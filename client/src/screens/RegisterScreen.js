@@ -1,19 +1,38 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../config/firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { Ionicons, FontAwesome, AntDesign } from '@expo/vector-icons';
 
 export default function RegisterScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [securePassword, setSecurePassword] = useState(true);
+  const [secureConfirmPassword, setSecureConfirmPassword] = useState(true);
+
   const [error, setError] = useState('');
 
   const handleRegister = async () => {
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      // In a real app, save fullName to Firestore or Auth Profile
+      setError('');
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+      // Update the user profile with the full name
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: fullName
+        });
+      }
+
       console.log('Registered!');
       // Navigate to Home
       navigation.replace('Main');
@@ -26,78 +45,119 @@ export default function RegisterScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardView}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
+
           <View style={styles.header}>
-            <View style={styles.logoPlaceholder}>
-              <Text style={styles.logoText}>PlanLi</Text>
+            <View style={styles.logoContainer}>
+               <Image
+                source={require('../../assets/logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+              <Text style={styles.appName}>PlanLi</Text>
             </View>
-            <Text style={styles.welcomeText}>ברוכים הבאים ל-PlanLi</Text>
-            <Text style={styles.subText}>מתכנן הנסיעות החכם שלך מבוסס קהילה</Text>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>Start your travel journey</Text>
           </View>
 
-          <View style={styles.formCard}>
-            <Text style={styles.cardTitle}>יצירת חשבון חדש</Text>
-
+          <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>שם מלא</Text>
               <TextInput
                 style={styles.input}
-                placeholder="הכנס את שמך המלא"
+                placeholder="Full name"
+                placeholderTextColor="#9CA3AF"
                 value={fullName}
                 onChangeText={setFullName}
-                textAlign="right"
+                autoCapitalize="words"
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>אימייל</Text>
               <TextInput
                 style={styles.input}
-                placeholder="your@email.com"
+                placeholder="Email address"
+                placeholderTextColor="#9CA3AF"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                textAlign="right"
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>סיסמה</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="........"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                textAlign="right"
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Password"
+                  placeholderTextColor="#9CA3AF"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={securePassword}
+                />
+                <TouchableOpacity onPress={() => setSecurePassword(!securePassword)} style={styles.eyeIcon}>
+                  <Ionicons name={securePassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Confirm password"
+                  placeholderTextColor="#9CA3AF"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={secureConfirmPassword}
+                />
+                <TouchableOpacity onPress={() => setSecureConfirmPassword(!secureConfirmPassword)} style={styles.eyeIcon}>
+                   <Ionicons name={secureConfirmPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.termsContainer}>
+              <Text style={styles.termsText}>
+                By signing up, you agree to our{' '}
+                <Text style={styles.link}>Terms of Service</Text> and{' '}
+                <Text style={styles.link}>Privacy Policy</Text>
+              </Text>
             </View>
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <TouchableOpacity style={styles.button} onPress={handleRegister}>
-              <Text style={styles.buttonText}>הרשמה</Text>
+              <Text style={styles.buttonText}>Create Account</Text>
             </TouchableOpacity>
 
             <View style={styles.dividerContainer}>
               <View style={styles.divider} />
-              <Text style={styles.dividerText}>או המשך עם</Text>
+              <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.divider} />
             </View>
 
-            <TouchableOpacity style={styles.socialButton}>
-               <Text style={styles.socialButtonText}>Google</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-               <Text style={styles.socialButtonText}>Facebook</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialButton}>
-               <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
+             <View style={styles.socialContainer}>
+              <TouchableOpacity style={styles.socialButton}>
+                <AntDesign name="google" size={24} color="#DB4437" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialButton}>
+                <FontAwesome name="facebook" size={24} color="#4267B2" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialButton}>
+                <AntDesign name="apple1" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.linkText}>כבר יש לך חשבון? התחבר</Text>
-            </TouchableOpacity>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Join thousands of travelers</Text>
+              <Text style={styles.footerText}>exploring the world together</Text>
+
+              <View style={styles.signinContainer}>
+                <Text style={styles.existingAccountText}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                  <Text style={styles.signInLink}>Sign in</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -108,123 +168,163 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E3A5F', // Deep Blue
+    backgroundColor: '#F0F9FF', // Light blue/cyan background to match design
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    padding: 24,
     justifyContent: 'center',
-    padding: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 32,
   },
-  logoPlaceholder: {
-    marginBottom: 10,
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  logoText: {
+  logo: {
+    width: 40,
+    height: 40,
+    marginRight: 8,
+  },
+  appName: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FF9F1C', // Orange
+    fontWeight: '600',
+    color: '#111827',
   },
-  welcomeText: {
+  title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 5,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
   },
-  subText: {
+  subtitle: {
     fontSize: 14,
-    color: '#ccc',
-    textAlign: 'center',
+    color: '#6B7280',
   },
-  formCard: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#333',
+  form: {
+    width: '100%',
   },
   inputContainer: {
-    marginBottom: 15,
-  },
-  label: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 5,
-    textAlign: 'right',
+    marginBottom: 16,
   },
   input: {
-    backgroundColor: '#f0f2f5',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    textAlign: 'right',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12, // Rounded corners as per design
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#1F2937',
   },
-  button: {
-    backgroundColor: '#2EC4B6',
-    padding: 15,
-    borderRadius: 8,
+  passwordContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  eyeIcon: {
+    marginLeft: 8,
+  },
+  termsContainer: {
+    marginVertical: 16,
+    alignItems: 'center',
+  },
+  termsText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  link: {
+    color: '#06B6D4', // Cyan color for links
+    fontWeight: '500',
   },
   errorText: {
-    color: 'red',
+    color: '#EF4444',
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 16,
+  },
+  button: {
+    backgroundColor: '#1E3A8A', // Dark Blue
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginBottom: 24,
   },
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#eee',
+    backgroundColor: '#E5E7EB',
   },
   dividerText: {
-    marginHorizontal: 10,
-    color: '#888',
+    marginHorizontal: 16,
+    color: '#6B7280',
+    fontSize: 12,
+  },
+  socialContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 32,
   },
   socialButton: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 12,
-    borderRadius: 8,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginHorizontal: 8,
   },
-  socialButtonText: {
-    color: '#333',
-    fontWeight: '600',
+  footer: {
+    alignItems: 'center',
   },
-  linkText: {
+  footerText: {
+    fontSize: 12,
+    color: '#6B7280',
     textAlign: 'center',
-    color: '#2EC4B6',
-    marginTop: 20,
+  },
+  signinContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  existingAccountText: {
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  signInLink: {
+    fontSize: 14,
+    color: '#1E3A8A',
     fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
