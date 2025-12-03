@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import RecommendationCard from '../components/RecommendationCard';
 
 export default function HomeScreen({ navigation }) {
   const [recommendations, setRecommendations] = useState([]);
@@ -76,33 +77,6 @@ export default function HomeScreen({ navigation }) {
     </View>
   );
 
-  const renderRecommendation = (item) => (
-    <View style={styles.recCard} key={item.id}>
-      <View style={styles.recHeader}>
-        <View style={styles.recUserAvatar} />
-        <View>
-          <Text style={styles.recTitle}>{item.title}</Text>
-          <Text style={styles.recCategory}>{item.category}</Text>
-        </View>
-      </View>
-
-      {item.images && item.images.length > 0 && (
-        <Image source={{ uri: item.images[0] }} style={styles.recImage} />
-      )}
-
-      <View style={styles.recBody}>
-        <Text style={styles.recDesc} numberOfLines={3}>{item.description}</Text>
-        <View style={styles.recTags}>
-          {item.tags && item.tags.map((tag, index) => (
-            <View key={index} style={styles.recTag}>
-              <Text style={styles.recTagText}>{tag}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -154,7 +128,7 @@ export default function HomeScreen({ navigation }) {
           ) : recommendations.length === 0 ? (
             <Text style={styles.emptyText}>No recommendations yet. Be the first to add one!</Text>
           ) : (
-            recommendations.map(renderRecommendation)
+            recommendations.map((item) => <RecommendationCard key={item.id} item={item} />)
           )}
         </View>
 
