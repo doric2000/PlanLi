@@ -3,7 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvo
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { Ionicons, FontAwesome, AntDesign } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; // השארתי רק מה שצריך
+
+// האייקונים הרשמיים (בדיוק כמו ב-Login)
+const GOOGLE_LOGO = "https://cdn-icons-png.flaticon.com/512/300/300221.png";
+const FACEBOOK_LOGO = "https://cdn-icons-png.flaticon.com/512/5968/5968764.png";
+const APPLE_LOGO = "https://cdn-icons-png.flaticon.com/512/0/747.png";
 
 export default function RegisterScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
@@ -46,6 +51,7 @@ export default function RegisterScreen({ navigation }) {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardView}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
 
+          {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoContainer}>
                <Image
@@ -53,13 +59,14 @@ export default function RegisterScreen({ navigation }) {
                 style={styles.logo}
                 resizeMode="contain"
               />
-              <Text style={styles.appName}>PlanLi</Text>
             </View>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Start your travel journey</Text>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
+            {/* Full Name */}
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
@@ -71,6 +78,7 @@ export default function RegisterScreen({ navigation }) {
               />
             </View>
 
+            {/* Email */}
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
@@ -83,6 +91,7 @@ export default function RegisterScreen({ navigation }) {
               />
             </View>
 
+            {/* Password */}
             <View style={styles.inputContainer}>
               <View style={styles.passwordContainer}>
                 <TextInput
@@ -99,6 +108,7 @@ export default function RegisterScreen({ navigation }) {
               </View>
             </View>
 
+            {/* Confirm Password */}
             <View style={styles.inputContainer}>
               <View style={styles.passwordContainer}>
                 <TextInput
@@ -115,6 +125,7 @@ export default function RegisterScreen({ navigation }) {
               </View>
             </View>
 
+            {/* Terms Text */}
             <View style={styles.termsContainer}>
               <Text style={styles.termsText}>
                 By signing up, you agree to our{' '}
@@ -125,28 +136,43 @@ export default function RegisterScreen({ navigation }) {
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
+            {/* Register Button */}
             <TouchableOpacity style={styles.button} onPress={handleRegister}>
               <Text style={styles.buttonText}>Create Account</Text>
             </TouchableOpacity>
 
+            {/* Divider */}
             <View style={styles.dividerContainer}>
               <View style={styles.divider} />
               <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.divider} />
             </View>
 
-             <View style={styles.socialContainer}>
+            {/* Social Buttons (התיקון כאן!) */}
+            <View style={styles.socialContainer}>
               <TouchableOpacity style={styles.socialButton}>
-                <AntDesign name="google" size={24} color="#DB4437" />
+                <Image 
+                  source={{ uri: GOOGLE_LOGO }} 
+                  style={styles.socialIcon} 
+                />
               </TouchableOpacity>
+
               <TouchableOpacity style={styles.socialButton}>
-                <FontAwesome name="facebook" size={24} color="#4267B2" />
+                <Image 
+                  source={{ uri: FACEBOOK_LOGO }} 
+                  style={styles.socialIcon} 
+                />
               </TouchableOpacity>
+
               <TouchableOpacity style={styles.socialButton}>
-                <AntDesign name="apple1" size={24} color="#000" />
+                <Image 
+                  source={{ uri: APPLE_LOGO }} 
+                  style={styles.socialIcon} 
+                />
               </TouchableOpacity>
             </View>
 
+            {/* Footer / Login Link */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>Join thousands of travelers</Text>
               <Text style={styles.footerText}>exploring the world together</Text>
@@ -185,17 +211,12 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 1,
   },
   logo: {
-    width: 40,
-    height: 40,
+    width: 200,
+    height: 200,
     marginRight: 8,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#111827',
   },
   title: {
     fontSize: 24,
@@ -217,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 12, // Rounded corners as per design
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
@@ -252,7 +273,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   link: {
-    color: '#06B6D4', // Cyan color for links
+    color: '#06B6D4',
     fontWeight: '500',
   },
   errorText: {
@@ -290,7 +311,7 @@ const styles = StyleSheet.create({
   socialContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
+    gap: 16, 
     marginBottom: 32,
   },
   socialButton: {
@@ -303,6 +324,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
     marginHorizontal: 8,
+  },
+  // הוספתי את הסטייל הזה שהיה חסר:
+  socialIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   footer: {
     alignItems: 'center',

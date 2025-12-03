@@ -5,6 +5,10 @@ import { auth } from '../config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Ionicons, FontAwesome, AntDesign } from '@expo/vector-icons';
 
+const GOOGLE_LOGO = "https://cdn-icons-png.flaticon.com/512/300/300221.png";
+const FACEBOOK_LOGO = "https://cdn-icons-png.flaticon.com/512/5968/5968764.png";
+const APPLE_LOGO = "https://cdn-icons-png.flaticon.com/512/0/747.png";
+
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,17 +38,16 @@ export default function LoginScreen({ navigation }) {
                 style={styles.logo}
                 resizeMode="contain"
               />
-              <Text style={styles.appName}>PlanLi</Text>
             </View>
-            <Text style={styles.title}>Sign In</Text>
-            <Text style={styles.subtitle}>Access to your account</Text>
+            <Text style={styles.title}>Start Planing</Text>
+            <Text style={styles.subtitle}>What do you waiting for?</Text>
           </View>
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Phone, email or username"
+                placeholder="Email"
                 placeholderTextColor="#9CA3AF"
                 value={email}
                 onChangeText={setEmail}
@@ -87,24 +90,28 @@ export default function LoginScreen({ navigation }) {
 
             <View style={styles.socialContainer}>
               <TouchableOpacity style={styles.socialButton}>
-                <Image
-                    // Using text/icon as placeholder if asset not available, but design shows G logo
-                    // For now using AntDesign
+                <Image 
+                  source={{ uri: GOOGLE_LOGO }} 
+                  style={styles.socialIcon} 
                 />
-                <AntDesign name="google" size={24} color="#DB4437" />
               </TouchableOpacity>
+
               <TouchableOpacity style={styles.socialButton}>
-                <FontAwesome name="facebook" size={24} color="#4267B2" />
+                <Image 
+                  source={{ uri: FACEBOOK_LOGO }} 
+                  style={styles.socialIcon} 
+                />
               </TouchableOpacity>
+
               <TouchableOpacity style={styles.socialButton}>
-                <AntDesign name="apple1" size={24} color="#000" />
+                <Image 
+                  source={{ uri: APPLE_LOGO }} 
+                  style={styles.socialIcon} 
+                />
               </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>The travel planning app designed</Text>
-              <Text style={styles.footerText}>to explore the world</Text>
-
               <View style={styles.signupContainer}>
                 <Text style={styles.newHereText}>New here? </Text>
                 <TouchableOpacity onPress={() => navigation.navigate('Register')}>
@@ -139,11 +146,11 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 1,
   },
   logo: {
-    width: 40,
-    height: 40,
+    width: 200,
+    height: 200,
     marginRight: 8,
   },
   appName: {
@@ -273,5 +280,10 @@ const styles = StyleSheet.create({
     color: '#1E3A8A', // Match button color or link color
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  socialIcon: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
 });
