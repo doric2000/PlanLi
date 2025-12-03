@@ -12,8 +12,8 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Navigate to Home or handle auth state change
-      console.log('Logged in!');
+      // Navigate to Home
+      navigation.replace('Main');
     } catch (err) {
       setError(err.message);
     }

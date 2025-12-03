@@ -15,6 +15,8 @@ export default function RegisterScreen({ navigation }) {
       await createUserWithEmailAndPassword(auth, email, password);
       // In a real app, save fullName to Firestore or Auth Profile
       console.log('Registered!');
+      // Navigate to Home
+      navigation.replace('Main');
     } catch (err) {
       setError(err.message);
     }
