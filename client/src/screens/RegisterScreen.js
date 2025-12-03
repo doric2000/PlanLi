@@ -48,204 +48,183 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Background Logo Decoration */}
-      <View style={styles.backgroundDecoration}>
-        <Image
-          source={require('../../assets/logo.png')}
-          style={styles.backgroundLogo}
-          resizeMode="contain"
-        />
-        <LinearGradient
-          colors={['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.9)', '#FFFFFF']}
-          style={styles.gradientOverlay}
-        />
-      </View>
-
+    <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardView}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoContainer}>
-                 <Image
+            <View style={styles.card}>
+              {/* Header */}
+              <View style={styles.header}>
+                <View style={styles.logoContainer}>
+                   <Image
+                    source={require('../../assets/logo.png')}
+                    style={styles.logo}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.title}>Create Account</Text>
+                <Text style={styles.subtitle}>Start your travel journey</Text>
+              </View>
+
+              {/* Form */}
+              <View style={styles.form}>
+                {/* Full Name */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Full Name</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your full name"
+                      placeholderTextColor="#9CA3AF"
+                      value={fullName}
+                      onChangeText={setFullName}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                </View>
+
+                {/* Email */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your email"
+                      placeholderTextColor="#9CA3AF"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                {/* Password */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Create a password"
+                      placeholderTextColor="#9CA3AF"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={securePassword}
+                    />
+                    <TouchableOpacity onPress={() => setSecurePassword(!securePassword)} style={styles.eyeIcon}>
+                      <Ionicons name={securePassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Confirm Password */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Confirm Password</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm your password"
+                      placeholderTextColor="#9CA3AF"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry={secureConfirmPassword}
+                    />
+                    <TouchableOpacity onPress={() => setSecureConfirmPassword(!secureConfirmPassword)} style={styles.eyeIcon}>
+                       <Ionicons name={secureConfirmPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Terms Text */}
+                <View style={styles.termsContainer}>
+                  <Text style={styles.termsText}>
+                    By signing up, you agree to our{' '}
+                    <Text style={styles.link}>Terms of Service</Text> and{' '}
+                    <Text style={styles.link}>Privacy Policy</Text>
+                  </Text>
+                </View>
+
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                {/* Register Button */}
+                <TouchableOpacity onPress={handleRegister} activeOpacity={0.8}>
+                  <LinearGradient
+                    colors={['#1E3A8A', '#2563EB']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.button}
+                  >
+                    <Text style={styles.buttonText}>Create Account</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Divider */}
+                <View style={styles.dividerContainer}>
+                  <View style={styles.divider} />
+                  <Text style={styles.dividerText}>Or continue with</Text>
+                  <View style={styles.divider} />
+                </View>
+
+                {/* Social Buttons */}
+                <View style={styles.socialContainer}>
+                  <TouchableOpacity style={styles.socialButton}>
+                    <Image 
+                      source={{ uri: GOOGLE_LOGO }} 
+                      style={styles.socialIcon} 
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.socialButton}>
+                    <Image 
+                      source={{ uri: FACEBOOK_LOGO }} 
+                      style={styles.socialIcon} 
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.socialButton}>
+                    <Image 
+                      source={{ uri: APPLE_LOGO }} 
+                      style={styles.socialIcon} 
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Footer / Login Link */}
+                <View style={styles.footer}>
+                  <Text style={styles.footerText}>Join thousands of travelers</Text>
+                  <Text style={styles.footerText}>exploring the world together</Text>
+
+                  <View style={styles.signinContainer}>
+                    <Text style={styles.existingAccountText}>Already have an account? </Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                      <Text style={styles.signInLink}>Sign in</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.cardBackgroundDecoration} pointerEvents="none">
+                <Image
                   source={require('../../assets/logo.png')}
-                  style={styles.logo}
+                  style={styles.cardBackgroundLogo}
                   resizeMode="contain"
                 />
-              </View>
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>Start your travel journey</Text>
-            </View>
-
-            {/* Form */}
-            <View style={styles.form}>
-              {/* Full Name */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Full Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your full name"
-                  placeholderTextColor="#9CA3AF"
-                  value={fullName}
-                  onChangeText={setFullName}
-                  autoCapitalize="words"
-                />
-              </View>
-
-              {/* Email */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Email</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#9CA3AF"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-
-              {/* Password */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    placeholder="Create a password"
-                    placeholderTextColor="#9CA3AF"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={securePassword}
-                  />
-                  <TouchableOpacity onPress={() => setSecurePassword(!securePassword)} style={styles.eyeIcon}>
-                    <Ionicons name={securePassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Confirm Password */}
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Confirm Password</Text>
-                <View style={styles.passwordContainer}>
-                  <TextInput
-                    style={styles.passwordInput}
-                    placeholder="Confirm your password"
-                    placeholderTextColor="#9CA3AF"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={secureConfirmPassword}
-                  />
-                  <TouchableOpacity onPress={() => setSecureConfirmPassword(!secureConfirmPassword)} style={styles.eyeIcon}>
-                     <Ionicons name={secureConfirmPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Terms Text */}
-              <View style={styles.termsContainer}>
-                <Text style={styles.termsText}>
-                  By signing up, you agree to our{' '}
-                  <Text style={styles.link}>Terms of Service</Text> and{' '}
-                  <Text style={styles.link}>Privacy Policy</Text>
-                </Text>
-              </View>
-
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-              {/* Register Button */}
-              <TouchableOpacity onPress={handleRegister} activeOpacity={0.8}>
-                <LinearGradient
-                  colors={['#1E3A8A', '#2563EB']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.button}
-                >
-                  <Text style={styles.buttonText}>Create Account</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {/* Divider */}
-              <View style={styles.dividerContainer}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>Or continue with</Text>
-                <View style={styles.divider} />
-              </View>
-
-              {/* Social Buttons */}
-              <View style={styles.socialContainer}>
-                <TouchableOpacity style={styles.socialButton}>
-                  <Image
-                    source={{ uri: GOOGLE_LOGO }}
-                    style={styles.socialIcon}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.socialButton}>
-                  <Image
-                    source={{ uri: FACEBOOK_LOGO }}
-                    style={styles.socialIcon}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.socialButton}>
-                  <Image
-                    source={{ uri: APPLE_LOGO }}
-                    style={styles.socialIcon}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Footer / Login Link */}
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Join thousands of travelers</Text>
-                <Text style={styles.footerText}>exploring the world together</Text>
-
-                <View style={styles.signinContainer}>
-                  <Text style={styles.existingAccountText}>Already have an account? </Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                    <Text style={styles.signInLink}>Sign in</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  backgroundDecoration: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: height * 0.45,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    overflow: 'hidden',
-  },
-  backgroundLogo: {
-    width: width * 1.2,
-    height: width * 1.2,
-    opacity: 0.08,
-    transform: [{ translateY: -width * 0.4 }],
-    tintColor: '#1E3A8A',
-  },
-  gradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   safeArea: {
     flex: 1,
@@ -255,13 +234,41 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
+    padding: 20,
     justifyContent: 'center',
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  cardBackgroundDecoration: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  cardBackgroundLogo: {
+    width: width * 1.0,
+    height: width * 1.0,
+    opacity: 0.2,
+    tintColor: '#9CA3AF',
+    transform: [{ rotate: '-15deg' }],
   },
   header: {
     alignItems: 'center',
     marginBottom: 32,
-    marginTop: 20,
   },
   logoContainer: {
     marginBottom: 16,
@@ -275,19 +282,19 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   logo: {
-    width: 90,
-    height: 90,
+    width: 120,
+    height: 120,
     borderRadius: 20,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1E3A8A',
     marginBottom: 8,
     letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#6B7280',
     letterSpacing: 0.2,
   },
@@ -304,17 +311,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 4,
   },
-  input: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#1F2937',
-  },
-  passwordContainer: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
@@ -323,7 +320,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
   },
-  passwordInput: {
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
     flex: 1,
     paddingVertical: 14,
     fontSize: 15,
