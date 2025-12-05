@@ -15,6 +15,7 @@ import { storage, auth } from "../config/firebase";
 import { signOut, updateProfile } from "firebase/auth";
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import appConfig from "../../app.json"
 
 export default function ProfileScreen({ navigation }) {
 	const user = auth.currentUser;
@@ -227,7 +228,7 @@ export default function ProfileScreen({ navigation }) {
 					<Text style={styles.signOutText}>Sign Out</Text>
 				</TouchableOpacity>
 
-				<Text style={styles.versionText}>Version 1.0.0</Text>
+				<Text style={styles.versionText}>Version {appConfig.expo.version}</Text>
 			</ScrollView>
 		</SafeAreaView>
 	);
