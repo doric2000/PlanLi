@@ -113,7 +113,7 @@ export default function HomeScreen({ navigation }) {
             <TouchableOpacity><Text style={styles.seeAllText}>View All</Text></TouchableOpacity>
           </View>
           <View style={styles.grid}>
-            {renderPopularDestination('Paris', 'France', '4.8', '2.4K', '#87CEEB')}
+            {renderPopularDestination('NUJEDAT', 'France', '4.8', '2.4K', '#87CEEB')}
             {renderPopularDestination('Tokyo', 'Japan', '4.9', '3.1K', '#FFB6C1')}
             {renderPopularDestination('Bali', 'Indonesia', '4.7', '1.8K', '#90EE90')}
             {renderPopularDestination('New York', 'USA', '4.8', '2.9K', '#D3D3D3')}
