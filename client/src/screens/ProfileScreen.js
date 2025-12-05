@@ -7,6 +7,7 @@ import {
 	TouchableOpacity,
 	ScrollView,
 	Alert,
+	Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -18,7 +19,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 export default function ProfileScreen({ navigation }) {
 	const user = auth.currentUser;
 
-  const [photoURL, setPhotoURL] = React.useState(user?.photoURL ?? null);
+	const [photoURL, setPhotoURL] = React.useState(user?.photoURL ?? null);
 	const handleSignOut = async () => {
 		try {
 			await signOut(auth);
@@ -45,13 +46,13 @@ export default function ProfileScreen({ navigation }) {
 		const result = await ImagePicker.launchImageLibraryAsync({
 			mediaTypes: ImagePicker.MediaTypeOptions.Images,
 			allowsEditing: true,
-			aspect: [4, 3],
+			aspect: [1, 1],
 			quality: 0.7,
 		});
 
 		if (!result.canceled) {
 			console.log("Picked from gallery:", result.assets[0].uri);
-      handleProfilePictureUpload(result.assets[0].uri);
+			handleProfilePictureUpload(result.assets[0].uri);
 		}
 	};
 
@@ -68,7 +69,7 @@ export default function ProfileScreen({ navigation }) {
 
 		const result = await ImagePicker.launchCameraAsync({
 			allowsEditing: true,
-			aspect: [4, 3],
+			aspect: [1, 1],
 			quality: 0.7,
 		});
 
@@ -80,6 +81,20 @@ export default function ProfileScreen({ navigation }) {
 
 	// Show options list when pressing the camera icon
 	const pickImage = () => {
+		if (Platform.OS === "web") {
+			// Web-specific: Use file input
+			const input = document.createElement("input");
+			input.type = "file";
+			input.accept = "image/*";
+			input.onchange = (e) => {
+				const file = e.target.files[0];
+				if (file) {
+					const uri = URL.createObjectURL(file);
+					handleProfilePictureUpload(uri);
+				}
+			};
+			input.click();
+		}
 		Alert.alert("Change profile photo", "Choose an option", [
 			{ text: "Upload from gallery", onPress: pickFromGallery },
 			{ text: "Use camera", onPress: pickFromCamera },
@@ -100,9 +115,11 @@ export default function ProfileScreen({ navigation }) {
 			await uploadBytes(storageRef, blob);
 			const downloadURL = await getDownloadURL(storageRef);
 
-      if (auth.currentUser){
-        await updateProfile(auth.currentUser, {photoURL: downloadURL});
-      }
+			if (auth.currentUser) {
+				await updateProfile(auth.currentUser, {
+					photoURL: downloadURL,
+				});
+			}
 
 			setPhotoURL(downloadURL);
 		} catch (e) {
@@ -123,20 +140,35 @@ export default function ProfileScreen({ navigation }) {
 			<ScrollView contentContainerStyle={styles.scrollContent}>
 				{/* Profile Header */}
 				<View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            {photoURL ? (
-              <Image source={{ uri: photoURL }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarText}>
-                  {user?.displayName ? user.displayName.charAt(0).toUpperCase() : "U"}
-                </Text>
-              </View>
-            )}
-            <TouchableOpacity onPress={pickImage} style={styles.editAvatarBadge}>
-              <Ionicons name="camera" size={14} color="#fff" />
-            </TouchableOpacity>
-          </View>
+					<View style={styles.avatarContainer}>
+						{photoURL ? (
+							<Image
+								source={{ uri: photoURL }}
+								style={styles.avatar}
+							/>
+						) : (
+							<View
+								style={[
+									styles.avatar,
+									styles.avatarPlaceholder,
+								]}
+							>
+								<Text style={styles.avatarText}>
+									{user?.displayName
+										? user.displayName
+												.charAt(0)
+												.toUpperCase()
+										: "U"}
+								</Text>
+							</View>
+						)}
+						<TouchableOpacity
+							onPress={pickImage}
+							style={styles.editAvatarBadge}
+						>
+							<Ionicons name="camera" size={14} color="#fff" />
+						</TouchableOpacity>
+					</View>
 					<Text style={styles.name}>
 						{user?.displayName || "Traveler"}
 					</Text>
