@@ -5,19 +5,37 @@ import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove } from 'fire
 import { db, auth } from '../config/firebase';
 
 const RecommendationCard = ({ item }) => {
-  const [author, setAuthor] = useState({ displayName: 'Traveler', photoURL: null });
   // Initialize like state. We assume item.likedBy is an array of user IDs.
   // If not present, we default to false/0.
   const currentUserId = auth.currentUser?.uid;
   const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId) || false);
   const [likeCount, setLikeCount] = useState(item.likes || 0);
+  
+  // First try to use data saved in the recommendation itself
+  const [author, setAuthor] = useState({ 
+    displayName: item.authorName || 'Traveler', 
+    photoURL: item.authorPhotoURL || null 
+  });
 
   useEffect(() => {
     const fetchAuthor = async () => {
+      // If we already have author name from the item, skip fetching
+      if (item.authorName) {
+        return;
+      }
+      
       if (item.userId) {
         try {
+          // First check if this is the current user
+          if (item.userId === currentUserId && auth.currentUser?.displayName) {
+            setAuthor({
+              displayName: auth.currentUser.displayName,
+              photoURL: auth.currentUser.photoURL || null
+            });
+            return;
+          }
+          
           // Attempt to fetch user profile from 'users' collection
-          // Assuming there is a users collection. If not, we fallback to default.
           const userDocRef = doc(db, 'users', item.userId);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -29,12 +47,19 @@ const RecommendationCard = ({ item }) => {
           }
         } catch (error) {
           console.log("Error fetching author:", error);
+          // Fallback to current user if it's their recommendation
+          if (item.userId === currentUserId && auth.currentUser?.displayName) {
+            setAuthor({
+              displayName: auth.currentUser.displayName,
+              photoURL: auth.currentUser.photoURL || null
+            });
+          }
         }
       }
     };
 
     fetchAuthor();
-  }, [item.userId]);
+  }, [item.userId, item.authorName, currentUserId]);
 
   const handleToggleLike = async () => {
     if (!currentUserId) return; // Prevent interaction if not logged in

@@ -93,6 +93,8 @@ export default function AddRecommendationScreen({ navigation }) {
 
       await addDoc(collection(db, 'recommendations'), {
         userId: auth.currentUser?.uid || 'anonymous',
+        authorName: auth.currentUser?.displayName || 'Traveler',
+        authorPhotoURL: auth.currentUser?.photoURL || null,
         title,
         description,
         location, // GeoPoint in future, string for now
@@ -101,7 +103,8 @@ export default function AddRecommendationScreen({ navigation }) {
         budget,
         images: imageUrl ? [imageUrl] : [],
         createdAt: serverTimestamp(),
-        likes: 0
+        likes: 0,
+        likedBy: []
       });
 
       Alert.alert("Success", "Recommendation added!");

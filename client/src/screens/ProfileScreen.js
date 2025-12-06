@@ -8,19 +8,55 @@ import {
 	ScrollView,
 	Alert,
 	Platform,
+	ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { storage, auth } from "../config/firebase";
+import { storage, auth, db } from "../config/firebase";
 import { signOut, updateProfile } from "firebase/auth";
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import appConfig from "../../app.json"
 
 export default function ProfileScreen({ navigation }) {
 	const user = auth.currentUser;
 
 	const [photoURL, setPhotoURL] = React.useState(user?.photoURL ?? null);
+	const [uploading, setUploading] = React.useState(false);
+
+	// Sync user to Firestore on profile load
+	React.useEffect(() => {
+		const syncUserToFirestore = async () => {
+			if (!user) return;
+			try {
+				const userDocRef = doc(db, 'users', user.uid);
+				const userDoc = await getDoc(userDocRef);
+				if (!userDoc.exists()) {
+					// Create new user document
+					await setDoc(userDocRef, {
+						uid: user.uid,
+						email: user.email,
+						displayName: user.displayName || '',
+						photoURL: user.photoURL || null,
+						createdAt: new Date(),
+					});
+					console.log('User document created in Firestore');
+				} else {
+					// Update existing document with latest info
+					await updateDoc(userDocRef, {
+						displayName: user.displayName || userDoc.data().displayName || '',
+						photoURL: user.photoURL || userDoc.data().photoURL || null,
+					});
+					console.log('User document updated in Firestore');
+				}
+			} catch (error) {
+				console.error('Error syncing user to Firestore:', error);
+			}
+		};
+		syncUserToFirestore();
+	}, [user]);
+
 	const handleSignOut = async () => {
 		try {
 			await signOut(auth);
@@ -105,6 +141,7 @@ export default function ProfileScreen({ navigation }) {
 
 	const handleProfilePictureUpload = async (uri) => {
 		if (!uri) return null;
+		setUploading(true);
 		try {
 			const response = await fetch(uri);
 			const blob = await response.blob();
@@ -123,9 +160,12 @@ export default function ProfileScreen({ navigation }) {
 			}
 
 			setPhotoURL(downloadURL);
+			Alert.alert("Success", "Profile picture updated!");
 		} catch (e) {
 			console.error("Upload failed", e);
-			throw e;
+			Alert.alert("Error", "Failed to upload profile picture.");
+		} finally {
+			setUploading(false);
 		}
 	};
 
@@ -142,7 +182,7 @@ export default function ProfileScreen({ navigation }) {
 				{/* Profile Header */}
 				<View style={styles.header}>
 					<View style={styles.avatarContainer}>
-						{photoURL ? (
+            {photoURL ? (
 							<Image
 								source={{ uri: photoURL }}
 								style={styles.avatar}
@@ -166,8 +206,13 @@ export default function ProfileScreen({ navigation }) {
 						<TouchableOpacity
 							onPress={pickImage}
 							style={styles.editAvatarBadge}
+							disabled={uploading}
 						>
-							<Ionicons name="camera" size={14} color="#fff" />
+							{uploading ? (
+								<ActivityIndicator size="small" color="#fff" />
+							) : (
+								<Ionicons name="camera" size={14} color="#fff" />
+							)}
 						</TouchableOpacity>
 					</View>
 					<Text style={styles.name}>
