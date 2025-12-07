@@ -10,31 +10,24 @@ const RecommendationCard = ({ item }) => {
   const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId) || false);
   const [likeCount, setLikeCount] = useState(item.likes || 0);
   const [likedByList, setLikedByList] = useState(item.likedBy || []);
-  
-  // State חדש לפתיחת ה-Modal
   const [showLikesModal, setShowLikesModal] = useState(false);
   
+  //Always start with default and selecting from firebase
   const [author, setAuthor] = useState({ 
-    displayName: item.authorName || 'Traveler', 
-    photoURL: item.authorPhotoURL || null 
+    displayName: 'Traveler', 
+    photoURL:  null 
   });
+  const [loadingAuthor, setloadingAuthor] = useState(true);
 
   useEffect(() => {
     const fetchAuthor = async () => {
-      if (item.authorName) {
+      if (!item.userId) {
+        setloadingAuthor(false);
         return;
       }
-      
-      if (item.userId) {
-        try {
-          if (item.userId === currentUserId && auth.currentUser?.displayName) {
-            setAuthor({
-              displayName: auth.currentUser.displayName,
-              photoURL: auth.currentUser.photoURL || null
-            });
-            return;
-          }
-          
+
+        try {      
+          //case 2 - other user recommendation 
           const userDocRef = doc(db, 'users', item.userId);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -44,20 +37,24 @@ const RecommendationCard = ({ item }) => {
               photoURL: userData.photoURL || null
             });
           }
+          else {
+            //if doc does not exists , try using authentication.
+            if (item.userId === currentUserId && auth.currentUser) {
+              setAuthor({
+                displayName: auth.currentUser.displayName || 'Traveler',
+                photoURL: auth.currentUser.photoURL || null
+              });
+            }
+          }
         } catch (error) {
           console.log("Error fetching author:", error);
-          if (item.userId === currentUserId && auth.currentUser?.displayName) {
-            setAuthor({
-              displayName: auth.currentUser.displayName,
-              photoURL: auth.currentUser.photoURL || null
-            });
-          }
+        } finally {
+          setLoadingAuthor(false);
         }
-      }
     };
 
     fetchAuthor();
-  }, [item.userId, item.authorName, currentUserId]);
+  }, [item.userId, currentUserId]);
 
   const handleToggleLike = async () => {
     if (!currentUserId) return;

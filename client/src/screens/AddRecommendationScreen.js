@@ -93,8 +93,6 @@ export default function AddRecommendationScreen({ navigation }) {
 
       await addDoc(collection(db, 'recommendations'), {
         userId: auth.currentUser?.uid || 'anonymous',
-        authorName: auth.currentUser?.displayName || 'Traveler',
-        authorPhotoURL: auth.currentUser?.photoURL || null,
         title,
         description,
         location, // GeoPoint in future, string for now
