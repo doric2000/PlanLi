@@ -3,15 +3,17 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
+import LikesModal from './likesList';
 
 const RecommendationCard = ({ item }) => {
-  // Initialize like state. We assume item.likedBy is an array of user IDs.
-  // If not present, we default to false/0.
   const currentUserId = auth.currentUser?.uid;
   const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId) || false);
   const [likeCount, setLikeCount] = useState(item.likes || 0);
+  const [likedByList, setLikedByList] = useState(item.likedBy || []);
   
-  // First try to use data saved in the recommendation itself
+  // State חדש לפתיחת ה-Modal
+  const [showLikesModal, setShowLikesModal] = useState(false);
+  
   const [author, setAuthor] = useState({ 
     displayName: item.authorName || 'Traveler', 
     photoURL: item.authorPhotoURL || null 
@@ -19,14 +21,12 @@ const RecommendationCard = ({ item }) => {
 
   useEffect(() => {
     const fetchAuthor = async () => {
-      // If we already have author name from the item, skip fetching
       if (item.authorName) {
         return;
       }
       
       if (item.userId) {
         try {
-          // First check if this is the current user
           if (item.userId === currentUserId && auth.currentUser?.displayName) {
             setAuthor({
               displayName: auth.currentUser.displayName,
@@ -35,7 +35,6 @@ const RecommendationCard = ({ item }) => {
             return;
           }
           
-          // Attempt to fetch user profile from 'users' collection
           const userDocRef = doc(db, 'users', item.userId);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -47,7 +46,6 @@ const RecommendationCard = ({ item }) => {
           }
         } catch (error) {
           console.log("Error fetching author:", error);
-          // Fallback to current user if it's their recommendation
           if (item.userId === currentUserId && auth.currentUser?.displayName) {
             setAuthor({
               displayName: auth.currentUser.displayName,
@@ -62,14 +60,19 @@ const RecommendationCard = ({ item }) => {
   }, [item.userId, item.authorName, currentUserId]);
 
   const handleToggleLike = async () => {
-    if (!currentUserId) return; // Prevent interaction if not logged in
+    if (!currentUserId) return;
 
-    // Optimistic Update
     const newIsLiked = !isLiked;
     const newLikeCount = newIsLiked ? likeCount + 1 : likeCount - 1;
+    
+    // עדכון גם את רשימת הלייקים
+    const newLikedByList = newIsLiked 
+      ? [...likedByList, currentUserId]
+      : likedByList.filter(id => id !== currentUserId);
 
     setIsLiked(newIsLiked);
     setLikeCount(newLikeCount);
+    setLikedByList(newLikedByList);
 
     try {
       const recRef = doc(db, 'recommendations', item.id);
@@ -87,9 +90,16 @@ const RecommendationCard = ({ item }) => {
       }
     } catch (error) {
       console.error("Error updating like:", error);
-      // Revert optimistic update on error
       setIsLiked(!newIsLiked);
       setLikeCount(likeCount);
+      setLikedByList(likedByList);
+    }
+  };
+
+  // פונקציה חדשה לפתיחת ה-Modal
+  const handleShowLikes = () => {
+    if (likeCount > 0) {
+      setShowLikesModal(true);
     }
   };
 
@@ -99,7 +109,6 @@ const RecommendationCard = ({ item }) => {
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
-    // Handle Firestore Timestamp or JS Date
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
@@ -154,20 +163,28 @@ const RecommendationCard = ({ item }) => {
       {/* Footer / Action Bar */}
       <View style={styles.footer}>
         <View style={styles.actionGroup}>
+            {/* Like Button */}
             <TouchableOpacity style={styles.actionButton} onPress={handleToggleLike}>
-            <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={24}
-                color={isLiked ? "#EF4444" : "#4B5563"}
-            />
-            <Text style={[styles.actionText, isLiked && styles.activeActionText]}>
-                {likeCount > 0 ? likeCount : ''}
-            </Text>
+              <Ionicons
+                  name={isLiked ? "heart" : "heart-outline"}
+                  size={24}
+                  color={isLiked ? "#EF4444" : "#4B5563"}
+              />
+            </TouchableOpacity>
+            
+            {/* Like Count - לחיץ לפתיחת Modal */}
+            <TouchableOpacity onPress={handleShowLikes}>
+              <Text style={[
+                styles.likeCountText, 
+                likeCount > 0 && styles.likeCountClickable
+              ]}>
+                {likeCount > 0 ? `${likeCount} likes` : ''}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionButton} onPress={handleCommentPress}>
-            <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
-            <Text style={styles.actionText}>Comment</Text>
+              <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
+              <Text style={styles.actionText}>Comment</Text>
             </TouchableOpacity>
         </View>
 
@@ -175,6 +192,13 @@ const RecommendationCard = ({ item }) => {
             <Ionicons name="share-social-outline" size={22} color="#4B5563" />
         </TouchableOpacity>
       </View>
+
+      {/* Likes Modal */}
+      <LikesModal
+        visible={showLikesModal}
+        onClose={() => setShowLikesModal(false)}
+        likedByUserIds={likedByList}
+      />
     </View>
   );
 };
@@ -280,7 +304,7 @@ const styles = StyleSheet.create({
   actionGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   actionButton: {
     flexDirection: 'row',
@@ -291,6 +315,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4B5563',
     fontWeight: '500',
+  },
+  likeCountText: {
+    fontSize: 14,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  likeCountClickable: {
+    color: '#1F2937',
+    fontWeight: '600',
   },
   activeActionText: {
     color: '#EF4444',

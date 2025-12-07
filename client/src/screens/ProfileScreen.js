@@ -25,38 +25,6 @@ export default function ProfileScreen({ navigation }) {
 	const [photoURL, setPhotoURL] = React.useState(user?.photoURL ?? null);
 	const [uploading, setUploading] = React.useState(false);
 
-	// Sync user to Firestore on profile load
-	React.useEffect(() => {
-		const syncUserToFirestore = async () => {
-			if (!user) return;
-			try {
-				const userDocRef = doc(db, 'users', user.uid);
-				const userDoc = await getDoc(userDocRef);
-				if (!userDoc.exists()) {
-					// Create new user document
-					await setDoc(userDocRef, {
-						uid: user.uid,
-						email: user.email,
-						displayName: user.displayName || '',
-						photoURL: user.photoURL || null,
-						createdAt: new Date(),
-					});
-					console.log('User document created in Firestore');
-				} else {
-					// Update existing document with latest info
-					await updateDoc(userDocRef, {
-						displayName: user.displayName || userDoc.data().displayName || '',
-						photoURL: user.photoURL || userDoc.data().photoURL || null,
-					});
-					console.log('User document updated in Firestore');
-				}
-			} catch (error) {
-				console.error('Error syncing user to Firestore:', error);
-			}
-		};
-		syncUserToFirestore();
-	}, [user]);
-
 	const handleSignOut = async () => {
 		try {
 			await signOut(auth);
