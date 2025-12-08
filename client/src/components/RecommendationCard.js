@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import LikesModal from './likesList';
 
 const RecommendationCard = ({ item }) => {
+  const navigation = useNavigation();
   const currentUserId = auth.currentUser?.uid;
   const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId) || false);
   const [likeCount, setLikeCount] = useState(item.likes || 0);
@@ -154,12 +156,22 @@ const RecommendationCard = ({ item }) => {
 
         {/* Location - Country & City */}
         {(item.location || item.country) && (
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color="#6B7280" />
+          <TouchableOpacity 
+            style={styles.locationRow}
+            onPress={() => {
+              if (item.cityId && item.countryId) {
+                navigation.navigate('TripDashboard', {
+                  cityId: item.cityId,
+                  countryId: item.countryId
+                });
+              }
+            }}
+          >
+            <Ionicons name="location-outline" size={14} color="#2EC4B6" />
             <Text style={styles.locationText}>
               {item.location}{item.country ? `, ${item.country}` : ''}
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
 
         <Text style={styles.description} numberOfLines={3}>
@@ -300,8 +312,9 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: '#2EC4B6',
     marginLeft: 4,
+    fontWeight: '500',
   },
   description: {
     fontSize: 14,
