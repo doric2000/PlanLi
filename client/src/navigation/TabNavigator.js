@@ -3,7 +3,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from '../screens/HomeScreen';
-import SearchScreen from '../screens/SearchScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import RoutesScreen from '../screens/RoutesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -19,8 +18,6 @@ export default function TabNavigator() {
 
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Search') {
-            iconName = focused ? 'search' : 'search-outline';
           } else if (route.name === 'Community') {
             iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Routes') {
@@ -37,7 +34,6 @@ export default function TabNavigator() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Community" component={CommunityScreen} />
       <Tab.Screen name="Routes" component={RoutesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />

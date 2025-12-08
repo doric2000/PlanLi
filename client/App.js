@@ -7,6 +7,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import TabNavigator from './src/navigation/TabNavigator';
 import AddRecommendationScreen from './src/screens/AddRecommendationScreen';
+import TripDashboardScreen from './src/screens/TripDashboardScreen';
 
 const Stack = createStackNavigator();
 
@@ -23,6 +24,7 @@ export default function App() {
             component={AddRecommendationScreen}
             options={{ presentation: 'modal', headerShown: true, title: 'Add Recommendation' }}
           />
+          <Stack.Screen name="TripDashboard" component={TripDashboardScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

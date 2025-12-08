@@ -17,12 +17,12 @@ const RecommendationCard = ({ item }) => {
     displayName: 'Traveler', 
     photoURL:  null 
   });
-  const [loadingAuthor, setloadingAuthor] = useState(true);
+  const [loadingAuthor, setLoadingAuthor] = useState(true);
 
   useEffect(() => {
     const fetchAuthor = async () => {
       if (!item.userId) {
-        setloadingAuthor(false);
+        setLoadingAuthor(false);
         return;
       }
 

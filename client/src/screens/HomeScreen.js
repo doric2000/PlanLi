@@ -13,18 +13,49 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+// שימו לב להוספת collectionGroup
+import { collection, getDocs, query, orderBy, limit, collectionGroup } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import RecommendationCard from '../components/RecommendationCard';
 
 export default function HomeScreen({ navigation }) {
   const [recommendations, setRecommendations] = useState([]);
+  const [destinations, setDestinations] = useState([]); // כאן נשמור את הערים
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // 1. פונקציה לשליפת ערים פופולריות (רצה פעם אחת בעלייה)
+  useEffect(() => {
+    const fetchDestinations = async () => {
+      try {
+        // שליפה מכל הקולקציות שנקראות 'cities' לא משנה תחת איזו מדינה
+        const citiesQuery = query(collectionGroup(db, 'cities'), limit(10));
+        const querySnapshot = await getDocs(citiesQuery);
+        
+        const citiesList = querySnapshot.docs.map(doc => {
+          // חילוץ ה-ID של המדינה (ההורה של ההורה)
+          const parentCountry = doc.ref.parent.parent;
+          const countryId = parentCountry ? parentCountry.id : 'Unknown';
 
+          return {
+            id: doc.id,
+            countryId: countryId,
+            ...doc.data()
+          };
+        });
+        
+        setDestinations(citiesList);
+      } catch (error) {
+        console.error("Error fetching destinations:", error);
+      }
+    };
+
+    fetchDestinations();
+  }, []);
+
+  // 2. פונקציה לשליפת הפיד (המלצות משתמשים)
   const fetchRecommendations = async () => {
     try {
-      // In a real app, we might paginate or limit
       const q = query(collection(db, 'recommendations'), orderBy('createdAt', 'desc'), limit(20));
       const querySnapshot = await getDocs(q);
       const recs = [];
@@ -40,7 +71,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // Fetch when screen focuses (in case we added a new one)
   useFocusEffect(
     useCallback(() => {
       fetchRecommendations();
@@ -55,25 +85,6 @@ export default function HomeScreen({ navigation }) {
   const renderTrendingItem = (name) => (
     <View style={styles.trendingItem} key={name}>
       <Text style={styles.trendingText}>{name}</Text>
-    </View>
-  );
-
-  const renderPopularDestination = (city, country, rating, travelers, imageColor) => (
-    <View style={styles.popularCard} key={city}>
-      <View style={[styles.popularImagePlaceholder, { backgroundColor: imageColor }]}>
-        <View style={styles.ratingBadge}>
-          <Ionicons name="star" size={12} color="#FFD700" />
-          <Text style={styles.ratingText}>{rating}</Text>
-        </View>
-      </View>
-      <View style={styles.popularInfo}>
-        <Text style={styles.popularCity}>{city}</Text>
-        <Text style={styles.popularCountry}>{country}</Text>
-        <View style={styles.travelerInfo}>
-          <Ionicons name="location-outline" size={12} color="#666" />
-          <Text style={styles.travelerText}>{travelers} travelers</Text>
-        </View>
-      </View>
     </View>
   );
 
@@ -98,7 +109,7 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Trending Now */}
+        {/* Trending Now (Static for now) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Trending Now 📈</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
@@ -106,21 +117,54 @@ export default function HomeScreen({ navigation }) {
           </ScrollView>
         </View>
 
-        {/* Popular Destinations */}
+        {/* Popular Destinations - DYNAMIC FROM FIREBASE */}
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Popular Destinations</Text>
             <TouchableOpacity><Text style={styles.seeAllText}>View All</Text></TouchableOpacity>
           </View>
+          
           <View style={styles.grid}>
-            {renderPopularDestination('NUJEDAT', 'France', '4.8', '2.4K', '#87CEEB')}
-            {renderPopularDestination('Tokyo', 'Japan', '4.9', '3.1K', '#FFB6C1')}
-            {renderPopularDestination('Bali', 'Indonesia', '4.7', '1.8K', '#90EE90')}
-            {renderPopularDestination('New York', 'USA', '4.8', '2.9K', '#D3D3D3')}
+            {destinations.length === 0 ? (
+               <Text style={styles.emptyText}>Loading destinations...</Text>
+            ) : (
+              destinations.map((city) => (
+                <TouchableOpacity 
+                  key={city.id} 
+                  style={styles.popularCard}
+                  onPress={() => navigation.navigate('TripDashboard', { 
+                    cityId: city.id, 
+                    countryId: city.countryId 
+                  })}
+                >
+                  {/* Placeholder Image Logic - using color if no image */}
+                  <View style={styles.popularImageContainer}>{city.imageUrl ? (
+                      <Image source={{ uri: city.imageUrl }} style={styles.cardImage} resizeMode="cover"/>) : 
+                      (/* Fallback if no image exists in DB */
+                      <View style={[styles.popularImagePlaceholder, { backgroundColor: '#87CEEB' }]} />
+                    )}
+                    
+                    {/* הדירוג נשאר מעל התמונה */}
+                    <View style={styles.ratingBadgeOverImage}>
+                        <Ionicons name="star" size={12} color="#FFD700" />
+                        <Text style={styles.ratingText}>{city.rating}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.popularInfo}>
+                    <Text style={styles.popularCity}>{city.name || city.id}</Text>
+                    <Text style={styles.popularCountry}>{city.countryId}</Text>
+                    <View style={styles.travelerInfo}>
+                      <Ionicons name="location-outline" size={12} color="#666" />
+                      <Text style={styles.travelerText}>{city.travelers || '0'} travelers</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         </View>
 
-        {/* Community Feed - Dynamic from Firestore */}
+        {/* Community Feed */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Community Feed (Recent)</Text>
           {loading ? (
@@ -143,6 +187,9 @@ export default function HomeScreen({ navigation }) {
       >
         <Ionicons name="add" size={32} color="#fff" />
       </TouchableOpacity>
+      
+      {/* Temporary button removed as we now have real cards */}
+
     </SafeAreaView>
   );
 }
@@ -242,6 +289,36 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     padding: 8,
   },
+  // המיכל שעוטף את התמונה והדירוג
+  popularImageContainer: {
+    width: '100%',
+    height: 120,
+    position: 'relative', // חשוב! מאפשר לדירוג לצוף מעליו במיקום אבסולוטי
+  },
+
+  // התמונה עצמה
+  cardImage: {
+    width: '100%',
+    height: '100%',
+    // אם הכרטיסייה עצמה עם borderRadius, כדאי שגם לתמונה יהיה:
+    borderTopLeftRadius: 12, 
+    borderTopRightRadius: 12,
+  },
+
+  // התיקון לדירוג:
+  ratingBadgeOverImage: {
+    position: 'absolute', // גורם לו לצוף מעל התמונה
+    top: 10,             // 10 פיקסלים מלמעלה
+    right: 10,           // 10 פיקסלים מימין (או left אם תרצו)
+    
+    flexDirection: 'row', // <--- זה התיקון! מיישר אותם בשורה אחת
+    alignItems: 'center', // מיישר אותם לגובה (שהכוכב לא יהיה גבוה מהטקסט)
+    
+    backgroundColor: 'rgba(255,255,255,0.9)', // רקע לבן חצי שקוף לקריאות
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
   ratingBadge: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -277,78 +354,12 @@ const styles = StyleSheet.create({
     color: '#888',
     marginLeft: 3,
   },
-  // Recommendation Card
-  recCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-    overflow: 'hidden',
-  },
-  recHeader: {
-    flexDirection: 'row',
-    padding: 10,
-    alignItems: 'center',
-  },
-  recUserAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#ddd',
-    marginRight: 10,
-  },
-  recTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'left',
-  },
-  recCategory: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'left',
-  },
-  recImage: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#eee',
-  },
-  recBody: {
-    padding: 10,
-  },
-  recDesc: {
-    fontSize: 14,
-    color: '#444',
-    marginBottom: 10,
-    lineHeight: 20,
-    textAlign: 'left',
-  },
-  recTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  recTag: {
-    backgroundColor: '#f0f2f5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  recTagText: {
-    fontSize: 12,
-    color: '#555',
-  },
   emptyText: {
     textAlign: 'center',
     color: '#888',
     marginTop: 20,
+    width: '100%',
   },
-  // FAB
   fab: {
     position: 'absolute',
     bottom: 20,
@@ -356,7 +367,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#FF9F1C', // Orange
+    backgroundColor: '#FF9F1C',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: "#000",
