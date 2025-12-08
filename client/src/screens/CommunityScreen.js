@@ -6,7 +6,9 @@ import {
   ActivityIndicator,
   FlatList,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  Modal,   
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,11 +16,19 @@ import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import RecommendationCard from '../components/RecommendationCard';
+const CATEGORIES = ['Food', 'Attraction', 'Hotel', 'Nightlife', 'Shopping'];
+const BUDGETS = ['$', '$$', '$$$', '$$$$'];
+
 
 export default function CommunityScreen({ navigation }) {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [filterCategories, setFilterCategories] = useState([]); // כמה קטגוריות
+  const [filterBudgets, setFilterBudgets] = useState([]);       // כמה תקציבים
+  const [filterDestination, setFilterDestination] = useState('');
+
 
   // פונקציה לשליפת כל ההמלצות (מהחדש לישן)
   const fetchRecommendations = async () => {
@@ -56,6 +66,53 @@ export default function CommunityScreen({ navigation }) {
     fetchRecommendations();
   };
 
+  const filteredRecommendations = recommendations.filter((item) => {
+    // מפרקים את השדה למילים שמופרדות בפסיק
+    const queries = filterDestination
+      .split(',')                     // מפרק לפי ","
+      .map((q) => q.trim().toLowerCase())
+      .filter((q) => q.length > 0);   // מסיר ריקים
+
+    if (queries.length > 0) {
+      const title = (item.title || '').toLowerCase();
+      const location = (item.location || '').toLowerCase();
+      const description = (item.description || '').toLowerCase();
+
+      // טקסט אחד לחיפוש
+      const text = `${title} ${location} ${description}`;
+
+      // האם לפחות אחד מהיעדים מופיע בטקסט?
+      const matchesText = queries.some((q) => text.includes(q));
+
+      if (!matchesText) return false;
+    }
+
+
+    if (filterCategories.length > 0 && !filterCategories.includes(item.category)) {
+      return false;
+    }
+
+    if (filterBudgets.length > 0 && !filterBudgets.includes(item.budget)) {
+      return false;
+    }
+
+
+    return true;
+  });
+
+  const isFiltered =
+    filterDestination.trim() !== '' ||
+    filterCategories.length > 0 ||
+    filterBudgets.length > 0;
+
+  const handleClearFilters = () => {
+    setFilterCategories([]);
+    setFilterBudgets([]);
+    setFilterDestination('');
+  };
+
+
+
   return (
     <SafeAreaView style={styles.container}>
       
@@ -65,8 +122,8 @@ export default function CommunityScreen({ navigation }) {
         <Text style={styles.headerSubtitle}>גלה המלצות חדשות מרחבי העולם</Text>
         
         {/* כפתור סינון (כרגע רק אייקון, נפעיל אותו בשלב הבא) */}
-        <TouchableOpacity style={styles.filterButton} onPress={() => alert('מסננים בקרוב...')}>
-            <Ionicons name="options-outline" size={24} color="#333" />
+        <TouchableOpacity style={styles.filterButton} onPress={() => setFilterVisible(true)}>
+            <Ionicons name="options-outline" size={24} color={isFiltered ? '#2EC4B6' : '#333'} />
         </TouchableOpacity>
       </View>
 
@@ -77,7 +134,7 @@ export default function CommunityScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={recommendations}
+          data={filteredRecommendations}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <RecommendationCard item={item} />}
           contentContainerStyle={styles.listContent}
@@ -87,22 +144,137 @@ export default function CommunityScreen({ navigation }) {
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
-                <Ionicons name="images-outline" size={50} color="#ccc" />
-                <Text style={styles.emptyText}>עדיין אין המלצות.</Text>
+              <Ionicons name="images-outline" size={50} color="#ccc" />
+              <Text style={styles.emptyText}>
+                {isFiltered ? 'אין תוצאות מתאימות למסננים שבחרת.' : 'עדיין אין המלצות.'}
+              </Text>
+              {!isFiltered && (
                 <Text style={styles.emptySubText}>היה הראשון לשתף!</Text>
+              )}
             </View>
           }
         />
       )}
 
       {/* Floating Action Button (FAB) - הועבר לכאן! */}
-      <TouchableOpacity
+            <TouchableOpacity
         style={styles.fab}
         onPress={() => navigation.navigate('AddRecommendation')}
       >
         <Ionicons name="add" size={32} color="#fff" />
       </TouchableOpacity>
 
+      {/* Filter Modal */}
+      <Modal
+        visible={filterVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFilterVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>מסננים</Text>
+              <TouchableOpacity onPress={() => setFilterVisible(false)}>
+                <Ionicons name="close" size={22} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            {/* יעד / עיר / מדינה */}
+            <Text style={styles.modalLabel}>יעד / עיר / מדינה</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="תל אביב, יוון, תאילנד..."
+              value={filterDestination}
+              onChangeText={setFilterDestination}
+              textAlign="right"
+            />
+
+            {/* קטגוריה */}
+            <Text style={[styles.modalLabel, { marginTop: 16 }]}>קטגוריה</Text>
+            <View style={styles.chipRow}>
+              {CATEGORIES.map((cat) => {
+                const selected = filterCategories.includes(cat);
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      styles.chip,
+                      selected && styles.chipSelected,
+                    ]}
+                    onPress={() =>
+                      setFilterCategories((prev) =>
+                        prev.includes(cat)
+                          ? prev.filter((c) => c !== cat)   // אם קיים – הסרה
+                          : [...prev, cat]                  // אם לא – הוספה
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        selected && styles.chipTextSelected,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* תקציב */}
+            <Text style={[styles.modalLabel, { marginTop: 16 }]}>תקציב</Text>
+            <View style={styles.chipRow}>
+              {BUDGETS.map((b) => {
+                const selected = filterBudgets.includes(b);
+                return (
+                  <TouchableOpacity
+                    key={b}
+                    style={[
+                      styles.budgetChip,
+                      selected && styles.budgetChipSelected,
+                    ]}
+                    onPress={() =>
+                      setFilterBudgets((prev) =>
+                        prev.includes(b)
+                          ? prev.filter((x) => x !== b)
+                          : [...prev, b]
+                      )
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.budgetChipText,
+                        selected && styles.budgetChipTextSelected,
+                      ]}
+                    >
+                      {b}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* כפתורים */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={handleClearFilters}
+              >
+                <Text style={styles.clearButtonText}>נקה</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={() => setFilterVisible(false)}
+              >
+                <Text style={styles.applyButtonText}>הפעל מסננים</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -174,5 +346,119 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
     elevation: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#F9FAFB',
+    fontSize: 14,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    marginLeft: 8,
+    marginBottom: 8,
+  },
+  chipSelected: {
+    backgroundColor: '#E6F7F6',
+    borderWidth: 1,
+    borderColor: '#2EC4B6',
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#4B5563',
+  },
+  chipTextSelected: {
+    color: '#2EC4B6',
+    fontWeight: '700',
+  },
+  budgetChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    marginLeft: 8,
+    marginBottom: 8,
+  },
+  budgetChipSelected: {
+    backgroundColor: '#2EC4B6',
+  },
+  budgetChipText: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  budgetChipTextSelected: {
+    color: '#fff',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  clearButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#F9FAFB',
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  applyButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    backgroundColor: '#1E3A5F',
+  },
+  applyButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
   },
 });
