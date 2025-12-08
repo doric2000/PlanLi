@@ -59,26 +59,41 @@ export default function TripDashboardScreen({ navigation, route }) {
   const { cityId, countryId } = route.params;
 
   const [cityData, setCityData] = useState(null);
+  const [countryData, setCountryData] = useState(null); // new , for the currency rate.
   const [cityRecommendations, setCityRecommendations] = useState([]);
 
   //states for weather:
   const [realWeather, setRealWeather] = useState(null); 
   const [loading, setLoading] = useState(true);
+  const [currencyRate, setCurrencyRate] = useState(null); //new , for the currency rate.
 
-  // 1. Fetch City Data
+  // 1. Fetch City Data & Country Data
   useEffect(() => {
-    const fetchCityData = async () => {
+    const fetchData = async () => {
       try {
-        const docRef = doc(db, "countries", countryId, "cities", cityId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setCityData(docSnap.data());
+        // הכנת הרפרנסים
+        const cityRef = doc(db, "countries", countryId, "cities", cityId);
+        const countryRef = doc(db, "countries", countryId); // הרפרנס למדינה (ההורה)
+
+        // שליפה במקביל לביצועים מקסימליים
+        const [citySnap, countrySnap] = await Promise.all([
+          getDoc(cityRef),
+          getDoc(countryRef)
+        ]);
+
+        if (citySnap.exists()) {
+          setCityData(citySnap.data());
         }
+        
+        if (countrySnap.exists()) {
+          setCountryData(countrySnap.data()); // שמירת מידע המדינה (שם יש את המטבע)
+        }
+
       } catch (error) {
-        console.error("Error fetching city:", error);
+        console.error("Error fetching data:", error);
       }
-    };
-    if (cityId && countryId) fetchCityData();
+  };
+    if (cityId && countryId) fetchData();
   }, [cityId, countryId]);
 
   // 2. Fetch Recommendations
@@ -133,6 +148,38 @@ export default function TripDashboardScreen({ navigation, route }) {
 
     fetchWeather();
   }, [cityData]); // רץ ברגע שיש cityData
+
+
+  // 4. שליפת שער מטבע - מבוסס עכשיו על countryData!
+  useEffect(() => {
+    const fetchCurrency = async () => {
+      // בדיקה אם יש לנו את המידע מהמדינה
+      if (!countryData?.currencyCode) return;
+      
+      const code = countryData.currencyCode;
+
+      // אם זה שקל, לא צריך להמיר
+      if (code === 'ILS') {
+        setCurrencyRate("מטבע מקומי (₪)");
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://api.frankfurter.app/latest?from=${code}&to=ILS`);
+        const data = await response.json();
+        const rate = data.rates.ILS;
+        if (rate) {
+           setCurrencyRate(`1 ${code} ≈ ${rate.toFixed(2)} ₪`);
+        }
+      } catch (error) {
+        console.error("Currency Error:", error);
+        setCurrencyRate(`${code} (שגיאה בטעינה)`);
+      }
+    };
+
+    if (countryData) fetchCurrency();
+  }, [countryData]); // רץ כשהמידע על המדינה נטען
+
 
   if (loading) {
     return (
@@ -252,13 +299,24 @@ export default function TripDashboardScreen({ navigation, route }) {
               </View>
             </View>
             
-            <View style={[styles.infoRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
+            <View style={styles.infoRow}>
               <View style={styles.iconBoxOrange}>
                 <MaterialCommunityIcons name="car-side" size={24} color="#FF9F1C" />
               </View>
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoTitle}>Trusted Driver</Text>
                 <Text style={styles.infoSubtitle}>{cityData.essentialInfo?.driver || 'N/A'}</Text>
+              </View>
+            </View>
+          
+          {/* הצגת המטבע מהמדינה */}
+            <View style={[styles.infoRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
+              <View style={styles.iconBoxOrange}>
+                <MaterialCommunityIcons name="cash-multiple" size={24} color="#FF9F1C" />
+              </View>
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoTitle}>Currency ({countryData?.currencyCode || 'Local'})</Text>
+                <Text style={styles.infoSubtitle}>{currencyRate || 'Checking rates...'}</Text>
               </View>
             </View>
           </View>
