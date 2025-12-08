@@ -75,15 +75,16 @@ export default function CommunityScreen({ navigation }) {
 
     if (queries.length > 0) {
       const title = (item.title || '').toLowerCase();
-      const location = (item.location || '').toLowerCase();
+      const location = (item.location || '').toLowerCase();   // יכול להיות "Tel Aviv"
       const description = (item.description || '').toLowerCase();
 
-      // טקסט אחד לחיפוש
-      const text = `${title} ${location} ${description}`;
+      // שדות נוספים – אם קיימים בדוקומנט:
+      const city = (item.city || '').toLowerCase();
+      const country = (item.country || '').toLowerCase();     // למשל "Israel", "Greece"
 
-      // האם לפחות אחד מהיעדים מופיע בטקסט?
+      // מחברים את כולם לטקסט אחד לחיפוש
+      const text = `${title} ${location} ${description} ${city} ${country}`;
       const matchesText = queries.some((q) => text.includes(q));
-
       if (!matchesText) return false;
     }
 
