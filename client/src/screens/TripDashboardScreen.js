@@ -150,7 +150,7 @@ export default function TripDashboardScreen({ navigation, route }) {
   }, [cityData]); // רץ ברגע שיש cityData
 
 
-  // 4. שליפת שער מטבע - מבוסס עכשיו על countryData!
+// 4. שליפת שער מטבע (מעודכן: תומך בכל המטבעות כולל PEN)
   useEffect(() => {
     const fetchCurrency = async () => {
       // בדיקה אם יש לנו את המידע מהמדינה
@@ -165,11 +165,18 @@ export default function TripDashboardScreen({ navigation, route }) {
       }
 
       try {
-        const response = await fetch(`https://api.frankfurter.app/latest?from=${code}&to=ILS`);
+        // --- שינוי API ---
+        // שימוש ב-open.er-api.com שתומך גם ב-PEN
+        const response = await fetch(`https://open.er-api.com/v6/latest/${code}`);
         const data = await response.json();
+        
+        // המבנה כאן הוא data.rates.ILS
         const rate = data.rates.ILS;
+        
         if (rate) {
            setCurrencyRate(`1 ${code} ≈ ${rate.toFixed(2)} ₪`);
+        } else {
+           setCurrencyRate("שער לא זמין");
         }
       } catch (error) {
         console.error("Currency Error:", error);
@@ -178,7 +185,7 @@ export default function TripDashboardScreen({ navigation, route }) {
     };
 
     if (countryData) fetchCurrency();
-  }, [countryData]); // רץ כשהמידע על המדינה נטען
+  }, [countryData]);
 
 
   if (loading) {

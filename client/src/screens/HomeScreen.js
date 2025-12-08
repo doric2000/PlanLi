@@ -55,33 +55,10 @@ export default function HomeScreen({ navigation }) {
     fetchDestinations();
   }, []);
 
-  // 2. פונקציה לשליפת הפיד (המלצות משתמשים)
-  const fetchRecommendations = async () => {
-    try {
-      const q = query(collection(db, 'recommendations'), orderBy('createdAt', 'desc'), limit(20));
-      const querySnapshot = await getDocs(q);
-      const recs = [];
-      querySnapshot.forEach((doc) => {
-        recs.push({ id: doc.id, ...doc.data() });
-      });
-      setRecommendations(recs);
-    } catch (error) {
-      console.error("Error fetching recommendations: ", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchRecommendations();
-    }, [])
-  );
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchRecommendations();
+    fetchDestinations();
   };
 
   const renderTrendingItem = (name) => (
@@ -194,29 +171,10 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Community Feed */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Community Feed (Recent)</Text>
-          {loading ? (
-            <ActivityIndicator size="large" color="#2EC4B6" />
-          ) : recommendations.length === 0 ? (
-            <Text style={styles.emptyText}>No recommendations yet. Be the first to add one!</Text>
-          ) : (
-            recommendations.map((item) => <RecommendationCard key={item.id} item={item} />)
-          )}
-        </View>
-
         {/* Spacer for FAB */}
         <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => navigation.navigate('AddRecommendation')}
-      >
-        <Ionicons name="add" size={32} color="#fff" />
-      </TouchableOpacity>
       
       {/* Temporary button removed as we now have real cards */}
 

@@ -152,6 +152,16 @@ const RecommendationCard = ({ item }) => {
             )}
         </View>
 
+        {/* Location - Country & City */}
+        {(item.location || item.country) && (
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={14} color="#6B7280" />
+            <Text style={styles.locationText}>
+              {item.location}{item.country ? `, ${item.country}` : ''}
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.description} numberOfLines={3}>
           {item.description}
         </Text>
@@ -282,6 +292,16 @@ const styles = StyleSheet.create({
     color: '#2563EB',
     fontSize: 10,
     fontWeight: '600',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginLeft: 4,
   },
   description: {
     fontSize: 14,
