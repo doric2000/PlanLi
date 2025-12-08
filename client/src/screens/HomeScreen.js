@@ -23,6 +23,8 @@ export default function HomeScreen({ navigation }) {
   const [destinations, setDestinations] = useState([]); // כאן נשמור את הערים
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
   
   // 1. פונקציה לשליפת ערים פופולריות (רצה פעם אחת בעלייה)
   useEffect(() => {
@@ -88,6 +90,17 @@ export default function HomeScreen({ navigation }) {
     </View>
   );
 
+  const filteredDestinations = destinations.filter((city) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true; // אין חיפוש -> הצג הכול
+
+    const name = (city.name || '').toLowerCase();
+    const country = (city.countryId || '').toLowerCase();
+
+    // חיפוש לפי שם עיר או שם מדינה
+    return name.includes(q) || country.includes(q);
+  });
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -102,9 +115,11 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.searchBar}>
             <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
             <TextInput
-              placeholder="חפש יעדים..."
-              style={styles.searchInput}
-              textAlign="right"
+               placeholder="חפש יעדים..."
+               style={styles.searchInput}
+               textAlign="right"
+               value={searchQuery}
+               onChangeText={setSearchQuery}
             />
           </View>
         </View>
@@ -126,9 +141,13 @@ export default function HomeScreen({ navigation }) {
           
           <View style={styles.grid}>
             {destinations.length === 0 ? (
-               <Text style={styles.emptyText}>Loading destinations...</Text>
+              <Text style={styles.emptyText}>Loading destinations...</Text>
+            ) : filteredDestinations.length === 0 ? (
+              <Text style={styles.emptyText}>
+                No destinations match "{searchQuery}"
+              </Text>
             ) : (
-              destinations.map((city) => (
+              filteredDestinations.map((city) => (
                 <TouchableOpacity 
                   key={city.id} 
                   style={styles.popularCard}
@@ -137,25 +156,36 @@ export default function HomeScreen({ navigation }) {
                     countryId: city.countryId 
                   })}
                 >
-                  {/* Placeholder Image Logic - using color if no image */}
-                  <View style={styles.popularImageContainer}>{city.imageUrl ? (
-                      <Image source={{ uri: city.imageUrl }} style={styles.cardImage} resizeMode="cover"/>) : 
-                      (/* Fallback if no image exists in DB */
-                      <View style={[styles.popularImagePlaceholder, { backgroundColor: '#87CEEB' }]} />
+                  <View style={styles.popularImageContainer}>
+                    {city.imageUrl ? (
+                      <Image
+                        source={{ uri: city.imageUrl }}
+                        style={styles.cardImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.popularImagePlaceholder,
+                          { backgroundColor: '#87CEEB' },
+                        ]}
+                      />
                     )}
-                    
-                    {/* הדירוג נשאר מעל התמונה */}
+
                     <View style={styles.ratingBadgeOverImage}>
-                        <Ionicons name="star" size={12} color="#FFD700" />
-                        <Text style={styles.ratingText}>{city.rating}</Text>
+                      <Ionicons name="star" size={12} color="#FFD700" />
+                      <Text style={styles.ratingText}>{city.rating}</Text>
                     </View>
                   </View>
+
                   <View style={styles.popularInfo}>
                     <Text style={styles.popularCity}>{city.name || city.id}</Text>
                     <Text style={styles.popularCountry}>{city.countryId}</Text>
                     <View style={styles.travelerInfo}>
                       <Ionicons name="location-outline" size={12} color="#666" />
-                      <Text style={styles.travelerText}>{city.travelers || '0'} travelers</Text>
+                      <Text style={styles.travelerText}>
+                        {city.travelers || '0'} travelers
+                      </Text>
                     </View>
                   </View>
                 </TouchableOpacity>
