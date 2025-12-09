@@ -134,8 +134,6 @@ export default function RoutesScreen({ navigation }) {
 	);
 }
 
-// ...existing styles...
-
 const styles = StyleSheet.create({
 	container: { flex: 1, justifyContent: "flex-start", alignItems: "center" },
 	headerTitle: {
@@ -159,9 +157,9 @@ const styles = StyleSheet.create({
 	header: {
 		backgroundColor: "#49bc8eff",
 		padding: 20,
-		paddingBottom: 10,
-		borderBottomLeftRadius: 20,
-		borderBottomRightRadius: 20,
+		paddingBottom: 5,
+		borderBottomLeftRadius: 0,
+		borderBottomRightRadius: 0,
 		width: "100%",
 	},
 	headerSubTitle: {
