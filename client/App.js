@@ -8,6 +8,7 @@ import TabNavigator from "./src/navigation/TabNavigator";
 import AddRecommendationScreen from "./src/screens/AddRecommendationScreen";
 import AddRoutesScreen from "./src/screens/AddRoutesScreen";
 import RoutesScreen from "./src/screens/RoutesScreen";
+import RouteDetailScreen from "./src/screens/RouteDetailScreen";
 
 import TripDashboardScreen from "./src/screens/TripDashboardScreen";
 const Stack = createStackNavigator();
@@ -17,7 +18,7 @@ export default function App() {
 		<SafeAreaProvider>
 			<NavigationContainer>
 				<Stack.Navigator
-					initialRouteName='Main'
+					initialRouteName='Route'
 					screenOptions={{ headerShown: false }}
 				>
 					<Stack.Screen name='Login' component={LoginScreen} />
@@ -41,6 +42,11 @@ export default function App() {
 						name='AddRoutesScreen'
 						component={AddRoutesScreen}
 					></Stack.Screen>
+					<Stack.Screen
+						name='RouteDetail'
+						component={RouteDetailScreen}
+						options={{ headerShown: true, title: "Route Details" }}
+					/>
 				</Stack.Navigator>
 			</NavigationContainer>
 		</SafeAreaProvider>

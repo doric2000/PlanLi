@@ -140,10 +140,6 @@ export default function AddRoutesScreen({ navigation }) {
 	useBackButton(navigation);
 
 	const addRoute = async () => {
-				if (parseInt(days) < tripDays.length) {
-			Alert.alert("Days error", "You have added more day details than the total days specified!");
-			return;
-		}
 		if (!user) {
 			Alert.alert("Error", "User must be authenticated to post!");
 			return;
@@ -151,7 +147,13 @@ export default function AddRoutesScreen({ navigation }) {
 			Alert.alert("Error", "Please fill in all fields.");
 			return;
 		}
-
+		if (parseInt(days) < tripDays.length) {
+			Alert.alert(
+				"Days error",
+				"You have added more day details than the total days specified!"
+			);
+			return;
+		}
 		setSubmitting(true);
 
 		try {
