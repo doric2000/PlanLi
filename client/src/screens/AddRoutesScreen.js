@@ -10,7 +10,13 @@ import {
 } from "react-native";
 import { styles, buttonStyles } from "./RoutesScreen.js";
 import { db, auth } from "../config/firebase.js";
-import { collection, addDoc, getDoc, doc, serverTimestamp } from "firebase/firestore";
+import {
+	collection,
+	addDoc,
+	getDoc,
+	doc,
+	serverTimestamp,
+} from "firebase/firestore";
 import { ActivityIndicator } from "react-native";
 import {
 	DIFFICULTY_TAGS,
@@ -19,6 +25,10 @@ import {
 	EXPERIENCE_TAGS,
 } from "../constants/Constatns.js";
 import PlacesInput from "../components/PlacesInput.js";
+import { useBackButton } from "../hooks/useBackButton";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import DayEditorModal from "../components/DayEditorModal";
+import DayList from "../components/DayList";
 
 const PlaceholderColor = "#9CA3AF";
 
@@ -49,24 +59,27 @@ const FormInput = ({
 );
 
 export default function AddRoutesScreen({ navigation }) {
-	console.log("AddRoutesScreen rendering");
+	const [tripDays, setTripDays] = useState([]);
+	const [isDayModalVisible, setDayModalVisible] = useState(false);
+	const [editingDayIndex, setEditingDayIndex] = useState(null);
 	const [difficultyTag, setDifficultyTag] = useState("");
 	const [travelStyleTag, setTravelStyleTag] = useState("");
 	const [roadTripTags, setRoadTripTags] = useState([]);
 	const [experienceTags, setExperienceTags] = useState([]);
 	const [title, setTitle] = useState("");
-	const [user, setUser] = useState("");
 	const [days, setDays] = useState("");
 	const [places, setPlaces] = useState([""]);
 	const [distance, setDistance] = useState("");
 	const [tags, setTags] = useState([]);
 	const [desc, setDesc] = useState("");
 	const [submitting, setSubmitting] = useState(false);
+	const { user, loading: userLoading } = useCurrentUser();
 
 	const newRoute = {
 		Title: title,
 		user,
 		days,
+		tripDaysData: tripDays,
 		places,
 		distance,
 		tags,
@@ -76,7 +89,30 @@ export default function AddRoutesScreen({ navigation }) {
 		roadTripTags,
 		experienceTags,
 	};
+	// Handlers for Day Logic
+	const handleAddDay = () => {
+		setEditingDayIndex(tripDays.length); // New index
+		setDayModalVisible(true);
+	};
 
+	const handleEditDay = (index) => {
+		setEditingDayIndex(index);
+		setDayModalVisible(true);
+	};
+	const handleSaveDay = (dayData, index) => {
+		const newTripDays = [...tripDays];
+		if (index >= newTripDays.length) {
+			// Adding new
+			newTripDays.push(dayData);
+		} else {
+			// Updating existing
+			newTripDays[index] = dayData;
+		}
+		setTripDays(newTripDays);
+
+		// Optional: Update the "Days" numeric input automatically
+		setDays(newTripDays.length.toString());
+	};
 	const toggleSingle = (tag, setter) => setter(tag);
 	const toggleMulti = (tag, list, setter) =>
 		setter(
@@ -94,53 +130,24 @@ export default function AddRoutesScreen({ navigation }) {
 	const clearForm = () => {
 		// Clear form
 		setTitle("");
-		setUser("");
 		setDays("");
 		setPlaces([""]);
 		setDistance("");
 		setTags([]);
 		setDesc("");
 	};
-	// Fetch username when component mounts
-	useEffect(() => {
-		const fetchUsername = async () => {
-			try {
-				const currentUser = auth.currentUser;
-				if (currentUser) {
-					console.log("IM HERE 1")
-					// Get user document from Firestore
-					const userDoc = await getDoc(
-						doc(db, "users", currentUser.uid)
-					);
-					if (userDoc.exists()) {
-											console.log("IM HERE 2")
-						const userData = userDoc.data();
-						setUser(
-								userData.displayName ||
-								currentUser.email
-						);
-					} else {
-						// Fallback to email if user document doesn't exist
-						setUser(currentUser.email);
-					}
-				}
-			} catch (error) {
-				console.error("Error fetching username:", error);
-				// Fallback to email
-				if (auth.currentUser) {
-					setUser(auth.currentUser.email);
-				}
-			}
-		};
 
-		fetchUsername();
-	}, []);
+	useBackButton(navigation);
+
 	const addRoute = async () => {
-		if(!user){
-			Alert.alert("Error","User must be authenticated to post!");
+				if (parseInt(days) < tripDays.length) {
+			Alert.alert("Days error", "You have added more day details than the total days specified!");
 			return;
 		}
-		else if (!title || !days || !places || !distance || !desc) {
+		if (!user) {
+			Alert.alert("Error", "User must be authenticated to post!");
+			return;
+		} else if (!title || !days || !places || !distance || !desc) {
 			Alert.alert("Error", "Please fill in all fields.");
 			return;
 		}
@@ -162,11 +169,40 @@ export default function AddRoutesScreen({ navigation }) {
 			setSubmitting(false);
 		}
 	};
+	const handleDeleteDay = (index) => {
+		Alert.alert(
+			"Delete Day",
+			`Are you sure you want to remove Day ${index + 1}?`,
+			[
+				{ text: "Cancel", style: "cancel" },
+				{
+					text: "Delete",
+					style: "destructive",
+					onPress: () => {
+						// Create a copy and remove the item at index
+						const newTripDays = tripDays.filter(
+							(_, i) => i !== index
+						);
+						setTripDays(newTripDays);
+
+						// Update the days count input
+						setDays(newTripDays.length.toString());
+
+						// If we were editing this day, close the modal
+						if (editingDayIndex === index) {
+							setDayModalVisible(false);
+							setEditingDayIndex(null);
+						}
+					},
+				},
+			]
+		);
+	};
 
 	return (
 		<ScrollView
 			style={{ flex: 1 }}
-			nestedScrollEnabled
+			// nestedScrollEnabled
 			keyboardShouldPersistTaps='handled'
 			contentContainerStyle={{ paddingBottom: 120 }}
 		>
@@ -198,6 +234,12 @@ export default function AddRoutesScreen({ navigation }) {
 					onChangeText={setDays}
 					placeholder='Days'
 					keyboardType='numeric'
+				/>
+				<DayList
+					days={tripDays}
+					onAdd={handleAddDay}
+					onEdit={handleEditDay}
+					onDelete={handleDeleteDay}
 				/>
 				<PlacesInput places={places} setPlaces={setPlaces} />
 				<FormInput
@@ -342,28 +384,6 @@ export default function AddRoutesScreen({ navigation }) {
 						</TouchableOpacity>
 					))}
 				</ScrollView>
-				{/* <View style={tagStyle.tagsContainer}>
-					{TAG_OPTIONS[].map((tag) => (
-						<TouchableOpacity
-							key={tag}
-							style={[
-								tagStyle.tagItem,
-								tags.includes(tag) && tagStyle.tagItemSelected,
-							]}
-							onPress={() => toggleTag(tag)}
-						>
-							<Text
-								style={[
-									tagStyle.tagText,
-									tags.includes(tag) &&
-										tagStyle.tagTextSelected,
-								]}
-							>
-								{tag}
-							</Text>
-						</TouchableOpacity>
-					))}
-				</View> */}
 				<TouchableOpacity
 					style={buttonStyles.submitButton}
 					onPress={addRoute}
@@ -378,6 +398,15 @@ export default function AddRoutesScreen({ navigation }) {
 					)}
 				</TouchableOpacity>
 			</View>
+			<DayEditorModal
+				visible={isDayModalVisible}
+				onClose={() => setDayModalVisible(false)}
+				onSave={handleSaveDay}
+				dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
+				initialData={
+					editingDayIndex !== null ? tripDays[editingDayIndex] : {}
+				}
+			/>
 		</ScrollView>
 	);
 }
