@@ -2,24 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove,collection, onSnapshot} from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import LikesModal from './likesList';
 
-const RecommendationCard = ({ item }) => {
+// שינוי 1: הוספת onCommentPress לרשימת הפרמטרים (props)
+const RecommendationCard = ({ item, onCommentPress }) => {
   const navigation = useNavigation();
   const currentUserId = auth.currentUser?.uid;
   const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId) || false);
   const [likeCount, setLikeCount] = useState(item.likes || 0);
   const [likedByList, setLikedByList] = useState(item.likedBy || []);
   const [showLikesModal, setShowLikesModal] = useState(false);
-  
-  //Always start with default and selecting from firebase
+  const [commentsCount, setCommentsCount] = useState(0);
   const [author, setAuthor] = useState({ 
     displayName: 'Traveler', 
     photoURL:  null 
   });
   const [loadingAuthor, setLoadingAuthor] = useState(true);
+
+  //comments count 
+  useEffect(() => {
+      // מאזין בזמן אמת לכמות התגובות
+      const commentsRef = collection(db, 'recommendations', item.id, 'comments');
+      const unsubscribe = onSnapshot(commentsRef, (snapshot) => {
+          setCommentsCount(snapshot.size); // מעדכן את המספר
+      });
+      return () => unsubscribe();
+  }, [item.id]);
 
   useEffect(() => {
     const fetchAuthor = async () => {
@@ -29,7 +39,6 @@ const RecommendationCard = ({ item }) => {
       }
 
         try {      
-          //case 2 - other user recommendation 
           const userDocRef = doc(db, 'users', item.userId);
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -40,7 +49,6 @@ const RecommendationCard = ({ item }) => {
             });
           }
           else {
-            //if doc does not exists , try using authentication.
             if (item.userId === currentUserId && auth.currentUser) {
               setAuthor({
                 displayName: auth.currentUser.displayName || 'Traveler',
@@ -64,7 +72,6 @@ const RecommendationCard = ({ item }) => {
     const newIsLiked = !isLiked;
     const newLikeCount = newIsLiked ? likeCount + 1 : likeCount - 1;
     
-    // עדכון גם את רשימת הלייקים
     const newLikedByList = newIsLiked 
       ? [...likedByList, currentUserId]
       : likedByList.filter(id => id !== currentUserId);
@@ -95,15 +102,20 @@ const RecommendationCard = ({ item }) => {
     }
   };
 
-  // פונקציה חדשה לפתיחת ה-Modal
   const handleShowLikes = () => {
     if (likeCount > 0) {
       setShowLikesModal(true);
     }
   };
 
+  // שינוי 2: עדכון הלוגיקה של לחיצה על תגובה
   const handleCommentPress = () => {
-    console.log("Open comments for:", item.id);
+    if (onCommentPress) {
+        // אנחנו "מודיעים" לאבא (CommunityScreen) שלחצו על תגובה בפוסט הזה
+        onCommentPress(item.id); 
+    } else {
+        console.log("onCommentPress prop not provided");
+    }
   };
 
   const formatDate = (timestamp) => {
@@ -191,7 +203,7 @@ const RecommendationCard = ({ item }) => {
               />
             </TouchableOpacity>
             
-            {/* Like Count - לחיץ לפתיחת Modal */}
+            {/* Like Count */}
             <TouchableOpacity onPress={handleShowLikes}>
               <Text style={[
                 styles.likeCountText, 
@@ -201,9 +213,12 @@ const RecommendationCard = ({ item }) => {
               </Text>
             </TouchableOpacity>
 
+            {/* Comment Button - מפעיל את הפונקציה המעודכנת */}
             <TouchableOpacity style={styles.actionButton} onPress={handleCommentPress}>
               <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
-              <Text style={styles.actionText}>Comment</Text>
+              <Text style={styles.actionText}>
+                Comment {commentsCount > 0 && `(${commentsCount})`}
+              </Text>
             </TouchableOpacity>
         </View>
 
