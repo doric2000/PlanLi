@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
 	},
 	placeText: {
 		fontSize: 13,
-		color: "#6a71d5ff",
+		color: "#4d4d4dff",
 		fontWeight: "500",
 		maxWidth: 100,
 	},

@@ -74,6 +74,16 @@ export default function AddRoutesScreen({ navigation }) {
 	const [desc, setDesc] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const { user, loading: userLoading } = useCurrentUser();
+	
+    useEffect(() => {
+        const combinedTags = [
+            difficultyTag,
+            travelStyleTag,
+            ...roadTripTags,
+            ...experienceTags,
+        ].filter(Boolean);
+        setTags(combinedTags);
+    }, [difficultyTag, travelStyleTag, roadTripTags, experienceTags]);
 
 	const newRoute = {
 		Title: title,
@@ -118,14 +128,6 @@ export default function AddRoutesScreen({ navigation }) {
 		setter(
 			list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag]
 		);
-
-	const toggleTag = (tag) => {
-		if (tags.includes(tag)) {
-			setTags(tags.filter((t) => t !== tag));
-		} else {
-			setTags([...tags, tag]);
-		}
-	};
 
 	const clearForm = () => {
 		// Clear form
