@@ -20,6 +20,7 @@ import {
 	collection,
 	addDoc,
 	getDoc,
+	updateDoc,
 	doc,
 	serverTimestamp,
 } from "firebase/firestore";
@@ -37,7 +38,7 @@ import DayList from "../../components/DayList.js";
 import { FormInput } from "../../components/FormInput.js";
 import { TagSelector } from "../../components/TagSelector.js";
 
-export default function AddRoutesScreen({ navigation }) {
+export default function AddRoutesScreen({ navigation, route }) {
 	const [tripDays, setTripDays] = useState([]);
 	const [isDayModalVisible, setDayModalVisible] = useState(false);
 	const [editingDayIndex, setEditingDayIndex] = useState(null);
@@ -53,6 +54,22 @@ export default function AddRoutesScreen({ navigation }) {
 	const [desc, setDesc] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const { user, loading: userLoading } = useCurrentUser();
+	const routeToEdit = route?.params?.routeToEdit;
+
+	useEffect(() => {
+		if (routeToEdit) {
+			setTitle(routeToEdit.Title || "");
+			setDays(routeToEdit.days ? routeToEdit.days.toString() : "");
+			setPlaces(routeToEdit.places || [""]);
+			setDistance(routeToEdit.distance ? routeToEdit.distance.toString() : "");
+			setDesc(routeToEdit.desc || "");
+			setTripDays(routeToEdit.tripDaysData || []);
+			setDifficultyTag(routeToEdit.difficultyTag || "");
+			setTravelStyleTag(routeToEdit.travelStyleTag || "");
+			setRoadTripTags(routeToEdit.roadTripTags || []);
+			setExperienceTags(routeToEdit.experienceTags || []);
+		}
+	}, [routeToEdit]);
 
 	useEffect(() => {
 		const combinedTags = [
@@ -133,15 +150,24 @@ export default function AddRoutesScreen({ navigation }) {
 		setSubmitting(true);
 
 		try {
-			await addDoc(collection(db, "routes"), {
-				userId: auth.currentUser?.uid,
-				...newRoute,
-				createdAt: serverTimestamp(),
-			});
-			Alert.alert("Success", "Route added succesfully!");
+			if (routeToEdit) {
+				await updateDoc(doc(db, "routes", routeToEdit.id), {
+					...newRoute,
+					updatedAt: serverTimestamp(),
+				});
+				Alert.alert("Success", "Route updated successfully!");
+			} else {
+				await addDoc(collection(db, "routes"), {
+					userId: auth.currentUser?.uid,
+					...newRoute,
+					createdAt: serverTimestamp(),
+				});
+				Alert.alert("Success", "Route added succesfully!");
+			}
 			clearForm();
 			navigation.goBack();
 		} catch (e) {
+			console.error(e);
 			Alert.alert("Error", "Failed to save route.");
 		} finally {
 			setSubmitting(false);
@@ -271,7 +297,9 @@ export default function AddRoutesScreen({ navigation }) {
 					{submitting ? (
 						<ActivityIndicator color={colors.white} />
 					) : (
-						<Text style={buttons.submitText}>Add Route</Text>
+						<Text style={buttons.submitText}>
+							{routeToEdit ? "Update Route" : "Add Route"}
+						</Text>
 					)}
 				</TouchableOpacity>
 			</View>

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "./Avatar";
 import PlacesRoute from "./PlacesRoute";
+import { ActionMenu } from "./ActionMenu";
 import { cards, typography, tags as tagsStyle, colors } from "../styles";
 
 const RenderTags = ({ tags }) => {
@@ -34,7 +35,7 @@ const RenderTags = ({ tags }) => {
     );
 };
 
-export const RouteCard = ({ item, onPress }) => {
+export const RouteCard = ({ item, onPress, isOwner, onEdit, onDelete }) => {
     let displayUser = "Unknown";
     let userPhoto = null;
     if (item.user) {
@@ -50,7 +51,16 @@ export const RouteCard = ({ item, onPress }) => {
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
             <View style={cards.route}>
-                <Text style={typography.h3}>{item.Title}</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Text style={[typography.h3, { flex: 1 }]}>{item.Title}</Text>
+                    {isOwner && (
+                        <ActionMenu 
+                            onEdit={onEdit} 
+                            onDelete={onDelete} 
+                            title="Manage Route"
+                        />
+                    )}
+                </View>
                 <View style={styles.userContainer}>
                     <Avatar 
                         photoURL={userPhoto} 
