@@ -7,7 +7,14 @@ import {
 	Alert,
 	ActivityIndicator,
 } from "react-native";
-import { colors, common, buttons, forms, tags as tagsStyle, typography } from "../../styles";
+import {
+	colors,
+	common,
+	buttons,
+	forms,
+	tags as tagsStyle,
+	typography,
+} from "../../styles";
 import { db, auth } from "../../config/firebase.js";
 import {
 	collection,
@@ -46,24 +53,24 @@ export default function AddRoutesScreen({ navigation }) {
 	const [desc, setDesc] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const { user, loading: userLoading } = useCurrentUser();
-	
-    useEffect(() => {
-        const combinedTags = [
-            difficultyTag,
-            travelStyleTag,
-            ...roadTripTags,
-            ...experienceTags,
-        ].filter(Boolean);
-        setTags(combinedTags);
-    }, [difficultyTag, travelStyleTag, roadTripTags, experienceTags]);
+
+	useEffect(() => {
+		const combinedTags = [
+			difficultyTag,
+			travelStyleTag,
+			...roadTripTags,
+			...experienceTags,
+		].filter(Boolean);
+		setTags(combinedTags);
+	}, [difficultyTag, travelStyleTag, roadTripTags, experienceTags]);
 
 	const newRoute = {
 		Title: title,
 		user,
-		days,
+		days: parseInt(days, 10),
 		tripDaysData: tripDays,
 		places,
-		distance,
+		distance: parseFloat(distance),
 		tags,
 		desc,
 		difficultyTag,
@@ -227,21 +234,21 @@ export default function AddRoutesScreen({ navigation }) {
 				/>
 
 				<TagSelector
-					label="Difficulty (single)"
+					label='Difficulty (single)'
 					tags={DIFFICULTY_TAGS}
 					selected={difficultyTag}
 					onSelect={setDifficultyTag}
 				/>
 
 				<TagSelector
-					label="Travel Style (single)"
+					label='Travel Style (single)'
 					tags={TRAVEL_STYLE_TAGS}
 					selected={travelStyleTag}
 					onSelect={setTravelStyleTag}
 				/>
 
 				<TagSelector
-					label="Road Trip Tags (multi)"
+					label='Road Trip Tags (multi)'
 					tags={ROAD_TRIP_TAGS}
 					selected={roadTripTags}
 					onSelect={setRoadTripTags}
@@ -249,7 +256,7 @@ export default function AddRoutesScreen({ navigation }) {
 				/>
 
 				<TagSelector
-					label="Experience Tags (multi)"
+					label='Experience Tags (multi)'
 					tags={EXPERIENCE_TAGS}
 					selected={experienceTags}
 					onSelect={setExperienceTags}
@@ -264,9 +271,7 @@ export default function AddRoutesScreen({ navigation }) {
 					{submitting ? (
 						<ActivityIndicator color={colors.white} />
 					) : (
-						<Text style={buttons.submitText}>
-							Add Route
-						</Text>
+						<Text style={buttons.submitText}>Add Route</Text>
 					)}
 				</TouchableOpacity>
 			</View>
@@ -282,5 +287,3 @@ export default function AddRoutesScreen({ navigation }) {
 		</ScrollView>
 	);
 }
-
-
