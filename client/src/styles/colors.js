@@ -36,7 +36,7 @@ export const colors = {
 	infoLight: "#E0F2FE",
 
 	// Like/Heart
-	heart: "#EF4444",
+	heart: "#1E3A5F",
 
 	// Header
 	headerBg: "#49bc8e",

@@ -4,6 +4,33 @@ import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, common } from '../styles';
 
+/**
+ * TimelineItem - A visual timeline component for displaying trip days.
+ * 
+ * This component shows a single day in a vertical timeline format with:
+ * - A location pin icon with the day number
+ * - A preview card with the day's description
+ * - A dashed connector line to the next day (except for the last item)
+ * 
+ * USE THIS COMPONENT to display trip itineraries or multi-day plans
+ * in a visual, easy-to-follow timeline format.
+ * 
+ * @param {Object} day - The day data object containing description and other info
+ * @param {number} index - The zero-based index of this day (used to show "Day 1", "Day 2", etc.)
+ * @param {boolean} isLast - If true, hides the connector line (for the last day)
+ * @param {function} onPress - Function to call when user taps the day (to view details)
+ * 
+ * @example
+ * {tripDays.map((day, index) => (
+ *   <TimelineItem
+ *     key={index}
+ *     day={day}
+ *     index={index}
+ *     isLast={index === tripDays.length - 1}
+ *     onPress={() => openDayDetails(index)}
+ *   />
+ * ))}
+ */
 export const TimelineItem = ({ day, index, isLast, onPress }) => {
     return (
         <View style={common.timelineItem}>

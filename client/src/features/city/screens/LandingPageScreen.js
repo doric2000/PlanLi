@@ -5,7 +5,8 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  ActivityIndicator
+  ActivityIndicator,
+  ImageBackground
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,8 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../../community/components/RecommendationCard';
+import { CommentsModal } from '../../../components/CommentsModal';
+import { BackButton } from '../../../components/BackButton';
 import { colors, typography, common, cards, buttons } from '../../../styles';
-import { useBackButton } from '../../../hooks/useBackButton';
 
 //weather API usage
 const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
@@ -62,8 +64,6 @@ const InfoCard = ({ icon, title, data, subData, color, iconColor, library }) => 
 export default function LandingPageScreen({ navigation, route }) {
   const { cityId, countryId } = route.params;
 
-  useBackButton(navigation);
-
   const [cityData, setCityData] = useState(null);
   const [countryData, setCountryData] = useState(null); // New: for currency rate
   const [cityRecommendations, setCityRecommendations] = useState([]);
@@ -72,6 +72,15 @@ export default function LandingPageScreen({ navigation, route }) {
   const [realWeather, setRealWeather] = useState(null); 
   const [loading, setLoading] = useState(true);
   const [currencyRate, setCurrencyRate] = useState(null); // New: for currency rate
+
+  // Comments Modal State
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState(null);
+
+  const handleOpenComments = (postId) => {
+    setSelectedPostId(postId);
+    setCommentsModalVisible(true);
+  };
 
   // 1. Fetch City Data & Country Data
   useEffect(() => {
@@ -211,38 +220,45 @@ export default function LandingPageScreen({ navigation, route }) {
   }
 
   return (
-    <SafeAreaView style={common.container}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={common.container} edges={['left', 'right', 'bottom']}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <ScrollView 
         contentContainerStyle={common.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* --- Static Header Container --- */}
         <View style={common.staticHeaderContainer}>
-          <LinearGradient
-            colors={['#1E3A5F', colors.primary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={common.gradientHeader}
+          <ImageBackground
+            source={{ uri: cityData.imageUrl || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800' }}
+            style={{ height: 260, width: '100%' }}
+            resizeMode="cover"
           >
-            <View style={common.topBar}>
-              <View style={common.topButton} />
-              <TouchableOpacity style={common.iconButton}>
-                <Ionicons name="heart-outline" size={24} color={colors.white} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
-              <Text style={[typography.h1, { color: colors.white, marginBottom: 4 }]}>{cityData.name}</Text>
-              <View style={common.row}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 12 }}>
-                  <Ionicons name="star" size={14} color="#FFD700" />
-                  <Text style={{ color: colors.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 }}>{cityData.rating}</Text>
-                </View>
-                <Text style={{ color: colors.white, fontSize: 14 }}>{cityData.travelers} Travelers</Text>
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.7)']}
+              style={{ flex: 1, justifyContent: 'space-between', padding: 16, paddingTop: 40, paddingBottom: 35 }}
+            >
+              <View style={common.topBar}>
+                <BackButton />
+                <TouchableOpacity style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 20 }}>
+                  <Ionicons name="heart-outline" size={24} color={colors.white} />
+                </TouchableOpacity>
               </View>
-            </View>
-          </LinearGradient>
+
+              <View style={{ alignItems: 'flex-start' }}>
+                <Text style={[typography.h1, { color: colors.white, marginBottom: 8, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 }]}>{cityData.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15, marginRight: 10 }}>
+                    <Ionicons name="star" size={14} color="#FFD700" />
+                    <Text style={{ color: colors.white, fontWeight: 'bold', marginLeft: 4, fontSize: 13 }}>{cityData.rating}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15 }}>
+                    <Ionicons name="people" size={14} color={colors.white} />
+                    <Text style={{ color: colors.white, marginLeft: 4, fontSize: 13 }}>{cityData.travelers} Travelers</Text>
+                  </View>
+                </View>
+              </View>
+            </LinearGradient>
+          </ImageBackground>
 
           {/* Floating Button */}
           <TouchableOpacity style={buttons.floatingPlan}>
@@ -343,12 +359,22 @@ export default function LandingPageScreen({ navigation, route }) {
                   </View>
               ) : (
                   cityRecommendations.map((item) => (
-                      <RecommendationCard key={item.id} item={item} />
+                      <RecommendationCard 
+                        key={item.id} 
+                        item={item} 
+                        onCommentPress={handleOpenComments}
+                      />
                   ))
               )}
           </View>
         </View>
       </ScrollView>
+
+      <CommentsModal
+        visible={commentsModalVisible}
+        onClose={() => setCommentsModalVisible(false)}
+        postId={selectedPostId}
+      />
     </SafeAreaView>
   );
 }

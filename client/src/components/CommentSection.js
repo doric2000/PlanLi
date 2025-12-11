@@ -19,17 +19,20 @@ import {
   onSnapshot, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { db, auth } from '../../../config/firebase';
-import { common } from '../../../styles';
-import { Avatar } from '../../../components/Avatar';
+import { db, auth } from '../config/firebase';
+import { common } from '../styles';
+import { Avatar } from './Avatar';
 
 /**
- * Component representing a single comment item.
- * @param {Object} props
- * @param {Object} props.item - The comment data object.
+ * CommentItem - Displays a single comment with user info.
+ * 
+ * Shows the commenter's avatar, name, and comment text.
+ * Automatically fetches user data from Firebase based on userId.
+ * 
+ * @param {Object} item - Comment object containing userId and text
  */
 const CommentItem = ({ item }) => {
-    const [userData, setUserData] = useState({ name: 'טוען...', photo: null });
+    const [userData, setUserData] = useState({ name: 'Loading...', photo: null });
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -55,27 +58,30 @@ const CommentItem = ({ item }) => {
 };
 
 /**
- * Main component for the comments section.
- * Handles fetching, adding, and displaying comments for a specific post.
- *
- * @param {Object} props
- * @param {string} props.collectionName - Name of the Firestore collection (e.g., 'recommendations').
- * @param {string} props.postId - ID of the post to fetch comments for.
+ * CommentsSection - The main comments interface component.
+ * 
+ * This component provides the full comments experience:
+ * - Displays a list of all comments for a post
+ * - Allows sorting comments (newest/oldest first)
+ * - Provides an input field to add new comments
+ * - Shows real-time updates when new comments are added
+ * 
+ * NOTE: This component is typically used inside CommentsModal.
+ * For most cases, use CommentsModal instead of this directly.
+ * 
+ * @param {string} collectionName - Firebase collection (e.g., 'recommendations', 'routes')
+ * @param {string} postId - The ID of the post to show comments for
  */
-const CommentsSection = ({ collectionName, postId }) => {
+export const CommentsSection = ({ collectionName, postId }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  
-  // 1. הוספנו State לניהול המיון (ברירת מחדל: הכי חדש ראשון)
   const [isNewestFirst, setIsNewestFirst] = useState(true);
 
-  // האזנה לפיירבייס
   useEffect(() => {
     if (!postId || !collectionName) return;
 
     const commentsRef = collection(db, collectionName, postId, 'comments');
-    // אנחנו מושכים הכל, המיון לתצוגה יקרה אצלנו בקוד
     const q = query(commentsRef, orderBy('createdAt', 'desc')); 
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -89,19 +95,15 @@ const CommentsSection = ({ collectionName, postId }) => {
     return () => unsubscribe(); 
   }, [postId, collectionName]);
 
-  // 2. פונקציה למיון הרשימה לפני התצוגה
   const getSortedComments = () => {
-    // יוצרים עותק וממיינים
     return [...comments].sort((a, b) => {
-        // המרת ה-Timestamp למספרים לצורך השוואה
-        // (הגנה מפני null במקרה שהשרת עוד לא עדכן את הזמן)
         const dateA = a.createdAt?.seconds || 0;
         const dateB = b.createdAt?.seconds || 0;
 
         if (isNewestFirst) {
-            return dateB - dateA; // חדש למעלה
+            return dateB - dateA;
         } else {
-            return dateA - dateB; // ישן למעלה
+            return dateA - dateB;
         }
     });
   };
@@ -109,7 +111,7 @@ const CommentsSection = ({ collectionName, postId }) => {
   const handleAddComment = async () => {
     if (newComment.trim() === '') return;
     if (!auth.currentUser) {
-        Alert.alert("שגיאה", "עליך להתחבר כדי להגיב");
+        Alert.alert("Error", "You must be logged in to comment");
         return;
     }
 
@@ -126,7 +128,7 @@ const CommentsSection = ({ collectionName, postId }) => {
       setNewComment('');
     } catch (error) {
       console.error("Error adding comment:", error);
-      Alert.alert("שגיאה", "לא ניתן היה לשלוח את התגובה");
+      Alert.alert("Error", "Could not send comment");
     } finally {
       setSubmitting(false);
     }
@@ -134,19 +136,16 @@ const CommentsSection = ({ collectionName, postId }) => {
 
   return (
     <View style={common.commentSection}>
-      
-      {/* 3. שינינו את הכותרת שתכלול גם את הכפתור */}
       <View style={common.commentHeaderContainer}>
-          <Text style={common.commentHeaderTitle}>תגובות ({comments.length})</Text>
+          <Text style={common.commentHeaderTitle}>Comments ({comments.length})</Text>
           
           <TouchableOpacity onPress={() => setIsNewestFirst(!isNewestFirst)}>
             <Text style={common.commentSortText}>
-                {isNewestFirst ? 'הצג לפי: הכי חדש ⬇' : 'הצג לפי: הכי ישן ⬆'}
+                {isNewestFirst ? 'Sort: Newest ⬇' : 'Sort: Oldest ⬆'}
             </Text>
           </TouchableOpacity>
       </View>
 
-      {/* רשימת התגובות - משתמשים בפונקציית המיון */}
       <FlatList
         data={getSortedComments()} 
         renderItem={({ item }) => <CommentItem item={item} />}
@@ -155,7 +154,6 @@ const CommentsSection = ({ collectionName, postId }) => {
         nestedScrollEnabled={true}
       />
 
-      {/* שורת כתיבת תגובה (נשארה זהה) */}
       <View style={common.commentInputContainer}>
         <Avatar 
           photoURL={auth.currentUser?.photoURL} 
@@ -164,7 +162,7 @@ const CommentsSection = ({ collectionName, postId }) => {
         />
         <TextInput
           style={common.commentInput}
-          placeholder="כתוב תגובה..."
+          placeholder="Write a comment..."
           value={newComment}
           onChangeText={setNewComment}
           multiline
@@ -183,6 +181,6 @@ const CommentsSection = ({ collectionName, postId }) => {
       </View>
     </View>
   );
-}
+};
 
 export default CommentsSection;

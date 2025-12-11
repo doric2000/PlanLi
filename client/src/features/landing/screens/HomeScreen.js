@@ -31,33 +31,35 @@ export default function HomeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Fetch popular destinations
+  const fetchDestinations = async () => {
+    try {
+      // Query all collections named 'cities' regardless of country
+      const citiesQuery = query(collectionGroup(db, 'cities'), limit(10));
+      const querySnapshot = await getDocs(citiesQuery);
+      
+      const citiesList = querySnapshot.docs.map(doc => {
+        // Extract Parent Country ID
+        const parentCountry = doc.ref.parent.parent;
+        const countryId = parentCountry ? parentCountry.id : 'Unknown';
+
+        return {
+          id: doc.id,
+          countryId: countryId,
+          ...doc.data()
+        };
+      });
+      
+      setDestinations(citiesList);
+    } catch (error) {
+      console.error("Error fetching destinations:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   
-  // 1. Fetch popular destinations (Runs once on mount)
+  // Fetch on mount
   useEffect(() => {
-    const fetchDestinations = async () => {
-      try {
-        // Query all collections named 'cities' regardless of country
-        const citiesQuery = query(collectionGroup(db, 'cities'), limit(10));
-        const querySnapshot = await getDocs(citiesQuery);
-        
-        const citiesList = querySnapshot.docs.map(doc => {
-          // Extract Parent Country ID
-          const parentCountry = doc.ref.parent.parent;
-          const countryId = parentCountry ? parentCountry.id : 'Unknown';
-
-          return {
-            id: doc.id,
-            countryId: countryId,
-            ...doc.data()
-          };
-        });
-        
-        setDestinations(citiesList);
-      } catch (error) {
-        console.error("Error fetching destinations:", error);
-      }
-    };
-
     fetchDestinations();
   }, []);
 

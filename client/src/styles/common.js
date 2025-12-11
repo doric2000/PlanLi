@@ -39,7 +39,8 @@ export const common = {
 	staticHeaderContainer: {
 		zIndex: 100,
 		position: "relative",
-		backgroundColor: "transparent",
+		backgroundColor: "#F9FAFB",
+		marginBottom: 30,
 	},
 
 	gradientHeader: {
@@ -79,7 +80,7 @@ export const common = {
 	// Main content area
 	mainContent: {
 		paddingHorizontal: 20,
-		paddingTop: 40,
+		paddingTop: 20,
 	},
 
 	scrollContent: {

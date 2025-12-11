@@ -65,7 +65,7 @@ export const buttons = {
 		position: 'absolute',
 		bottom: -25,
 		alignSelf: 'center',
-		backgroundColor: '#FF9F1C',
+		backgroundColor: '#1E3A5F',
 		paddingVertical: 15,
 		paddingHorizontal: 40,
 		borderRadius: 12,

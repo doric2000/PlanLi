@@ -7,7 +7,7 @@ import { useLikes } from '../hooks/useLikes';
 import { useCommentsCount } from '../hooks/useCommentsCount';
 import { Avatar } from '../../../components/Avatar';
 import LikesModal from './likesList';
-import { cards } from '../../../styles';
+import { cards, colors } from '../../../styles';
 
 /**
  * Card component for displaying a recommendation item.
@@ -108,7 +108,7 @@ const RecommendationCard = ({ item, onCommentPress }) => {
             <Ionicons
               name={isLiked ? "heart" : "heart-outline"}
               size={24}
-              color={isLiked ? "#EF4444" : "#4B5563"}
+              color={isLiked ? colors.heart : colors.textSecondary}
             />
           </TouchableOpacity>
           

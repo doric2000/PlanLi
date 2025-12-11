@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../components/RecommendationCard';
-import CommentsSection from '../components/CommentSection';
+import { CommentsModal } from '../../../components/CommentsModal';
 import { colors, spacing, common, buttons, tags } from '../../../styles';
 
 const CATEGORIES = ['Food', 'Attraction', 'Hotel', 'Nightlife', 'Shopping'];
@@ -259,35 +259,11 @@ export default function CommunityScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* --- Comments Modal (New) --- */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <CommentsModal
         visible={commentsModalVisible}
-        onRequestClose={() => setCommentsModalVisible(false)}
-      >
-        <View style={common.modalOverlay}>
-          <View style={common.modalContentTall}>
-            
-            {/* Comments Header */}
-            <View style={common.modalHeader}>
-                <Text style={common.modalTitle}>תגובות</Text>
-                <TouchableOpacity onPress={() => setCommentsModalVisible(false)}>
-                    <Ionicons name="close" size={24} color={colors.textPrimary} />
-                </TouchableOpacity>
-            </View>
-            
-            {/* Embedding the comments component */}
-            {selectedPostId && (
-                <CommentsSection 
-                    collectionName="recommendations" 
-                    postId={selectedPostId} 
-                />
-            )}
-            
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setCommentsModalVisible(false)}
+        postId={selectedPostId}
+      />
 
     </SafeAreaView>
   );
