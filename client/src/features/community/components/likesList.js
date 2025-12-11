@@ -5,13 +5,13 @@ import {
   Modal,
   TouchableOpacity,
   FlatList,
-  Image,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { common } from '../../../styles';
+import { Avatar } from '../../../components/Avatar';
 
 /**
  * Modal to display a list of users who liked a post.
@@ -81,15 +81,7 @@ const LikesModal = ({ visible, onClose, likedByUserIds }) => {
   const renderUserItem = ({ item }) => (
     <View style={common.userItem}>
       {/* תמונת פרופיל */}
-      {item.photoURL ? (
-        <Image source={{ uri: item.photoURL }} style={common.userAvatar} />
-      ) : (
-        <View style={[common.userAvatar, common.avatarPlaceholder]}>
-          <Text style={common.avatarInitial}>
-            {item.displayName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-      )}
+      <Avatar photoURL={item.photoURL} displayName={item.displayName} size={44} />
 
       {/* שם המשתמש */}
       <Text style={common.userNameText}>{item.displayName}</Text>

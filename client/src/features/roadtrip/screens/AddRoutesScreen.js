@@ -31,12 +31,12 @@ import {
 } from "../../../constants/Constatns.js";
 import { db, auth } from "../../../config/firebase.js";
 import PlacesInput from "../components/PlacesInput.js";
-import { useBackButton } from "../../../hooks/useBackButton.js";
 import { useCurrentUser } from "../../auth/hooks/useCurrentUser.js";
 import DayEditorModal from "../components/DayEditorModal.js";
 import DayList from "../components/DayList.js";
 import { FormInput } from "../../../components/FormInput.js";
 import { TagSelector } from "../../../components/TagSelector.js";
+import { useBackButton } from "../../../hooks/useBackButton.js";
 
 /**
  * Screen for adding a new route.
@@ -46,6 +46,9 @@ import { TagSelector } from "../../../components/TagSelector.js";
  * @param {Object} route - Route object containing params.
  */
 export default function AddRoutesScreen({ navigation, route }) {
+	// Setup back button with hook
+	useBackButton(navigation, { title: 'Create Route' });
+
 	const [tripDays, setTripDays] = useState([]);
 	const [isDayModalVisible, setDayModalVisible] = useState(false);
 	const [editingDayIndex, setEditingDayIndex] = useState(null);
@@ -136,8 +139,6 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setTags([]);
 		setDesc("");
 	};
-
-	useBackButton(navigation);
 
 	const addRoute = async () => {
 		if (!user) {

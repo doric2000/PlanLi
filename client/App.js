@@ -9,8 +9,8 @@ import AddRecommendationScreen from "./src/features/community/screens/AddRecomme
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
-
 import LandingPageScreen from "./src/features/city/screens/LandingPageScreen";
+
 const Stack = createStackNavigator();
 
 /**
@@ -44,8 +44,6 @@ export default function App() {
 						component={AddRecommendationScreen}
 						options={{
 							presentation: "modal",
-							headerShown: true,
-							title: "Add Recommendation",
 						}}
 					/>
 					<Stack.Screen
@@ -55,11 +53,10 @@ export default function App() {
 					<Stack.Screen
 						name='AddRoutesScreen'
 						component={AddRoutesScreen}
-					></Stack.Screen>
+					/>
 					<Stack.Screen
 						name='RouteDetail'
 						component={RouteDetailScreen}
-						options={{ headerShown: true, title: "Route Details" }}
 					/>
 				</Stack.Navigator>
 			</NavigationContainer>

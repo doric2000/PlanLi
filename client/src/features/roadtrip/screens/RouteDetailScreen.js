@@ -11,10 +11,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import PlacesRoute from "../components/PlacesRoute";
 import { Ionicons } from '@expo/vector-icons';
 import DayViewModal from '../components/DayViewModal';
-import { useBackButton } from '../../../hooks/useBackButton';
 import { colors, common, tags as tagsStyle, typography, spacing } from "../../../styles";
 import { Avatar } from "../../../components/Avatar";
 import { TimelineItem } from "../../../components/TimelineItem";
+import { useBackButton } from "../../../hooks/useBackButton";
 
 const { width } = Dimensions.get('window');
 
@@ -26,11 +26,12 @@ const { width } = Dimensions.get('window');
  * @param {Object} route - Route object containing params.
  */
 export default function RouteDetailScreen({ route, navigation }) {
+    // Setup back button with hook
+    useBackButton(navigation, { title: 'Route Details' });
+
     const { routeData } = route.params;
     const [selectedDay, setSelectedDay] = useState(null);
     const [modalVisible, setModalVisible] = useState(false);
-
-    useBackButton(navigation);
 
     const tripDays = routeData.tripDaysData || [];
 

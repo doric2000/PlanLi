@@ -50,7 +50,7 @@ export const buttons = {
 		width: 60,
 		height: 60,
 		borderRadius: 30,
-		backgroundColor: '#FF9F1C',
+		backgroundColor: '#1E3A5F',
 		justifyContent: 'center',
 		alignItems: 'center',
 		shadowColor: "#000000ff",

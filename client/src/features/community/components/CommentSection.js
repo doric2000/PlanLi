@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  Image,
   ActivityIndicator,
   Alert
 } from 'react-native';
@@ -22,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { common } from '../../../styles';
+import { Avatar } from '../../../components/Avatar';
 
 /**
  * Component representing a single comment item.
@@ -45,7 +45,7 @@ const CommentItem = ({ item }) => {
 
     return (
         <View style={common.commentItem}>
-            <Image source={{ uri: userData.photo || 'https://via.placeholder.com/40' }} style={common.commentAvatar} />
+            <Avatar photoURL={userData.photo} displayName={userData.name} size={40} />
             <View style={common.commentContent}>
                 <Text style={common.commentUserName}>{userData.name}</Text>
                 <Text style={common.commentText}>{item.text}</Text>
@@ -157,9 +157,10 @@ const CommentsSection = ({ collectionName, postId }) => {
 
       {/* שורת כתיבת תגובה (נשארה זהה) */}
       <View style={common.commentInputContainer}>
-        <Image 
-          source={{ uri: auth.currentUser?.photoURL || 'https://via.placeholder.com/40' }} 
-          style={common.commentInputAvatar} 
+        <Avatar 
+          photoURL={auth.currentUser?.photoURL} 
+          displayName={auth.currentUser?.displayName} 
+          size={32} 
         />
         <TextInput
           style={common.commentInput}

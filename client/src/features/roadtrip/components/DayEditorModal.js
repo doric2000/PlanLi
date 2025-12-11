@@ -3,7 +3,6 @@ import {
     Modal, 
     View, 
     Text, 
-    TextInput, 
     TouchableOpacity, 
     StyleSheet, 
     Image, 
@@ -11,6 +10,7 @@ import {
     Alert
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { FormInput } from '../../../components/FormInput';
 
 /**
  * Modal for editing day details in a trip.
@@ -71,17 +71,16 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
                 </View>
 
                 <View style={styles.content}>
-                    <Text style={styles.label}>Story of the day</Text>
-                    <TextInput
-                        style={styles.input}
-                        multiline
+                    <FormInput
+                        label="Story of the day"
                         placeholder="What did you do today? Where did you go?"
                         value={description}
                         onChangeText={setDescription}
-                        textAlignVertical="top"
+                        multiline
+                        style={{ height: 150 }}
                     />
 
-                    <Text style={styles.label}>Photo Memory</Text>
+                    <Text style={styles.photoLabel}>Photo Memory</Text>
                     <TouchableOpacity style={styles.imageUpload} onPress={pickImage}>
                         {image ? (
                             <Image source={{ uri: image }} style={styles.uploadedImage} />
@@ -117,17 +116,7 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 18, fontWeight: '700' },
     headerBtn: { fontSize: 16, color: '#007AFF' },
     content: { padding: 20 },
-    label: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155' },
-    input: {
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderRadius: 12,
-        padding: 12,
-        height: 150,
-        fontSize: 16,
-        marginBottom: 24,
-    },
+    photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155' },
     imageUpload: {
         height: 200,
         backgroundColor: '#F1F5F9',

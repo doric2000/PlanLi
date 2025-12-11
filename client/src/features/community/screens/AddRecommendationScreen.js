@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   ScrollView,
   TouchableOpacity,
   Image,
@@ -19,6 +18,8 @@ import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'fi
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
+import { FormInput } from '../../../components/FormInput';
+import { useBackButton } from '../../../hooks/useBackButton';
 
 const CATEGORIES = ["Food", "Attraction", "Hotel", "Nightlife", "Shopping"];
 const TAGS = ["Kosher", "Family", "Budget", "Luxury", "Nature", "Romantic", "Accessible"];
@@ -32,6 +33,9 @@ const BUDGETS = ["$", "$$", "$$$", "$$$$"];
  * @param {Object} navigation - Navigation object.
  */
 export default function AddRecommendationScreen({ navigation }) {
+  // Setup back button with hook
+  useBackButton(navigation, { title: 'Add Recommendation' });
+
   // Existing fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -205,17 +209,13 @@ export default function AddRecommendationScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Title */}
-        <View style={forms.inputWrapper}>
-          <Text style={forms.label}>Title</Text>
-          <TextInput
-            style={forms.input}
-            placeholder="e.g., Best Hummus in Jaffa"
-            placeholderTextColor={forms.placeholder}
-            value={title}
-            onChangeText={setTitle}
-            textAlign="right"
-          />
-        </View>
+        <FormInput
+          label="Title"
+          placeholder="e.g., Best Hummus in Jaffa"
+          value={title}
+          onChangeText={setTitle}
+          textAlign="right"
+        />
 
         {/* --- Location Selection --- */}
         <View style={styles.rowGroup}>
@@ -250,19 +250,15 @@ export default function AddRecommendationScreen({ navigation }) {
         </View>
 
         {/* Description */}
-        <View style={forms.inputWrapper}>
-          <Text style={forms.label}>Description</Text>
-          <TextInput
-            style={[forms.input, forms.inputMultiline]}
-            placeholder="Tell us why it's great..."
-            placeholderTextColor={forms.placeholder}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlign="right"
-          />
-        </View>
+        <FormInput
+          label="Description"
+          placeholder="Tell us why it's great..."
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={4}
+          textAlign="right"
+        />
 
         {/* Category */}
         <View style={forms.inputWrapper}>

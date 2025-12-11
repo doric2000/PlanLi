@@ -14,6 +14,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../../community/components/RecommendationCard';
 import { colors, typography, common, cards, buttons } from '../../../styles';
+import { useBackButton } from '../../../hooks/useBackButton';
 
 //weather API usage
 const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
@@ -60,6 +61,8 @@ const InfoCard = ({ icon, title, data, subData, color, iconColor, library }) => 
  */
 export default function LandingPageScreen({ navigation, route }) {
   const { cityId, countryId } = route.params;
+
+  useBackButton(navigation);
 
   const [cityData, setCityData] = useState(null);
   const [countryData, setCountryData] = useState(null); // New: for currency rate
@@ -223,10 +226,7 @@ export default function LandingPageScreen({ navigation, route }) {
             style={common.gradientHeader}
           >
             <View style={common.topBar}>
-              <TouchableOpacity onPress={() => navigation.goBack()} style={common.topButton}>
-                <Ionicons name="arrow-forward" size={24} color={colors.white} />
-                <Text style={common.backText}>Back</Text>
-              </TouchableOpacity>
+              <View style={common.topButton} />
               <TouchableOpacity style={common.iconButton}>
                 <Ionicons name="heart-outline" size={24} color={colors.white} />
               </TouchableOpacity>
