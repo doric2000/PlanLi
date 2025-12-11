@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../../../config/firebase';
+import { colors, spacing, typography, buttons, forms, tags as tagStyles } from '../../../styles';
 
 const CATEGORIES = ["Food", "Attraction", "Hotel", "Nightlife", "Shopping"];
 const TAGS = ["Kosher", "Family", "Budget", "Luxury", "Nature", "Romantic", "Accessible"];
@@ -31,7 +32,7 @@ const BUDGETS = ["$", "$$", "$$$", "$$$$"];
  * @param {Object} navigation - Navigation object.
  */
 export default function AddRecommendationScreen({ navigation }) {
-  // שדות קיימים
+  // Existing fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -40,22 +41,22 @@ export default function AddRecommendationScreen({ navigation }) {
   const [imageUri, setImageUri] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // --- שדות חדשים לניהול מיקום ---
+  // --- Location Management Fields ---
   const [countries, setCountries] = useState([]);
   const [cities, setCities] = useState([]);
   
-  const [selectedCountry, setSelectedCountry] = useState(null); // האובייקט המלא של המדינה
-  const [selectedCity, setSelectedCity] = useState(null);       // האובייקט המלא של העיר
+  const [selectedCountry, setSelectedCountry] = useState(null); // Full country object
+  const [selectedCity, setSelectedCity] = useState(null);       // Full city object
 
-  // ניהול המודל (החלון הקופץ) לבחירה
+  // Selection Modal Management
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectionType, setSelectionType] = useState(null); // 'COUNTRY' או 'CITY'
+  const [selectionType, setSelectionType] = useState(null); // 'COUNTRY' or 'CITY'
 
-  // 1. שליפת רשימת המדינות בטעינת המסך
+  // 1. Fetch countries on mount
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const q = query(collection(db, 'countries')); // אפשר להוסיף orderBy('name')
+        const q = query(collection(db, 'countries'));
         const snapshot = await getDocs(q);
         const countriesList = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -70,13 +71,13 @@ export default function AddRecommendationScreen({ navigation }) {
     fetchCountries();
   }, []);
 
-  // 2. פונקציה לשליפת ערים כשבוחרים מדינה
+  // 2. Fetch cities when country selected
   const handleSelectCountry = async (country) => {
     setSelectedCountry(country);
-    setSelectedCity(null); // איפוס העיר אם החלפנו מדינה
+    setSelectedCity(null); // Reset city
     setModalVisible(false);
 
-    // שליפת הערים של המדינה שנבחרה
+    // Fetch cities for selected country
     try {
       const citiesRef = collection(db, 'countries', country.id, 'cities');
       const snapshot = await getDocs(citiesRef);
@@ -104,7 +105,7 @@ export default function AddRecommendationScreen({ navigation }) {
     setModalVisible(true);
   };
 
-  // --- פונקציות קיימות (תמונה, תגיות וכו') ---
+  // --- Helper Functions (Image, Tags, etc) ---
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -142,7 +143,7 @@ export default function AddRecommendationScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
-    // בדיקת תקינות מעודכנת - בודקים שנבחרו מדינה ועיר
+    // Validating all fields including location
     if (!title || !description || !category || !selectedCountry || !selectedCity) {
       Alert.alert("Missing Info", "Please fill in Title, Description, Category, and Location (Country & City).");
       return;
@@ -156,17 +157,17 @@ export default function AddRecommendationScreen({ navigation }) {
         imageUrl = await uploadImage(imageUri);
       }
 
-      // שמירת המסמך המעודכן עם המבנה החדש
+      // Save document with new structure
       await addDoc(collection(db, 'recommendations'), {
         userId: auth.currentUser?.uid || 'anonymous',
         title,
         description,
         
-        // --- שינוי: שמירת המידע המובנה ---
-        location: selectedCity.name || selectedCity.id, // שם העיר לתצוגה פשוטה
-        country: selectedCountry.id,      // שם המדינה לתצוגה
-        countryId: selectedCountry.id,    // מזהה המדינה לסינון
-        cityId: selectedCity.id,          // מזהה העיר לסינון
+        // --- Location Data ---
+        location: selectedCity.name || selectedCity.id, // Display city name
+        country: selectedCountry.id,      // Display country name
+        countryId: selectedCountry.id,    // Country ID for filtering
+        cityId: selectedCity.id,          // City ID for filtering
         
         category,
         tags: selectedTags,
@@ -204,22 +205,23 @@ export default function AddRecommendationScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Title */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Title</Text>
+        <View style={forms.inputWrapper}>
+          <Text style={forms.label}>Title</Text>
           <TextInput
-            style={styles.input}
+            style={forms.input}
             placeholder="e.g., Best Hummus in Jaffa"
+            placeholderTextColor={forms.placeholder}
             value={title}
             onChangeText={setTitle}
             textAlign="right"
           />
         </View>
 
-        {/* --- חלק חדש: בחירת מיקום --- */}
+        {/* --- Location Selection --- */}
         <View style={styles.rowGroup}>
-            {/* כפתור בחירת מדינה */}
+            {/* Country Selector */}
             <View style={{flex: 1, marginRight: 10}}>
-                <Text style={styles.label}>Country</Text>
+                <Text style={forms.label}>Country</Text>
                 <TouchableOpacity 
                     style={styles.selectorButton} 
                     onPress={() => openSelectionModal('COUNTRY')}
@@ -227,13 +229,13 @@ export default function AddRecommendationScreen({ navigation }) {
                     <Text style={selectedCountry ? styles.selectorText : styles.placeholderText}>
                         {selectedCountry ? (selectedCountry.name || selectedCountry.id) : "Select Country"}
                     </Text>
-                    <Ionicons name="chevron-down" size={20} color="#666" />
+                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
             </View>
 
-            {/* כפתור בחירת עיר */}
+            {/* City Selector */}
             <View style={{flex: 1}}>
-                <Text style={styles.label}>City</Text>
+                <Text style={forms.label}>City</Text>
                 <TouchableOpacity 
                     style={[styles.selectorButton, !selectedCountry && styles.disabledButton]} 
                     onPress={() => openSelectionModal('CITY')}
@@ -242,17 +244,18 @@ export default function AddRecommendationScreen({ navigation }) {
                     <Text style={selectedCity ? styles.selectorText : styles.placeholderText}>
                         {selectedCity ? (selectedCity.name || selectedCity.id) : "Select City"}
                     </Text>
-                    <Ionicons name="chevron-down" size={20} color="#666" />
+                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
             </View>
         </View>
 
         {/* Description */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Description</Text>
+        <View style={forms.inputWrapper}>
+          <Text style={forms.label}>Description</Text>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[forms.input, forms.inputMultiline]}
             placeholder="Tell us why it's great..."
+            placeholderTextColor={forms.placeholder}
             value={description}
             onChangeText={setDescription}
             multiline
@@ -262,24 +265,24 @@ export default function AddRecommendationScreen({ navigation }) {
         </View>
 
         {/* Category */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Category</Text>
+        <View style={forms.inputWrapper}>
+          <Text style={forms.label}>Category</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat}
-                style={[styles.chip, category === cat && styles.chipSelected]}
+                style={[tagStyles.chip, category === cat && tagStyles.chipSelected]}
                 onPress={() => setCategory(cat)}
               >
-                <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
+                <Text style={[tagStyles.chipText, category === cat && tagStyles.chipTextSelected]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
         {/* Budget */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Budget</Text>
+        <View style={forms.inputWrapper}>
+          <Text style={forms.label}>Budget</Text>
           <View style={styles.budgetContainer}>
             {BUDGETS.map((b) => (
               <TouchableOpacity
@@ -294,30 +297,30 @@ export default function AddRecommendationScreen({ navigation }) {
         </View>
 
         {/* Tags */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Tags</Text>
+        <View style={forms.inputWrapper}>
+          <Text style={forms.label}>Tags</Text>
           <View style={styles.tagContainer}>
             {TAGS.map((tag) => (
               <TouchableOpacity
                 key={tag}
-                style={[styles.tagChip, selectedTags.includes(tag) && styles.tagChipSelected]}
+                style={[tagStyles.item, selectedTags.includes(tag) && tagStyles.itemSelected]}
                 onPress={() => toggleTag(tag)}
               >
-                <Text style={[styles.tagText, selectedTags.includes(tag) && styles.tagTextSelected]}>{tag}</Text>
+                <Text style={[tagStyles.text, selectedTags.includes(tag) && tagStyles.textSelected]}>{tag}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+          style={[buttons.submit, submitting && buttons.disabled]}
           onPress={handleSubmit}
           disabled={submitting}
         >
           {submitting ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={styles.submitButtonText}>Post Recommendation</Text>
+            <Text style={buttons.submitText}>Post Recommendation</Text>
           )}
         </TouchableOpacity>
 
@@ -372,83 +375,61 @@ export default function AddRecommendationScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  scrollContent: { padding: 20, paddingBottom: 40 },
+  container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { padding: spacing.lg, paddingBottom: 40 },
   imagePicker: {
-    width: '100%', height: 200, backgroundColor: '#f0f2f5', borderRadius: 15,
-    marginBottom: 20, overflow: 'hidden', justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: '#ddd', borderStyle: 'dashed',
+    width: '100%', height: 200, backgroundColor: colors.borderLight, borderRadius: 15,
+    marginBottom: spacing.xl, overflow: 'hidden', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
   },
   previewImage: { width: '100%', height: '100%' },
   imagePlaceholder: { alignItems: 'center' },
-  imagePlaceholderText: { color: '#888', marginTop: 10 },
-  inputGroup: { marginBottom: 20 },
-  rowGroup: { flexDirection: 'row', marginBottom: 20, justifyContent: 'space-between' },
-  label: { fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#333', textAlign: 'right' },
-  input: {
-    backgroundColor: '#f9f9f9', borderWidth: 1, borderColor: '#eee', borderRadius: 8,
-    padding: 12, fontSize: 16,
-  },
-  textArea: { height: 100, textAlignVertical: 'top' },
+  imagePlaceholderText: { color: colors.textMuted, marginTop: 10 },
+  rowGroup: { flexDirection: 'row', marginBottom: spacing.xl, justifyContent: 'space-between' },
   
-  // סגנונות חדשים לבוחר (Selector)
+  // Selector Styles
   selectorButton: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#f9f9f9', borderWidth: 1, borderColor: '#eee', borderRadius: 8,
+    backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
     padding: 12, height: 50
   },
-  disabledButton: { opacity: 0.5, backgroundColor: '#eee' },
-  selectorText: { fontSize: 16, color: '#333' },
-  placeholderText: { fontSize: 16, color: '#aaa' },
+  disabledButton: { opacity: 0.5, backgroundColor: colors.borderLight },
+  selectorText: { fontSize: 16, color: colors.textPrimary },
+  placeholderText: { fontSize: 16, color: colors.placeholder },
 
-  // סגנונות למודל
+  // Modal Styles
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end'
   },
   modalContent: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '70%', padding: 20
+    backgroundColor: colors.white, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    maxHeight: '70%', padding: spacing.xl
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15,
-    borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 10
+    borderBottomWidth: 1, borderBottomColor: colors.borderLight, paddingBottom: 10
   },
-  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  modalTitle: { ...typography.h4 },
   modalItem: {
-    paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+    paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
     flexDirection: 'row', justifyContent: 'space-between'
   },
-  modalItemText: { fontSize: 16 },
-  emptyListText: { textAlign: 'center', marginTop: 20, color: '#888' },
+  modalItemText: { fontSize: 16, color: colors.textPrimary },
+  emptyListText: { textAlign: 'center', marginTop: 20, color: colors.textMuted },
 
-  // שאר הסגנונות הקיימים (Chips, Tags וכו')
+  // Chip Scroll
   chipScroll: { flexDirection: 'row' },
-  chip: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f0f2f5',
-    marginRight: 10, borderWidth: 1, borderColor: 'transparent',
-  },
-  chipSelected: { backgroundColor: '#e6f7f6', borderColor: '#2EC4B6' },
-  chipText: { color: '#555' },
-  chipTextSelected: { color: '#2EC4B6', fontWeight: 'bold' },
+
+  // Budget
   budgetContainer: { flexDirection: 'row', justifyContent: 'space-between' },
   budgetButton: {
-    flex: 1, paddingVertical: 10, backgroundColor: '#f0f2f5', alignItems: 'center',
+    flex: 1, paddingVertical: 10, backgroundColor: colors.borderLight, alignItems: 'center',
     marginHorizontal: 5, borderRadius: 8,
   },
-  budgetButtonSelected: { backgroundColor: '#2EC4B6' },
-  budgetText: { color: '#555', fontWeight: 'bold' },
-  budgetTextSelected: { color: '#fff' },
-  tagContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  tagChip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15, backgroundColor: '#f0f2f5',
-    marginRight: 8, marginBottom: 8,
-  },
-  tagChipSelected: { backgroundColor: '#FF9F1C' },
-  tagText: { fontSize: 12, color: '#555' },
-  tagTextSelected: { color: '#fff', fontWeight: 'bold' },
-  submitButton: {
-    backgroundColor: '#1E3A5F', padding: 16, borderRadius: 10, alignItems: 'center', marginTop: 10,
-  },
-  submitButtonDisabled: { opacity: 0.7 },
-  submitButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  budgetButtonSelected: { backgroundColor: colors.primary },
+  budgetText: { color: colors.textSecondary, fontWeight: 'bold' },
+  budgetTextSelected: { color: colors.white },
+
+  // Tags
+  tagContainer: tagStyles.container,
 });

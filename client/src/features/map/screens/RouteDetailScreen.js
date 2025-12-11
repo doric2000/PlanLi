@@ -12,7 +12,7 @@ import PlacesRoute from "../components/PlacesRoute";
 import { Ionicons } from '@expo/vector-icons';
 import DayViewModal from '../../trips/components/DayViewModal';
 import { useBackButton } from '../../../hooks/useBackButton';
-import { colors, common, tags as tagsStyle, typography } from "../../../styles";
+import { colors, common, tags as tagsStyle, typography, spacing } from "../../../styles";
 import { Avatar } from "../../../components/Avatar";
 import { TimelineItem } from "../../../components/TimelineItem";
 
@@ -142,54 +142,53 @@ export default function RouteDetailScreen({ route, navigation }) {
 const styles = StyleSheet.create({
     headerSection: {
         backgroundColor: colors.white,
-        padding: 20,
+        padding: spacing.screenHorizontal,
         borderBottomWidth: 1,
         borderBottomColor: colors.border
     },
     authorRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginBottom: 12
+        gap: spacing.sm,
+        marginBottom: spacing.md
     },
     metaRow: {
         flexDirection: 'row',
-        gap: 16,
-        marginBottom: 16
+        gap: spacing.lg,
+        marginBottom: spacing.lg
     },
     placesSection: {
-        marginBottom: 16
+        marginBottom: spacing.lg
     },
     subsectionTitle: {
-        fontSize: 12,
-        fontWeight: '700',
+        ...typography.caption,
         color: colors.textLight,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
-        marginBottom: 8
+        marginBottom: spacing.sm
     },
     tagsSection: {
-        marginTop: 8
+        marginTop: spacing.sm
     },
     tagsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8
+        gap: spacing.sm
     },
     timelineSection: {
-        padding: 20,
+        padding: spacing.screenHorizontal,
         backgroundColor: colors.white,
-        marginTop: 8
+        marginTop: spacing.sm
     },
     timeline: {
         paddingLeft: 10
     },
     emptyState: {
-        padding: 40,
+        padding: spacing.xxxl,
         alignItems: 'center'
     },
     emptyText: {
+        ...typography.bodySmall,
         color: colors.textMuted,
-        fontSize: 14
     }
 });

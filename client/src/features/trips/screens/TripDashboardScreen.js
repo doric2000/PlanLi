@@ -15,13 +15,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../../community/components/RecommendationCard';
+import { colors, spacing, typography, shadows, cards } from '../../../styles';
 
 const { width } = Dimensions.get('window');
 
 //weather API usage
 const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
 
-// 2. פונקציית עזר: הופכת את תיאור מזג האוויר לאייקון של Ionicons
+// 2. Helper function: Converts weather description to Ionicons name
 const getWeatherIcon = (weatherCondition) => {
   if (!weatherCondition) return 'help-circle-outline';
   
@@ -35,7 +36,7 @@ const getWeatherIcon = (weatherCondition) => {
   if (condition.includes('drizzle')) return 'water';
   if (condition.includes('mist') || condition.includes('fog')) return 'cloudy-outline';
   
-  return 'partly-sunny'; // ברירת מחדל
+  return 'partly-sunny'; // Default
 };
 
 const InfoCard = ({ icon, title, data, subData, color, iconColor, library }) => (
@@ -65,23 +66,23 @@ export default function TripDashboardScreen({ navigation, route }) {
   const { cityId, countryId } = route.params;
 
   const [cityData, setCityData] = useState(null);
-  const [countryData, setCountryData] = useState(null); // new , for the currency rate.
+  const [countryData, setCountryData] = useState(null); // New: for currency rate
   const [cityRecommendations, setCityRecommendations] = useState([]);
 
-  //states for weather:
+  // Weather states
   const [realWeather, setRealWeather] = useState(null); 
   const [loading, setLoading] = useState(true);
-  const [currencyRate, setCurrencyRate] = useState(null); //new , for the currency rate.
+  const [currencyRate, setCurrencyRate] = useState(null); // New: for currency rate
 
   // 1. Fetch City Data & Country Data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // הכנת הרפרנסים
+        // Prepare references
         const cityRef = doc(db, "countries", countryId, "cities", cityId);
-        const countryRef = doc(db, "countries", countryId); // הרפרנס למדינה (ההורה)
+        const countryRef = doc(db, "countries", countryId); // Parent country reference
 
-        // שליפה במקביל לביצועים מקסימליים
+        // Parallel fetch for performance
         const [citySnap, countrySnap] = await Promise.all([
           getDoc(cityRef),
           getDoc(countryRef)
@@ -92,7 +93,7 @@ export default function TripDashboardScreen({ navigation, route }) {
         }
         
         if (countrySnap.exists()) {
-          setCountryData(countrySnap.data()); // שמירת מידע המדינה (שם יש את המטבע)
+          setCountryData(countrySnap.data()); // Store country data (currency)
         }
 
       } catch (error) {
@@ -127,14 +128,14 @@ export default function TripDashboardScreen({ navigation, route }) {
   }, [cityData]);
 
 
-  // --- 3. חדש: שליפת מזג אוויר בזמן אמת ---
+  // --- 3. New: Fetch Real-Time Weather ---
   useEffect(() => {
     const fetchWeather = async () => {
-      // אם אין שם עיר או אין מפתח API, לא עושים כלום
+      // If no city name or API key, do nothing
       if (!cityData?.name || !WEATHER_API_KEY) return;
 
       try {
-        // קריאה ל-API (יחידות מטריות = צלזיוס)
+        // Call API (Metric units = Celsius)
         const response = await fetch(
           `https://api.openweathermap.org/data/2.5/weather?q=${cityData.name}&units=metric&appid=${WEATHER_API_KEY}`
         );
@@ -142,9 +143,9 @@ export default function TripDashboardScreen({ navigation, route }) {
 
         if (data.main && data.weather) {
           setRealWeather({
-            temp: Math.round(data.main.temp) + "°C", // מעגלים את הטמפרטורה
-            desc: data.weather[0].description,       // תיאור (למשל: broken clouds)
-            main: data.weather[0].main               // ראשי (למשל: Clouds)
+            temp: Math.round(data.main.temp) + "°C", // Round temp
+            desc: data.weather[0].description,       // Description
+            main: data.weather[0].main               // Main condition
           });
         }
       } catch (error) {
@@ -153,40 +154,40 @@ export default function TripDashboardScreen({ navigation, route }) {
     };
 
     fetchWeather();
-  }, [cityData]); // רץ ברגע שיש cityData
+  }, [cityData]); // Runs when cityData is available
 
 
-// 4. שליפת שער מטבע (מעודכן: תומך בכל המטבעות כולל PEN)
+// 4. Fetch Currency Rate (Updated: Supports all currencies)
   useEffect(() => {
     const fetchCurrency = async () => {
-      // בדיקה אם יש לנו את המידע מהמדינה
+      // Check if country data is available
       if (!countryData?.currencyCode) return;
       
       const code = countryData.currencyCode;
 
-      // אם זה שקל, לא צריך להמיר
+      // No conversion needed for ILS
       if (code === 'ILS') {
-        setCurrencyRate("מטבע מקומי (₪)");
+        setCurrencyRate("Local Currency (₪)");
         return;
       }
 
       try {
-        // --- שינוי API ---
-        // שימוש ב-open.er-api.com שתומך גם ב-PEN
+        // --- API Change ---
+        // Using open.er-api.com
         const response = await fetch(`https://open.er-api.com/v6/latest/${code}`);
         const data = await response.json();
         
-        // המבנה כאן הוא data.rates.ILS
+        // Structure is data.rates.ILS
         const rate = data.rates.ILS;
         
         if (rate) {
            setCurrencyRate(`1 ${code} ≈ ${rate.toFixed(2)} ₪`);
         } else {
-           setCurrencyRate("שער לא זמין");
+           setCurrencyRate("Rate Unavailable");
         }
       } catch (error) {
         console.error("Currency Error:", error);
-        setCurrencyRate(`${code} (שגיאה בטעינה)`);
+        setCurrencyRate(`${code} (Load Error)`);
       }
     };
 
@@ -217,21 +218,21 @@ export default function TripDashboardScreen({ navigation, route }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* --- המיכל של החלק הסטטי (כולל הכפתור) --- */}
+        {/* --- Static Header Container --- */}
         <View style={styles.staticHeaderContainer}>
           <LinearGradient
-            colors={['#1E3A5F', '#2EC4B6']}
+            colors={['#1E3A5F', colors.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradientHeader}
           >
             <View style={styles.topBar}>
               <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topButton}>
-                <Ionicons name="arrow-forward" size={24} color="#fff" />
+                <Ionicons name="arrow-forward" size={24} color={colors.white} />
                 <Text style={styles.backText}>Back</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton}>
-                <Ionicons name="heart-outline" size={24} color="#fff" />
+                <Ionicons name="heart-outline" size={24} color={colors.white} />
               </TouchableOpacity>
             </View>
 
@@ -247,33 +248,33 @@ export default function TripDashboardScreen({ navigation, route }) {
             </View>
           </LinearGradient>
 
-          {/* הכפתור נמצא בתוך המיכל הסטטי, אבל ממוקם אבסולוטית למטה */}
+          {/* Floating Button */}
           <TouchableOpacity style={styles.floatingPlanButton}>
             <Text style={styles.planButtonText}>Start Planning Your Trip</Text>
           </TouchableOpacity>
         </View>
 
-        {/* --- התוכן הראשי --- */}
+        {/* --- Main Content --- */}
         <View style={styles.mainContent}>
           <View style={styles.gridContainer}>
-            {/* --- i have updated weather ot use api --- */}
+            {/* --- Weather Widget --- */}
             <InfoCard
               title="Current Weather"
-              // אם יש מידע אמיתי - נשתמש באייקון המחושב, אחרת ברירת מחדל
+              // Use real weather if available, otherwise default
               icon={realWeather ? getWeatherIcon(realWeather.main) : "cloud-outline"}
-              // אם יש מידע אמיתי - נציג אותו, אחרת נציג את מה שיש ב-Firebase (גיבוי)
+              // Use real data if available, otherwise firebase fallback
               data={realWeather ? realWeather.temp : (cityData.widgets?.weather?.temp)}
               subData={realWeather ? realWeather.desc : (cityData.widgets?.weather?.status)}
-              color="#E3F2FD"
-              iconColor="#2196F3"
+              color={colors.infoLight}
+              iconColor={colors.info}
             />
             <InfoCard
               title="Airport"
               icon="airplane"
               data={cityData.widgets?.airport?.name}
               subData={cityData.widgets?.airport?.distance}
-              color="#F3E5F5"
-              iconColor="#9C27B0"
+              color={colors.accentLight} // #E0E7FF close to purple/lavender
+              iconColor={colors.accent}
               library="Material"
             />
             <InfoCard
@@ -281,8 +282,8 @@ export default function TripDashboardScreen({ navigation, route }) {
               icon="cellphone"
               data={cityData.widgets?.sim?.provider}
               subData={cityData.widgets?.sim?.price}
-              color="#E8F5E9"
-              iconColor="#4CAF50"
+              color={colors.successLight}
+              iconColor={colors.success}
               library="Material"
             />
             <InfoCard
@@ -290,8 +291,8 @@ export default function TripDashboardScreen({ navigation, route }) {
               icon="bus"
               data={cityData.widgets?.transport?.type}
               subData={cityData.widgets?.transport?.recommendation}
-              color="#FFF3E0"
-              iconColor="#FF9800"
+              color={colors.warningLight}
+              iconColor={colors.warning}
               library="Material"
             />
           </View>
@@ -299,12 +300,12 @@ export default function TripDashboardScreen({ navigation, route }) {
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Essential Info</Text>
-              <Ionicons name="wifi" size={20} color="#2EC4B6" />
+              <Ionicons name="wifi" size={20} color={colors.primary} />
             </View>
 
             <View style={styles.infoRow}>
               <View style={styles.iconBoxOrange}>
-                <MaterialCommunityIcons name="office-building" size={24} color="#FF9F1C" />
+                <MaterialCommunityIcons name="office-building" size={24} color={colors.secondary} />
               </View>
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoTitle}>Recommended Hotel</Text>
@@ -314,7 +315,7 @@ export default function TripDashboardScreen({ navigation, route }) {
             
             <View style={styles.infoRow}>
               <View style={styles.iconBoxOrange}>
-                <MaterialCommunityIcons name="car-side" size={24} color="#FF9F1C" />
+                <MaterialCommunityIcons name="car-side" size={24} color={colors.secondary} />
               </View>
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoTitle}>Trusted Driver</Text>
@@ -322,10 +323,10 @@ export default function TripDashboardScreen({ navigation, route }) {
               </View>
             </View>
           
-          {/* הצגת המטבע מהמדינה */}
+          {/* Display Country Currency */}
             <View style={[styles.infoRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
               <View style={styles.iconBoxOrange}>
-                <MaterialCommunityIcons name="cash-multiple" size={24} color="#FF9F1C" />
+                <MaterialCommunityIcons name="cash-multiple" size={24} color={colors.secondary} />
               </View>
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoTitle}>Currency ({countryData?.currencyCode || 'Local'})</Text>
@@ -340,7 +341,7 @@ export default function TripDashboardScreen({ navigation, route }) {
               
               {cityRecommendations.length === 0 ? (
                   <View style={styles.emptyState}>
-                      <Ionicons name="chatbubble-ellipses-outline" size={40} color="#ccc" />
+                      <Ionicons name="chatbubble-ellipses-outline" size={40} color={colors.textMuted} />
                       <Text style={styles.emptyText}>No recommendations yet.</Text>
                       <Text style={styles.emptySubText}>Be the first to share your experience!</Text>
                   </View>
@@ -357,83 +358,75 @@ export default function TripDashboardScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F5F7FA',
-  },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: common.container,
+  loadingContainer: common.loadingContainer,
   
-  // מיכל חדש לחלק העליון - מבטיח שהכפתור יהיה מעל הגלילה
+  // Static Header Container
   staticHeaderContainer: {
-    zIndex: 100, // הכי גבוה בהיררכיה
+    zIndex: 100,
     position: 'relative',
     backgroundColor: 'transparent',
-    // אין כאן overflow: hidden כדי שהכפתור יוכל לבלוט
   },
 
   gradientHeader: {
-    paddingBottom: 45, // נותן מקום לכפתור שיושב למטה
+    paddingBottom: 45, // Space for floating button
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: spacing.screenHorizontal,
+    paddingTop: spacing.sm,
   },
   
-  // הכפתור עכשיו צף ביחס למיכל הסטטי
+  // Floating Button
   floatingPlanButton: { 
-    position: 'absolute', // מיקום אבסולוטי בתוך ה-Header Container
-    bottom: -25,          // חורג החוצה ב-25 פיקסלים
+    position: 'absolute',
+    bottom: -25,
     alignSelf: 'center', 
-    backgroundColor: '#FF9F1C', 
+    backgroundColor: colors.secondary,
     paddingVertical: 15, 
     paddingHorizontal: 40, 
-    borderRadius: 12, 
+    borderRadius: spacing.radiusMedium,
     alignItems: 'center', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.2, 
-    shadowRadius: 5, 
-    elevation: 5 
+    ...shadows.medium,
   },
-  planButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  planButtonText: { color: colors.white, fontSize: 16, fontWeight: 'bold' },
 
   scrollContent: {
     paddingBottom: 40,
   },
 
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
   topButton: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 20 },
-  headerContent: { alignItems: 'flex-end', marginBottom: 10 }, // הקטנתי קצת כדי להרים את הטקסט
-  destinationTitle: { fontSize: 32, fontWeight: 'bold', color: '#fff', marginBottom: 5 },
+  iconButton: { backgroundColor: 'rgba(255,255,255,0.2)', padding: spacing.sm, borderRadius: 20 },
+  headerContent: { alignItems: 'flex-end', marginBottom: spacing.md },
+  destinationTitle: { ...typography.h1, color: colors.white, marginBottom: spacing.xs },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
-  statBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 10 },
-  statText: { color: '#fff', fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
-  travelersText: { color: '#fff', fontSize: 14 },
+  statBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 12, marginRight: spacing.md },
+  statText: { color: colors.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
+  travelersText: { color: colors.white, fontSize: 14 },
   
-  mainContent: { paddingHorizontal: 20, paddingTop: 40 },
+  mainContent: { paddingHorizontal: spacing.screenHorizontal, paddingTop: 40 },
   
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   infoCard: { width: (width - 50) / 2, padding: 15, borderRadius: 16, marginBottom: 15, height: 110, justifyContent: 'space-between' },
   cardHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 14, color: '#555', fontWeight: '600' },
+  cardTitle: { ...typography.labelSmall, color: colors.textSecondary },
   cardContent: { alignItems: 'flex-end' },
-  cardData: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 2 },
-  cardSubData: { fontSize: 12, color: '#666' },
+  cardData: { ...typography.h4, marginBottom: 2 },
+  cardSubData: { ...typography.caption, color: colors.textLight },
   
-  sectionContainer: { backgroundColor: '#E0F7FA', borderRadius: 16, padding: 15, marginTop: 10, borderWidth: 1, borderColor: '#B2EBF2' },
+  sectionContainer: { backgroundColor: colors.infoLight, borderRadius: 16, padding: spacing.cardPadding, marginTop: spacing.md, borderWidth: 1, borderColor: '#B2EBF2' },
   sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 15, justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginRight: 10 },
-  infoRow: { backgroundColor: '#fff', borderRadius: 12, padding: 12, flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 10 },
-  iconBoxOrange: { width: 40, height: 40, backgroundColor: '#FFF3E0', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginLeft: 12 },
+  sectionTitle: { ...typography.h4, marginRight: spacing.md },
+  infoRow: { backgroundColor: colors.white, borderRadius: 12, padding: 12, flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 10 },
+  iconBoxOrange: { width: 40, height: 40, backgroundColor: colors.secondaryLight, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginLeft: 12 },
   infoTextContainer: { flex: 1, alignItems: 'flex-end' },
-  infoTitle: { fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 2 },
-  infoSubtitle: { fontSize: 12, color: '#777', textAlign: 'right' },
+  infoTitle: { ...typography.label, marginBottom: 2 },
+  infoSubtitle: { ...typography.caption, color: colors.textLight, textAlign: 'right' },
 
-  feedSection: { marginTop: 30, marginBottom: 20 },
-  feedTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', textAlign: 'right', marginBottom: 5 },
-  feedSubtitle: { fontSize: 14, color: '#666', textAlign: 'right', marginBottom: 15 },
-  emptyState: { alignItems: 'center', padding: 20, marginTop: 10 },
-  emptyText: { color: '#888', marginTop: 10, fontSize: 16 },
-  emptySubText: { color: '#2EC4B6', fontWeight: 'bold', marginTop: 5 }
+  feedSection: { marginTop: spacing.xxxl, marginBottom: spacing.xl },
+  feedTitle: { ...typography.h3, textAlign: 'right', marginBottom: spacing.xs },
+  feedSubtitle: { ...typography.bodySmall, textAlign: 'right', marginBottom: spacing.lg },
+  emptyState: { alignItems: 'center', padding: spacing.xl, marginTop: spacing.md },
+  emptyText: common.emptyText,
+  emptySubText: { color: colors.primary, fontWeight: 'bold', marginTop: spacing.xs }
 });

@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy, limit, collectionGroup } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../../community/components/RecommendationCard';
+import { colors, spacing, typography, buttons, shadows } from '../../../styles';
 
 /**
  * Landing screen for the application.
@@ -32,16 +33,16 @@ export default function HomeScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   
   
-  // 1. פונקציה לשליפת ערים פופולריות (רצה פעם אחת בעלייה)
+  // 1. Fetch popular destinations (Runs once on mount)
   useEffect(() => {
     const fetchDestinations = async () => {
       try {
-        // שליפה מכל הקולקציות שנקראות 'cities' לא משנה תחת איזו מדינה
+        // Query all collections named 'cities' regardless of country
         const citiesQuery = query(collectionGroup(db, 'cities'), limit(10));
         const querySnapshot = await getDocs(citiesQuery);
         
         const citiesList = querySnapshot.docs.map(doc => {
-          // חילוץ ה-ID של המדינה (ההורה של ההורה)
+          // Extract Parent Country ID
           const parentCountry = doc.ref.parent.parent;
           const countryId = parentCountry ? parentCountry.id : 'Unknown';
 
@@ -75,12 +76,12 @@ export default function HomeScreen({ navigation }) {
 
   const filteredDestinations = destinations.filter((city) => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return true; // אין חיפוש -> הצג הכול
+    if (!q) return true; // No search -> show all
 
     const name = (city.name || '').toLowerCase();
     const country = (city.countryId || '').toLowerCase();
 
-    // חיפוש לפי שם עיר או שם מדינה
+    // Search by city name or country name
     return name.includes(q) || country.includes(q);
   });
 
@@ -94,11 +95,11 @@ export default function HomeScreen({ navigation }) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>לאן ההרפתקה הבאה שלך תיקח אותך?</Text>
+          <Text style={styles.headerTitle}>Where will your next adventure take you?</Text>
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+            <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
             <TextInput
-               placeholder="חפש יעדים..."
+               placeholder="Search destinations..."
                style={styles.searchInput}
                textAlign="right"
                value={searchQuery}
@@ -191,35 +192,34 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingBottom: 20,
   },
   header: {
-    backgroundColor: '#1E3A5F',
-    padding: 20,
-    paddingBottom: 30,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: '#1E3A5F', // Keeping brand header
+    padding: spacing.screenHorizontal,
+    paddingBottom: spacing.xxxl,
+    borderBottomLeftRadius: spacing.radiusXL,
+    borderBottomRightRadius: spacing.radiusXL,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
+    ...typography.h3,
+    color: colors.white,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   searchBar: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: spacing.lg,
     height: 50,
   },
   searchIcon: {
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
   searchInput: {
     flex: 1,
@@ -227,37 +227,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   section: {
-    marginTop: 20,
-    paddingHorizontal: 15,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.screenHorizontal,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: spacing.md,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
+    ...typography.h4,
+    marginBottom: spacing.md,
   },
   seeAllText: {
-    color: '#2EC4B6',
+    color: colors.primary,
     fontWeight: '600',
   },
   horizontalScroll: {
     flexDirection: 'row',
   },
   trendingItem: {
-    backgroundColor: '#2EC4B6',
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 20,
-    marginRight: 10,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: spacing.radiusXL,
+    marginRight: spacing.sm,
   },
   trendingText: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: 'bold',
   },
   grid: {
@@ -267,55 +265,50 @@ const styles = StyleSheet.create({
   },
   popularCard: {
     width: '48%',
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 12,
     marginBottom: 15,
     overflow: 'hidden',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    ...shadows.small,
   },
   popularImagePlaceholder: {
     height: 100,
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
-    padding: 8,
+    padding: spacing.sm,
   },
-  // המיכל שעוטף את התמונה והדירוג
+  // Container wrapping image and rating
   popularImageContainer: {
     width: '100%',
     height: 120,
-    position: 'relative', // חשוב! מאפשר לדירוג לצוף מעליו במיקום אבסולוטי
+    position: 'relative', // Allows absolute positioning of rating
   },
 
-  // התמונה עצמה
+  // The image itself
   cardImage: {
     width: '100%',
     height: '100%',
-    // אם הכרטיסייה עצמה עם borderRadius, כדאי שגם לתמונה יהיה:
     borderTopLeftRadius: 12, 
     borderTopRightRadius: 12,
   },
 
-  // התיקון לדירוג:
+  // Rating badge fix:
   ratingBadgeOverImage: {
-    position: 'absolute', // גורם לו לצוף מעל התמונה
-    top: 10,             // 10 פיקסלים מלמעלה
-    right: 10,           // 10 פיקסלים מימין (או left אם תרצו)
+    position: 'absolute',
+    top: 10,
+    right: 10,
     
-    flexDirection: 'row', // <--- זה התיקון! מיישר אותם בשורה אחת
-    alignItems: 'center', // מיישר אותם לגובה (שהכוכב לא יהיה גבוה מהטקסט)
+    flexDirection: 'row',
+    alignItems: 'center',
     
-    backgroundColor: 'rgba(255,255,255,0.9)', // רקע לבן חצי שקוף לקריאות
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 12,
   },
   ratingBadge: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
@@ -327,16 +320,16 @@ const styles = StyleSheet.create({
     marginLeft: 3,
   },
   popularInfo: {
-    padding: 10,
+    padding: spacing.md,
   },
   popularCity: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
   },
   popularCountry: {
     fontSize: 12,
-    color: '#666',
+    color: colors.textLight,
   },
   travelerInfo: {
     flexDirection: 'row',
@@ -345,29 +338,14 @@ const styles = StyleSheet.create({
   },
   travelerText: {
     fontSize: 10,
-    color: '#888',
+    color: colors.textMuted,
     marginLeft: 3,
   },
   emptyText: {
     textAlign: 'center',
-    color: '#888',
+    color: colors.textMuted,
     marginTop: 20,
     width: '100%',
   },
-  fab: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FF9F1C',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
-  },
+  fab: buttons.fab,
 });

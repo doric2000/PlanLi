@@ -5,6 +5,7 @@ import { auth } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { colors, spacing, typography, shadows } from '../../../styles';
 
 const { width, height } = Dimensions.get('window');
 const GOOGLE_LOGO = "https://cdn-icons-png.flaticon.com/512/300/300221.png";
@@ -64,7 +65,7 @@ export default function RegisterScreen({ navigation }) {
               <View style={styles.header}>
                 <View style={styles.logoContainer}>
                    <Image
-                    source={require('../../assets/logo.png')}
+                    source={require('../../../../assets/logo.png')}
                     style={styles.logo}
                     resizeMode="contain"
                   />
@@ -215,7 +216,7 @@ export default function RegisterScreen({ navigation }) {
               </View>
               <View style={styles.cardBackgroundDecoration} pointerEvents="none">
                 <Image
-                  source={require('../../assets/logo.png')}
+                  source={require('../../../../assets/logo.png')}
                   style={styles.cardBackgroundLogo}
                   resizeMode="contain"
                 />
@@ -244,15 +245,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
-    padding: 24,
+    padding: spacing.xxl,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    ...shadows.medium,
     shadowRadius: 12,
-    elevation: 5,
     overflow: 'hidden',
   },
   cardBackgroundDecoration: {
@@ -293,38 +291,36 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    ...typography.h2,
     color: '#1E3A8A',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    ...typography.bodySmall,
+    color: colors.textLight,
     letterSpacing: 0.2,
   },
   form: {
     width: '100%',
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+    ...typography.label,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
     marginLeft: 4,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   inputIcon: {
     marginRight: 12,
@@ -333,29 +329,29 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     fontSize: 15,
-    color: '#1F2937',
+    color: colors.textPrimary,
   },
   eyeIcon: {
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
   termsContainer: {
-    marginVertical: 16,
+    marginVertical: spacing.lg,
     alignItems: 'center',
   },
   termsText: {
-    fontSize: 12,
-    color: '#6B7280',
+    ...typography.caption,
+    color: colors.textLight,
     textAlign: 'center',
     lineHeight: 18,
   },
   link: {
-    color: '#2563EB',
+    color: colors.info,
     fontWeight: '600',
   },
   errorText: {
-    color: '#EF4444',
+    color: colors.error,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
     fontSize: 13,
   },
   button: {
@@ -383,33 +379,29 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.border,
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: '#9CA3AF',
+    marginHorizontal: spacing.lg,
+    color: colors.textMuted,
     fontSize: 13,
   },
   socialContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 20,
-    marginBottom: 32,
+    gap: spacing.xl,
+    marginBottom: spacing.xxxl,
   },
   socialButton: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: colors.borderLight,
+    ...shadows.small,
   },
   socialIcon: {
     width: 24,
@@ -420,18 +412,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
-    color: '#6B7280',
+    ...typography.caption,
+    color: colors.textLight,
     textAlign: 'center',
   },
   signinContainer: {
     flexDirection: 'row',
-    marginTop: 8,
+    marginTop: spacing.sm,
     alignItems: 'center',
   },
   existingAccountText: {
-    fontSize: 14,
-    color: '#6B7280',
+    ...typography.bodySmall,
+    color: colors.textLight,
   },
   signInLink: {
     fontSize: 14,

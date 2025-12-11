@@ -18,6 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import appConfig from "../../../../app.json"
+import { colors, spacing, typography, shadows, common } from "../../../styles";
 
 /**
  * Screen for displaying and editing user profile.
@@ -57,7 +58,7 @@ export default function ProfileScreen({ navigation }) {
                         email: data.email || user.email || '',
                     });
                 } else {
-                    // אם אין מסמך ב-Firestore, נשתמש בנתונים מ-Auth כ-fallback
+                    // If no document in Firestore, use Auth data as fallback
                     setUserData({
                         displayName: user.displayName || 'Traveler',
                         photoURL: user.photoURL || null,
@@ -66,7 +67,7 @@ export default function ProfileScreen({ navigation }) {
                 }
             } catch (error) {
                 console.error('Error fetching user data:', error);
-                // Fallback ל-Auth
+                // Fallback to Auth
                 setUserData({
                     displayName: user.displayName || 'Traveler',
                     photoURL: user.photoURL || null,
@@ -172,12 +173,12 @@ export default function ProfileScreen({ navigation }) {
             await uploadBytes(storageRef, blob);
             const downloadURL = await getDownloadURL(storageRef);
 
-            // עדכון ב-Firebase Auth
+            // Update in Firebase Auth
             await updateProfile(user, {
                 photoURL: downloadURL,
             });
 
-            // עדכון ב-Firestore
+            // Update in Firestore
             const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 
@@ -197,7 +198,7 @@ export default function ProfileScreen({ navigation }) {
                 });
             }
 
-            // עדכון ה-state המקומי
+            // Update local state
             setUserData(prev => ({
                 ...prev,
                 photoURL: downloadURL,
@@ -223,7 +224,7 @@ export default function ProfileScreen({ navigation }) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#4F46E5" />
+                    <ActivityIndicator size="large" color={colors.accent} />
                 </View>
             </SafeAreaView>
         );
@@ -329,33 +330,22 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#F9FAFB",
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    container: common.container,
+    loadingContainer: common.loadingContainer,
     scrollContent: {
         paddingBottom: 40,
     },
     header: {
         alignItems: "center",
-        paddingVertical: 30,
-        backgroundColor: "#fff",
+        paddingVertical: spacing.xxxl,
+        backgroundColor: colors.white,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        elevation: 3,
+        ...shadows.medium,
     },
     avatarContainer: {
         position: "relative",
-        marginBottom: 16,
+        marginBottom: spacing.lg,
     },
     avatar: {
         width: 100,
@@ -363,117 +353,108 @@ const styles = StyleSheet.create({
         borderRadius: 50,
     },
     avatarPlaceholder: {
-        backgroundColor: "#E0E7FF",
+        backgroundColor: colors.accentLight,
         justifyContent: "center",
         alignItems: "center",
         borderWidth: 2,
-        borderColor: "#fff",
+        borderColor: colors.white,
     },
     avatarText: {
         fontSize: 36,
         fontWeight: "bold",
-        color: "#4F46E5",
+        color: colors.accent,
     },
     editAvatarBadge: {
         position: "absolute",
         bottom: 0,
         right: 0,
-        backgroundColor: "#4F46E5",
+        backgroundColor: colors.accent,
         padding: 8,
         borderRadius: 20,
         borderWidth: 2,
-        borderColor: "#fff",
+        borderColor: colors.white,
     },
     name: {
-        fontSize: 22,
-        fontWeight: "bold",
-        color: "#1F2937",
-        marginBottom: 4,
+        ...typography.h3,
+        marginBottom: spacing.xs,
     },
     email: {
-        fontSize: 14,
-        color: "#6B7280",
+        ...typography.bodySmall,
+        color: colors.textLight,
     },
     statsContainer: {
         flexDirection: "row",
-        backgroundColor: "#fff",
-        marginHorizontal: 20,
-        paddingVertical: 20,
+        backgroundColor: colors.white,
+        marginHorizontal: spacing.screenHorizontal,
+        paddingVertical: spacing.xl,
         borderRadius: 15,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2,
+        ...shadows.medium,
         justifyContent: "space-between",
-        marginBottom: 20,
-        marginTop: 20,
+        marginBottom: spacing.xl,
+        marginTop: spacing.xl,
     },
     statItem: {
         flex: 1,
         alignItems: "center",
     },
     statNumber: {
-        fontSize: 18,
-        fontWeight: "bold",
-        color: "#1F2937",
+        ...typography.h4,
     },
     statLabel: {
-        fontSize: 12,
-        color: "#6B7280",
-        marginTop: 4,
+        ...typography.caption,
+        color: colors.textLight,
+        marginTop: spacing.xs,
     },
     statDivider: {
         width: 1,
         height: "60%",
-        backgroundColor: "#E5E7EB",
+        backgroundColor: colors.border,
         alignSelf: "center",
     },
     menuContainer: {
-        backgroundColor: "#fff",
+        backgroundColor: colors.white,
         borderRadius: 15,
-        marginHorizontal: 20,
-        paddingVertical: 10,
+        marginHorizontal: spacing.screenHorizontal,
+        paddingVertical: spacing.md,
     },
     menuItem: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingVertical: 16,
-        paddingHorizontal: 20,
+        paddingVertical: spacing.lg,
+        paddingHorizontal: spacing.xl,
         borderBottomWidth: 1,
-        borderBottomColor: "#F3F4F6",
+        borderBottomColor: colors.borderLight,
     },
     menuItemLeft: {
         flexDirection: "row",
         alignItems: "center",
     },
     menuItemText: {
-        fontSize: 16,
-        marginLeft: 16,
-        color: "#374151",
+        ...typography.body,
+        marginLeft: spacing.lg,
         fontWeight: "500",
     },
     signOutButton: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#FEE2E2",
-        marginHorizontal: 20,
-        marginTop: 24,
-        paddingVertical: 16,
+        backgroundColor: colors.errorLight,
+        marginHorizontal: spacing.screenHorizontal,
+        marginTop: spacing.xxl,
+        paddingVertical: spacing.lg,
         borderRadius: 15,
     },
     signOutText: {
         marginLeft: 8,
         fontSize: 16,
         fontWeight: "600",
-        color: "#EF4444",
+        color: colors.error,
     },
     versionText: {
         textAlign: "center",
-        marginTop: 20,
-        color: "#9CA3AF",
+        marginTop: spacing.xl,
+        color: colors.textMuted,
         fontSize: 12,
     },
 });

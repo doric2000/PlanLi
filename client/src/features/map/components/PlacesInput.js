@@ -8,8 +8,9 @@ import {
 	FlatList,
 	ActivityIndicator,
 } from "react-native";
+import { colors, spacing, typography, shadows } from "../../../styles";
 
-const PlaceholderColor = "#9CA3AF";
+const PlaceholderColor = colors.placeholder;
 
 /**
  * Component for inputting multiple places (cities or countries).
@@ -186,8 +187,8 @@ export default function PlacesInput({ places, setPlaces }) {
 					{loading[index] ? (
 						<ActivityIndicator
 							size='small'
-							color='#0284C7'
-							style={{ marginLeft: 8 }}
+							color={colors.info}
+							style={{ marginLeft: spacing.sm }}
 						/>
 					) : null}
 					{isValid ? <Text style={styles.checkmark}>✓</Text> : null}
@@ -268,74 +269,70 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		marginBottom: 8,
+		marginBottom: spacing.sm,
 	},
-	label: { fontSize: 14, fontWeight: "700", color: "#1f2937" },
+	label: { ...typography.label, color: colors.textPrimary },
 	addBtn: {
 		paddingHorizontal: 10,
 		paddingVertical: 6,
 		borderRadius: 12,
-		backgroundColor: "#e0f2fe",
+		backgroundColor: colors.infoLight,
 	},
-	addText: { color: "#0284C7", fontSize: 16, fontWeight: "700" },
+	addText: { color: colors.info, fontSize: 16, fontWeight: "700" },
 	row: {
 		flexDirection: "row",
 		alignItems: "center",
-		backgroundColor: "#F8FAFC",
+		backgroundColor: colors.background,
 		borderRadius: 12,
 		borderWidth: 1,
-		borderColor: "#E2E8F0",
+		borderColor: colors.border,
 		paddingHorizontal: 10,
 		paddingVertical: 8,
 	},
 	rowError: {
-		borderColor: "#DC2626",
-		backgroundColor: "#FEF2F2",
+		borderColor: colors.error,
+		backgroundColor: colors.errorLight,
 	},
 	rowValid: {
-		borderColor: "#10B981",
-		backgroundColor: "#F0FDF4",
+		borderColor: colors.success,
+		backgroundColor: colors.successLight,
 	},
-	input: { flex: 1, fontSize: 15, color: "#0F172A", paddingVertical: 6 },
+	input: { flex: 1, fontSize: 15, color: colors.textPrimary, paddingVertical: 6 },
 	removeBtn: {
 		width: 32,
 		height: 32,
 		borderRadius: 16,
-		backgroundColor: "#fee2e2",
+		backgroundColor: colors.errorLight,
 		alignItems: "center",
 		justifyContent: "center",
-		marginLeft: 8,
+		marginLeft: spacing.sm,
 	},
-	removeText: { color: "#b91c1c", fontSize: 18, fontWeight: "700" },
+	removeText: { color: colors.error, fontSize: 18, fontWeight: "700" },
 	checkmark: {
-		color: "#10B981",
+		color: colors.success,
 		fontSize: 18,
 		fontWeight: "700",
-		marginLeft: 8,
+		marginLeft: spacing.sm,
 	},
 	errorText: {
-		color: "#DC2626",
+		color: colors.error,
 		fontSize: 12,
 		marginTop: 4,
 		marginLeft: 4,
 	},
 	suggestionsContainer: {
-		backgroundColor: "#fff",
+		backgroundColor: colors.white,
 		borderRadius: 8,
 		borderWidth: 1,
-		borderColor: "#E2E8F0",
+		borderColor: colors.border,
 		marginTop: 4,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.1,
-		shadowRadius: 4,
-		elevation: 3,
+		...shadows.small,
 	},
 	suggestionItem: {
 		paddingVertical: 12,
 		paddingHorizontal: 12,
 		borderBottomWidth: 1,
-		borderBottomColor: "#F1F5F9",
+		borderBottomColor: colors.borderLight,
 	},
 	suggestionContent: {
 		flexDirection: "row",
@@ -344,12 +341,12 @@ const styles = StyleSheet.create({
 	},
 	suggestionText: {
 		fontSize: 14,
-		color: "#0F172A",
+		color: colors.textPrimary,
 		flex: 1,
 	},
 	suggestionType: {
 		fontSize: 11,
-		color: "#64748B",
-		marginLeft: 8,
+		color: colors.textSecondary,
+		marginLeft: spacing.sm,
 	},
 });

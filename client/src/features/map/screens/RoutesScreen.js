@@ -13,7 +13,7 @@ import { collection, getDocs, orderBy, query, deleteDoc, doc } from "firebase/fi
 import { db, auth } from "../../../config/firebase";
 import { useRefresh } from "../../community/hooks/useRefresh";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { common, buttons } from "../../../styles";
+import { common, buttons, colors } from "../../../styles";
 
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../../trips/components/GenerateTripCard";
@@ -126,8 +126,8 @@ export default function RoutesScreen({ navigation }) {
 						<RefreshControl
 							refreshing={isRefreshing}
 							onRefresh={onRefresh}
-							colors={["#1E3A5F"]}
-							tintColor='#1E3A5F'
+							colors={[colors.textPrimary]} // Using dark theme color
+							tintColor={colors.textPrimary}
 						/>
 					}
 					ListEmptyComponent={
