@@ -10,7 +10,7 @@ import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 
-import TripDashboardScreen from "./src/features/city/screens/TripDashboardScreen";
+import LandingPageScreen from "./src/features/city/screens/LandingPageScreen";
 const Stack = createStackNavigator();
 
 /**
@@ -23,7 +23,7 @@ const Stack = createStackNavigator();
  * - Main: Tab Navigator (Home, Community, etc.)
  * - Route: Routes list
  * - AddRecommendation: Modal for adding new content
- * - TripDashboard: Dashboard for trip planning
+ * - LandingPage: Dashboard for Landing Page Screen
  * - AddRoutesScreen: Screen to create/edit routes
  * - RouteDetail: Detailed view of a specific route
  */
@@ -49,8 +49,8 @@ export default function App() {
 						}}
 					/>
 					<Stack.Screen
-						name='TripDashboard'
-						component={TripDashboardScreen}
+						name='LandingPage'
+						component={LandingPageScreen}
 					/>
 					<Stack.Screen
 						name='AddRoutesScreen'

@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   FlatList,
   TouchableOpacity,
@@ -17,7 +16,7 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../components/RecommendationCard';
 import CommentsSection from '../components/CommentSection';
-import { colors, spacing, typography, buttons, tags } from '../../../styles';
+import { colors, spacing, common, buttons, tags } from '../../../styles';
 
 const CATEGORIES = ['Food', 'Attraction', 'Hotel', 'Nightlife', 'Shopping'];
 const BUDGETS = ['$', '$$', '$$$', '$$$$'];
@@ -128,21 +127,21 @@ export default function CommunityScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={common.container}>
       
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>קהילת המטיילים 🌍</Text>
-        <Text style={styles.headerSubtitle}>גלה המלצות חדשות מרחבי העולם</Text>
+      <View style={common.screenHeader}>
+        <Text style={common.screenHeaderTitle}>קהילת המטיילים 🌍</Text>
+        <Text style={common.screenHeaderSubtitle}>גלה המלצות חדשות מרחבי העולם</Text>
         
-        <TouchableOpacity style={styles.filterButton} onPress={() => setFilterVisible(true)}>
+        <TouchableOpacity style={buttons.filterIcon} onPress={() => setFilterVisible(true)}>
             <Ionicons name="options-outline" size={24} color={isFiltered ? colors.primary : colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
       {/* Main List */}
       {loading ? (
-        <View style={styles.center}>
+        <View style={common.center}>
             <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
@@ -156,19 +155,19 @@ export default function CommunityScreen({ navigation }) {
                 onCommentPress={handleOpenComments} 
             />
           )}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={common.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           ListEmptyComponent={
-            <View style={styles.emptyState}>
+            <View style={common.emptyState}>
               <Ionicons name="images-outline" size={50} color={colors.textMuted} />
-              <Text style={styles.emptyText}>
+              <Text style={common.emptyText}>
                 {isFiltered ? 'אין תוצאות מתאימות למסננים שבחרת.' : 'עדיין אין המלצות.'}
               </Text>
               {!isFiltered && (
-                <Text style={styles.emptySubText}>היה הראשון לשתף!</Text>
+                <Text style={common.emptySubText}>היה הראשון לשתף!</Text>
               )}
             </View>
           }
@@ -177,7 +176,7 @@ export default function CommunityScreen({ navigation }) {
 
       {/* Floating Action Button (FAB) */}
       <TouchableOpacity
-        style={styles.fab}
+        style={buttons.fab}
         onPress={() => navigation.navigate('AddRecommendation')}
       >
         <Ionicons name="add" size={32} color="#fff" />
@@ -190,70 +189,70 @@ export default function CommunityScreen({ navigation }) {
         transparent
         onRequestClose={() => setFilterVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalTitle}>מסננים</Text>
+        <View style={common.modalOverlay}>
+          <View style={common.modalContent}>
+            <View style={common.modalHeader}>
+              <Text style={common.modalTitle}>מסננים</Text>
               <TouchableOpacity onPress={() => setFilterVisible(false)}>
                 <Ionicons name="close" size={22} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalLabel}>יעד / עיר / מדינה</Text>
+            <Text style={common.modalLabel}>יעד / עיר / מדינה</Text>
             <TextInput
-              style={styles.modalInput}
+              style={common.modalInput}
               placeholder="תל אביב, יוון, תאילנד..."
               value={filterDestination}
               onChangeText={setFilterDestination}
               textAlign="right"
             />
 
-            <Text style={[styles.modalLabel, { marginTop: spacing.lg }]}>קטגוריה</Text>
-            <View style={styles.chipRow}>
+            <Text style={[common.modalLabel, { marginTop: spacing.lg }]}>קטגוריה</Text>
+            <View style={tags.chipRow}>
               {CATEGORIES.map((cat) => {
                 const selected = filterCategories.includes(cat);
                 return (
                   <TouchableOpacity
                     key={cat}
-                    style={[styles.chip, selected && styles.chipSelected]}
+                    style={[tags.filterChip, selected && tags.filterChipSelected]}
                     onPress={() =>
                       setFilterCategories((prev) =>
                         prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
                       )
                     }
                   >
-                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{cat}</Text>
+                    <Text style={[tags.filterChipText, selected && tags.filterChipTextSelected]}>{cat}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <Text style={[styles.modalLabel, { marginTop: spacing.lg }]}>תקציב</Text>
-            <View style={styles.chipRow}>
+            <Text style={[common.modalLabel, { marginTop: spacing.lg }]}>תקציב</Text>
+            <View style={tags.chipRow}>
               {BUDGETS.map((b) => {
                 const selected = filterBudgets.includes(b);
                 return (
                   <TouchableOpacity
                     key={b}
-                    style={[styles.budgetChip, selected && styles.budgetChipSelected]}
+                    style={[tags.budgetChip, selected && tags.budgetChipSelected]}
                     onPress={() =>
                       setFilterBudgets((prev) =>
                         prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]
                       )
                     }
                   >
-                    <Text style={[styles.budgetChipText, selected && styles.budgetChipTextSelected]}>{b}</Text>
+                    <Text style={[tags.budgetChipText, selected && tags.budgetChipTextSelected]}>{b}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.clearButton} onPress={handleClearFilters}>
-                <Text style={styles.clearButtonText}>נקה</Text>
+            <View style={common.modalActions}>
+              <TouchableOpacity style={buttons.clear} onPress={handleClearFilters}>
+                <Text style={buttons.clearText}>נקה</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.applyButton} onPress={() => setFilterVisible(false)}>
-                <Text style={styles.applyButtonText}>הפעל מסננים</Text>
+              <TouchableOpacity style={buttons.apply} onPress={() => setFilterVisible(false)}>
+                <Text style={buttons.applyText}>הפעל מסננים</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -267,12 +266,12 @@ export default function CommunityScreen({ navigation }) {
         visible={commentsModalVisible}
         onRequestClose={() => setCommentsModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.commentsModalContent}> {/* Special design for comments */}
+        <View style={common.modalOverlay}>
+          <View style={common.modalContentTall}>
             
             {/* Comments Header */}
-            <View style={styles.modalHeaderRow}>
-                <Text style={styles.modalTitle}>תגובות</Text>
+            <View style={common.modalHeader}>
+                <Text style={common.modalTitle}>תגובות</Text>
                 <TouchableOpacity onPress={() => setCommentsModalVisible(false)}>
                     <Ionicons name="close" size={24} color={colors.textPrimary} />
                 </TouchableOpacity>
@@ -293,119 +292,3 @@ export default function CommunityScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: {
-    padding: spacing.xl,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    alignItems: 'center',
-    position: 'relative'
-  },
-  headerTitle: { ...typography.h3, color: '#1E3A5F' }, // Kept specific brand color
-  headerSubtitle: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xs },
-  filterButton: { position: 'absolute', right: 20, top: 25, padding: 5 },
-  listContent: { padding: spacing.lg, paddingBottom: 80 },
-  emptyState: { alignItems: 'center', marginTop: 50 },
-  emptyText: { marginTop: spacing.md, fontSize: 18, color: colors.textMuted },
-  emptySubText: { fontSize: 14, color: colors.primary, fontWeight: 'bold' },
-  fab: buttons.fab,
-  
-  // Modal Common Styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    paddingBottom: spacing.sm
-  },
-  modalTitle: { ...typography.h4 },
-  
-  // Filter Modal Styles
-  modalContent: {
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xxl,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20
-  },
-  modalLabel: {
-    ...typography.label,
-    marginBottom: 6,
-    textAlign: 'right'
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: colors.background,
-    fontSize: 14
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end' },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: colors.borderLight,
-    marginLeft: 8,
-    marginBottom: 8
-  },
-  chipSelected: {
-    backgroundColor: colors.primaryLight,
-    borderWidth: 1,
-    borderColor: colors.primary
-  },
-  chipText: { fontSize: 13, color: colors.textSecondary },
-  chipTextSelected: { color: colors.primary, fontWeight: '700' },
-  budgetChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: colors.borderLight,
-    marginLeft: 8,
-    marginBottom: 8
-  },
-  budgetChipSelected: { backgroundColor: colors.primary },
-  budgetChipText: { fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
-  budgetChipTextSelected: { color: colors.white },
-  modalActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xl },
-  clearButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.textMuted,
-    backgroundColor: colors.background
-  },
-  clearButtonText: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
-  applyButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    backgroundColor: '#1E3A5F'
-  },
-  applyButtonText: { fontSize: 14, color: colors.white, fontWeight: '600' },
-
-  // --- Comments Modal ---
-  commentsModalContent: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: '75%',
-    padding: spacing.xl,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  }
-});

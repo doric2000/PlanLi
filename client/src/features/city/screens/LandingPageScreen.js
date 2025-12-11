@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
   StatusBar,
   ActivityIndicator
 } from 'react-native';
@@ -15,9 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../../community/components/RecommendationCard';
-import { colors, spacing, typography, shadows, cards } from '../../../styles';
-
-const { width } = Dimensions.get('window');
+import { colors, typography, common, cards, buttons } from '../../../styles';
 
 //weather API usage
 const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
@@ -40,18 +36,18 @@ const getWeatherIcon = (weatherCondition) => {
 };
 
 const InfoCard = ({ icon, title, data, subData, color, iconColor, library }) => (
-  <View style={[styles.infoCard, { backgroundColor: color }]}>
-    <View style={styles.cardHeader}>
-      <Text style={styles.cardTitle}>{title}</Text>
+  <View style={[cards.info, { backgroundColor: color }]}>
+    <View style={cards.infoHeader}>
+      <Text style={[typography.labelSmall, { color: colors.textSecondary }]}>{title}</Text>
       {library === 'Material' ? (
         <MaterialCommunityIcons name={icon} size={20} color={iconColor} />
       ) : (
         <Ionicons name={icon} size={20} color={iconColor} />
       )}
     </View>
-    <View style={styles.cardContent}>
-      <Text style={styles.cardData}>{data || '-'}</Text>
-      <Text style={styles.cardSubData}>{subData || ''}</Text>
+    <View style={cards.infoContent}>
+      <Text style={[typography.h4, { marginBottom: 2 }]}>{data || '-'}</Text>
+      <Text style={[typography.caption, { color: colors.textLight }]}>{subData || ''}</Text>
     </View>
   </View>
 );
@@ -62,7 +58,7 @@ const InfoCard = ({ icon, title, data, subData, color, iconColor, library }) => 
  *
  * @param {Object} navigation - Navigation object.
  */
-export default function TripDashboardScreen({ navigation, route }) {
+export default function LandingPageScreen({ navigation, route }) {
   const { cityId, countryId } = route.params;
 
   const [cityData, setCityData] = useState(null);
@@ -197,66 +193,66 @@ export default function TripDashboardScreen({ navigation, route }) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF9F1C" />
+      <View style={common.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.secondary} />
       </View>
     );
   }
 
   if (!cityData) {
     return (
-      <View style={styles.container}>
+      <View style={common.container}>
         <Text style={{ textAlign: 'center', marginTop: 50 }}>City not found.</Text>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={common.container}>
       <StatusBar barStyle="light-content" />
       <ScrollView 
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={common.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* --- Static Header Container --- */}
-        <View style={styles.staticHeaderContainer}>
+        <View style={common.staticHeaderContainer}>
           <LinearGradient
             colors={['#1E3A5F', colors.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.gradientHeader}
+            style={common.gradientHeader}
           >
-            <View style={styles.topBar}>
-              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.topButton}>
+            <View style={common.topBar}>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={common.topButton}>
                 <Ionicons name="arrow-forward" size={24} color={colors.white} />
-                <Text style={styles.backText}>Back</Text>
+                <Text style={common.backText}>Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
+              <TouchableOpacity style={common.iconButton}>
                 <Ionicons name="heart-outline" size={24} color={colors.white} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.headerContent}>
-              <Text style={styles.destinationTitle}>{cityData.name}</Text>
-              <View style={styles.statsRow}>
-                <View style={styles.statBadge}>
+            <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+              <Text style={[typography.h1, { color: colors.white, marginBottom: 4 }]}>{cityData.name}</Text>
+              <View style={common.row}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 12 }}>
                   <Ionicons name="star" size={14} color="#FFD700" />
-                  <Text style={styles.statText}>{cityData.rating}</Text>
+                  <Text style={{ color: colors.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 }}>{cityData.rating}</Text>
                 </View>
-                <Text style={styles.travelersText}>{cityData.travelers} Travelers</Text>
+                <Text style={{ color: colors.white, fontSize: 14 }}>{cityData.travelers} Travelers</Text>
               </View>
             </View>
           </LinearGradient>
 
           {/* Floating Button */}
-          <TouchableOpacity style={styles.floatingPlanButton}>
-            <Text style={styles.planButtonText}>Start Planning Your Trip</Text>
+          <TouchableOpacity style={buttons.floatingPlan}>
+            <Text style={buttons.floatingPlanText}>Start Planning Your Trip</Text>
           </TouchableOpacity>
         </View>
 
         {/* --- Main Content --- */}
-        <View style={styles.mainContent}>
-          <View style={styles.gridContainer}>
+        <View style={common.mainContent}>
+          <View style={cards.infoGrid}>
             {/* --- Weather Widget --- */}
             <InfoCard
               title="Current Weather"
@@ -297,53 +293,53 @@ export default function TripDashboardScreen({ navigation, route }) {
             />
           </View>
 
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Essential Info</Text>
+          <View style={cards.sectionContainer}>
+            <View style={cards.sectionHeader}>
+              <Text style={cards.sectionTitle}>Essential Info</Text>
               <Ionicons name="wifi" size={20} color={colors.primary} />
             </View>
 
-            <View style={styles.infoRow}>
-              <View style={styles.iconBoxOrange}>
+            <View style={cards.infoRow}>
+              <View style={cards.iconBox}>
                 <MaterialCommunityIcons name="office-building" size={24} color={colors.secondary} />
               </View>
-              <View style={styles.infoTextContainer}>
-                <Text style={styles.infoTitle}>Recommended Hotel</Text>
-                <Text style={styles.infoSubtitle}>{cityData.essentialInfo?.hotel || 'N/A'}</Text>
+              <View style={cards.infoTextContainer}>
+                <Text style={cards.infoTitle}>Recommended Hotel</Text>
+                <Text style={cards.infoSubtitle}>{cityData.essentialInfo?.hotel || 'N/A'}</Text>
               </View>
             </View>
             
-            <View style={styles.infoRow}>
-              <View style={styles.iconBoxOrange}>
+            <View style={cards.infoRow}>
+              <View style={cards.iconBox}>
                 <MaterialCommunityIcons name="car-side" size={24} color={colors.secondary} />
               </View>
-              <View style={styles.infoTextContainer}>
-                <Text style={styles.infoTitle}>Trusted Driver</Text>
-                <Text style={styles.infoSubtitle}>{cityData.essentialInfo?.driver || 'N/A'}</Text>
+              <View style={cards.infoTextContainer}>
+                <Text style={cards.infoTitle}>Trusted Driver</Text>
+                <Text style={cards.infoSubtitle}>{cityData.essentialInfo?.driver || 'N/A'}</Text>
               </View>
             </View>
           
           {/* Display Country Currency */}
-            <View style={[styles.infoRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
-              <View style={styles.iconBoxOrange}>
+            <View style={[cards.infoRow, { borderBottomWidth: 0, marginBottom: 0 }]}>
+              <View style={cards.iconBox}>
                 <MaterialCommunityIcons name="cash-multiple" size={24} color={colors.secondary} />
               </View>
-              <View style={styles.infoTextContainer}>
-                <Text style={styles.infoTitle}>Currency ({countryData?.currencyCode || 'Local'})</Text>
-                <Text style={styles.infoSubtitle}>{currencyRate || 'Checking rates...'}</Text>
+              <View style={cards.infoTextContainer}>
+                <Text style={cards.infoTitle}>Currency ({countryData?.currencyCode || 'Local'})</Text>
+                <Text style={cards.infoSubtitle}>{currencyRate || 'Checking rates...'}</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.feedSection}>
-              <Text style={styles.feedTitle}>Community Recommendations</Text>
-              <Text style={styles.feedSubtitle}>What travelers say about {cityData.name}</Text>
+          <View style={common.feedSection}>
+              <Text style={common.feedTitle}>Community Recommendations</Text>
+              <Text style={common.feedSubtitle}>What travelers say about {cityData.name}</Text>
               
               {cityRecommendations.length === 0 ? (
-                  <View style={styles.emptyState}>
+                  <View style={common.emptyState}>
                       <Ionicons name="chatbubble-ellipses-outline" size={40} color={colors.textMuted} />
-                      <Text style={styles.emptyText}>No recommendations yet.</Text>
-                      <Text style={styles.emptySubText}>Be the first to share your experience!</Text>
+                      <Text style={common.emptyText}>No recommendations yet.</Text>
+                      <Text style={common.emptySubText}>Be the first to share your experience!</Text>
                   </View>
               ) : (
                   cityRecommendations.map((item) => (
@@ -356,77 +352,3 @@ export default function TripDashboardScreen({ navigation, route }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: common.container,
-  loadingContainer: common.loadingContainer,
-  
-  // Static Header Container
-  staticHeaderContainer: {
-    zIndex: 100,
-    position: 'relative',
-    backgroundColor: 'transparent',
-  },
-
-  gradientHeader: {
-    paddingBottom: 45, // Space for floating button
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    paddingHorizontal: spacing.screenHorizontal,
-    paddingTop: spacing.sm,
-  },
-  
-  // Floating Button
-  floatingPlanButton: { 
-    position: 'absolute',
-    bottom: -25,
-    alignSelf: 'center', 
-    backgroundColor: colors.secondary,
-    paddingVertical: 15, 
-    paddingHorizontal: 40, 
-    borderRadius: spacing.radiusMedium,
-    alignItems: 'center', 
-    ...shadows.medium,
-  },
-  planButtonText: { color: colors.white, fontSize: 16, fontWeight: 'bold' },
-
-  scrollContent: {
-    paddingBottom: 40,
-  },
-
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xl },
-  topButton: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: { backgroundColor: 'rgba(255,255,255,0.2)', padding: spacing.sm, borderRadius: 20 },
-  headerContent: { alignItems: 'flex-end', marginBottom: spacing.md },
-  destinationTitle: { ...typography.h1, color: colors.white, marginBottom: spacing.xs },
-  statsRow: { flexDirection: 'row', alignItems: 'center' },
-  statBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 12, marginRight: spacing.md },
-  statText: { color: colors.white, fontWeight: 'bold', marginLeft: 4, fontSize: 12 },
-  travelersText: { color: colors.white, fontSize: 14 },
-  
-  mainContent: { paddingHorizontal: spacing.screenHorizontal, paddingTop: 40 },
-  
-  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  infoCard: { width: (width - 50) / 2, padding: 15, borderRadius: 16, marginBottom: 15, height: 110, justifyContent: 'space-between' },
-  cardHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { ...typography.labelSmall, color: colors.textSecondary },
-  cardContent: { alignItems: 'flex-end' },
-  cardData: { ...typography.h4, marginBottom: 2 },
-  cardSubData: { ...typography.caption, color: colors.textLight },
-  
-  sectionContainer: { backgroundColor: colors.infoLight, borderRadius: 16, padding: spacing.cardPadding, marginTop: spacing.md, borderWidth: 1, borderColor: '#B2EBF2' },
-  sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 15, justifyContent: 'space-between' },
-  sectionTitle: { ...typography.h4, marginRight: spacing.md },
-  infoRow: { backgroundColor: colors.white, borderRadius: 12, padding: 12, flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 10 },
-  iconBoxOrange: { width: 40, height: 40, backgroundColor: colors.secondaryLight, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginLeft: 12 },
-  infoTextContainer: { flex: 1, alignItems: 'flex-end' },
-  infoTitle: { ...typography.label, marginBottom: 2 },
-  infoSubtitle: { ...typography.caption, color: colors.textLight, textAlign: 'right' },
-
-  feedSection: { marginTop: spacing.xxxl, marginBottom: spacing.xl },
-  feedTitle: { ...typography.h3, textAlign: 'right', marginBottom: spacing.xs },
-  feedSubtitle: { ...typography.bodySmall, textAlign: 'right', marginBottom: spacing.lg },
-  emptyState: { alignItems: 'center', padding: spacing.xl, marginTop: spacing.md },
-  emptyText: common.emptyText,
-  emptySubText: { color: colors.primary, fontWeight: 'bold', marginTop: spacing.xs }
-});

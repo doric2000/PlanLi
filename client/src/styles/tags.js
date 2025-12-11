@@ -87,4 +87,61 @@ export const tags = {
 		color: "#111827",
 		marginBottom: 8,
 	},
+
+	// Budget chips
+	budgetChip: {
+		paddingHorizontal: 14,
+		paddingVertical: 6,
+		borderRadius: 16,
+		backgroundColor: "#F3F4F6",
+		marginLeft: 8,
+		marginBottom: 8,
+	},
+
+	budgetChipSelected: {
+		backgroundColor: "#2EC4B6",
+	},
+
+	budgetChipText: {
+		fontSize: 13,
+		color: "#111827",
+		fontWeight: "600",
+	},
+
+	budgetChipTextSelected: {
+		color: "#FFFFFF",
+	},
+
+	// Filter chips (variant)
+	filterChip: {
+		paddingHorizontal: 12,
+		paddingVertical: 6,
+		borderRadius: 16,
+		backgroundColor: "#F3F4F6",
+		marginLeft: 8,
+		marginBottom: 8,
+	},
+
+	filterChipSelected: {
+		backgroundColor: "#E0F2FE",
+		borderWidth: 1,
+		borderColor: "#2EC4B6",
+	},
+
+	filterChipText: {
+		fontSize: 13,
+		color: "#4B5563",
+	},
+
+	filterChipTextSelected: {
+		color: "#2EC4B6",
+		fontWeight: "700",
+	},
+
+	// Chip row container
+	chipRow: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		justifyContent: "flex-end",
+	},
 };

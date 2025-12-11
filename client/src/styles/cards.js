@@ -1,3 +1,7 @@
+import { Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+
 export const cards = {
 	// Base card style
 	base: {
@@ -38,6 +42,95 @@ export const cards = {
 		borderWidth: 1,
 		borderColor: "#F3F4F6",
 		overflow: "hidden",
+	},
+
+	// Info card (widget style)
+	info: {
+		width: (width - 50) / 2,
+		padding: 15,
+		borderRadius: 16,
+		marginBottom: 15,
+		height: 110,
+		justifyContent: "space-between",
+	},
+
+	infoHeader: {
+		flexDirection: "row-reverse",
+		justifyContent: "space-between",
+		alignItems: "center",
+	},
+
+	infoContent: {
+		alignItems: "flex-end",
+	},
+
+	infoGrid: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		justifyContent: "space-between",
+	},
+
+	// Section container (e.g., Essential Info)
+	sectionContainer: {
+		backgroundColor: "#E0F2FE",
+		borderRadius: 16,
+		padding: 16,
+		marginTop: 12,
+		borderWidth: 1,
+		borderColor: "#B2EBF2",
+	},
+
+	sectionHeader: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		marginBottom: 15,
+		justifyContent: "space-between",
+	},
+
+	sectionTitle: {
+		fontSize: 18,
+		fontWeight: "600",
+		color: "#111827",
+		marginRight: 12,
+	},
+
+	// Info row (hotel, driver, currency)
+	infoRow: {
+		backgroundColor: "#FFFFFF",
+		borderRadius: 12,
+		padding: 12,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		marginBottom: 10,
+	},
+
+	iconBox: {
+		width: 40,
+		height: 40,
+		backgroundColor: "#FEF3C7",
+		borderRadius: 8,
+		justifyContent: "center",
+		alignItems: "center",
+		marginLeft: 12,
+	},
+
+	infoTextContainer: {
+		flex: 1,
+		alignItems: "flex-end",
+	},
+
+	infoTitle: {
+		fontSize: 14,
+		fontWeight: "600",
+		color: "#111827",
+		marginBottom: 2,
+	},
+
+	infoSubtitle: {
+		fontSize: 12,
+		fontWeight: "500",
+		color: "#6B7280",
+		textAlign: "right",
 	},
 
 	// Card header
@@ -95,5 +188,221 @@ export const cards = {
 	userText: {
 		fontSize: 14,
 		color: "#4B5563",
+	},
+
+	// Recommendation card detailed styles
+	recHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		padding: 12,
+	},
+
+	recAuthorInfo: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+
+	recUsername: {
+		fontSize: 14,
+		fontWeight: "700",
+		color: "#1F2937",
+	},
+
+	recDate: {
+		fontSize: 11,
+		color: "#9CA3AF",
+		marginTop: 2,
+	},
+
+	recImage: {
+		width: "100%",
+		height: 220,
+		backgroundColor: "#F3F4F6",
+	},
+
+	recContent: {
+		padding: 12,
+	},
+
+	recTitleRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: 6,
+	},
+
+	recTitle: {
+		fontSize: 16,
+		fontWeight: "700",
+		color: "#111827",
+		flex: 1,
+		marginRight: 8,
+		textAlign: "left",
+	},
+
+	recCategoryChip: {
+		backgroundColor: "#EFF6FF",
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 12,
+	},
+
+	recCategoryText: {
+		color: "#2563EB",
+		fontSize: 10,
+		fontWeight: "600",
+	},
+
+	recLocationRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginBottom: 8,
+	},
+
+	recLocationText: {
+		fontSize: 13,
+		color: "#2EC4B6",
+		marginLeft: 4,
+		fontWeight: "500",
+	},
+
+	recDescription: {
+		fontSize: 14,
+		color: "#4B5563",
+		lineHeight: 20,
+		textAlign: "left",
+	},
+
+	recFooter: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingHorizontal: 12,
+		paddingVertical: 10,
+		borderTopWidth: 1,
+		borderTopColor: "#F9FAFB",
+	},
+
+	recActionGroup: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+	},
+
+	recActionButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+	},
+
+	recActionText: {
+		fontSize: 14,
+		color: "#4B5563",
+		fontWeight: "500",
+	},
+
+	recLikeCount: {
+		fontSize: 14,
+		color: "#4B5563",
+		fontWeight: "500",
+	},
+
+	recLikeCountClickable: {
+		color: "#1F2937",
+		fontWeight: "600",
+	},
+
+	// Popular destination cards (HomeScreen)
+	popular: {
+		width: "48%",
+		backgroundColor: "#FFFFFF",
+		borderRadius: 12,
+		marginBottom: 15,
+		overflow: "hidden",
+		shadowColor: "#000000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.08,
+		shadowRadius: 4,
+		elevation: 3,
+	},
+
+	popularImageContainer: {
+		width: "100%",
+		height: 120,
+		position: "relative",
+	},
+
+	popularImage: {
+		width: "100%",
+		height: "100%",
+		borderTopLeftRadius: 12,
+		borderTopRightRadius: 12,
+	},
+
+	popularImagePlaceholder: {
+		height: 100,
+		justifyContent: "flex-end",
+		alignItems: "flex-end",
+		padding: 8,
+	},
+
+	popularRatingBadge: {
+		position: "absolute",
+		top: 10,
+		right: 10,
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: "rgba(255,255,255,0.9)",
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 12,
+	},
+
+	popularRatingText: {
+		fontSize: 10,
+		fontWeight: "bold",
+		marginLeft: 3,
+	},
+
+	popularInfo: {
+		padding: 12,
+	},
+
+	popularCity: {
+		fontSize: 16,
+		fontWeight: "bold",
+		color: "#111827",
+	},
+
+	popularCountry: {
+		fontSize: 12,
+		color: "#9CA3AF",
+	},
+
+	popularTravelerRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginTop: 5,
+	},
+
+	popularTravelerText: {
+		fontSize: 10,
+		color: "#6B7280",
+		marginLeft: 3,
+	},
+
+	// Trending item chip
+	trending: {
+		backgroundColor: "#2EC4B6",
+		paddingVertical: 8,
+		paddingHorizontal: 16,
+		borderRadius: 20,
+		marginRight: 8,
+	},
+
+	trendingText: {
+		color: "#FFFFFF",
+		fontWeight: "bold",
 	},
 };

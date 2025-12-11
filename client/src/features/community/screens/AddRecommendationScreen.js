@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   ScrollView,
   TouchableOpacity,
@@ -10,7 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  FlatList
+  FlatList,
+  StyleSheet
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../../../config/firebase';
-import { colors, spacing, typography, buttons, forms, tags as tagStyles } from '../../../styles';
+import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 
 const CATEGORIES = ["Food", "Attraction", "Hotel", "Nightlife", "Shopping"];
 const TAGS = ["Kosher", "Family", "Budget", "Luxury", "Nature", "Romantic", "Accessible"];
@@ -189,7 +189,7 @@ export default function AddRecommendationScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={common.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {/* Image Picker */}
@@ -271,10 +271,10 @@ export default function AddRecommendationScreen({ navigation }) {
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
                 key={cat}
-                style={[tagStyles.chip, category === cat && tagStyles.chipSelected]}
+                style={[tags.chip, category === cat && tags.chipSelected]}
                 onPress={() => setCategory(cat)}
               >
-                <Text style={[tagStyles.chipText, category === cat && tagStyles.chipTextSelected]}>{cat}</Text>
+                <Text style={[tags.chipText, category === cat && tags.chipTextSelected]}>{cat}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -299,14 +299,14 @@ export default function AddRecommendationScreen({ navigation }) {
         {/* Tags */}
         <View style={forms.inputWrapper}>
           <Text style={forms.label}>Tags</Text>
-          <View style={styles.tagContainer}>
+          <View style={tags.container}>
             {TAGS.map((tag) => (
               <TouchableOpacity
                 key={tag}
-                style={[tagStyles.item, selectedTags.includes(tag) && tagStyles.itemSelected]}
+                style={[tags.item, selectedTags.includes(tag) && tags.itemSelected]}
                 onPress={() => toggleTag(tag)}
               >
-                <Text style={[tagStyles.text, selectedTags.includes(tag) && tagStyles.textSelected]}>{tag}</Text>
+                <Text style={[tags.text, selectedTags.includes(tag) && tags.textSelected]}>{tag}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -333,10 +333,10 @@ export default function AddRecommendationScreen({ navigation }) {
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>
+        <View style={common.modalOverlay}>
+            <View style={[common.modalContent, { maxHeight: '70%', padding: spacing.xl }]}>
+                <View style={common.modalHeader}>
+                    <Text style={common.modalTitle}>
                         Select {selectionType === 'COUNTRY' ? 'Country' : 'City'}
                     </Text>
                     <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -374,9 +374,11 @@ export default function AddRecommendationScreen({ navigation }) {
   );
 }
 
+// Screen-specific styles only
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { padding: spacing.lg, paddingBottom: 40 },
+  
+  // Image picker
   imagePicker: {
     width: '100%', height: 200, backgroundColor: colors.borderLight, borderRadius: 15,
     marginBottom: spacing.xl, overflow: 'hidden', justifyContent: 'center', alignItems: 'center',
@@ -385,9 +387,11 @@ const styles = StyleSheet.create({
   previewImage: { width: '100%', height: '100%' },
   imagePlaceholder: { alignItems: 'center' },
   imagePlaceholderText: { color: colors.textMuted, marginTop: 10 },
+  
+  // Row group
   rowGroup: { flexDirection: 'row', marginBottom: spacing.xl, justifyContent: 'space-between' },
   
-  // Selector Styles
+  // Selector
   selectorButton: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
@@ -397,19 +401,7 @@ const styles = StyleSheet.create({
   selectorText: { fontSize: 16, color: colors.textPrimary },
   placeholderText: { fontSize: 16, color: colors.placeholder },
 
-  // Modal Styles
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end'
-  },
-  modalContent: {
-    backgroundColor: colors.white, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    maxHeight: '70%', padding: spacing.xl
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15,
-    borderBottomWidth: 1, borderBottomColor: colors.borderLight, paddingBottom: 10
-  },
-  modalTitle: { ...typography.h4 },
+  // Modal item
   modalItem: {
     paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
     flexDirection: 'row', justifyContent: 'space-between'
@@ -417,7 +409,7 @@ const styles = StyleSheet.create({
   modalItemText: { fontSize: 16, color: colors.textPrimary },
   emptyListText: { textAlign: 'center', marginTop: 20, color: colors.textMuted },
 
-  // Chip Scroll
+  // Chip scroll
   chipScroll: { flexDirection: 'row' },
 
   // Budget
@@ -429,7 +421,4 @@ const styles = StyleSheet.create({
   budgetButtonSelected: { backgroundColor: colors.primary },
   budgetText: { color: colors.textSecondary, fontWeight: 'bold' },
   budgetTextSelected: { color: colors.white },
-
-  // Tags
-  tagContainer: tagStyles.container,
 });

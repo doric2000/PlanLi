@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView, Dimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, typography, shadows } from '../../../styles';
+import { forms } from '../../../styles';
 
-const { width, height } = Dimensions.get('window');
 const GOOGLE_LOGO = "https://cdn-icons-png.flaticon.com/512/300/300221.png";
 const FACEBOOK_LOGO = "https://cdn-icons-png.flaticon.com/512/5968/5968764.png";
 const APPLE_LOGO = "https://cdn-icons-png.flaticon.com/512/0/747.png";
@@ -55,34 +54,34 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardView}>
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={forms.authContainer}>
+      <SafeAreaView style={forms.authSafeArea}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={forms.authKeyboardView}>
+          <ScrollView contentContainerStyle={forms.authScrollContent} showsVerticalScrollIndicator={false}>
 
-            <View style={styles.card}>
+            <View style={forms.authCard}>
               {/* Header */}
-              <View style={styles.header}>
-                <View style={styles.logoContainer}>
+              <View style={forms.authHeader}>
+                <View style={forms.authLogoContainer}>
                    <Image
                     source={require('../../../../assets/logo.png')}
-                    style={styles.logo}
+                    style={forms.authLogo}
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.title}>Create Account</Text>
-                <Text style={styles.subtitle}>Start your travel journey</Text>
+                <Text style={forms.authTitle}>Create Account</Text>
+                <Text style={forms.authSubtitle}>Start your travel journey</Text>
               </View>
 
               {/* Form */}
-              <View style={styles.form}>
+              <View style={forms.authForm}>
                 {/* Full Name */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Full Name</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="person-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <View style={forms.authInputContainer}>
+                  <Text style={forms.authInputLabel}>Full Name</Text>
+                  <View style={forms.authInputWrapper}>
+                    <Ionicons name="person-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
                     <TextInput
-                      style={styles.input}
+                      style={forms.authInput}
                       placeholder="Enter your full name"
                       placeholderTextColor="#9CA3AF"
                       value={fullName}
@@ -93,12 +92,12 @@ export default function RegisterScreen({ navigation }) {
                 </View>
 
                 {/* Email */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Email</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="mail-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <View style={forms.authInputContainer}>
+                  <Text style={forms.authInputLabel}>Email</Text>
+                  <View style={forms.authInputWrapper}>
+                    <Ionicons name="mail-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
                     <TextInput
-                      style={styles.input}
+                      style={forms.authInput}
                       placeholder="Enter your email"
                       placeholderTextColor="#9CA3AF"
                       value={email}
@@ -110,53 +109,53 @@ export default function RegisterScreen({ navigation }) {
                 </View>
 
                 {/* Password */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Password</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <View style={forms.authInputContainer}>
+                  <Text style={forms.authInputLabel}>Password</Text>
+                  <View style={forms.authInputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
                     <TextInput
-                      style={styles.input}
+                      style={forms.authInput}
                       placeholder="Create a password"
                       placeholderTextColor="#9CA3AF"
                       value={password}
                       onChangeText={setPassword}
                       secureTextEntry={securePassword}
                     />
-                    <TouchableOpacity onPress={() => setSecurePassword(!securePassword)} style={styles.eyeIcon}>
+                    <TouchableOpacity onPress={() => setSecurePassword(!securePassword)} style={forms.authEyeIcon}>
                       <Ionicons name={securePassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 {/* Confirm Password */}
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Confirm Password</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={styles.inputIcon} />
+                <View style={forms.authInputContainer}>
+                  <Text style={forms.authInputLabel}>Confirm Password</Text>
+                  <View style={forms.authInputWrapper}>
+                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
                     <TextInput
-                      style={styles.input}
+                      style={forms.authInput}
                       placeholder="Confirm your password"
                       placeholderTextColor="#9CA3AF"
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
                       secureTextEntry={secureConfirmPassword}
                     />
-                    <TouchableOpacity onPress={() => setSecureConfirmPassword(!secureConfirmPassword)} style={styles.eyeIcon}>
+                    <TouchableOpacity onPress={() => setSecureConfirmPassword(!secureConfirmPassword)} style={forms.authEyeIcon}>
                        <Ionicons name={secureConfirmPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
                     </TouchableOpacity>
                   </View>
                 </View>
 
                 {/* Terms Text */}
-                <View style={styles.termsContainer}>
-                  <Text style={styles.termsText}>
+                <View style={forms.authTermsContainer}>
+                  <Text style={forms.authTermsText}>
                     By signing up, you agree to our{' '}
-                    <Text style={styles.link}>Terms of Service</Text> and{' '}
-                    <Text style={styles.link}>Privacy Policy</Text>
+                    <Text style={forms.authTermsLink}>Terms of Service</Text> and{' '}
+                    <Text style={forms.authTermsLink}>Privacy Policy</Text>
                   </Text>
                 </View>
 
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {error ? <Text style={forms.authErrorText}>{error}</Text> : null}
 
                 {/* Register Button */}
                 <TouchableOpacity onPress={handleRegister} activeOpacity={0.8}>
@@ -164,60 +163,60 @@ export default function RegisterScreen({ navigation }) {
                     colors={['#1E3A8A', '#2563EB']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={styles.button}
+                    style={forms.authButton}
                   >
-                    <Text style={styles.buttonText}>Create Account</Text>
+                    <Text style={forms.authButtonText}>Create Account</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
                 {/* Divider */}
-                <View style={styles.dividerContainer}>
-                  <View style={styles.divider} />
-                  <Text style={styles.dividerText}>Or continue with</Text>
-                  <View style={styles.divider} />
+                <View style={forms.authDividerContainer}>
+                  <View style={forms.authDivider} />
+                  <Text style={forms.authDividerText}>Or continue with</Text>
+                  <View style={forms.authDivider} />
                 </View>
 
                 {/* Social Buttons */}
-                <View style={styles.socialContainer}>
-                  <TouchableOpacity style={styles.socialButton}>
+                <View style={forms.authSocialContainer}>
+                  <TouchableOpacity style={forms.authSocialButton}>
                     <Image 
                       source={{ uri: GOOGLE_LOGO }} 
-                      style={styles.socialIcon} 
+                      style={forms.authSocialIcon} 
                     />
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.socialButton}>
+                  <TouchableOpacity style={forms.authSocialButton}>
                     <Image 
                       source={{ uri: FACEBOOK_LOGO }} 
-                      style={styles.socialIcon} 
+                      style={forms.authSocialIcon} 
                     />
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.socialButton}>
+                  <TouchableOpacity style={forms.authSocialButton}>
                     <Image 
                       source={{ uri: APPLE_LOGO }} 
-                      style={styles.socialIcon} 
+                      style={forms.authSocialIcon} 
                     />
                   </TouchableOpacity>
                 </View>
 
                 {/* Footer / Login Link */}
-                <View style={styles.footer}>
-                  <Text style={styles.footerText}>Join thousands of travelers</Text>
-                  <Text style={styles.footerText}>exploring the world together</Text>
+                <View style={forms.authFooter}>
+                  <Text style={forms.authFooterText}>Join thousands of travelers</Text>
+                  <Text style={forms.authFooterText}>exploring the world together</Text>
 
-                  <View style={styles.signinContainer}>
-                    <Text style={styles.existingAccountText}>Already have an account? </Text>
+                  <View style={forms.authLinkContainer}>
+                    <Text style={forms.authLinkText}>Already have an account? </Text>
                     <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                      <Text style={styles.signInLink}>Sign in</Text>
+                      <Text style={forms.authLink}>Sign in</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               </View>
-              <View style={styles.cardBackgroundDecoration} pointerEvents="none">
+              <View style={forms.authCardDecoration} pointerEvents="none">
                 <Image
                   source={require('../../../../assets/logo.png')}
-                  style={styles.cardBackgroundLogo}
+                  style={forms.authCardLogo}
                   resizeMode="contain"
                 />
               </View>
@@ -228,206 +227,3 @@ export default function RegisterScreen({ navigation }) {
     </LinearGradient>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: spacing.xxl,
-    width: '100%',
-    ...shadows.medium,
-    shadowRadius: 12,
-    overflow: 'hidden',
-  },
-  cardBackgroundDecoration: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  cardBackgroundLogo: {
-    width: width * 1.0,
-    height: width * 1.0,
-    opacity: 0.2,
-    tintColor: '#9CA3AF',
-    transform: [{ rotate: '-15deg' }],
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  logoContainer: {
-    marginBottom: 16,
-    shadowColor: '#1E3A8A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    backgroundColor: '#fff',
-    borderRadius: 25,
-    padding: 4,
-  },
-  logo: {
-    width: 120,
-    height: 120,
-    borderRadius: 20,
-  },
-  title: {
-    ...typography.h2,
-    color: '#1E3A8A',
-    marginBottom: spacing.sm,
-    letterSpacing: 0.5,
-  },
-  subtitle: {
-    ...typography.bodySmall,
-    color: colors.textLight,
-    letterSpacing: 0.2,
-  },
-  form: {
-    width: '100%',
-  },
-  inputContainer: {
-    marginBottom: spacing.xl,
-  },
-  inputLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    marginLeft: 4,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: spacing.lg,
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  eyeIcon: {
-    marginLeft: spacing.sm,
-  },
-  termsContainer: {
-    marginVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  termsText: {
-    ...typography.caption,
-    color: colors.textLight,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  link: {
-    color: colors.info,
-    fontWeight: '600',
-  },
-  errorText: {
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    fontSize: 13,
-  },
-  button: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  dividerText: {
-    marginHorizontal: spacing.lg,
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  socialContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.xl,
-    marginBottom: spacing.xxxl,
-  },
-  socialButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.small,
-  },
-  socialIcon: {
-    width: 24,
-    height: 24,
-    resizeMode: 'contain',
-  },
-  footer: {
-    alignItems: 'center',
-  },
-  footerText: {
-    ...typography.caption,
-    color: colors.textLight,
-    textAlign: 'center',
-  },
-  signinContainer: {
-    flexDirection: 'row',
-    marginTop: spacing.sm,
-    alignItems: 'center',
-  },
-  existingAccountText: {
-    ...typography.bodySmall,
-    color: colors.textLight,
-  },
-  signInLink: {
-    fontSize: 14,
-    color: '#1E3A8A',
-    fontWeight: '700',
-  },
-});

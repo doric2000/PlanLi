@@ -1,6 +1,6 @@
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
-import { tags as tagsStyle } from "../styles";
+import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { tags as tagsStyle, spacing } from "../styles";
 
 export const TagSelector = ({ 
     label, 
@@ -31,12 +31,12 @@ export const TagSelector = ({
     };
 
     return (
-        <View style={styles.container}>
+        <View style={tagsStyle.container}>
             {label && <Text style={tagsStyle.sectionLabel}>{label}</Text>}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={{ paddingRight: spacing.screenHorizontal }}
             >
                 {tags.map((tag) => (
                     <TouchableOpacity
@@ -61,12 +61,3 @@ export const TagSelector = ({
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        marginBottom: 12,
-    },
-    scrollContent: {
-        paddingRight: 20,
-    }
-});

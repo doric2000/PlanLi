@@ -1,7 +1,7 @@
 import React from "react";
-import { TouchableOpacity, Alert, StyleSheet } from "react-native";
+import { TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../styles";
+import { colors, common } from "../styles";
 
 export const ActionMenu = ({ onEdit, onDelete, title = "Manage", iconColor = colors.textLight }) => {
   const handleMenuPress = () => {
@@ -17,14 +17,8 @@ export const ActionMenu = ({ onEdit, onDelete, title = "Manage", iconColor = col
   };
 
   return (
-    <TouchableOpacity onPress={handleMenuPress} style={styles.menuButton}>
+    <TouchableOpacity onPress={handleMenuPress} style={common.menuButton}>
       <Ionicons name="ellipsis-horizontal" size={24} color={iconColor} />
     </TouchableOpacity>
   );
 };
-
-const styles = StyleSheet.create({
-  menuButton: {
-    padding: 4,
-  },
-});

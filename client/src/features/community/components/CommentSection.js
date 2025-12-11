@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
   FlatList,
@@ -22,6 +21,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
+import { common } from '../../../styles';
 
 /**
  * Component representing a single comment item.
@@ -44,11 +44,11 @@ const CommentItem = ({ item }) => {
     }, [item.userId]);
 
     return (
-        <View style={styles.commentItem}>
-            <Image source={{ uri: userData.photo || 'https://via.placeholder.com/40' }} style={styles.avatar} />
-            <View style={styles.commentContent}>
-                <Text style={styles.userName}>{userData.name}</Text>
-                <Text style={styles.commentText}>{item.text}</Text>
+        <View style={common.commentItem}>
+            <Image source={{ uri: userData.photo || 'https://via.placeholder.com/40' }} style={common.commentAvatar} />
+            <View style={common.commentContent}>
+                <Text style={common.commentUserName}>{userData.name}</Text>
+                <Text style={common.commentText}>{item.text}</Text>
             </View>
         </View>
     );
@@ -133,14 +133,14 @@ const CommentsSection = ({ collectionName, postId }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={common.commentSection}>
       
       {/* 3. שינינו את הכותרת שתכלול גם את הכפתור */}
-      <View style={styles.headerContainer}>
-          <Text style={styles.headerTitle}>תגובות ({comments.length})</Text>
+      <View style={common.commentHeaderContainer}>
+          <Text style={common.commentHeaderTitle}>תגובות ({comments.length})</Text>
           
           <TouchableOpacity onPress={() => setIsNewestFirst(!isNewestFirst)}>
-            <Text style={styles.sortButtonText}>
+            <Text style={common.commentSortText}>
                 {isNewestFirst ? 'הצג לפי: הכי חדש ⬇' : 'הצג לפי: הכי ישן ⬆'}
             </Text>
           </TouchableOpacity>
@@ -151,25 +151,25 @@ const CommentsSection = ({ collectionName, postId }) => {
         data={getSortedComments()} 
         renderItem={({ item }) => <CommentItem item={item} />}
         keyExtractor={item => item.id}
-        style={styles.list}
+        style={common.commentList}
         nestedScrollEnabled={true}
       />
 
       {/* שורת כתיבת תגובה (נשארה זהה) */}
-      <View style={styles.inputContainer}>
+      <View style={common.commentInputContainer}>
         <Image 
           source={{ uri: auth.currentUser?.photoURL || 'https://via.placeholder.com/40' }} 
-          style={styles.inputAvatar} 
+          style={common.commentInputAvatar} 
         />
         <TextInput
-          style={styles.input}
+          style={common.commentInput}
           placeholder="כתוב תגובה..."
           value={newComment}
           onChangeText={setNewComment}
           multiline
         />
         <TouchableOpacity 
-          style={[styles.sendButton, (!newComment.trim() || submitting) && styles.disabledButton]} 
+          style={[common.commentSendButton, (!newComment.trim() || submitting) && common.commentSendDisabled]} 
           onPress={handleAddComment}
           disabled={!newComment.trim() || submitting}
         >
@@ -183,102 +183,5 @@ const CommentsSection = ({ collectionName, postId }) => {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 20,
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 12,
-  },
-  // 4. עדכון סטיילים לכותרת החדשה
-  headerContainer: {
-    flexDirection: 'row-reverse', // כותרת מימין, כפתור משמאל
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333'
-  },
-  sortButtonText: {
-    fontSize: 14,
-    color: '#2EC4B6', // צבע תואם לכפתור השליחה
-    fontWeight: '600'
-  },
-  list: {
-    maxHeight: 300,
-  },
-  commentItem: {
-    flexDirection: 'row-reverse', // RTL
-    marginBottom: 15,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginLeft: 10,
-    backgroundColor: '#eee'
-  },
-  commentContent: {
-    flex: 1,
-    backgroundColor: '#f5f7fa',
-    borderRadius: 12,
-    padding: 10,
-    borderTopRightRadius: 2,
-  },
-  userName: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    color: '#333',
-    textAlign: 'right' // RTL
-  },
-  commentText: {
-    fontSize: 14,
-    color: '#444',
-    textAlign: 'right', // RTL
-    marginTop: 2
-  },
-  
-  // Input Styles
-  inputContainer: {
-    flexDirection: 'row-reverse', // RTL
-    alignItems: 'center',
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 15,
-  },
-  inputAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginLeft: 10,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#f0f2f5',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    fontSize: 14,
-    textAlign: 'right', // RTL
-    maxHeight: 80,
-    marginLeft: 10,
-  },
-  sendButton: {
-    backgroundColor: '#2EC4B6',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  }
-});
 
 export default CommentsSection;

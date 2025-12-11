@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Image, Text, StyleSheet } from "react-native";
+import { View, Image, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { common } from "../styles";
 
 export const Avatar = ({ photoURL, displayName, size = 36 }) => {
 	if (photoURL) {
@@ -8,7 +9,7 @@ export const Avatar = ({ photoURL, displayName, size = 36 }) => {
 			<Image
 				source={{ uri: photoURL }}
 				style={[
-					styles.avatar,
+					common.avatar,
 					{ width: size, height: size, borderRadius: size / 2 },
 				]}
 			/>
@@ -18,12 +19,12 @@ export const Avatar = ({ photoURL, displayName, size = 36 }) => {
 	return (
 		<View
 			style={[
-				styles.avatarPlaceholder,
+				common.avatarWithPlaceholder,
 				{ width: size, height: size, borderRadius: size / 2 },
 			]}
 		>
 			{displayName ? (
-				<Text style={styles.avatarInitial}>
+				<Text style={common.avatarInitial}>
 					{displayName.charAt(0).toUpperCase()}
 				</Text>
 			) : (
@@ -32,21 +33,3 @@ export const Avatar = ({ photoURL, displayName, size = 36 }) => {
 		</View>
 	);
 };
-
-const styles = StyleSheet.create({
-	avatar: {
-		backgroundColor: "#E2E8F0",
-		marginRight: 10,
-	},
-	avatarPlaceholder: {
-		backgroundColor: "#E0E7FF",
-		justifyContent: "center",
-		alignItems: "center",
-		marginRight: 10,
-	},
-	avatarInitial: {
-		color: "#4F46E5",
-		fontWeight: "bold",
-		fontSize: 14,
-	},
-});

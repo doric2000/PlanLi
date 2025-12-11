@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   ScrollView,
   TouchableOpacity,
@@ -17,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy, limit, collectionGroup } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import RecommendationCard from '../../community/components/RecommendationCard';
-import { colors, spacing, typography, buttons, shadows } from '../../../styles';
+import { colors, spacing, typography, buttons, shadows, common, cards } from '../../../styles';
 
 /**
  * Landing screen for the application.
@@ -69,8 +68,8 @@ export default function HomeScreen({ navigation }) {
   };
 
   const renderTrendingItem = (name) => (
-    <View style={styles.trendingItem} key={name}>
-      <Text style={styles.trendingText}>{name}</Text>
+    <View style={cards.trending} key={name}>
+      <Text style={cards.trendingText}>{name}</Text>
     </View>
   );
 
@@ -86,21 +85,21 @@ export default function HomeScreen({ navigation }) {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={common.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={common.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Where will your next adventure take you?</Text>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+        <View style={common.homeHeader}>
+          <Text style={common.homeHeaderTitle}>Where will your next adventure take you?</Text>
+          <View style={common.homeSearchBar}>
+            <Ionicons name="search" size={20} color={colors.textSecondary} style={common.homeSearchIcon} />
             <TextInput
                placeholder="Search destinations..."
-               style={styles.searchInput}
+               style={common.homeSearchInput}
                textAlign="right"
                value={searchQuery}
                onChangeText={setSearchQuery}
@@ -109,65 +108,65 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Trending Now (Static for now) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trending Now 📈</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+        <View style={common.homeSection}>
+          <Text style={common.homeSectionTitle}>Trending Now 📈</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={common.homeHorizontalScroll}>
             {['Thailand', 'Greece', 'Iceland', 'Portugal'].map(renderTrendingItem)}
           </ScrollView>
         </View>
 
         {/* Popular Destinations - DYNAMIC FROM FIREBASE */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Popular Destinations</Text>
-            <TouchableOpacity><Text style={styles.seeAllText}>View All</Text></TouchableOpacity>
+        <View style={common.homeSection}>
+          <View style={common.homeSectionHeaderRow}>
+            <Text style={common.homeSectionTitle}>Popular Destinations</Text>
+            <TouchableOpacity><Text style={common.homeSeeAllText}>View All</Text></TouchableOpacity>
           </View>
           
-          <View style={styles.grid}>
+          <View style={common.homeGrid}>
             {destinations.length === 0 ? (
-              <Text style={styles.emptyText}>Loading destinations...</Text>
+              <Text style={common.emptyText}>Loading destinations...</Text>
             ) : filteredDestinations.length === 0 ? (
-              <Text style={styles.emptyText}>
+              <Text style={common.emptyText}>
                 No destinations match "{searchQuery}"
               </Text>
             ) : (
               filteredDestinations.map((city) => (
                 <TouchableOpacity 
                   key={city.id} 
-                  style={styles.popularCard}
-                  onPress={() => navigation.navigate('TripDashboard', { 
+                  style={cards.popular}
+                  onPress={() => navigation.navigate('LandingPage', { 
                     cityId: city.id, 
                     countryId: city.countryId 
                   })}
                 >
-                  <View style={styles.popularImageContainer}>
+                  <View style={cards.popularImageContainer}>
                     {city.imageUrl ? (
                       <Image
                         source={{ uri: city.imageUrl }}
-                        style={styles.cardImage}
+                        style={cards.popularImage}
                         resizeMode="cover"
                       />
                     ) : (
                       <View
                         style={[
-                          styles.popularImagePlaceholder,
+                          cards.popularImagePlaceholder,
                           { backgroundColor: '#87CEEB' },
                         ]}
                       />
                     )}
 
-                    <View style={styles.ratingBadgeOverImage}>
+                    <View style={cards.popularRatingBadge}>
                       <Ionicons name="star" size={12} color="#FFD700" />
-                      <Text style={styles.ratingText}>{city.rating}</Text>
+                      <Text style={cards.popularRatingText}>{city.rating}</Text>
                     </View>
                   </View>
 
-                  <View style={styles.popularInfo}>
-                    <Text style={styles.popularCity}>{city.name || city.id}</Text>
-                    <Text style={styles.popularCountry}>{city.countryId}</Text>
-                    <View style={styles.travelerInfo}>
+                  <View style={cards.popularInfo}>
+                    <Text style={cards.popularCity}>{city.name || city.id}</Text>
+                    <Text style={cards.popularCountry}>{city.countryId}</Text>
+                    <View style={cards.popularTravelerRow}>
                       <Ionicons name="location-outline" size={12} color="#666" />
-                      <Text style={styles.travelerText}>
+                      <Text style={cards.popularTravelerText}>
                         {city.travelers || '0'} travelers
                       </Text>
                     </View>
@@ -189,163 +188,3 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  header: {
-    backgroundColor: '#1E3A5F', // Keeping brand header
-    padding: spacing.screenHorizontal,
-    paddingBottom: spacing.xxxl,
-    borderBottomLeftRadius: spacing.radiusXL,
-    borderBottomRightRadius: spacing.radiusXL,
-  },
-  headerTitle: {
-    ...typography.h3,
-    color: colors.white,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  searchBar: {
-    backgroundColor: colors.white,
-    borderRadius: 25,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    height: 50,
-  },
-  searchIcon: {
-    marginRight: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 16,
-  },
-  section: {
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.screenHorizontal,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.h4,
-    marginBottom: spacing.md,
-  },
-  seeAllText: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  horizontalScroll: {
-    flexDirection: 'row',
-  },
-  trendingItem: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: spacing.radiusXL,
-    marginRight: spacing.sm,
-  },
-  trendingText: {
-    color: colors.white,
-    fontWeight: 'bold',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  popularCard: {
-    width: '48%',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    marginBottom: 15,
-    overflow: 'hidden',
-    ...shadows.small,
-  },
-  popularImagePlaceholder: {
-    height: 100,
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    padding: spacing.sm,
-  },
-  // Container wrapping image and rating
-  popularImageContainer: {
-    width: '100%',
-    height: 120,
-    position: 'relative', // Allows absolute positioning of rating
-  },
-
-  // The image itself
-  cardImage: {
-    width: '100%',
-    height: '100%',
-    borderTopLeftRadius: 12, 
-    borderTopRightRadius: 12,
-  },
-
-  // Rating badge fix:
-  ratingBadgeOverImage: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    
-    flexDirection: 'row',
-    alignItems: 'center',
-    
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 3,
-  },
-  popularInfo: {
-    padding: spacing.md,
-  },
-  popularCity: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-  },
-  popularCountry: {
-    fontSize: 12,
-    color: colors.textLight,
-  },
-  travelerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  travelerText: {
-    fontSize: 10,
-    color: colors.textMuted,
-    marginLeft: 3,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    marginTop: 20,
-    width: '100%',
-  },
-  fab: buttons.fab,
-});
