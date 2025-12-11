@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from '../features/landing/screens/HomeScreen';
 import CommunityScreen from '../features/community/screens/CommunityScreen';
-import RoutesScreen from '../features/map/screens/RoutesScreen';
+import RoutesScreen from '../features/roadtrip/screens/RoutesScreen';
 import ProfileScreen from '../features/profile/screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();

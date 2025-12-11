@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { common, buttons, colors } from "../../../styles";
 
 import { RouteCard } from "../components/RouteCard";
-import { GenerateTripCard } from "../../trips/components/GenerateTripCard";
+import { GenerateTripCard } from "../components/GenerateTripCard";
 
 /**
  * Screen for displaying a list of routes.

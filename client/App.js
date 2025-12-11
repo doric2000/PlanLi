@@ -6,11 +6,11 @@ import LoginScreen from "./src/features/auth/screens/LoginScreen";
 import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import TabNavigator from "./src/navigation/TabNavigator";
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
-import AddRoutesScreen from "./src/features/map/screens/AddRoutesScreen";
-import RoutesScreen from "./src/features/map/screens/RoutesScreen";
-import RouteDetailScreen from "./src/features/map/screens/RouteDetailScreen";
+import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
+import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
+import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 
-import TripDashboardScreen from "./src/features/trips/screens/TripDashboardScreen";
+import TripDashboardScreen from "./src/features/city/screens/TripDashboardScreen";
 const Stack = createStackNavigator();
 
 /**

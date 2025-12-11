@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PlacesRoute from "../components/PlacesRoute";
 import { Ionicons } from '@expo/vector-icons';
-import DayViewModal from '../../trips/components/DayViewModal';
+import DayViewModal from '../components/DayViewModal';
 import { useBackButton } from '../../../hooks/useBackButton';
 import { colors, common, tags as tagsStyle, typography, spacing } from "../../../styles";
 import { Avatar } from "../../../components/Avatar";

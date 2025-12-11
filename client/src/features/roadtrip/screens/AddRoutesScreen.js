@@ -33,8 +33,8 @@ import { db, auth } from "../../../config/firebase.js";
 import PlacesInput from "../components/PlacesInput.js";
 import { useBackButton } from "../../../hooks/useBackButton.js";
 import { useCurrentUser } from "../../auth/hooks/useCurrentUser.js";
-import DayEditorModal from "../../trips/components/DayEditorModal.js";
-import DayList from "../../trips/components/DayList.js";
+import DayEditorModal from "../components/DayEditorModal.js";
+import DayList from "../components/DayList.js";
 import { FormInput } from "../../../components/FormInput.js";
 import { TagSelector } from "../../../components/TagSelector.js";
 
