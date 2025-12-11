@@ -1,120 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, increment, arrayUnion, arrayRemove,collection, onSnapshot} from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
+import { useUserData } from '../hooks/useUserData';
+import { useLikes } from '../hooks/useLikes';
+import { useCommentsCount } from '../hooks/useCommentsCount';
+import { Avatar } from './Avatar';
 import LikesModal from './likesList';
 
-// שינוי 1: הוספת onCommentPress לרשימת הפרמטרים (props)
 const RecommendationCard = ({ item, onCommentPress }) => {
   const navigation = useNavigation();
-  const currentUserId = auth.currentUser?.uid;
-  const [isLiked, setIsLiked] = useState(item.likedBy?.includes(currentUserId) || false);
-  const [likeCount, setLikeCount] = useState(item.likes || 0);
-  const [likedByList, setLikedByList] = useState(item.likedBy || []);
   const [showLikesModal, setShowLikesModal] = useState(false);
-  const [commentsCount, setCommentsCount] = useState(0);
-  const [author, setAuthor] = useState({ 
-    displayName: 'Traveler', 
-    photoURL:  null 
-  });
-  const [loadingAuthor, setLoadingAuthor] = useState(true);
+  
+  // Use custom hooks
+  const author = useUserData(item.userId);
+  const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
+    'recommendations', 
+    item.id, 
+    item.likes, 
+    item.likedBy
+  );
+  const commentsCount = useCommentsCount('recommendations', item.id);
 
-  //comments count 
-  useEffect(() => {
-      // מאזין בזמן אמת לכמות התגובות
-      const commentsRef = collection(db, 'recommendations', item.id, 'comments');
-      const unsubscribe = onSnapshot(commentsRef, (snapshot) => {
-          setCommentsCount(snapshot.size); // מעדכן את המספר
-      });
-      return () => unsubscribe();
-  }, [item.id]);
-
-  useEffect(() => {
-    const fetchAuthor = async () => {
-      if (!item.userId) {
-        setLoadingAuthor(false);
-        return;
-      }
-
-        try {      
-          const userDocRef = doc(db, 'users', item.userId);
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setAuthor({
-              displayName: userData.displayName || 'Traveler',
-              photoURL: userData.photoURL || null
-            });
-          }
-          else {
-            if (item.userId === currentUserId && auth.currentUser) {
-              setAuthor({
-                displayName: auth.currentUser.displayName || 'Traveler',
-                photoURL: auth.currentUser.photoURL || null
-              });
-            }
-          }
-        } catch (error) {
-          console.log("Error fetching author:", error);
-        } finally {
-          setLoadingAuthor(false);
-        }
-    };
-
-    fetchAuthor();
-  }, [item.userId, currentUserId]);
-
-  const handleToggleLike = async () => {
-    if (!currentUserId) return;
-
-    const newIsLiked = !isLiked;
-    const newLikeCount = newIsLiked ? likeCount + 1 : likeCount - 1;
-    
-    const newLikedByList = newIsLiked 
-      ? [...likedByList, currentUserId]
-      : likedByList.filter(id => id !== currentUserId);
-
-    setIsLiked(newIsLiked);
-    setLikeCount(newLikeCount);
-    setLikedByList(newLikedByList);
-
-    try {
-      const recRef = doc(db, 'recommendations', item.id);
-
-      if (newIsLiked) {
-        await updateDoc(recRef, {
-          likes: increment(1),
-          likedBy: arrayUnion(currentUserId)
-        });
-      } else {
-        await updateDoc(recRef, {
-          likes: increment(-1),
-          likedBy: arrayRemove(currentUserId)
-        });
-      }
-    } catch (error) {
-      console.error("Error updating like:", error);
-      setIsLiked(!newIsLiked);
-      setLikeCount(likeCount);
-      setLikedByList(likedByList);
-    }
-  };
-
-  const handleShowLikes = () => {
-    if (likeCount > 0) {
-      setShowLikesModal(true);
-    }
-  };
-
-  // שינוי 2: עדכון הלוגיקה של לחיצה על תגובה
   const handleCommentPress = () => {
     if (onCommentPress) {
-        // אנחנו "מודיעים" לאבא (CommunityScreen) שלחצו על תגובה בפוסט הזה
-        onCommentPress(item.id); 
-    } else {
-        console.log("onCommentPress prop not provided");
+      onCommentPress(item.id);
     }
   };
 
@@ -129,15 +39,7 @@ const RecommendationCard = ({ item, onCommentPress }) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.authorInfo}>
-          {author.photoURL ? (
-            <Image source={{ uri: author.photoURL }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarInitial}>
-                {author.displayName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <Avatar photoURL={author.photoURL} displayName={author.displayName} />
           <View>
             <Text style={styles.username}>{author.displayName}</Text>
             {item.createdAt && (
@@ -146,7 +48,7 @@ const RecommendationCard = ({ item, onCommentPress }) => {
           </View>
         </View>
         <TouchableOpacity>
-           <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
+          <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
 
@@ -158,15 +60,14 @@ const RecommendationCard = ({ item, onCommentPress }) => {
       {/* Content */}
       <View style={styles.content}>
         <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-            {item.category && (
-                <View style={styles.categoryChip}>
-                    <Text style={styles.categoryText}>{item.category}</Text>
-                </View>
-            )}
+          <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
+          {item.category && (
+            <View style={styles.categoryChip}>
+              <Text style={styles.categoryText}>{item.category}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Location - Country & City */}
         {(item.location || item.country) && (
           <TouchableOpacity 
             style={styles.locationRow}
@@ -194,40 +95,36 @@ const RecommendationCard = ({ item, onCommentPress }) => {
       {/* Footer / Action Bar */}
       <View style={styles.footer}>
         <View style={styles.actionGroup}>
-            {/* Like Button */}
-            <TouchableOpacity style={styles.actionButton} onPress={handleToggleLike}>
-              <Ionicons
-                  name={isLiked ? "heart" : "heart-outline"}
-                  size={24}
-                  color={isLiked ? "#EF4444" : "#4B5563"}
-              />
-            </TouchableOpacity>
-            
-            {/* Like Count */}
-            <TouchableOpacity onPress={handleShowLikes}>
-              <Text style={[
-                styles.likeCountText, 
-                likeCount > 0 && styles.likeCountClickable
-              ]}>
-                {likeCount > 0 ? `${likeCount} likes` : ''}
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={toggleLike}>
+            <Ionicons
+              name={isLiked ? "heart" : "heart-outline"}
+              size={24}
+              color={isLiked ? "#EF4444" : "#4B5563"}
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity onPress={() => likeCount > 0 && setShowLikesModal(true)}>
+            <Text style={[
+              styles.likeCountText, 
+              likeCount > 0 && styles.likeCountClickable
+            ]}>
+              {likeCount > 0 ? `${likeCount} likes` : ''}
+            </Text>
+          </TouchableOpacity>
 
-            {/* Comment Button - מפעיל את הפונקציה המעודכנת */}
-            <TouchableOpacity style={styles.actionButton} onPress={handleCommentPress}>
-              <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
-              <Text style={styles.actionText}>
-                Comment {commentsCount > 0 && `(${commentsCount})`}
-              </Text>
-            </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleCommentPress}>
+            <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
+            <Text style={styles.actionText}>
+              Comment {commentsCount > 0 && `(${commentsCount})`}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity>
-            <Ionicons name="share-social-outline" size={22} color="#4B5563" />
+          <Ionicons name="share-social-outline" size={22} color="#4B5563" />
         </TouchableOpacity>
       </View>
 
-      {/* Likes Modal */}
       <LikesModal
         visible={showLikesModal}
         onClose={() => setShowLikesModal(false)}
