@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
-    StyleSheet,
     Image,
     TouchableOpacity,
     ScrollView,
@@ -18,7 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import appConfig from "../../../../app.json"
-import { colors, spacing, typography, shadows, common } from "../../../styles";
+import { colors, common, cards, buttons, typography } from "../../../styles";
 
 /**
  * Screen for displaying and editing user profile.
@@ -222,8 +221,8 @@ export default function ProfileScreen({ navigation }) {
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.loadingContainer}>
+            <SafeAreaView style={common.container}>
+                <View style={common.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.accent} />
                 </View>
             </SafeAreaView>
@@ -231,84 +230,84 @@ export default function ProfileScreen({ navigation }) {
     }
 
     return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
+        <SafeAreaView style={common.container}>
+            <ScrollView contentContainerStyle={common.profileScrollContent}>
                 {/* Profile Header */}
-                <View style={styles.header}>
-                    <View style={styles.avatarContainer}>
+                <View style={common.profileHeader}>
+                    <View style={common.profileAvatarContainer}>
                         {userData.photoURL ? (
                             <Image
                                 source={{ uri: userData.photoURL }}
-                                style={styles.avatar}
+                                style={common.profileAvatar}
                             />
                         ) : (
                             <View
                                 style={[
-                                    styles.avatar,
-                                    styles.avatarPlaceholder,
+                                    common.profileAvatar,
+                                    common.profileAvatarPlaceholder,
                                 ]}
                             >
-                                <Text style={styles.avatarText}>
+                                <Text style={common.profileAvatarText}>
                                     {userData.displayName.charAt(0).toUpperCase()}
                                 </Text>
                             </View>
                         )}
                         <TouchableOpacity
                             onPress={pickImage}
-                            style={styles.editAvatarBadge}
+                            style={buttons.editAvatarBadge}
                             disabled={uploading}
                         >
                             {uploading ? (
-                                <ActivityIndicator size="small" color="#fff" />
+                                <ActivityIndicator size="small" color={colors.white} />
                             ) : (
-                                <Ionicons name="camera" size={14} color="#fff" />
+                                <Ionicons name="camera" size={14} color={colors.white} />
                             )}
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.name}>
+                    <Text style={typography.profileName}>
                         {userData.displayName}
                     </Text>
-                    <Text style={styles.email}>
+                    <Text style={typography.profileEmail}>
                         {userData.email}
                     </Text>
                 </View>
 
                 {/* Stats Section */}
-                <View style={styles.statsContainer}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>0</Text>
-                        <Text style={styles.statLabel}>Trips</Text>
+                <View style={cards.profileStats}>
+                    <View style={cards.profileStatItem}>
+                        <Text style={typography.profileStatNumber}>0</Text>
+                        <Text style={typography.profileStatLabel}>Trips</Text>
                     </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>0</Text>
-                        <Text style={styles.statLabel}>Reviews</Text>
+                    <View style={cards.profileStatDivider} />
+                    <View style={cards.profileStatItem}>
+                        <Text style={typography.profileStatNumber}>0</Text>
+                        <Text style={typography.profileStatLabel}>Reviews</Text>
                     </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>0</Text>
-                        <Text style={styles.statLabel}>Photos</Text>
+                    <View style={cards.profileStatDivider} />
+                    <View style={cards.profileStatItem}>
+                        <Text style={typography.profileStatNumber}>0</Text>
+                        <Text style={typography.profileStatLabel}>Photos</Text>
                     </View>
                 </View>
 
                 {/* Menu Items */}
-                <View style={styles.menuContainer}>
+                <View style={cards.profileMenu}>
                     {menuItems.map((item, index) => (
-                        <TouchableOpacity key={index} style={styles.menuItem}>
-                            <View style={styles.menuItemLeft}>
+                        <TouchableOpacity key={index} style={cards.profileMenuItem}>
+                            <View style={cards.profileMenuItemLeft}>
                                 <Ionicons
                                     name={item.icon}
                                     size={22}
-                                    color="#4B5563"
+                                    color={colors.textSecondary}
                                 />
-                                <Text style={styles.menuItemText}>
+                                <Text style={typography.profileMenuItemText}>
                                     {item.label}
                                 </Text>
                             </View>
                             <Ionicons
                                 name="chevron-forward"
                                 size={20}
-                                color="#9CA3AF"
+                                color={colors.textMuted}
                             />
                         </TouchableOpacity>
                     ))}
@@ -316,145 +315,15 @@ export default function ProfileScreen({ navigation }) {
 
                 {/* Sign Out Button */}
                 <TouchableOpacity
-                    style={styles.signOutButton}
+                    style={buttons.signOut}
                     onPress={handleSignOut}
                 >
-                    <MaterialIcons name="logout" size={20} color="#EF4444" />
-                    <Text style={styles.signOutText}>Sign Out</Text>
+                    <MaterialIcons name="logout" size={20} color={colors.error} />
+                    <Text style={buttons.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.versionText}>Version {appConfig.expo.version}</Text>
+                <Text style={typography.profileVersion}>Version {appConfig.expo.version}</Text>
             </ScrollView>
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    container: common.container,
-    loadingContainer: common.loadingContainer,
-    scrollContent: {
-        paddingBottom: 40,
-    },
-    header: {
-        alignItems: "center",
-        paddingVertical: spacing.xxxl,
-        backgroundColor: colors.white,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        ...shadows.medium,
-    },
-    avatarContainer: {
-        position: "relative",
-        marginBottom: spacing.lg,
-    },
-    avatar: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-    },
-    avatarPlaceholder: {
-        backgroundColor: colors.accentLight,
-        justifyContent: "center",
-        alignItems: "center",
-        borderWidth: 2,
-        borderColor: colors.white,
-    },
-    avatarText: {
-        fontSize: 36,
-        fontWeight: "bold",
-        color: colors.accent,
-    },
-    editAvatarBadge: {
-        position: "absolute",
-        bottom: 0,
-        right: 0,
-        backgroundColor: colors.accent,
-        padding: 8,
-        borderRadius: 20,
-        borderWidth: 2,
-        borderColor: colors.white,
-    },
-    name: {
-        ...typography.h3,
-        marginBottom: spacing.xs,
-    },
-    email: {
-        ...typography.bodySmall,
-        color: colors.textLight,
-    },
-    statsContainer: {
-        flexDirection: "row",
-        backgroundColor: colors.white,
-        marginHorizontal: spacing.screenHorizontal,
-        paddingVertical: spacing.xl,
-        borderRadius: 15,
-        ...shadows.medium,
-        justifyContent: "space-between",
-        marginBottom: spacing.xl,
-        marginTop: spacing.xl,
-    },
-    statItem: {
-        flex: 1,
-        alignItems: "center",
-    },
-    statNumber: {
-        ...typography.h4,
-    },
-    statLabel: {
-        ...typography.caption,
-        color: colors.textLight,
-        marginTop: spacing.xs,
-    },
-    statDivider: {
-        width: 1,
-        height: "60%",
-        backgroundColor: colors.border,
-        alignSelf: "center",
-    },
-    menuContainer: {
-        backgroundColor: colors.white,
-        borderRadius: 15,
-        marginHorizontal: spacing.screenHorizontal,
-        paddingVertical: spacing.md,
-    },
-    menuItem: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingVertical: spacing.lg,
-        paddingHorizontal: spacing.xl,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.borderLight,
-    },
-    menuItemLeft: {
-        flexDirection: "row",
-        alignItems: "center",
-    },
-    menuItemText: {
-        ...typography.body,
-        marginLeft: spacing.lg,
-        fontWeight: "500",
-    },
-    signOutButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.errorLight,
-        marginHorizontal: spacing.screenHorizontal,
-        marginTop: spacing.xxl,
-        paddingVertical: spacing.lg,
-        borderRadius: 15,
-    },
-    signOutText: {
-        marginLeft: 8,
-        fontSize: 16,
-        fontWeight: "600",
-        color: colors.error,
-    },
-    versionText: {
-        textAlign: "center",
-        marginTop: spacing.xl,
-        color: colors.textMuted,
-        fontSize: 12,
-    },
-});

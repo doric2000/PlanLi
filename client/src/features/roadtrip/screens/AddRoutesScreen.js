@@ -218,23 +218,8 @@ export default function AddRoutesScreen({ navigation, route }) {
 			keyboardShouldPersistTaps='handled'
 			contentContainerStyle={{ paddingBottom: 120 }}
 		>
-			<View style={common.header}>
-				<Text style={common.headerTitle}>Road Trips & Routes</Text>
-				<Text style={common.headerSubTitle}>
-					Explore travel routes shared by the community
-				</Text>
-			</View>
-
 			{/* Add Route Form */}
 			<View style={{ padding: 20 }}>
-				<Text
-					style={{
-						...typography.h4,
-						marginBottom: 10,
-					}}
-				>
-					Add New Route
-				</Text>
 				<FormInput
 					value={title}
 					onChangeText={setTitle}

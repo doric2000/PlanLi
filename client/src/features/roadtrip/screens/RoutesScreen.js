@@ -104,9 +104,9 @@ export default function RoutesScreen({ navigation }) {
 
 	return (
 		<SafeAreaView style={common.container}>
-			<View style={common.header}>
-				<Text style={common.headerTitle}>מסלולים</Text>
-				<Text style={common.headerSubTitle}>
+			<View style={common.screenHeader}>
+				<Text style={common.screenHeaderTitle}>מסלולים</Text>
+				<Text style={common.screenHeaderSubtitle}>
 					המסלולים הכי שווים, ישר מהשטח
 				</Text>
 			</View>
@@ -126,8 +126,8 @@ export default function RoutesScreen({ navigation }) {
 						<RefreshControl
 							refreshing={isRefreshing}
 							onRefresh={onRefresh}
-							colors={[colors.textPrimary]} // Using dark theme color
-							tintColor={colors.textPrimary}
+							colors={[colors.primary]}
+							tintColor={colors.primary}
 						/>
 					}
 					ListEmptyComponent={

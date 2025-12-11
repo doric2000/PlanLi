@@ -649,4 +649,47 @@ export const common = {
 	menuButton: {
 		padding: 4,
 	},
+
+	// ===== Profile Screen Layout Styles =====
+	profileScrollContent: {
+		paddingBottom: 40,
+	},
+
+	profileHeader: {
+		alignItems: "center",
+		paddingVertical: 32,
+		backgroundColor: "#FFFFFF",
+		borderBottomLeftRadius: 30,
+		borderBottomRightRadius: 30,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+
+	profileAvatarContainer: {
+		position: "relative",
+		marginBottom: 16,
+	},
+
+	profileAvatar: {
+		width: 100,
+		height: 100,
+		borderRadius: 50,
+	},
+
+	profileAvatarPlaceholder: {
+		backgroundColor: "#E0E7FF",
+		justifyContent: "center",
+		alignItems: "center",
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+	},
+
+	profileAvatarText: {
+		fontSize: 36,
+		fontWeight: "bold",
+		color: "#4F46E5",
+	},
 };

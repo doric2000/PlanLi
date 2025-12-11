@@ -405,4 +405,54 @@ export const cards = {
 		color: "#FFFFFF",
 		fontWeight: "bold",
 	},
+
+	// ===== Profile Cards =====
+	profileStats: {
+		flexDirection: "row",
+		backgroundColor: "#FFFFFF",
+		marginHorizontal: 16,
+		paddingVertical: 20,
+		borderRadius: 15,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 8,
+		elevation: 4,
+		justifyContent: "space-between",
+		marginVertical: 20,
+	},
+
+	profileStatItem: {
+		flex: 1,
+		alignItems: "center",
+	},
+
+	profileStatDivider: {
+		width: 1,
+		height: "60%",
+		backgroundColor: "#E5E7EB",
+		alignSelf: "center",
+	},
+
+	profileMenu: {
+		backgroundColor: "#FFFFFF",
+		borderRadius: 15,
+		marginHorizontal: 16,
+		paddingVertical: 8,
+	},
+
+	profileMenuItem: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		paddingVertical: 16,
+		paddingHorizontal: 20,
+		borderBottomWidth: 1,
+		borderBottomColor: "#F3F4F6",
+	},
+
+	profileMenuItemLeft: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
 };

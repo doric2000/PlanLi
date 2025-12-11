@@ -131,8 +131,8 @@ export default function CommunityScreen({ navigation }) {
       
       {/* Header */}
       <View style={common.screenHeader}>
-        <Text style={common.screenHeaderTitle}>Travelers Community🌍</Text>
-        <Text style={common.screenHeaderSubtitle}>Describe new recommendations</Text>
+        <Text style={common.screenHeaderTitle}>קהילת המטיילים</Text>
+        <Text style={common.screenHeaderSubtitle}>גלו המלצות חדשות!</Text>
         
         <TouchableOpacity style={buttons.filterIcon} onPress={() => setFilterVisible(true)}>
             <Ionicons name="options-outline" size={24} color={isFiltered ? colors.primary : colors.textPrimary} />

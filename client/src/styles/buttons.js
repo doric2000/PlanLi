@@ -137,4 +137,35 @@ export const buttons = {
 	sendDisabled: {
 		backgroundColor: "#D1D5DB",
 	},
+
+	// Sign out button
+	signOut: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#FEE2E2",
+		marginHorizontal: 16,
+		marginTop: 24,
+		paddingVertical: 16,
+		borderRadius: 15,
+	},
+
+	signOutText: {
+		marginLeft: 8,
+		fontSize: 16,
+		fontWeight: "600",
+		color: "#EF4444",
+	},
+
+	// Edit avatar badge
+	editAvatarBadge: {
+		position: "absolute",
+		bottom: 0,
+		right: 0,
+		backgroundColor: "#1E3A5F",
+		padding: 8,
+		borderRadius: 20,
+		borderWidth: 2,
+		borderColor: "#FFFFFF",
+	},
 };
