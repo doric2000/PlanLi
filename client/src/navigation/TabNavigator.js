@@ -9,6 +9,16 @@ import ProfileScreen from '../features/profile/screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
+/**
+ * Bottom Tab Navigator.
+ * Manages the main navigation flow of the application.
+ *
+ * Tabs:
+ * - Home: Landing screen
+ * - Community: Social feed and interactions
+ * - Routes: Map and route planning
+ * - Profile: User settings and profile
+ */
 export default function TabNavigator() {
   return (
     <Tab.Navigator

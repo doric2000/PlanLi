@@ -2,17 +2,31 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import LoginScreen from "./src/screens/LoginScreen";
-import RegisterScreen from "./src/screens/RegisterScreen";
+import LoginScreen from "./src/features/auth/screens/LoginScreen";
+import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import TabNavigator from "./src/navigation/TabNavigator";
-import AddRecommendationScreen from "./src/screens/AddRecommendationScreen";
-import AddRoutesScreen from "./src/screens/Routes/AddRoutesScreen";
-import RoutesScreen from "./src/screens/Routes/RoutesScreen";
-import RouteDetailScreen from "./src/screens/Routes/RouteDetailScreen";
+import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
+import AddRoutesScreen from "./src/features/map/screens/AddRoutesScreen";
+import RoutesScreen from "./src/features/map/screens/RoutesScreen";
+import RouteDetailScreen from "./src/features/map/screens/RouteDetailScreen";
 
-import TripDashboardScreen from "./src/screens/TripDashboardScreen";
+import TripDashboardScreen from "./src/features/trips/screens/TripDashboardScreen";
 const Stack = createStackNavigator();
 
+/**
+ * Main App Component.
+ * Sets up the Navigation Container and the Root Stack Navigator.
+ *
+ * Stack Screens:
+ * - Login: Authentication screen
+ * - Register: New user registration
+ * - Main: Tab Navigator (Home, Community, etc.)
+ * - Route: Routes list
+ * - AddRecommendation: Modal for adding new content
+ * - TripDashboard: Dashboard for trip planning
+ * - AddRoutesScreen: Screen to create/edit routes
+ * - RouteDetail: Detailed view of a specific route
+ */
 export default function App() {
 	return (
 		<SafeAreaProvider>

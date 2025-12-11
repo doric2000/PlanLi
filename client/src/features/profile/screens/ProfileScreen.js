@@ -17,7 +17,7 @@ import { signOut, updateProfile } from "firebase/auth";
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import appConfig from "../../../app.json"
+import appConfig from "../../../../app.json"
 
 /**
  * Screen for displaying and editing user profile.
