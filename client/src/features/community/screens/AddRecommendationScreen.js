@@ -4,22 +4,21 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   Modal,
   FlatList,
   StyleSheet
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 // הוספנו את getDocs, query, orderBy
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, auth } from '../../../config/firebase';
+import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 import { FormInput } from '../../../components/FormInput';
+import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import { useBackButton } from '../../../hooks/useBackButton';
+import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 
 const CATEGORIES = ["אוכל", "אטרקציה", "מלון", "חיי לילה", "קניות"];
 const TAGS = ["כשר", "למשפחה", "תקציב", "יוקרה", "טבע", "רומנטי", "נגיש"];
@@ -42,8 +41,10 @@ export default function AddRecommendationScreen({ navigation }) {
   const [category, setCategory] = useState('');
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
-  const [imageUri, setImageUri] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Image picker with upload hook (SOLID-based composition)
+  const { imageUri, pickImage, uploadImage } = useImagePickerWithUpload({ storagePath: 'recommendations' });
 
   // --- Location Management Fields ---
   const [countries, setCountries] = useState([]);
@@ -109,41 +110,11 @@ export default function AddRecommendationScreen({ navigation }) {
     setModalVisible(true);
   };
 
-  // --- Helper Functions (Image, Tags, etc) ---
-
-  const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert("Permission required!");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.5,
-    });
-    if (!result.canceled) setImageUri(result.assets[0].uri);
-  };
+  // --- Helper Functions (Tags, etc) ---
 
   const toggleTag = (tag) => {
     if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag));
     else setSelectedTags([...selectedTags, tag]);
-  };
-
-  const uploadImage = async (uri) => {
-    if (!uri) return null;
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const filename = `recommendations/${auth.currentUser?.uid}/${Date.now()}.jpg`;
-      const storageRef = ref(storage, filename);
-      await uploadBytes(storageRef, blob);
-      return await getDownloadURL(storageRef);
-    } catch (e) {
-      console.error("Upload failed", e);
-      throw e;
-    }
   };
 
   const handleSubmit = async () => {
@@ -197,16 +168,12 @@ export default function AddRecommendationScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {/* Image Picker */}
-        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.previewImage} />
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <Ionicons name="camera" size={40} color="#ccc" />
-              <Text style={styles.imagePlaceholderText}>הוסף תמונה</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <ImagePickerBox
+          imageUri={imageUri}
+          onPress={pickImage}
+          placeholderText="הוסף תמונה"
+          style={{ marginBottom: spacing.xl }}
+        />
 
         {/* Title */}
         <View style={{ marginBottom: 16 }}>
@@ -382,16 +349,6 @@ export default function AddRecommendationScreen({ navigation }) {
 // Screen-specific styles only
 const styles = StyleSheet.create({
   scrollContent: { padding: spacing.lg, paddingBottom: 40 },
-  
-  // Image picker
-  imagePicker: {
-    width: '100%', height: 200, backgroundColor: colors.borderLight, borderRadius: 15,
-    marginBottom: spacing.xl, overflow: 'hidden', justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
-  },
-  previewImage: { width: '100%', height: '100%' },
-  imagePlaceholder: { alignItems: 'center' },
-  imagePlaceholderText: { color: colors.textMuted, marginTop: 10 },
   
   // Row group
   rowGroup: { flexDirection: 'row', marginBottom: spacing.xl, justifyContent: 'space-between' },

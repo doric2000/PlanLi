@@ -6,18 +6,16 @@ import {
     TouchableOpacity,
     ScrollView,
     Alert,
-    Platform,
     ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { storage, auth, db } from "../../../config/firebase";
+import { auth, db } from "../../../config/firebase";
 import { signOut, updateProfile } from "firebase/auth";
-import * as ImagePicker from "expo-image-picker";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import appConfig from "../../../../app.json"
 import { colors, common, cards, buttons, typography } from "../../../styles";
+import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
 
 /**
  * Screen for displaying and editing user profile.
@@ -28,6 +26,13 @@ import { colors, common, cards, buttons, typography } from "../../../styles";
 export default function ProfileScreen({ navigation }) {
     const user = auth.currentUser;
 
+	// Image picker with upload hook (SOLID-based composition)
+	const { pickImage, uploadImage, uploading } = useImagePickerWithUpload({
+		storagePath: 'profilePicture',
+		aspect: [1, 1],
+		quality: 0.7,
+	});
+
 	// state for user data from Firebase Table
 	const [userData, setUserData] = useState({
         displayName: 'Traveler',
@@ -35,7 +40,6 @@ export default function ProfileScreen({ navigation }) {
         email: user?.email || '',
     });
     const [loading, setLoading] = useState(true);
-    const [uploading, setUploading] = useState(false);
 
     // Extracting user date from Firestore.
     useEffect(() => {
@@ -92,85 +96,11 @@ export default function ProfileScreen({ navigation }) {
         }
     };
 
-    const pickFromGallery = async () => {
-        const permissionResult =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permissionResult.granted) {
-            Alert.alert(
-                "Permission required",
-                "Permission to access gallery is required!"
-            );
-            return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
-        });
-
-        if (!result.canceled) {
-            console.log("Picked from gallery:", result.assets[0].uri);
-            handleProfilePictureUpload(result.assets[0].uri);
-        }
-    };
-
-    const pickFromCamera = async () => {
-        const permissionResult =
-            await ImagePicker.requestCameraPermissionsAsync();
-        if (!permissionResult.granted) {
-            Alert.alert(
-                "Permission required",
-                "Permission to access camera is required!"
-            );
-            return;
-        }
-
-        const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.7,
-        });
-
-        if (!result.canceled) {
-            console.log("Picked from camera:", result.assets[0].uri);
-            handleProfilePictureUpload(result.assets[0].uri);
-        }
-    };
-
-    const pickImage = () => {
-        if (Platform.OS === "web") {
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = "image/*";
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const uri = URL.createObjectURL(file);
-                    handleProfilePictureUpload(uri);
-                }
-            };
-            input.click();
-            return;
-        }
-        Alert.alert("Change profile photo", "Choose an option", [
-            { text: "Upload from gallery", onPress: pickFromGallery },
-            { text: "Use camera", onPress: pickFromCamera },
-            { text: "Cancel", style: "cancel" },
-        ]);
-    };
-
     const handleProfilePictureUpload = async (uri) => {
-        if (!uri || !user) return null;
-        setUploading(true);
+        if (!uri || !user) return;
         try {
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            const filename = `profilePicture/${user.uid}/${Date.now()}.jpg`;
-            const storageRef = ref(storage, filename);
-
-            await uploadBytes(storageRef, blob);
-            const downloadURL = await getDownloadURL(storageRef);
+            const downloadURL = await uploadImage(uri);
+            if (!downloadURL) return;
 
             // Update in Firebase Auth
             await updateProfile(user, {
@@ -181,20 +111,20 @@ export default function ProfileScreen({ navigation }) {
             const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 
-                    if (userDoc.exists()) {
-                        await updateDoc(userDocRef, {
-                            photoURL: downloadURL,
-                            updatedAt: new Date(),
-                        });
-                    } else {
-                        await setDoc(userDocRef, {
-                            uid: user.uid,
-                            email: user.email,
-                            displayName: user.displayName || userData.displayName,
-                            photoURL: downloadURL,
-                            createdAt: new Date(),
-                            updatedAt: new Date(),
-                        });
+            if (userDoc.exists()) {
+                await updateDoc(userDocRef, {
+                    photoURL: downloadURL,
+                    updatedAt: new Date(),
+                });
+            } else {
+                await setDoc(userDocRef, {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName || userData.displayName,
+                    photoURL: downloadURL,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
             }
 
             // Update local state
@@ -207,9 +137,11 @@ export default function ProfileScreen({ navigation }) {
         } catch (e) {
             console.error("Upload failed", e);
             Alert.alert("Error", "Failed to upload profile picture.");
-        } finally {
-            setUploading(false);
         }
+    };
+
+    const handlePickImage = () => {
+        pickImage(handleProfilePictureUpload);
     };
 
     const menuItems = [
@@ -253,7 +185,7 @@ export default function ProfileScreen({ navigation }) {
                             </View>
                         )}
                         <TouchableOpacity
-                            onPress={pickImage}
+                            onPress={handlePickImage}
                             style={buttons.editAvatarBadge}
                             disabled={uploading}
                         >

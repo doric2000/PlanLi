@@ -5,12 +5,14 @@ import {
     Text, 
     TouchableOpacity, 
     StyleSheet, 
-    Image, 
     SafeAreaView,
     Alert
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { FormInput } from '../../../components/FormInput';
+import { ImagePickerBox } from '../../../components/ImagePickerBox';
+import { Ionicons } from '@expo/vector-icons';
+import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
+import { spacing } from '../../../styles';
 
 /**
  * Modal for editing day details in a trip.
@@ -25,7 +27,10 @@ import { FormInput } from '../../../components/FormInput';
  */
 export default function DayEditorModal({ visible, onClose, onSave, initialData, dayIndex }) {
     const [description, setDescription] = useState('');
-    const [image, setImage] = useState(null);
+    // Image picker with upload hook (SOLID-based composition)
+    const { imageUri: image, setImageUri: setImage, pickImage, clearImage } = useImagePickerWithUpload({ 
+        storagePath: 'trips',
+    });
 
     useEffect(() => {
         if (visible) {
@@ -33,20 +38,6 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
             setImage(initialData?.image || null);
         }
     }, [visible, initialData]);
-
-    const pickImage = async () => {
-        // No permissions request is necessary for launching the image library
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.5,
-        });
-
-        if (!result.canceled) {
-            setImage(result.assets[0].uri);
-        }
-    };
 
     const handleSave = () => {
 		if (!description){
@@ -81,19 +72,19 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
                     />
 
                     <Text style={styles.photoLabel}>Photo Memory</Text>
-                    <TouchableOpacity style={styles.imageUpload} onPress={pickImage}>
-                        {image ? (
-                            <Image source={{ uri: image }} style={styles.uploadedImage} />
-                        ) : (
-                            <View style={styles.placeholder}>
-                                <Text style={styles.placeholderIcon}>📷</Text>
-                                <Text style={styles.placeholderText}>Tap to upload photo</Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                    <ImagePickerBox
+                        imageUri={image}
+                                  onPress={pickImage}
+                                  placeholderText="הוסף תמונה"
+                                  style={{ marginBottom: spacing.xl }}
+                        // onPress={pickImage}
+                        // placeholderText="Tap to upload photo"
+                        // // iconColor="#64748B"
+                        // iconSize={32}
+                    />
                     
                     {image && (
-                        <TouchableOpacity onPress={() => setImage(null)} style={styles.removeBtn}>
+                        <TouchableOpacity onPress={clearImage} style={styles.removeBtn}>
                             <Text style={styles.removeText}>Remove Photo</Text>
                         </TouchableOpacity>
                     )}
@@ -117,21 +108,6 @@ const styles = StyleSheet.create({
     headerBtn: { fontSize: 16, color: '#007AFF' },
     content: { padding: 20 },
     photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155' },
-    imageUpload: {
-        height: 200,
-        backgroundColor: '#F1F5F9',
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        borderStyle: 'dashed',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    uploadedImage: { width: '100%', height: '100%' },
-    placeholder: { alignItems: 'center' },
-    placeholderIcon: { fontSize: 32, marginBottom: 8 },
-    placeholderText: { color: '#64748B' },
     removeBtn: { marginTop: 10, alignItems: 'center' },
     removeText: { color: '#EF4444' }
 });
