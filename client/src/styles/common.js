@@ -577,28 +577,31 @@ export const common = {
 
 	// HomeScreen specific
 	homeHeader: {
-		backgroundColor: "#1E3A5F",
+		backgroundColor: "#FFFFFF",
 		padding: 20,
-		paddingBottom: 30,
+		paddingBottom: 15,
 		borderBottomLeftRadius: 20,
 		borderBottomRightRadius: 20,
+		borderBottomColor: "#F3F4F6",
+		borderBottomWidth: 1,
+		alignItems: "center",
+		position: "relative",
 	},
-
 	homeHeaderTitle: {
 		fontSize: 20,
 		fontWeight: "700",
-		color: "#FFFFFF",
+		color: "#1E3A5F",
 		textAlign: "center",
 		marginBottom: 16,
 	},
 
 	homeSearchBar: {
-		backgroundColor: "#FFFFFF",
+		backgroundColor: "#F3F4F6",
 		borderRadius: 25,
 		flexDirection: "row",
 		alignItems: "center",
 		paddingHorizontal: 16,
-		height: 50,
+		height: 30,
 	},
 
 	homeSearchIcon: {
