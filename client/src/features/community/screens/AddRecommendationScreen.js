@@ -21,9 +21,9 @@ import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 import { FormInput } from '../../../components/FormInput';
 import { useBackButton } from '../../../hooks/useBackButton';
 
-const CATEGORIES = ["Food", "Attraction", "Hotel", "Nightlife", "Shopping"];
-const TAGS = ["Kosher", "Family", "Budget", "Luxury", "Nature", "Romantic", "Accessible"];
-const BUDGETS = ["$", "$$", "$$$", "$$$$"];
+const CATEGORIES = ["אוכל", "אטרקציה", "מלון", "חיי לילה", "קניות"];
+const TAGS = ["כשר", "למשפחה", "תקציב", "יוקרה", "טבע", "רומנטי", "נגיש"];
+const BUDGETS = ["₪", "₪₪", "₪₪₪", "₪₪₪₪"];
 
 /**
  * Screen for adding a new recommendation.
@@ -34,7 +34,7 @@ const BUDGETS = ["$", "$$", "$$$", "$$$$"];
  */
 export default function AddRecommendationScreen({ navigation }) {
   // Setup back button with hook
-  useBackButton(navigation, { title: 'Add Recommendation' });
+  useBackButton(navigation, { title: "הוסף המלצות" });
 
   // Existing fields
   const [title, setTitle] = useState('');
@@ -149,7 +149,7 @@ export default function AddRecommendationScreen({ navigation }) {
   const handleSubmit = async () => {
     // Validating all fields including location
     if (!title || !description || !category || !selectedCountry || !selectedCity) {
-      Alert.alert("Missing Info", "Please fill in Title, Description, Category, and Location (Country & City).");
+      Alert.alert("חסר מידע!", "אנא מלא כותרת, תיאור, קטגוריה ומיקום (מדינה ועיר).");
       return;
     }
 
@@ -182,11 +182,11 @@ export default function AddRecommendationScreen({ navigation }) {
         likedBy: []
       });
 
-      Alert.alert("Success", "Recommendation added!");
+      Alert.alert("ההמלצה נוספה בהצלחה!");
       navigation.goBack();
     } catch (error) {
       console.error("Error adding document: ", error);
-      Alert.alert("Error", "Failed to save recommendation.");
+      Alert.alert("שגיאה", "ההמלצה לא נשמרה.");
     } finally {
       setSubmitting(false);
     }
@@ -203,46 +203,51 @@ export default function AddRecommendationScreen({ navigation }) {
           ) : (
             <View style={styles.imagePlaceholder}>
               <Ionicons name="camera" size={40} color="#ccc" />
-              <Text style={styles.imagePlaceholderText}>Add Photo</Text>
+              <Text style={styles.imagePlaceholderText}>הוסף תמונה</Text>
             </View>
           )}
         </TouchableOpacity>
 
         {/* Title */}
-        <FormInput
-          label="Title"
-          placeholder="e.g., Best Hummus in Jaffa"
-          value={title}
-          onChangeText={setTitle}
-          textAlign="right"
-        />
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+            כותרת
+          </Text>
+          <FormInput
+            placeholder="לדוגמא: מסעדת שף בתל אביב"
+            value={title}
+            onChangeText={setTitle}
+            textAlign="right"
+          />
+        </View>
+
 
         {/* --- Location Selection --- */}
         <View style={styles.rowGroup}>
-            {/* Country Selector */}
-            <View style={{flex: 1, marginRight: 10}}>
-                <Text style={forms.label}>Country</Text>
-                <TouchableOpacity 
-                    style={styles.selectorButton} 
-                    onPress={() => openSelectionModal('COUNTRY')}
-                >
-                    <Text style={selectedCountry ? styles.selectorText : styles.placeholderText}>
-                        {selectedCountry ? (selectedCountry.name || selectedCountry.id) : "Select Country"}
-                    </Text>
-                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-            </View>
-
             {/* City Selector */}
-            <View style={{flex: 1}}>
-                <Text style={forms.label}>City</Text>
+            <View style={{flex: 1, marginRight: 10}}>
+                 <Text style={[forms.label, {textAlign: "right"}]}>עיר</Text>
                 <TouchableOpacity 
                     style={[styles.selectorButton, !selectedCountry && styles.disabledButton]} 
                     onPress={() => openSelectionModal('CITY')}
                     disabled={!selectedCountry}
                 >
                     <Text style={selectedCity ? styles.selectorText : styles.placeholderText}>
-                        {selectedCity ? (selectedCity.name || selectedCity.id) : "Select City"}
+                        {selectedCity ? (selectedCity.name || selectedCity.id) : "בחר עיר"}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+            </View>
+
+                        {/* Country Selector */}
+            <View style={{flex: 1}}>
+                 <Text style={[forms.label, {textAlign: "right"}]}>מדינה</Text>
+                <TouchableOpacity 
+                    style={styles.selectorButton} 
+                    onPress={() => openSelectionModal('COUNTRY')}
+                >
+                    <Text style={selectedCountry ? styles.selectorText : styles.placeholderText}>
+                        {selectedCountry ? (selectedCountry.name || selectedCountry.id) : "בחר מדינה"}
                     </Text>
                     <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
@@ -250,19 +255,23 @@ export default function AddRecommendationScreen({ navigation }) {
         </View>
 
         {/* Description */}
-        <FormInput
-          label="Description"
-          placeholder="Tell us why it's great..."
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-          textAlign="right"
-        />
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+            תיאור
+          </Text>
+          <FormInput
+            placeholder="תאר לנו למה אתה ממליץ על המקום הזה..."
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            textAlign="right"
+          />
+        </View>
 
         {/* Category */}
         <View style={forms.inputWrapper}>
-          <Text style={forms.label}>Category</Text>
+          <Text style={[forms.label, {textAlign: "right"}]}>קטגוריה</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
             {CATEGORIES.map((cat) => (
               <TouchableOpacity
@@ -278,7 +287,7 @@ export default function AddRecommendationScreen({ navigation }) {
 
         {/* Budget */}
         <View style={forms.inputWrapper}>
-          <Text style={forms.label}>Budget</Text>
+          <Text style={[forms.label, {textAlign: "right"}]}>תקציב</Text>
           <View style={styles.budgetContainer}>
             {BUDGETS.map((b) => (
               <TouchableOpacity
@@ -294,7 +303,7 @@ export default function AddRecommendationScreen({ navigation }) {
 
         {/* Tags */}
         <View style={forms.inputWrapper}>
-          <Text style={forms.label}>Tags</Text>
+          <Text style={[forms.label, {textAlign: "right"}]}>תגיות</Text>
           <View style={tags.container}>
             {TAGS.map((tag) => (
               <TouchableOpacity
@@ -316,7 +325,7 @@ export default function AddRecommendationScreen({ navigation }) {
           {submitting ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={buttons.submitText}>Post Recommendation</Text>
+            <Text style={buttons.submitText}>פרסם המלצה</Text>
           )}
         </TouchableOpacity>
 
@@ -333,7 +342,7 @@ export default function AddRecommendationScreen({ navigation }) {
             <View style={[common.modalContent, { maxHeight: '70%', padding: spacing.xl }]}>
                 <View style={common.modalHeader}>
                     <Text style={common.modalTitle}>
-                        Select {selectionType === 'COUNTRY' ? 'Country' : 'City'}
+                        בחר {selectionType === 'COUNTRY' ? 'מדינה' : 'עיר'}
                     </Text>
                     <TouchableOpacity onPress={() => setModalVisible(false)}>
                         <Ionicons name="close" size={24} color="#333" />
