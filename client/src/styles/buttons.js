@@ -13,6 +13,19 @@ export const buttons = {
 		fontWeight: "600",
 	},
 
+	primarySmall: {
+		backgroundColor: "#1E3A5F",
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		borderRadius: 20,
+	},
+
+	primarySmallText: {
+		color: "#FFFFFF",
+		fontWeight: "600",
+		fontSize: 14,
+	},
+
 	secondary: {
 		backgroundColor: "#FFFFFF",
 		paddingVertical: 12,
@@ -167,5 +180,26 @@ export const buttons = {
 		borderRadius: 20,
 		borderWidth: 2,
 		borderColor: "#FFFFFF",
+	},
+
+	// Bottom action bar
+	bottomBar: {
+		position: "absolute",
+		bottom: 0,
+		left: 0,
+		right: 0,
+		flexDirection: "row",
+		backgroundColor: "#FFFFFF",
+		paddingVertical: 12,
+		paddingHorizontal: 16,
+		borderTopWidth: 1,
+		borderTopColor: "#E5E7EB",
+		paddingBottom: 28,
+	},
+
+	bottomBarAction: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 };

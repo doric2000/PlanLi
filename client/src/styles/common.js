@@ -77,6 +77,44 @@ export const common = {
 		borderRadius: 20,
 	},
 
+	// Hero section (detail screens)
+	heroContainer: {
+		height: 300,
+		width: "100%",
+	},
+
+	heroImage: {
+		width: "100%",
+		height: "100%",
+	},
+
+	heroGradient: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		justifyContent: "space-between",
+		padding: 16,
+		paddingTop: 50,
+	},
+
+	noImageHeader: {
+		paddingTop: 50,
+		paddingHorizontal: 16,
+		paddingBottom: 16,
+		backgroundColor: "#F9FAFB",
+	},
+
+	detailContent: {
+		padding: 20,
+		backgroundColor: "#FFFFFF",
+		borderTopLeftRadius: 24,
+		borderTopRightRadius: 24,
+		marginTop: -24,
+		minHeight: 400,
+	},
+
 	// Main content area
 	mainContent: {
 		paddingHorizontal: 20,
@@ -440,6 +478,85 @@ export const common = {
 
 	commentSendDisabled: {
 		backgroundColor: "#ccc",
+	},
+
+	// Inline action bar (detail screens)
+	actionBar: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-around",
+		paddingVertical: 16,
+		borderTopWidth: 1,
+		borderBottomWidth: 1,
+		borderColor: "#E5E7EB",
+		backgroundColor: "#FFFFFF",
+	},
+
+	actionBarItem: {
+		flexDirection: "column",
+		alignItems: "center",
+		gap: 4,
+	},
+
+	actionBarText: {
+		fontSize: 12,
+		color: "#6B7280",
+	},
+
+	// Fixed bottom input bar
+	bottomInputBar: {
+		position: "absolute",
+		bottom: 0,
+		left: 0,
+		right: 0,
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: "#FFFFFF",
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+		paddingBottom: 28,
+		borderTopWidth: 1,
+		borderTopColor: "#E5E7EB",
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: -2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 5,
+	},
+
+	bottomInputContainer: {
+		flex: 1,
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: "#F3F4F6",
+		borderRadius: 24,
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		marginLeft: 12,
+	},
+
+	bottomInput: {
+		flex: 1,
+		fontSize: 14,
+		color: "#111827",
+		maxHeight: 60,
+	},
+
+	// Rating display
+	ratingContainer: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 4,
+	},
+
+	ratingStar: {
+		color: "#FBBF24",
+	},
+
+	ratingText: {
+		fontSize: 14,
+		fontWeight: "600",
+		color: "#374151",
 	},
 
 	// Likes modal styles

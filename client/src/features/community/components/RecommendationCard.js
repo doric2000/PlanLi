@@ -6,8 +6,10 @@ import { useUserData } from '../../auth/hooks/useUserData';
 import { useLikes } from '../hooks/useLikes';
 import { useCommentsCount } from '../hooks/useCommentsCount';
 import { Avatar } from '../../../components/Avatar';
-import LikesModal from './likesList';
+import { ActionMenu } from '../../../components/ActionMenu';
+import LikesModal from '../../../components/LikesModal';
 import { cards, colors } from '../../../styles';
+import { auth } from '../../../config/firebase';
 
 /**
  * Card component for displaying a recommendation item.
@@ -31,6 +33,13 @@ const RecommendationCard = ({ item, onCommentPress }) => {
   );
   const commentsCount = useCommentsCount('recommendations', item.id);
 
+  // Check if current user is the owner
+  const isOwner = auth.currentUser?.uid === item.userId;
+
+  const handleCardPress = () => {
+    navigation.navigate('RecommendationDetail', { item });
+  };
+
   const handleCommentPress = () => {
     if (onCommentPress) {
       onCommentPress(item.id);
@@ -44,7 +53,11 @@ const RecommendationCard = ({ item, onCommentPress }) => {
   };
 
   return (
-    <View style={cards.recommendation}>
+    <TouchableOpacity 
+      style={cards.recommendation}
+      onPress={handleCardPress}
+      activeOpacity={0.9}
+    >
       {/* Header */}
       <View style={cards.recHeader}>
         <View style={cards.recAuthorInfo}>
@@ -56,9 +69,17 @@ const RecommendationCard = ({ item, onCommentPress }) => {
             )}
           </View>
         </View>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
-        </TouchableOpacity>
+        {isOwner ? (
+          <ActionMenu
+            onEdit={() => {/* TODO: handle edit */}}
+            onDelete={() => {/* TODO: handle delete */}}
+            title="Manage Recommendation"
+          />
+        ) : (
+          <TouchableOpacity>
+            <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Image */}
@@ -139,7 +160,7 @@ const RecommendationCard = ({ item, onCommentPress }) => {
         onClose={() => setShowLikesModal(false)}
         likedByUserIds={likedByList}
       />
-    </View>
+    </TouchableOpacity>
   );
 };
 
