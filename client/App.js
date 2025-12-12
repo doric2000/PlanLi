@@ -9,7 +9,7 @@ import AddRecommendationScreen from "./src/features/community/screens/AddRecomme
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
-import LandingPageScreen from "./src/features/city/screens/LandingPageScreen";
+import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 
 const Stack = createStackNavigator();
 
