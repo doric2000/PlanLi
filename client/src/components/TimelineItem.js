@@ -1,14 +1,41 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, typography } from '../styles';
+import { colors, typography, common } from '../styles';
 
+/**
+ * TimelineItem - A visual timeline component for displaying trip days.
+ * 
+ * This component shows a single day in a vertical timeline format with:
+ * - A location pin icon with the day number
+ * - A preview card with the day's description
+ * - A dashed connector line to the next day (except for the last item)
+ * 
+ * USE THIS COMPONENT to display trip itineraries or multi-day plans
+ * in a visual, easy-to-follow timeline format.
+ * 
+ * @param {Object} day - The day data object containing description and other info
+ * @param {number} index - The zero-based index of this day (used to show "Day 1", "Day 2", etc.)
+ * @param {boolean} isLast - If true, hides the connector line (for the last day)
+ * @param {function} onPress - Function to call when user taps the day (to view details)
+ * 
+ * @example
+ * {tripDays.map((day, index) => (
+ *   <TimelineItem
+ *     key={index}
+ *     day={day}
+ *     index={index}
+ *     isLast={index === tripDays.length - 1}
+ *     onPress={() => openDayDetails(index)}
+ *   />
+ * ))}
+ */
 export const TimelineItem = ({ day, index, isLast, onPress }) => {
     return (
-        <View style={styles.dayContainer}>
+        <View style={common.timelineItem}>
             {!isLast && (
-                <View style={styles.connector}>
+                <View style={common.timelineConnector}>
                     <Svg height="60" width="2">
                         <Path
                             d="M 1 0 L 1 60"
@@ -21,15 +48,15 @@ export const TimelineItem = ({ day, index, isLast, onPress }) => {
             )}
 
             <TouchableOpacity 
-                style={styles.dayPin}
+                style={common.timelinePin}
                 onPress={onPress}
             >
                 <Ionicons name="location" size={32} color={colors.info} />
-                <Text style={styles.dayNumber}>{index + 1}</Text>
+                <Text style={common.timelineDayNumber}>{index + 1}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
-                style={styles.dayPreview}
+                style={common.timelinePreview}
                 onPress={onPress}
             >
                 <Text style={{ ...typography.h4, fontSize: 16, marginBottom: 4 }}>Day {index + 1}</Text>
@@ -40,44 +67,3 @@ export const TimelineItem = ({ day, index, isLast, onPress }) => {
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    dayContainer: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 20,
-        position: 'relative'
-    },
-    connector: {
-        position: 'absolute',
-        left: 15,
-        top: 40,
-        zIndex: -1
-    },
-    dayPin: {
-        alignItems: 'center',
-        marginRight: 16,
-        position: 'relative'
-    },
-    dayNumber: {
-        position: 'absolute',
-        top: 6,
-        fontSize: 12,
-        fontWeight: '700',
-        color: colors.white,
-        backgroundColor: colors.info,
-        borderRadius: 10,
-        width: 20,
-        height: 20,
-        textAlign: 'center',
-        lineHeight: 20
-    },
-    dayPreview: {
-        flex: 1,
-        backgroundColor: colors.background,
-        padding: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border
-    }
-});

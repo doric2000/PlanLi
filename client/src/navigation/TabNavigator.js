@@ -2,13 +2,23 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
-import HomeScreen from '../screens/HomeScreen';
-import CommunityScreen from '../screens/CommunityScreen';
-import RoutesScreen from '../screens/Routes/RoutesScreen';
-import ProfileScreen from '../screens/ProfileScreen';
+import HomeScreen from '../features/landing/screens/HomeScreen';
+import CommunityScreen from '../features/community/screens/CommunityScreen';
+import RoutesScreen from '../features/roadtrip/screens/RoutesScreen';
+import ProfileScreen from '../features/profile/screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
+/**
+ * Bottom Tab Navigator.
+ * Manages the main navigation flow of the application.
+ *
+ * Tabs:
+ * - Home: Landing screen
+ * - Community: Social feed and interactions
+ * - Routes: Map and route planning
+ * - Profile: User settings and profile
+ */
 export default function TabNavigator() {
   return (
     <Tab.Navigator

@@ -2,17 +2,31 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import LoginScreen from "./src/screens/LoginScreen";
-import RegisterScreen from "./src/screens/RegisterScreen";
+import LoginScreen from "./src/features/auth/screens/LoginScreen";
+import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import TabNavigator from "./src/navigation/TabNavigator";
-import AddRecommendationScreen from "./src/screens/AddRecommendationScreen";
-import AddRoutesScreen from "./src/screens/Routes/AddRoutesScreen";
-import RoutesScreen from "./src/screens/Routes/RoutesScreen";
-import RouteDetailScreen from "./src/screens/Routes/RouteDetailScreen";
+import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
+import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
+import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
+import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
+import LandingPageScreen from "./src/features/city/screens/LandingPageScreen";
 
-import TripDashboardScreen from "./src/screens/TripDashboardScreen";
 const Stack = createStackNavigator();
 
+/**
+ * Main App Component.
+ * Sets up the Navigation Container and the Root Stack Navigator.
+ *
+ * Stack Screens:
+ * - Login: Authentication screen
+ * - Register: New user registration
+ * - Main: Tab Navigator (Home, Community, etc.)
+ * - Route: Routes list
+ * - AddRecommendation: Modal for adding new content
+ * - LandingPage: Dashboard for Landing Page Screen
+ * - AddRoutesScreen: Screen to create/edit routes
+ * - RouteDetail: Detailed view of a specific route
+ */
 export default function App() {
 	return (
 		<SafeAreaProvider>
@@ -30,22 +44,19 @@ export default function App() {
 						component={AddRecommendationScreen}
 						options={{
 							presentation: "modal",
-							headerShown: true,
-							title: "Add Recommendation",
 						}}
 					/>
 					<Stack.Screen
-						name='TripDashboard'
-						component={TripDashboardScreen}
+						name='LandingPage'
+						component={LandingPageScreen}
 					/>
 					<Stack.Screen
 						name='AddRoutesScreen'
 						component={AddRoutesScreen}
-					></Stack.Screen>
+					/>
 					<Stack.Screen
 						name='RouteDetail'
 						component={RouteDetailScreen}
-						options={{ headerShown: true, title: "Route Details" }}
 					/>
 				</Stack.Navigator>
 			</NavigationContainer>
