@@ -34,7 +34,7 @@ const BUDGETS = ["₪", "₪₪", "₪₪₪", "₪₪₪₪"];
  */
 export default function AddRecommendationScreen({ navigation }) {
   // Setup back button with hook
-  useBackButton(navigation, { title: "הוסף המלצות" });
+  useBackButton(navigation, { title: "יאלללה להמליץ!" });
 
   // Existing fields
   const [title, setTitle] = useState('');
