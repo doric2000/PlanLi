@@ -155,6 +155,8 @@ export const CommentsSection = ({ collectionName, postId }) => {
         keyExtractor={item => item.id}
         style={common.commentList}
         nestedScrollEnabled={true}
+        removeClippedSubviews={true}
+        windowSize={5}
       />
 
       <View style={common.commentInputContainer}>
