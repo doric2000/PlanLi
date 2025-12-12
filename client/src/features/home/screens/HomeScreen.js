@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 // שימו לב להוספת collectionGroup
-import { collection, getDocs, query, orderBy, limit, collectionGroup } from 'firebase/firestore';
+import { getDocs, query, limit, collectionGroup } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
-import RecommendationCard from '../../community/components/RecommendationCard';
 import { colors, spacing, typography, buttons, shadows, common, cards } from '../../../styles';
 
 /**
@@ -96,11 +93,11 @@ export default function HomeScreen({ navigation }) {
       >
         {/* Header */}
         <View style={common.homeHeader}>
-          <Text style={common.homeHeaderTitle}>Where will your next adventure take you?</Text>
+          <Text style={common.homeHeaderTitle}>יאלללה, לאן טסים?</Text>
           <View style={common.homeSearchBar}>
             <Ionicons name="search" size={20} color={colors.textSecondary} style={common.homeSearchIcon} />
             <TextInput
-               placeholder="Search destinations..."
+               placeholder="חפש יעדים..."
                style={common.homeSearchInput}
                textAlign="right"
                value={searchQuery}
