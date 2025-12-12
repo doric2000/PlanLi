@@ -181,20 +181,20 @@ export default function ProfileScreen({ navigation }) {
             const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 
-            if (userDoc.exists()) {
-                await updateDoc(userDocRef, {
-                    photoURL: downloadURL,
-                    updatedAt: new Date(),
-                });
-            } else {
-                await setDoc(userDocRef, {
-                    uid: user.uid,
-                    email: user.email,
-                    displayName: user.displayName || userData.displayName,
-                    photoURL: downloadURL,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                });
+                    if (userDoc.exists()) {
+                        await updateDoc(userDocRef, {
+                            photoURL: downloadURL,
+                            updatedAt: new Date(),
+                        });
+                    } else {
+                        await setDoc(userDocRef, {
+                            uid: user.uid,
+                            email: user.email,
+                            displayName: user.displayName || userData.displayName,
+                            photoURL: downloadURL,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        });
             }
 
             // Update local state

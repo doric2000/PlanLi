@@ -9,17 +9,28 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
-import { common } from '../../../styles';
-import { Avatar } from '../../../components/Avatar';
+import { db } from '../config/firebase';
+import { common, colors } from '../styles';
+import { Avatar } from './Avatar';
 
 /**
- * Modal to display a list of users who liked a post.
- *
- * @param {Object} props
- * @param {boolean} props.visible - Controls visibility of the modal.
- * @param {Function} props.onClose - Callback to close the modal.
- * @param {string[]} props.likedByUserIds - Array of user IDs who liked the post.
+ * LikesModal - A reusable modal to display users who liked a post.
+ * 
+ * This component shows a bottom sheet modal with a list of users who
+ * liked any piece of content (recommendations, routes, etc.)
+ * 
+ * USE THIS COMPONENT anywhere you need to show who liked something.
+ * 
+ * @param {boolean} visible - Controls visibility of the modal
+ * @param {Function} onClose - Callback to close the modal
+ * @param {string[]} likedByUserIds - Array of user IDs who liked the post
+ * 
+ * @example
+ * <LikesModal
+ *   visible={showLikes}
+ *   onClose={() => setShowLikes(false)}
+ *   likedByUserIds={likedByList}
+ * />
  */
 const LikesModal = ({ visible, onClose, likedByUserIds }) => {
   const [users, setUsers] = useState([]);
@@ -77,21 +88,14 @@ const LikesModal = ({ visible, onClose, likedByUserIds }) => {
     fetchUsers();
   }, [visible, likedByUserIds]);
 
-  // פונקציה להצגת כל משתמש ברשימה
   const renderUserItem = ({ item }) => (
     <View style={common.userItem}>
-      {/* תמונת פרופיל */}
       <Avatar photoURL={item.photoURL} displayName={item.displayName} size={44} />
-
-      {/* שם המשתמש */}
       <Text style={common.userNameText}>{item.displayName}</Text>
-
-      {/* אייקון לב קטן */}
-      <Ionicons name="heart" size={16} color="#EF4444" />
+      <Ionicons name="heart" size={16} color={colors.heart} />
     </View>
   );
 
-  // מה להציג כשאין לייקים
   const renderEmptyList = () => (
     <View style={common.emptyContainer}>
       <Ionicons name="heart-outline" size={48} color="#D1D5DB" />
@@ -108,7 +112,6 @@ const LikesModal = ({ visible, onClose, likedByUserIds }) => {
       onRequestClose={onClose}
     >
       <View style={common.modalOverlay}>
-        {/* לחיצה על הרקע סוגרת את ה-Modal */}
         <TouchableOpacity 
           style={common.overlayTouchable} 
           activeOpacity={1} 
@@ -116,7 +119,6 @@ const LikesModal = ({ visible, onClose, likedByUserIds }) => {
         />
         
         <View style={common.likesModalContainer}>
-          {/* Handle bar */}
           <View style={common.handleBar} />
 
           <View style={common.likesHeader}>

@@ -22,6 +22,7 @@ import {
 import { db, auth } from '../config/firebase';
 import { common } from '../styles';
 import { Avatar } from './Avatar';
+import { formatTimestamp } from '../utils/formatTimestamp';
 
 /**
  * CommentItem - Displays a single comment with user info.
@@ -32,29 +33,32 @@ import { Avatar } from './Avatar';
  * @param {Object} item - Comment object containing userId and text
  */
 const CommentItem = ({ item }) => {
-    const [userData, setUserData] = useState({ name: 'Loading...', photo: null });
+  const [userData, setUserData] = useState({ name: 'Loading...', photo: null });
 
-    useEffect(() => {
-        const fetchUser = async () => {
-            if (!item.userId) return;
-            const snap = await getDoc(doc(db, 'users', item.userId));
-            if (snap.exists()) setUserData({ 
-                name: snap.data().displayName, 
-                photo: snap.data().photoURL 
-            });
-        };
-        fetchUser();
-    }, [item.userId]);
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (!item.userId) return;
+      const snap = await getDoc(doc(db, 'users', item.userId));
+      if (snap.exists()) setUserData({ 
+        name: snap.data().displayName, 
+        photo: snap.data().photoURL 
+      });
+    };
+    fetchUser();
+  }, [item.userId]);
 
-    return (
-        <View style={common.commentItem}>
-            <Avatar photoURL={userData.photo} displayName={userData.name} size={40} />
-            <View style={common.commentContent}>
-                <Text style={common.commentUserName}>{userData.name}</Text>
-                <Text style={common.commentText}>{item.text}</Text>
-            </View>
+  return (
+    <View style={common.commentItem}>
+      <Avatar photoURL={userData.photo} displayName={userData.name} size={40} />
+      <View style={common.commentContent}>
+        <View style={{ alignItems: 'flex-end', marginBottom: 2 }}>
+          <Text style={common.commentUserName}>{userData.name}</Text>
+          <Text style={[common.commentText, { color: '#9CA3AF', fontSize: 11 }]}>{formatTimestamp(item.createdAt)}</Text>
         </View>
-    );
+        <Text style={common.commentText}>{item.text}</Text>
+      </View>
+    </View>
+  );
 };
 
 /**
@@ -138,7 +142,6 @@ export const CommentsSection = ({ collectionName, postId }) => {
     <View style={common.commentSection}>
       <View style={common.commentHeaderContainer}>
           <Text style={common.commentHeaderTitle}>Comments ({comments.length})</Text>
-          
           <TouchableOpacity onPress={() => setIsNewestFirst(!isNewestFirst)}>
             <Text style={common.commentSortText}>
                 {isNewestFirst ? 'Sort: Newest ⬇' : 'Sort: Oldest ⬆'}
@@ -152,6 +155,8 @@ export const CommentsSection = ({ collectionName, postId }) => {
         keyExtractor={item => item.id}
         style={common.commentList}
         nestedScrollEnabled={true}
+        removeClippedSubviews={true}
+        windowSize={5}
       />
 
       <View style={common.commentInputContainer}>

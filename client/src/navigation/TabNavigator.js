@@ -1,11 +1,6 @@
-import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-
-import HomeScreen from '../features/landing/screens/HomeScreen';
-import CommunityScreen from '../features/community/screens/CommunityScreen';
-import RoutesScreen from '../features/roadtrip/screens/RoutesScreen';
-import ProfileScreen from '../features/profile/screens/ProfileScreen';
+import {tabConfigs, tabScreens} from './TabConfigs'
 
 const Tab = createBottomTabNavigator();
 
@@ -22,31 +17,24 @@ const Tab = createBottomTabNavigator();
 export default function TabNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Community') {
-            iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'Routes') {
-            iconName = focused ? 'map' : 'map-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#FF8C00', // Orange brand color
+      screenOptions={({ route }) => {
+        const config = tabConfigs[route.name];
+        return ({
+          tabBarIcon: ({focused, color, size}) => (
+            <Ionicons name={focused ? config.icon : `${config.icon}-outline`}
+            size={size}
+            color={color}
+            />
+          ),
+        tabBarActiveTintColor: config.activeColor,
         tabBarInactiveTintColor: 'gray',
         headerShown: false,
-      })}
+        });
+      }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Community" component={CommunityScreen} />
-      <Tab.Screen name="Routes" component={RoutesScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      {tabScreens.map(({name, component}) => (
+        <Tab.Screen key={name} name={name} component={component}/>
+      ))}
     </Tab.Navigator>
   );
 }

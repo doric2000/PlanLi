@@ -1,15 +1,15 @@
 export const colors = {
 	// Primary colors
-	primary: "#2EC4B6",
+	primary: "#1E3A5F",
 	primaryLight: "#D1FAE5",
-	primaryDark: "#14B8A6",
+	primaryDark: "#1E3A5F",
 
 	// Secondary colors
 	secondary: "#FF9F1C",
 	secondaryLight: "#FEF3C7",
 
 	// Accent colors
-	accent: "#4F46E5",
+	accent: "#1E3A5F",
 	accentLight: "#E0E7FF",
 
 	// Neutral colors
@@ -39,7 +39,7 @@ export const colors = {
 	heart: "#1E3A5F",
 
 	// Header
-	headerBg: "#49bc8e",
+	headerBg: "#1E3A5F",
 
 	// Shadows
 	shadow: "#000000",

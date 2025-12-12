@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth } from '../../../config/firebase';
+import { auth, db } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { forms } from '../../../styles';
@@ -43,6 +44,24 @@ export default function RegisterScreen({ navigation }) {
         await updateProfile(userCredential.user, {
           displayName: fullName
         });
+
+        // --- Firestore user creation logic ---
+        // Add user to Firestore 'users' collection with uid
+        try {
+          const { uid, email: userEmail, displayName } = userCredential.user;
+          // Import Firestore methods and db if not already
+          // (Assume import { db } from '../../../config/firebase'; and import { setDoc, doc, serverTimestamp } from 'firebase/firestore'; are present at the top)
+          await setDoc(doc(db, 'users', uid), {
+            uid,
+            email: userEmail,
+            displayName: displayName || fullName,
+            createdAt: serverTimestamp(),
+            photoURL: null,
+          });
+        } catch (firestoreErr) {
+          console.error('Error creating user in Firestore:', firestoreErr);
+        }
+        // --- End Firestore user creation logic ---
       }
 
       console.log('Registered!');

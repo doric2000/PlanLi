@@ -6,10 +6,11 @@ import LoginScreen from "./src/features/auth/screens/LoginScreen";
 import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import TabNavigator from "./src/navigation/TabNavigator";
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
+import RecommendationDetailScreen from "./src/features/community/screens/RecommendationDetailScreen";
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
-import LandingPageScreen from "./src/features/city/screens/LandingPageScreen";
+import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 
 const Stack = createStackNavigator();
 
@@ -45,6 +46,10 @@ export default function App() {
 						options={{
 							presentation: "modal",
 						}}
+					/>
+					<Stack.Screen
+						name='RecommendationDetail'
+						component={RecommendationDetailScreen}
 					/>
 					<Stack.Screen
 						name='LandingPage'
