@@ -123,7 +123,7 @@ const LikesModal = ({ visible, onClose, likedByUserIds }) => {
 
           <View style={common.likesHeader}>
             <Text style={common.likesTitle}>
-              {likedByUserIds?.length || 0} Likes
+              {likedByUserIds?.length || 0} לייקים
             </Text>
             <TouchableOpacity onPress={onClose} style={common.likesCloseButton}>
               <Ionicons name="close" size={24} color="#374151" />

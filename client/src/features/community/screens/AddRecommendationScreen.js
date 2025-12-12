@@ -19,6 +19,7 @@ import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
+import { CATEGORY_TAGS, PRICE_TAGS } from '../../../constants/Constatns';
 
 const CATEGORIES = ["אוכל", "אטרקציה", "מלון", "חיי לילה", "קניות"];
 const TAGS = ["כשר", "למשפחה", "תקציב", "יוקרה", "טבע", "רומנטי", "נגיש"];
@@ -240,7 +241,7 @@ export default function AddRecommendationScreen({ navigation }) {
         <View style={forms.inputWrapper}>
           <Text style={[forms.label, {textAlign: "right"}]}>קטגוריה</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {CATEGORIES.map((cat) => (
+            {CATEGORY_TAGS.map((cat) => (
               <TouchableOpacity
                 key={cat}
                 style={[tags.chip, category === cat && tags.chipSelected]}
@@ -256,7 +257,7 @@ export default function AddRecommendationScreen({ navigation }) {
         <View style={forms.inputWrapper}>
           <Text style={[forms.label, {textAlign: "right"}]}>תקציב</Text>
           <View style={styles.budgetContainer}>
-            {BUDGETS.map((b) => (
+            {PRICE_TAGS.map((b) => (
               <TouchableOpacity
                 key={b}
                 style={[styles.budgetButton, budget === b && styles.budgetButtonSelected]}
@@ -271,7 +272,7 @@ export default function AddRecommendationScreen({ navigation }) {
         {/* Tags */}
         <View style={forms.inputWrapper}>
           <Text style={[forms.label, {textAlign: "right"}]}>תגיות</Text>
-          <View style={tags.container}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
             {TAGS.map((tag) => (
               <TouchableOpacity
                 key={tag}
@@ -281,7 +282,7 @@ export default function AddRecommendationScreen({ navigation }) {
                 <Text style={[tags.text, selectedTags.includes(tag) && tags.textSelected]}>{tag}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         </View>
 
         <TouchableOpacity

@@ -141,10 +141,10 @@ export const CommentsSection = ({ collectionName, postId }) => {
   return (
     <View style={common.commentSection}>
       <View style={common.commentHeaderContainer}>
-          <Text style={common.commentHeaderTitle}>Comments ({comments.length})</Text>
+          <Text style={common.commentHeaderTitle}>תגובות ({comments.length})</Text>
           <TouchableOpacity onPress={() => setIsNewestFirst(!isNewestFirst)}>
             <Text style={common.commentSortText}>
-                {isNewestFirst ? 'Sort: Newest ⬇' : 'Sort: Oldest ⬆'}
+                {isNewestFirst ? 'מיין: חדש קודם ⬇' : 'מיין: ישן קודם ⬆'}
             </Text>
           </TouchableOpacity>
       </View>
@@ -167,7 +167,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
         />
         <TextInput
           style={common.commentInput}
-          placeholder="Write a comment..."
+          placeholder="כתוב תגובה..."
           value={newComment}
           onChangeText={setNewComment}
           multiline
