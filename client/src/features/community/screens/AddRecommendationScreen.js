@@ -236,7 +236,7 @@ export default function AddRecommendationScreen({ navigation }) {
                         {selectedCity ? (selectedCity.name || selectedCity.id) : "בחר עיר"}
                     </Text>
                     <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </TouchableOpacity>             
             </View>
 
                         {/* Country Selector */}
