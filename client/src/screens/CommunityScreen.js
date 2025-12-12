@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', marginTop: 50 },
   emptyText: { marginTop: 10, fontSize: 18, color: '#888' },
   emptySubText: { fontSize: 14, color: '#2EC4B6', fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: 20, left: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#FF9F1C', justifyContent: 'center', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
+  fab: { position: 'absolute', bottom: 20, right: 20, width: 60, height: 60, borderRadius: 30, backgroundColor: '#FF9F1C', justifyContent: 'center', alignItems: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
   
   // Modal Common Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
