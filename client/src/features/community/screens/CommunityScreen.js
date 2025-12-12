@@ -17,9 +17,8 @@ import { db } from '../../../config/firebase';
 import RecommendationCard from '../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { colors, spacing, common, buttons, tags } from '../../../styles';
+import { PRICE_TAGS,CATEGORY_TAGS } from '../../../constants/Constatns';
 
-const CATEGORIES = ['Food', 'Attraction', 'Hotel', 'Nightlife', 'Shopping'];
-const BUDGETS = ['$', '$$', '$$$', '$$$$'];
 
 /**
  * Screen displaying community recommendations.
@@ -37,6 +36,11 @@ export default function CommunityScreen({ navigation }) {
   const [filterCategories, setFilterCategories] = useState([]);
   const [filterBudgets, setFilterBudgets] = useState([]);      
   const [filterDestination, setFilterDestination] = useState('');
+
+  // Temp states for filter modal
+  const [tempCategories, setTempCategories] = useState([]);
+  const [tempBudgets, setTempBudgets] = useState([]);
+  const [tempDestination, setTempDestination] = useState('');
 
   // --- Comments Modal Management ---
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
@@ -124,6 +128,16 @@ export default function CommunityScreen({ navigation }) {
     setFilterCategories([]);
     setFilterBudgets([]);
     setFilterDestination('');
+    setTempCategories([]);
+    setTempBudgets([]);
+    setTempDestination('');
+  };
+
+  const applyFilters = () => {
+    setFilterCategories(tempCategories);
+    setFilterBudgets(tempBudgets);
+    setFilterDestination(tempDestination);
+    setFilterVisible(false);
   };
 
   return (
@@ -202,21 +216,21 @@ export default function CommunityScreen({ navigation }) {
             <TextInput
               style={common.modalInput}
               placeholder="תל אביב, יוון, תאילנד..."
-              value={filterDestination}
-              onChangeText={setFilterDestination}
+              value={tempDestination}
+              onChangeText={setTempDestination}
               textAlign="right"
             />
 
             <Text style={[common.modalLabel, { marginTop: spacing.lg }]}>קטגוריה</Text>
             <View style={tags.chipRow}>
-              {CATEGORIES.map((cat) => {
-                const selected = filterCategories.includes(cat);
+              {CATEGORY_TAGS.map((cat) => {
+                const selected = tempCategories.includes(cat);
                 return (
                   <TouchableOpacity
                     key={cat}
                     style={[tags.filterChip, selected && tags.filterChipSelected]}
                     onPress={() =>
-                      setFilterCategories((prev) =>
+                      setTempCategories((prev) =>
                         prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
                       )
                     }
@@ -229,14 +243,14 @@ export default function CommunityScreen({ navigation }) {
 
             <Text style={[common.modalLabel, { marginTop: spacing.lg }]}>תקציב</Text>
             <View style={tags.chipRow}>
-              {BUDGETS.map((b) => {
-                const selected = filterBudgets.includes(b);
+              {PRICE_TAGS.map((b) => {
+                const selected = tempBudgets.includes(b);
                 return (
                   <TouchableOpacity
                     key={b}
                     style={[tags.budgetChip, selected && tags.budgetChipSelected]}
                     onPress={() =>
-                      setFilterBudgets((prev) =>
+                      setTempBudgets((prev) =>
                         prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]
                       )
                     }
@@ -251,7 +265,7 @@ export default function CommunityScreen({ navigation }) {
               <TouchableOpacity style={buttons.clear} onPress={handleClearFilters}>
                 <Text style={buttons.clearText}>נקה</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={buttons.apply} onPress={() => setFilterVisible(false)}>
+              <TouchableOpacity style={buttons.apply} onPress={applyFilters}>
                 <Text style={buttons.applyText}>הפעל מסננים</Text>
               </TouchableOpacity>
             </View>

@@ -138,14 +138,14 @@ const RecommendationCard = ({ item, onCommentPress }) => {
               cards.recLikeCount, 
               likeCount > 0 && cards.recLikeCountClickable
             ]}>
-              {likeCount > 0 ? `${likeCount} likes` : ''}
+              {likeCount > 0 ? `${likeCount} לייקים` : ''}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={cards.recActionButton} onPress={handleCommentPress}>
             <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
             <Text style={cards.recActionText}>
-              Comment {commentsCount > 0 && `(${commentsCount})`}
+              תגובות {commentsCount > 0 && `(${commentsCount})`}
             </Text>
           </TouchableOpacity>
         </View>

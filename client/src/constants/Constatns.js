@@ -2,136 +2,137 @@
 // Difficulty Tags
 // =======================
 export const DIFFICULTY_TAGS = [
-	"Easy",
-	"Medium",
-	"Hard",
-	"Beginner",
-	"Advanced",
+	"קל",
+	"בינוני",
+	"קשה",
+	"מתחילים",
+	"מתקדמים",
 ];
 
 // =======================
 // Travel Style Tags
 // =======================
 export const TRAVEL_STYLE_TAGS = [
-	"Family Friendly",
-	"Couples",
-	"Backpackers",
-	"Digital Nomads",
-	"Solo Travelers",
-	"Luxury Travel",
-	"Budget Travel",
-	"Road Trip",
-	"Foodie",
-	"Nightlife",
+	"ידידותי למשפחות",
+	"זוגות",
+	"תרמילאים",
+	"נוודים דיגיטליים",
+	"מטיילים לבד",
+	"טיול יוקרתי",
+	"טיול בתקציב נמוך",
+	"טיול בדרכים",
+	"חובבי אוכל",
+	"חיי לילה",
 ];
 
 // =======================
 // Duration / Time Tags
 // =======================
 export const DURATION_TAGS = [
-	"1 Hour",
-	"2–3 Hours",
-	"Half Day",
-	"Full Day",
-	"Weekend",
-	"Multi-Day",
-	"3 Days",
-	"7 Days",
+	"שעה",
+	"שעתיים-שלוש",
+	"חצי יום",
+	"יום שלם",
+	"סוף שבוע",
+	"מספר ימים",
+	"3 ימים",
+	"7 ימים",
 ];
 
 // =======================
 // Category Tags (Type of Place)
 // =======================
 export const CATEGORY_TAGS = [
-	"Food",
-	"Restaurant",
-	"Cafe",
-	"Street Food",
-	"Kosher",
-	"Vegan",
-	"Vegetarian",
-	"Bar",
-	"Nightlife",
-	"Accommodation",
-	"Hotel",
-	"Hostel",
-	"Guesthouse",
-	"Airbnb",
-	"Budget",
-	"Luxury",
-	"Transportation",
-	"Bus",
-	"Train",
-	"Scooter Rental",
-	"Car Rental",
-	"Metro",
-	"Taxi",
-	"Private Driver",
-	"Airport Transfer",
-	"Attraction",
-	"Nature",
-	"Hiking",
-	"Museum",
-	"Viewpoint",
-	"Beach",
-	"Landmark",
-	"Ski",
-	"Waterfalls",
-	"Theme Park",
-	"Adventure",
-	"Shopping",
-	"Mall",
-	"Local Market",
-	"Souvenirs",
-	"Electronics",
+	"אוכל",
+	"מסעדה",
+	"בית קפה",
+	"אוכל רחוב",
+	"כשר",
+	"טבעוני",
+	"צמחוני",
+	"בר",
+	"חיי לילה",
+	"לינה",
+	"מלון",
+	"אכסניה",
+	"בית הארחה",
+	"איירביאנבי",
+	"תקציב נמוך",
+	"יוקרתי",
+	"תחבורה",
+	"אוטובוס",
+	"רכבת",
+	"השכרת קטנוע",
+	"השכרת רכב",
+	"מטרו",
+	"מונית",
+	"נהג פרטי",
+	"העברה משדה התעופה",
+	"אטרקציה",
+	"טבע",
+	"טיול רגלי",
+	"מוזיאון",
+	"נקודת תצפית",
+	"חוף",
+	"אתר היסטורי",
+	"סקי",
+	"מפלים",
+	"פארק שעשועים",
+	"הרפתקה",
+	"קניות",
+	"קניון",
+	"שוק מקומי",
+	"מזכרות",
+	"אלקטרוניקה",
 ];
 
 // =======================
 // Logistics / Practical Tags
 // =======================
 export const LOGISTICS_TAGS = [
-	"Local Tips",
-	"SIM Card",
-	"Safety Warning",
-	"Dangerous Area",
-	"Public Transport Tips",
-	"Opening Hours",
-	"Must-Visit",
-	"Hidden Gem",
-	"Tourist Trap",
-	"Budget Option",
-	"Cheap Option",
+	"טיפים מקומיים",
+	"סים קארד",
+	"אזהרת בטיחות",
+	"אזור מסוכן",
+	"טיולים מאורגנים",
+	"תחבורה ציבורית",
+	"שעות פתיחה",
+	"חובה לבקר",
+	"פנינה נסתרת",
+	"מלכודת תיירים",
+	"אופציה זולה",
+	"אופציה בתקציב נמוך",
 ];
 
 // =======================
 // Price Tags
 // =======================
-export const PRICE_TAGS = ["Free", "Cheap", "Medium", "Expensive", "Premium"];
+export const PRICE_TAGS = ["חינמי", "₪", "₪₪", "₪₪₪", "₪₪₪₪"];
 
 // =======================
 // Seasonal / Weather Tags
 // =======================
 export const SEASONAL_TAGS = [
-	"Rainy Season",
-	"Dry Season",
-	"Winter",
-	"Summer",
-	"Suitable for Snow",
-	"Indoor Activity",
-	"Outdoor Activity",
+	"עונת הגשמים",
+	"עונה יבשה",
+	"חורף",
+	"קיץ",
+	"מתאים לשלג",
+	"פעילות מקורה",
+	"פעילות חוץ",
 ];
 
 // =======================
 // Israeli Touch Tags
 // =======================
 export const ISRAELI_TOUCH_TAGS = [
-	"Kosher",
-	"Chabad",
-	"Israeli Community",
-	"Hebrew Friendly",
-	"Israeli Drivers",
-	"Israeli Restaurants",
-	"Shabbat Friendly",
+	"כשר",
+	"חב״ד",
+	"קהילה ישראלית",
+	"ידידותי לעברית",
+	"נהגים ישראלים",
+	"מסעדות ישראליות",
+	"ידידותי לשבת",
 ];
 
 // =======================
@@ -150,28 +151,28 @@ export const QUALITY_TAGS = [
 // Road Trip Special Tags
 // =======================
 export const ROAD_TRIP_TAGS = [
-	"Scenic Route",
-	"Long Drive",
-	"Short Drive",
-	"Viewpoints",
-	"Gas Stations",
-	"Parking Spots",
-	"Food Stops",
-	"Photo Spot",
-	"Hiking Spot",
+	"מסלול נופי",
+	"נסיעה ארוכה",
+	"נסיעה קצרה",
+	"נקודות תצפית",
+	"תחנות דלק",
+	"מקומות חניה",
+	"עצירות אוכל",
+	"נקודת צילום",
+	"נקודת טיול רגלי",
 ];
 
 // =======================
 // Experience Tags
 // =======================
 export const EXPERIENCE_TAGS = [
-	"Romantic",
-	"Extreme",
-	"Relaxing",
-	"Cultural",
-	"Local Experience",
-	"Instagrammable",
-	"Photography",
+	"רומנטי",
+	"אתגרי",
+	"מרגיע",
+	"תרבותי",
+	"חוויה מקומית",
+	"לאינסטגרם",
+	"צילום",
 ];
 
 // ...existing exports...

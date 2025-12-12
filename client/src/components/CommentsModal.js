@@ -37,7 +37,7 @@ export const CommentsModal = ({
 }) => {
   return (
     <Modal
-      animationType="slide"
+      animationType="fade"
       transparent={true}
       visible={visible}
       onRequestClose={onClose}
@@ -45,7 +45,7 @@ export const CommentsModal = ({
       <View style={common.modalOverlay}>
         <View style={common.modalContentTall}>
           <View style={common.modalHeader}>
-            <Text style={common.modalTitle}>Comments</Text>
+            <Text style={common.modalTitle}>תגובות</Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
