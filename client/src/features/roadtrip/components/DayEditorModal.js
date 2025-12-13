@@ -49,7 +49,7 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
     };
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={onClose}>

@@ -192,6 +192,19 @@ export default function AddRecommendationScreen({ navigation }) {
 
         {/* --- Location Selection --- */}
         <View style={styles.rowGroup}>
+          {/* Country Selector */}
+            <View style={{flex: 1}}>
+                 <Text style={[forms.label, {textAlign: "right"}]}>מדינה</Text>
+                <TouchableOpacity 
+                    style={styles.selectorButton} 
+                    onPress={() => openSelectionModal('COUNTRY')}
+                >
+                    <Text style={selectedCountry ? styles.selectorText : styles.placeholderText}>
+                        {selectedCountry ? (selectedCountry.name || selectedCountry.id) : "בחר מדינה"}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+            </View>
             {/* City Selector */}
             <View style={{flex: 1, marginRight: 10}}>
                  <Text style={[forms.label, {textAlign: "right"}]}>עיר</Text>
@@ -205,20 +218,6 @@ export default function AddRecommendationScreen({ navigation }) {
                     </Text>
                     <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>             
-            </View>
-
-                        {/* Country Selector */}
-            <View style={{flex: 1}}>
-                 <Text style={[forms.label, {textAlign: "right"}]}>מדינה</Text>
-                <TouchableOpacity 
-                    style={styles.selectorButton} 
-                    onPress={() => openSelectionModal('COUNTRY')}
-                >
-                    <Text style={selectedCountry ? styles.selectorText : styles.placeholderText}>
-                        {selectedCountry ? (selectedCountry.name || selectedCountry.id) : "בחר מדינה"}
-                    </Text>
-                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
             </View>
         </View>
 
@@ -302,19 +301,22 @@ export default function AddRecommendationScreen({ navigation }) {
       {/* --- המודל (החלון הקופץ) לבחירה --- */}
       <Modal
         visible={modalVisible}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={common.modalOverlay}>
             <View style={[common.modalContent, { maxHeight: '70%', padding: spacing.xl }]}>
-                <View style={common.modalHeader}>
-                    <Text style={common.modalTitle}>
-                        בחר {selectionType === 'COUNTRY' ? 'מדינה' : 'עיר'}
-                    </Text>
-                    <TouchableOpacity onPress={() => setModalVisible(false)}>
-                        <Ionicons name="close" size={24} color="#333" />
-                    </TouchableOpacity>
+                <View style={[common.modalHeader, { flexDirection: 'row', alignItems: 'center' }]}>
+                  {/* Close Button on the Left */}
+                  <TouchableOpacity onPress={() => setModalVisible(false)}>
+                    <Ionicons name="close" size={24} color="#333" />
+                  </TouchableOpacity>
+
+                  {/* Title on the Right */}
+                  <Text style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>
+                    בחר {selectionType === 'COUNTRY' ? 'מדינה' : 'עיר'}
+                  </Text>
                 </View>
 
                 <FlatList
@@ -352,17 +354,27 @@ const styles = StyleSheet.create({
   scrollContent: { padding: spacing.lg, paddingBottom: 40 },
   
   // Row group
-  rowGroup: { flexDirection: 'row', marginBottom: spacing.xl, justifyContent: 'space-between' },
+  rowGroup: {
+    flexDirection: 'row-reverse', // Ensure RTL layout
+    marginBottom: spacing.xl,
+    justifyContent: 'space-between',
+  },
   
   // Selector
   selectorButton: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-    padding: 12, height: 50
+    flexDirection: 'row-reverse', // Reverse icon and text alignment
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    height: 50,
   },
   disabledButton: { opacity: 0.5, backgroundColor: colors.borderLight },
-  selectorText: { fontSize: 16, color: colors.textPrimary },
-  placeholderText: { fontSize: 16, color: colors.placeholder },
+  selectorText: { fontSize: 16, color: colors.textPrimary, textAlign: 'right' },
+  placeholderText: { fontSize: 16, color: colors.placeholder, textAlign: 'right' },
 
   // Modal item
   modalItem: {

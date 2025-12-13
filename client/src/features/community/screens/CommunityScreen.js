@@ -199,30 +199,32 @@ export default function CommunityScreen({ navigation }) {
       {/* --- Filter Modal (Existing) --- */}
       <Modal
         visible={filterVisible}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={() => setFilterVisible(false)}
       >
         <View style={common.modalOverlay}>
           <View style={common.modalContent}>
-            <View style={common.modalHeader}>
-              <Text style={common.modalTitle}>מסננים</Text>
+            <View style={[common.modalHeader, { flexDirection: 'row', alignItems: 'center' }]}>
+              {/* Close Button on the Left */}
               <TouchableOpacity onPress={() => setFilterVisible(false)}>
                 <Ionicons name="close" size={22} color={colors.textPrimary} />
               </TouchableOpacity>
+
+              {/* Title on the Right */}
+              <Text style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>מסננים</Text>
             </View>
 
-            <Text style={common.modalLabel}>יעד / עיר / מדינה</Text>
+            <Text style={[common.modalLabel, { textAlign: 'right' }]}>יעד / עיר / מדינה</Text>
             <TextInput
-              style={common.modalInput}
+              style={[common.modalInput, { textAlign: 'right' }]}
               placeholder="תל אביב, יוון, תאילנד..."
               value={tempDestination}
               onChangeText={setTempDestination}
-              textAlign="right"
             />
 
-            <Text style={[common.modalLabel, { marginTop: spacing.lg }]}>קטגוריה</Text>
-            <View style={tags.chipRow}>
+            <Text style={[common.modalLabel, { marginTop: spacing.lg, textAlign: 'right' }]}>קטגוריה</Text>
+            <View style={[tags.chipRow, { flexDirection: 'row-reverse' }]}>
               {CATEGORY_TAGS.map((cat) => {
                 const selected = tempCategories.includes(cat);
                 return (
@@ -241,8 +243,8 @@ export default function CommunityScreen({ navigation }) {
               })}
             </View>
 
-            <Text style={[common.modalLabel, { marginTop: spacing.lg }]}>תקציב</Text>
-            <View style={tags.chipRow}>
+            <Text style={[common.modalLabel, { marginTop: spacing.lg, textAlign: 'right' }]}>תקציב</Text>
+            <View style={[tags.chipRow, { flexDirection: 'row-reverse' }]}>
               {PRICE_TAGS.map((b) => {
                 const selected = tempBudgets.includes(b);
                 return (
@@ -261,7 +263,7 @@ export default function CommunityScreen({ navigation }) {
               })}
             </View>
 
-            <View style={common.modalActions}>
+            <View style={[common.modalActions, { flexDirection: 'row-reverse' }]}>
               <TouchableOpacity style={buttons.clear} onPress={handleClearFilters}>
                 <Text style={buttons.clearText}>נקה</Text>
               </TouchableOpacity>
