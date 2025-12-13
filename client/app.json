@@ -2,7 +2,7 @@
   "expo": {
     "name": "client",
     "slug": "client",
-    "version": "0.5.9",
+    "version": "0.5.10",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -27,3 +27,4 @@
     }
   }
 }
+
