@@ -124,18 +124,20 @@ export const tags = {
 
 	filterChipSelected: {
 		backgroundColor: "#E0F2FE",
-		borderWidth: 1,
+		//borderWidth: 1, -> make it unstable while selected
 		borderColor: "#2EC4B6",
 	},
 
 	filterChipText: {
 		fontSize: 13,
 		color: "#4B5563",
+		fontWeight: "700",
 	},
 
 	filterChipTextSelected: {
 		color: "#2EC4B6",
 		fontWeight: "700",
+		fontSize: 13,
 	},
 
 	// Chip row container
