@@ -280,7 +280,7 @@ export default function CommunityScreen({ navigation }) {
         onClose={() => setCommentsModalVisible(false)}
         postId={selectedPostId}
       />
-
+      
     </SafeAreaView>
   );
 }

@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../../auth/hooks/useUserData';
 import { useLikes } from '../hooks/useLikes';
-import { useCommentsCount } from '../hooks/useCommentsCount';
 import { Avatar } from '../../../components/Avatar';
 import { ActionMenu } from '../../../components/ActionMenu';
-import LikesModal from '../../../components/LikesModal';
-import { cards, colors } from '../../../styles';
+import { cards } from '../../../styles';
 import { auth } from '../../../config/firebase';
+import ActionBar from '../../../components/ActionBar';
 
 /**
  * Card component for displaying a recommendation item.
@@ -21,7 +19,6 @@ import { auth } from '../../../config/firebase';
  */
 const RecommendationCard = ({ item, onCommentPress }) => {
   const navigation = useNavigation();
-  const [showLikesModal, setShowLikesModal] = useState(false);
   
   // Use custom hooks
   const author = useUserData(item.userId);
@@ -31,19 +28,12 @@ const RecommendationCard = ({ item, onCommentPress }) => {
     item.likes, 
     item.likedBy
   );
-  const commentsCount = useCommentsCount('recommendations', item.id);
 
   // Check if current user is the owner
   const isOwner = auth.currentUser?.uid === item.userId;
 
   const handleCardPress = () => {
     navigation.navigate('RecommendationDetail', { item });
-  };
-
-  const handleCommentPress = () => {
-    if (onCommentPress) {
-      onCommentPress(item.id);
-    }
   };
 
   const formatDate = (timestamp) => {
@@ -123,43 +113,8 @@ const RecommendationCard = ({ item, onCommentPress }) => {
       </View>
 
       {/* Footer / Action Bar */}
-      <View style={cards.recFooter}>
-        <View style={cards.recActionGroup}>
-          <TouchableOpacity style={cards.recActionButton} onPress={toggleLike}>
-            <Ionicons
-              name={isLiked ? "heart" : "heart-outline"}
-              size={24}
-              color={isLiked ? colors.heart : colors.textSecondary}
-            />
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={() => likeCount > 0 && setShowLikesModal(true)}>
-            <Text style={[
-              cards.recLikeCount, 
-              likeCount > 0 && cards.recLikeCountClickable
-            ]}>
-              {likeCount > 0 ? `${likeCount} לייקים` : ''}
-            </Text>
-          </TouchableOpacity>
+      <ActionBar item = {item} onCommentPress={onCommentPress}/>
 
-          <TouchableOpacity style={cards.recActionButton} onPress={handleCommentPress}>
-            <Ionicons name="chatbubble-outline" size={22} color="#4B5563" />
-            <Text style={cards.recActionText}>
-              תגובות {commentsCount > 0 && `(${commentsCount})`}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity>
-          <Ionicons name="share-social-outline" size={22} color="#4B5563" />
-        </TouchableOpacity>
-      </View>
-
-      <LikesModal
-        visible={showLikesModal}
-        onClose={() => setShowLikesModal(false)}
-        likedByUserIds={likedByList}
-      />
     </TouchableOpacity>
   );
 };
