@@ -20,12 +20,16 @@ import {
   onSnapshot, 
   serverTimestamp,
   getDoc,
-  doc 
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { useUserData } from '../../auth/hooks/useUserData';
 import { useLikes } from '../hooks/useLikes';
 import { useCommentsCount } from '../hooks/useCommentsCount';
+import { useFavoriteRecommendation } from '../../../hooks/useFavoriteRecommendation';
 
 import { Avatar } from '../../../components/Avatar';
 import { BackButton } from '../../../components/BackButton';
@@ -54,8 +58,6 @@ import { formatTimestamp } from '../../../utils/formatTimestamp';
  */
 export default function RecommendationDetailScreen({ route, navigation }) {
   const { item } = route.params;
-  
-  // Hooks
   const author = useUserData(item.userId);
   const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
     'recommendations',
@@ -64,16 +66,10 @@ export default function RecommendationDetailScreen({ route, navigation }) {
     item.likedBy
   );
   const commentsCount = useCommentsCount('recommendations', item.id);
-
-  // Check if current user is the owner
-  const isOwner = auth.currentUser?.uid === item.userId;
-
-  // Modal states
+  const user = auth.currentUser;
+  const isOwner = user?.uid === item.userId;
   const [likesModalVisible, setLikesModalVisible] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-
-
-  // Comments logic is now handled by CommentsSection component
+  const { isFavorite, toggleFavorite, loading: saving } = useFavoriteRecommendation(item.id);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
@@ -111,12 +107,13 @@ export default function RecommendationDetailScreen({ route, navigation }) {
                     <BackButton />
                     <TouchableOpacity 
                       style={common.iconButton}
-                      onPress={() => setIsSaved(!isSaved)}
+                      onPress={toggleFavorite}
+                      disabled={saving}
                     >
                       <Ionicons 
-                        name={isSaved ? "bookmark" : "bookmark-outline"} 
+                        name={isFavorite ? "bookmark" : "bookmark-outline"} 
                         size={24} 
-                        color={isSaved ? colors.primary : colors.white} 
+                        color={isFavorite ? colors.primary : colors.white} 
                       />
                     </TouchableOpacity>
                   </View>
@@ -128,12 +125,13 @@ export default function RecommendationDetailScreen({ route, navigation }) {
                   <BackButton color="dark" variant="solid" />
                   <TouchableOpacity 
                     style={[common.iconButton, { backgroundColor: colors.background }]}
-                    onPress={() => setIsSaved(!isSaved)}
+                    onPress={toggleFavorite}
+                    disabled={saving}
                   >
                     <Ionicons 
-                      name={isSaved ? "bookmark" : "bookmark-outline"} 
+                      name={isFavorite ? "bookmark" : "bookmark-outline"} 
                       size={24} 
-                      color={isSaved ? colors.primary : colors.textPrimary} 
+                      color={isFavorite ? colors.primary : colors.textPrimary} 
                     />
                   </TouchableOpacity>
                 </View>
