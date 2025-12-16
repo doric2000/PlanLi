@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 // הוספנו את getDocs, query, orderBy
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 import { FormInput } from '../../../components/FormInput';
@@ -32,9 +32,12 @@ const BUDGETS = ["₪", "₪₪", "₪₪₪", "₪₪₪₪"];
  *
  * @param {Object} navigation - Navigation object.
  */
-export default function AddRecommendationScreen({ navigation }) {
+export default function AddRecommendationScreen({ navigation , route }) {
   // Setup back button with hook
-  useBackButton(navigation, { title: "יאלללה להמליץ!" });
+  const isEdit = route?.params?.mode === 'edit';
+  const editItem = route?.params?.item || null;
+  const editPostId = route?.params?.postId || null;
+  useBackButton(navigation, { title: isEdit ? "עריכת המלצה" : "יאלללה להמליץ!" });
 
   // Existing fields
   const [title, setTitle] = useState('');
@@ -51,6 +54,9 @@ export default function AddRecommendationScreen({ navigation }) {
   const [countries, setCountries] = useState([]);
   const [cities, setCities] = useState([]);
   
+  const existingImage = isEdit ? (editItem?.images?.[0] || null) : null;
+  const displayImageUri = imageUri || existingImage;
+
   const [selectedCountry, setSelectedCountry] = useState(null); // Full country object
   const [selectedCity, setSelectedCity] = useState(null);       // Full city object
 
@@ -76,6 +82,41 @@ export default function AddRecommendationScreen({ navigation }) {
     };
     fetchCountries();
   }, []);
+
+  useEffect(() => {
+    if (!isEdit || !editItem) return;
+
+    setTitle(editItem.title || '');
+    setDescription(editItem.description || '');
+    setCategory(editItem.category || '');
+    setSelectedTags(editItem.tags || []);
+    setBudget(editItem.budget || '');
+  }, [isEdit, editItem]);
+
+
+  useEffect(() => {
+    if (!isEdit || !editItem) return;
+    if (countries.length === 0) return;
+
+    const foundCountry = countries.find((c) => c.id === editItem.countryId);
+    if (!foundCountry) return;
+
+    (async () => {
+      setSelectedCountry(foundCountry);
+
+      try {
+        const citiesRef = collection(db, 'countries', foundCountry.id, 'cities');
+        const snapshot = await getDocs(citiesRef);
+        const citiesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setCities(citiesList);
+
+        const foundCity = citiesList.find((ct) => ct.id === editItem.cityId);
+        if (foundCity) setSelectedCity(foundCity);
+      } catch (e) {
+        console.error('Error restoring cities:', e);
+      }
+    })();
+  }, [isEdit, editItem, countries]);
 
   // 2. Fetch cities when country selected
   const handleSelectCountry = async (country) => {
@@ -129,33 +170,52 @@ export default function AddRecommendationScreen({ navigation }) {
 
     try {
       let imageUrl = null;
+
       if (imageUri) {
         imageUrl = await uploadImage(imageUri);
       }
 
-      // Save document with new structure
-      await addDoc(collection(db, 'recommendations'), {
-        userId: auth.currentUser?.uid || 'anonymous',
-        title,
-        description,
-        
-        // --- Location Data ---
-        location: selectedCity.name || selectedCity.id, // Display city name
-        country: selectedCountry.id,      // Display country name
-        countryId: selectedCountry.id,    // Country ID for filtering
-        cityId: selectedCity.id,          // City ID for filtering
-        
-        category,
-        tags: selectedTags,
-        budget,
-        images: imageUrl ? [imageUrl] : [],
-        createdAt: serverTimestamp(),
-        likes: 0,
-        likedBy: []
-      });
+      const prevImages = editItem?.images || [];
+      const finalImages = imageUrl ? [imageUrl] : (isEdit ? prevImages : []);
 
-      Alert.alert("ההמלצה נוספה בהצלחה!");
-      navigation.goBack();
+      if (!isEdit) {
+        await addDoc(collection(db, 'recommendations'), {
+          userId: auth.currentUser?.uid || 'anonymous',
+          title,
+          description,
+          location: selectedCity.name || selectedCity.id,
+          country: selectedCountry.id,
+          countryId: selectedCountry.id,
+          cityId: selectedCity.id,
+          category,
+          tags: selectedTags,
+          budget,
+          images: finalImages,
+          createdAt: serverTimestamp(),
+          likes: 0,
+          likedBy: [],
+        });
+
+        Alert.alert("ההמלצה נוספה בהצלחה!");
+        navigation.goBack();
+      } else {
+        await updateDoc(doc(db, 'recommendations', editPostId), {
+          title,
+          description,
+          location: selectedCity.name || selectedCity.id,
+          country: selectedCountry.id,
+          countryId: selectedCountry.id,
+          cityId: selectedCity.id,
+          category,
+          tags: selectedTags,
+          budget,
+          images: finalImages,
+          updatedAt: serverTimestamp(),
+        });
+
+        Alert.alert("ההמלצה עודכנה בהצלחה!");
+        navigation.goBack();
+      }
     } catch (error) {
       console.error("Error adding document: ", error);
       Alert.alert("שגיאה", "ההמלצה לא נשמרה.");
@@ -170,7 +230,7 @@ export default function AddRecommendationScreen({ navigation }) {
 
         {/* Image Picker */}
         <ImagePickerBox
-          imageUri={imageUri}
+          imageUri={displayImageUri}
           onPress={pickImage}
           placeholderText="הוסף תמונה"
           style={{ marginBottom: spacing.xl }}
@@ -292,7 +352,9 @@ export default function AddRecommendationScreen({ navigation }) {
           {submitting ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={buttons.submitText}>פרסם המלצה</Text>
+            <Text style={buttons.submitText}>
+              {isEdit ? 'שמור שינויים' : 'פרסם המלצה'}
+            </Text>
           )}
         </TouchableOpacity>
 

@@ -1,4 +1,5 @@
-import { View, Text, Image, TouchableOpacity } from 'react-native';
+import React from 'react';
+import { View, Text, Image, Pressable, Alert ,TouchableOpacity , Platform} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../../auth/hooks/useUserData';
@@ -8,6 +9,9 @@ import { ActionMenu } from '../../../components/ActionMenu';
 import { cards } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import ActionBar from '../../../components/ActionBar';
+import { db } from '../../../config/firebase';
+import { deleteDoc, doc } from 'firebase/firestore';
+
 
 /**
  * Card component for displaying a recommendation item.
@@ -17,7 +21,7 @@ import ActionBar from '../../../components/ActionBar';
  * @param {Object} props.item - Recommendation data.
  * @param {Function} props.onCommentPress - Callback when comment button is pressed.
  */
-const RecommendationCard = ({ item, onCommentPress }) => {
+const RecommendationCard = ({ item, onCommentPress , onDeleted }) => {
   const navigation = useNavigation();
   
   // Use custom hooks
@@ -42,12 +46,44 @@ const RecommendationCard = ({ item, onCommentPress }) => {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
+  const handleEdit = () => {
+    navigation.navigate('AddRecommendation', {
+      mode: 'edit',
+      item,
+      postId: item.id,
+    });
+  };
+
+  const handleDelete = async () => {
+    const ok =
+      Platform.OS === 'web'
+        ? window.confirm("בטוח שברצונך למחוק את ההמלצה?")
+        : await new Promise((resolve) => {
+            Alert.alert(
+              "מחיקת המלצה",
+              "בטוח שברצונך למחוק את ההמלצה?",
+              [
+                { text: "ביטול", style: "cancel", onPress: () => resolve(false) },
+                { text: "מחק", style: "destructive", onPress: () => resolve(true) },
+              ]
+            );
+          });
+
+    if (!ok) return;
+
+    try {
+      await deleteDoc(doc(db, "recommendations", item.id));
+      onDeleted?.(item.id); // חשוב: לעדכן את הרשימה
+    } catch (error) {
+      console.error("Delete error:", error);
+      Alert.alert("שגיאה", "לא הצלחנו למחוק את ההמלצה.");
+    }
+  };
+
+
+
   return (
-    <TouchableOpacity 
-      style={cards.recommendation}
-      onPress={handleCardPress}
-      activeOpacity={0.9}
-    >
+    <Pressable style={cards.recommendation} onPress={handleCardPress}>
       {/* Header */}
       <View style={cards.recHeader}>
         <View style={cards.recAuthorInfo}>
@@ -61,15 +97,17 @@ const RecommendationCard = ({ item, onCommentPress }) => {
         </View>
         {isOwner ? (
           <ActionMenu
-            onEdit={() => {/* TODO: handle edit */}}
-            onDelete={() => {/* TODO: handle delete */}}
+              onEdit={() => {
+              handleEdit();
+            }}
+            onDelete={() => {
+              handleDelete();
+              console.log("DELETE CLICKED", item.id);
+              Alert.alert("DEBUG", "לחצת על מחיקה");
+            }}
             title="Manage Recommendation"
           />
-        ) : (
-          <TouchableOpacity>
-            <Ionicons name="ellipsis-horizontal" size={20} color="#9CA3AF" />
-          </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {/* Image */}
@@ -115,7 +153,7 @@ const RecommendationCard = ({ item, onCommentPress }) => {
       {/* Footer / Action Bar */}
       <ActionBar item = {item} onCommentPress={onCommentPress}/>
 
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 

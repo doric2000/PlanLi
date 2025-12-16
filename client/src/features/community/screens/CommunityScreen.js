@@ -167,6 +167,9 @@ export default function CommunityScreen({ navigation }) {
             <RecommendationCard 
                 item={item} 
                 onCommentPress={handleOpenComments} 
+                onDeleted={(deletedId) => {
+                  setRecommendations((prev) => prev.filter((r) => r.id !== deletedId));
+                }}
             />
           )}
           contentContainerStyle={common.listContent}
