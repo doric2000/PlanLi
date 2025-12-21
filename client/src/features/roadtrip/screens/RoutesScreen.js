@@ -107,8 +107,6 @@ export default function RoutesScreen({ navigation }) {
 					המסלולים הכי שווים, ישר מהשטח
 				</Text>
 			</View>
-					{/* Floating Action Button (FAB) */}
-      		<FabButton onPress={() => navigation.navigate('AddRoutesScreen')} />
 			{loading ? (
 				<ActivityIndicator style={{ marginTop: 20 }} size="large" color={colors.primary} />
 			) : (
@@ -135,6 +133,8 @@ export default function RoutesScreen({ navigation }) {
 					}
 				/>
 			)}
+			{/* Floating Action Button (FAB) */}
+      		<FabButton onPress={() => navigation.navigate('AddRoutesScreen')} />
 		</SafeAreaView>
 	);
 }
