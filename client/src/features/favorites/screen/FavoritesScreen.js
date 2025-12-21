@@ -65,7 +65,7 @@ export default function FavoritesScreen({ navigation }) {
 				data={recommendations}
 				keyExtractor={item => item.id}
 				renderItem={({ item }) => (
-					<RecommendationCard item={item} />
+					<RecommendationCard item={item} showActionBar={false} />
 				)}
 				contentContainerStyle={{ padding: 16 }}
 			/>

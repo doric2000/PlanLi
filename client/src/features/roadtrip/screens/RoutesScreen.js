@@ -15,7 +15,7 @@ import { db, auth } from "../../../config/firebase";
 import { useRefresh } from "../../community/hooks/useRefresh";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { common, buttons, colors } from "../../../styles";
-
+import FabButton from '../../../components/FabButton';
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
 
@@ -107,7 +107,8 @@ export default function RoutesScreen({ navigation }) {
 					המסלולים הכי שווים, ישר מהשטח
 				</Text>
 			</View>
-
+					{/* Floating Action Button (FAB) */}
+      		<FabButton onPress={() => navigation.navigate('AddRoutesScreen')} />
 			{loading ? (
 				<ActivityIndicator style={{ marginTop: 20 }} size="large" color={colors.primary} />
 			) : (
@@ -134,13 +135,6 @@ export default function RoutesScreen({ navigation }) {
 					}
 				/>
 			)}
-
-			<TouchableOpacity
-				style={buttons.fab}
-				onPress={() => navigation.navigate("AddRoutesScreen")}
-			>
-				<Ionicons name='add' size={32} color='#fff' />
-			</TouchableOpacity>
 		</SafeAreaView>
 	);
 }

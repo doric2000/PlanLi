@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import FabButton from '../../../components/FabButton';
 import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
@@ -192,12 +193,7 @@ export default function CommunityScreen({ navigation }) {
       )}
 
       {/* Floating Action Button (FAB) */}
-      <TouchableOpacity
-        style={buttons.fab}
-        onPress={() => navigation.navigate('AddRecommendation')}
-      >
-        <Ionicons name="add" size={32} color="#fff" />
-      </TouchableOpacity>
+      <FabButton onPress={() => navigation.navigate('AddRecommendation')} />
 
       {/* --- Filter Modal (Existing) --- */}
       <Modal

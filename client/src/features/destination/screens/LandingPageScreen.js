@@ -224,6 +224,7 @@ export default function LandingPageScreen({ navigation, route }) {
                         key={item.id} 
                         item={item} 
                         onCommentPress={handleOpenComments}
+                        showActionBar={false}
                       />
                   ))
               )}

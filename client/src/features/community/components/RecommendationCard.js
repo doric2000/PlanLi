@@ -20,8 +20,9 @@ import { deleteDoc, doc } from 'firebase/firestore';
  * @param {Object} props
  * @param {Object} props.item - Recommendation data.
  * @param {Function} props.onCommentPress - Callback when comment button is pressed.
+ * @param {boolean} [props.showActionBar] - Whether to show the ActionBar (default: true)
  */
-const RecommendationCard = ({ item, onCommentPress , onDeleted }) => {
+const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true }) => {
   const navigation = useNavigation();
   
   // Use custom hooks
@@ -151,7 +152,9 @@ const RecommendationCard = ({ item, onCommentPress , onDeleted }) => {
       </View>
 
       {/* Footer / Action Bar */}
-      <ActionBar item = {item} onCommentPress={onCommentPress}/>
+      {showActionBar && (
+        <ActionBar item={item} onCommentPress={onCommentPress} />
+      )}
 
     </Pressable>
   );
