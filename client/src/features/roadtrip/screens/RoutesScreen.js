@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react"; // 1. Import useCallback
 import {
 	View,
 	Text,
@@ -8,6 +8,7 @@ import {
 	TouchableOpacity,
 	Alert,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native"; // 2. Import useFocusEffect
 import { Ionicons } from "@expo/vector-icons";
 import { collection, getDocs, orderBy, query, deleteDoc, doc } from "firebase/firestore";
 import { db, auth } from "../../../config/firebase";
@@ -18,12 +19,6 @@ import { common, buttons, colors } from "../../../styles";
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
 
-/**
- * Screen for displaying a list of routes.
- * Allows users to view, add, edit, and delete routes.
- *
- * @param {Object} navigation - Navigation object.
- */
 export default function RoutesScreen({ navigation }) {
 	const [routes, setRoutes] = useState([]);
 	const [loading, setLoading] = useState(true);
@@ -43,18 +38,21 @@ export default function RoutesScreen({ navigation }) {
 			setRoutes(data);
 		} catch (err) {
 			console.log("Failed to load routes", err);
-		}
+		} finally {
+            // Ensure loading is set to false even if there is an error
+            setLoading(false);
+        }
 	};
 
 	const { isRefreshing, onRefresh } = useRefresh(fetchRoutes);
 
-	useEffect(() => {
-		const init = async () => {
-			await fetchRoutes();
-			setLoading(false);
-		};
-		init();
-	}, []);
+    // 3. REPLACE useEffect with useFocusEffect
+    // This ensures the data is fetched every time you look at this screen
+	useFocusEffect(
+		useCallback(() => {
+			fetchRoutes();
+		}, [])
+	);
 
 	const handleDelete = (routeId) => {
 		Alert.alert(
@@ -85,7 +83,6 @@ export default function RoutesScreen({ navigation }) {
 	};
 
     const handleGenerateTrip = () => {
-        // Placeholder for future functionality
         Alert.alert("Generate trip feature coming soon!");
     };
 
@@ -112,7 +109,7 @@ export default function RoutesScreen({ navigation }) {
 			</View>
 
 			{loading ? (
-				<ActivityIndicator style={{ marginTop: 20 }} />
+				<ActivityIndicator style={{ marginTop: 20 }} size="large" color={colors.primary} />
 			) : (
 				<FlatList
 					contentContainerStyle={{ padding: 15 }}
@@ -131,8 +128,8 @@ export default function RoutesScreen({ navigation }) {
 						/>
 					}
 					ListEmptyComponent={
-						<Text style={{ textAlign: "center", marginTop: 20 }}>
-							No routes yet.
+						<Text style={{ textAlign: "center", marginTop: 20, color: colors.textSecondary }}>
+							No routes yet. Start by adding one!
 						</Text>
 					}
 				/>

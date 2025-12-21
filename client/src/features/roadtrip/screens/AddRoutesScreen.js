@@ -29,14 +29,14 @@ import {
 	ROAD_TRIP_TAGS,
 	EXPERIENCE_TAGS,
 } from "../../../constants/Constatns.js";
-import { db, auth } from "../../../config/firebase.js";
-import PlacesInput from "../components/PlacesInput.js";
-import { useCurrentUser } from "../../auth/hooks/useCurrentUser.js";
-import DayEditorModal from "../components/DayEditorModal.js";
-import DayList from "../components/DayList.js";
-import { FormInput } from "../../../components/FormInput.js";
-import { TagSelector } from "../../../components/TagSelector.js";
-import { useBackButton } from "../../../hooks/useBackButton.js";
+import { db, auth } from '../../../config/firebase';
+import PlacesInput from '../components/PlacesInput';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import DayEditorModal from '../components/DayEditorModal';
+import DayList from '../components/DayList';
+import { FormInput } from '../../../components/FormInput';
+import { TagSelector } from '../../../components/TagSelector';
+import { useBackButton } from '../../../hooks/useBackButton';
 
 /**
  * Screen for adding a new route.
@@ -166,7 +166,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 				Alert.alert("Success", "Route updated successfully!");
 			} else {
 				await addDoc(collection(db, "routes"), {
-					userId: auth.currentUser?.uid,
+					  userId: user?.uid,
 					...newRoute,
 					createdAt: serverTimestamp(),
 				});

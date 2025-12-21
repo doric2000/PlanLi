@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useUserData } from '../../../hooks/useUserData';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "../../../components/Avatar";
@@ -51,17 +52,10 @@ const RenderTags = ({ tags }) => {
  * @param {Function} props.onDelete - Callback for delete action.
  */
 export const RouteCard = ({ item, onPress, isOwner, onEdit, onDelete }) => {
-    let displayUser = "Unknown";
-    let userPhoto = null;
-    if (item.user) {
-        if (typeof item.user === "object") {
-            displayUser =
-                item.user.displayName || item.user.email || "Anonymous";
-            userPhoto = item.user.photoURL;
-        } else {
-            displayUser = item.user;
-        }
-    }
+    // Always use useUserData for author info
+    const author = useUserData(item.userId);
+    const displayUser = author.displayName || "Anonymous";
+    const userPhoto = author.photoURL;
 
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
@@ -111,6 +105,7 @@ export const RouteCard = ({ item, onPress, isOwner, onEdit, onDelete }) => {
         </TouchableOpacity>
     );
 };
+
 
 const styles = StyleSheet.create({
     userContainer: {

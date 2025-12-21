@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { doc, getDoc } from "firebase/firestore";
-import { db, auth } from "../../../config/firebase";
+import { db, auth } from "../config/firebase";
 
 /**
  * Custom hook to fetch user data for a specific user ID.

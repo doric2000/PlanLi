@@ -13,8 +13,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Custom Hooks & Components
-import { useDestinationData } from '../hooks/useDestinationData'; // new hook file ive created
-import { InfoCard } from '../components/InfoCard'; // New modular component
+import { useDestinationData } from '../hooks/useDestinationData';
+import { InfoCard } from '../components/InfoCard';
 import RecommendationCard from '../../community/components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { BackButton } from '../../../components/BackButton';

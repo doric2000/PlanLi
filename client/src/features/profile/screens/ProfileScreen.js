@@ -1,21 +1,3 @@
-import React, { useState, useEffect } from "react";
-import {
-    View,
-    Text,
-    Image,
-    TouchableOpacity,
-    ScrollView,
-    Alert,
-    ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { auth, db } from "../../../config/firebase";
-import { signOut, updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
-import appConfig from "../../../../app.json"
-import { colors, common, cards, buttons, typography } from "../../../styles";
-import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
 
 /**
  * Screen for displaying and editing user profile.
@@ -23,18 +5,30 @@ import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUploa
  *
  * @param {Object} navigation - Navigation object.
  */
-export default function ProfileScreen({ navigation }) {
-    const user = auth.currentUser;
+import React, { useState, useEffect } from 'react';
+import { View, Text, Image, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { auth, db } from '../../../config/firebase';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { signOut, updateProfile } from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import appConfig from '../../../../app.json';
+import { colors, common, cards, buttons, typography } from '../../../styles';
+import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 
-	// Image picker with upload hook (SOLID-based composition)
-	const { pickImage, uploadImage, uploading } = useImagePickerWithUpload({
-		storagePath: 'profilePicture',
-		aspect: [1, 1],
-		quality: 0.7,
-	});
+const ProfileScreen = ({ navigation }) => {
+    const { user } = useCurrentUser();
 
-	// state for user data from Firebase Table
-	const [userData, setUserData] = useState({
+    // Image picker with upload hook (SOLID-based composition)
+    const { pickImage, uploadImage, uploading } = useImagePickerWithUpload({
+        storagePath: 'profilePicture',
+        aspect: [1, 1],
+        quality: 0.7,
+    });
+
+    // state for user data from Firebase Table
+    const [userData, setUserData] = useState({
         displayName: 'Traveler',
         photoURL: null,
         email: user?.email || '',
@@ -97,17 +91,21 @@ export default function ProfileScreen({ navigation }) {
     };
 
     const handleProfilePictureUpload = async (uri) => {
-        if (!uri || !user) return;
+        // Validation check
+        if (!uri || !auth.currentUser) return; 
+
         try {
             const downloadURL = await uploadImage(uri);
             if (!downloadURL) return;
 
-            // Update in Firebase Auth
-            await updateProfile(user, {
+            // FIX: Use 'auth.currentUser' here, NOT 'user'
+            // 'auth.currentUser' is the technical object that can authorize changes.
+            await updateProfile(auth.currentUser, {
                 photoURL: downloadURL,
             });
 
             // Update in Firestore
+            // (It's fine to use 'user.uid' here because your hook provides the UID string)
             const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 
@@ -127,7 +125,7 @@ export default function ProfileScreen({ navigation }) {
                 });
             }
 
-            // Update local state
+            // Update local state so the image changes immediately on screen
             setUserData(prev => ({
                 ...prev,
                 photoURL: downloadURL,
@@ -258,4 +256,6 @@ export default function ProfileScreen({ navigation }) {
             </ScrollView>
         </SafeAreaView>
     );
-}
+};
+
+export default ProfileScreen;

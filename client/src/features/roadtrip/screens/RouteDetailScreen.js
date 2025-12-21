@@ -8,13 +8,14 @@ import {
     Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import PlacesRoute from "../components/PlacesRoute";
+import PlacesRoute from '../components/PlacesRoute';
 import { Ionicons } from '@expo/vector-icons';
 import DayViewModal from '../components/DayViewModal';
-import { colors, common, tags as tagsStyle, typography, spacing } from "../../../styles";
-import { Avatar } from "../../../components/Avatar";
-import { TimelineItem } from "../../../components/TimelineItem";
-import { useBackButton } from "../../../hooks/useBackButton";
+import { colors, common, tags as tagsStyle, typography, spacing } from '../../../styles';
+import { Avatar } from '../../../components/Avatar';
+import { TimelineItem } from '../../../components/TimelineItem';
+import { useBackButton } from '../../../hooks/useBackButton';
+import { useUserData } from '../../../hooks/useUserData';
 
 const { width } = Dimensions.get('window');
 
@@ -41,16 +42,10 @@ export default function RouteDetailScreen({ route, navigation }) {
     };
 
     // Get display name from user object
-    let displayUser = "Unknown";
-    let userPhoto = null;
-    if (routeData.user) {
-        if (typeof routeData.user === "object") {
-            displayUser = routeData.user.displayName || routeData.user.email || "Anonymous";
-            userPhoto = routeData.user.photoURL;
-        } else {
-            displayUser = routeData.user;
-        }
-    }
+        // Use useUserData for author info
+        const author = useUserData(routeData.userId);
+        let displayUser = author.displayName || "Anonymous";
+        let userPhoto = author.photoURL;
 
     // Prepare places array
     const places = Array.isArray(routeData.places) ? routeData.places : [];

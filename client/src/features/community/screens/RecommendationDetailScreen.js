@@ -26,9 +26,9 @@ import {
   arrayRemove
 } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
-import { useUserData } from '../../auth/hooks/useUserData';
-import { useLikes } from '../hooks/useLikes';
-import { useCommentsCount } from '../hooks/useCommentsCount';
+import { useUserData } from '../../../hooks/useUserData';
+import { useLikes } from '../../community/hooks/useLikes';
+import { useCommentsCount } from '../../community/hooks/useCommentsCount';
 import { useFavoriteRecommendation } from '../../../hooks/useFavoriteRecommendation';
 
 import { Avatar } from '../../../components/Avatar';
