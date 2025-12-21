@@ -1,32 +1,21 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { forms } from '../../../styles';
 
-const GOOGLE_LOGO = "https://cdn-icons-png.flaticon.com/512/300/300221.png";
-const FACEBOOK_LOGO = "https://cdn-icons-png.flaticon.com/512/5968/5968764.png";
-const APPLE_LOGO = "https://cdn-icons-png.flaticon.com/512/0/747.png";
+// --- Import the new Modular Components ---
+import { AuthInput } from '../../../components/AuthInput';
+import { SocialLoginButtons } from '../components/SocialLoginButtons';
 
-/**
- * Screen for user registration.
- * Allows new users to sign up with email, password, and full name.
- *
- * @param {Object} navigation - Navigation object for screen transitions.
- */
 export default function RegisterScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
-  const [securePassword, setSecurePassword] = useState(true);
-  const [secureConfirmPassword, setSecureConfirmPassword] = useState(true);
-
   const [error, setError] = useState('');
 
   const handleRegister = async () => {
@@ -39,33 +28,18 @@ export default function RegisterScreen({ navigation }) {
       setError('');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-      // Update the user profile with the full name
       if (userCredential.user) {
-        await updateProfile(userCredential.user, {
-          displayName: fullName
+        await updateProfile(userCredential.user, { displayName: fullName });
+
+        // Add user to Firestore
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email,
+          displayName: fullName,
+          createdAt: serverTimestamp(),
+          photoURL: null,
         });
-
-        // --- Firestore user creation logic ---
-        // Add user to Firestore 'users' collection with uid
-        try {
-          const { uid, email: userEmail, displayName } = userCredential.user;
-          // Import Firestore methods and db if not already
-          // (Assume import { db } from '../../../config/firebase'; and import { setDoc, doc, serverTimestamp } from 'firebase/firestore'; are present at the top)
-          await setDoc(doc(db, 'users', uid), {
-            uid,
-            email: userEmail,
-            displayName: displayName || fullName,
-            createdAt: serverTimestamp(),
-            photoURL: null,
-          });
-        } catch (firestoreErr) {
-          console.error('Error creating user in Firestore:', firestoreErr);
-        }
-        // --- End Firestore user creation logic ---
       }
-
-      console.log('Registered!');
-      // Navigate to Home
       navigation.replace('Main');
     } catch (err) {
       setError(err.message);
@@ -82,88 +56,50 @@ export default function RegisterScreen({ navigation }) {
               {/* Header */}
               <View style={forms.authHeader}>
                 <View style={forms.authLogoContainer}>
-                   <Image
-                    source={require('../../../../assets/logo.png')}
-                    style={forms.authLogo}
-                    resizeMode="contain"
-                  />
+                   <Image source={require('../../../../assets/logo.png')} style={forms.authLogo} resizeMode="contain" />
                 </View>
                 <Text style={forms.authTitle}>Create Account</Text>
                 <Text style={forms.authSubtitle}>Start your travel journey</Text>
               </View>
 
-              {/* Form */}
               <View style={forms.authForm}>
-                {/* Full Name */}
-                <View style={forms.authInputContainer}>
-                  <Text style={forms.authInputLabel}>Full Name</Text>
-                  <View style={forms.authInputWrapper}>
-                    <Ionicons name="person-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
-                    <TextInput
-                      style={forms.authInput}
-                      placeholder="Enter your full name"
-                      placeholderTextColor="#9CA3AF"
-                      value={fullName}
-                      onChangeText={setFullName}
-                      autoCapitalize="words"
-                    />
-                  </View>
-                </View>
+                
+                {/* --- Reusable Inputs --- */}
+                <AuthInput
+                  label="Full Name"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder="Enter your full name"
+                  iconName="person-outline"
+                  autoCapitalize="words"
+                />
 
-                {/* Email */}
-                <View style={forms.authInputContainer}>
-                  <Text style={forms.authInputLabel}>Email</Text>
-                  <View style={forms.authInputWrapper}>
-                    <Ionicons name="mail-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
-                    <TextInput
-                      style={forms.authInput}
-                      placeholder="Enter your email"
-                      placeholderTextColor="#9CA3AF"
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
-                  </View>
-                </View>
+                <AuthInput
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  iconName="mail-outline"
+                  keyboardType="email-address"
+                />
 
-                {/* Password */}
-                <View style={forms.authInputContainer}>
-                  <Text style={forms.authInputLabel}>Password</Text>
-                  <View style={forms.authInputWrapper}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
-                    <TextInput
-                      style={forms.authInput}
-                      placeholder="Create a password"
-                      placeholderTextColor="#9CA3AF"
-                      value={password}
-                      onChangeText={setPassword}
-                      secureTextEntry={securePassword}
-                    />
-                    <TouchableOpacity onPress={() => setSecurePassword(!securePassword)} style={forms.authEyeIcon}>
-                      <Ionicons name={securePassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <AuthInput
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Create a password"
+                  iconName="lock-closed-outline"
+                  isPassword={true}
+                />
 
-                {/* Confirm Password */}
-                <View style={forms.authInputContainer}>
-                  <Text style={forms.authInputLabel}>Confirm Password</Text>
-                  <View style={forms.authInputWrapper}>
-                    <Ionicons name="lock-closed-outline" size={20} color="#6B7280" style={forms.authInputIcon} />
-                    <TextInput
-                      style={forms.authInput}
-                      placeholder="Confirm your password"
-                      placeholderTextColor="#9CA3AF"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      secureTextEntry={secureConfirmPassword}
-                    />
-                    <TouchableOpacity onPress={() => setSecureConfirmPassword(!secureConfirmPassword)} style={forms.authEyeIcon}>
-                       <Ionicons name={secureConfirmPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <AuthInput
+                  label="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm your password"
+                  iconName="lock-closed-outline"
+                  isPassword={true}
+                />
 
                 {/* Terms Text */}
                 <View style={forms.authTermsContainer}>
@@ -178,12 +114,7 @@ export default function RegisterScreen({ navigation }) {
 
                 {/* Register Button */}
                 <TouchableOpacity onPress={handleRegister} activeOpacity={0.8}>
-                  <LinearGradient
-                    colors={['#1E3A8A', '#2563EB']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={forms.authButton}
-                  >
+                  <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={forms.authButton}>
                     <Text style={forms.authButtonText}>Create Account</Text>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -195,31 +126,10 @@ export default function RegisterScreen({ navigation }) {
                   <View style={forms.authDivider} />
                 </View>
 
-                {/* Social Buttons */}
-                <View style={forms.authSocialContainer}>
-                  <TouchableOpacity style={forms.authSocialButton}>
-                    <Image 
-                      source={{ uri: GOOGLE_LOGO }} 
-                      style={forms.authSocialIcon} 
-                    />
-                  </TouchableOpacity>
+                {/* --- Reusable Social Buttons --- */}
+                <SocialLoginButtons />
 
-                  <TouchableOpacity style={forms.authSocialButton}>
-                    <Image 
-                      source={{ uri: FACEBOOK_LOGO }} 
-                      style={forms.authSocialIcon} 
-                    />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={forms.authSocialButton}>
-                    <Image 
-                      source={{ uri: APPLE_LOGO }} 
-                      style={forms.authSocialIcon} 
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Footer / Login Link */}
+                {/* Footer */}
                 <View style={forms.authFooter}>
                   <Text style={forms.authFooterText}>Join thousands of travelers</Text>
                   <Text style={forms.authFooterText}>exploring the world together</Text>
@@ -231,13 +141,6 @@ export default function RegisterScreen({ navigation }) {
                     </TouchableOpacity>
                   </View>
                 </View>
-              </View>
-              <View style={forms.authCardDecoration} pointerEvents="none">
-                <Image
-                  source={require('../../../../assets/logo.png')}
-                  style={forms.authCardLogo}
-                  resizeMode="contain"
-                />
               </View>
             </View>
           </ScrollView>
