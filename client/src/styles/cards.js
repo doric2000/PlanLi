@@ -456,3 +456,5 @@ export const cards = {
 		alignItems: "center",
 	},
 };
+
+export const FAVORITE_CARD_WIDTH = 400; // or any value that matches the RecommendationCard width

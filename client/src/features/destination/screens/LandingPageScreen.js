@@ -76,6 +76,14 @@ export default function LandingPageScreen({ navigation, route }) {
     );
   }
 
+  // Create snapshot data for city favorites
+  const citySnapshotData = {
+    name: cityData.name,
+    thumbnail_url: cityData.imageUrl,
+    sub_text: `${cityData.travelers || 0} travelers`,
+    rating: cityData.rating
+  };
+
   return (
     <SafeAreaView style={common.container} edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -100,7 +108,8 @@ export default function LandingPageScreen({ navigation, route }) {
                   type="cities" 
                   id={cityId} 
                   variant="light" 
-                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 20 }} 
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 20 }}
+                  snapshotData={citySnapshotData}
                 />
               </View>
 

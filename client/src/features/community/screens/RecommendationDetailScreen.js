@@ -82,6 +82,14 @@ export default function RecommendationDetailScreen({ route, navigation }) {
 
   const hasImage = item.images && item.images.length > 0;
 
+  // Create snapshot data for favorites
+  const snapshotData = {
+    name: item.title,
+    thumbnail_url: item.images && item.images.length > 0 ? item.images[0] : null,
+    sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : '',
+    rating: item.rating
+  };
+
   return (
     <SafeAreaView style={common.container} edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -104,7 +112,7 @@ export default function RecommendationDetailScreen({ route, navigation }) {
                 >
                   <View style={common.rowBetween}>
                     <BackButton />
-                    <FavoriteButton type="recommendations" id={item.id} variant="light" />
+                    <FavoriteButton type="recommendations" id={item.id} variant="light" snapshotData={snapshotData} />
                   </View>
                 </LinearGradient>
               </View>
@@ -112,7 +120,7 @@ export default function RecommendationDetailScreen({ route, navigation }) {
               <View style={common.noImageHeader}>
                 <View style={common.rowBetween}>
                   <BackButton color="dark" variant="solid" />
-                  <FavoriteButton type="recommendations" id={item.id} variant="dark" />
+                  <FavoriteButton type="recommendations" id={item.id} variant="dark" snapshotData={snapshotData} />
                 </View>
               </View>
             )}

@@ -11,6 +11,7 @@ import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import { db } from '../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
+import FavoriteButton from './FavoriteButton';
 
 
 /**
@@ -36,6 +37,14 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
   // Check if current user is the owner
   const isOwner = auth.currentUser?.uid === item.userId;
+
+  // Create snapshot data for favorites
+  const snapshotData = {
+    name: item.title,
+    thumbnail_url: item.images && item.images.length > 0 ? item.images[0] : null,
+    sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : '',
+    rating: item.rating
+  };
 
   const handleCardPress = () => {
     navigation.navigate('RecommendationDetail', { item });
@@ -96,19 +105,27 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             )}
           </View>
         </View>
-        {isOwner ? (
-          <ActionMenu
-              onEdit={() => {
-              handleEdit();
-            }}
-            onDelete={() => {
-              handleDelete();
-              console.log("DELETE CLICKED", item.id);
-              Alert.alert("DEBUG", "לחצת על מחיקה");
-            }}
-            title="Manage Recommendation"
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <FavoriteButton 
+            type="recommendations" 
+            id={item.id} 
+            variant="light" 
+            snapshotData={snapshotData} 
           />
-        ) : null}
+          {isOwner ? (
+            <ActionMenu
+                onEdit={() => {
+                handleEdit();
+              }}
+              onDelete={() => {
+                handleDelete();
+                console.log("DELETE CLICKED", item.id);
+                Alert.alert("DEBUG", "לחצת על מחיקה");
+              }}
+              title="Manage Recommendation"
+            />
+          ) : null}
+        </View>
       </View>
 
       {/* Image */}

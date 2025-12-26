@@ -1,47 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { Alert } from 'react-native';
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
 /**
- * useFavorite - Generic hook for favoriting different types of items
+ * useFavorite - Generic hook for favoriting different types of items using sub-collections
  * @param {string} type - Type of item ('recommendations', 'routes', 'cities', etc.)
  * @param {string} id - ID of the item to favorite
+ * @param {Object} snapshotData - Optional snapshot data (name, thumbnail_url, sub_text, rating)
  * @returns { isFavorite, toggleFavorite, loading }
  */
-export function useFavorite(type, id) {
+export function useFavorite(type, id, snapshotData = {}) {
   const user = auth.currentUser;
   const [isFavorite, setIsFavorite] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Get the field name based on type
-  const getFieldName = (type) => {
-    switch (type) {
-      case 'recommendations':
-        return 'favoriteRecommendations';
-      case 'routes':
-        return 'favoriteRoutes';
-      case 'cities':
-        return 'favoriteCities';
-      default:
-        return `favorite${type.charAt(0).toUpperCase() + type.slice(1)}`;
-    }
-  };
-
-  const fieldName = getFieldName(type);
-
-  // Check if this item is in user's favorites
+  // Check if this item is in user's favorites (subcollection for all types)
   const checkFavorite = useCallback(async () => {
     if (!user || !id) return;
     try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const favs = userDoc.data()[fieldName] || [];
-        setIsFavorite(favs.includes(id));
-      }
+      const favoriteDoc = await getDoc(doc(db, 'users', user.uid, 'favorites', id));
+      setIsFavorite(favoriteDoc.exists());
     } catch (e) {
-      // ignore
+      console.error('Error checking favorite status:', e);
+      setIsFavorite(false);
     }
-  }, [user, id, fieldName]);
+  }, [user, id]);
 
   useEffect(() => {
     checkFavorite();
@@ -49,23 +33,42 @@ export function useFavorite(type, id) {
 
   // Toggle favorite status
   const toggleFavorite = async () => {
-    if (!user) return;
+    console.log('[FavoriteButton] toggleFavorite called:', { type, id, user, snapshotData });
+    if (!user) {
+      console.warn('No authenticated user!');
+      Alert && Alert.alert && Alert.alert('Error', 'You must be logged in to favorite.');
+      return;
+    }
+    if (!id) {
+      console.warn('No item ID provided!');
+      Alert && Alert.alert && Alert.alert('Error', 'No item ID provided.');
+      return;
+    }
     setLoading(true);
     try {
-      const userDocRef = doc(db, 'users', user.uid);
+      const favoriteDocRef = doc(db, 'users', user.uid, 'favorites', id);
       if (isFavorite) {
-        await updateDoc(userDocRef, {
-          [fieldName]: arrayRemove(id)
-        });
+        await deleteDoc(favoriteDocRef);
         setIsFavorite(false);
+        console.log('[FavoriteButton] Removed from favorites:', id);
       } else {
-        await updateDoc(userDocRef, {
-          [fieldName]: arrayUnion(id)
-        });
+        // Remove undefined fields from snapshotData
+        const cleanSnapshotData = Object.fromEntries(
+          Object.entries(snapshotData).filter(([_, v]) => v !== undefined)
+        );
+        const favoriteData = {
+          id,
+          type,
+          created_at: serverTimestamp(),
+          ...cleanSnapshotData
+        };
+        await setDoc(favoriteDocRef, favoriteData);
         setIsFavorite(true);
+        console.log('[FavoriteButton] Added to favorites:', favoriteData);
       }
     } catch (e) {
       console.error('Error toggling favorite:', e);
+      Alert.alert('Error', e.message || String(e));
     } finally {
       setLoading(false);
     }

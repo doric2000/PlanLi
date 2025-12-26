@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { auth, db } from "../config/firebase";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 
-export function useFavoriteRecommendationIds() {
+export function useFavoriteCityIds() {
   const user = auth.currentUser;
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,11 +16,11 @@ export function useFavoriteRecommendationIds() {
 
     setLoading(true);
 
-    // Query the favorites sub-collection for recommendations
+    // Query the favorites sub-collection for cities
     const favoritesRef = collection(db, "users", user.uid, "favorites");
     const q = query(
       favoritesRef,
-      where("type", "==", "recommendations"),
+      where("type", "==", "cities"),
       orderBy("created_at", "desc")
     );
 
@@ -33,7 +33,7 @@ export function useFavoriteRecommendationIds() {
         setFavorites(favs);
       })
       .catch((error) => {
-        console.error("Error fetching favorite recommendations:", error);
+        console.error("Error fetching favorite cities:", error);
         setFavorites([]);
       })
       .finally(() => setLoading(false));
