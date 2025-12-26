@@ -63,7 +63,9 @@ function FavoriteCitiesList({ navigation }) {
 }
 
 function FavoriteRecommendationsList() {
+	// ... (hooks remain the same)
 	const { favorites, loading } = useFavoriteRecommendationIds();
+
 	if (loading) {
 		return (
 			<View style={common.containerCentered}>
@@ -79,24 +81,29 @@ function FavoriteRecommendationsList() {
 			</View>
 		);
 	}
+
 	return (
 		<FlatList
 			data={favorites}
 			keyExtractor={item => item.id}
 			renderItem={({ item }) => (
-				<View style={{ alignItems: 'center' }}>
-					<RecommendationCard
-						item={{
-							id: item.id,
-							title: item.name || 'Untitled',
-							description: item.sub_text || '',
-							images: item.thumbnail_url ? [item.thumbnail_url] : [],
-							rating: item.rating,
-							...item
-						}}
-						showActionBar={false}
-						style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}
-					/>
+				<View style={{ alignItems: 'center', width: '100%' }}>
+					{/* ✅ FIX: We wrap the card in a View with the specific width. 
+					    The card will expand to fill this wrapper. */}
+					<View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>
+						<RecommendationCard
+							item={{
+								id: item.id,
+								title: item.name || 'Untitled',
+								description: item.sub_text || '',
+								images: item.thumbnail_url ? [item.thumbnail_url] : [],
+								rating: item.rating,
+								...item
+							}}
+							showActionBar={false}
+							// ❌ We removed the 'style' prop from here since the component ignores it
+						/>
+					</View>
 				</View>
 			)}
 			contentContainerStyle={{ padding: 16, alignItems: 'center' }}
