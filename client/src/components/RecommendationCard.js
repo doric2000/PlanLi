@@ -2,14 +2,14 @@ import React from 'react';
 import { View, Text, Image, Pressable, Alert ,TouchableOpacity , Platform} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useUserData } from '../../../hooks/useUserData';
-import { useLikes } from '../../community/hooks/useLikes';
-import { Avatar } from '../../../components/Avatar';
-import { ActionMenu } from '../../../components/ActionMenu';
-import { cards } from '../../../styles';
-import { auth } from '../../../config/firebase';
-import ActionBar from '../../../components/ActionBar';
-import { db } from '../../../config/firebase';
+import { useUserData } from '../hooks/useUserData';
+import { useLikes } from '../features/community/hooks/useLikes';
+import { Avatar } from './Avatar';
+import { ActionMenu } from './ActionMenu';
+import { cards } from '../styles';
+import { auth } from '../config/firebase';
+import ActionBar from './ActionBar';
+import { db } from '../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 
 

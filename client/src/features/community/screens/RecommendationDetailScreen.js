@@ -29,10 +29,10 @@ import { db, auth } from '../../../config/firebase';
 import { useUserData } from '../../../hooks/useUserData';
 import { useLikes } from '../../community/hooks/useLikes';
 import { useCommentsCount } from '../../community/hooks/useCommentsCount';
-import { useFavoriteRecommendation } from '../../../hooks/useFavoriteRecommendation';
 
 import { Avatar } from '../../../components/Avatar';
 import { BackButton } from '../../../components/BackButton';
+import FavoriteButton from '../../../components/FavoriteButton';
 import LikesModal from '../../../components/LikesModal';
 import { CommentsSection } from '../../../components/CommentSection';
 import { colors, typography, common, buttons, cards, tags as tagsStyle } from '../../../styles';
@@ -69,7 +69,6 @@ export default function RecommendationDetailScreen({ route, navigation }) {
   const user = auth.currentUser;
   const isOwner = user?.uid === item.userId;
   const [likesModalVisible, setLikesModalVisible] = useState(false);
-  const { isFavorite, toggleFavorite, loading: saving } = useFavoriteRecommendation(item.id);
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
@@ -105,17 +104,7 @@ export default function RecommendationDetailScreen({ route, navigation }) {
                 >
                   <View style={common.rowBetween}>
                     <BackButton />
-                    <TouchableOpacity 
-                      style={common.iconButton}
-                      onPress={toggleFavorite}
-                      disabled={saving}
-                    >
-                      <Ionicons 
-                        name={isFavorite ? "bookmark" : "bookmark-outline"} 
-                        size={24} 
-                        color={isFavorite ? colors.primary : colors.white} 
-                      />
-                    </TouchableOpacity>
+                    <FavoriteButton type="recommendations" id={item.id} variant="light" />
                   </View>
                 </LinearGradient>
               </View>
@@ -123,17 +112,7 @@ export default function RecommendationDetailScreen({ route, navigation }) {
               <View style={common.noImageHeader}>
                 <View style={common.rowBetween}>
                   <BackButton color="dark" variant="solid" />
-                  <TouchableOpacity 
-                    style={[common.iconButton, { backgroundColor: colors.background }]}
-                    onPress={toggleFavorite}
-                    disabled={saving}
-                  >
-                    <Ionicons 
-                      name={isFavorite ? "bookmark" : "bookmark-outline"} 
-                      size={24} 
-                      color={isFavorite ? colors.primary : colors.textPrimary} 
-                    />
-                  </TouchableOpacity>
+                  <FavoriteButton type="recommendations" id={item.id} variant="dark" />
                 </View>
               </View>
             )}

@@ -6,7 +6,7 @@ import { buttons } from "../../../styles/buttons";
 import { tags } from "../../../styles/tags";
 
 import { useFavoriteRecommendationIds } from '../../../hooks/useFavoriteRecommendationIds';
-import RecommendationCard from '../../community/components/RecommendationCard';
+import RecommendationCard from '../../../components/RecommendationCard';
 import { useEffect, useState } from 'react';
 import { db } from '../../../config/firebase';
 import { doc, getDoc } from 'firebase/firestore';

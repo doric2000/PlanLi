@@ -15,7 +15,7 @@ import FabButton from '../../../components/FabButton';
 import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
-import RecommendationCard from '../components/RecommendationCard';
+import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { colors, spacing, common, buttons, tags } from '../../../styles';
 import { PRICE_TAGS,CATEGORY_TAGS } from '../../../constants/Constatns';

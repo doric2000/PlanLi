@@ -15,9 +15,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 // Custom Hooks & Components
 import { useDestinationData } from '../hooks/useDestinationData';
 import { InfoCard } from '../components/InfoCard';
-import RecommendationCard from '../../community/components/RecommendationCard';
+import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { BackButton } from '../../../components/BackButton';
+import FavoriteButton from '../../../components/FavoriteButton';
 
 // Styles
 import { colors, typography, common, cards, buttons } from '../../../styles';
@@ -95,9 +96,12 @@ export default function LandingPageScreen({ navigation, route }) {
             >
               <View style={common.topBar}>
                 <BackButton />
-                <TouchableOpacity style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 20 }}>
-                  <Ionicons name="heart-outline" size={24} color={colors.white} />
-                </TouchableOpacity>
+                <FavoriteButton 
+                  type="cities" 
+                  id={cityId} 
+                  variant="light" 
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 8, borderRadius: 20 }} 
+                />
               </View>
 
               <View style={{ alignItems: 'flex-start' }}>
