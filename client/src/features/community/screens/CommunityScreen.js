@@ -4,11 +4,10 @@ import {
   Text,
   ActivityIndicator,
   FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Modal,   
-  TextInput,
+  RefreshControl, 
 } from 'react-native';
+import FilterIconButton from '../../../components/FilterIconButton';
+import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import FabButton from '../../../components/FabButton';
@@ -38,10 +37,7 @@ export default function CommunityScreen({ navigation }) {
   const [filterBudgets, setFilterBudgets] = useState([]);      
   const [filterDestination, setFilterDestination] = useState('');
 
-  // Temp states for filter modal
-  const [tempCategories, setTempCategories] = useState([]);
-  const [tempBudgets, setTempBudgets] = useState([]);
-  const [tempDestination, setTempDestination] = useState('');
+
 
   // --- Comments Modal Management ---
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
@@ -129,17 +125,16 @@ export default function CommunityScreen({ navigation }) {
     setFilterCategories([]);
     setFilterBudgets([]);
     setFilterDestination('');
-    setTempCategories([]);
-    setTempBudgets([]);
-    setTempDestination('');
-  };
-
-  const applyFilters = () => {
-    setFilterCategories(tempCategories);
-    setFilterBudgets(tempBudgets);
-    setFilterDestination(tempDestination);
     setFilterVisible(false);
   };
+
+  const applyFilters = (next) => {
+    setFilterCategories(Array.isArray(next?.categories) ? next.categories : []);
+    setFilterBudgets(Array.isArray(next?.budgets) ? next.budgets : []);
+    setFilterDestination(next?.destination || '');
+    setFilterVisible(false);
+  };
+
 
   return (
     <SafeAreaView style={common.container}>
@@ -149,9 +144,7 @@ export default function CommunityScreen({ navigation }) {
         <Text style={common.screenHeaderTitle}>קהילת המטיילים</Text>
         <Text style={common.screenHeaderSubtitle}>גלו המלצות חדשות!</Text>
         
-        <TouchableOpacity style={buttons.filterIcon} onPress={() => setFilterVisible(true)}>
-            <Ionicons name="options-outline" size={24} color={isFiltered ? colors.primary : colors.textPrimary} />
-        </TouchableOpacity>
+        <FilterIconButton active={isFiltered} onPress={() => setFilterVisible(true)} />
       </View>
 
       {/* Main List */}
@@ -196,83 +189,18 @@ export default function CommunityScreen({ navigation }) {
       <FabButton onPress={() => navigation.navigate('AddRecommendation')} />
 
       {/* --- Filter Modal (Existing) --- */}
-      <Modal
+      <RecommendationsFilterModal
         visible={filterVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setFilterVisible(false)}
-      >
-        <View style={common.modalOverlay}>
-          <View style={common.modalContent}>
-            <View style={[common.modalHeader, { flexDirection: 'row', alignItems: 'center' }]}>
-              {/* Close Button on the Left */}
-              <TouchableOpacity onPress={() => setFilterVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textPrimary} />
-              </TouchableOpacity>
+        onClose={() => setFilterVisible(false)}
+        filters={{
+          destination: filterDestination,
+          categories: filterCategories,
+          budgets: filterBudgets,
+        }}
+        onApply={applyFilters}
+        onClear={handleClearFilters}
+      />
 
-              {/* Title on the Right */}
-              <Text style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>מסננים</Text>
-            </View>
-
-            <Text style={[common.modalLabel, { textAlign: 'right' }]}>יעד / עיר / מדינה</Text>
-            <TextInput
-              style={[common.modalInput, { textAlign: 'right' }]}
-              placeholder="תל אביב, יוון, תאילנד..."
-              value={tempDestination}
-              onChangeText={setTempDestination}
-            />
-
-            <Text style={[common.modalLabel, { marginTop: spacing.lg, textAlign: 'right' }]}>קטגוריה</Text>
-            <View style={[tags.chipRow, { flexDirection: 'row-reverse' }]}>
-              {CATEGORY_TAGS.map((cat) => {
-                const selected = tempCategories.includes(cat);
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[tags.filterChip, selected && tags.filterChipSelected]}
-                    onPress={() =>
-                      setTempCategories((prev) =>
-                        prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-                      )
-                    }
-                  >
-                    <Text style={[tags.filterChipText, selected && tags.filterChipTextSelected]}>{cat}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[common.modalLabel, { marginTop: spacing.lg, textAlign: 'right' }]}>תקציב</Text>
-            <View style={[tags.chipRow, { flexDirection: 'row-reverse' }]}>
-              {PRICE_TAGS.map((b) => {
-                const selected = tempBudgets.includes(b);
-                return (
-                  <TouchableOpacity
-                    key={b}
-                    style={[tags.budgetChip, selected && tags.budgetChipSelected]}
-                    onPress={() =>
-                      setTempBudgets((prev) =>
-                        prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]
-                      )
-                    }
-                  >
-                    <Text style={[tags.budgetChipText, selected && tags.budgetChipTextSelected]}>{b}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={[common.modalActions, { flexDirection: 'row-reverse' }]}>
-              <TouchableOpacity style={buttons.clear} onPress={handleClearFilters}>
-                <Text style={buttons.clearText}>נקה</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={buttons.apply} onPress={applyFilters}>
-                <Text style={buttons.applyText}>הפעל מסננים</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <CommentsModal
         visible={commentsModalVisible}
