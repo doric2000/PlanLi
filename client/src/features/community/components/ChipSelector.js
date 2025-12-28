@@ -1,0 +1,61 @@
+import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { tags, colors } from '../../../styles'; 
+
+const ChipSelector = ({ 
+  label, 
+  items, 
+  selectedValue, 
+  onSelect, 
+  multiSelect = false 
+}) => {
+
+  const isSelected = (item) => {
+    if (multiSelect) {
+      return Array.isArray(selectedValue) && selectedValue.includes(item);
+    }
+    return selectedValue === item;
+  };
+
+  return (
+    <View style={styles.inputWrapper}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+        {items.map((item) => {
+          const active = isSelected(item);
+          return (
+            <TouchableOpacity
+              key={item}
+              style={[tags.chip, active && tags.chipSelected]} 
+              onPress={() => onSelect(item)}
+            >
+              <Text style={[tags.chipText, active && tags.chipTextSelected]}>
+                {item}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  inputWrapper: {
+    marginBottom: 20,
+
+  },
+  label: {
+    textAlign: "right",
+    marginBottom: 8,
+    fontWeight: 'bold',
+    fontSize: 14,
+    color: colors.textPrimary || '#333', 
+  },
+  chipScroll: {
+    flexDirection: 'row',
+  }
+});
+
+export default ChipSelector;
