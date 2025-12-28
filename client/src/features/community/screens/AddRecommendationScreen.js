@@ -6,40 +6,39 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Modal,
-  FlatList,
   StyleSheet
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-// הוספנו את getDocs, query, orderBy
-import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query } from 'firebase/firestore';
+// Firestore imports
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
+
+// --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
+import SelectField from '../components/SelectField'; 
+import SelectionModal from '../components/SelectionModal';
+import ChipSelector from '../components/ChipSelector';
+import SegmentedControl from '../components/SegmentedControl';
+
+// --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
+import { useLocationData } from '../../../hooks/useLocationData'; 
+
 import { CATEGORY_TAGS, PRICE_TAGS } from '../../../constants/Constatns';
 
-const CATEGORIES = ["אוכל", "אטרקציה", "מלון", "חיי לילה", "קניות"];
 const TAGS = ["כשר", "למשפחה", "תקציב", "יוקרה", "טבע", "רומנטי", "נגיש"];
-const BUDGETS = ["₪", "₪₪", "₪₪₪", "₪₪₪₪"];
 
-/**
- * Screen for adding a new recommendation.
- * Users can fill in title, description, category, budget, location, and tags.
- * Also supports uploading an image.
- *
- * @param {Object} navigation - Navigation object.
- */
 export default function AddRecommendationScreen({ navigation , route }) {
-  // Setup back button with hook
+  // --- Initialization & Params ---
   const isEdit = route?.params?.mode === 'edit';
   const editItem = route?.params?.item || null;
   const editPostId = route?.params?.postId || null;
+
   useBackButton(navigation, { title: isEdit ? "עריכת המלצה" : "יאלללה להמליץ!" });
 
-  // Existing fields
+  // --- Local State ---
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -47,42 +46,31 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [budget, setBudget] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Image picker with upload hook (SOLID-based composition)
+  // --- Image Handling ---
   const { imageUri, pickImage, uploadImage } = useImagePickerWithUpload({ storagePath: 'recommendations' });
-
-  // --- Location Management Fields ---
-  const [countries, setCountries] = useState([]);
-  const [cities, setCities] = useState([]);
-  
   const existingImage = isEdit ? (editItem?.images?.[0] || null) : null;
   const displayImageUri = imageUri || existingImage;
 
-  const [selectedCountry, setSelectedCountry] = useState(null); // Full country object
-  const [selectedCity, setSelectedCity] = useState(null);       // Full city object
+  // --- Location Handling (via Custom Hook) ---
+  const { 
+    countries, 
+    cities, 
+    selectedCountry, 
+    selectedCity, 
+    handleSelectCountry, 
+    handleSelectCity 
+  } = useLocationData(
+    isEdit ? editItem?.countryId : null, 
+    isEdit ? editItem?.cityId : null
+  );
 
-  // Selection Modal Management
+  // --- Modal State ---
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectionType, setSelectionType] = useState(null); // 'COUNTRY' or 'CITY'
+  const [selectionType, setSelectionType] = useState(null); 
 
-  // 1. Fetch countries on mount
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const q = query(collection(db, 'countries'));
-        const snapshot = await getDocs(q);
-        const countriesList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setCountries(countriesList);
-      } catch (error) {
-        console.error("Error fetching countries:", error);
-        Alert.alert("Error", "Could not load countries list");
-      }
-    };
-    fetchCountries();
-  }, []);
-
+  // --- Effects ---
+  
+  // Pre-fill form data if in Edit Mode
   useEffect(() => {
     if (!isEdit || !editItem) return;
 
@@ -93,66 +81,28 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setBudget(editItem.budget || '');
   }, [isEdit, editItem]);
 
-
-  useEffect(() => {
-    if (!isEdit || !editItem) return;
-    if (countries.length === 0) return;
-
-    const foundCountry = countries.find((c) => c.id === editItem.countryId);
-    if (!foundCountry) return;
-
-    (async () => {
-      setSelectedCountry(foundCountry);
-
-      try {
-        const citiesRef = collection(db, 'countries', foundCountry.id, 'cities');
-        const snapshot = await getDocs(citiesRef);
-        const citiesList = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setCities(citiesList);
-
-        const foundCity = citiesList.find((ct) => ct.id === editItem.cityId);
-        if (foundCity) setSelectedCity(foundCity);
-      } catch (e) {
-        console.error('Error restoring cities:', e);
-      }
-    })();
-  }, [isEdit, editItem, countries]);
-
-  // 2. Fetch cities when country selected
-  const handleSelectCountry = async (country) => {
-    setSelectedCountry(country);
-    setSelectedCity(null); // Reset city
-    setModalVisible(false);
-
-    // Fetch cities for selected country
-    try {
-      const citiesRef = collection(db, 'countries', country.id, 'cities');
-      const snapshot = await getDocs(citiesRef);
-      const citiesList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setCities(citiesList);
-    } catch (error) {
-      console.error("Error fetching cities:", error);
-    }
-  };
-
-  const handleSelectCity = (city) => {
-    setSelectedCity(city);
-    setModalVisible(false);
-  };
+  // --- Handlers ---
 
   const openSelectionModal = (type) => {
+    // Validate country selection before opening city modal
     if (type === 'CITY' && !selectedCountry) {
-      Alert.alert("Hold on", "Please select a country first.");
+      Alert.alert("אוי לא!", "אנא בחר מדינה לפני בחירת עיר.");
       return;
     }
     setSelectionType(type);
     setModalVisible(true);
   };
 
-  // --- Helper Functions (Tags, etc) ---
+  // Wrapper handlers to close modal after selection
+  const onCountrySelect = (item) => {
+    handleSelectCountry(item);
+    setModalVisible(false);
+  };
+
+  const onCitySelect = (item) => {
+    handleSelectCity(item);
+    setModalVisible(false);
+  };
 
   const toggleTag = (tag) => {
     if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag));
@@ -160,9 +110,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
   };
 
   const handleSubmit = async () => {
-    // Validating all fields including location
+    // Form Validation (Your custom alerts)
     if (!title || !description || !category || !selectedCountry || !selectedCity) {
-      Alert.alert("חסר מידע!", "אנא מלא כותרת, תיאור, קטגוריה ומיקום (מדינה ועיר).");
+      Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
       return;
     }
 
@@ -171,64 +121,60 @@ export default function AddRecommendationScreen({ navigation , route }) {
     try {
       let imageUrl = null;
 
+      // Handle Image Upload
       if (imageUri) {
         imageUrl = await uploadImage(imageUri);
       }
-
       const prevImages = editItem?.images || [];
       const finalImages = imageUrl ? [imageUrl] : (isEdit ? prevImages : []);
 
+      // Prepare Data Object
+      const postData = {
+        title,
+        description,
+        location: selectedCity.name || selectedCity.id,
+        country: selectedCountry.id,
+        countryId: selectedCountry.id,
+        cityId: selectedCity.id,
+        category,
+        tags: selectedTags,
+        budget,
+        images: finalImages,
+      };
+
+      // Save to Firestore
       if (!isEdit) {
         await addDoc(collection(db, 'recommendations'), {
+          ...postData,
           userId: auth.currentUser?.uid || 'anonymous',
-          title,
-          description,
-          location: selectedCity.name || selectedCity.id,
-          country: selectedCountry.id,
-          countryId: selectedCountry.id,
-          cityId: selectedCity.id,
-          category,
-          tags: selectedTags,
-          budget,
-          images: finalImages,
           createdAt: serverTimestamp(),
           likes: 0,
           likedBy: [],
         });
-
-        Alert.alert("ההמלצה נוספה בהצלחה!");
-        navigation.goBack();
+        Alert.alert("איזה כיף!", "ההמלצה נוספה בהצלחה!");
       } else {
         await updateDoc(doc(db, 'recommendations', editPostId), {
-          title,
-          description,
-          location: selectedCity.name || selectedCity.id,
-          country: selectedCountry.id,
-          countryId: selectedCountry.id,
-          cityId: selectedCity.id,
-          category,
-          tags: selectedTags,
-          budget,
-          images: finalImages,
+          ...postData,
           updatedAt: serverTimestamp(),
         });
-
-        Alert.alert("ההמלצה עודכנה בהצלחה!");
-        navigation.goBack();
+        Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
       }
+      navigation.goBack();
+
     } catch (error) {
-      console.error("Error adding document: ", error);
-      Alert.alert("שגיאה", "ההמלצה לא נשמרה.");
+      console.error("Error saving document: ", error);
+      Alert.alert("אוי לא!", "לא הצלחנו לשמור את ההמלצה.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  // --- Render ---
   return (
     <View style={common.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
-        {/* Image Picker */}
+        {/* 1. Image Picker */}
         <ImagePickerBox
           imageUri={displayImageUri}
           onPress={pickImage}
@@ -236,7 +182,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
           style={{ marginBottom: spacing.xl }}
         />
 
-        {/* Title */}
+        {/* 2. Title Input */}
         <View style={{ marginBottom: 16 }}>
           <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
             כותרת
@@ -249,39 +195,24 @@ export default function AddRecommendationScreen({ navigation , route }) {
           />
         </View>
 
-
-        {/* --- Location Selection --- */}
-        <View style={styles.rowGroup}>
-          {/* Country Selector */}
-            <View style={{flex: 1}}>
-                 <Text style={[forms.label, {textAlign: "right"}]}>מדינה</Text>
-                <TouchableOpacity 
-                    style={styles.selectorButton} 
-                    onPress={() => openSelectionModal('COUNTRY')}
-                >
-                    <Text style={selectedCountry ? styles.selectorText : styles.placeholderText}>
-                        {selectedCountry ? (selectedCountry.name || selectedCountry.id) : "בחר מדינה"}
-                    </Text>
-                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-            </View>
-            {/* City Selector */}
-            <View style={{flex: 1, marginRight: 10}}>
-                 <Text style={[forms.label, {textAlign: "right"}]}>עיר</Text>
-                <TouchableOpacity 
-                    style={[styles.selectorButton, !selectedCountry && styles.disabledButton]} 
-                    onPress={() => openSelectionModal('CITY')}
-                    disabled={!selectedCountry}
-                >
-                    <Text style={selectedCity ? styles.selectorText : styles.placeholderText}>
-                        {selectedCity ? (selectedCity.name || selectedCity.id) : "בחר עיר"}
-                    </Text>
-                    <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>             
-            </View>
+        {/* 3. Location Selection */}
+        <View style={{ flexDirection: 'row-reverse', gap: 12, marginBottom: spacing.xl }}>
+            <SelectField 
+                label="מדינה"
+                placeholder="בחר מדינה"
+                value={selectedCountry ? (selectedCountry.name || selectedCountry.id) : null}
+                onPress={() => openSelectionModal('COUNTRY')}
+            />
+            <SelectField 
+                label="עיר"
+                placeholder="בחר עיר"
+                value={selectedCity ? (selectedCity.name || selectedCity.id) : null}
+                onPress={() => openSelectionModal('CITY')}
+                disabled={!selectedCountry}
+            />
         </View>
 
-        {/* Description */}
+        {/* 4. Description Input */}
         <View style={{ marginBottom: 16 }}>
           <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
             תיאור
@@ -296,54 +227,33 @@ export default function AddRecommendationScreen({ navigation , route }) {
           />
         </View>
 
-        {/* Category */}
-        <View style={forms.inputWrapper}>
-          <Text style={[forms.label, {textAlign: "right"}]}>קטגוריה</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {CATEGORY_TAGS.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[tags.chip, category === cat && tags.chipSelected]}
-                onPress={() => setCategory(cat)}
-              >
-                <Text style={[tags.chipText, category === cat && tags.chipTextSelected]}>{cat}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* 5. Category Selector */}
+        <ChipSelector
+          label="קטגוריה"
+          items={CATEGORY_TAGS}
+          selectedValue={category}
+          onSelect={setCategory} 
+          multiSelect={false}
+        />
 
-        {/* Budget */}
-        <View style={forms.inputWrapper}>
-          <Text style={[forms.label, {textAlign: "right"}]}>תקציב</Text>
-          <View style={styles.budgetContainer}>
-            {PRICE_TAGS.map((b) => (
-              <TouchableOpacity
-                key={b}
-                style={[styles.budgetButton, budget === b && styles.budgetButtonSelected]}
-                onPress={() => setBudget(b)}
-              >
-                <Text style={[styles.budgetText, budget === b && styles.budgetTextSelected]}>{b}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        {/* 6. Budget Selector */}
+        <SegmentedControl
+          label="תקציב"
+          items={PRICE_TAGS}
+          selectedValue={budget}
+          onSelect={setBudget}
+        />
 
-        {/* Tags */}
-        <View style={forms.inputWrapper}>
-          <Text style={[forms.label, {textAlign: "right"}]}>תגיות</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-            {TAGS.map((tag) => (
-              <TouchableOpacity
-                key={tag}
-                style={[tags.item, selectedTags.includes(tag) && tags.itemSelected]}
-                onPress={() => toggleTag(tag)}
-              >
-                <Text style={[tags.text, selectedTags.includes(tag) && tags.textSelected]}>{tag}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* 7. Tags Selector */}
+        <ChipSelector
+          label="תגיות"
+          items={TAGS}
+          selectedValue={selectedTags}
+          onSelect={toggleTag}
+          multiSelect={true}
+        />
 
+        {/* 8. Submit Button */}
         <TouchableOpacity
           style={[buttons.submit, submitting && buttons.disabled]}
           onPress={handleSubmit}
@@ -360,102 +270,21 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
       </ScrollView>
 
-      {/* --- המודל (החלון הקופץ) לבחירה --- */}
-      <Modal
+      {/* --- Selection Modal --- */}
+      <SelectionModal
         visible={modalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={common.modalOverlay}>
-            <View style={[common.modalContent, { maxHeight: '70%', padding: spacing.xl }]}>
-                <View style={[common.modalHeader, { flexDirection: 'row', alignItems: 'center' }]}>
-                  {/* Close Button on the Left */}
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
-                    <Ionicons name="close" size={24} color="#333" />
-                  </TouchableOpacity>
-
-                  {/* Title on the Right */}
-                  <Text style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>
-                    בחר {selectionType === 'COUNTRY' ? 'מדינה' : 'עיר'}
-                  </Text>
-                </View>
-
-                <FlatList
-                    data={selectionType === 'COUNTRY' ? countries : cities}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity
-                            style={styles.modalItem}
-                            onPress={() => selectionType === 'COUNTRY' ? handleSelectCountry(item) : handleSelectCity(item)}
-                        >
-                            <Text style={styles.modalItemText}>{item.name || item.id}</Text>
-                            {/* סימון של ה-V אם זה נבחר כבר */}
-                            {((selectionType === 'COUNTRY' && selectedCountry?.id === item.id) ||
-                              (selectionType === 'CITY' && selectedCity?.id === item.id)) && (
-                                <Ionicons name="checkmark" size={20} color="#2EC4B6" />
-                            )}
-                        </TouchableOpacity>
-                    )}
-                    ListEmptyComponent={
-                        <Text style={styles.emptyListText}>
-                            {selectionType === 'CITY' ? "No cities found for this country." : "Loading..."}
-                        </Text>
-                    }
-                />
-            </View>
-        </View>
-      </Modal>
+        onClose={() => setModalVisible(false)}
+        title={selectionType === 'COUNTRY' ? 'בחר מדינה' : 'בחר עיר'}
+        data={selectionType === 'COUNTRY' ? countries : cities}
+        onSelect={selectionType === 'COUNTRY' ? onCountrySelect : onCitySelect}
+        selectedId={selectionType === 'COUNTRY' ? selectedCountry?.id : selectedCity?.id}
+        emptyText={selectionType === 'CITY' ? "No cities found for this country" : "Loading..."}
+      />
 
     </View>
   );
 }
 
-// Screen-specific styles only
 const styles = StyleSheet.create({
   scrollContent: { padding: spacing.lg, paddingBottom: 40 },
-  
-  // Row group
-  rowGroup: {
-    flexDirection: 'row-reverse', // Ensure RTL layout
-    marginBottom: spacing.xl,
-    justifyContent: 'space-between',
-  },
-  
-  // Selector
-  selectorButton: {
-    flexDirection: 'row-reverse', // Reverse icon and text alignment
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    height: 50,
-  },
-  disabledButton: { opacity: 0.5, backgroundColor: colors.borderLight },
-  selectorText: { fontSize: 16, color: colors.textPrimary, textAlign: 'right' },
-  placeholderText: { fontSize: 16, color: colors.placeholder, textAlign: 'right' },
-
-  // Modal item
-  modalItem: {
-    paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: colors.borderLight,
-    flexDirection: 'row', justifyContent: 'space-between'
-  },
-  modalItemText: { fontSize: 16, color: colors.textPrimary },
-  emptyListText: { textAlign: 'center', marginTop: 20, color: colors.textMuted },
-
-  // Chip scroll
-  chipScroll: { flexDirection: 'row' },
-
-  // Budget
-  budgetContainer: { flexDirection: 'row', justifyContent: 'space-between' },
-  budgetButton: {
-    flex: 1, paddingVertical: 10, backgroundColor: colors.borderLight, alignItems: 'center',
-    marginHorizontal: 5, borderRadius: 8,
-  },
-  budgetButtonSelected: { backgroundColor: colors.primary },
-  budgetText: { color: colors.textSecondary, fontWeight: 'bold' },
-  budgetTextSelected: { color: colors.white },
 });
