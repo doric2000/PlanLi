@@ -14,7 +14,7 @@ export const ActionMenu = ({
   onEdit,
   onDelete,
   title = "ניהול",
-  iconColor = colors.textLight,
+  iconColor = colors.primary,
 }) => {
   const [visible, setVisible] = useState(false);
 
