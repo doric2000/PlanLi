@@ -13,6 +13,7 @@ import { auth, db } from '../../../config/firebase';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { signOut, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage';
 import appConfig from '../../../../app.json';
 import { colors, common, cards, buttons, typography } from '../../../styles';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
@@ -92,20 +93,35 @@ const ProfileScreen = ({ navigation }) => {
 
     const handleProfilePictureUpload = async (uri) => {
         // Validation check
-        if (!uri || !auth.currentUser) return; 
+        if (!uri || !auth.currentUser) return;
 
         try {
+            // Delete old photo if exists
+            if (userData.photoURL) {
+                try {
+                    // Extract storage path from photoURL
+                    const storage = getStorage();
+                    // Assumes photoURL is a Firebase Storage URL
+                    // Example: https://firebasestorage.googleapis.com/v0/b/<bucket>/o/profilePicture%2Fuid%2F123456.jpg?alt=media
+                    const match = decodeURIComponent(userData.photoURL).match(/\/o\/(.+)\?/);
+                    if (match && match[1]) {
+                        const oldPath = match[1];
+                        const oldRef = storageRef(storage, oldPath);
+                        await deleteObject(oldRef);
+                    }
+                } catch (err) {
+                    console.warn('Failed to delete old profile photo:', err);
+                }
+            }
+
             const downloadURL = await uploadImage(uri);
             if (!downloadURL) return;
 
-            // FIX: Use 'auth.currentUser' here, NOT 'user'
-            // 'auth.currentUser' is the technical object that can authorize changes.
             await updateProfile(auth.currentUser, {
                 photoURL: downloadURL,
             });
 
             // Update in Firestore
-            // (It's fine to use 'user.uid' here because your hook provides the UID string)
             const userDocRef = doc(db, 'users', user.uid);
             const userDoc = await getDoc(userDocRef);
 

@@ -11,6 +11,7 @@ import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import { db } from '../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage';
 import FavoriteButton from './FavoriteButton';
 
 
@@ -64,6 +65,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     });
   };
 
+
   const handleDelete = async () => {
     const ok =
       Platform.OS === 'web'
@@ -82,6 +84,21 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     if (!ok) return;
 
     try {
+      // Delete image from storage if exists
+      if (item.images && item.images[0]) {
+        try {
+          const storage = getStorage();
+          const imageUrl = item.images[0];
+          const match = decodeURIComponent(imageUrl).match(/\/o\/(.+)\?/);
+          if (match && match[1]) {
+            const oldPath = match[1];
+            const oldRef = storageRef(storage, oldPath);
+            await deleteObject(oldRef);
+          }
+        } catch (err) {
+          console.warn('Failed to delete recommendation image from storage:', err);
+        }
+      }
       await deleteDoc(doc(db, "recommendations", item.id));
       onDeleted?.(item.id); // חשוב: לעדכן את הרשימה
     } catch (error) {
