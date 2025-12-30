@@ -3,7 +3,7 @@
     "name": "PlanLi",
     "slug": "client",
     "scheme": "planli",
-    "version": "0.7.1",
+    "version": "0.8.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

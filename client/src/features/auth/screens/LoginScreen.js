@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { auth } from '../../../config/firebase';
+import { auth, db } from '../../../config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { forms } from '../../../styles';
 import { AuthInput } from '../../../components/AuthInput';
@@ -11,6 +11,10 @@ import { SocialLoginButtons } from '../components/SocialLoginButtons';
 import * as Google from 'expo-auth-session/providers/google';
 import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -20,22 +24,48 @@ export default function LoginScreen({ navigation }) {
   // Google AuthSession setup
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    responseType: "id_token", // must done for FireBase.
     redirectUri: makeRedirectUri({
       scheme: 'planli',
-      preferLocalhost: false, // <--- זו השורה הקריטית!
+      preferLocalhost: false,
     }),
   });
+
+
   React.useEffect(() => {
-    if (response?.type === "success") {
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      signInWithCredential(auth, credential)
-        .then(() => {
-          navigation.replace('Main');
-        })
-        .catch((err) => setError(err.message));
-    }
-  }, [response]);
+      if (response?.type === "success") {
+        const { id_token } = response.params;
+        const credential = GoogleAuthProvider.credential(id_token);
+        
+        signInWithCredential(auth, credential)
+          .then(async (userCredential) => {
+            const user = userCredential.user;
+
+            //check if the user already exists in -Firestore
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+              // creating a new user with google cerdentials
+              await setDoc(userDocRef, {
+                email: user.email,
+                // using realname from google
+                displayName: user.displayName || user.email.split('@')[0], 
+                photoURL: user.photoURL,
+                createdAt: serverTimestamp(),
+                // initial data, should be 0 always so we should cosider it.
+                trips: 0,
+                reviews: 0,
+                credibilityScore: 10,
+                isExpert: false,
+              });
+            }
+            
+            navigation.replace('Main');
+          })
+          .catch((err) => setError(err.message));
+      }
+    }, [response]);
 
   const handleLogin = async () => {
     try {
