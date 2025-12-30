@@ -30,6 +30,16 @@ import { CATEGORY_TAGS, PRICE_TAGS } from '../../../constants/Constatns';
 
 const TAGS = ["כשר", "למשפחה", "תקציב", "יוקרה", "טבע", "רומנטי", "נגיש"];
 
+// --- Local Helper Component ---
+const LabeledInput = ({ label, style, ...props }) => (
+  <View style={[{ marginBottom: 16 }, style]}>
+    <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+      {label}
+    </Text>
+    <FormInput textAlign="right" {...props} />
+  </View>
+);
+
 export default function AddRecommendationScreen({ navigation , route }) {
   // --- Initialization & Params ---
   const isEdit = route?.params?.mode === 'edit';
@@ -183,17 +193,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
         />
 
         {/* 2. Title Input */}
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
-            כותרת
-          </Text>
-          <FormInput
-            placeholder="לדוגמא: מסעדת שף בתל אביב"
-            value={title}
-            onChangeText={setTitle}
-            textAlign="right"
-          />
-        </View>
+        <LabeledInput
+          label="כותרת"
+          placeholder="לדוגמא: מסעדת שף בתל אביב"
+          value={title}
+          onChangeText={setTitle}
+        />
 
         {/* 3. Location Selection */}
         <View style={{ flexDirection: 'row-reverse', gap: 12, marginBottom: spacing.xl }}>
@@ -213,19 +218,14 @@ export default function AddRecommendationScreen({ navigation , route }) {
         </View>
 
         {/* 4. Description Input */}
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
-            תיאור
-          </Text>
-          <FormInput
-            placeholder="תאר לנו למה אתה ממליץ על המקום הזה..."
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={4}
-            textAlign="right"
-          />
-        </View>
+        <LabeledInput
+          label="תיאור"
+          placeholder="תאר לנו למה אתה ממליץ על המקום הזה..."
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={4}
+        />
 
         {/* 5. Category Selector */}
         <ChipSelector
