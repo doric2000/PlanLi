@@ -1,213 +1,154 @@
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  FlatList,
-  RefreshControl, 
-} from 'react-native';
-import FilterIconButton from '../../../components/FilterIconButton';
-import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
+import React, { useState } from 'react';
+import { View, Text, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import FabButton from '../../../components/FabButton';
-import { useFocusEffect } from '@react-navigation/native';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '../../../config/firebase';
+
+// Components
+import FilterIconButton from '../../../components/FilterIconButton';
+import ScreenHeader from '../../../components/ScreenHeader'; 
+import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
 import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
-import { colors, spacing, common, buttons, tags } from '../../../styles';
-import { PRICE_TAGS,CATEGORY_TAGS } from '../../../constants/Constatns';
+import FabButton from '../../../components/FabButton';
+import ActiveFiltersList from '../../../components/ActiveFiltersList';
 
+// Hooks
+import { useRecommendations } from '../../../hooks/useRecommendations';
+import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 
-/**
- * Screen displaying community recommendations.
- * Allows users to view, like, and comment on recommendations.
- *
- * @param {Object} navigation - Navigation object.
- */
+// Global Styles
+import { colors, common, spacing, typography } from '../../../styles';
+
 export default function CommunityScreen({ navigation }) {
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  
-  // --- Filter Management ---
-  const [filterVisible, setFilterVisible] = useState(false);
-  const [filterCategories, setFilterCategories] = useState([]);
-  const [filterBudgets, setFilterBudgets] = useState([]);      
-  const [filterDestination, setFilterDestination] = useState('');
-
-
-
-  // --- Comments Modal Management ---
+  // --- State ---
+  const [sortBy, setSortBy] = useState('popularity');
+  const [sortMenuVisible, setSortMenuVisible] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
 
-  // Function passed to card to open comments
-  const handleOpenComments = (postId) => {
-    setSelectedPostId(postId);
-    setCommentsModalVisible(true);
+  // --- Hooks ---
+  const { data: recommendations, loading, refreshing, refresh, removeRecommendation } = useRecommendations(sortBy);
+  const { filteredData, filters, isFiltered, updateFilters, clearFilters } = useRecommendationFilter(recommendations);
+
+  // --- Handlers ---
+  const handleSortSelect = (option) => { setSortBy(option); setSortMenuVisible(false); };
+  const handleOpenComments = (postId) => { setSelectedPostId(postId); setCommentsModalVisible(true); };
+  
+  const handleRemoveFilter = (type, value) => {
+    if (type === 'destination') updateFilters({ destination: '' });
+    else if (type === 'category') updateFilters({ categories: filters.categories.filter((c) => c !== value) });
+    else if (type === 'budget') updateFilters({ budgets: filters.budgets.filter((b) => b !== value) });
   };
-
-  // Function to fetch all recommendations
-  const fetchRecommendations = async () => {
-    try {
-      const q = query(
-        collection(db, 'recommendations'),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const recs = [];
-      querySnapshot.forEach((doc) => {
-        recs.push({ id: doc.id, ...doc.data() });
-      });
-      
-      setRecommendations(recs);
-    } catch (error) {
-      console.error("Error fetching recommendations: ", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchRecommendations();
-    }, [])
-  );
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchRecommendations();
-  };
-
-  // --- Filtering Logic ---
-  const filteredRecommendations = recommendations.filter((item) => {
-    const queries = filterDestination
-      .split(',')                  
-      .map((q) => q.trim().toLowerCase())
-      .filter((q) => q.length > 0);  
-
-    if (queries.length > 0) {
-      const title = (item.title || '').toLowerCase();
-      const location = (item.location || '').toLowerCase();   // Can be "Tel Aviv"
-      const description = (item.description || '').toLowerCase();
-
-      // Additional fields - if present in document:
-      const city = (item.city || '').toLowerCase();
-      const country = (item.country || '').toLowerCase();     // e.g. "Israel", "Greece"
-
-      // Combine all to single text for search
-      const text = `${title} ${location} ${description} ${city} ${country}`;
-      const matchesText = queries.some((q) => text.includes(q));
-      if (!matchesText) return false;
-    }
-
-    if (filterCategories.length > 0 && !filterCategories.includes(item.category)) {
-      return false;
-    }
-
-    if (filterBudgets.length > 0 && !filterBudgets.includes(item.budget)) {
-      return false;
-    }
-
-    return true;
-  });
-
-  const isFiltered =
-    filterDestination.trim() !== '' ||
-    filterCategories.length > 0 ||
-    filterBudgets.length > 0;
-
-  const handleClearFilters = () => {
-    setFilterCategories([]);
-    setFilterBudgets([]);
-    setFilterDestination('');
-    setFilterVisible(false);
-  };
-
-  const applyFilters = (next) => {
-    setFilterCategories(Array.isArray(next?.categories) ? next.categories : []);
-    setFilterBudgets(Array.isArray(next?.budgets) ? next.budgets : []);
-    setFilterDestination(next?.destination || '');
-    setFilterVisible(false);
-  };
-
 
   return (
-    <SafeAreaView style={common.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       
-      {/* Header */}
-      <View style={common.screenHeader}>
-        <Text style={common.screenHeaderTitle}>קהילת המטיילים</Text>
-        <Text style={common.screenHeaderSubtitle}>גלו המלצות חדשות!</Text>
+      {/* --- REUSABLE HEADER --- */}
+      <ScreenHeader
+        title="קהילת המטיילים"
+        subtitle="גלו המלצות חדשות!"
         
-        <FilterIconButton active={isFiltered} onPress={() => setFilterVisible(true)} />
-      </View>
+        // Render Filter Button (Right)
+        renderRight={() => (
+          <FilterIconButton 
+            active={isFiltered} 
+            onPress={() => setFilterModalVisible(true)} 
+            floating={false} // Clean usage thanks to buttons.js refactor
+          />
+        )}
 
-      {/* Main List */}
+        // Render Sort Button (Left)
+        renderLeft={() => (
+          <TouchableOpacity 
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            onPress={() => setSortMenuVisible(true)}
+          >
+            <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
+            <Text style={{ ...typography.caption, fontWeight: 'bold', color: colors.textPrimary }}>
+              {sortBy === 'popularity' ? 'פופולרי' : 'חדש'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      />
+
+      {/* --- CONTENT --- */}
+      <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} />
+
       {loading ? (
         <View style={common.center}>
             <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
-          data={filteredRecommendations}
+          data={filteredData}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            // --- Passing function to card ---
             <RecommendationCard 
                 item={item} 
                 onCommentPress={handleOpenComments} 
-                onDeleted={(deletedId) => {
-                  setRecommendations((prev) => prev.filter((r) => r.id !== deletedId));
-                }}
+                onDeleted={removeRecommendation}
             />
           )}
           contentContainerStyle={common.listContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
           ListEmptyComponent={
             <View style={common.emptyState}>
               <Ionicons name="images-outline" size={50} color={colors.textMuted} />
-              <Text style={common.emptyText}>
-                {isFiltered ? 'אין תוצאות מתאימות למסננים שבחרת.' : 'עדיין אין המלצות.'}
-              </Text>
-              {!isFiltered && (
-                <Text style={common.emptySubText}>היה הראשון לשתף!</Text>
-              )}
+              <Text style={common.emptyText}>{isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
             </View>
           }
         />
       )}
 
-      {/* Floating Action Button (FAB) */}
       <FabButton onPress={() => navigation.navigate('AddRecommendation')} />
 
-      {/* --- Filter Modal (Existing) --- */}
+      {/* --- MODALS --- */}
       <RecommendationsFilterModal
-        visible={filterVisible}
-        onClose={() => setFilterVisible(false)}
-        filters={{
-          destination: filterDestination,
-          categories: filterCategories,
-          budgets: filterBudgets,
-        }}
-        onApply={applyFilters}
-        onClear={handleClearFilters}
-      />
-
-
-      <CommentsModal
-        visible={commentsModalVisible}
-        onClose={() => setCommentsModalVisible(false)}
-        postId={selectedPostId}
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        filters={filters}
+        onApply={(next) => { updateFilters(next); setFilterModalVisible(false); }}
+        onClear={() => { clearFilters(); setFilterModalVisible(false); }}
       />
       
+      <CommentsModal visible={commentsModalVisible} onClose={() => setCommentsModalVisible(false)} postId={selectedPostId} />
+
+      {/* Sort Menu Modal */}
+      <Modal visible={sortMenuVisible} transparent={true} animationType="fade" onRequestClose={() => setSortMenuVisible(false)}>
+        <TouchableOpacity style={localStyles.modalOverlay} activeOpacity={1} onPress={() => setSortMenuVisible(false)}>
+            <View style={localStyles.sortMenu}>
+                <Text style={{ ...typography.h3, textAlign: 'center', marginBottom: spacing.md }}>מיין לפי</Text>
+                {['popularity', 'newest'].map((option) => (
+                    <TouchableOpacity 
+                        key={option}
+                        style={[localStyles.sortOption, sortBy === option && { backgroundColor: colors.background }]}
+                        onPress={() => handleSortSelect(option)}
+                    >
+                        <Text style={{ color: sortBy === option ? colors.primary : colors.textPrimary }}>
+                            {option === 'popularity' ? '🔥 הכי פופולרי' : '🕒 הכי חדש'}
+                        </Text>
+                        {sortBy === option && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                    </TouchableOpacity>
+                ))}
+            </View>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }
+
+// Only styles specific to the local Sort Modal
+const localStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center'
+  },
+  sortMenu: {
+    width: 220, backgroundColor: 'white', borderRadius: 12, padding: spacing.md, elevation: 5
+  },
+  sortOption: {
+    flexDirection: 'row-reverse', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee'
+  }
+});

@@ -2,62 +2,42 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StatusBar,
-  ActivityIndicator,
-  Alert,
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp,
-  getDoc,
-  doc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove
-} from 'firebase/firestore';
-import { db, auth } from '../../../config/firebase';
+
+import { auth } from '../../../config/firebase';
 import { useUserData } from '../../../hooks/useUserData';
 import { useLikes } from '../../community/hooks/useLikes';
 import { useCommentsCount } from '../../community/hooks/useCommentsCount';
 
-import { Avatar } from '../../../components/Avatar';
-import { BackButton } from '../../../components/BackButton';
-import FavoriteButton from '../../../components/FavoriteButton';
+// New Modular Components
+import { RecommendationHero } from '../../../components/RecommendationHero';
+import { AuthorInfo } from '../../../components/AuthorInfo';
+import { RecommendationMeta } from '../../../components/RecommendationMeta';
+import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
+
+// Existing Components
 import LikesModal from '../../../components/LikesModal';
 import { CommentsSection } from '../../../components/CommentSection';
-import { colors, typography, common, buttons, cards, tags as tagsStyle } from '../../../styles';
-import { formatTimestamp } from '../../../utils/formatTimestamp';
-
-
-// CommentItem is now handled by CommentsSection, which uses useUserData and Avatar internally.
+import { colors, typography, common, tags as tagsStyle } from '../../../styles';
 
 /**
  * RecommendationDetailScreen - Full view of a recommendation
  * 
- * Shows all details of a recommendation including:
- * - Full image with gradient overlay
- * - Author info with avatar
- * - Title, description, category
- * - Location (clickable to navigate to city)
- * - Budget indicator
- * - Tags
- * - Like and comment interactions
+ * Shows all details of a recommendation by composing modular components.
+ * It's responsible for fetching data and passing it down to the child components.
  * 
  * @param {Object} route - Route object containing recommendation data
  * @param {Object} navigation - Navigation object
  */
 export default function RecommendationDetailScreen({ route, navigation }) {
   const { item } = route.params;
+  
+  // --- Hooks ---
   const author = useUserData(item.userId);
   const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
     'recommendations',
@@ -67,22 +47,12 @@ export default function RecommendationDetailScreen({ route, navigation }) {
   );
   const commentsCount = useCommentsCount('recommendations', item.id);
   const user = auth.currentUser;
-  const isOwner = user?.uid === item.userId;
+  
+  // --- State ---
   const [likesModalVisible, setLikesModalVisible] = useState(false);
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString(undefined, { 
-      year: 'numeric',
-      month: 'long', 
-      day: 'numeric' 
-    });
-  };
-
-  const hasImage = item.images && item.images.length > 0;
-
-  // Create snapshot data for favorites
+  // --- Computed Values ---
+  const isOwner = user?.uid === item.userId;
   const snapshotData = {
     name: item.title,
     thumbnail_url: item.images && item.images.length > 0 ? item.images[0] : null,
@@ -90,6 +60,7 @@ export default function RecommendationDetailScreen({ route, navigation }) {
     rating: item.rating
   };
 
+  // --- Render ---
   return (
     <SafeAreaView style={common.container} edges={['left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -98,99 +69,22 @@ export default function RecommendationDetailScreen({ route, navigation }) {
         keyExtractor={() => 'empty'}
         ListHeaderComponent={
           <>
-            {/* Hero Image Section */}
-            {hasImage ? (
-              <View style={common.heroContainer}>
-                <Image 
-                  source={{ uri: item.images[0] }} 
-                  style={common.heroImage}
-                  resizeMode="cover"
-                />
-                <LinearGradient
-                  colors={['rgba(0,0,0,0.3)', 'transparent', 'transparent']}
-                  style={common.heroGradient}
-                >
-                  <View style={common.rowBetween}>
-                    <BackButton />
-                    <FavoriteButton type="recommendations" id={item.id} variant="light" snapshotData={snapshotData} />
-                  </View>
-                </LinearGradient>
-              </View>
-            ) : (
-              <View style={common.noImageHeader}>
-                <View style={common.rowBetween}>
-                  <BackButton color="dark" variant="solid" />
-                  <FavoriteButton type="recommendations" id={item.id} variant="dark" snapshotData={snapshotData} />
-                </View>
-              </View>
-            )}
+            <RecommendationHero item={item} snapshotData={snapshotData} />
 
             {/* Content Section */}
             <View style={common.detailContent}>
-              {/* Category */}
               {item.category && (
                 <Text style={[typography.caption, { color: colors.primary, marginBottom: 8 }]}> 
                   {item.category}
                 </Text>
               )}
 
-              {/* Title */}
               <Text style={typography.h2}>{item.title}</Text>
 
-              {/* Author Card */}
-              <View style={[cards.userContainer, { marginTop: 16, marginBottom: 16 }]}> 
-                <Avatar photoURL={author.photoURL} displayName={author.displayName} size={48} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={common.rowBetween}>
-                    <Text style={typography.label}>{author.displayName}</Text>
-                    {item.createdAt && (
-                      <Text style={[typography.caption, { color: '#9CA3AF', fontSize: 11 }]}> {formatTimestamp(item.createdAt)} </Text>
-                    )}
-                  </View>
-                </View>
-                {!isOwner && (
-                  <TouchableOpacity style={buttons.primarySmall}>
-                    <Text style={buttons.primarySmallText}>Follow</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <AuthorInfo author={author} item={item} isOwner={isOwner} />
 
-              {/* Location, Rating & Budget Row */}
-              <View style={[common.row, { flexWrap: 'wrap', gap: 12, marginBottom: 16 }]}> 
-                {(item.location || item.country) && (
-                  <TouchableOpacity 
-                    style={common.row}
-                    onPress={() => {
-                      if (item.cityId && item.countryId) {
-                        navigation.navigate('LandingPage', {
-                          cityId: item.cityId,
-                          countryId: item.countryId
-                        });
-                      }
-                    }}
-                  >
-                    <Ionicons name="location" size={16} color={colors.primary} />
-                    <Text style={[typography.body, { color: colors.textSecondary, marginLeft: 4 }]}> 
-                      {item.location}{item.country ? `, ${item.country}` : ''}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                
-                {item.rating && (
-                  <View style={common.ratingContainer}>
-                    <Text style={common.ratingStar}>★</Text>
-                    <Text style={common.ratingText}>{item.rating}</Text>
-                  </View>
-                )}
+              <RecommendationMeta item={item} navigation={navigation} />
 
-                {item.budget && (
-                  <View style={[tagsStyle.chip, { backgroundColor: colors.secondaryLight, borderColor: colors.secondary }]}> 
-                    <Text style={[tagsStyle.chipText, { color: colors.secondary }]}>{item.budget}</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Description */}
               <Text style={[typography.body, { lineHeight: 24, marginBottom: 20 }]}> 
                 {item.description}
               </Text>
@@ -212,37 +106,14 @@ export default function RecommendationDetailScreen({ route, navigation }) {
                 </View>
               )}
 
-              {/* Action Bar */}
-              <View style={common.actionBar}>
-                <TouchableOpacity style={common.actionBarItem} onPress={toggleLike}>
-                  <Ionicons
-                    name={isLiked ? "heart" : "heart-outline"}
-                    size={24}
-                    color={isLiked ? colors.heart : colors.textSecondary}
-                  />
-                  <Text style={[common.actionBarText, isLiked && { color: colors.heart }]}> 
-                    {likeCount}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={common.actionBarItem}>
-                  <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
-                  <Text style={common.actionBarText}>{commentsCount.length}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={common.actionBarItem}
-                  onPress={() => likeCount > 0 && setLikesModalVisible(true)}
-                >
-                  <Ionicons name="people-outline" size={24} color={colors.textSecondary} />
-                  <Text style={common.actionBarText}>Likes</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={common.actionBarItem}>
-                  <Ionicons name="share-social-outline" size={24} color={colors.textSecondary} />
-                  <Text style={common.actionBarText}>Share</Text>
-                </TouchableOpacity>
-              </View>
+              <RecommendationActionBar
+                isLiked={isLiked}
+                likeCount={likeCount}
+                commentsCount={commentsCount}
+                onLikePress={toggleLike}
+                onLikesListPress={() => setLikesModalVisible(true)}
+                onSharePress={() => alert('Share functionality to be implemented')}
+              />
             </View>
           </>
         }
