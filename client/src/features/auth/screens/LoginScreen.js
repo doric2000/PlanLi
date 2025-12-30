@@ -1,56 +1,60 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { auth, db } from '../../../config/firebase';
+import { auth } from '../../../config/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { forms } from '../../../styles';
 import { AuthInput } from '../../../components/AuthInput';
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
 import * as Google from 'expo-auth-session/providers/google';
-import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
 import { useGoogleLogin } from '../../../hooks/useGoogleLogin';
 
-
-
-// Completes the auth session if redirected back from Google
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }) {
-  // Hook for registering/updating user in Firestore
   const registerOrUpdateUser = useRegisterOrUpdateUser();
-  // Hook for handling Google login and user creation
   const handleGoogleResponse = useGoogleLogin(navigation.replace);
 
-  // State for email/password login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  // Google AuthSession setup
-  // This configures the Google OAuth flow for Expo
+  // --- CONFIGURATION ---
+  // 1. Enter your exact Expo username here (check expo.dev)
+  const EXPO_USERNAME = 'doric2000'; 
+  // 2. Enter your slug from app.json
+  const EXPO_SLUG = 'client';
+  
+  // This constructs: https://auth.expo.io/@doric2000/client
+  const PROXY_URL = `https://auth.expo.io/@${EXPO_USERNAME}/${EXPO_SLUG}`;
+
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    responseType: "id_token", // Required for Firebase authentication
-    redirectUri: makeRedirectUri({
-      scheme: 'planli',
-      preferLocalhost: false,
-    }),
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID, 
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID, 
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    responseType: "id_token",
+    
+    // 3. FORCE THE URL
+    // If we are on mobile, we DO NOT use makeRedirectUri. We force the string.
+    redirectUri: Platform.OS === 'web' ? undefined : PROXY_URL
   });
 
-  // Handles Google login response and user creation in Firestore
-  React.useEffect(() => {
+  useEffect(() => {
     if (response) {
-      handleGoogleResponse(response).catch((err) => setError(err.message));
+      if (response.type === 'error') {
+        setError("Google Sign-In Error: " + (response.params?.error_description || "Unknown error"));
+        return;
+      }
+      if (response.type === 'success') {
+        handleGoogleResponse(response).catch((err) => setError(err.message));
+      }
     }
   }, [response]);
 
-  // Handles email/password login with Firebase
   const handleLogin = async () => {
     try {
       setError('');
@@ -61,18 +65,26 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // Triggers Google login flow
   const handleGoogleLogin = () => {
-    promptAsync();
+    if (Platform.OS === 'web') {
+      promptAsync();
+    } else {
+      // 4. FORCE THE PROXY AGAIN
+      // We pass the URL here explicitly to override any defaults
+      promptAsync({ 
+        useProxy: true,
+        redirectUri: PROXY_URL
+      });
+    }
   };
 
   return (
     <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={forms.authContainer}>
+      {/* ... (Your UI code remains exactly the same) ... */}
       <SafeAreaView style={forms.authSafeArea}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={forms.authKeyboardView}>
           <ScrollView contentContainerStyle={forms.authScrollContent} showsVerticalScrollIndicator={false}>
             <View style={forms.authCard}>
-              {/* Header - (You could even componentize this!) */}
               <View style={forms.authHeader}>
                 <View style={forms.authLogoContainer}>
                   <Image source={require('../../../../assets/logo.png')} style={forms.authLogo} resizeMode="contain"/>
@@ -82,7 +94,6 @@ export default function LoginScreen({ navigation }) {
               </View>
 
               <View style={forms.authForm}>
-                {/* Modular Inputs */}
                 <AuthInput 
                     label="Email" 
                     value={email} 
@@ -103,18 +114,21 @@ export default function LoginScreen({ navigation }) {
                   <Text style={forms.authForgotPasswordText}>Forgot Password?</Text>
                 </TouchableOpacity>
                 {error ? <Text style={forms.authErrorText}>{error}</Text> : null}
+                
                 <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
                   <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={forms.authButton}>
                     <Text style={forms.authButtonText}>Sign In</Text>
                   </LinearGradient>
                 </TouchableOpacity>
+
                 <View style={forms.authDividerContainer}>
                   <View style={forms.authDivider} />
                   <Text style={forms.authDividerText}>Or continue with</Text>
                   <View style={forms.authDivider} />
                 </View>
-                {/* Modular Social Buttons */}
+
                 <SocialLoginButtons onGoogleLogin={handleGoogleLogin} />
+
                 <View style={forms.authFooter}>
                   <View style={forms.authLinkContainer}>
                     <Text style={forms.authLinkText}>Don't have an account? </Text>

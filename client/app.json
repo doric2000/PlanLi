@@ -2,8 +2,9 @@
   "expo": {
     "name": "PlanLi",
     "slug": "client",
-    "scheme": "planli",
+    "scheme": "client",
     "version": "0.8.4",
+    "owner": "doric2000",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +15,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.planli.planlitravels",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
