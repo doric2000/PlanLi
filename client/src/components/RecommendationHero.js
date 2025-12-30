@@ -3,7 +3,7 @@ import { View, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BackButton } from './BackButton';
 import FavoriteButton from './FavoriteButton';
-import { common } from '../../styles';
+import { common } from '../styles';
 
 export const RecommendationHero = ({ item, snapshotData }) => {
   const hasImage = item.images && item.images.length > 0;
