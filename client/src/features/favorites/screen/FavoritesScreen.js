@@ -7,7 +7,7 @@ import { buttons } from "../../../styles/buttons";
 import { tags } from "../../../styles/tags";
 import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
 
-import { useFavoriteRecommendationIds } from '../../../hooks/useFavoriteRecommendationIds';
+import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
 import RecommendationCard from '../../../components/RecommendationCard';
 import CityCard from '../../../components/CityCard';
 import { useFavoriteCityIds } from '../../../hooks/useFavoriteCityIds';
@@ -62,9 +62,10 @@ function FavoriteCitiesList({ navigation }) {
 	);
 }
 
+
 function FavoriteRecommendationsList() {
-	// ... (hooks remain the same)
-	const { favorites, loading } = useFavoriteRecommendationIds();
+	// Use the new hook to get full recommendation objects
+	const { favorites, loading } = useFavoriteRecommendationsFull();
 
 	if (loading) {
 		return (

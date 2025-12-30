@@ -13,60 +13,44 @@ import { signInWithCredential, GoogleAuthProvider } from 'firebase/auth';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
+import { useGoogleLogin } from '../../../hooks/useGoogleLogin';
 
+
+
+// Completes the auth session if redirected back from Google
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }) {
+  // Hook for registering/updating user in Firestore
+  const registerOrUpdateUser = useRegisterOrUpdateUser();
+  // Hook for handling Google login and user creation
+  const handleGoogleResponse = useGoogleLogin(navigation.replace);
+
+  // State for email/password login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   // Google AuthSession setup
+  // This configures the Google OAuth flow for Expo
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    responseType: "id_token", // must done for FireBase.
+    responseType: "id_token", // Required for Firebase authentication
     redirectUri: makeRedirectUri({
       scheme: 'planli',
       preferLocalhost: false,
     }),
   });
 
-
+  // Handles Google login response and user creation in Firestore
   React.useEffect(() => {
-      if (response?.type === "success") {
-        const { id_token } = response.params;
-        const credential = GoogleAuthProvider.credential(id_token);
-        
-        signInWithCredential(auth, credential)
-          .then(async (userCredential) => {
-            const user = userCredential.user;
+    if (response) {
+      handleGoogleResponse(response).catch((err) => setError(err.message));
+    }
+  }, [response]);
 
-            //check if the user already exists in -Firestore
-            const userDocRef = doc(db, "users", user.uid);
-            const userDoc = await getDoc(userDocRef);
-
-            if (!userDoc.exists()) {
-              // creating a new user with google cerdentials
-              await setDoc(userDocRef, {
-                email: user.email,
-                // using realname from google
-                displayName: user.displayName || user.email.split('@')[0], 
-                photoURL: user.photoURL,
-                createdAt: serverTimestamp(),
-                // initial data, should be 0 always so we should cosider it.
-                trips: 0,
-                reviews: 0,
-                credibilityScore: 10,
-                isExpert: false,
-              });
-            }
-            
-            navigation.replace('Main');
-          })
-          .catch((err) => setError(err.message));
-      }
-    }, [response]);
-
+  // Handles email/password login with Firebase
   const handleLogin = async () => {
     try {
       setError('');
@@ -77,6 +61,7 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  // Triggers Google login flow
   const handleGoogleLogin = () => {
     promptAsync();
   };
