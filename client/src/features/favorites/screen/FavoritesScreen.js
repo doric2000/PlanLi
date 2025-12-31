@@ -1,12 +1,14 @@
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { common } from "../../../styles/common";
 import { typography } from "../../../styles/typography";
-import { buttons } from "../../../styles/buttons";
 import { tags } from "../../../styles/tags";
-import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
 
+import FavoriteCitiesList from '../components/FavoriteCitiesList';
+import FavoriteRecommendationsList from '../components/FavoriteRecommendationsList';
+import FavoriteRoadTripsList from '../components/FavoriteRoadTripsList';
+import FavoriteTripsList from '../components/FavoriteTripsList';
 import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
 import RecommendationCard from '../../../components/RecommendationCard';
 import CityCard from '../../../components/CityCard';
@@ -118,10 +120,11 @@ export default function FavoritesScreen({ navigation }) {
 	const renderTabContent = (activeTab) => {
 		switch (activeTab) {
 			case 'destinations':
-				return <FavoriteCitiesList navigation={navigation} />;
+				return <FavoriteCitiesList />;
 			case 'recommendations':
 				return <FavoriteRecommendationsList />;
 			case 'trips':
+				/* return <FavoriteTripsList /> */
 				return (
 					<View style={common.containerCentered}>
 						<Text style={typography.h2}>טיולים חכמים (בקרוב)</Text>
@@ -129,6 +132,7 @@ export default function FavoritesScreen({ navigation }) {
 					</View>
 				);
 			case 'roadtrips':
+				/* return <FavoriteRoadTripsList /> */
 				return (
 					<View style={common.containerCentered}>
 						<Text style={typography.h2}>מסלולים שמורים</Text>
