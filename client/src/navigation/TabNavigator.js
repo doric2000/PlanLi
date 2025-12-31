@@ -1,5 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { Image, View, Text } from 'react-native';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import {tabConfigs, tabScreens} from './TabConfigs'
 
 const Tab = createBottomTabNavigator();
@@ -15,25 +17,37 @@ const Tab = createBottomTabNavigator();
  * - Profile: User settings and profile
  */
 export default function TabNavigator() {
+  const { user } = useCurrentUser();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => {
         const config = tabConfigs[route.name];
         return ({
-          tabBarIcon: ({focused, color, size}) => (
-            <Ionicons name={focused ? config.icon : `${config.icon}-outline`}
-            size={size}
-            color={color}
-            />
-          ),
-        tabBarActiveTintColor: config.activeColor,
-        tabBarInactiveTintColor: 'gray',
-        headerShown: false,
+          tabBarIcon: ({ focused, color, size }) => {
+            if (route.name === 'Profile' && user && user.photoURL) {
+              return (
+                <Image
+                  source={{ uri: user.photoURL }}
+                  style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 2 : 0, borderColor: color }}
+                  resizeMode="cover"
+                />
+              );
+            }
+            return (
+              <Ionicons name={focused ? config.icon : `${config.icon}-outline`}
+                size={size}
+                color={color}
+              />
+            );
+          },
+          tabBarActiveTintColor: config.activeColor,
+          tabBarInactiveTintColor: 'gray',
+          headerShown: false,
         });
       }}
     >
-      {tabScreens.map(({name, component}) => (
-        <Tab.Screen key={name} name={name} component={component}/>
+      {tabScreens.map(({ name, component }) => (
+        <Tab.Screen key={name} name={name} component={component} />
       ))}
     </Tab.Navigator>
   );
