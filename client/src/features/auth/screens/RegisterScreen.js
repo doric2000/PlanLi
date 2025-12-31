@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
 import { forms } from '../../../styles';
 
 // --- Import the new Modular Components ---
@@ -12,6 +13,7 @@ import { AuthInput } from '../../../components/AuthInput';
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
 
 export default function RegisterScreen({ navigation }) {
+  const registerOrUpdateUser = useRegisterOrUpdateUser();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,15 +32,7 @@ export default function RegisterScreen({ navigation }) {
 
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: fullName });
-
-        // Add user to Firestore
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          displayName: fullName,
-          createdAt: serverTimestamp(),
-          photoURL: null,
-        });
+        await registerOrUpdateUser(userCredential.user, { displayName: fullName, photoURL: null });
       }
       navigation.replace('Main');
     } catch (err) {

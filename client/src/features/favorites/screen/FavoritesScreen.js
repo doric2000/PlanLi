@@ -9,6 +9,10 @@ import FavoriteCitiesList from '../components/FavoriteCitiesList';
 import FavoriteRecommendationsList from '../components/FavoriteRecommendationsList';
 import FavoriteRoadTripsList from '../components/FavoriteRoadTripsList';
 import FavoriteTripsList from '../components/FavoriteTripsList';
+import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
+import RecommendationCard from '../../../components/RecommendationCard';
+import CityCard from '../../../components/CityCard';
+import { useFavoriteCityIds } from '../../../hooks/useFavoriteCityIds';
 
 const TABS = [
 	{ key: 'destinations', label: 'יעדים' },
@@ -16,6 +20,99 @@ const TABS = [
 	{ key: 'trips', label: 'טיולים' },
 	{ key: 'roadtrips', label: 'מסלולים' },
 ];
+
+function FavoriteCitiesList({ navigation }) {
+	const { favorites, loading } = useFavoriteCityIds();
+	if (loading) {
+		return (
+			<View style={common.containerCentered}>
+				<ActivityIndicator size="large" color="#49bc8e" />
+			</View>
+		);
+	}
+	if (!favorites.length) {
+		return (
+			<View style={common.containerCentered}>
+				<Text style={typography.h2}>היעדים המועדפים שלך</Text>
+				<Text style={typography.body}>לא שמרת יעדים עדיין</Text>
+			</View>
+		);
+	}
+	return (
+		<FlatList
+			data={favorites}
+			keyExtractor={item => item.id}
+			renderItem={({ item }) => (
+				<CityCard
+					city={{
+						id: item.id,
+						name: item.name || item.title || 'Unknown',
+						countryId: item.countryId,
+						imageUrl: item.thumbnail_url,
+						rating: item.rating,
+						travelers: item.travelers
+					}}
+					onPress={() => navigation.navigate('LandingPage', {
+						cityId: item.id,
+						countryId: item.countryId
+					})}
+					style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}
+				/>
+			)}
+			contentContainerStyle={{ padding: 16, alignItems: 'center' }}
+		/>
+	);
+}
+
+
+function FavoriteRecommendationsList() {
+	// Use the new hook to get full recommendation objects
+	const { favorites, loading } = useFavoriteRecommendationsFull();
+
+	if (loading) {
+		return (
+			<View style={common.containerCentered}>
+				<ActivityIndicator size="large" color="#49bc8e" />
+			</View>
+		);
+	}
+	if (!favorites.length) {
+		return (
+			<View style={common.containerCentered}>
+				<Text style={typography.h2}>ההמלצות המועדפות שלך</Text>
+				<Text style={typography.body}>לא שמרת המלצות עדיין</Text>
+			</View>
+		);
+	}
+
+	return (
+		<FlatList
+			data={favorites}
+			keyExtractor={item => item.id}
+			renderItem={({ item }) => (
+				<View style={{ alignItems: 'center', width: '100%' }}>
+					{/* ✅ FIX: We wrap the card in a View with the specific width. 
+					    The card will expand to fill this wrapper. */}
+					<View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>
+						<RecommendationCard
+							item={{
+								id: item.id,
+								title: item.name || 'Untitled',
+								description: item.sub_text || '',
+								images: item.thumbnail_url ? [item.thumbnail_url] : [],
+								rating: item.rating,
+								...item
+							}}
+							showActionBar={false}
+							// ❌ We removed the 'style' prop from here since the component ignores it
+						/>
+					</View>
+				</View>
+			)}
+			contentContainerStyle={{ padding: 16, alignItems: 'center' }}
+		/>
+	);
+}
 
 export default function FavoritesScreen({ navigation }) {
 	const [activeTab, setActiveTab] = useState('destinations');

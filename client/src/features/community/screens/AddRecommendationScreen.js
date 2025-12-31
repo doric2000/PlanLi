@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 // Firestore imports
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 
@@ -131,8 +132,24 @@ export default function AddRecommendationScreen({ navigation , route }) {
     try {
       let imageUrl = null;
 
-      // Handle Image Upload
+      // Handle Image Upload and auto-delete old image if editing
       if (imageUri) {
+        // If editing and there is an existing image, delete it
+        if (isEdit && editItem?.images?.[0]) {
+          try {
+            const storage = getStorage();
+            const oldUrl = editItem.images[0];
+            // Extract storage path from image URL
+            const match = decodeURIComponent(oldUrl).match(/\/o\/(.+)\?/);
+            if (match && match[1]) {
+              const oldPath = match[1];
+              const oldRef = storageRef(storage, oldPath);
+              await deleteObject(oldRef);
+            }
+          } catch (err) {
+            console.warn('Failed to delete old recommendation image:', err);
+          }
+        }
         imageUrl = await uploadImage(imageUri);
       }
       const prevImages = editItem?.images || [];
