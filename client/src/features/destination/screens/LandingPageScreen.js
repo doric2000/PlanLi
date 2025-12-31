@@ -81,7 +81,9 @@ export default function LandingPageScreen({ navigation, route }) {
     name: cityData.name,
     thumbnail_url: cityData.imageUrl,
     sub_text: `${cityData.travelers || 0} travelers`,
-    rating: cityData.rating
+    rating: cityData.rating,
+    countryId: countryId,
+    travelers: cityData.travelers || 0
   };
 
   return (

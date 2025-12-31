@@ -1,0 +1,1 @@
+/* Dor: put here the implementation of FavoriteTripsList component */
