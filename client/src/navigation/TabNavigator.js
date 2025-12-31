@@ -24,12 +24,21 @@ export default function TabNavigator() {
         const config = tabConfigs[route.name];
         return ({
           tabBarIcon: ({ focused, color, size }) => {
-            if (route.name === 'Profile' && user && user.photoURL) {
+            if (route.name === 'Profile' && user) {
+              if (user.photoURL) {
+                return (
+                  <Image
+                    source={{ uri: user.photoURL }}
+                    style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 2 : 0, borderColor: color }}
+                    resizeMode="cover"
+                  />
+                );
+              }
+              // Fallback: show Ionicons icon if no photoURL
               return (
-                <Image
-                  source={{ uri: user.photoURL }}
-                  style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 2 : 0, borderColor: color }}
-                  resizeMode="cover"
+                <Ionicons name={focused ? config.icon : `${config.icon}-outline`}
+                  size={size}
+                  color={color}
                 />
               );
             }
