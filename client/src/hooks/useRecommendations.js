@@ -13,10 +13,8 @@ export const useRecommendations = (sortBy = 'popularity') => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchRecommendations = async () => {
-    // Show loading indicator only on initial load or sort change, not on refresh
-    if (!refreshing) setLoading(true);
-
+  const fetchRecommendations = async ({ showLoader = true } = {}) => {
+    if (showLoader) setLoading(true);
     try {
       // Determine the field to sort by
       const sortField = sortBy === 'newest' ? 'createdAt' : 'likes';
@@ -44,13 +42,13 @@ export const useRecommendations = (sortBy = 'popularity') => {
   // Re-fetch when screen focuses or when 'sortBy' changes
   useFocusEffect(
     useCallback(() => {
-      fetchRecommendations();
+      fetchRecommendations({ showLoader: false });
     }, [sortBy])
   );
 
   const refresh = () => {
     setRefreshing(true);
-    fetchRecommendations();
+    fetchRecommendations({ showLoader: false });
   };
 
   const removeRecommendation = (id) => {

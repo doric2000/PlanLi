@@ -89,7 +89,12 @@ export default function HomeScreen({ navigation }) {
       <ScrollView
         contentContainerStyle={common.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
         }
       >
         {/* Header */}
@@ -154,4 +159,3 @@ export default function HomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
