@@ -1,35 +1,33 @@
 import { useState, useEffect } from "react";
 import {
-	View,
-	Text,
-	ScrollView,
-	TouchableOpacity,
-	Alert,
-	ActivityIndicator,
+    View,
+    Text,
+    ScrollView,
+    TouchableOpacity,
+    Alert,
+    ActivityIndicator,
+    StyleSheet,
 } from "react-native";
 import {
-	colors,
-	common,
-	buttons,
-	forms,
-	tags as tagsStyle,
-	typography,
+    colors,
+    common,
+    buttons,
+    spacing,
 } from "../../../styles";
 import {
-	collection,
-	addDoc,
-	getDoc,
-	updateDoc,
-	doc,
-	serverTimestamp,
+    collection,
+    addDoc,
+    updateDoc,
+    doc,
+    serverTimestamp,
 } from "firebase/firestore";
 import {
-	DIFFICULTY_TAGS,
-	TRAVEL_STYLE_TAGS,
-	ROAD_TRIP_TAGS,
-	EXPERIENCE_TAGS,
-} from "../../../constants/Constatns.js";
-import { db, auth } from '../../../config/firebase';
+    DIFFICULTY_TAGS,
+    TRAVEL_STYLE_TAGS,
+    ROAD_TRIP_TAGS,
+    EXPERIENCE_TAGS,
+} from "../../../constants/Constants.js";
+import { db } from '../../../config/firebase';
 import PlacesInput from '../components/PlacesInput';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import DayEditorModal from '../components/DayEditorModal';
@@ -39,272 +37,241 @@ import { TagSelector } from '../../../components/TagSelector';
 import { useBackButton } from '../../../hooks/useBackButton';
 
 /**
- * Screen for adding a new route.
- * Users can define days, places, distance, and tags for a route.
- *
- * @param {Object} navigation - Navigation object.
- * @param {Object} route - Route object containing params.
+ * Screen for adding/editing a route.
+ * Aligned with the new dynamic Constants structure.
  */
 export default function AddRoutesScreen({ navigation, route }) {
-	// Setup back button with hook
-	useBackButton(navigation, { title: 'Create Route' });
+    // Setup back button
+    useBackButton(navigation, { title: route?.params?.routeToEdit ? "Edit Route" : "Create Route" });
 
-	const [tripDays, setTripDays] = useState([]);
-	const [isDayModalVisible, setDayModalVisible] = useState(false);
-	const [editingDayIndex, setEditingDayIndex] = useState(null);
-	const [difficultyTag, setDifficultyTag] = useState("");
-	const [travelStyleTag, setTravelStyleTag] = useState("");
-	const [roadTripTags, setRoadTripTags] = useState([]);
-	const [experienceTags, setExperienceTags] = useState([]);
-	const [title, setTitle] = useState("");
-	const [days, setDays] = useState("");
-	const [places, setPlaces] = useState([""]);
-	const [distance, setDistance] = useState("");
-	const [tags, setTags] = useState([]);
-	const [desc, setDesc] = useState("");
-	const [submitting, setSubmitting] = useState(false);
-	const { user, loading: userLoading } = useCurrentUser();
-	const routeToEdit = route?.params?.routeToEdit;
+    // --- State Management ---
+    const [title, setTitle] = useState("");
+    const [days, setDays] = useState("");
+    const [places, setPlaces] = useState([""]);
+    const [distance, setDistance] = useState("");
+    const [desc, setDesc] = useState("");
+    const [tripDays, setTripDays] = useState([]);
+    
+    // Tag States (Single vs Multi)
+    const [difficultyTag, setDifficultyTag] = useState(""); // String
+    const [travelStyleTag, setTravelStyleTag] = useState(""); // String
+    const [roadTripTags, setRoadTripTags] = useState([]); // Array
+    const [experienceTags, setExperienceTags] = useState([]); // Array
+    
+    const [tags, setTags] = useState([]); // Combined array for Firestore
+    const [submitting, setSubmitting] = useState(false);
+    const [isDayModalVisible, setDayModalVisible] = useState(false);
+    const [editingDayIndex, setEditingDayIndex] = useState(null);
 
-	useEffect(() => {
-		if (routeToEdit) {
-			setTitle(routeToEdit.Title || "");
-			setDays(routeToEdit.days ? routeToEdit.days.toString() : "");
-			setPlaces(routeToEdit.places || [""]);
-			setDistance(routeToEdit.distance ? routeToEdit.distance.toString() : "");
-			setDesc(routeToEdit.desc || "");
-			setTripDays(routeToEdit.tripDaysData || []);
-			setDifficultyTag(routeToEdit.difficultyTag || "");
-			setTravelStyleTag(routeToEdit.travelStyleTag || "");
-			setRoadTripTags(routeToEdit.roadTripTags || []);
-			setExperienceTags(routeToEdit.experienceTags || []);
-		}
-	}, [routeToEdit]);
+    const { user } = useCurrentUser();
+    const routeToEdit = route?.params?.routeToEdit;
 
-	useEffect(() => {
-		const combinedTags = [
-			difficultyTag,
-			travelStyleTag,
-			...roadTripTags,
-			...experienceTags,
-		].filter(Boolean);
-		setTags(combinedTags);
-	}, [difficultyTag, travelStyleTag, roadTripTags, experienceTags]);
+    // Helper: Extract label from constant item (handles both String and Object)
+    const getLabel = (item) => (typeof item === 'object' ? item.label : item);
 
-	const newRoute = {
-		Title: title,
-		user,
-		days: parseInt(days, 10),
-		tripDaysData: tripDays,
-		places,
-		distance: parseFloat(distance),
-		tags,
-		desc,
-		difficultyTag,
-		travelStyleTag,
-		roadTripTags,
-		experienceTags,
-	};
-	// Handlers for Day Logic
-	const handleAddDay = () => {
-		setEditingDayIndex(tripDays.length); // New index
-		setDayModalVisible(true);
-	};
+    // --- Effects ---
+    
+    // Load existing data if in Edit Mode
+    useEffect(() => {
+        if (routeToEdit) {
+            setTitle(routeToEdit.Title || "");
+            setDays(routeToEdit.days ? routeToEdit.days.toString() : "");
+            setPlaces(routeToEdit.places || [""]);
+            setDistance(routeToEdit.distance ? routeToEdit.distance.toString() : "");
+            setDesc(routeToEdit.desc || "");
+            setTripDays(routeToEdit.tripDaysData || []);
+            setDifficultyTag(routeToEdit.difficultyTag || "");
+            setTravelStyleTag(routeToEdit.travelStyleTag || "");
+            setRoadTripTags(routeToEdit.roadTripTags || []);
+            setExperienceTags(routeToEdit.experienceTags || []);
+        }
+    }, [routeToEdit]);
 
-	const handleEditDay = (index) => {
-		setEditingDayIndex(index);
-		setDayModalVisible(true);
-	};
-	const handleSaveDay = (dayData, index) => {
-		const newTripDays = [...tripDays];
-		if (index >= newTripDays.length) {
-			// Adding new
-			newTripDays.push(dayData);
-		} else {
-			// Updating existing
-			newTripDays[index] = dayData;
-		}
-		setTripDays(newTripDays);
+    // Update the combined 'tags' array whenever specific tag states change
+    useEffect(() => {
+        const combinedTags = [
+            difficultyTag,
+            travelStyleTag,
+            ...roadTripTags,
+            ...experienceTags,
+        ].filter(Boolean); // Remove empty/null values
+        setTags(combinedTags);
+    }, [difficultyTag, travelStyleTag, roadTripTags, experienceTags]);
 
-		// Optional: Update the "Days" numeric input automatically
-		setDays(newTripDays.length.toString());
-	};
+    // --- Handlers ---
 
-	const clearForm = () => {
-		// Clear form
-		setTitle("");
-		setDays("");
-		setPlaces([""]);
-		setDistance("");
-		setTags([]);
-		setDesc("");
-	};
+    const handleSaveDay = (dayData, index) => {
+        const newTripDays = [...tripDays];
+        if (index >= newTripDays.length) {
+            newTripDays.push(dayData);
+        } else {
+            newTripDays[index] = dayData;
+        }
+        setTripDays(newTripDays);
+        setDays(newTripDays.length.toString());
+    };
 
-	const addRoute = async () => {
-		if (!user) {
-			Alert.alert("Error", "User must be authenticated to post!");
-			return;
-		} else if (!title || !days || !places || !distance || !desc) {
-			Alert.alert("Error", "Please fill in all fields.");
-			return;
-		}
-		if (parseInt(days) < tripDays.length) {
-			Alert.alert(
-				"Days error",
-				"You have added more day details than the total days specified!"
-			);
-			return;
-		}
-		setSubmitting(true);
+    const handleDeleteDay = (index) => {
+        Alert.alert("Delete Day", `Remove Day ${index + 1}?`, [
+            { text: "Cancel", style: "cancel" },
+            {
+                text: "Delete",
+                style: "destructive",
+                onPress: () => {
+                    const updated = tripDays.filter((_, i) => i !== index);
+                    setTripDays(updated);
+                    setDays(updated.length.toString());
+                },
+            },
+        ]);
+    };
 
-		try {
-			if (routeToEdit) {
-				await updateDoc(doc(db, "routes", routeToEdit.id), {
-					...newRoute,
-					updatedAt: serverTimestamp(),
-				});
-				Alert.alert("Success", "Route updated successfully!");
-			} else {
-				await addDoc(collection(db, "routes"), {
-					  userId: user?.uid,
-					...newRoute,
-					createdAt: serverTimestamp(),
-				});
-				Alert.alert("Success", "Route added succesfully!");
-			}
-			clearForm();
-			navigation.goBack();
-		} catch (e) {
-			console.error(e);
-			Alert.alert("Error", "Failed to save route.");
-		} finally {
-			setSubmitting(false);
-		}
-	};
-	const handleDeleteDay = (index) => {
-		Alert.alert(
-			"Delete Day",
-			`Are you sure you want to remove Day ${index + 1}?`,
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Delete",
-					style: "destructive",
-					onPress: () => {
-						// Create a copy and remove the item at index
-						const newTripDays = tripDays.filter(
-							(_, i) => i !== index
-						);
-						setTripDays(newTripDays);
+    const addRoute = async () => {
+        if (!user) {
+            Alert.alert("Error", "User must be authenticated!");
+            return;
+        }
+        if (!title || !days || !places.length || !distance || !desc) {
+            Alert.alert("Error", "Please fill in all required fields.");
+            return;
+        }
 
-						// Update the days count input
-						setDays(newTripDays.length.toString());
+        setSubmitting(true);
 
-						// If we were editing this day, close the modal
-						if (editingDayIndex === index) {
-							setDayModalVisible(false);
-							setEditingDayIndex(null);
-						}
-					},
-				},
-			]
-		);
-	};
+        // Build the payload object
+        const routeData = {
+            Title: title,
+            days: parseInt(days, 10),
+            tripDaysData: tripDays,
+            places,
+            distance: parseFloat(distance),
+            tags, // Combined array for global search
+            desc,
+            difficultyTag,
+            travelStyleTag,
+            roadTripTags,
+            experienceTags,
+            userId: user?.uid,
+        };
 
-	return (
-		<ScrollView
-			style={common.container}
-			// nestedScrollEnabled
-			keyboardShouldPersistTaps='handled'
-			contentContainerStyle={{ paddingBottom: 120 }}
-		>
-			{/* Add Route Form */}
-			<View style={{ padding: 20 }}>
-				<FormInput
-					value={title}
-					onChangeText={setTitle}
-					placeholder='Title'
-				/>
-				<FormInput
-					value={days}
-					onChangeText={setDays}
-					placeholder='Days'
-					keyboardType='numeric'
-				/>
-				<DayList
-					days={tripDays}
-					onAdd={handleAddDay}
-					onEdit={handleEditDay}
-					onDelete={handleDeleteDay}
-				/>
-				<PlacesInput places={places} setPlaces={setPlaces} />
-				<FormInput
-					value={distance}
-					onChangeText={setDistance}
-					placeholder='Distance (km)'
-					keyboardType='numeric'
-				/>
-				<FormInput
-					value={desc}
-					onChangeText={setDesc}
-					placeholder='Description'
-					multiline
-					style={{ minHeight: 120 }}
-				/>
+        // --- DEBUG LOG: Verify payload matches backend expectations ---
+        console.log("PlanLi Debug - Saving Route:", JSON.stringify(routeData, null, 2));
 
-				<TagSelector
-					label='Difficulty (single)'
-					tags={DIFFICULTY_TAGS}
-					selected={difficultyTag}
-					onSelect={setDifficultyTag}
-				/>
+        try {
+            if (routeToEdit) {
+                await updateDoc(doc(db, "routes", routeToEdit.id), {
+                    ...routeData,
+                    updatedAt: serverTimestamp(),
+                });
+                Alert.alert("Success", "Route updated!");
+            } else {
+                await addDoc(collection(db, "routes"), {
+                    ...routeData,
+                    createdAt: serverTimestamp(),
+                });
+                Alert.alert("Success", "Route added!");
+            }
+            navigation.goBack();
+        } catch (e) {
+            console.error("Firestore Error:", e);
+            Alert.alert("Error", "Failed to save route data.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
-				<TagSelector
-					label='Travel Style (single)'
-					tags={TRAVEL_STYLE_TAGS}
-					selected={travelStyleTag}
-					onSelect={setTravelStyleTag}
-				/>
+    return (
+        <ScrollView
+            style={common.container}
+            keyboardShouldPersistTaps='handled'
+            contentContainerStyle={{ paddingBottom: 120 }}
+        >
+            <View style={{ padding: 20 }}>
+                {/* Basic Details */}
+                <FormInput value={title} onChangeText={setTitle} placeholder='Title' />
+                <FormInput value={days} onChangeText={setDays} placeholder='Total Days' keyboardType='numeric' />
+                
+                {/* Day Logic */}
+                <DayList
+                    days={tripDays}
+                    onAdd={() => { setEditingDayIndex(tripDays.length); setDayModalVisible(true); }}
+                    onEdit={(index) => { setEditingDayIndex(index); setDayModalVisible(true); }}
+                    onDelete={handleDeleteDay}
+                />
 
-				<TagSelector
-					label='Road Trip Tags (multi)'
-					tags={ROAD_TRIP_TAGS}
-					selected={roadTripTags}
-					onSelect={setRoadTripTags}
-					multi={true}
-				/>
+                <PlacesInput places={places} setPlaces={setPlaces} />
+                
+                <FormInput
+                    value={distance}
+                    onChangeText={setDistance}
+                    placeholder='Distance (km)'
+                    keyboardType='numeric'
+                />
+                
+                <FormInput
+                    value={desc}
+                    onChangeText={setDesc}
+                    placeholder='Description'
+                    multiline
+                    style={{ minHeight: 120 }}
+                />
 
-				<TagSelector
-					label='Experience Tags (multi)'
-					tags={EXPERIENCE_TAGS}
-					selected={experienceTags}
-					onSelect={setExperienceTags}
-					multi={true}
-				/>
+                {/* --- Tag Selectors (Linked to Constants) --- */}
+                
+                <TagSelector
+                    label='Difficulty (Single)'
+                    tags={DIFFICULTY_TAGS.map(getLabel)}
+                    selected={difficultyTag}
+                    onSelect={setDifficultyTag}
+                />
 
-				<TouchableOpacity
-					style={buttons.submit}
-					onPress={addRoute}
-					disabled={submitting}
-				>
-					{submitting ? (
-						<ActivityIndicator color={colors.white} />
-					) : (
-						<Text style={buttons.submitText}>
-							{routeToEdit ? "Update Route" : "Add Route"}
-						</Text>
-					)}
-				</TouchableOpacity>
-			</View>
-			<DayEditorModal
-				visible={isDayModalVisible}
-				onClose={() => setDayModalVisible(false)}
-				onSave={handleSaveDay}
-				dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
-				initialData={
-					editingDayIndex !== null ? tripDays[editingDayIndex] : {}
-				}
-			/>
-		</ScrollView>
-	);
+                <TagSelector
+                    label='Travel Style (Single)'
+                    tags={TRAVEL_STYLE_TAGS.map(getLabel)}
+                    selected={travelStyleTag}
+                    onSelect={setTravelStyleTag}
+                />
+
+                <TagSelector
+                    label='Road Trip Tags (Multi)'
+                    tags={ROAD_TRIP_TAGS.map(getLabel)}
+                    selected={roadTripTags}
+                    onSelect={setRoadTripTags}
+                    multi={true}
+                />
+
+                <TagSelector
+                    label='Experience Tags (Multi)'
+                    tags={EXPERIENCE_TAGS.map(getLabel)}
+                    selected={experienceTags}
+                    onSelect={setExperienceTags}
+                    multi={true}
+                />
+
+                {/* Submission */}
+                <TouchableOpacity
+                    style={[buttons.submit, submitting && { opacity: 0.7 }]}
+                    onPress={addRoute}
+                    disabled={submitting}
+                >
+                    {submitting ? (
+                        <ActivityIndicator color={colors.white} />
+                    ) : (
+                        <Text style={buttons.submitText}>
+                            {routeToEdit ? "Update Route" : "Add Route"}
+                        </Text>
+                    )}
+                </TouchableOpacity>
+            </View>
+
+            {/* Day Editor Component */}
+            <DayEditorModal
+                visible={isDayModalVisible}
+                onClose={() => setDayModalVisible(false)}
+                onSave={handleSaveDay}
+                dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
+                initialData={editingDayIndex !== null ? tripDays[editingDayIndex] : {}}
+            />
+        </ScrollView>
+    );
 }

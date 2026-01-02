@@ -5,16 +5,17 @@ import { colors, spacing } from '../styles';
 
 /**
  * Displays a horizontal list of currently active filters.
- * Allows the user to remove specific filters directly.
- * * @param {Object} filters - The current filters state { destination, categories, budgets }
+ * Now supports: destination, categories, tags, and budgets.
+ * * @param {Object} filters - The current filters state { destination, categories, tags, budgets }
  * @param {Function} onRemove - Callback when a filter is removed (type, value)
  */
 const ActiveFiltersList = ({ filters, onRemove }) => {
-  // Check if there are any active filters
+  // FIXED: Added tags to the existence check
   const hasFilters = 
     filters.destination || 
-    filters.categories?.length > 0 || 
-    filters.budgets?.length > 0;
+    (filters.categories?.length > 0) || 
+    (filters.tags?.length > 0) || // Added this line
+    (filters.budgets?.length > 0);
 
   if (!hasFilters) return null;
 
@@ -45,7 +46,17 @@ const ActiveFiltersList = ({ filters, onRemove }) => {
           </View>
         ))}
 
-        {/* 3. Budget Chips */}
+        {/* 3. Tag Chips (Sub-categories) */}
+        {filters.tags?.map((tag) => (
+          <View key={`tag-${tag}`} style={styles.chip}>
+            <TouchableOpacity onPress={() => onRemove('tag', tag)}>
+              <Ionicons name="close-circle" size={18} color={colors.white} />
+            </TouchableOpacity>
+            <Text style={styles.chipText}>{tag}</Text>
+          </View>
+        ))}
+
+        {/* 4. Budget Chips */}
         {filters.budgets?.map((budget) => (
           <View key={`budget-${budget}`} style={styles.chip}>
             <TouchableOpacity onPress={() => onRemove('budget', budget)}>
@@ -65,17 +76,23 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg, 
-    flexDirection: 'row-reverse', // RTL layout for the scroll
+    flexDirection: 'row-reverse', // Keeps the RTL flow for Hebrew
     gap: 8,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary, // Using primary color to highlight active state
+    backgroundColor: colors.primary, 
     borderRadius: 20,
     paddingVertical: 6,
     paddingHorizontal: 12,
     gap: 6,
+  },
+  // Optional: distinct style for tags to differentiate from parent categories
+  tagChip: {
+    backgroundColor: colors.secondary || colors.primary, 
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   chipText: {
     color: colors.white,

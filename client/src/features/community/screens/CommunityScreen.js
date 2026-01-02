@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ActivityIndicator, 
+  FlatList, 
+  RefreshControl, 
+  TouchableOpacity, 
+  Modal, 
+  StyleSheet 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-// Components
+// --- Components ---
 import FilterIconButton from '../../../components/FilterIconButton';
 import ScreenHeader from '../../../components/ScreenHeader'; 
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
@@ -12,11 +21,11 @@ import { CommentsModal } from '../../../components/CommentsModal';
 import FabButton from '../../../components/FabButton';
 import ActiveFiltersList from '../../../components/ActiveFiltersList';
 
-// Hooks
+// --- Hooks ---
 import { useRecommendations } from '../../../hooks/useRecommendations';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 
-// Global Styles
+// --- Global Styles ---
 import { colors, common, spacing, typography } from '../../../styles';
 
 export default function CommunityScreen({ navigation }) {
@@ -35,30 +44,34 @@ export default function CommunityScreen({ navigation }) {
   const handleSortSelect = (option) => { setSortBy(option); setSortMenuVisible(false); };
   const handleOpenComments = (postId) => { setSelectedPostId(postId); setCommentsModalVisible(true); };
   
+  // FIXED: Added the logic to handle 'tag' removal
   const handleRemoveFilter = (type, value) => {
-    if (type === 'destination') updateFilters({ destination: '' });
-    else if (type === 'category') updateFilters({ categories: filters.categories.filter((c) => c !== value) });
-    else if (type === 'budget') updateFilters({ budgets: filters.budgets.filter((b) => b !== value) });
+    if (type === 'destination') {
+      updateFilters({ destination: '' });
+    } else if (type === 'category') {
+      updateFilters({ categories: filters.categories.filter((c) => c !== value) });
+    } else if (type === 'budget') {
+      updateFilters({ budgets: filters.budgets.filter((b) => b !== value) });
+    } else if (type === 'tag') {
+      // Logic for removing a specific tag from the array
+      updateFilters({ tags: filters.tags.filter((t) => t !== value) });
+    }
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       
-      {/* --- REUSABLE HEADER --- */}
+      {/* --- HEADER --- */}
       <ScreenHeader
         title="קהילת המטיילים"
         subtitle="גלו המלצות חדשות!"
-        
-        // Render Filter Button (Right)
         renderRight={() => (
           <FilterIconButton 
             active={isFiltered} 
             onPress={() => setFilterModalVisible(true)} 
-            floating={false} // Clean usage thanks to buttons.js refactor
+            floating={false} 
           />
         )}
-
-        // Render Sort Button (Left)
         renderLeft={() => (
           <TouchableOpacity 
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
@@ -72,9 +85,10 @@ export default function CommunityScreen({ navigation }) {
         )}
       />
 
-      {/* --- CONTENT --- */}
+      {/* --- ACTIVE FILTERS BAR --- */}
       <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} />
 
+      {/* --- RECOMMENDATIONS LIST --- */}
       {loading ? (
         <View style={common.center}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -104,16 +118,26 @@ export default function CommunityScreen({ navigation }) {
 
       <FabButton onPress={() => navigation.navigate('AddRecommendation')} />
 
-      {/* --- MODALS --- */}
+      {/* --- FILTER MODAL --- */}
       <RecommendationsFilterModal
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
         filters={filters}
-        onApply={(next) => { updateFilters(next); setFilterModalVisible(false); }}
-        onClear={() => { clearFilters(); setFilterModalVisible(false); }}
+        onApply={(next) => { 
+          updateFilters(next); 
+          setFilterModalVisible(false); 
+        }}
+        onClear={() => { 
+          clearFilters(); 
+          setFilterModalVisible(false); 
+        }}
       />
       
-      <CommentsModal visible={commentsModalVisible} onClose={() => setCommentsModalVisible(false)} postId={selectedPostId} />
+      <CommentsModal 
+        visible={commentsModalVisible} 
+        onClose={() => setCommentsModalVisible(false)} 
+        postId={selectedPostId} 
+      />
 
       {/* Sort Menu Modal */}
       <Modal visible={sortMenuVisible} transparent={true} animationType="fade" onRequestClose={() => setSortMenuVisible(false)}>
@@ -140,7 +164,6 @@ export default function CommunityScreen({ navigation }) {
   );
 }
 
-// Only styles specific to the local Sort Modal
 const localStyles = StyleSheet.create({
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center'
