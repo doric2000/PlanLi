@@ -7,6 +7,7 @@ import { tags } from "../../../styles/tags";
 
 import FavoriteCitiesList from '../components/FavoriteCitiesList';
 import FavoriteRecommendationsList from '../components/FavoriteRecommendationsList';
+import FavoriteRoadTripsList from '../components/FavoriteRoadTripsList';
 
 const TABS = [
 	{ key: 'destinations', label: 'יעדים' },
@@ -33,13 +34,7 @@ export default function FavoritesScreen({ navigation }) {
 					</View>
 				);
 			case 'roadtrips':
-				/* return <FavoriteRoadTripsList /> */
-				return (
-					<View style={common.containerCentered}>
-						<Text style={typography.h2}>מסלולים שמורים</Text>
-						<Text style={typography.body}>כאן תוכל לראות את כל המסלולים ששמרת</Text>
-					</View>
-				);
+				return <FavoriteRoadTripsList />;
 			default:
 				return null;
 		}
