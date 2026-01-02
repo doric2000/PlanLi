@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import FilterModal from './FilterModal';
-import { common, spacing, colors } from '../styles';
-import { CATEGORY_TAGS, PRICE_TAGS } from '../constants/Constatns';
+import { common, spacing } from '../styles';
 
-// --- Import New Modular Components ---
+// --- Import constants for hierarchical logic ---
+import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../constants/Constants';
+
+// --- Import Modular Components ---
 import ChipSelector from '../features/community/components/ChipSelector';
 import { FormInput } from './FormInput';
 
@@ -17,41 +19,72 @@ export default function RecommendationsFilterModal({
 }) {
   const current = filters || {};
 
-  // Local State
+  // --- 1. Local State ---
   const [tempDestination, setTempDestination] = useState('');
-  const [tempCategories, setTempCategories] = useState([]);
+  const [tempCategories, setTempCategories] = useState([]); // Stores parent category IDs
+  const [tempTags, setTempTags] = useState([]);           // Stores sub-tag labels
   const [tempBudgets, setTempBudgets] = useState([]);
 
-  // Sync state when modal opens
+  // --- 2. Sync state when modal opens ---
   useEffect(() => {
     if (!visible) return;
+    
     setTempDestination(current.destination || '');
-    setTempCategories(Array.isArray(current.categories) ? current.categories : []);
+    
+    // Map Hebrew labels back to IDs for internal modal logic
+    const initialCategoryIds = (current.categories || []).map(label => 
+      PARENT_CATEGORIES.find(c => c.label === label)?.id
+    ).filter(Boolean);
+    
+    setTempCategories(initialCategoryIds);
+    setTempTags(Array.isArray(current.tags) ? current.tags : []);
     setTempBudgets(Array.isArray(current.budgets) ? current.budgets : []);
   }, [visible, filters]);
 
-  // --- Toggle Logic for Multi-Select ---
-  // ChipSelector returns the clicked item, we need to manage the array add/remove logic
-  const toggleCategory = (item) => {
+  // --- 3. Toggle Handlers ---
+
+  const toggleCategory = (id) => {
     setTempCategories((prev) => {
-      if (prev.includes(item)) return prev.filter((i) => i !== item);
-      return [...prev, item];
+      if (prev.includes(id)) {
+        // Cleanup: Remove sub-tags belonging to this category when category is unselected
+        const tagsToRemove = TAGS_BY_CATEGORY[id] || [];
+        setTempTags(currentTags => currentTags.filter(t => !tagsToRemove.includes(t)));
+        return prev.filter((i) => i !== id);
+      }
+      return [...prev, id];
     });
+  };
+
+  const toggleTag = (tag) => {
+    setTempTags((prev) => 
+      prev.includes(tag) ? prev.filter((i) => i !== tag) : [...prev, tag]
+    );
   };
 
   const toggleBudget = (item) => {
-    setTempBudgets((prev) => {
-      if (prev.includes(item)) return prev.filter((i) => i !== item);
-      return [...prev, item];
-    });
+    setTempBudgets((prev) => 
+      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
+    );
   };
 
+  // --- 4. Final Apply Logic ---
   const handleApply = () => {
-    onApply?.({
-      destination: tempDestination,
-      categories: tempCategories,
+    // Map internal category IDs back to Hebrew Labels for the main screen bar
+    const categoryLabels = tempCategories.map(id => 
+      PARENT_CATEGORIES.find(c => c.id === id)?.label
+    ).filter(Boolean);
+
+    const finalFilters = {
+      destination: tempDestination.trim(),
+      categories: categoryLabels, // Sending labels (e.g., "טבע ומסלולים")
+      tags: tempTags,             // Sending tags (e.g., "טיול רגלי")
       budgets: tempBudgets,
-    });
+    };
+
+    // DEBUG LOG: Verification of the payload sent back to the main screen
+    console.log("PlanLi Debug - Modal Export:", JSON.stringify(finalFilters, null, 2));
+
+    onApply?.(finalFilters);
   };
 
   return (
@@ -62,41 +95,79 @@ export default function RecommendationsFilterModal({
       onClear={onClear}
       onApply={handleApply}
     >
-      {/* 1. Destination Input using FormInput */}
-      <View style={styles.section}>
-        <Text style={[common.modalLabel, { textAlign: 'right' }]}>יעד / עיר / מדינה</Text>
-        <FormInput
-          placeholder="תל אביב, יוון, תאילנד..."
-          value={tempDestination}
-          onChangeText={setTempDestination}
-          textAlign="right"
+      {/* 5. ScrollView wrapper: Allows content to grow and ensures scrollability */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Destination Section */}
+        <View style={styles.section}>
+          <Text style={[common.modalLabel, { textAlign: 'right' }]}>יעד / עיר / מדינה</Text>
+          <FormInput
+            placeholder="תל אביב, יוון, תאילנד..."
+            value={tempDestination}
+            onChangeText={setTempDestination}
+            textAlign="right"
+          />
+        </View>
+
+        {/* Parent Category Selection */}
+        <ChipSelector
+          label="קטגוריה"
+          items={PARENT_CATEGORIES.map(c => c.label)} 
+          selectedValue={tempCategories.map(id => PARENT_CATEGORIES.find(c => c.id === id)?.label)} 
+          onSelect={(label) => {
+            const id = PARENT_CATEGORIES.find(c => c.label === label)?.id;
+            toggleCategory(id);
+          }}
+          multiSelect={true}
         />
-      </View>
 
-      {/* 2. Categories using ChipSelector */}
-      <ChipSelector
-        label="קטגוריה"
-        items={CATEGORY_TAGS}
-        selectedValue={tempCategories} // Array
-        onSelect={toggleCategory}
-        multiSelect={true}
-      />
+        {/* Dynamic Tags - Rendered based on selected parent categories */}
+        {tempCategories.length > 0 && (
+          <View style={styles.dynamicSection}>
+            {tempCategories.map(catId => {
+              const category = PARENT_CATEGORIES.find(c => c.id === catId);
+              return (
+                <ChipSelector
+                  key={catId}
+                  label={`תגיות ל${category?.label}`}
+                  items={TAGS_BY_CATEGORY[catId]}
+                  selectedValue={tempTags}
+                  onSelect={toggleTag}
+                  multiSelect={true}
+                />
+              );
+            })}
+          </View>
+        )}
 
-      {/* 3. Budget using ChipSelector */}
-      <ChipSelector
-        label="תקציב"
-        items={PRICE_TAGS}
-        selectedValue={tempBudgets} // Array
-        onSelect={toggleBudget}
-        multiSelect={true}
-      />
-
+        {/* Budget Section */}
+        <View style={styles.lastSection}>
+          <ChipSelector
+            label="תקציב"
+            items={PRICE_TAGS}
+            selectedValue={tempBudgets}
+            onSelect={toggleBudget}
+            multiSelect={true}
+          />
+        </View>
+      </ScrollView>
     </FilterModal>
   );
 }
 
 const styles = StyleSheet.create({
   section: {
+    marginBottom: spacing.md,
+  },
+  dynamicSection: {
+    marginTop: spacing.xs,
+  },
+  lastSection: {
     marginBottom: spacing.lg,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl, // Extra padding ensures bottom content is not hidden
   }
 });

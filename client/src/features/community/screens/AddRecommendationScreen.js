@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 // Firestore imports
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 
@@ -27,9 +26,10 @@ import { useBackButton } from '../../../hooks/useBackButton';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { useLocationData } from '../../../hooks/useLocationData'; 
 
-import { CATEGORY_TAGS, PRICE_TAGS } from '../../../constants/Constatns';
+// --- Constants ---
+import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
 
-const TAGS = ["כשר", "למשפחה", "תקציב", "יוקרה", "טבע", "רומנטי", "נגיש"];
+
 
 // --- Local Helper Component ---
 const LabeledInput = ({ label, style, ...props }) => (
@@ -52,7 +52,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
   // --- Local State ---
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(''); // Stores the ID (e.g., 'food')
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +62,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const existingImage = isEdit ? (editItem?.images?.[0] || null) : null;
   const displayImageUri = imageUri || existingImage;
 
-  // --- Location Handling (via Custom Hook) ---
+  // --- Location Handling ---
   const { 
     countries, 
     cities, 
@@ -80,8 +80,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [selectionType, setSelectionType] = useState(null); 
 
   // --- Effects ---
-  
-  // Pre-fill form data if in Edit Mode
   useEffect(() => {
     if (!isEdit || !editItem) return;
 
@@ -94,8 +92,13 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
   // --- Handlers ---
 
+  // Custom handler for category change to reset sub-tags
+  const handleCategoryChange = (newCatId) => {
+    setCategory(newCatId);
+    setSelectedTags([]); 
+  };
+
   const openSelectionModal = (type) => {
-    // Validate country selection before opening city modal
     if (type === 'CITY' && !selectedCountry) {
       Alert.alert("אוי לא!", "אנא בחר מדינה לפני בחירת עיר.");
       return;
@@ -104,7 +107,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setModalVisible(true);
   };
 
-  // Wrapper handlers to close modal after selection
   const onCountrySelect = (item) => {
     handleSelectCountry(item);
     setModalVisible(false);
@@ -120,8 +122,8 @@ export default function AddRecommendationScreen({ navigation , route }) {
     else setSelectedTags([...selectedTags, tag]);
   };
 
-  const handleSubmit = async () => {
-    // Form Validation (Your custom alerts)
+const handleSubmit = async () => {
+    // Basic form validation
     if (!title || !description || !category || !selectedCountry || !selectedCity) {
       Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
       return;
@@ -131,31 +133,16 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
     try {
       let imageUrl = null;
-
-      // Handle Image Upload and auto-delete old image if editing
       if (imageUri) {
-        // If editing and there is an existing image, delete it
-        if (isEdit && editItem?.images?.[0]) {
-          try {
-            const storage = getStorage();
-            const oldUrl = editItem.images[0];
-            // Extract storage path from image URL
-            const match = decodeURIComponent(oldUrl).match(/\/o\/(.+)\?/);
-            if (match && match[1]) {
-              const oldPath = match[1];
-              const oldRef = storageRef(storage, oldPath);
-              await deleteObject(oldRef);
-            }
-          } catch (err) {
-            console.warn('Failed to delete old recommendation image:', err);
-          }
-        }
         imageUrl = await uploadImage(imageUri);
       }
-      const prevImages = editItem?.images || [];
-      const finalImages = imageUrl ? [imageUrl] : (isEdit ? prevImages : []);
+      
+      const finalImages = imageUrl ? [imageUrl] : (isEdit ? editItem?.images : []);
 
-      // Prepare Data Object
+      // NEW: Find the label corresponding to the selected ID
+      const categoryLabel = PARENT_CATEGORIES.find(c => c.id === category)?.label || category;
+
+      // Prepare Data Object for Firestore
       const postData = {
         title,
         description,
@@ -163,13 +150,14 @@ export default function AddRecommendationScreen({ navigation , route }) {
         country: selectedCountry.id,
         countryId: selectedCountry.id,
         cityId: selectedCity.id,
-        category,
+        category: categoryLabel, // Now saving the Hebrew Label instead of the ID
+        categoryId: category,    // Optional: Keeping the ID as a separate field for easier filtering later
         tags: selectedTags,
         budget,
         images: finalImages,
       };
 
-      // Save to Firestore
+      // Save to Firestore logic
       if (!isEdit) {
         await addDoc(collection(db, 'recommendations'), {
           ...postData,
@@ -244,30 +232,39 @@ export default function AddRecommendationScreen({ navigation , route }) {
           numberOfLines={4}
         />
 
-        {/* 5. Category Selector */}
+        {/* 5. Category Selector - Displays Hebrew Labels but logic uses IDs */}
         <ChipSelector
           label="קטגוריה"
-          items={CATEGORY_TAGS}
-          selectedValue={category}
-          onSelect={setCategory} 
+          items={PARENT_CATEGORIES.map(c => c.label)} 
+          selectedValue={PARENT_CATEGORIES.find(c => c.id === category)?.label || ''}
+          onSelect={(selectedLabel) => {
+            const selectedId = PARENT_CATEGORIES.find(c => c.label === selectedLabel)?.id;
+            handleCategoryChange(selectedId);
+          }} 
           multiSelect={false}
         />
 
-        {/* 6. Budget Selector */}
+        {/* 6. Tags Selector - Dynamically filtered based on selected category */}
+        {category ? (
+          <ChipSelector
+            label="תגיות"
+            items={TAGS_BY_CATEGORY[category]}
+            selectedValue={selectedTags}
+            onSelect={toggleTag}
+            multiSelect={true}
+          />
+        ) : (
+              <Text style={{ textAlign: 'center', fontSize: 14, marginBottom: 8 }}>
+               בחר קטגוריה כדי לראות תגיות
+              </Text>
+        )}
+
+        {/* 7. Budget Selector */}
         <SegmentedControl
           label="תקציב"
           items={PRICE_TAGS}
           selectedValue={budget}
           onSelect={setBudget}
-        />
-
-        {/* 7. Tags Selector */}
-        <ChipSelector
-          label="תגיות"
-          items={TAGS}
-          selectedValue={selectedTags}
-          onSelect={toggleTag}
-          multiSelect={true}
         />
 
         {/* 8. Submit Button */}
