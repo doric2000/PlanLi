@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
 /**
@@ -15,21 +15,26 @@ export function useFavorite(type, id, snapshotData = {}) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Check if this item is in user's favorites (subcollection for all types)
-  const checkFavorite = useCallback(async () => {
-    if (!user || !id) return;
-    try {
-      const favoriteDoc = await getDoc(doc(db, 'users', user.uid, 'favorites', id));
-      setIsFavorite(favoriteDoc.exists());
-    } catch (e) {
-      console.error('Error checking favorite status:', e);
-      setIsFavorite(false);
-    }
-  }, [user, id]);
-
   useEffect(() => {
-    checkFavorite();
-  }, [checkFavorite]);
+    if (!user || !id) {
+      setIsFavorite(false);
+      return undefined;
+    }
+
+    const favoriteDocRef = doc(db, 'users', user.uid, 'favorites', id);
+    const unsubscribe = onSnapshot(
+      favoriteDocRef,
+      (snap) => {
+        setIsFavorite(snap.exists());
+      },
+      (e) => {
+        console.error('Error checking favorite status:', e);
+        setIsFavorite(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user, id]);
 
   // Toggle favorite status
   const toggleFavorite = async () => {

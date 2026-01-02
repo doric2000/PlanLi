@@ -27,8 +27,7 @@ const FavoriteButton = ({ type, id, variant = 'light', style, snapshotData = {} 
 
   const getIconColor = () => {
     if (isFavorite) return colors.primary;
-    // Always use a visible color when not favorited
-    return colors.primary;
+    return colors.textSecondary;
   };
 
   return (

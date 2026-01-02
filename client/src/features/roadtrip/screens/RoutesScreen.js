@@ -26,6 +26,7 @@ import { common, buttons, colors, spacing } from "../../../styles";
 import FabButton from "../../../components/FabButton";
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
+import { CommentsModal } from "../../../components/CommentsModal";
 
 
 export default function RoutesScreen({ navigation }) {
@@ -44,6 +45,8 @@ export default function RoutesScreen({ navigation }) {
 	const [filterMaxDays, setFilterMaxDays] = useState("");
 	const [filterMinDistance, setFilterMinDistance] = useState("");
 	const [filterMaxDistance, setFilterMaxDistance] = useState("");
+	const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+	const [selectedRouteId, setSelectedRouteId] = useState(null);
 
 
 
@@ -99,6 +102,11 @@ export default function RoutesScreen({ navigation }) {
 		Alert.alert("Generate trip feature coming soon!");
 	};
 
+	const handleOpenComments = (routeId) => {
+		setSelectedRouteId(routeId);
+		setCommentsModalVisible(true);
+	};
+
 	const renderItem = ({ item }) => {
 		const isOwner = currentUser && item.userId === currentUser.uid;
 		return (
@@ -108,6 +116,7 @@ export default function RoutesScreen({ navigation }) {
 				isOwner={isOwner}
 				onEdit={() => handleEdit(item)}
 				onDelete={() => handleDelete(item.id)}
+				onCommentPress={handleOpenComments}
 			/>
 		);
 	};
@@ -285,6 +294,13 @@ export default function RoutesScreen({ navigation }) {
 				}}
 				onApply={applyFilters}
 				onClear={handleClearFilters}
+			/>
+
+			<CommentsModal
+				visible={commentsModalVisible}
+				onClose={() => setCommentsModalVisible(false)}
+				postId={selectedRouteId}
+				collectionName="routes"
 			/>
 
 		</SafeAreaView>
