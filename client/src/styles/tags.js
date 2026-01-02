@@ -5,7 +5,7 @@ export const tags = {
 	},
 
 	container: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 	},
 
 	// Tag item
@@ -16,7 +16,8 @@ export const tags = {
 		borderWidth: 1,
 		borderColor: "#E5E7EB",
 		backgroundColor: "#F9FAFB",
-		marginRight: 8,
+		marginLeft: 8,
+		marginRight: 0,
 	},
 
 	itemSelected: {
@@ -62,7 +63,8 @@ export const tags = {
 		borderWidth: 1,
 		borderColor: "#E5E7EB",
 		backgroundColor: "#FFFFFF",
-		marginRight: 8,
+		marginLeft: 8,
+		marginRight: 0,
 	},
 
 	chipSelected: {
@@ -142,8 +144,8 @@ export const tags = {
 
 	// Chip row container
 	chipRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		flexWrap: "wrap",
-		justifyContent: "flex-end",
+		justifyContent: "flex-start",
 	},
 };

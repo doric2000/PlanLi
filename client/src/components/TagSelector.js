@@ -69,7 +69,10 @@ export const TagSelector = ({
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ paddingRight: spacing.screenHorizontal }}
+                contentContainerStyle={{
+                    paddingLeft: spacing.screenHorizontal,
+                    flexDirection: "row-reverse",
+                }}
             >
                 {tags.map((tag) => (
                     <TouchableOpacity

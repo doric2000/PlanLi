@@ -1,14 +1,68 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, Text, TouchableOpacity, View, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { auth, db } from "../../../config/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
-import { colors, common, typography, cards, tags, buttons } from "../../../styles";
+
+
+import { colors, common, typography, cards, tags, buttons, spacing } from "../../../styles";
+
+
+// Styles for new header and pattern (must be above component)
+const styles = StyleSheet.create({
+  headerBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.white,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: spacing.lg,
+    height: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerBackBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerBackText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 4,
+  },
+  headerTitle: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'right',
+    marginRight: 8,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: 40,
+  },
+  sectionLabel: {
+    textAlign: 'right',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: colors.textPrimary,
+  },
+});
 import { toggleValue } from "./utils/toggleValue";
-import { TRAVEL_STYLES, TRIP_TYPES, INTERESTS, CONSTRAINTS } from "./constants/smartProfileOptions";
+import { TRAVEL_STYLES, TRIP_TYPES, INTERESTS, CONSTRAINTS } from "../constants/smartProfileOptions";
 
 function Chip({ label, selected, onPress }) {
   return (
@@ -17,7 +71,6 @@ function Chip({ label, selected, onPress }) {
       style={[
         tags.filterChip,
         selected && tags.filterChipSelected,
-        { marginLeft: 0, marginRight: 8 },
       ]}
       activeOpacity={0.8}
     >
@@ -27,6 +80,17 @@ function Chip({ label, selected, onPress }) {
     </TouchableOpacity>
   );
 }
+
+// LabeledInput pattern from AddRecommendationScreen
+import { FormInput } from "../../../components/FormInput";
+const LabeledInput = ({ label, style, ...props }) => (
+  <View style={[{ marginBottom: 16 }, style]}>
+    <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+      {label}
+    </Text>
+    <FormInput textAlign="right" {...props} />
+  </View>
+);
 
 export default function EditProfileScreen({ navigation }) {
   const uid = auth.currentUser?.uid;
@@ -109,33 +173,29 @@ export default function EditProfileScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={common.containerCentered}>
-        <Text style={typography.profileEmail}>Loading...</Text>
-      </SafeAreaView>
+      <View style={[common.containerCentered, { backgroundColor: colors.background }]}> 
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={common.container}>
-      {/* Header */}
-      <View style={[common.header, { paddingHorizontal: 16, paddingVertical: 14 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={common.topButton}>
-          <Ionicons name="chevron-back" size={22} color={colors.white} />
-          <Text style={common.backText}>Back</Text>
+    <View style={[common.container, { backgroundColor: colors.background }]}> 
+      {/* Header - white, shadow, dark text, like AddRecommendationScreen */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
+          <Ionicons name="chevron-forward" size={24} color={colors.primary} />
+          <Text style={styles.headerBackText}>חזור</Text>
         </TouchableOpacity>
-
-        <Text style={[typography.sectionTitle, { color: colors.white }]}>
-          Edit Profile
-        </Text>
-
-        <View style={{ width: 60 }} />
+        <Text style={styles.headerTitle}>עריכת פרופיל</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Travel Style */}
         <View style={cards.card}>
-          <Text style={typography.sectionTitle}>Travel Style</Text>
-          <View style={[tags.chipRow, { marginTop: 10, justifyContent: "flex-start" }]}>
+          <Text style={styles.sectionLabel}>תקציב</Text>
+          <View style={[tags.chipRow, { marginTop: 10 }]}> 
             {TRAVEL_STYLES.map(opt => (
               <Chip
                 key={opt.value}
@@ -148,9 +208,9 @@ export default function EditProfileScreen({ navigation }) {
         </View>
 
         {/* Trip Type */}
-        <View style={[cards.card, { marginTop: 12 }]}>
-          <Text style={typography.sectionTitle}>Trip Type</Text>
-          <View style={[tags.chipRow, { marginTop: 10, justifyContent: "flex-start" }]}>
+        <View style={[cards.card, { marginTop: spacing.lg }]}> 
+          <Text style={styles.sectionLabel}>הרכב הטיול</Text>
+          <View style={[tags.chipRow, { marginTop: 10 }]}> 
             {TRIP_TYPES.map(opt => (
               <Chip
                 key={opt.value}
@@ -163,9 +223,9 @@ export default function EditProfileScreen({ navigation }) {
         </View>
 
         {/* Interests */}
-        <View style={[cards.card, { marginTop: 12 }]}>
-          <Text style={typography.sectionTitle}>Interests</Text>
-          <View style={[tags.chipRow, { marginTop: 10, justifyContent: "flex-start" }]}>
+        <View style={[cards.card, { marginTop: spacing.lg }]}> 
+          <Text style={styles.sectionLabel}>תחומי עניין</Text>
+          <View style={[tags.chipRow, { marginTop: 10 }]}> 
             {INTERESTS.map(opt => (
               <Chip
                 key={opt.value}
@@ -178,9 +238,9 @@ export default function EditProfileScreen({ navigation }) {
         </View>
 
         {/* Constraints */}
-        <View style={[cards.card, { marginTop: 12 }]}>
-          <Text style={typography.sectionTitle}>Constraints</Text>
-          <View style={[tags.chipRow, { marginTop: 10, justifyContent: "flex-start" }]}>
+        <View style={[cards.card, { marginTop: spacing.lg }]}> 
+          <Text style={styles.sectionLabel}>אופי הטיול</Text>
+          <View style={[tags.chipRow, { marginTop: 10 }]}> 
             {CONSTRAINTS.map(opt => (
               <Chip
                 key={opt.value}
@@ -194,16 +254,18 @@ export default function EditProfileScreen({ navigation }) {
 
         {/* Save */}
         <TouchableOpacity
-          style={[buttons.primary, { marginTop: 18, opacity: saving ? 0.6 : 1 }]}
+          style={[buttons.submit, saving && buttons.disabled]}
           onPress={onSave}
           disabled={saving}
-          activeOpacity={0.85}
         >
-          <Text style={buttons.primaryText}>
-            {saving ? "Saving..." : "Save"}
-          </Text>
+          {saving ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={buttons.submitText}>שמור</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
-}
+    }
+

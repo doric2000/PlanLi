@@ -45,7 +45,7 @@ import {
   TRIP_TYPES,
   INTERESTS,
   CONSTRAINTS,
-} from './constants/smartProfileOptions';
+} from '../constants/smartProfileOptions';
 
 const labelMapFromOptions = (arr) =>
   (arr || []).reduce((acc, it) => {

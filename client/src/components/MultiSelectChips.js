@@ -25,7 +25,7 @@ export default function MultiSelectChips({
     <View style={{ marginTop: 8 }}>
       {!!label && <Text style={tagsStyle.sectionLabel}>{label}</Text>}
 
-      <View style={[tagsStyle.chipRow, { flexDirection: 'row-reverse' }]}>
+      <View style={tagsStyle.chipRow}>
         {options.map((opt) => {
           const isSelected = sel.includes(opt);
           return (

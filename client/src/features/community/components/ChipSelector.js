@@ -21,7 +21,11 @@ const ChipSelector = ({
     <View style={styles.inputWrapper}>
       {label && <Text style={styles.label}>{label}</Text>}
       
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipScroll}
+      >
         {items.map((item) => {
           const active = isSelected(item);
           return (
@@ -54,7 +58,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary || '#333', 
   },
   chipScroll: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
   }
 });
 
