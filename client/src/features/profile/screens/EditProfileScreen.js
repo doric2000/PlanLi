@@ -1,54 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, ScrollView, Text, TouchableOpacity, View, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 
 import { auth, db } from "../../../config/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
-
-
-import { colors, common, typography, cards, tags, buttons, spacing } from "../../../styles";
+import { colors, common, cards, tags, buttons, spacing } from "../../../styles";
+import { useBackButton } from "../../../hooks/useBackButton";
+import { toggleValue } from "./utils/toggleValue";
+import { TRAVEL_STYLES, TRIP_TYPES, INTERESTS, CONSTRAINTS } from "../constants/smartProfileOptions";
+import { FormInput } from "../../../components/FormInput";
 
 
 // Styles for new header and pattern (must be above component)
 const styles = StyleSheet.create({
-  headerBar: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.white,
-    paddingTop: 0,
-    paddingBottom: 0,
-    paddingHorizontal: spacing.lg,
-    height: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  headerBackBtn: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 2,
-  },
-  headerBackText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 4,
-  },
-  headerTitle: {
-    flex: 1,
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'right',
-    marginRight: 8,
-  },
   scrollContent: {
     padding: spacing.lg,
     paddingBottom: 40,
@@ -61,8 +26,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 });
-import { toggleValue } from "./utils/toggleValue";
-import { TRAVEL_STYLES, TRIP_TYPES, INTERESTS, CONSTRAINTS } from "../constants/smartProfileOptions";
 
 function Chip({ label, selected, onPress }) {
   return (
@@ -82,7 +45,6 @@ function Chip({ label, selected, onPress }) {
 }
 
 // LabeledInput pattern from AddRecommendationScreen
-import { FormInput } from "../../../components/FormInput";
 const LabeledInput = ({ label, style, ...props }) => (
   <View style={[{ marginBottom: 16 }, style]}>
     <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
@@ -94,6 +56,7 @@ const LabeledInput = ({ label, style, ...props }) => (
 
 export default function EditProfileScreen({ navigation }) {
   const uid = auth.currentUser?.uid;
+  useBackButton(navigation, { title: "עריכת פרופיל", color: colors.primary });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -180,17 +143,8 @@ export default function EditProfileScreen({ navigation }) {
   }
 
   return (
+  <SafeAreaView style={common.container}>
     <View style={[common.container, { backgroundColor: colors.background }]}> 
-      {/* Header - white, shadow, dark text, like AddRecommendationScreen */}
-      <View style={styles.headerBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
-          <Ionicons name="chevron-forward" size={24} color={colors.primary} />
-          <Text style={styles.headerBackText}>חזור</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>עריכת פרופיל</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Travel Style */}
         <View style={cards.card}>
@@ -266,6 +220,6 @@ export default function EditProfileScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
     </View>
+    </SafeAreaView>
   );
     }
-

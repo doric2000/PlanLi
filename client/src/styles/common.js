@@ -812,4 +812,41 @@ export const common = {
 		fontWeight: "bold",
 		color: "#4F46E5",
 	},
+
+	// ===== Support Modal =====
+	supportModalOverlay: {
+		flex: 1,
+		backgroundColor: "rgba(0,0,0,0.45)",
+		justifyContent: "center",
+		padding: 16,
+	},
+	supportModalCard: {
+		backgroundColor: "#FFFFFF",
+		borderRadius: 16,
+		padding: 16,
+	},
+	supportHeader: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: 12,
+	},
+	supportRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginBottom: 12,
+	},
+	supportIconWrap: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		backgroundColor: "#F3F4F6",
+		justifyContent: "center",
+		alignItems: "center",
+		marginRight: 12,
+	},
+	supportBodyText: {
+		color: "#4B5563",
+		lineHeight: 20,
+	},
 };
