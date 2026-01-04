@@ -3,7 +3,7 @@
     "name": "PlanLi",
     "slug": "client",
     "scheme": "client",
-    "version": "0.10.2",
+    "version": "0.10.3",
     "owner": "doric2000",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
