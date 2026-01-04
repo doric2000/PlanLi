@@ -2,20 +2,20 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  TextInput,
   ScrollView,
   TouchableOpacity,
   Image,
-  RefreshControl
+  RefreshControl,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 // שימו לב להוספת collectionGroup
 import { getDocs, query, limit, collectionGroup } from 'firebase/firestore';
 import CityCard from '../../../components/CityCard';
 import { db } from '../../../config/firebase';
 import { colors, spacing, typography, buttons, shadows, common, cards } from '../../../styles';
-
+import GooglePlacesInput from '../../../components/GooglePlacesInput'; 
+import { getOrCreateDestination } from '../../../services/LocationService';
 /**
  * Landing screen for the application.
  * Displays trending destinations, popular places, and a community feed.
@@ -100,14 +100,30 @@ export default function HomeScreen({ navigation }) {
         {/* Header */}
         <View style={common.homeHeader}>
           <Text style={common.homeHeaderTitle}>יאלללה, לאן טסים?</Text>
-          <View style={common.homeSearchBar}>
-            <Ionicons name="search" size={20} color={colors.textSecondary} style={common.homeSearchIcon} />
-            <TextInput
-               placeholder="חפש יעדים..."
-               style={common.homeSearchInput}
-               textAlign="right"
-               value={searchQuery}
-               onChangeText={setSearchQuery}
+          <View style={styles.searchContainer}>
+            <GooglePlacesInput 
+                onSelect={async (placeId) => {
+                    try {
+                        console.log("Selected Place ID:", placeId);
+                        const result = await getOrCreateDestination(placeId);
+                        
+                        // Debugging: Check what the service actually returned
+                        console.log("Service Result:", result); 
+
+                        if (result) {
+                            navigation.navigate('LandingPage', {
+                                // --- THE FIX IS HERE ---
+                                // Access the .id inside the .city object
+                                cityId: result.city.id,       
+                                countryId: result.country.id  
+                                // -----------------------
+                            });
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        alert("Could not load destination.");
+                    }
+                }}
             />
           </View>
         </View>
@@ -150,7 +166,7 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Spacer for FAB */}
-        <View style={{ height: 80 }} />
+        <View style={styles.spacer} />
       </ScrollView>
 
       
@@ -159,3 +175,13 @@ export default function HomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  searchContainer: {
+    width: '100%',
+    zIndex: 100,
+  },
+  spacer: {
+    height: 80,
+  },
+});

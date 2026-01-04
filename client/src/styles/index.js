@@ -7,3 +7,4 @@ export { cards } from "./cards";
 export { forms } from "./forms";
 export { tags } from "./tags";
 export { common } from "./common";
+export { googlePlacesInput } from "./googlePlacesInput";
