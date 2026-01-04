@@ -94,6 +94,41 @@ export const useImagePicker = (options = {}) => {
   }, [config.allowsEditing, config.aspect, config.quality, requestGalleryPermission]);
 
   /**
+   * Pick multiple images from the device's photo library.
+   * Note: Expo ImagePicker does not support editing when selecting multiple.
+   *
+   * @param {Object} opts
+   * @param {number} [opts.selectionLimit=5] - Max number of images to select
+   * @returns {Promise<string[]>} Array of selected image URIs
+   */
+  const pickMultipleFromGallery = useCallback(async ({ selectionLimit = 5 } = {}) => {
+    try {
+      const hasPermission = await requestGalleryPermission();
+      if (!hasPermission) return [];
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit,
+        quality: config.quality,
+      });
+
+      if (result.canceled) return [];
+      const uris = (result.assets || []).map(a => a?.uri).filter(Boolean);
+      if (uris.length) {
+        setImageUri(uris[0]);
+        setError(null);
+      }
+      return uris;
+    } catch (err) {
+      console.error('Error picking multiple images:', err);
+      setError(err);
+      Alert.alert("Error", "Failed to pick images.");
+      return [];
+    }
+  }, [config.quality, requestGalleryPermission]);
+
+  /**
    * Capture an image using the device's camera
    * @returns {Promise<string|null>} The captured image URI or null
    */
@@ -141,6 +176,31 @@ export const useImagePicker = (options = {}) => {
       }
     };
     input.click();
+  }, []);
+
+  /**
+   * Handle web file input (multiple)
+   * @param {Object} opts
+   * @param {number} [opts.selectionLimit=5]
+   * @returns {Promise<string[]>}
+   */
+  const pickMultipleFromWeb = useCallback(({ selectionLimit = 5 } = {}) => {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.multiple = true;
+      input.onchange = (e) => {
+        const files = Array.from(e.target.files || []).slice(0, selectionLimit);
+        const uris = files.map((file) => URL.createObjectURL(file));
+        if (uris.length) {
+          setImageUri(uris[0]);
+          setError(null);
+        }
+        resolve(uris);
+      };
+      input.click();
+    });
   }, []);
 
   /**
@@ -196,8 +256,12 @@ export const useImagePicker = (options = {}) => {
     // Actions
     pickImage,
     pickFromGallery,
+    pickMultipleFromGallery,
     pickFromCamera,
     clearImage,
+
+    // Web multiple
+    pickMultipleFromWeb,
   };
 };
 

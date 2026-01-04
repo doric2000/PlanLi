@@ -99,6 +99,17 @@ export const common = {
 		paddingTop: 50,
 	},
 
+	heroDotsContainer: {
+		position: 'absolute',
+		bottom: 14,
+		left: 0,
+		right: 0,
+		flexDirection: 'row',
+		justifyContent: 'center',
+		alignItems: 'center',
+		gap: 6,
+	},
+
 	noImageHeader: {
 		paddingTop: 50,
 		paddingHorizontal: 16,

@@ -2,6 +2,8 @@ import { Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
+export const FAVORITE_CARD_WIDTH = 400;
+
 export const cards = {
 	// Base card style
 	base: {
@@ -42,6 +44,69 @@ export const cards = {
 		borderWidth: 1,
 		borderColor: "#F3F4F6",
 		overflow: "hidden",
+	},
+
+	// Recommendation image carousel (used by RecommendationCard)
+	recCarouselContainer: {
+		width: '100%',
+		height: 220,
+		backgroundColor: '#F3F4F6',
+	},
+	recCarouselImage: {
+		height: '100%',
+	},
+	recDotsContainer: {
+		position: 'absolute',
+		bottom: 10,
+		left: 0,
+		right: 0,
+		flexDirection: 'row',
+		justifyContent: 'center',
+		alignItems: 'center',
+		gap: 6,
+	},
+	recDot: {
+		width: 6,
+		height: 6,
+		borderRadius: 3,
+		backgroundColor: 'rgba(255,255,255,0.5)',
+	},
+	recDotActive: {
+		backgroundColor: 'rgba(255,255,255,0.95)',
+	},
+
+	// Web-only carousel navigation overlay (click/tap sides)
+	recNavOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
+		flexDirection: 'row',
+	},
+	recNavOverlayRow: {
+		flex: 1,
+		flexDirection: 'row',
+	},
+	recNavZoneLeft: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'flex-start',
+		paddingLeft: 8,
+	},
+	recNavZoneRight: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'flex-end',
+		paddingRight: 8,
+	},
+	recNavButton: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		backgroundColor: 'rgba(0,0,0,0.35)',
+		justifyContent: 'center',
+		alignItems: 'center',
 	},
 
 	// Info card (widget style)
@@ -457,4 +522,3 @@ export const cards = {
 	},
 };
 
-export const FAVORITE_CARD_WIDTH = 400; // or any value that matches the RecommendationCard width

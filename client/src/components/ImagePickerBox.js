@@ -25,6 +25,7 @@ import { colors } from '../styles';
  */
 export const ImagePickerBox = ({
     imageUri,
+    imageUris,
     onPress,
     placeholderText = "Tap to add photo",
     iconName = "camera",
@@ -35,6 +36,9 @@ export const ImagePickerBox = ({
     imageStyle,
     disabled = false,
 }) => {
+    const resolvedImageUri = imageUri || (Array.isArray(imageUris) && imageUris.length ? imageUris[0] : null);
+    const count = Array.isArray(imageUris) ? imageUris.length : (resolvedImageUri ? 1 : 0);
+
     return (
         <TouchableOpacity
             style={[styles.container, { height }, style]}
@@ -42,9 +46,9 @@ export const ImagePickerBox = ({
             disabled={disabled}
             activeOpacity={0.7}
         >
-            {imageUri ? (
+            {resolvedImageUri ? (
                 <Image
-                    source={{ uri: imageUri }}
+                    source={{ uri: resolvedImageUri }}
                     style={[styles.image, imageStyle]}
                     resizeMode="cover"
                 />
@@ -56,6 +60,12 @@ export const ImagePickerBox = ({
                     </Text>
                 </View>
             )}
+
+            {count > 1 ? (
+                <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{count}/5</Text>
+                </View>
+            ) : null}
         </TouchableOpacity>
     );
 };
@@ -82,6 +92,20 @@ const styles = StyleSheet.create({
     placeholderText: {
         marginTop: 10,
         fontSize: 14,
+    },
+    countBadge: {
+        position: 'absolute',
+        right: 10,
+        top: 10,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+    },
+    countText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '700',
     },
 });
 

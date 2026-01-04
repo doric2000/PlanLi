@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Image, Pressable, Alert ,TouchableOpacity , Platform} from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { View, Text, Image, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../hooks/useUserData';
@@ -24,8 +24,20 @@ import FavoriteButton from './FavoriteButton';
  * @param {Function} props.onCommentPress - Callback when comment button is pressed.
  * @param {boolean} [props.showActionBar] - Whether to show the ActionBar (default: true)
  */
-const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true }) => {
+const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true, style }) => {
   const navigation = useNavigation();
+
+  const { width: windowWidth } = useWindowDimensions();
+
+  const images = useMemo(() => (Array.isArray(item.images) ? item.images.filter(Boolean) : []), [item.images]);
+  const [carouselWidth, setCarouselWidth] = useState(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const carouselRef = useRef(null);
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    const first = viewableItems?.[0]?.index;
+    if (typeof first === 'number') setActiveImageIndex(first);
+  }).current;
   
   // Use custom hooks
   const author = useUserData(item.userId);
@@ -49,6 +61,41 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
   const handleCardPress = () => {
     navigation.navigate('RecommendationDetail', { item });
+  };
+
+  const renderCarouselImage = (uri) => {
+    const pageWidth = carouselWidth || windowWidth || 0;
+
+    if (Platform.OS === 'web') {
+      const imgStyle = {
+        width: pageWidth || '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block',
+        backgroundColor: '#F3F4F6',
+      };
+      // Using <img> on web avoids RN-web's XHR image loader CORS restrictions.
+      return <img src={uri} style={imgStyle} alt="" />;
+    }
+
+    return (
+      <Image
+        source={{ uri }}
+        style={[cards.recCarouselImage, { width: pageWidth || '100%' }]}
+        resizeMode="cover"
+      />
+    );
+  };
+
+  const scrollToImageIndex = (nextIndex) => {
+    if (!images.length) return;
+    const clamped = Math.max(0, Math.min(nextIndex, images.length - 1));
+    try {
+      carouselRef.current?.scrollToIndex?.({ index: clamped, animated: true });
+      setActiveImageIndex(clamped);
+    } catch {
+      // ignore
+    }
   };
 
   const formatDate = (timestamp) => {
@@ -106,11 +153,8 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       Alert.alert("שגיאה", "לא הצלחנו למחוק את ההמלצה.");
     }
   };
-
-
-
   return (
-    <Pressable style={cards.recommendation} onPress={handleCardPress}>
+    <View style={[cards.recommendation, style]}>
       {/* Header */}
       <View style={cards.recHeader}>
         <View style={cards.recAuthorInfo}>
@@ -145,13 +189,78 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         </View>
       </View>
 
-      {/* Image */}
-      {item.images && item.images.length > 0 && (
-        <Image source={{ uri: item.images[0] }} style={cards.recImage} resizeMode="cover" />
+      {/* Images (swipe like Instagram) */}
+      {images.length > 0 && (
+        <View
+          style={cards.recCarouselContainer}
+          onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
+        >
+          <FlatList
+            ref={carouselRef}
+            data={images}
+            keyExtractor={(uri, index) => `${item.id || 'rec'}:${index}:${uri}`}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={images.length > 1}
+            nestedScrollEnabled
+            renderItem={({ item: uri }) => (
+              <View style={{ width: carouselWidth || windowWidth || '100%', height: '100%' }}>
+                {renderCarouselImage(uri)}
+              </View>
+            )}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            getItemLayout={(_, index) => {
+              const pageWidth = carouselWidth || windowWidth || 0;
+              return { length: pageWidth, offset: pageWidth * index, index };
+            }}
+          />
+
+          {Platform.OS === 'web' && images.length > 1 && (
+            <View style={cards.recNavOverlay} pointerEvents="box-none">
+              <Pressable
+                style={cards.recNavZoneLeft}
+                onPress={() => scrollToImageIndex(activeImageIndex - 1)}
+              >
+                {activeImageIndex > 0 && (
+                  <View style={cards.recNavButton}>
+                    <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+                  </View>
+                )}
+              </Pressable>
+              <Pressable
+                style={cards.recNavZoneRight}
+                onPress={() => scrollToImageIndex(activeImageIndex + 1)}
+              >
+                {activeImageIndex < images.length - 1 && (
+                  <View style={cards.recNavButton}>
+                    <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+                  </View>
+                )}
+              </Pressable>
+            </View>
+          )}
+
+          {images.length > 1 && (
+            <View style={cards.recDotsContainer} pointerEvents="none">
+              {images.map((_, index) => (
+                <View
+                  key={`${item.id || 'rec'}:dot:${index}`}
+                  style={[
+                    cards.recDot,
+                    index === activeImageIndex && cards.recDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
       )}
 
       {/* Content */}
-      <View style={cards.recContent}>
+      <Pressable onPress={handleCardPress}>
+        <View style={cards.recContent}>
         <View style={cards.recTitleRow}>
           <Text style={cards.recTitle} numberOfLines={1}>{item.title}</Text>
           {item.category && (
@@ -183,14 +292,15 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         <Text style={cards.recDescription} numberOfLines={3}>
           {item.description}
         </Text>
-      </View>
+        </View>
+      </Pressable>
 
       {/* Footer / Action Bar */}
       {showActionBar && (
         <ActionBar item={item} onCommentPress={onCommentPress} />
       )}
 
-    </Pressable>
+    </View>
   );
 };
 

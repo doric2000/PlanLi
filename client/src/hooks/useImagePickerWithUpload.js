@@ -104,6 +104,43 @@ export const useImagePickerWithUpload = (options = {}) => {
     uploader.resetUpload();
   }, [picker, uploader]);
 
+  /**
+   * Pick up to N images (gallery/web) and return their local URIs.
+   * Camera is intentionally not supported for multi-pick.
+   *
+   * @param {Object} opts
+   * @param {number} [opts.limit=5]
+   * @returns {Promise<string[]>}
+   */
+  const pickImages = useCallback(async ({ limit = 5 } = {}) => {
+    // Web: file input supports multiple
+    if (typeof document !== 'undefined' && picker.pickMultipleFromWeb) {
+      return picker.pickMultipleFromWeb({ selectionLimit: limit });
+    }
+    if (picker.pickMultipleFromGallery) {
+      return picker.pickMultipleFromGallery({ selectionLimit: limit });
+    }
+    return [];
+  }, [picker]);
+
+  /**
+   * Upload an array of local URIs and return download URLs.
+   *
+   * @param {string[]} uris
+   * @returns {Promise<string[]>}
+   */
+  const uploadImages = useCallback(async (uris) => {
+    if (!Array.isArray(uris) || uris.length === 0) return [];
+    const limited = uris.slice(0, 5);
+    const results = [];
+    for (const uri of limited) {
+      // eslint-disable-next-line no-await-in-loop
+      const url = await uploader.uploadImage(uri);
+      if (url) results.push(url);
+    }
+    return results;
+  }, [uploader]);
+
   return {
     // Picker state
     imageUri: picker.imageUri,
@@ -130,6 +167,10 @@ export const useImagePickerWithUpload = (options = {}) => {
     captureAndUpload,
     pickImageAndUpload,
     reset,
+
+    // Multi-image helpers
+    pickImages,
+    uploadImages,
   };
 };
 

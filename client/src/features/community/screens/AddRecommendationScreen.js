@@ -58,9 +58,10 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [submitting, setSubmitting] = useState(false);
 
   // --- Image Handling ---
-  const { imageUri, pickImage, uploadImage } = useImagePickerWithUpload({ storagePath: 'recommendations' });
-  const existingImage = isEdit ? (editItem?.images?.[0] || null) : null;
-  const displayImageUri = imageUri || existingImage;
+  const { pickImages, uploadImages } = useImagePickerWithUpload({ storagePath: 'recommendations' });
+  const existingImages = isEdit ? (editItem?.images || []) : [];
+  const [localImageUris, setLocalImageUris] = useState([]);
+  const displayImageUris = localImageUris.length ? localImageUris : existingImages;
 
   // --- Location Handling ---
   const { 
@@ -132,12 +133,11 @@ const handleSubmit = async () => {
     setSubmitting(true);
 
     try {
-      let imageUrl = null;
-      if (imageUri) {
-        imageUrl = await uploadImage(imageUri);
+      let finalImages = isEdit ? (editItem?.images || []) : [];
+      if (localImageUris.length) {
+        const uploaded = await uploadImages(localImageUris.slice(0, 5));
+        finalImages = uploaded;
       }
-      
-      const finalImages = imageUrl ? [imageUrl] : (isEdit ? editItem?.images : []);
 
       // NEW: Find the label corresponding to the selected ID
       const categoryLabel = PARENT_CATEGORIES.find(c => c.id === category)?.label || category;
@@ -191,9 +191,12 @@ const handleSubmit = async () => {
 
         {/* 1. Image Picker */}
         <ImagePickerBox
-          imageUri={displayImageUri}
-          onPress={pickImage}
-          placeholderText="הוסף תמונה"
+          imageUris={displayImageUris}
+          onPress={async () => {
+            const uris = await pickImages({ limit: 5 });
+            if (uris?.length) setLocalImageUris(uris.slice(0, 5));
+          }}
+          placeholderText="הוסף תמונות (עד 5)"
           style={{ marginBottom: spacing.xl }}
         />
 
