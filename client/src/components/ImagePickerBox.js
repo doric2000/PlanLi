@@ -1,112 +1,282 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+  Platform,
+  useWindowDimensions,
+  Pressable,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../styles';
 
 /**
  * Reusable image picker box component.
- * Displays either a selected image or a placeholder with camera icon.
- * 
- * SOLID Principles:
- * - S: Single responsibility - only handles image display/placeholder UI
- * - O: Open for extension via style props and customization options
- * 
- * @param {Object} props
- * @param {string} props.imageUri - URI of the selected image (null shows placeholder)
- * @param {Function} props.onPress - Callback when box is pressed
- * @param {string} props.placeholderText - Text to show in placeholder
- * @param {string} props.iconName - Ionicons icon name (default: "camera")
- * @param {number} props.iconSize - Icon size (default: 40)
- * @param {string} props.iconColor - Icon color (default: "#ccc")
- * @param {number} props.height - Box height (default: 200)
- * @param {Object} props.style - Additional container styles
- * @param {Object} props.imageStyle - Additional image styles
- * @param {boolean} props.disabled - Whether the box is disabled
+ * - Empty: shows placeholder, press to pick.
+ * - Single: shows image preview + edit button.
+ * - Multi: swipeable carousel + dots + count badge + edit button.
+ * - Web: uses <img> for more reliable rendering.
  */
 export const ImagePickerBox = ({
-    imageUri,
-    imageUris,
-    onPress,
-    placeholderText = "Tap to add photo",
-    iconName = "camera",
-    iconSize = 40,
-    iconColor = "#ccc",
-    height = 200,
-    style,
-    imageStyle,
-    disabled = false,
+  imageUri,
+  imageUris,
+  onPress,
+  placeholderText = 'Tap to add photo',
+  iconName = 'camera',
+  iconSize = 40,
+  iconColor = colors.primary,
+  height = 200,
+  style,
+  imageStyle,
+  disabled = false,
 }) => {
-    const resolvedImageUri = imageUri || (Array.isArray(imageUris) && imageUris.length ? imageUris[0] : null);
-    const count = Array.isArray(imageUris) ? imageUris.length : (resolvedImageUri ? 1 : 0);
+  const { width: windowWidth } = useWindowDimensions();
 
-    return (
+  const images = useMemo(() => {
+    if (Array.isArray(imageUris) && imageUris.length) return imageUris.filter(Boolean);
+    return imageUri ? [imageUri].filter(Boolean) : [];
+  }, [imageUri, imageUris]);
+
+  const count = images.length;
+  const [containerWidth, setContainerWidth] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const listRef = useRef(null);
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    const first = viewableItems?.[0]?.index;
+    if (typeof first === 'number') setActiveIndex(first);
+  }).current;
+
+  const pageWidth = containerWidth || windowWidth || 0;
+  const canSwipe = count > 1;
+
+  const scrollToIndex = (nextIndex) => {
+    if (!count) return;
+    const clamped = Math.max(0, Math.min(nextIndex, count - 1));
+    try {
+      listRef.current?.scrollToIndex?.({ index: clamped, animated: true });
+      setActiveIndex(clamped);
+    } catch {
+      // ignore
+    }
+  };
+
+  const renderWebImg = (uri) => (
+    <img
+      src={uri}
+      alt=""
+      style={{
+        width: pageWidth || '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block',
+        backgroundColor: '#F3F4F6',
+      }}
+    />
+  );
+
+  return (
+    <View
+      style={[styles.container, { height }, style]}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+    >
+      {count === 0 ? (
         <TouchableOpacity
-            style={[styles.container, { height }, style]}
+          style={styles.placeholder}
+          onPress={onPress}
+          disabled={disabled}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={iconName} size={iconSize} color={iconColor} />
+          <Text style={styles.placeholderText}>{placeholderText}</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.carouselWrap}>
+          <FlatList
+            ref={listRef}
+            data={images}
+            keyExtractor={(uri, index) => `${index}:${uri}`}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={canSwipe}
+            renderItem={({ item: uri }) => (
+              <View style={{ width: pageWidth || '100%', height: '100%' }}>
+                {Platform.OS === 'web' ? (
+                  renderWebImg(uri)
+                ) : (
+                  <Image
+                    source={{ uri }}
+                    style={[styles.image, imageStyle, { width: pageWidth || '100%' }]}
+                    resizeMode="cover"
+                  />
+                )}
+              </View>
+            )}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            getItemLayout={(_, index) => {
+              const w = pageWidth || 0;
+              return { length: w, offset: w * index, index };
+            }}
+          />
+
+          {Platform.OS === 'web' && count > 1 ? (
+            <View style={styles.navOverlay} pointerEvents="box-none">
+              <Pressable
+                style={styles.navZoneLeft}
+                onPress={() => scrollToIndex(activeIndex - 1)}
+              >
+                {activeIndex > 0 ? (
+                  <View style={styles.navBtn}>
+                    <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+                  </View>
+                ) : null}
+              </Pressable>
+              <Pressable
+                style={styles.navZoneRight}
+                onPress={() => scrollToIndex(activeIndex + 1)}
+              >
+                {activeIndex < count - 1 ? (
+                  <View style={styles.navBtn}>
+                    <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+                  </View>
+                ) : null}
+              </Pressable>
+            </View>
+          ) : null}
+
+          {count > 1 ? (
+            <View style={styles.dots} pointerEvents="none">
+              {images.map((_, i) => (
+                <View
+                  key={`dot:${i}`}
+                  style={[styles.dot, i === activeIndex && styles.dotActive]}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={styles.editBtn}
             onPress={onPress}
             disabled={disabled}
-            activeOpacity={0.7}
-        >
-            {resolvedImageUri ? (
-                <Image
-                    source={{ uri: resolvedImageUri }}
-                    style={[styles.image, imageStyle]}
-                    resizeMode="cover"
-                />
-            ) : (
-                <View style={styles.placeholder}>
-                    <Ionicons name={iconName} size={iconSize} color={iconColor} />
-                    <Text style={[styles.placeholderText, { color: iconColor }]}>
-                        {placeholderText}
-                    </Text>
-                </View>
-            )}
+            activeOpacity={0.8}
+          >
+            <Ionicons name={iconName} size={18} color="#FFFFFF" />
+          </TouchableOpacity>
 
-            {count > 1 ? (
-                <View style={styles.countBadge}>
-                    <Text style={styles.countText}>{count}/5</Text>
-                </View>
-            ) : null}
-        </TouchableOpacity>
-    );
+          {count > 1 ? (
+            <View style={styles.countBadge} pointerEvents="none">
+              <Text style={styles.countText}>{count}/5</Text>
+            </View>
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        width: '100%',
-        backgroundColor: colors.borderLight || '#F1F5F9',
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: colors.border || '#E2E8F0',
-        borderStyle: 'dashed',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    image: {
-        width: '100%',
-        height: '100%',
-    },
-    placeholder: {
-        alignItems: 'center',
-    },
-    placeholderText: {
-        marginTop: 10,
-        fontSize: 14,
-    },
-    countBadge: {
-        position: 'absolute',
-        right: 10,
-        top: 10,
-        backgroundColor: 'rgba(0,0,0,0.55)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    countText: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '700',
-    },
+  container: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.cardBackground || '#FFFFFF',
+  },
+  carouselWrap: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F3F4F6',
+  },
+  image: {
+    height: '100%',
+  },
+  placeholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: colors.textSecondary || '#6B7280',
+  },
+  editBtn: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dots: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  dotActive: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+  },
+  countBadge: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  countText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  navOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+  },
+  navZoneLeft: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 8,
+  },
+  navZoneRight: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 8,
+  },
+  navBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default ImagePickerBox;

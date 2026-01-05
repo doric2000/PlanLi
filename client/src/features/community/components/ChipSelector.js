@@ -10,6 +10,8 @@ const ChipSelector = ({
   multiSelect = false 
 }) => {
 
+  const safeItems = Array.isArray(items) ? items : [];
+
   const isSelected = (item) => {
     if (multiSelect) {
       return Array.isArray(selectedValue) && selectedValue.includes(item);
@@ -26,11 +28,11 @@ const ChipSelector = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipScroll}
       >
-        {items.map((item) => {
+        {safeItems.map((item, index) => {
           const active = isSelected(item);
           return (
             <TouchableOpacity
-              key={item}
+              key={typeof item === 'string' ? item : `${index}`}
               style={[tags.chip, active && tags.chipSelected]} 
               onPress={() => onSelect(item)}
             >
