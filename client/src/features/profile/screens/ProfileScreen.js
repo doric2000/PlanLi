@@ -10,9 +10,11 @@ import {
   Alert,
   TouchableOpacity,
   Text,
+  StyleSheet
 } from 'react-native';
+import { DrawerActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons , Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 
 import appConfig from '../../../../app.json';
@@ -34,7 +36,7 @@ const MENU_ITEMS = [
   { icon: 'help-circle-outline', label: 'Help & Support' },
 ];
 
-const ProfileScreen = ({ navigation }) => {
+const ProfileScreen = ({ navigation , route }) => {
   const { user } = useCurrentUser();
   const uid = user?.uid;
   const [supportOpen, setSupportOpen] = useState(false);
@@ -43,6 +45,29 @@ const ProfileScreen = ({ navigation }) => {
     uid,
     user,
   });
+
+  const styles = StyleSheet.create({
+    menuButton: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      zIndex: 999,
+      elevation: 10, // אנדרואיד
+      padding: 10,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.95)',
+    },
+  });
+
+
+
+
+  useEffect(() => {
+    if (route?.params?.openSupport) {
+      setSupportOpen(true);
+      navigation.setParams({ openSupport: false });
+    }
+  }, [route?.params?.openSupport, navigation]);
 
   const { onPickImage, uploading } = useProfilePhoto({
     uid,
@@ -113,6 +138,13 @@ const ProfileScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={common.container}>
+      <TouchableOpacity
+        style={styles.menuButton}
+        onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="menu" size={22} color={colors.textPrimary} />
+      </TouchableOpacity>
       <ScrollView contentContainerStyle={common.profileScrollContent}>
         <ProfileHeader
           userData={userData}
@@ -125,14 +157,6 @@ const ProfileScreen = ({ navigation }) => {
 
         <ProfileStatsCard stats={stats} />
 
-        <ProfileMenuList items={MENU_ITEMS} onPressItem={handleMenuPress} />
-
-        <TouchableOpacity style={buttons.signOut} onPress={handleSignOut} activeOpacity={0.85}>
-          <MaterialIcons name="logout" size={20} color={colors.error} />
-          <Text style={buttons.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-
-        <Text style={typography.profileVersion}>Version {appConfig.expo.version}</Text>
       </ScrollView>
 
       <SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
