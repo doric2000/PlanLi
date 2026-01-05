@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, common, googlePlacesInput } from '../styles';
@@ -82,12 +82,10 @@ export default function GooglePlacesInput({ onSelect }) {
       {/* Suggestions List */}
       {showList && predictions.length > 0 && (
         <View style={googlePlacesInput.listContainer}>
-          <FlatList
-            data={predictions}
-            keyExtractor={(item) => item.place_id}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
+          <ScrollView keyboardShouldPersistTaps="handled">
+            {predictions.map((item) => (
               <TouchableOpacity
+                key={item.place_id}
                 style={googlePlacesInput.listItem}
                 onPress={() => handleSelect(item)}
               >
@@ -99,8 +97,8 @@ export default function GooglePlacesInput({ onSelect }) {
                 />
                 <Text style={googlePlacesInput.listText}>{item.description}</Text>
               </TouchableOpacity>
-            )}
-          />
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
