@@ -65,7 +65,7 @@ export default function GooglePlacesInput({ onSelect }) {
         />
         <TextInput
           style={[common.homeSearchInput, googlePlacesInput.input]}
-          placeholder="Search for a city..."
+          placeholder="חפש עיר..."
           value={query}
           onChangeText={handleTextChange}
           placeholderTextColor={colors.placeholder}

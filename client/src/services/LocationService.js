@@ -11,7 +11,7 @@ export const searchCities = async (searchText) => {
 
   try {
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(searchText)}&types=(cities)&language=en&key=${GOOGLE_API_KEY}`
+      `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(searchText)}&types=(cities)&language=iw&key=${GOOGLE_API_KEY}`
     );
     const data = await response.json();
     return data.predictions || [];
@@ -48,7 +48,7 @@ export const getOrCreateDestination = async (placeId) => {
   try {
     // A. Fetch from Google
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,address_components,geometry,photos,rating,place_id&key=${GOOGLE_API_KEY}`
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,address_components,geometry,photos,rating,place_id&language=iw&key=${GOOGLE_API_KEY}`
     );
     const data = await response.json();
     const result = data.result;
@@ -76,8 +76,15 @@ export const getOrCreateDestination = async (placeId) => {
     // If no specific city found, use the place name itself (e.g. for "Astra")
     const cityName = cityComp ? cityComp.long_name : result.name;
 
-    // C. FIND OR CREATE COUNTRY (ID = Name)
-    const countryId = countryName; 
+    // C. FIND OR CREATE COUNTRY
+    // Prefer an existing country doc (to avoid creating duplicates) by matching the ISO code.
+    let countryId = countryName;
+    const existingCountryByCodeQ = query(collection(db, 'countries'), where('code', '==', countryCode));
+    const existingCountryByCodeSnap = await getDocs(existingCountryByCodeQ);
+    if (!existingCountryByCodeSnap.empty) {
+      countryId = existingCountryByCodeSnap.docs[0].id;
+    }
+
     const countryDocRef = doc(db, 'countries', countryId);
     const countrySnap = await getDoc(countryDocRef);
 
@@ -90,10 +97,21 @@ export const getOrCreateDestination = async (placeId) => {
         currencyCode: metadata.currencyCode
       });
       console.log(`Created new country: ${countryId}`);
+    } else {
+      // Keep the doc ID stable, but refresh display name in Hebrew.
+      await setDoc(countryDocRef, { name: countryName, code: countryCode }, { merge: true });
     }
 
-    // D. FIND OR CREATE CITY (ID = Name) <--- CHANGED THIS SECTION
-    const cityId = cityName; // The ID is now "Paris" instead of "7f8s..."
+    // D. FIND OR CREATE CITY
+    // Prefer an existing city doc by matching googlePlaceId to avoid duplicates.
+    const citiesRef = collection(db, 'countries', countryId, 'cities');
+    let cityId = cityName;
+    const existingCityQ = query(citiesRef, where('googlePlaceId', '==', result.place_id));
+    const existingCitySnap = await getDocs(existingCityQ);
+    if (!existingCitySnap.empty) {
+      cityId = existingCitySnap.docs[0].id;
+    }
+
     const cityDocRef = doc(db, 'countries', countryId, 'cities', cityId);
     const citySnap = await getDoc(cityDocRef);
 
@@ -118,6 +136,13 @@ export const getOrCreateDestination = async (placeId) => {
           }
       });
       console.log(`Created new city: ${cityId}`);
+    } else {
+      // Refresh display fields in Hebrew; keep existing imageUrl/travelers/rating, etc.
+      await setDoc(cityDocRef, {
+        name: cityName,
+        description: result.formatted_address,
+        googlePlaceId: result.place_id,
+      }, { merge: true });
     }
 
     // E. RETURN FULL OBJECTS
