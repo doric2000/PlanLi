@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  StyleSheet
+  StyleSheet,
+  Image,
+  Pressable,
+  Platform,
 } from 'react-native';
 // Firestore imports
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -60,8 +63,38 @@ export default function AddRecommendationScreen({ navigation , route }) {
   // --- Image Handling ---
   const { pickImages, uploadImages } = useImagePickerWithUpload({ storagePath: 'recommendations' });
   const existingImages = isEdit ? (editItem?.images || []) : [];
-  const [localImageUris, setLocalImageUris] = useState([]);
-  const displayImageUris = localImageUris.length ? localImageUris : existingImages;
+  const [editableImageUris, setEditableImageUris] = useState([]);
+
+  useEffect(() => {
+    if (isEdit) {
+      setEditableImageUris(Array.isArray(existingImages) ? existingImages : []);
+    } else {
+      setEditableImageUris([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, editItem?.id]);
+
+  const handleAddImages = async () => {
+    const uris = await pickImages({ limit: 5 });
+    if (!uris?.length) return;
+
+    setEditableImageUris((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      for (const uri of uris) {
+        if (next.length >= 5) break;
+        if (!next.includes(uri)) next.push(uri);
+      }
+      return next;
+    });
+  };
+
+  const removeImageAt = (index) => {
+    setEditableImageUris((prev) => {
+      const next = Array.isArray(prev) ? [...prev] : [];
+      next.splice(index, 1);
+      return next;
+    });
+  };
 
   // --- Location Handling ---
   const { 
@@ -133,11 +166,14 @@ const handleSubmit = async () => {
     setSubmitting(true);
 
     try {
-      let finalImages = isEdit ? (editItem?.images || []) : [];
-      if (localImageUris.length) {
-        const uploaded = await uploadImages(localImageUris.slice(0, 5));
-        finalImages = uploaded;
-      }
+      // Build final images list: keep existing remote URLs, upload local URIs.
+      const current = Array.isArray(editableImageUris) ? editableImageUris.slice(0, 5) : [];
+      const isRemote = (uri) => typeof uri === 'string' && /^https?:\/\//i.test(uri);
+      const localUris = current.filter((uri) => !isRemote(uri));
+
+      const uploadedLocal = localUris.length ? await uploadImages(localUris) : [];
+      const uploadedQueue = [...uploadedLocal];
+      const finalImages = current.map((uri) => (isRemote(uri) ? uri : uploadedQueue.shift())).filter(Boolean);
 
       // NEW: Find the label corresponding to the selected ID
       const categoryLabel = PARENT_CATEGORIES.find(c => c.id === category)?.label || category;
@@ -191,14 +227,46 @@ const handleSubmit = async () => {
 
         {/* 1. Image Picker */}
         <ImagePickerBox
-          imageUris={displayImageUris}
-          onPress={async () => {
-            const uris = await pickImages({ limit: 5 });
-            if (uris?.length) setLocalImageUris(uris.slice(0, 5));
-          }}
+          imageUris={editableImageUris}
+          onPress={handleAddImages}
           placeholderText="הוסף תמונות (עד 5)"
           style={{ marginBottom: spacing.xl }}
         />
+
+        {editableImageUris.length > 0 ? (
+          <View style={styles.imagesRow}
+          >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesScroll}>
+              {editableImageUris.map((uri, index) => (
+                <View key={`${uri}:${index}`} style={styles.thumbWrap}>
+                  {Platform.OS === 'web' ? (
+                    <img
+                      src={uri}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        display: 'block',
+                        backgroundColor: '#F3F4F6',
+                      }}
+                    />
+                  ) : (
+                    <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+                  )}
+                  <Pressable onPress={() => removeImageAt(index)} style={styles.thumbRemove} hitSlop={10}>
+                    <Text style={styles.thumbRemoveText}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+            {editableImageUris.length < 5 ? (
+              <TouchableOpacity onPress={handleAddImages} style={styles.addMoreBtn}>
+                <Text style={styles.addMoreText}>הוסף עוד</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* 2. Title Input */}
         <LabeledInput
@@ -251,7 +319,7 @@ const handleSubmit = async () => {
         {category ? (
           <ChipSelector
             label="תגיות"
-            items={TAGS_BY_CATEGORY[category]}
+            items={TAGS_BY_CATEGORY[category] || []}
             selectedValue={selectedTags}
             onSelect={toggleTag}
             multiSelect={true}
@@ -304,4 +372,48 @@ const handleSubmit = async () => {
 
 const styles = StyleSheet.create({
   scrollContent: { padding: spacing.lg, paddingBottom: 40 },
+  imagesRow: {
+    marginTop: -spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  imagesScroll: {
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  thumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginLeft: spacing.sm,
+  },
+  thumb: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbRemove: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbRemoveText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
+  addMoreBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: spacing.sm,
+  },
+  addMoreText: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
 });
