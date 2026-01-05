@@ -12,6 +12,8 @@ import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
+import RightDrawerNavigator from "./src/navigation/RightDrawerNavigator";
+
 
 const Stack = createStackNavigator();
 
@@ -39,7 +41,7 @@ export default function App() {
 				>
 					<Stack.Screen name='Login' component={LoginScreen} />
 					<Stack.Screen name='Register' component={RegisterScreen} />
-					<Stack.Screen name='Main' component={TabNavigator} />
+					<Stack.Screen name='Main' component={RightDrawerNavigator} />
 					<Stack.Screen name="EditProfile" component={EditProfileScreen} />
 					<Stack.Screen name='Route' component={RoutesScreen} />
 					<Stack.Screen

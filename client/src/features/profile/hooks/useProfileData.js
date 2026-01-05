@@ -15,7 +15,6 @@ import { calculateCredibilityScore, getCredibilityLevelLabel } from '../utils/cr
 const DEFAULT_STATS = {
   trips: 0,
   reviews: 0,
-  photos: 0,
   likesReceived: 0,
   credibilityScore: 0,
   credibilityLabel: 'Level 1 Traveler',
@@ -77,7 +76,6 @@ export function useProfileData({ uid, user }) {
       }
 
       let reviewsCount = 0;
-      let photosCount = 0;
       let likesReceived = 0;
 
       try {
@@ -89,7 +87,6 @@ export function useProfileData({ uid, user }) {
         recSnap.forEach((d) => {
           const r = d.data();
           const imgs = Array.isArray(r.images) ? r.images : [];
-          photosCount += imgs.length;
 
           const likes = Number(r.likes || 0);
           likesReceived += likes;
@@ -107,7 +104,6 @@ export function useProfileData({ uid, user }) {
       setStats({
         trips: tripsCount,
         reviews: reviewsCount,
-        photos: photosCount,
         likesReceived,
         credibilityScore,
         credibilityLabel,
