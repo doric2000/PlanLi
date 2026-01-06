@@ -1,21 +1,51 @@
 import { collection, query, where, getDocs, addDoc, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { Platform } from 'react-native';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+const PLACES_PROXY_BASE_URL = process.env.EXPO_PUBLIC_PLACES_PROXY_BASE_URL || 'http://localhost:5000';
+
+const fetchPlacesAutocomplete = async (searchText, { signal } = {}) => {
+  // On web, call our own server to avoid browser CORS restrictions.
+  if (Platform.OS === 'web') {
+    const url = `${PLACES_PROXY_BASE_URL}/api/places/autocomplete?input=${encodeURIComponent(searchText)}`;
+    const response = await fetch(url, { signal });
+    return response.json();
+  }
+
+  // Native can call Google directly (no browser CORS).
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(searchText)}&types=(cities)&language=iw&key=${GOOGLE_API_KEY}`,
+    { signal }
+  );
+  return response.json();
+};
+
+const fetchPlacesDetails = async (placeId) => {
+  if (Platform.OS === 'web') {
+    const url = `${PLACES_PROXY_BASE_URL}/api/places/details?placeId=${encodeURIComponent(placeId)}`;
+    const response = await fetch(url);
+    return response.json();
+  }
+
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,address_components,geometry,photos,rating,place_id&language=iw&key=${GOOGLE_API_KEY}`
+  );
+  return response.json();
+};
 
 /**
  * 1. AUTOCOMPLETE SEARCH
  */
-export const searchCities = async (searchText) => {
+export const searchCities = async (searchText, { signal } = {}) => {
   if (!searchText || searchText.length < 2) return [];
 
   try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(searchText)}&types=(cities)&language=iw&key=${GOOGLE_API_KEY}`
-    );
-    const data = await response.json();
-    return data.predictions || [];
+    const data = await fetchPlacesAutocomplete(searchText, { signal });
+    return data?.predictions || [];
   } catch (error) {
+    // Abort is expected when user keeps typing.
+    if (error?.name === 'AbortError') return [];
     console.error("Error fetching city predictions:", error);
     return [];
   }
@@ -28,8 +58,10 @@ const fetchCountryMetadata = async (countryName) => {
   try {
     const response = await fetch(`https://restcountries.com/v3.1/name/${countryName}?fullText=true`);
     const data = await response.json();
-    const country = data[0];
-    if (!country) return null;
+    const country = Array.isArray(data) ? data[0] : null;
+    if (!country) {
+      return { currencyCode: "USD", region: "Global" };
+    }
     
     return { 
         currencyCode: country.currencies ? Object.keys(country.currencies)[0] : "USD",
@@ -47,10 +79,7 @@ const fetchCountryMetadata = async (countryName) => {
 export const getOrCreateDestination = async (placeId) => {
   try {
     // A. Fetch from Google
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,address_components,geometry,photos,rating,place_id&language=iw&key=${GOOGLE_API_KEY}`
-    );
-    const data = await response.json();
+    const data = await fetchPlacesDetails(placeId);
     const result = data.result;
     
     if (!result) throw new Error("Google Places API returned no result.");
@@ -89,7 +118,7 @@ export const getOrCreateDestination = async (placeId) => {
     const countrySnap = await getDoc(countryDocRef);
 
     if (!countrySnap.exists()) {
-      const metadata = await fetchCountryMetadata(countryName);
+      const metadata = (await fetchCountryMetadata(countryName)) || { currencyCode: 'USD', region: 'Global' };
       await setDoc(countryDocRef, {
         name: countryName,
         code: countryCode,

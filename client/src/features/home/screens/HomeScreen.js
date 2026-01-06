@@ -16,6 +16,7 @@ import { db } from '../../../config/firebase';
 import { colors, spacing, typography, buttons, shadows, common, cards } from '../../../styles';
 import GooglePlacesInput from '../../../components/GooglePlacesInput'; 
 import { getOrCreateDestination } from '../../../services/LocationService';
+import { USE_DEVELOPER_DESTINATION_SEARCH } from '../../../constants/Constants';
 /**
  * Landing screen for the application.
  * Displays trending destinations, popular places, and a community feed.
@@ -28,6 +29,8 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [useGoogleFallback, setUseGoogleFallback] = useState(false);
   
   // Fetch popular destinations
   const fetchDestinations = async () => {
@@ -78,11 +81,32 @@ export default function HomeScreen({ navigation }) {
     if (!q) return true; // No search -> show all
 
     const name = (city.name || '').toLowerCase();
-    const country = (city.countryId || '').toLowerCase();
+    // `description` is typically the formatted_address from Google (often includes the country name).
+    const description = (city.description || '').toLowerCase();
+    const countryId = (city.countryId || '').toLowerCase();
 
     // Search by city name or country name
-    return name.includes(q) || country.includes(q);
+    return name.includes(q) || description.includes(q) || countryId.includes(q);
   });
+
+  const handleGoogleSelect = async (placeId) => {
+    try {
+      console.log("Selected Place ID:", placeId);
+      const result = await getOrCreateDestination(placeId);
+      console.log("Service Result:", result);
+
+      if (result) {
+        setUseGoogleFallback(false);
+        navigation.navigate('LandingPage', {
+          cityId: result.city.id,
+          countryId: result.country.id,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Could not load destination.");
+    }
+  };
 
   return (
     <SafeAreaView style={common.container}>
@@ -101,30 +125,24 @@ export default function HomeScreen({ navigation }) {
         <View style={common.homeHeader}>
           <Text style={common.homeHeaderTitle}>יאלללה, לאן טסים?</Text>
           <View style={styles.searchContainer}>
-            <GooglePlacesInput 
-                onSelect={async (placeId) => {
-                    try {
-                        console.log("Selected Place ID:", placeId);
-                        const result = await getOrCreateDestination(placeId);
-                        
-                        // Debugging: Check what the service actually returned
-                        console.log("Service Result:", result); 
-
-                        if (result) {
-                            navigation.navigate('LandingPage', {
-                                // --- THE FIX IS HERE ---
-                                // Access the .id inside the .city object
-                                cityId: result.city.id,       
-                                countryId: result.country.id  
-                                // -----------------------
-                            });
-                        }
-                    } catch (error) {
-                        console.error(error);
-                        alert("Could not load destination.");
-                    }
+            {USE_DEVELOPER_DESTINATION_SEARCH && !useGoogleFallback ? (
+              <GooglePlacesInput
+                mode="filter"
+                value={searchQuery}
+                onChangeValue={setSearchQuery}
+                hasLocalResults={filteredDestinations.length > 0}
+                onRequestGoogleSearch={(q) => {
+                  setSearchQuery(q);
+                  setUseGoogleFallback(true);
                 }}
-            />
+              />
+            ) : (
+              <GooglePlacesInput
+                mode="google"
+                seedQuery={USE_DEVELOPER_DESTINATION_SEARCH ? searchQuery : undefined}
+                onSelect={handleGoogleSelect}
+              />
+            )}
           </View>
         </View>
 
@@ -179,7 +197,8 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   searchContainer: {
     width: '100%',
-    zIndex: 100,
+    position: 'relative',
+    zIndex: 10000,
   },
   spacer: {
     height: 80,

@@ -7,7 +7,8 @@ const SEARCH_BAR_HEIGHT = 30;
 
 export const googlePlacesInput = StyleSheet.create({
 	container: {
-		zIndex: 100,
+		position: 'relative',
+		zIndex: 10000,
 		width: '100%',
 	},
 	inputWrapper: {
@@ -38,12 +39,26 @@ export const googlePlacesInput = StyleSheet.create({
 		top: SEARCH_BAR_HEIGHT + spacing.sm,
 		left: 0,
 		right: 0,
+		zIndex: 10001,
+		elevation: 10001,
 		backgroundColor: colors.white,
 		borderRadius: spacing.radiusSmall,
 		borderWidth: 1,
 		borderColor: colors.borderLight,
 		...shadows.small,
 		maxHeight: 200,
+	},
+	dropdownStatusRow: {
+		flexDirection: 'row-reverse',
+		alignItems: 'center',
+		justifyContent: 'center',
+		padding: spacing.md,
+		gap: spacing.sm,
+	},
+	dropdownStatusText: {
+		fontSize: 14,
+		color: colors.textSecondary,
+		textAlign: 'right',
 	},
 	listItem: {
 		flexDirection: 'row',
@@ -58,5 +73,15 @@ export const googlePlacesInput = StyleSheet.create({
 	listText: {
 		fontSize: 14,
 		color: colors.textPrimary,
+	},
+	fallbackContainer: {
+		marginTop: spacing.sm,
+		alignItems: 'flex-end',
+	},
+	fallbackButton: {
+		alignSelf: 'flex-end',
+	},
+	fallbackButtonText: {
+		textAlign: 'center',
 	},
 });
