@@ -101,12 +101,16 @@ export const cards = {
 		paddingRight: 8,
 	},
 	recNavButton: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		backgroundColor: 'rgba(0,0,0,0.35)',
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		backgroundColor: 'rgba(0,0,0,0.65)',
 		justifyContent: 'center',
 		alignItems: 'center',
+		boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+		borderWidth: 2,
+		borderColor: '#fff',
+		opacity: 1,
 	},
 
 	// Info card (widget style)
