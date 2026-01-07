@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { tags, colors } from '../../../styles'; 
+import { tags, colors } from '../../../styles';
 
-const ChipSelector = ({ 
-  label, 
-  items, 
-  selectedValue, 
-  onSelect, 
-  multiSelect = false 
+const ChipSelector = ({
+  label,
+  items,
+  selectedValue,
+  onSelect,
+  multiSelect = false
 }) => {
 
   const safeItems = Array.isArray(items) ? items : []; 
@@ -23,19 +23,19 @@ const ChipSelector = ({
   return (
     <View style={styles.inputWrapper}>
       {label && <Text style={styles.label}>{label}</Text>}
-      
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipScroll}
       >
-        {safeItems.map((item, index) => {
+        {safeItems.map((item) => {
           const active = isSelected(item);
           return (
             <TouchableOpacity
-              key={typeof item === 'string' ? item : `${index}`}
-              style={[tags.chip, active && tags.chipSelected]} 
-              onPress={() => onSelect(item)}
+              key={String(item)}
+              style={[tags.chip, active && tags.chipSelected]}
+              onPress={() => safeOnSelect(item)}
             >
               <Text style={[tags.chipText, active && tags.chipTextSelected]}>
                 {item}
@@ -51,14 +51,13 @@ const ChipSelector = ({
 const styles = StyleSheet.create({
   inputWrapper: {
     marginBottom: 20,
-
   },
   label: {
     textAlign: "right",
     marginBottom: 8,
     fontWeight: 'bold',
     fontSize: 14,
-    color: colors.textPrimary || '#333', 
+    color: colors.textPrimary || '#333',
   },
   chipScroll: {
     flexDirection: 'row-reverse',
