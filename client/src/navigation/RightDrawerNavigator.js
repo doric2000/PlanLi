@@ -9,6 +9,7 @@ import TabNavigator from './TabNavigator';
 import ProfileMenuList from '../features/profile/components/ProfileMenuList';
 import { auth } from '../config/firebase';
 import { buttons, colors, typography, common } from '../styles';
+import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 
 const Drawer = createDrawerNavigator();
 
@@ -21,6 +22,7 @@ const MENU_ITEMS = [
 
 function CustomDrawerContent(props) {
   const { navigation } = props;
+  const unreadCount = useUnreadCount();
 
   const rootStackNav = navigation.getParent?.(); // זה ה-Stack הראשי (App.js)
 
@@ -38,6 +40,12 @@ function CustomDrawerContent(props) {
       if (label === 'Edit Profile') {
         navigation.closeDrawer?.();
         rootStackNav?.navigate?.('EditProfile');
+        return;
+      }
+
+      if (label === 'Notifications') {
+        navigation.closeDrawer?.();
+        rootStackNav?.navigate?.('Notifications');
         return;
       }
 
@@ -72,7 +80,11 @@ function CustomDrawerContent(props) {
       <View style={{ padding: 16 }}>
         <Text style={[typography.sectionTitle, { marginBottom: 12 }]}>Menu</Text>
 
-        <ProfileMenuList items={MENU_ITEMS} onPressItem={handleMenuPress} />
+        <ProfileMenuList 
+          items={MENU_ITEMS} 
+          onPressItem={handleMenuPress} 
+          notificationBadge={unreadCount}
+        />
 
         <View style={{ flex: 1 }} />
 

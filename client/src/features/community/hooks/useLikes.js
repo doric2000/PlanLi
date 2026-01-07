@@ -5,8 +5,11 @@ import {
 	increment,
 	arrayUnion,
 	arrayRemove,
+	getDoc,
 } from "firebase/firestore";
 import { db, auth } from "../../../config/firebase";
+import { notifyLikeEvent } from "../../notifications/services/NotificationObserver";
+import { PostType } from "../../notifications/models/NotificationModel";
 
 /**
  * Custom hook to handle like functionality for posts.
@@ -54,6 +57,33 @@ export const useLikes = (
 					likes: increment(1),
 					likedBy: arrayUnion(currentUserId),
 				});
+
+				// Trigger notification after successful like
+				console.log('Attempting to trigger like notification for itemId:', itemId);
+				try {
+					// Fetch post data to get owner and title
+					const postSnap = await getDoc(docRef);
+					if (postSnap.exists()) {
+						const postData = postSnap.data();
+						const currentUserDoc = await getDoc(doc(db, 'users', currentUserId));
+						const currentUserData = currentUserDoc.exists() ? currentUserDoc.data() : {};
+
+						// Trigger notification observer
+						await notifyLikeEvent({
+							postId: itemId,
+							postTitle: postData.name || postData.title || 'Untitled Post',
+							postType: collectionName === 'routes' ? PostType.ROUTE : PostType.RECOMMENDATION,
+							postOwnerId: postData.userId,
+							actorId: currentUserId,
+							actorName: currentUserData.displayName || 'Anonymous',
+							actorAvatar: currentUserData.photoURL || null,
+							currentLikeCount: newLikeCount,
+						});
+					}
+				} catch (notificationError) {
+					console.error('Error sending like notification:', notificationError);
+					// Don't fail the like operation if notification fails
+				}
 			} else {
 				await updateDoc(docRef, {
 					likes: increment(-1),
