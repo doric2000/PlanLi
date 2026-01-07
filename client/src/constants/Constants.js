@@ -238,8 +238,9 @@ export const PARENT_CATEGORIES = [
   { id: 'nature', label: 'טבע ומסלולים', icon: 'landscape' },
   { id: 'attractions', label: 'אטרקציות', icon: 'local-activity' },
   { id: 'stay', label: 'לינה', icon: 'bed' },
-  { id: 'transportation', label: 'תחבורה', icon: 'directions-bus' }, // קטגוריה חדשה
-  { id: 'logistics', label: 'לוגיסטיקה', icon: 'info' }, // הופרד
+  { id: 'transportation', label: 'תחבורה', icon: 'directions-bus' },
+  { id: 'logistics', label: 'לוגיסטיקה', icon: 'info' },
+  { id: 'services', label: 'שירותים ואנשי מקצוע', icon: 'handyman' },
 ];
 
 export const TAGS_BY_CATEGORY = {
@@ -267,7 +268,15 @@ export const TAGS_BY_CATEGORY = {
   logistics: [ // תגיות הלוגיסטיקה בלבד
     "סים קארד", "החלפת כספים", "טיפים מקומיים", 
     "מדריכי טיולים", "סוכני טיולים", "סוכני טיסות", "השכרת ציוד"
+  ],
+  services: [ // התגיות החדשות שביקשת
+    "מספרה / ספר", "מכון יופי / בניית ציפורניים", "קוסמטיקאית", "מכון הסרת שיער",
+    "תופר / מתפרה", "סנדלר", "שען", "מעבדת סלולר ומחשבים",
+    "מכבסה", "ניקוי יבש",
+    "בית מרקחת", "אופטיקה", "עיסוי / ספא",
+    "דפוס וצילום מסמכים", "חנות לציוד משרדי"
   ]
+
 };
 
 // --- ROUTE CATEGORIES (For RoutesFilterModal) ---
