@@ -21,9 +21,15 @@ export default function GooglePlacesInput({
   hasLocalResults,
   onRequestGoogleSearch,
   seedQuery,
+  localResults,
+  onSelectLocal,
+  localResultsLoading = false,
+  googleFallbackDelayMs = 2000,
 }) {
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
+
+  const normalizedLocalResults = Array.isArray(localResults) ? localResults : [];
 
   const [query, setQuery] = useState(value ?? '');
   const [predictions, setPredictions] = useState([]);
@@ -31,6 +37,13 @@ export default function GooglePlacesInput({
   const [loading, setLoading] = useState(false);
 
   const [settledQuery, setSettledQuery] = useState('');
+
+  // In local-first mode, we only hit Google if:
+  // - user stopped typing for googleFallbackDelayMs
+  // - query is long enough
+  // - no local matches
+  const googleFallbackTimerRef = useRef(null);
+  const [googleTriggerQuery, setGoogleTriggerQuery] = useState('');
 
   // Aggressive call reduction:
   // - Debounce (wait for user to pause typing)
@@ -49,6 +62,7 @@ export default function GooglePlacesInput({
   const MIN_QUERY_LENGTH = 3;
   const DEBOUNCE_MS = 650;
   const COOLDOWN_MS = 1200;
+  const LOCAL_MIN_QUERY_LENGTH = 2;
 
   // Keep internal query in sync when controlled from above.
   useEffect(() => {
@@ -104,6 +118,39 @@ export default function GooglePlacesInput({
     };
   }, [isGoogleMode, query]);
 
+  // Local-first: automatically enable Google fallback only after user stops typing for a while
+  // and there are no local matches.
+  useEffect(() => {
+    const text = query.trim();
+
+    if (googleFallbackTimerRef.current) {
+      clearTimeout(googleFallbackTimerRef.current);
+      googleFallbackTimerRef.current = null;
+    }
+
+    setGoogleTriggerQuery('');
+    if (abortRef.current) abortRef.current.abort();
+    setPredictions([]);
+    setLoading(false);
+
+    if (!showList) return;
+    if (text.length < MIN_QUERY_LENGTH) return;
+    if (localResultsLoading) return;
+    if (normalizedLocalResults.length > 0) return;
+    if (typeof onSelect !== 'function') return;
+
+    googleFallbackTimerRef.current = setTimeout(() => {
+      setGoogleTriggerQuery(text);
+    }, googleFallbackDelayMs);
+
+    return () => {
+      if (googleFallbackTimerRef.current) {
+        clearTimeout(googleFallbackTimerRef.current);
+        googleFallbackTimerRef.current = null;
+      }
+    };
+  }, [query, showList, normalizedLocalResults.length, localResultsLoading, googleFallbackDelayMs, onSelect]);
+
   useEffect(() => {
     if (!isGoogleMode) {
       setLoading(false);
@@ -111,7 +158,7 @@ export default function GooglePlacesInput({
       return;
     }
 
-    const text = query.trim();
+    const text = googleTriggerQuery.trim();
 
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
@@ -158,9 +205,17 @@ export default function GooglePlacesInput({
         setLoading(false);
       }
     }, delay);
-  }, [isGoogleMode, query, showList]);
+  }, [isGoogleMode, googleTriggerQuery, showList]);
 
-  const showDropdown = isGoogleMode && showList && query.trim().length >= MIN_QUERY_LENGTH;
+  const shouldShowAnyDropdown =
+    showList &&
+    query.trim().length >= (
+      localResultsLoading
+        ? LOCAL_MIN_QUERY_LENGTH
+        : (normalizedLocalResults.length > 0 ? LOCAL_MIN_QUERY_LENGTH : MIN_QUERY_LENGTH)
+    );
+
+  const showDropdown = isGoogleMode && shouldShowAnyDropdown;
 
   const shouldShowGoogleFallbackButton =
     !isGoogleMode &&
@@ -194,6 +249,19 @@ export default function GooglePlacesInput({
     }
     setShowList(false);
     onSelect(place.place_id); // Pass the ID back to HomeScreen
+  };
+
+  const handleSelectLocal = (city) => {
+    const label = city?.name || city?.description || '';
+    if (isControlled) {
+      onChangeValue(label);
+    } else {
+      setQuery(label);
+    }
+    setShowList(false);
+    if (typeof onSelectLocal === 'function') {
+      onSelectLocal(city);
+    }
   };
 
   return (
@@ -238,9 +306,41 @@ export default function GooglePlacesInput({
       )}
 
       {/* Suggestions List */}
-      {Platform.OS !== 'web' && showDropdown && (
+      {Platform.OS !== 'web' && shouldShowAnyDropdown && (
         <View style={googlePlacesInput.listContainer}>
-          {loading ? (
+          {normalizedLocalResults.length > 0 ? (
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {normalizedLocalResults.map((city) => (
+                <TouchableOpacity
+                  key={`${city.countryId || 'country'}:${city.id}`}
+                  style={googlePlacesInput.listItem}
+                  onPress={() => handleSelectLocal(city)}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                    style={googlePlacesInput.locationIcon}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={googlePlacesInput.mainText} numberOfLines={1}>
+                      {city.name}
+                    </Text>
+                    {!!city.description && (
+                      <Text style={googlePlacesInput.subText} numberOfLines={1}>
+                        {city.description}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : localResultsLoading ? (
+            <View style={googlePlacesInput.dropdownStatusRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
+            </View>
+          ) : loading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
@@ -287,7 +387,39 @@ export default function GooglePlacesInput({
               },
             ]}
           >
-            {loading ? (
+            {normalizedLocalResults.length > 0 ? (
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {normalizedLocalResults.map((city) => (
+                  <TouchableOpacity
+                    key={`${city.countryId || 'country'}:${city.id}`}
+                    style={googlePlacesInput.listItem}
+                    onPress={() => handleSelectLocal(city)}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={googlePlacesInput.locationIcon}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={googlePlacesInput.mainText} numberOfLines={1}>
+                        {city.name}
+                      </Text>
+                      {!!city.description && (
+                        <Text style={googlePlacesInput.subText} numberOfLines={1}>
+                          {city.description}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : localResultsLoading ? (
+              <View style={googlePlacesInput.dropdownStatusRow}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
+              </View>
+            ) : loading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>

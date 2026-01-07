@@ -16,7 +16,6 @@ import { db } from '../../../config/firebase';
 import { colors, spacing, typography, buttons, shadows, common, cards } from '../../../styles';
 import GooglePlacesInput from '../../../components/GooglePlacesInput'; 
 import { getOrCreateDestination } from '../../../services/LocationService';
-import { USE_DEVELOPER_DESTINATION_SEARCH } from '../../../constants/Constants';
 /**
  * Landing screen for the application.
  * Displays trending destinations, popular places, and a community feed.
@@ -26,11 +25,11 @@ import { USE_DEVELOPER_DESTINATION_SEARCH } from '../../../constants/Constants';
 export default function HomeScreen({ navigation }) {
   const [recommendations, setRecommendations] = useState([]);
   const [destinations, setDestinations] = useState([]); // כאן נשמור את הערים
+  const [allDestinationsForSearch, setAllDestinationsForSearch] = useState([]);
+  const [hasLoadedAllDestinationsForSearch, setHasLoadedAllDestinationsForSearch] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  const [useGoogleFallback, setUseGoogleFallback] = useState(false);
   
   // Fetch popular destinations
   const fetchDestinations = async () => {
@@ -58,15 +57,52 @@ export default function HomeScreen({ navigation }) {
       setRefreshing(false);
     }
   };
+
+  const fetchAllDestinationsForSearch = async () => {
+    try {
+      // Only used for dev-mode local search (cached once) so we can search across ALL saved cities,
+      // not just the 10 displayed on the Home screen.
+      const citiesQuery = query(collectionGroup(db, 'cities'));
+      const querySnapshot = await getDocs(citiesQuery);
+
+      const citiesList = querySnapshot.docs.map(doc => {
+        const parentCountry = doc.ref.parent.parent;
+        const countryId = parentCountry ? parentCountry.id : 'Unknown';
+
+        return {
+          id: doc.id,
+          countryId: countryId,
+          ...doc.data()
+        };
+      });
+
+      setAllDestinationsForSearch(citiesList);
+      setHasLoadedAllDestinationsForSearch(true);
+    } catch (error) {
+      console.error('Error fetching all destinations for search:', error);
+    }
+  };
   
   // Fetch on mount
   useEffect(() => {
     fetchDestinations();
   }, []);
 
+  // Local-first autocomplete should cover all saved cities, not only the "popular" 10.
+  // We fetch once and cache it to avoid repeated large reads on every keystroke.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    if (hasLoadedAllDestinationsForSearch) return;
+
+    fetchAllDestinationsForSearch();
+  }, [searchQuery, hasLoadedAllDestinationsForSearch]);
+
 
   const onRefresh = () => {
     setRefreshing(true);
+    setHasLoadedAllDestinationsForSearch(false);
+    setAllDestinationsForSearch([]);
     fetchDestinations();
   };
 
@@ -76,7 +112,11 @@ export default function HomeScreen({ navigation }) {
     </View>
   );
 
-  const filteredDestinations = destinations.filter((city) => {
+  const searchableDestinations = searchQuery.trim()
+    ? (hasLoadedAllDestinationsForSearch ? allDestinationsForSearch : destinations)
+    : destinations;
+
+  const filteredDestinations = searchableDestinations.filter((city) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true; // No search -> show all
 
@@ -89,6 +129,12 @@ export default function HomeScreen({ navigation }) {
     return name.includes(q) || description.includes(q) || countryId.includes(q);
   });
 
+  const localAutocompleteResults = searchQuery.trim()
+    ? filteredDestinations.slice(0, 20)
+    : [];
+
+  const localResultsLoading = searchQuery.trim().length >= 2 && !hasLoadedAllDestinationsForSearch;
+
   const handleGoogleSelect = async (placeId) => {
     try {
       console.log("Selected Place ID:", placeId);
@@ -96,7 +142,6 @@ export default function HomeScreen({ navigation }) {
       console.log("Service Result:", result);
 
       if (result) {
-        setUseGoogleFallback(false);
         navigation.navigate('LandingPage', {
           cityId: result.city.id,
           countryId: result.country.id,
@@ -125,24 +170,22 @@ export default function HomeScreen({ navigation }) {
         <View style={common.homeHeader}>
           <Text style={common.homeHeaderTitle}>יאלללה, לאן טסים?</Text>
           <View style={styles.searchContainer}>
-            {USE_DEVELOPER_DESTINATION_SEARCH && !useGoogleFallback ? (
-              <GooglePlacesInput
-                mode="filter"
-                value={searchQuery}
-                onChangeValue={setSearchQuery}
-                hasLocalResults={filteredDestinations.length > 0}
-                onRequestGoogleSearch={(q) => {
-                  setSearchQuery(q);
-                  setUseGoogleFallback(true);
-                }}
-              />
-            ) : (
-              <GooglePlacesInput
-                mode="google"
-                seedQuery={USE_DEVELOPER_DESTINATION_SEARCH ? searchQuery : undefined}
-                onSelect={handleGoogleSelect}
-              />
-            )}
+            <GooglePlacesInput
+              mode="google"
+              value={searchQuery}
+              onChangeValue={setSearchQuery}
+              localResults={localAutocompleteResults}
+              localResultsLoading={localResultsLoading}
+              onSelectLocal={(city) => {
+                if (!city?.id || !city?.countryId) return;
+                navigation.navigate('LandingPage', {
+                  cityId: city.id,
+                  countryId: city.countryId,
+                });
+              }}
+              onSelect={handleGoogleSelect}
+              googleFallbackDelayMs={2000}
+            />
           </View>
         </View>
 
