@@ -314,4 +314,3 @@ export const PRICE_TAGS = ["חינמי", "₪", "₪₪", "₪₪₪", "₪₪�
 // --- Destination search mode ---
 // true  -> Developer mode: local filter + button to search Google when no local results
 // false -> Normal mode: Google Places autocomplete
-export const USE_DEVELOPER_DESTINATION_SEARCH = true;
