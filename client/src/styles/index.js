@@ -8,3 +8,4 @@ export { forms } from "./forms";
 export { tags } from "./tags";
 export { common } from "./common";
 export { googlePlacesInput } from "./googlePlacesInput";
+export { notifications } from "./notifications";

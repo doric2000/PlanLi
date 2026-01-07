@@ -7,12 +7,12 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../../../components/Avatar';
 import { formatNotificationMessage } from '../models/NotificationModel';
 import { formatNotificationTime } from '../../../utils/formatNotificationTime';
-import { colors, spacing, typography, shadows } from '../../../styles';
+import { colors, notifications } from '../../../styles';
 import { NotificationType, PostType } from '../models/NotificationModel';
 
 export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
@@ -56,130 +56,30 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
 
   return (
     <TouchableOpacity
-      style={[styles.container, !isRead && styles.unreadContainer]}
+      style={[notifications.cardContainer, !isRead && notifications.cardUnread]}
       onPress={handlePress}
       activeOpacity={0.7}
     >
-      {!isRead && <View style={styles.unreadDot} />}
-      <View style={styles.content}>
-        <View style={styles.header}>
+      {!isRead && <View style={notifications.cardUnreadDot} />}
+      <View style={notifications.cardContent}>
+        <View style={notifications.cardHeader}>
           <Avatar photoURL={actorAvatar} displayName={actorName} size={44} />
-          <View style={styles.typeIconContainer}>{getTypeIcon()}</View>
+          <View style={notifications.cardTypeIconContainer}>{getTypeIcon()}</View>
         </View>
-        <View style={styles.body}>
-          <Text style={styles.message} numberOfLines={2}>{message}</Text>
-          <Text style={styles.postTitle} numberOfLines={1}>"{postTitle}"</Text>
-          <View style={styles.footer}>
-            <View style={styles.postTypeBadge}>
-              <Text style={styles.postTypeText}>{getPostTypeLabel()}</Text>
+        <View style={notifications.cardBody}>
+          <Text style={notifications.cardMessage} numberOfLines={2}>{message}</Text>
+          <Text style={notifications.cardPostTitle} numberOfLines={1}>"{postTitle}"</Text>
+          <View style={notifications.cardFooter}>
+            <View style={notifications.cardPostTypeBadge}>
+              <Text style={notifications.cardPostTypeText}>{getPostTypeLabel()}</Text>
             </View>
-            <Text style={styles.timestamp}>{timeString}</Text>
+            <Text style={notifications.cardTimestamp}>{timeString}</Text>
           </View>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={styles.arrowIcon} />
+      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={notifications.cardArrowIcon} />
     </TouchableOpacity>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 12,
-    marginVertical: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.18,
-    shadowRadius: 1.0,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  unreadContainer: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#FF9F1C',
-    borderWidth: 1.5,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF9F1C',
-    position: 'absolute',
-    top: 12,
-    left: 12,
-  },
-  content: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  header: {
-    position: 'relative',
-  },
-  typeIconContainer: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.18,
-    shadowRadius: 1.0,
-    elevation: 1,
-  },
-  body: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  message: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  postTitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-    fontStyle: 'italic',
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  postTypeBadge: {
-    backgroundColor: '#1E3A5F15',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  postTypeText: {
-    fontSize: 12,
-    color: '#1E3A5F',
-    fontWeight: '500',
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '400',
-  },
-  arrowIcon: {
-    marginLeft: 4,
-  },
-});
 
 export default NotificationCard;

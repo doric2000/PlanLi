@@ -1,8 +1,9 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, View, Text, StyleSheet } from 'react-native';
+import { Image, View, Text } from 'react-native';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
+import { notifications } from '../styles';
 import {tabConfigs, tabScreens} from './TabConfigs'
 
 const Tab = createBottomTabNavigator();
@@ -47,8 +48,8 @@ export default function TabNavigator() {
                 <View>
                   {iconContent}
                   {unreadCount > 0 && (
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
+                    <View style={notifications.badge}>
+                      <Text style={notifications.badgeText}>
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </Text>
                     </View>
@@ -76,25 +77,3 @@ export default function TabNavigator() {
     </Tab.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: '#FF3B30',
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 1,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-});

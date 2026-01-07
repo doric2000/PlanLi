@@ -20,7 +20,6 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
-  StyleSheet,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,6 +36,9 @@ import NotificationCard from '../components/NotificationCard';
 // Hooks
 import { useNotifications } from '../hooks/useNotifications';
 import { useClearNotifications } from '../hooks/useClearNotifications';
+
+// Styles
+import { notifications as notificationStyles } from '../../../styles';
 
 // Models
 import { PostType } from '../models/NotificationModel';
@@ -116,10 +118,10 @@ export default function NotificationScreen() {
 
   // Empty state component
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
+    <View style={notificationStyles.emptyContainer}>
       <Ionicons name="notifications-off-outline" size={80} color="#6C757D" />
-      <Text style={styles.emptyTitle}>No Notifications</Text>
-      <Text style={styles.emptySubtitle}>
+      <Text style={notificationStyles.emptyTitle}>No Notifications</Text>
+      <Text style={notificationStyles.emptySubtitle}>
         When someone likes or comments on your posts, you'll see it here
       </Text>
     </View>
@@ -131,7 +133,7 @@ export default function NotificationScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.clearButton}
+        style={notificationStyles.clearButton}
         onPress={handleClearAll}
         disabled={clearing}
       >
@@ -140,7 +142,7 @@ export default function NotificationScreen() {
         ) : (
           <>
             <Ionicons name="trash-outline" size={18} color="#1E3A5F" />
-            <Text style={styles.clearButtonText}>Clear All</Text>
+            <Text style={notificationStyles.clearButtonText}>Clear All</Text>
           </>
         )}
       </TouchableOpacity>
@@ -164,9 +166,9 @@ export default function NotificationScreen() {
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={notificationStyles.screenContainer}>
         <ScreenHeader title="Notifications" renderLeft={renderHeaderLeft} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={notificationStyles.loadingCenter}>
           <ActivityIndicator size="large" color="#1E3A5F" />
         </View>
       </SafeAreaView>
@@ -174,7 +176,7 @@ export default function NotificationScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={notificationStyles.screenContainer}>
       {/* Header */}
       <ScreenHeader
         title="Notifications"
@@ -193,7 +195,7 @@ export default function NotificationScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderNotificationItem}
         contentContainerStyle={
-          notifications.length === 0 ? styles.emptyListContainer : styles.listContainer
+          notifications.length === 0 ? notificationStyles.emptyListContainer : notificationStyles.listContainer
         }
         ListEmptyComponent={renderEmptyState}
         refreshControl={
@@ -209,47 +211,3 @@ export default function NotificationScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  listContainer: {
-    paddingVertical: 8,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E3A5F',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#6C757D',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E3A5F',
-  },
-});
