@@ -31,7 +31,7 @@ import { db } from '../../../config/firebase';
 // Components
 import ScreenHeader from '../../../components/ScreenHeader';
 import BackButton from '../../../components/BackButton';
-import NotificationCard from '../components/NotificationCard';
+import NotificationCard from '../components/';
 
 // Hooks
 import { useNotifications } from '../hooks/useNotifications';

@@ -16,6 +16,6 @@ export const tabScreens = [
 	{ name: "Home", component: HomeScreen },
 	{ name: "Community", component: CommunityScreen },
 	{ name: "Routes", component: RoutesScreen },
-	{ name: "Favorite", component: FavoritesScreen },
+	{ name: "Favorites", component: FavoritesScreen },
 	{ name: "Profile", component: ProfileScreen },
 ];
