@@ -10,7 +10,8 @@ const ChipSelector = ({
   multiSelect = false 
 }) => {
 
-  const safeItems = Array.isArray(items) ? items : [];
+  const safeItems = Array.isArray(items) ? items : []; 
+  
 
   const isSelected = (item) => {
     if (multiSelect) {
