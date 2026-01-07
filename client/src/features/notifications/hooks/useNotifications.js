@@ -50,6 +50,7 @@ export const useNotifications = () => {
     const unsubscribe = subscribeToNotifications(
       currentUser.uid,
       (fetchedNotifications) => {
+        console.log('Notifications received:', fetchedNotifications.length);
         setNotifications(fetchedNotifications);
         setLoading(false);
         setRefreshing(false);

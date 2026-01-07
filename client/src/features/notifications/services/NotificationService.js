@@ -245,10 +245,15 @@ export const getNotifications = async (userId, options = {}) => {
 
     const snapshot = await getDocs(q);
 
-    const notifications = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const notifications = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        // Convert Firestore Timestamp to JavaScript Date
+        timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp,
+      };
+    });
 
     return notifications.slice(0, limit);
   } catch (error) {
@@ -291,10 +296,15 @@ export const subscribeToNotifications = (userId, callback, errorCallback) => {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const notifications = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const notifications = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            // Convert Firestore Timestamp to JavaScript Date
+            timestamp: data.timestamp?.toDate ? data.timestamp.toDate() : data.timestamp,
+          };
+        });
         callback(notifications);
       },
       (error) => {

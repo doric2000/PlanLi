@@ -59,6 +59,7 @@ export const useLikes = (
 				});
 
 				// Trigger notification after successful like
+				console.log('Attempting to trigger like notification for itemId:', itemId);
 				try {
 					// Fetch post data to get owner and title
 					const postSnap = await getDoc(docRef);

@@ -115,6 +115,7 @@ class NotificationStrategy {
  */
 export class LikeNotificationStrategy extends NotificationStrategy {
   async process(data) {
+    console.log('LikeNotificationStrategy processing:', data);
     try {
       // Validate required data
       this.validateData(data, [
@@ -126,6 +127,7 @@ export class LikeNotificationStrategy extends NotificationStrategy {
         'actorName',
         'currentLikeCount',
       ]);
+      console.log('✅ Validation passed');
 
       const {
         postId,
@@ -145,10 +147,13 @@ export class LikeNotificationStrategy extends NotificationStrategy {
       }
 
       // Check if we should notify at this count
-      if (!shouldNotify(currentLikeCount)) {
+      const shouldSendNotification = shouldNotify(currentLikeCount);
+      console.log(`shouldNotify(${currentLikeCount}):`, shouldSendNotification);
+      if (!shouldSendNotification) {
         console.log(`No notification at count ${currentLikeCount}`);
         return;
       }
+      console.log(`Will send notification at count ${currentLikeCount}`);
 
       // Get the batch threshold for this notification
       const batchThreshold = getBatchThreshold(currentLikeCount);
@@ -195,6 +200,7 @@ export class LikeNotificationStrategy extends NotificationStrategy {
  */
 export class CommentNotificationStrategy extends NotificationStrategy {
   async process(data) {
+    console.log('CommentNotificationStrategy processing:', data);
     try {
       // Validate required data
       this.validateData(data, [
@@ -206,6 +212,7 @@ export class CommentNotificationStrategy extends NotificationStrategy {
         'actorName',
         'currentCommentCount',
       ]);
+      console.log('Validation passed');
 
       const {
         postId,
@@ -368,6 +375,12 @@ export const notificationSystem = new NotificationSystem();
  * });
  */
 export const notifyLikeEvent = async (data) => {
+  console.log('notifyLikeEvent called with data:', {
+    postId: data.postId,
+    postOwnerId: data.postOwnerId,
+    actorId: data.actorId,
+    currentLikeCount: data.currentLikeCount,
+  });
   await notificationSystem.notifyLike(data);
 };
 
@@ -388,5 +401,11 @@ export const notifyLikeEvent = async (data) => {
  * });
  */
 export const notifyCommentEvent = async (data) => {
+  console.log('notifyCommentEvent called with data:', {
+    postId: data.postId,
+    postOwnerId: data.postOwnerId,
+    actorId: data.actorId,
+    currentCommentCount: data.currentCommentCount,
+  });
   await notificationSystem.notifyComment(data);
 };
