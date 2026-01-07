@@ -1,7 +1,8 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, View, Text } from 'react-native';
+import { Image, View, Text, StyleSheet } from 'react-native';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import {tabConfigs, tabScreens} from './TabConfigs'
 
 const Tab = createBottomTabNavigator();
@@ -18,6 +19,10 @@ const Tab = createBottomTabNavigator();
  */
 export default function TabNavigator() {
   const { user } = useCurrentUser();
+  const unreadCount = useUnreadCount();
+  
+  console.log('Unread notification count in TabNavigator:', unreadCount);
+  
   return (
     <Tab.Navigator
       screenOptions={({ route }) => {
@@ -25,21 +30,27 @@ export default function TabNavigator() {
         return ({
           tabBarIcon: ({ focused, color, size }) => {
             if (route.name === 'Profile' && user) {
-              if (user.photoURL) {
-                return (
-                  <Image
-                    source={{ uri: user.photoURL }}
-                    style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 2 : 0, borderColor: color }}
-                    resizeMode="cover"
-                  />
-                );
-              }
-              // Fallback: show Ionicons icon if no photoURL
-              return (
+              const iconContent = user.photoURL ? (
+                <Image
+                  source={{ uri: user.photoURL }}
+                  style={{ width: size, height: size, borderRadius: size / 2, borderWidth: focused ? 2 : 0, borderColor: color }}
+                  resizeMode="cover"
+                />
+              ) : (
                 <Ionicons name={focused ? config.icon : `${config.icon}-outline`}
                   size={size}
                   color={color}
                 />
+              );
+              
+              // Wrap with badge container
+              return (
+                <View>
+                  {iconContent}
+                  {unreadCount > 0 && (
+                    <View style={styles.badge} />
+                  )}
+                </View>
               );
             }
             return (
@@ -61,3 +72,17 @@ export default function TabNavigator() {
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF3B30',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+});
