@@ -12,7 +12,6 @@ const ChipSelector = ({
   const safeItems = Array.isArray(items) ? items : [];
   const safeOnSelect = typeof onSelect === 'function' ? onSelect : () => {};
 
-  const safeItems = Array.isArray(items) ? items : [];
 
   const isSelected = (item) => {
     if (multiSelect) {
