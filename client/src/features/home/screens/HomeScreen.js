@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,8 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const isFetchingAllDestinationsForSearchRef = useRef(false);
+  const allDestinationsFetchDebounceRef = useRef(null);
   
   // Fetch popular destinations
   const fetchDestinations = async () => {
@@ -59,6 +61,8 @@ export default function HomeScreen({ navigation }) {
   };
 
   const fetchAllDestinationsForSearch = async () => {
+    if (isFetchingAllDestinationsForSearchRef.current) return;
+    isFetchingAllDestinationsForSearchRef.current = true;
     try {
       // Only used for dev-mode local search (cached once) so we can search across ALL saved cities,
       // not just the 10 displayed on the Home screen.
@@ -80,6 +84,8 @@ export default function HomeScreen({ navigation }) {
       setHasLoadedAllDestinationsForSearch(true);
     } catch (error) {
       console.error('Error fetching all destinations for search:', error);
+    } finally {
+      isFetchingAllDestinationsForSearchRef.current = false;
     }
   };
   
@@ -95,7 +101,20 @@ export default function HomeScreen({ navigation }) {
     if (q.length < 2) return;
     if (hasLoadedAllDestinationsForSearch) return;
 
-    fetchAllDestinationsForSearch();
+    if (allDestinationsFetchDebounceRef.current) {
+      clearTimeout(allDestinationsFetchDebounceRef.current);
+    }
+
+    allDestinationsFetchDebounceRef.current = setTimeout(() => {
+      fetchAllDestinationsForSearch();
+    }, 400);
+
+    return () => {
+      if (allDestinationsFetchDebounceRef.current) {
+        clearTimeout(allDestinationsFetchDebounceRef.current);
+        allDestinationsFetchDebounceRef.current = null;
+      }
+    };
   }, [searchQuery, hasLoadedAllDestinationsForSearch]);
 
 
@@ -103,6 +122,7 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(true);
     setHasLoadedAllDestinationsForSearch(false);
     setAllDestinationsForSearch([]);
+    isFetchingAllDestinationsForSearchRef.current = false;
     fetchDestinations();
   };
 

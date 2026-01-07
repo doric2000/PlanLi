@@ -1,7 +1,13 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { cards } from '../styles';
+
+const DEFAULT_CITY_IMAGE_URL = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
+
+const isGooglePlacesPhotoUrl = (uri) =>
+  typeof uri === 'string' &&
+  (uri.includes('/maps/api/place/photo') || uri.includes('maps.googleapis.com/maps/api/place/photo'));
 
 /**
  * CityCard - displays a city with image, rating, name, country, and travelers count
@@ -10,12 +16,18 @@ import { cards } from '../styles';
  * @param {Function} props.onPress - Callback when card is pressed
  */
 export default function CityCard({ city, onPress, style }) {
+  const rawImageUrl = city?.imageUrl;
+  const imageUrl =
+    Platform.OS === 'web' && isGooglePlacesPhotoUrl(rawImageUrl)
+      ? DEFAULT_CITY_IMAGE_URL
+      : rawImageUrl;
+
   return (
     <TouchableOpacity style={[cards.popular, style]} onPress={onPress}>
       <View style={cards.popularImageContainer}>
-        {city.imageUrl ? (
+        {imageUrl ? (
           <Image
-            source={{ uri: city.imageUrl }}
+            source={{ uri: imageUrl }}
             style={cards.popularImage}
             resizeMode="cover"
           />

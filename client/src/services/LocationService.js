@@ -177,9 +177,13 @@ export const getOrCreateDestination = async (placeId) => {
     if (!citySnap.exists()) {
       // Prepare Image
       const photoRef = result.photos ? result.photos[0].photo_reference : null;
-      const imageUrl = photoRef 
+      const fallbackImageUrl = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
+
+      // On web, avoid storing Google Places Photo URLs (they can create many billable photo requests
+      // when rendering lists, and they don't go through our server logs).
+      const imageUrl = (photoRef && Platform.OS !== 'web')
           ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference=${photoRef}&key=${GOOGLE_API_KEY}`
-          : 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800'; 
+          : fallbackImageUrl;
 
       // Create City Doc using SETDOC (custom ID) instead of ADDDOC (random ID)
       await setDoc(cityDocRef, {
