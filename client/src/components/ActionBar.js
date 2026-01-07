@@ -93,13 +93,13 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' })
 				</TouchableOpacity>
 			</View>
 
-			<TouchableOpacity>
+			{/* <TouchableOpacity>
 				<Ionicons
 					name='share-social-outline'
 					size={22}
 					color='#4B5563'
 				/>
-			</TouchableOpacity>
+			</TouchableOpacity> */}
 
 			<LikesModal
 				visible={showLikesModal}
