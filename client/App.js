@@ -12,6 +12,7 @@ import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
+import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
 import RightDrawerNavigator from "./src/navigation/RightDrawerNavigator";
 
 
@@ -25,6 +26,8 @@ const Stack = createStackNavigator();
  * - Login: Authentication screen
  * - Register: New user registration
  * - Main: Tab Navigator (Home, Community, etc.)
+ * - EditProfile: User profile editing screen
+ * - Notifications: Notifications screen
  * - Route: Routes list
  * - AddRecommendation: Modal for adding new content
  * - LandingPage: Dashboard for Landing Page Screen
@@ -43,6 +46,7 @@ export default function App() {
 					<Stack.Screen name='Register' component={RegisterScreen} />
 					<Stack.Screen name='Main' component={RightDrawerNavigator} />
 					<Stack.Screen name="EditProfile" component={EditProfileScreen} />
+					<Stack.Screen name="Notifications" component={NotificationScreen} />
 					<Stack.Screen name='Route' component={RoutesScreen} />
 					<Stack.Screen
 						name='AddRecommendation'
