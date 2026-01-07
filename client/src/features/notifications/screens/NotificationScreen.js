@@ -26,9 +26,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../../config/firebase';
 
 // Components
 import ScreenHeader from '../../../components/ScreenHeader';
+import BackButton from '../../../components/BackButton';
 import NotificationCard from '../components/NotificationCard';
 
 // Hooks
@@ -54,13 +57,32 @@ export default function NotificationScreen() {
       console.error('Error marking notification as read:', error);
     }
 
-    // Navigate to the appropriate screen
-    if (postType === PostType.RECOMMENDATION) {
-      // Navigate to RecommendationDetail
-      navigation.navigate('RecommendationDetail', { recommendationId: postId });
-    } else if (postType === PostType.ROUTE) {
-      // Navigate to RouteDetail
-      navigation.navigate('RouteDetail', { routeId: postId });
+    // Fetch the full post data from Firestore
+    try {
+      if (postType === PostType.RECOMMENDATION) {
+        const docRef = doc(db, 'recommendations', postId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const item = { id: docSnap.id, ...docSnap.data() };
+          navigation.navigate('RecommendationDetail', { item });
+        } else {
+          Alert.alert('Error', 'This post no longer exists.');
+        }
+      } else if (postType === PostType.ROUTE) {
+        const docRef = doc(db, 'routes', postId);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const routeData = { id: docSnap.id, ...docSnap.data() };
+          navigation.navigate('RouteDetail', { routeData });
+        } else {
+          Alert.alert('Error', 'This route no longer exists.');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching post data:', error);
+      Alert.alert('Error', 'Failed to load the post. Please try again.');
     }
   };
 
@@ -125,6 +147,11 @@ export default function NotificationScreen() {
     );
   };
 
+  // Header left component - Back button
+  const renderHeaderLeft = () => {
+    return <BackButton color="dark" variant="ghost" />;
+  };
+
   // Render notification item
   const renderNotificationItem = ({ item }) => (
     <NotificationCard
@@ -138,7 +165,7 @@ export default function NotificationScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScreenHeader title="Notifications" />
+        <ScreenHeader title="Notifications" renderLeft={renderHeaderLeft} />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#1E3A5F" />
         </View>
@@ -157,6 +184,7 @@ export default function NotificationScreen() {
             : 'Stay updated with your posts'
         }
         renderRight={renderHeaderRight}
+        renderLeft={renderHeaderLeft}
       />
 
       {/* Notifications List */}
