@@ -35,7 +35,7 @@ const ChipSelector = ({
             <TouchableOpacity
               key={String(item)}
               style={[tags.chip, active && tags.chipSelected]}
-              onPress={() => safeOnSelect(item)}
+              onPress={() => onSelect(item)}
             >
               <Text style={[tags.chipText, active && tags.chipTextSelected]}>
                 {item}
