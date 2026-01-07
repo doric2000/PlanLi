@@ -61,9 +61,12 @@ export default function GooglePlacesInput({
     if (!isGoogleMode) return;
     if (typeof seedQuery !== 'string') return;
     const next = seedQuery;
+    // Even if the text didn't change, force opening the dropdown and
+    // allow an immediate request when transitioning from filter->google.
+    lastRequestedQuery.current = '';
+    setShowList(true);
     if (next === query) return;
     setQuery(next);
-    setShowList(true);
   }, [isGoogleMode, seedQuery]);
 
   useEffect(() => {
@@ -155,7 +158,7 @@ export default function GooglePlacesInput({
         setLoading(false);
       }
     }, delay);
-  }, [query, showList]);
+  }, [isGoogleMode, query, showList]);
 
   const showDropdown = isGoogleMode && showList && query.trim().length >= MIN_QUERY_LENGTH;
 

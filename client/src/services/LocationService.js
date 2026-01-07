@@ -54,18 +54,30 @@ export const searchCities = async (searchText, { signal } = {}) => {
 /**
  * HELPER: Fetch Metadata
  */
-const fetchCountryMetadata = async (countryName) => {
+const fetchCountryMetadata = async ({ countryName, countryCode }) => {
   try {
-    const response = await fetch(`https://restcountries.com/v3.1/name/${countryName}?fullText=true`);
-    const data = await response.json();
-    const country = Array.isArray(data) ? data[0] : null;
-    if (!country) {
-      return { currencyCode: "USD", region: "Global" };
+    // Prefer ISO code lookup because display names may be localized (Hebrew).
+    // RestCountries alpha endpoint is stable for this.
+    let country = null;
+
+    if (countryCode) {
+      const alphaRes = await fetch(`https://restcountries.com/v3.1/alpha/${countryCode}`);
+      const alphaData = await alphaRes.json();
+      country = Array.isArray(alphaData) ? alphaData[0] : null;
     }
+
+    // Fallback: try name search without fullText (more forgiving)
+    if (!country && countryName) {
+      const nameRes = await fetch(`https://restcountries.com/v3.1/name/${encodeURIComponent(countryName)}`);
+      const nameData = await nameRes.json();
+      country = Array.isArray(nameData) ? nameData[0] : null;
+    }
+
+    if (!country) return { currencyCode: "USD", region: "Global" };
     
-    return { 
-        currencyCode: country.currencies ? Object.keys(country.currencies)[0] : "USD",
-        region: country.region || "Global"
+    return {
+      currencyCode: country.currencies ? Object.keys(country.currencies)[0] : "USD",
+      region: country.region || "Global",
     };
   } catch (error) {
     return { currencyCode: "USD", region: "Global" };
@@ -118,7 +130,9 @@ export const getOrCreateDestination = async (placeId) => {
     const countrySnap = await getDoc(countryDocRef);
 
     if (!countrySnap.exists()) {
-      const metadata = (await fetchCountryMetadata(countryName)) || { currencyCode: 'USD', region: 'Global' };
+      const metadata =
+        (await fetchCountryMetadata({ countryName, countryCode })) ||
+        { currencyCode: 'USD', region: 'Global' };
       await setDoc(countryDocRef, {
         name: countryName,
         code: countryCode,
@@ -127,8 +141,24 @@ export const getOrCreateDestination = async (placeId) => {
       });
       console.log(`Created new country: ${countryId}`);
     } else {
-      // Keep the doc ID stable, but refresh display name in Hebrew.
-      await setDoc(countryDocRef, { name: countryName, code: countryCode }, { merge: true });
+      // Keep the doc ID stable, refresh display name in Hebrew,
+      // and fix currency/region if they were saved with fallback defaults.
+      const existing = countrySnap.data() || {};
+      const needsCurrencyFix =
+        !existing.currencyCode ||
+        (existing.currencyCode === 'USD' && countryCode !== 'US');
+      const needsRegionFix = !existing.region || existing.region === 'Global';
+
+      const patch = { name: countryName, code: countryCode };
+      if (needsCurrencyFix || needsRegionFix) {
+        const metadata =
+          (await fetchCountryMetadata({ countryName, countryCode })) ||
+          { currencyCode: 'USD', region: 'Global' };
+        if (needsCurrencyFix) patch.currencyCode = metadata.currencyCode;
+        if (needsRegionFix) patch.region = metadata.region;
+      }
+
+      await setDoc(countryDocRef, patch, { merge: true });
     }
 
     // D. FIND OR CREATE CITY
