@@ -24,11 +24,11 @@ export const useUnreadCount = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const currentUser = auth.currentUser;
 
-  console.log('🔍 useUnreadCount hook - currentUser:', currentUser?.uid);
+  console.log('useUnreadCount hook - currentUser:', currentUser?.uid);
 
   useEffect(() => {
     if (!currentUser) {
-      console.log('❌ No current user in useUnreadCount');
+      console.log('No current user in useUnreadCount');
       setUnreadCount(0);
       return;
     }

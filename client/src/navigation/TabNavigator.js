@@ -6,7 +6,6 @@ import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import {tabConfigs, tabScreens} from './TabConfigs'
 
 const Tab = createBottomTabNavigator();
-
 /**
  * Bottom Tab Navigator.
  * Manages the main navigation flow of the application.
@@ -48,7 +47,11 @@ export default function TabNavigator() {
                 <View>
                   {iconContent}
                   {unreadCount > 0 && (
-                    <View style={styles.badge} />
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Text>
+                    </View>
                   )}
                 </View>
               );
@@ -57,6 +60,7 @@ export default function TabNavigator() {
               <Ionicons name={focused ? config.icon : `${config.icon}-outline`}
                 size={size}
                 color={color}
+
               />
             );
           },
@@ -76,13 +80,21 @@ export default function TabNavigator() {
 const styles = StyleSheet.create({
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: -6,
+    right: -6,
     backgroundColor: '#FF3B30',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     borderWidth: 2,
     borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 1,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
