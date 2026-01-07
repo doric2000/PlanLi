@@ -44,7 +44,21 @@ export const useDestinationData = (cityId, countryId) => {
       // Fetch Weather
       if (WEATHER_API_KEY) {
         try {
-          const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${cityData.name}&units=metric&appid=${WEATHER_API_KEY}`);
+          const lat = cityData?.coordinates?.lat;
+          const lon = cityData?.coordinates?.lng;
+
+          // Prefer coordinates to avoid language/alias issues (e.g., Hebrew city names).
+          const url = (typeof lat === 'number' && typeof lon === 'number')
+            ? `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=he&appid=${WEATHER_API_KEY}`
+            : `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cityData.name)}&units=metric&lang=he&appid=${WEATHER_API_KEY}`;
+
+          const res = await fetch(url);
+          if (!res.ok) {
+            console.warn('Weather request failed', { status: res.status, cityName: cityData.name });
+            setWeather(null);
+            return;
+          }
+
           const data = await res.json();
           if (data.main) {
              setWeather({
@@ -53,7 +67,10 @@ export const useDestinationData = (cityId, countryId) => {
                main: data.weather[0].main
              });
           }
-        } catch (e) { console.error("Weather error", e); }
+        } catch (e) {
+          console.error("Weather error", e);
+          setWeather(null);
+        }
       }
       setLoading(false);
     };

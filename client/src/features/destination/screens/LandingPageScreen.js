@@ -39,6 +39,13 @@ const getWeatherIcon = (weatherCondition) => {
 export default function LandingPageScreen({ navigation, route }) {
   const { cityId, countryId } = route.params;
 
+  const isValuePresent = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value !== 'string') return true;
+    const trimmed = value.trim();
+    return trimmed !== '' && trimmed !== '-';
+  };
+
   // 1. All Logic handled by Custom Hook
   const { 
     cityData, 
@@ -70,17 +77,30 @@ export default function LandingPageScreen({ navigation, route }) {
     return (
       <View style={common.container}>
         <Text style={{ textAlign: 'center', marginTop: 50, color: colors.textPrimary }}>
-          City not found.
+          העיר לא נמצאה.
         </Text>
       </View>
     );
   }
 
+  const widgetWeatherTemp = cityData.widgets?.weather?.temp;
+  const widgetWeatherStatus = cityData.widgets?.weather?.status;
+  const displayedWeatherTemp = weather?.temp ?? widgetWeatherTemp;
+  const displayedWeatherStatus = weather?.desc ?? widgetWeatherStatus;
+  const isWeatherUnavailable = !displayedWeatherTemp && !displayedWeatherStatus;
+
+  const airportName = cityData.widgets?.airport?.name;
+  const airportDistance = cityData.widgets?.airport?.distance;
+  const simProvider = cityData.widgets?.sim?.provider;
+  const simPrice = cityData.widgets?.sim?.price;
+  const transportType = cityData.widgets?.transport?.type;
+  const transportRecommendation = cityData.widgets?.transport?.recommendation;
+
   // Create snapshot data for city favorites
   const citySnapshotData = {
     name: cityData.name,
     thumbnail_url: cityData.imageUrl,
-    sub_text: `${cityData.travelers || 0} travelers`,
+    sub_text: `${cityData.travelers || 0} מטיילים`,
     rating: cityData.rating,
     countryId: countryId,
     travelers: cityData.travelers || 0
@@ -129,7 +149,7 @@ export default function LandingPageScreen({ navigation, route }) {
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15 }}>
                     <Ionicons name="people" size={14} color={colors.white} />
                     <Text style={{ color: colors.white, marginLeft: 4, fontSize: 13 }}>
-                      {cityData.travelers} Travelers
+                      {cityData.travelers} מטיילים
                     </Text>
                   </View>
                 </View>
@@ -138,7 +158,7 @@ export default function LandingPageScreen({ navigation, route }) {
           </ImageBackground>
 
           <TouchableOpacity style={buttons.floatingPlan}>
-            <Text style={buttons.floatingPlanText}>Start Planning Your Trip</Text>
+            <Text style={buttons.floatingPlanText}>התחל לתכנן את הטיול</Text>
           </TouchableOpacity>
         </View>
 
@@ -148,36 +168,36 @@ export default function LandingPageScreen({ navigation, route }) {
           {/* Info Grid using Modular InfoCard */}
           <View style={cards.infoGrid}>
             <InfoCard
-              title="Current Weather"
+              title="מזג אוויר נוכחי"
               icon={weather ? getWeatherIcon(weather.main) : "cloud-outline"}
-              data={weather ? weather.temp : (cityData.widgets?.weather?.temp)}
-              subData={weather ? weather.desc : (cityData.widgets?.weather?.status)}
+              data={isWeatherUnavailable ? 'לא זמין' : displayedWeatherTemp}
+              subData={isWeatherUnavailable ? 'מידע על מזג האוויר לא זמין כרגע' : displayedWeatherStatus}
               color={colors.successLight}
               iconColor={colors.info}
             />
             <InfoCard
-              title="Airport"
+              title="שדה תעופה"
               icon="airplane"
-              data={cityData.widgets?.airport?.name}
-              subData={cityData.widgets?.airport?.distance}
+              data={isValuePresent(airportName) ? airportName : 'לא זמין'}
+              subData={isValuePresent(airportName) ? (isValuePresent(airportDistance) ? airportDistance : 'לא זמין') : ''}
               color={colors.successLight}
               iconColor={colors.accent}
               library="Material"
             />
             <InfoCard
-              title="Local Sim"
+              title="סים מקומי"
               icon="cellphone"
-              data={cityData.widgets?.sim?.provider}
-              subData={cityData.widgets?.sim?.price}
+              data={isValuePresent(simProvider) ? simProvider : 'לא זמין'}
+              subData={isValuePresent(simProvider) ? (isValuePresent(simPrice) ? simPrice : 'לא זמין') : ''}
               color={colors.successLight}
               iconColor={colors.success}
               library="Material"
             />
             <InfoCard
-              title="Transport"
+              title="תחבורה"
               icon="bus"
-              data={cityData.widgets?.transport?.type}
-              subData={cityData.widgets?.transport?.recommendation}
+              data={isValuePresent(transportType) ? transportType : 'לא זמין'}
+              subData={isValuePresent(transportType) ? (isValuePresent(transportRecommendation) ? transportRecommendation : 'לא זמין') : ''}
               color={colors.successLight}
               iconColor={colors.warning}
               library="Material"
@@ -187,7 +207,7 @@ export default function LandingPageScreen({ navigation, route }) {
           {/* Essential Info Section */}
           <View style={cards.sectionContainer}>
             <View style={cards.sectionHeader}>
-              <Text style={cards.sectionTitle}>Essential Info</Text>
+              <Text style={cards.sectionTitle}>מידע חיוני</Text>
               <Ionicons name="wifi" size={20} color={colors.primary} />
             </View>
 
@@ -196,8 +216,8 @@ export default function LandingPageScreen({ navigation, route }) {
                 <MaterialCommunityIcons name="office-building" size={24} color={colors.secondary} />
               </View>
               <View style={cards.infoTextContainer}>
-                <Text style={cards.infoTitle}>Recommended Hotel</Text>
-                <Text style={cards.infoSubtitle}>{cityData.essentialInfo?.hotel || 'N/A'}</Text>
+                <Text style={cards.infoTitle}>מלון מומלץ</Text>
+                <Text style={cards.infoSubtitle}>{cityData.essentialInfo?.hotel || 'לא זמין'}</Text>
               </View>
             </View>
             
@@ -206,8 +226,8 @@ export default function LandingPageScreen({ navigation, route }) {
                 <MaterialCommunityIcons name="car-side" size={24} color={colors.secondary} />
               </View>
               <View style={cards.infoTextContainer}>
-                <Text style={cards.infoTitle}>Trusted Driver</Text>
-                <Text style={cards.infoSubtitle}>{cityData.essentialInfo?.driver || 'N/A'}</Text>
+                <Text style={cards.infoTitle}>נהג מומלץ</Text>
+                <Text style={cards.infoSubtitle}>{cityData.essentialInfo?.driver || 'לא זמין'}</Text>
               </View>
             </View>
           
@@ -216,22 +236,22 @@ export default function LandingPageScreen({ navigation, route }) {
                 <MaterialCommunityIcons name="cash-multiple" size={24} color={colors.secondary} />
               </View>
               <View style={cards.infoTextContainer}>
-                <Text style={cards.infoTitle}>Currency ({countryData?.currencyCode || 'Local'})</Text>
-                <Text style={cards.infoSubtitle}>{currencyRate || 'Checking rates...'}</Text>
+                <Text style={cards.infoTitle}>מטבע ({countryData?.currencyCode || 'מקומי'})</Text>
+                <Text style={cards.infoSubtitle}>{currencyRate || 'בודק שערים...'}</Text>
               </View>
             </View>
           </View>
 
           {/* Community Feed */}
           <View style={common.feedSection}>
-              <Text style={common.feedTitle}>Community Recommendations</Text>
-              <Text style={common.feedSubtitle}>What travelers say about {cityData.name}</Text>
+              <Text style={common.feedTitle}>המלצות מהקהילה</Text>
+              <Text style={common.feedSubtitle}>מה מטיילים אומרים על {cityData.name}</Text>
               
               {recommendations.length === 0 ? (
                   <View style={common.emptyState}>
                       <Ionicons name="chatbubble-ellipses-outline" size={40} color={colors.textMuted} />
-                      <Text style={common.emptyText}>No recommendations yet.</Text>
-                      <Text style={common.emptySubText}>Be the first to share your experience!</Text>
+                  <Text style={common.emptyText}>עדיין אין המלצות.</Text>
+                  <Text style={common.emptySubText}>היו הראשונים לשתף את החוויה שלכם!</Text>
                   </View>
               ) : (
                   recommendations.map((item) => (
