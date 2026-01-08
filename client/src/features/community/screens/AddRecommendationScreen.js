@@ -119,8 +119,8 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
     setTitle(editItem.title || '');
     setDescription(editItem.description || '');
-    setCategory(editItem.category || '');
-    setSelectedTags(editItem.tags || []);
+    setCategory(editItem.categoryId || '');
+    setSelectedTags(Array.isArray(editItem.tags) ? editItem.tags : []);
     setBudget(editItem.budget || '');
   }, [isEdit, editItem]);
 
@@ -129,7 +129,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
   // Custom handler for category change to reset sub-tags
   const handleCategoryChange = (newCatId) => {
     setCategory(newCatId);
-    setSelectedTags([]); 
+    setSelectedTags((prev) => (newCatId !== category ? [] : prev));
   };
 
   const openSelectionModal = (type) => {

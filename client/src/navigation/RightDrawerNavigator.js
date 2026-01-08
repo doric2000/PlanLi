@@ -3,7 +3,7 @@ import { Alert, View, Text, TouchableOpacity } from 'react-native';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import { MaterialIcons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
-
+import { DrawerActions } from '@react-navigation/native';
 import appConfig from '../../app.json';
 import TabNavigator from './TabNavigator';
 import ProfileMenuList from '../features/profile/components/ProfileMenuList';
@@ -34,6 +34,14 @@ function CustomDrawerContent(props) {
     },
     [navigation]
   );
+  const goToRootScreen = (screenName, params) => {
+    navigation.dispatch(DrawerActions.closeDrawer());
+
+    const parent = navigation.getParent?.();
+    if (parent?.navigate) return parent.navigate(screenName, params);
+
+    return navigation.navigate(screenName, params);
+  };
 
   const handleMenuPress = useCallback(
     (label) => {
@@ -46,6 +54,12 @@ function CustomDrawerContent(props) {
       if (label === 'Notifications') {
         navigation.closeDrawer?.();
         rootStackNav?.navigate?.('Notifications');
+        return;
+      }
+
+      if (label === 'Settings') {
+        navigation.closeDrawer?.();
+        rootStackNav?.navigate?.('Settings');
         return;
       }
 
