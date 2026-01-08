@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { auth, db } from "../config/firebase";
-import { getDoc, doc } from "firebase/firestore";
+import { getDoc, doc, onSnapshot } from "firebase/firestore";
 
 /**
  * Custom hook to get the current authenticated user and their profile data from Firestore.
@@ -15,53 +15,51 @@ export const useCurrentUser = () => {
 	const [error, setError] = useState(null);
 
 	useEffect(() => {
-		const fetchUser = async () => {
-			try {
-				setLoading(true);
-				const currentUser = auth.currentUser;
+		const currentUser = auth.currentUser;
 
-				if (currentUser) {
-					const userDoc = await getDoc(
-						doc(db, "users", currentUser.uid)
-					);
+		if (!currentUser) {
+			setUser(null);
+			setLoading(false);
+			return;
+		}
 
-					if (userDoc.exists()) {
-						const userData = userDoc.data();
-						setUser({
-							uid: currentUser.uid,
-							email: currentUser.email,
-							displayName:
-								userData.displayName || currentUser.email,
-							...userData,
-						});
-					} else {
-						setUser({
-							uid: currentUser.uid,
-							email: currentUser.email,
-							displayName: currentUser.email,
-						});
-					}
-				} else {
-					setUser(null);
-				}
-			} catch (err) {
-				console.error("Error fetching user:", err);
-				setError(err);
-
-				// Fallback to auth user
-				if (auth.currentUser) {
+		// Set up real-time listener for user document
+		const unsubscribe = onSnapshot(
+			doc(db, "users", currentUser.uid),
+			(docSnapshot) => {
+				setLoading(false);
+				if (docSnapshot.exists()) {
+					const userData = docSnapshot.data();
 					setUser({
-						uid: auth.currentUser.uid,
-						email: auth.currentUser.email,
-						displayName: auth.currentUser.email,
+						uid: currentUser.uid,
+						email: currentUser.email,
+						displayName: userData.displayName || currentUser.email,
+						...userData,
+					});
+				} else {
+					// Document doesn't exist, use auth data
+					setUser({
+						uid: currentUser.uid,
+						email: currentUser.email,
+						displayName: currentUser.email,
 					});
 				}
-			} finally {
+			},
+			(err) => {
+				console.error("Error listening to user changes:", err);
+				setError(err);
 				setLoading(false);
+				// Fallback to auth user
+				setUser({
+					uid: currentUser.uid,
+					email: currentUser.email,
+					displayName: currentUser.email,
+				});
 			}
-		};
+		);
 
-		fetchUser();
+		// Cleanup listener on unmount
+		return () => unsubscribe();
 	}, []);
 
 	return { user, loading, error };
