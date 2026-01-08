@@ -174,6 +174,8 @@ export const getOrCreateDestination = async (placeId) => {
     const cityDocRef = doc(db, 'countries', countryId, 'cities', cityId);
     const citySnap = await getDoc(cityDocRef);
 
+    let createdCityData = null;
+
     if (!citySnap.exists()) {
       // Prepare Image
       const photoRef = result.photos ? result.photos[0].photo_reference : null;
@@ -186,7 +188,7 @@ export const getOrCreateDestination = async (placeId) => {
           : fallbackImageUrl;
 
       // Create City Doc using SETDOC (custom ID) instead of ADDDOC (random ID)
-      await setDoc(cityDocRef, {
+      createdCityData = {
           name: cityName,
           description: result.formatted_address,
           googlePlaceId: result.place_id,
@@ -197,7 +199,9 @@ export const getOrCreateDestination = async (placeId) => {
               lat: result.geometry.location.lat,
               lng: result.geometry.location.lng
           }
-      });
+      };
+
+      await setDoc(cityDocRef, createdCityData);
       console.log(`Created new city: ${cityId}`);
     } else {
       // Refresh display fields in Hebrew; keep existing imageUrl/travelers/rating, etc.
@@ -208,10 +212,13 @@ export const getOrCreateDestination = async (placeId) => {
       }, { merge: true });
     }
 
+    const finalCitySnap = await getDoc(cityDocRef);
+    const finalCityData = finalCitySnap.exists() ? finalCitySnap.data() : (createdCityData || null);
+
     // E. RETURN FULL OBJECTS
     return { 
         country: { id: countryId, name: countryName }, 
-        city: { id: cityId, name: cityName } 
+      city: { id: cityId, ...(finalCityData || { name: cityName }) } 
     };
 
   } catch (error) {

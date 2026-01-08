@@ -162,6 +162,26 @@ export default function HomeScreen({ navigation }) {
       console.log("Service Result:", result);
 
       if (result) {
+        const createdOrExistingCity = {
+          ...(result.city || {}),
+          id: result.city?.id,
+          countryId: result.country?.id,
+        };
+
+        if (createdOrExistingCity?.id && createdOrExistingCity?.countryId) {
+          setDestinations((prev) => {
+            const next = [createdOrExistingCity, ...(prev || []).filter((c) => c.id !== createdOrExistingCity.id)];
+            return next.slice(0, 10);
+          });
+
+          if (hasLoadedAllDestinationsForSearch) {
+            setAllDestinationsForSearch((prev) => {
+              const next = [createdOrExistingCity, ...(prev || []).filter((c) => c.id !== createdOrExistingCity.id)];
+              return next;
+            });
+          }
+        }
+
         navigation.navigate('LandingPage', {
           cityId: result.city.id,
           countryId: result.country.id,
