@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,22 +12,21 @@ import {
   Platform,
 } from 'react-native';
 // Firestore imports
-import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, collectionGroup } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
 
 // --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
-import SelectField from '../components/SelectField'; 
-import SelectionModal from '../components/SelectionModal';
+import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ChipSelector from '../components/ChipSelector';
 import SegmentedControl from '../components/SegmentedControl';
 
 // --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { useLocationData } from '../../../hooks/useLocationData'; 
+import { getOrCreateDestinationForPlace, searchPlaces } from '../../../services/LocationService';
 
 // --- Constants ---
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
@@ -59,6 +58,17 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // --- Exact Location Handling (local-first) ---
+  const [locationQuery, setLocationQuery] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(null); // {id,name}
+  const [selectedCity, setSelectedCity] = useState(null); // {id,name}
+  const [selectedPlace, setSelectedPlace] = useState(null); // {placeId,name,address,coordinates,url}
+
+  const [allCitiesForSearch, setAllCitiesForSearch] = useState([]);
+  const [hasLoadedAllCitiesForSearch, setHasLoadedAllCitiesForSearch] = useState(false);
+  const isFetchingAllCitiesForSearchRef = useRef(false);
+  const allCitiesFetchDebounceRef = useRef(null);
 
   // --- Image Handling ---
   const { pickImages, uploadImages } = useImagePickerWithUpload({ storagePath: 'recommendations' });
@@ -96,23 +106,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
     });
   };
 
-  // --- Location Handling ---
-  const { 
-    countries, 
-    cities, 
-    selectedCountry, 
-    selectedCity, 
-    handleSelectCountry, 
-    handleSelectCity 
-  } = useLocationData(
-    isEdit ? editItem?.countryId : null, 
-    isEdit ? editItem?.cityId : null
-  );
-
-  // --- Modal State ---
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectionType, setSelectionType] = useState(null); 
-
   // --- Effects ---
   useEffect(() => {
     if (!isEdit || !editItem) return;
@@ -122,7 +115,55 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setCategory(editItem.categoryId || '');
     setSelectedTags(Array.isArray(editItem.tags) ? editItem.tags : []);
     setBudget(editItem.budget || '');
+
+    const initialCountryId = editItem.countryId || null;
+    const initialCityId = editItem.cityId || null;
+    setSelectedCountry(initialCountryId ? { id: initialCountryId, name: editItem.country || initialCountryId } : null);
+    setSelectedCity(initialCityId ? { id: initialCityId, name: editItem.location || initialCityId } : null);
+    setSelectedPlace(editItem.place || null);
+    setLocationQuery(editItem.place?.name || editItem.location || '');
   }, [isEdit, editItem]);
+
+  useEffect(() => {
+    const q = locationQuery.trim();
+    if (q.length < 2) return;
+    if (hasLoadedAllCitiesForSearch) return;
+    if (isFetchingAllCitiesForSearchRef.current) return;
+
+    if (allCitiesFetchDebounceRef.current) {
+      clearTimeout(allCitiesFetchDebounceRef.current);
+    }
+
+    allCitiesFetchDebounceRef.current = setTimeout(async () => {
+      isFetchingAllCitiesForSearchRef.current = true;
+      try {
+        const citiesQuery = query(collectionGroup(db, 'cities'));
+        const querySnapshot = await getDocs(citiesQuery);
+        const citiesList = querySnapshot.docs.map((cityDoc) => {
+          const parentCountry = cityDoc.ref.parent.parent;
+          const countryId = parentCountry ? parentCountry.id : 'Unknown';
+          return {
+            id: cityDoc.id,
+            countryId,
+            ...cityDoc.data(),
+          };
+        });
+        setAllCitiesForSearch(citiesList);
+        setHasLoadedAllCitiesForSearch(true);
+      } catch (error) {
+        console.error('Error fetching all cities for search:', error);
+      } finally {
+        isFetchingAllCitiesForSearchRef.current = false;
+      }
+    }, 400);
+
+    return () => {
+      if (allCitiesFetchDebounceRef.current) {
+        clearTimeout(allCitiesFetchDebounceRef.current);
+        allCitiesFetchDebounceRef.current = null;
+      }
+    };
+  }, [locationQuery, hasLoadedAllCitiesForSearch]);
 
   // --- Handlers ---
 
@@ -132,33 +173,59 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setSelectedTags((prev) => (newCatId !== category ? [] : prev));
   };
 
-  const openSelectionModal = (type) => {
-    if (type === 'CITY' && !selectedCountry) {
-      Alert.alert("אוי לא!", "אנא בחר מדינה לפני בחירת עיר.");
-      return;
-    }
-    setSelectionType(type);
-    setModalVisible(true);
-  };
-
-  const onCountrySelect = (item) => {
-    handleSelectCountry(item);
-    setModalVisible(false);
-  };
-
-  const onCitySelect = (item) => {
-    handleSelectCity(item);
-    setModalVisible(false);
-  };
-
   const toggleTag = (tag) => {
     if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag));
     else setSelectedTags([...selectedTags, tag]);
   };
 
+  const localCitiesSearchable = locationQuery.trim()
+    ? (hasLoadedAllCitiesForSearch ? allCitiesForSearch : [])
+    : [];
+
+  const localAutocompleteResults = localCitiesSearchable
+    .filter((city) => {
+      const q = locationQuery.trim().toLowerCase();
+      if (!q) return false;
+      const name = (city.name || '').toLowerCase();
+      const description = (city.description || '').toLowerCase();
+      const countryId = (city.countryId || '').toLowerCase();
+      return name.includes(q) || description.includes(q) || countryId.includes(q);
+    })
+    .slice(0, 20);
+
+  const localResultsLoading = locationQuery.trim().length >= 2 && !hasLoadedAllCitiesForSearch;
+
+  const handleSelectLocalCity = (city) => {
+    if (!city?.id || !city?.countryId) return;
+    setSelectedCountry({ id: city.countryId, name: city.countryId });
+    setSelectedCity({ id: city.id, name: city.name || city.id });
+    setSelectedPlace(
+      city.googlePlaceId
+        ? {
+            placeId: city.googlePlaceId,
+            name: city.name || null,
+            address: city.description || null,
+            ...(city.coordinates ? { coordinates: city.coordinates } : {}),
+          }
+        : null
+    );
+  };
+
+  const handleSelectGooglePlace = async (placeId) => {
+    try {
+      const result = await getOrCreateDestinationForPlace(placeId);
+      setSelectedCountry(result.destination.country);
+      setSelectedCity(result.destination.city);
+      setSelectedPlace(result.place);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('אוי לא!', 'לא הצלחנו לטעון את פרטי המיקום.');
+    }
+  };
+
 const handleSubmit = async () => {
     // Basic form validation
-    if (!title || !description || !category || !selectedCountry || !selectedCity) {
+    if (!title || !description || !category || !selectedCountry?.id || !selectedCity?.id) {
       Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
       return;
     }
@@ -183,7 +250,7 @@ const handleSubmit = async () => {
         title,
         description,
         location: selectedCity.name || selectedCity.id,
-        country: selectedCountry.id,
+        country: selectedCountry.name || selectedCountry.id,
         countryId: selectedCountry.id,
         cityId: selectedCity.id,
         category: categoryLabel, // Now saving the Hebrew Label instead of the ID
@@ -191,6 +258,7 @@ const handleSubmit = async () => {
         tags: selectedTags,
         budget,
         images: finalImages,
+        place: selectedPlace || null,
       };
 
       // Save to Firestore logic
@@ -276,21 +344,27 @@ const handleSubmit = async () => {
           onChangeText={setTitle}
         />
 
-        {/* 3. Location Selection */}
-        <View style={{ flexDirection: 'row-reverse', gap: 12, marginBottom: spacing.xl }}>
-            <SelectField 
-                label="מדינה"
-                placeholder="בחר מדינה"
-                value={selectedCountry ? (selectedCountry.name || selectedCountry.id) : null}
-                onPress={() => openSelectionModal('COUNTRY')}
-            />
-            <SelectField 
-                label="עיר"
-                placeholder="בחר עיר"
-                value={selectedCity ? (selectedCity.name || selectedCity.id) : null}
-                onPress={() => openSelectionModal('CITY')}
-                disabled={!selectedCountry}
-            />
+        {/* 3. Exact Location Selection (local-first) */}
+        <View style={{ marginBottom: spacing.xl }}>
+          <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+            מיקום מדויק
+          </Text>
+          <GooglePlacesInput
+            mode="google"
+            value={locationQuery}
+            onChangeValue={(text) => {
+              setLocationQuery(text);
+              setSelectedPlace(null);
+              // Don't clear selected destination immediately; user may be editing text.
+            }}
+            localResults={localAutocompleteResults}
+            localResultsLoading={localResultsLoading}
+            onSelectLocal={handleSelectLocalCity}
+            onSelect={handleSelectGooglePlace}
+            googleFallbackDelayMs={2000}
+            googleSearchFn={(text, opts) => searchPlaces(text, { ...opts, types: 'all' })}
+            placeholder="חפש מקום / אטרקציה / מסעדה..."
+          />
         </View>
 
         {/* 4. Description Input */}
@@ -354,17 +428,6 @@ const handleSubmit = async () => {
         </TouchableOpacity>
 
       </ScrollView>
-
-      {/* --- Selection Modal --- */}
-      <SelectionModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        title={selectionType === 'COUNTRY' ? 'בחר מדינה' : 'בחר עיר'}
-        data={selectionType === 'COUNTRY' ? countries : cities}
-        onSelect={selectionType === 'COUNTRY' ? onCountrySelect : onCitySelect}
-        selectedId={selectionType === 'COUNTRY' ? selectedCountry?.id : selectedCity?.id}
-        emptyText={selectionType === 'CITY' ? "No cities found for this country" : "Loading..."}
-      />
 
     </View>
   );
