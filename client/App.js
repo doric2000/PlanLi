@@ -5,11 +5,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import LoginScreen from "./src/features/auth/screens/LoginScreen";
 import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import TabNavigator from "./src/navigation/TabNavigator";
+import ChangeNameScreen from "./src/features/profile/screens/ChangeNameScreen";
+import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordScreen";
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
 import RecommendationDetailScreen from "./src/features/community/screens/RecommendationDetailScreen";
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
+import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
 import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
@@ -47,6 +50,9 @@ export default function App() {
 					<Stack.Screen name='Main' component={RightDrawerNavigator} />
 					<Stack.Screen name="EditProfile" component={EditProfileScreen} />
 					<Stack.Screen name="Notifications" component={NotificationScreen} />
+					<Stack.Screen name='Settings' component={SettingsScreen} />
+					<Stack.Screen name="ChangeName" component={ChangeNameScreen} />
+					<Stack.Screen name="ChangePassword" component={ChangePasswordScreen} /> 
 					<Stack.Screen name='Route' component={RoutesScreen} />
 					<Stack.Screen
 						name='AddRecommendation'

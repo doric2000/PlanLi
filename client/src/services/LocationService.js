@@ -3,7 +3,7 @@ import { db } from '../config/firebase';
 import { Platform } from 'react-native';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
-const PLACES_PROXY_BASE_URL = process.env.EXPO_PUBLIC_PLACES_PROXY_BASE_URL || 'http://localhost:5000';
+const PLACES_PROXY_BASE_URL = process.env.EXPO_PUBLIC_PLACES_PROXY_BASE_URL || 'http://localhost:8082';
 
 const fetchPlacesAutocomplete = async (searchText, { signal, types = '(cities)' } = {}) => {
   // On web, call our own server to avoid browser CORS restrictions.

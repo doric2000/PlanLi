@@ -50,7 +50,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   const handleEdit = () => {
     navigation.navigate('AddRecommendation', {
       mode: 'edit',
-      item,
+      recommendation: item,
       postId: item.id,
     });
   };
