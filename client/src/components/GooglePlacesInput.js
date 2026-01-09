@@ -25,6 +25,8 @@ export default function GooglePlacesInput({
   onSelectLocal,
   localResultsLoading = false,
   googleFallbackDelayMs = 2000,
+  googleSearchFn,
+  placeholder = 'חפש עיר...',
 }) {
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
@@ -63,6 +65,8 @@ export default function GooglePlacesInput({
   const DEBOUNCE_MS = 650;
   const COOLDOWN_MS = 1200;
   const LOCAL_MIN_QUERY_LENGTH = 2;
+
+  const resolvedGoogleSearchFn = typeof googleSearchFn === 'function' ? googleSearchFn : searchCities;
 
   // Keep internal query in sync when controlled from above.
   useEffect(() => {
@@ -196,7 +200,7 @@ export default function GooglePlacesInput({
         lastRequestAt.current = Date.now();
         lastRequestedQuery.current = text;
 
-        const results = await searchCities(text, { signal: abortRef.current.signal });
+        const results = await resolvedGoogleSearchFn(text, { signal: abortRef.current.signal });
         cacheRef.current.set(text, results);
         setPredictions(results);
       } catch (e) {
@@ -276,7 +280,7 @@ export default function GooglePlacesInput({
         />
         <TextInput
           style={[common.homeSearchInput, googlePlacesInput.input]}
-          placeholder="חפש עיר..."
+          placeholder={placeholder}
           value={query}
           onChangeText={handleTextChange}
           autoCorrect={false}
