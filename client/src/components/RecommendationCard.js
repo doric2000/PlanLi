@@ -271,22 +271,25 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         </View>
 
         {(item.location || item.country) && (
-          <TouchableOpacity 
-            style={cards.recLocationRow}
-            onPress={() => {
-              if (item.cityId && item.countryId) {
-                navigation.navigate('LandingPage', {
-                  cityId: item.cityId,
-                  countryId: item.countryId
-                });
-              }
-            }}
-          >
-            <Ionicons name="location-outline" size={14} color="#2EC4B6" />
-            <Text style={cards.recLocationText}>
-              {item.location}{item.country ? `, ${item.country}` : ''}
-            </Text>
-          </TouchableOpacity>
+          <View style={cards.recLocationRow}>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center' }}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (item.cityId && item.countryId) {
+                  navigation.navigate('LandingPage', {
+                    cityId: item.cityId,
+                    countryId: item.countryId,
+                  });
+                }
+              }}
+            >
+              <Ionicons name="location-outline" size={14} color="#2EC4B6" />
+              <Text style={cards.recLocationText}>
+                {item.location}{item.country ? `, ${item.country}` : ''}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <Text style={cards.recDescription} numberOfLines={3}>
