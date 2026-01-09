@@ -112,8 +112,29 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
     setTitle(editItem.title || '');
     setDescription(editItem.description || '');
-    setCategory(editItem.categoryId || '');
-    setSelectedTags(Array.isArray(editItem.tags) ? editItem.tags : []);
+
+    const resolvedCategoryId = (() => {
+      const fromId = typeof editItem.categoryId === 'string' ? editItem.categoryId.trim() : '';
+      if (fromId) return fromId;
+
+      const raw = typeof editItem.category === 'string' ? editItem.category.trim() : '';
+      if (!raw) return '';
+
+      // Backward-compat: older docs may have stored the Hebrew label in `category`.
+      const byId = PARENT_CATEGORIES.find((c) => c.id === raw);
+      if (byId) return byId.id;
+      const byLabel = PARENT_CATEGORIES.find((c) => c.label === raw);
+      return byLabel?.id || '';
+    })();
+
+    const resolvedTags = Array.isArray(editItem.tags)
+      ? editItem.tags
+          .map((t) => (typeof t === 'string' ? t.trim() : String(t).trim()))
+          .filter(Boolean)
+      : [];
+
+    setCategory(resolvedCategoryId);
+    setSelectedTags(resolvedTags);
     setBudget(editItem.budget || '');
 
     const initialCountryId = editItem.countryId || null;
