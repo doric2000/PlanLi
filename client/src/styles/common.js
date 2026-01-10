@@ -100,13 +100,13 @@ export const common = {
 	},
 
 	heroDotsContainer: {
-		position: 'absolute',
+		position: "absolute",
 		bottom: 14,
 		left: 0,
 		right: 0,
-		flexDirection: 'row',
-		justifyContent: 'center',
-		alignItems: 'center',
+		flexDirection: "row",
+		justifyContent: "center",
+		alignItems: "center",
 		gap: 6,
 	},
 
@@ -762,7 +762,11 @@ export const common = {
 		fontSize: 18,
 		fontWeight: "700",
 		color: "#111827",
-		marginBottom: 12,
+		marginBottom: 0,
+		textAlign: "right",
+		writingDirection: "rtl",
+		paddingRight: 25,
+		paddingTop: 15,
 	},
 
 	homeSeeAllText: {
