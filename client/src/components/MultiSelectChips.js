@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { tags as tagsStyle } from '../styles';
+import { getBudgetTheme } from '../utils/getBudgetTheme';
 
 export default function MultiSelectChips({
   label,
@@ -28,14 +29,35 @@ export default function MultiSelectChips({
       <View style={tagsStyle.chipRow}>
         {options.map((opt) => {
           const isSelected = sel.includes(opt);
+          const budgetTheme = styleVariant === 'budget' ? getBudgetTheme(opt) : null;
           return (
             <TouchableOpacity
               key={opt}
-              style={[chipStyle, isSelected && chipSelectedStyle]}
+              style={[
+                chipStyle,
+                isSelected && chipSelectedStyle,
+                styleVariant === 'budget' && isSelected
+                  ? {
+                      backgroundColor: budgetTheme.backgroundColor,
+                      borderColor: budgetTheme.borderColor,
+                      borderWidth: 1,
+                    }
+                  : null,
+              ]}
               onPress={() => toggle(opt)}
               activeOpacity={0.85}
             >
-              <Text style={[chipTextStyle, isSelected && chipTextSelectedStyle]}>{opt}</Text>
+              <Text
+                style={[
+                  chipTextStyle,
+                  isSelected && chipTextSelectedStyle,
+                  styleVariant === 'budget' && isSelected
+                    ? { color: budgetTheme.textColor }
+                    : null,
+                ]}
+              >
+                {opt}
+              </Text>
             </TouchableOpacity>
           );
         })}

@@ -30,6 +30,7 @@ import { getOrCreateDestinationForPlace, searchPlaces } from '../../../services/
 
 // --- Constants ---
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
+import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 
 
 
@@ -443,6 +444,7 @@ const handleSubmit = async () => {
           items={PRICE_TAGS}
           selectedValue={budget}
           onSelect={setBudget}
+          getItemTheme={getBudgetTheme}
         />
 
         {/* 8. Submit Button */}

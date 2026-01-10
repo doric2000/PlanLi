@@ -25,6 +25,7 @@ import { RecommendationActionBar } from '../../../components/RecommendationActio
 import LikesModal from '../../../components/LikesModal';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { colors, typography, common, tags as tagsStyle } from '../../../styles';
+import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 
 /**
  * RecommendationDetailScreen - Full view of a recommendation
@@ -37,6 +38,8 @@ import { colors, typography, common, tags as tagsStyle } from '../../../styles';
  */
 export default function RecommendationDetailScreen({ route, navigation }) {
   const { item } = route.params;
+
+  const budgetTheme = getBudgetTheme(item?.budget);
 
   const insets = useSafeAreaInsets();
   
@@ -79,9 +82,29 @@ export default function RecommendationDetailScreen({ route, navigation }) {
 
               {/* Content Section */}
               <View style={common.detailContent}>
-              {item.category && (
-                <View style={styles.categoryPill}>
-                  <Text style={styles.categoryPillText}>{item.category}</Text>
+              {(item.category || item.budget) && (
+                <View style={styles.topPillsRow}>
+                  {!!item.budget && (
+                    <View
+                      style={[
+                        styles.pricePill,
+                        {
+                          backgroundColor: budgetTheme.backgroundColor,
+                          borderColor: budgetTheme.borderColor,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.pricePillText, { color: budgetTheme.textColor }]}>
+                        {item.budget}
+                      </Text>
+                    </View>
+                  )}
+
+                  {!!item.category && (
+                    <View style={styles.categoryPill}>
+                      <Text style={styles.categoryPillText}>{item.category}</Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -98,20 +121,6 @@ export default function RecommendationDetailScreen({ route, navigation }) {
                 </View>
                 <RecommendationMeta item={item} navigation={navigation} />
               </View>
-
-              {!!item.budget && (
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
-                    <Text style={styles.sectionHeaderText}>מחיר</Text>
-                  </View>
-                  <View style={styles.budgetRow}>
-                    <View style={[tagsStyle.chip, styles.budgetChip]}>
-                      <Text style={[tagsStyle.chipText, styles.budgetChipText]}>{item.budget}</Text>
-                    </View>
-                  </View>
-                </View>
-              )}
 
               {!!item.description && (
                 <View style={styles.sectionCard}>
@@ -187,20 +196,37 @@ export default function RecommendationDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  topPillsRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
   categoryPill: {
-    alignSelf: 'flex-end',
     backgroundColor: '#EFF6FF',
     borderColor: '#DBEAFE',
     borderWidth: 1,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
-    marginBottom: 10,
   },
   categoryPillText: {
     color: '#2563EB',
     fontWeight: '800',
     fontSize: 12,
+  },
+
+  pricePill: {
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+  },
+  pricePillText: {
+    fontWeight: '800',
+    fontSize: 12,
+    textAlign: 'right',
   },
 
   titleRtl: {
@@ -254,20 +280,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 12,
     textAlign: 'right',
-  },
-
-  budgetRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  budgetChip: {
-    backgroundColor: colors.secondaryLight,
-    borderColor: colors.secondary,
-  },
-  budgetChipText: {
-    color: colors.secondary,
-    fontWeight: '700',
   },
 
   stickyActionBar: {

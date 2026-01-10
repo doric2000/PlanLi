@@ -15,7 +15,8 @@ const SegmentedControl = ({
   label, 
   items, 
   selectedValue, 
-  onSelect 
+  onSelect,
+  getItemTheme,
 }) => {
   return (
     <View style={styles.container}>
@@ -24,18 +25,35 @@ const SegmentedControl = ({
       <View style={styles.row}>
         {items.map((item) => {
           const isSelected = selectedValue === item;
+          const theme = typeof getItemTheme === 'function' ? getItemTheme(item) : null;
+
+          const selectedButtonStyle = isSelected
+            ? {
+                backgroundColor: theme?.backgroundColor || styles.buttonSelected.backgroundColor,
+                borderColor: theme?.borderColor || styles.buttonSelected.backgroundColor,
+              }
+            : null;
+
+          const selectedTextStyle = isSelected
+            ? {
+                color: theme?.textColor || styles.textSelected.color,
+              }
+            : null;
+
           return (
             <TouchableOpacity
               key={item}
               style={[
                 styles.button, 
-                isSelected && styles.buttonSelected
+                isSelected && styles.buttonSelected,
+                selectedButtonStyle,
               ]}
               onPress={() => onSelect(item)}
             >
               <Text style={[
                 styles.text, 
-                isSelected && styles.textSelected
+                isSelected && styles.textSelected,
+                selectedTextStyle,
               ]}>
                 {item}
               </Text>

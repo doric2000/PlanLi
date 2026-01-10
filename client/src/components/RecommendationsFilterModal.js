@@ -5,6 +5,7 @@ import { common, spacing } from '../styles';
 
 // --- Import constants for hierarchical logic ---
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../constants/Constants';
+import { getBudgetTheme } from '../utils/getBudgetTheme';
 
 // --- Import Modular Components ---
 import ChipSelector from '../features/community/components/ChipSelector';
@@ -150,6 +151,7 @@ export default function RecommendationsFilterModal({
             selectedValue={tempBudgets}
             onSelect={toggleBudget}
             multiSelect={true}
+            getItemTheme={getBudgetTheme}
           />
         </View>
       </ScrollView>

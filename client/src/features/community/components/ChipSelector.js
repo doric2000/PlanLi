@@ -7,7 +7,8 @@ const ChipSelector = ({
   items,
   selectedValue,
   onSelect,
-  multiSelect = false
+  multiSelect = false,
+  getItemTheme,
 }) => {
 
   const safeItems = Array.isArray(items) ? items : []; 
@@ -31,13 +32,30 @@ const ChipSelector = ({
       >
         {safeItems.map((item) => {
           const active = isSelected(item);
+          const theme = typeof getItemTheme === 'function' ? getItemTheme(item) : null;
           return (
             <TouchableOpacity
               key={String(item)}
-              style={[tags.chip, active && tags.chipSelected]}
+              style={[
+                tags.chip,
+                active && tags.chipSelected,
+                active && theme
+                  ? {
+                      backgroundColor: theme.backgroundColor,
+                      borderColor: theme.borderColor,
+                      borderWidth: 1,
+                    }
+                  : null,
+              ]}
               onPress={() => onSelect(item)}
             >
-              <Text style={[tags.chipText, active && tags.chipTextSelected]}>
+              <Text
+                style={[
+                  tags.chipText,
+                  active && tags.chipTextSelected,
+                  active && theme ? { color: theme.textColor, fontWeight: '700' } : null,
+                ]}
+              >
                 {item}
               </Text>
             </TouchableOpacity>
