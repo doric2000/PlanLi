@@ -6,9 +6,9 @@ import { colors, common, spacing, typography } from '../styles';
  * Reusable Header Component.
  * Enforces a symmetrical 3-column layout.
  */
-const ScreenHeader = ({ title, subtitle, renderRight, renderLeft }) => {
+const ScreenHeader = ({ title, subtitle, renderRight, renderLeft, compact = false }) => {
   return (
-    <View style={styles.headerRow}>
+    <View style={[styles.headerRow, compact && styles.headerRowCompact]}>
       
       {/* Right Side (Actions) */}
       <View style={styles.sideContainerRight}>
@@ -46,6 +46,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.background,
     minHeight: 60,
+  },
+  headerRowCompact: {
+    paddingVertical: spacing.sm,
+    minHeight: 52,
   },
   sideContainerRight: {
     width: 80, // Fixed width enforces symmetry
