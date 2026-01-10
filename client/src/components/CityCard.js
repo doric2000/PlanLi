@@ -39,10 +39,10 @@ export default function CityCard({ city, onPress, style }) {
             ]}
           />
         )}
-        <View style={cards.popularRatingBadge}>
+        {/* <View style={cards.popularRatingBadge}>
           <Ionicons name="star" size={12} color="#FFD700" />
           <Text style={cards.popularRatingText}>{city.rating}</Text>
-        </View>
+        </View> */}
       </View>
       <View style={cards.popularInfo}>
         <Text style={cards.popularCity}>{city.name || city.id}</Text>
