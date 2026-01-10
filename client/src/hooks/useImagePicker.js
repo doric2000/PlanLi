@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, Platform, Image as RNImage } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 /**
  * Configuration options for the image picker
@@ -17,6 +18,66 @@ const DEFAULT_OPTIONS = {
   aspect: [4, 3],
   quality: 0.5,
   allowsEditing: true,
+
+  // Optional: normalize output to a strict aspect/size (Instagram-like)
+  normalizeToAspect: false,
+  normalizeAspect: [4, 5],
+  normalizeWidth: 1080,
+  normalizeHeight: 1350,
+  normalizeCompress: 0.9,
+};
+
+const getImageSize = (uri) => {
+  return new Promise((resolve, reject) => {
+    RNImage.getSize(
+      uri,
+      (width, height) => resolve({ width, height }),
+      (err) => reject(err)
+    );
+  });
+};
+
+const normalizeImageUri = async (uri, config) => {
+  if (!config.normalizeToAspect) return uri;
+  if (!uri) return uri;
+
+  try {
+    const { width, height } = await getImageSize(uri);
+    if (!width || !height) return uri;
+
+    const targetAspect = (config.normalizeAspect?.[0] || 4) / (config.normalizeAspect?.[1] || 5);
+    const currentAspect = width / height;
+
+    let cropWidth = width;
+    let cropHeight = height;
+    if (currentAspect > targetAspect) {
+      // too wide
+      cropWidth = Math.round(height * targetAspect);
+      cropHeight = height;
+    } else {
+      // too tall
+      cropWidth = width;
+      cropHeight = Math.round(width / targetAspect);
+    }
+
+    const originX = Math.max(0, Math.round((width - cropWidth) / 2));
+    const originY = Math.max(0, Math.round((height - cropHeight) / 2));
+
+    const actions = [
+      { crop: { originX, originY, width: cropWidth, height: cropHeight } },
+      { resize: { width: config.normalizeWidth, height: config.normalizeHeight } },
+    ];
+
+    const result = await ImageManipulator.manipulateAsync(uri, actions, {
+      compress: config.normalizeCompress,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+
+    return result?.uri || uri;
+  } catch (err) {
+    console.warn('normalizeImageUri failed, using original:', err);
+    return uri;
+  }
 };
 
 /**
@@ -79,7 +140,7 @@ export const useImagePicker = (options = {}) => {
       });
 
       if (!result.canceled && result.assets[0]?.uri) {
-        const uri = result.assets[0].uri;
+        const uri = await normalizeImageUri(result.assets[0].uri, config);
         setImageUri(uri);
         setError(null);
         return uri;
@@ -91,7 +152,7 @@ export const useImagePicker = (options = {}) => {
       Alert.alert("Error", "Failed to pick image.");
       return null;
     }
-  }, [config.allowsEditing, config.aspect, config.quality, requestGalleryPermission]);
+  }, [config, requestGalleryPermission]);
 
   /**
    * Pick multiple images from the device's photo library.
@@ -114,7 +175,12 @@ export const useImagePicker = (options = {}) => {
       });
 
       if (result.canceled) return [];
-      const uris = (result.assets || []).map(a => a?.uri).filter(Boolean);
+      const picked = (result.assets || []).map(a => a?.uri).filter(Boolean);
+      const uris = [];
+      for (const uri of picked) {
+        // eslint-disable-next-line no-await-in-loop
+        uris.push(await normalizeImageUri(uri, config));
+      }
       if (uris.length) {
         setImageUri(uris[0]);
         setError(null);
@@ -126,7 +192,7 @@ export const useImagePicker = (options = {}) => {
       Alert.alert("Error", "Failed to pick images.");
       return [];
     }
-  }, [config.quality, requestGalleryPermission]);
+  }, [config, requestGalleryPermission]);
 
   /**
    * Capture an image using the device's camera
@@ -144,7 +210,7 @@ export const useImagePicker = (options = {}) => {
       });
 
       if (!result.canceled && result.assets[0]?.uri) {
-        const uri = result.assets[0].uri;
+        const uri = await normalizeImageUri(result.assets[0].uri, config);
         setImageUri(uri);
         setError(null);
         return uri;
@@ -156,7 +222,7 @@ export const useImagePicker = (options = {}) => {
       Alert.alert("Error", "Failed to take photo.");
       return null;
     }
-  }, [config.allowsEditing, config.aspect, config.quality, requestCameraPermission]);
+  }, [config, requestCameraPermission]);
 
   /**
    * Handle web file input

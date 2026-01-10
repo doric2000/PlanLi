@@ -67,6 +67,7 @@ export default function TabNavigator() {
           },
           tabBarActiveTintColor: config.activeColor,
           tabBarInactiveTintColor: 'gray',
+          tabBarLabel: config.label,
           headerShown: false,
         });
       }}

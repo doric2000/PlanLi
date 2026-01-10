@@ -69,7 +69,7 @@ export default function NotificationScreen() {
           const item = { id: docSnap.id, ...docSnap.data() };
           navigation.navigate('RecommendationDetail', { item });
         } else {
-          Alert.alert('Error', 'This post no longer exists.');
+          Alert.alert('שגיאה', 'הפוסט הזה כבר לא קיים.');
         }
       } else if (postType === PostType.ROUTE) {
         const docRef = doc(db, 'routes', postId);
@@ -79,36 +79,36 @@ export default function NotificationScreen() {
           const routeData = { id: docSnap.id, ...docSnap.data() };
           navigation.navigate('RouteDetail', { routeData });
         } else {
-          Alert.alert('Error', 'This route no longer exists.');
+          Alert.alert('שגיאה', 'המסלול הזה כבר לא קיים.');
         }
       }
     } catch (error) {
       console.error('Error fetching post data:', error);
-      Alert.alert('Error', 'Failed to load the post. Please try again.');
+      Alert.alert('שגיאה', 'לא ניתן לטעון את הפוסט. נסו שוב.');
     }
   };
 
   // Handle clear all notifications
   const handleClearAll = () => {
     Alert.alert(
-      'Clear All Notifications',
-      'Are you sure you want to clear all notifications? This action cannot be undone.',
+      'ניקוי כל ההתראות',
+      'בטוח שברצונך למחוק את כל ההתראות? לא ניתן לבטל פעולה זו.',
       [
         {
-          text: 'Cancel',
+          text: 'ביטול',
           style: 'cancel',
         },
         {
-          text: 'Clear All',
+          text: 'נקה הכל',
           style: 'destructive',
           onPress: async () => {
             try {
               const count = await clearAll();
               if (count > 0) {
-                Alert.alert('Success', `Cleared ${count} notification${count > 1 ? 's' : ''}`);
+                Alert.alert('הצלחה', `נמחקו ${count} התראות`);
               }
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear notifications. Please try again.');
+              Alert.alert('שגיאה', 'לא ניתן לנקות התראות. נסו שוב.');
             }
           },
         },
@@ -120,9 +120,9 @@ export default function NotificationScreen() {
   const renderEmptyState = () => (
     <View style={notificationStyles.emptyContainer}>
       <Ionicons name="notifications-off-outline" size={80} color="#6C757D" />
-      <Text style={notificationStyles.emptyTitle}>No Notifications</Text>
+      <Text style={notificationStyles.emptyTitle}>אין התראות</Text>
       <Text style={notificationStyles.emptySubtitle}>
-        When someone likes or comments on your posts, you'll see it here
+        כשמישהו עושה לייק או מגיב לפוסטים שלך, זה יופיע כאן
       </Text>
     </View>
   );
@@ -142,7 +142,7 @@ export default function NotificationScreen() {
         ) : (
           <>
             <Ionicons name="trash-outline" size={18} color="#1E3A5F" />
-            <Text style={notificationStyles.clearButtonText}>Clear All</Text>
+            <Text style={notificationStyles.clearButtonText}>נקה הכל</Text>
           </>
         )}
       </TouchableOpacity>
@@ -167,7 +167,7 @@ export default function NotificationScreen() {
   if (loading) {
     return (
       <SafeAreaView style={notificationStyles.screenContainer}>
-        <ScreenHeader title="Notifications" renderLeft={renderHeaderLeft} />
+        <ScreenHeader title="התראות" renderLeft={renderHeaderLeft} />
         <View style={notificationStyles.loadingCenter}>
           <ActivityIndicator size="large" color="#1E3A5F" />
         </View>
@@ -179,11 +179,11 @@ export default function NotificationScreen() {
     <SafeAreaView style={notificationStyles.screenContainer}>
       {/* Header */}
       <ScreenHeader
-        title="Notifications"
+        title="התראות"
         subtitle={
           notifications.length > 0
-            ? `${notifications.length} notification${notifications.length > 1 ? 's' : ''}`
-            : 'Stay updated with your posts'
+            ? `${notifications.length} התראות`
+            : 'כאן תמצאו עדכונים על הפוסטים שלכם'
         }
         renderRight={renderHeaderRight}
         renderLeft={renderHeaderLeft}

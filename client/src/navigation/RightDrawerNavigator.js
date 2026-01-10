@@ -14,10 +14,10 @@ import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 const Drawer = createDrawerNavigator();
 
 const MENU_ITEMS = [
-  { icon: 'person-outline', label: 'Edit Profile' },
-  { icon: 'settings-outline', label: 'Settings' },
-  { icon: 'notifications-outline', label: 'Notifications' },
-  { icon: 'help-circle-outline', label: 'Help & Support' },
+  { key: 'editProfile', icon: 'person-outline', label: 'עריכת פרופיל' },
+  { key: 'settings', icon: 'settings-outline', label: 'הגדרות' },
+  { key: 'notifications', icon: 'notifications-outline', label: 'התראות' },
+  { key: 'support', icon: 'help-circle-outline', label: 'עזרה ותמיכה' },
 ];
 
 function CustomDrawerContent(props) {
@@ -44,31 +44,31 @@ function CustomDrawerContent(props) {
   };
 
   const handleMenuPress = useCallback(
-    (label) => {
-      if (label === 'Edit Profile') {
+    (key) => {
+      if (key === 'editProfile') {
         navigation.closeDrawer?.();
         rootStackNav?.navigate?.('EditProfile');
         return;
       }
 
-      if (label === 'Notifications') {
+      if (key === 'notifications') {
         navigation.closeDrawer?.();
         rootStackNav?.navigate?.('Notifications');
         return;
       }
 
-      if (label === 'Settings') {
+      if (key === 'settings') {
         navigation.closeDrawer?.();
         rootStackNav?.navigate?.('Settings');
         return;
       }
 
-      if (label === 'Help & Support') {
+      if (key === 'support') {
         goToProfile({ openSupport: true });
         return;
       }
 
-      Alert.alert('Coming soon', label);
+      Alert.alert('בקרוב', 'הפיצ’ר הזה עדיין לא זמין');
       navigation.closeDrawer?.();
     },
     [navigation, rootStackNav, goToProfile]
@@ -85,14 +85,14 @@ function CustomDrawerContent(props) {
         routes: [{ name: 'Login' }],
       });
     } catch (e) {
-      Alert.alert('Error', 'Failed to sign out: ' + e.message);
+      Alert.alert('שגיאה', 'לא ניתן להתנתק: ' + e.message);
     }
   }, [navigation, rootStackNav]);
 
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
       <View style={{ padding: 16 }}>
-        <Text style={[typography.sectionTitle, { marginBottom: 12 }]}>Menu</Text>
+        <Text style={[typography.sectionTitle, { marginBottom: 12, textAlign: 'right' }]}>תפריט</Text>
 
         <ProfileMenuList 
           items={MENU_ITEMS} 
@@ -104,10 +104,10 @@ function CustomDrawerContent(props) {
 
         <TouchableOpacity style={buttons.signOut} onPress={handleSignOut} activeOpacity={0.85}>
           <MaterialIcons name="logout" size={20} color={colors.error} />
-          <Text style={buttons.signOutText}>Sign Out</Text>
+          <Text style={buttons.signOutText}>התנתקות</Text>
         </TouchableOpacity>
 
-        <Text style={typography.profileVersion}>Version {appConfig.expo.version}</Text>
+        <Text style={typography.profileVersion}>גרסה {appConfig.expo.version}</Text>
       </View>
     </DrawerContentScrollView>
   );

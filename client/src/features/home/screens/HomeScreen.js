@@ -16,6 +16,7 @@ import { db } from '../../../config/firebase';
 import { colors, spacing, typography, buttons, shadows, common, cards } from '../../../styles';
 import GooglePlacesInput from '../../../components/GooglePlacesInput'; 
 import { getOrCreateDestination } from '../../../services/LocationService';
+import { Ionicons } from '@expo/vector-icons';
 /**
  * Landing screen for the application.
  * Displays trending destinations, popular places, and a community feed.
@@ -231,7 +232,10 @@ export default function HomeScreen({ navigation }) {
 
         {/* Trending Now (Static for now) */}
         <View style={common.homeSection}>
-          <Text style={common.homeSectionTitle}>Trending Now 📈</Text>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="trending-up-outline" size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />
+            <Text style={common.homeSectionTitle}>Trending Now</Text>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={common.homeHorizontalScroll}>
             {['Thailand', 'Greece', 'Iceland', 'Portugal'].map(renderTrendingItem)}
           </ScrollView>
@@ -278,6 +282,10 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   searchContainer: {
     width: '100%',
     position: 'relative',

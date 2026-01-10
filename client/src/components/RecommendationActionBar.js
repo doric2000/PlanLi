@@ -3,9 +3,18 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { common, colors } from '../styles';
 
-export const RecommendationActionBar = ({ isLiked, likeCount, commentsCount, onLikePress, onLikesListPress, onSharePress }) => {
+export const RecommendationActionBar = ({
+  isLiked,
+  likeCount,
+  commentsCount,
+  onCommentPress,
+  onLikePress,
+  onLikesListPress,
+  onSharePress,
+  style,
+}) => {
   return (
-    <View style={common.actionBar}>
+    <View style={[common.actionBar, style]}>
       <TouchableOpacity style={common.actionBarItem} onPress={onLikePress}>
         <Ionicons
           name={isLiked ? "heart" : "heart-outline"}
@@ -17,9 +26,9 @@ export const RecommendationActionBar = ({ isLiked, likeCount, commentsCount, onL
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={common.actionBarItem}>
+      <TouchableOpacity style={common.actionBarItem} onPress={onCommentPress}>
         <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
-        <Text style={common.actionBarText}>{commentsCount.length}</Text>
+        <Text style={common.actionBarText}>{commentsCount}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
@@ -27,12 +36,12 @@ export const RecommendationActionBar = ({ isLiked, likeCount, commentsCount, onL
         onPress={() => likeCount > 0 && onLikesListPress()}
       >
         <Ionicons name="people-outline" size={24} color={colors.textSecondary} />
-        <Text style={common.actionBarText}>Likes</Text>
+        <Text style={common.actionBarText}>לייקים</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={common.actionBarItem} onPress={onSharePress}>
         <Ionicons name="share-social-outline" size={24} color={colors.textSecondary} />
-        <Text style={common.actionBarText}>Share</Text>
+        <Text style={common.actionBarText}>שיתוף</Text>
       </TouchableOpacity>
     </View>
   );

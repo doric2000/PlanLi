@@ -31,6 +31,7 @@ export const ImagePickerBox = ({
   height = 200,
   style,
   imageStyle,
+  imageFit = 'cover',
   disabled = false,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
@@ -71,9 +72,9 @@ export const ImagePickerBox = ({
       style={{
         width: pageWidth || '100%',
         height: '100%',
-        objectFit: 'cover',
+        objectFit: imageFit,
         display: 'block',
-        backgroundColor: '#F3F4F6',
+        backgroundColor: imageFit === 'contain' ? '#000000' : '#F3F4F6',
       }}
     />
   );
@@ -94,7 +95,12 @@ export const ImagePickerBox = ({
           <Text style={styles.placeholderText}>{placeholderText}</Text>
         </TouchableOpacity>
       ) : (
-        <View style={styles.carouselWrap}>
+        <View
+          style={[
+            styles.carouselWrap,
+            imageFit === 'contain' ? styles.carouselWrapContain : null,
+          ]}
+        >
           <FlatList
             ref={listRef}
             data={images}
@@ -111,7 +117,7 @@ export const ImagePickerBox = ({
                   <Image
                     source={{ uri }}
                     style={[styles.image, imageStyle, { width: pageWidth || '100%' }]}
-                    resizeMode="cover"
+                    resizeMode={imageFit}
                   />
                 )}
               </View>
@@ -191,6 +197,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#F3F4F6',
+  },
+  carouselWrapContain: {
+    backgroundColor: '#000000',
   },
   image: {
     height: '100%',

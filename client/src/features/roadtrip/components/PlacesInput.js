@@ -8,6 +8,7 @@ import {
 	FlatList,
 	ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, typography, shadows } from "../../../styles";
 
 const PlaceholderColor = colors.placeholder;
@@ -223,11 +224,17 @@ export default function PlacesInput({ places, setPlaces }) {
 									<Text style={styles.suggestionText}>
 										{place.name}
 									</Text>
-									<Text style={styles.suggestionType}>
-										{place.type === "country"
-											? "🌍 Country"
-											: "🏙️ City"}
-									</Text>
+									<View style={styles.suggestionTypeRow}>
+										<Ionicons
+											name={place.type === "country" ? "globe-outline" : "business-outline"}
+											size={12}
+											color={colors.textSecondary}
+											style={{ marginRight: 6 }}
+										/>
+										<Text style={styles.suggestionType}>
+											{place.type === "country" ? "מדינה" : "עיר"}
+										</Text>
+									</View>
 								</View>
 							</TouchableOpacity>
 						))}
@@ -347,6 +354,11 @@ const styles = StyleSheet.create({
 	suggestionType: {
 		fontSize: 11,
 		color: colors.textSecondary,
+		marginLeft: spacing.sm,
+	},
+	suggestionTypeRow: {
+		flexDirection: "row",
+		alignItems: "center",
 		marginLeft: spacing.sm,
 	},
 });

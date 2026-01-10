@@ -93,9 +93,11 @@ export const typography = {
 
 	profileMenuItemText: {
 		fontSize: 16,
-		marginLeft: 16,
+		marginRight: 16,
 		fontWeight: "500",
 		color: "#111827",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	profileVersion: {

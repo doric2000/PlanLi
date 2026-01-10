@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { common, typography, colors, tags as tagsStyle } from '../styles';
+import { common, typography, colors } from '../styles';
 
 export const RecommendationMeta = ({ item, navigation }) => {
   const openInGoogleMaps = () => {
@@ -22,47 +22,97 @@ export const RecommendationMeta = ({ item, navigation }) => {
   };
 
   return (
-    <View style={[common.row, { flexWrap: 'wrap', gap: 12, marginBottom: 16 }]}> 
+    <View style={styles.wrap}>
       {(item.location || item.country) && (
-        <TouchableOpacity 
-          style={common.row}
+        <TouchableOpacity
+          style={styles.rowButton}
+          activeOpacity={0.75}
           onPress={() => {
             if (item.cityId && item.countryId) {
               navigation.navigate('LandingPage', {
                 cityId: item.cityId,
-                countryId: item.countryId
+                countryId: item.countryId,
               });
             }
           }}
         >
-          <Ionicons name="location" size={16} color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginLeft: 4 }]}> 
+          <Ionicons name="location" size={16} color={colors.primary} style={styles.icon} />
+          <Text style={[typography.body, styles.rowText]}>
             {item.location}{item.country ? `, ${item.country}` : ''}
           </Text>
+          <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       )}
 
       {!!(item?.place?.placeId || item?.place?.coordinates) && (
-        <TouchableOpacity style={common.row} onPress={openInGoogleMaps}>
-          <Ionicons name="map-outline" size={16} color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textSecondary, marginLeft: 4 }]}> 
-            פתח ב-Google Maps
-          </Text>
+        <TouchableOpacity style={styles.mapsButton} activeOpacity={0.85} onPress={openInGoogleMaps}>
+          <Ionicons name="map-outline" size={18} color={colors.primary} style={styles.icon} />
+          <Text style={[typography.body, styles.mapsText]}>פתח בגוגל מפות</Text>
+          <View style={{ flex: 1 }} />
+          <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       )}
-      
-      {item.rating && (
-        <View style={common.ratingContainer}>
-          <Text style={common.ratingStar}>★</Text>
-          <Text style={common.ratingText}>{item.rating}</Text>
-        </View>
-      )}
 
-      {item.budget && (
-        <View style={[tagsStyle.chip, { backgroundColor: colors.secondaryLight, borderColor: colors.secondary }]}> 
-          <Text style={[tagsStyle.chipText, { color: colors.secondary }]}>{item.budget}</Text>
-        </View>
-      )}
+      {item.rating && <View style={styles.divider} />}
+
+      <View style={styles.badgesRow}>
+        {item.rating && (
+          <View style={common.ratingContainer}>
+            <Text style={common.ratingStar}>★</Text>
+            <Text style={common.ratingText}>{item.rating}</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  wrap: {
+    marginBottom: 4,
+  },
+  rowButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E8EEF5',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 10,
+  },
+  mapsButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(46,196,182,0.30)',
+    backgroundColor: 'rgba(46,196,182,0.10)',
+  },
+  icon: {
+    marginLeft: 8,
+  },
+  rowText: {
+    color: colors.textSecondary,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  mapsText: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E8EEF5',
+    marginVertical: 12,
+  },
+  badgesRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+});

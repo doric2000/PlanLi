@@ -150,9 +150,17 @@ export default function CommunityScreen({ navigation }) {
                         style={[localStyles.sortOption, sortBy === option && { backgroundColor: colors.background }]}
                         onPress={() => handleSortSelect(option)}
                     >
-                        <Text style={{ color: sortBy === option ? colors.primary : colors.textPrimary }}>
-                            {option === 'popularity' ? '🔥 הכי פופולרי' : '🕒 הכי חדש'}
-                        </Text>
+                    <View style={localStyles.sortOptionLabelRow}>
+                      <Ionicons
+                        name={option === 'popularity' ? 'trending-up-outline' : 'time-outline'}
+                        size={16}
+                        color={sortBy === option ? colors.primary : colors.textSecondary}
+                        style={{ marginLeft: 6 }}
+                      />
+                      <Text style={{ color: sortBy === option ? colors.primary : colors.textPrimary }}>
+                        {option === 'popularity' ? 'הכי פופולרי' : 'הכי חדש'}
+                      </Text>
+                    </View>
                         {sortBy === option && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                     </TouchableOpacity>
                 ))}
@@ -173,5 +181,9 @@ const localStyles = StyleSheet.create({
   },
   sortOption: {
     flexDirection: 'row-reverse', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee'
+  },
+  sortOptionLabelRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
   }
 });

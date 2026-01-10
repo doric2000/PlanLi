@@ -67,15 +67,19 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     const pageWidth = carouselWidth || windowWidth || 0;
 
     if (Platform.OS === 'web') {
-      const imgStyle = {
-        width: pageWidth || '100%',
-        height: '100%',
-        objectFit: 'cover',
-        display: 'block',
-        backgroundColor: '#F3F4F6',
-      };
       // Using <img> on web avoids RN-web's XHR image loader CORS restrictions.
-      return <img src={uri} style={imgStyle} alt="" />;
+      return (
+        <img
+          src={uri}
+          alt=""
+          style={{
+            width: pageWidth || '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
+      );
     }
 
     return (

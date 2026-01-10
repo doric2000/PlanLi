@@ -18,7 +18,7 @@ export const AuthorInfo = ({ author, item, isOwner }) => {
       </View>
       {!isOwner && (
         <TouchableOpacity style={buttons.primarySmall}>
-          <Text style={buttons.primarySmallText}>Follow</Text>
+          <Text style={buttons.primarySmallText}>מעקב</Text>
         </TouchableOpacity>
       )}
     </View>

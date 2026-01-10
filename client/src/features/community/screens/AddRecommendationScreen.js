@@ -71,7 +71,18 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const allCitiesFetchDebounceRef = useRef(null);
 
   // --- Image Handling ---
-  const { pickImages, uploadImages } = useImagePickerWithUpload({ storagePath: 'recommendations' });
+  const { pickImages, uploadImages } = useImagePickerWithUpload({
+    storagePath: 'recommendations',
+    // Instagram-like feed format: square 1:1 at 1080x1080
+    aspect: [1, 1],
+    allowsEditing: true,
+    quality: 0.9,
+    normalizeToAspect: true,
+    normalizeAspect: [1, 1],
+    normalizeWidth: 1080,
+    normalizeHeight: 1080,
+    normalizeCompress: 0.9,
+  });
   const existingImages = isEdit ? (editItem?.images || []) : [];
   const [editableImageUris, setEditableImageUris] = useState([]);
 
@@ -319,6 +330,7 @@ const handleSubmit = async () => {
           imageUris={editableImageUris}
           onPress={handleAddImages}
           placeholderText="הוסף תמונות (עד 5)"
+          imageFit="cover"
           style={{ marginBottom: spacing.xl }}
         />
 

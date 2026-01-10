@@ -5,11 +5,11 @@ import ProfileScreen from "../features/profile/screens/ProfileScreen";
 import FavoritesScreen from "../features/favorites/screen/FavoritesScreen";
 
 export const tabConfigs = {
-	Home: { icon: "home", activeColor: "#1A73E8" }, // Orange (brand)
-	Community: { icon: "people", activeColor: "#1E8E3E" }, // Blue (social)
-	Routes: { icon: "map", activeColor: "#673AB7" }, // Green (travel)
-	Favorites: { icon: "bookmark", activeColor: "#F9A825" }, // i think bookmark icon looks more modern, dor thinks like a old head and wants a star, if star is chosen as the favorite among our friends, chagne it to 'star'
-	Profile: { icon: "person", activeColor: "#E67C00" }, // Purple (personal)
+	Home: { icon: "home", activeColor: "#1A73E8", label: "בית" }, // Orange (brand)
+	Community: { icon: "people", activeColor: "#1E8E3E", label: "קהילה" }, // Blue (social)
+	Routes: { icon: "map", activeColor: "#673AB7", label: "מסלולים" }, // Green (travel)
+	Favorites: { icon: "bookmark", activeColor: "#F9A825", label: "מועדפים" }, // i think bookmark icon looks more modern, dor thinks like a old head and wants a star, if star is chosen as the favorite among our friends, chagne it to 'star'
+	Profile: { icon: "person", activeColor: "#E67C00", label: "פרופיל" }, // Purple (personal)
 };
 
 export const tabScreens = [

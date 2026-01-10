@@ -20,6 +20,13 @@ const DEFAULT_OPTIONS = {
   aspect: [4, 3],
   quality: 0.5,
   allowsEditing: true,
+
+  // Optional: normalize to strict aspect/size
+  normalizeToAspect: false,
+  normalizeAspect: [4, 5],
+  normalizeWidth: 1080,
+  normalizeHeight: 1350,
+  normalizeCompress: 0.9,
   // Uploader options
   storagePath: 'images',
   strategy: FirebaseUploadStrategy,
@@ -47,6 +54,11 @@ export const useImagePickerWithUpload = (options = {}) => {
     aspect: config.aspect,
     quality: config.quality,
     allowsEditing: config.allowsEditing,
+    normalizeToAspect: config.normalizeToAspect,
+    normalizeAspect: config.normalizeAspect,
+    normalizeWidth: config.normalizeWidth,
+    normalizeHeight: config.normalizeHeight,
+    normalizeCompress: config.normalizeCompress,
   });
 
   const uploader = useImageUploader({

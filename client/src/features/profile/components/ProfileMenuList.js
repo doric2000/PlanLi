@@ -9,13 +9,13 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
     <View style={cards.profileMenu}>
       {items.map((item, index) => {
         // Show badge only for Notifications item
-        const showBadge = item.label === 'Notifications' && notificationBadge > 0;
+        const showBadge = item.key === 'notifications' && notificationBadge > 0;
         
         return (
           <TouchableOpacity
-            key={item.label || index}
+            key={item.key || item.label || index}
             style={cards.profileMenuItem}
-            onPress={() => onPressItem?.(item.label)}
+            onPress={() => onPressItem?.(item.key ?? item.label)}
             activeOpacity={0.85}
           >
             <View style={cards.profileMenuItemLeft}>
@@ -32,7 +32,7 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
               <Text style={typography.profileMenuItemText}>{item.label}</Text>
             </View>
 
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         );
       })}

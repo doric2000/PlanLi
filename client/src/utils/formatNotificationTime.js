@@ -1,14 +1,14 @@
 /**
  * formatNotificationTime.js
- * 
+ *
  * Utility to format timestamps for notification display.
- * Shows time in HH:MM format if within 24 hours, otherwise shows days.
+ * Shows time in HH:MM format if within 24 hours, otherwise shows Hebrew relative days.
  */
 
 /**
  * Format notification timestamp according to requirements:
  * - Within 24 hours: HH:MM
- * - More than 24 hours: "1 day before", "2 days before", etc.
+ * - More than 24 hours: "אתמול", "לפני 2 ימים", etc.
  * 
  * @param {object|number|Date} timestamp - Firestore Timestamp, JS Date, or ms
  * @returns {string} Formatted time string
@@ -41,10 +41,10 @@ export function formatNotificationTime(timestamp) {
 
   // More than 24 hours: show days
   if (diffDays === 1) {
-    return '1 day before';
+    return 'אתמול';
   }
 
-  return `${diffDays} days before`;
+  return `לפני ${diffDays} ימים`;
 }
 
 /**
@@ -73,10 +73,10 @@ export function getShortRelativeTime(timestamp) {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m`;
-  if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays < 7) return `${diffDays}d`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
-  return `${Math.floor(diffDays / 30)}mo`;
+  if (diffMins < 1) return 'הרגע';
+  if (diffMins < 60) return `${diffMins} דק׳`;
+  if (diffHours < 24) return `${diffHours} ש׳`;
+  if (diffDays < 7) return `${diffDays} י׳`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} שב׳`;
+  return `${Math.floor(diffDays / 30)} ח׳`;
 }

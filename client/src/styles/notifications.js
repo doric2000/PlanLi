@@ -81,7 +81,7 @@ export const notifications = StyleSheet.create({
     padding: 12,
     marginHorizontal: 12,
     marginVertical: 4,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -98,7 +98,7 @@ export const notifications = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     gap: 8,
   },
   cardHeader: {
@@ -132,15 +132,19 @@ export const notifications = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 4,
     lineHeight: 18,
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   cardPostTitle: {
     fontSize: 12,
     color: '#6B7280',
     marginBottom: 4,
     fontStyle: 'italic',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   cardFooter: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -154,14 +158,17 @@ export const notifications = StyleSheet.create({
     fontSize: 12,
     color: '#1E3A5F',
     fontWeight: '500',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   cardTimestamp: {
     fontSize: 12,
     color: '#6B7280',
     fontWeight: '400',
+    textAlign: 'left',
   },
   cardArrowIcon: {
-    marginLeft: 4,
+    marginRight: 4,
   },
   cardUnreadDot: {
     width: 8,
@@ -170,6 +177,6 @@ export const notifications = StyleSheet.create({
     backgroundColor: '#FF9F1C',
     position: 'absolute',
     top: 12,
-    left: 12,
+    right: 12,
   },
 });

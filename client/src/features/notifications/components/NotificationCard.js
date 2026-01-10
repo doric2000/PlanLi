@@ -39,7 +39,7 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
   };
 
   const getPostTypeLabel = () => {
-    return postType === PostType.ROUTE ? 'Route' : 'Community';
+    return postType === PostType.ROUTE ? 'מסלול' : 'קהילה';
   };
 
   const message = formatNotificationMessage(notification);
@@ -77,7 +77,7 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
           </View>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} style={notifications.cardArrowIcon} />
+      <Ionicons name="chevron-back" size={20} color={colors.textSecondary} style={notifications.cardArrowIcon} />
     </TouchableOpacity>
   );
 };

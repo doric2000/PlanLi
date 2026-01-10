@@ -149,18 +149,22 @@ export const formatNotificationMessage = (notification) => {
 
   if (count === 1) {
     if (type === NotificationType.LIKE) {
-      return `${actorName} liked your post`;
+      return `${actorName} עשה לייק לפוסט שלך`;
     } else if (type === NotificationType.COMMENT) {
-      return `${actorName} commented on your post`;
+      return `${actorName} הגיב על הפוסט שלך`;
     }
   } else {
     const others = count - 1;
     if (type === NotificationType.LIKE) {
-      return `${actorName} and ${others} ${others === 1 ? 'other' : 'others'} liked your post`;
+      return others === 1
+        ? `${actorName} ועוד אדם אחד עשו לייק לפוסט שלך`
+        : `${actorName} ועוד ${others} אנשים עשו לייק לפוסט שלך`;
     } else if (type === NotificationType.COMMENT) {
-      return `${actorName} and ${others} ${others === 1 ? 'other' : 'others'} commented on your post`;
+      return others === 1
+        ? `${actorName} ועוד אדם אחד הגיבו על הפוסט שלך`
+        : `${actorName} ועוד ${others} אנשים הגיבו על הפוסט שלך`;
     }
   }
 
-  return 'New notification';
+  return 'התראה חדשה';
 };

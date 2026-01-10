@@ -49,8 +49,8 @@ export const cards = {
 	// Recommendation image carousel (used by RecommendationCard)
 	recCarouselContainer: {
 		width: '100%',
-		height: 220,
-		backgroundColor: '#F3F4F6',
+		aspectRatio: 1,
+		backgroundColor: '#000000',
 	},
 	recCarouselImage: {
 		height: '100%',
@@ -286,8 +286,8 @@ export const cards = {
 
 	recImage: {
 		width: "100%",
-		height: 220,
-		backgroundColor: "#F3F4F6",
+		aspectRatio: 1,
+		backgroundColor: "#000000",
 	},
 
 	recContent: {
@@ -511,7 +511,7 @@ export const cards = {
 	},
 
 	profileMenuItem: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		justifyContent: "space-between",
 		paddingVertical: 16,
@@ -521,7 +521,7 @@ export const cards = {
 	},
 
 	profileMenuItemLeft: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 	},
 };

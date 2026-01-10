@@ -175,9 +175,17 @@ export const CommentsSection = ({ collectionName, postId }) => {
       <View style={common.commentHeaderContainer}>
           <Text style={common.commentHeaderTitle}>תגובות ({comments.length})</Text>
           <TouchableOpacity onPress={() => setIsNewestFirst(!isNewestFirst)}>
-            <Text style={common.commentSortText}>
-                {isNewestFirst ? 'מיין: חדש קודם ⬇' : 'מיין: ישן קודם ⬆'}
-            </Text>
+            <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
+              <Ionicons
+                name={isNewestFirst ? 'arrow-down' : 'arrow-up'}
+                size={14}
+                color="#1E3A5F"
+                style={{ marginLeft: 6 }}
+              />
+              <Text style={common.commentSortText}>
+                {isNewestFirst ? 'מיין: חדש קודם' : 'מיין: ישן קודם'}
+              </Text>
+            </View>
           </TouchableOpacity>
       </View>
 
@@ -212,7 +220,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
           {submitting ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Ionicons name="send" size={20} color="#fff" />
+            <Ionicons name="send" size={20} color="#fff" style={common.commentSendIcon} />
           )}
         </TouchableOpacity>
       </View>

@@ -406,7 +406,7 @@ export const common = {
 
 	commentSortText: {
 		fontSize: 14,
-		color: "#2EC4B6",
+		color: "#1E3A5F",
 		fontWeight: "600",
 	},
 
@@ -479,12 +479,16 @@ export const common = {
 	},
 
 	commentSendButton: {
-		backgroundColor: "#2EC4B6",
+		backgroundColor: "#1E3A5F",
 		width: 36,
 		height: 36,
 		borderRadius: 18,
 		justifyContent: "center",
 		alignItems: "center",
+	},
+
+	commentSendIcon: {
+		transform: [{ scaleX: -1 }],
 	},
 
 	commentSendDisabled: {

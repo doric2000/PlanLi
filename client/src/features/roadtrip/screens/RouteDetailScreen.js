@@ -8,6 +8,7 @@ import {
     Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import PlacesRoute from '../components/PlacesRoute';
 import DayViewModal from '../components/DayViewModal';
 import { colors, common, tags as tagsStyle, typography, spacing } from '../../../styles';
@@ -71,8 +72,14 @@ export default function RouteDetailScreen({ route, navigation }) {
                     <Text style={{ ...typography.body, marginBottom: 16 }}>{routeData.desc}</Text>
                     
                     <View style={styles.metaRow}>
-                        <Text style={typography.meta}>📅 {routeData.days} days</Text>
-                        <Text style={typography.meta}>📍 {routeData.distance} km</Text>
+                        <View style={styles.metaItem}>
+                            <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+                            <Text style={typography.meta}>{routeData.days} days</Text>
+                        </View>
+                        <View style={styles.metaItem}>
+                            <Ionicons name="map-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
+                            <Text style={typography.meta}>{routeData.distance} km</Text>
+                        </View>
                     </View>
 
                     {/* Places with Arrows - Replace the old section */}
@@ -151,6 +158,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: spacing.lg,
         marginBottom: spacing.lg
+    },
+    metaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     placesSection: {
         marginBottom: spacing.lg
