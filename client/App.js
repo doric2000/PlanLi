@@ -10,6 +10,7 @@ import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordS
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
 import RecommendationDetailScreen from "./src/features/community/screens/RecommendationDetailScreen";
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
+import UserProfileScreen from "./src/features/profile/screens/UserProfileScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
@@ -63,6 +64,7 @@ export default function App() {
 					<Stack.Screen name='Settings' component={SettingsAuthed} />
 					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} />
 					<Stack.Screen name="ChangePassword" component={ChangePasswordAuthed} /> 
+					<Stack.Screen name='UserProfile' component={UserProfileScreen} />
 					<Stack.Screen name="AdminPanel" component={AdminPanelAuthed} />
 					<Stack.Screen name='Route' component={RoutesScreen} />
 					<Stack.Screen
