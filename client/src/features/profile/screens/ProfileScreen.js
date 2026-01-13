@@ -10,37 +10,41 @@ import {
   Alert,
   TouchableOpacity,
   Text,
-  StyleSheet
+  StyleSheet,
 } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons , Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 
-import appConfig from '../../../../app.json';
-import { auth } from '../../../config/firebase';
+import { auth, db } from '../../../config/firebase';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useAuthUser } from '../../../hooks/useAuthUser';
-import { colors, common, buttons, typography } from '../../../styles';
+import { colors, common } from '../../../styles';
+
 import ProfileHeader from '../components/ProfileHeader';
 import ProfileStatsCard from '../components/ProfileStatsCard';
-import ProfileMenuList from '../components/ProfileMenuList';
 import RecommendationCard from '../../../components/RecommendationCard';
 import SupportModal from '../components/SupportModal';
+
 import { useProfileData } from '../hooks/useProfileData';
 import { useProfilePhoto } from '../hooks/useProfilePhoto';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSmartProfileBadges } from '../utils/smartProfileBadges';
-import { db } from '../../../config/firebase';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  deleteDoc,
+  doc,
+} from 'firebase/firestore';
 
-const MENU_ITEMS = [
-  { icon: 'person-outline', label: 'Edit Profile' },
-  { icon: 'settings-outline', label: 'Settings' },
-  { icon: 'notifications-outline', label: 'Notifications' },
-  { icon: 'help-circle-outline', label: 'Help & Support' },
-];
+import { RouteCard } from '../../roadtrip/components/RouteCard';
+import { CommentsModal } from '../../../components/CommentsModal';
 
 function getRootNavigation(navigation) {
   let current = navigation;
@@ -54,11 +58,11 @@ function getRootNavigation(navigation) {
 
 function ProfileScreen({ navigation, route }) {
   const { isGuest, loading: authLoading } = useAuthUser();
+
   useEffect(() => {
     if (authLoading) return;
     if (!isGuest) return;
 
-    // Prefer switching to Auth tab; fallback to root Login.
     try {
       navigation.navigate?.('Auth');
       return;
@@ -87,19 +91,24 @@ function ProfileScreen({ navigation, route }) {
 
 function AuthedProfileScreen({ navigation, route }) {
   const { user } = useCurrentUser();
-  const uid = user?.uid;
+  const profileUid = route?.params?.uid || user?.uid;
+  const isMyProfile = profileUid === user?.uid;
 
   const [supportOpen, setSupportOpen] = useState(false);
+
   const [contentTab, setContentTab] = useState('recommendations');
   const [myRecs, setMyRecs] = useState([]);
   const [myRoutes, setMyRoutes] = useState([]);
   const [contentLoading, setContentLoading] = useState(false);
+
+  // Comments (Routes)
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState(null);
+
   const activeData = contentTab === 'recommendations' ? myRecs : myRoutes;
 
-
-
   const { userData, stats, loading, refresh, resetProfileState, setUserData } = useProfileData({
-    uid,
+    uid: profileUid,
     user,
   });
 
@@ -116,10 +125,24 @@ function AuthedProfileScreen({ navigation, route }) {
       borderRadius: 999,
       backgroundColor: 'rgba(255,255,255,0.95)',
     },
+    tabRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(0,0,0,0.08)',
+    },
+    tabBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      alignItems: 'center',
+      borderBottomWidth: 2,
+    },
+    tabText: {
+      fontWeight: '700',
+    },
   });
 
   const loadMyContent = useCallback(async () => {
-    if (!uid) return;
+    if (!profileUid) return;
     setContentLoading(true);
 
     try {
@@ -128,7 +151,7 @@ function AuthedProfileScreen({ navigation, route }) {
       try {
         const recQ = query(
           collection(db, 'recommendations'),
-          where('userId', '==', uid),
+          where('userId', '==', profileUid),
           orderBy('createdAt', 'desc'),
           limit(30)
         );
@@ -137,13 +160,12 @@ function AuthedProfileScreen({ navigation, route }) {
         console.log('Ordered recs query failed, fallback:', err?.message);
         const recQFallback = query(
           collection(db, 'recommendations'),
-          where('userId', '==', uid),
+          where('userId', '==', profileUid),
           limit(30)
         );
         recSnap = await getDocs(recQFallback);
       }
 
-      console.log('uid:', uid, 'myRecs:', recSnap.size);
       setMyRecs(recSnap.docs.map(d => ({ id: d.id, ...d.data() })));
 
       // --- Routes ---
@@ -151,7 +173,7 @@ function AuthedProfileScreen({ navigation, route }) {
       try {
         const routesQ = query(
           collection(db, 'routes'),
-          where('userId', '==', uid),
+          where('userId', '==', profileUid),
           orderBy('createdAt', 'desc'),
           limit(30)
         );
@@ -160,24 +182,19 @@ function AuthedProfileScreen({ navigation, route }) {
         console.log('Ordered routes query failed, fallback:', err?.message);
         const routesQFallback = query(
           collection(db, 'routes'),
-          where('userId', '==', uid),
+          where('userId', '==', profileUid),
           limit(30)
         );
         routesSnap = await getDocs(routesQFallback);
       }
 
-      console.log('uid:', uid, 'myRoutes:', routesSnap.size);
       setMyRoutes(routesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.log('loadMyContent error:', e?.message || e);
     } finally {
       setContentLoading(false);
     }
-  }, [uid]);
-
-
-
-
+  }, [profileUid]);
 
   useEffect(() => {
     if (route?.params?.openSupport) {
@@ -187,15 +204,15 @@ function AuthedProfileScreen({ navigation, route }) {
   }, [route?.params?.openSupport, navigation]);
 
   const { onPickImage, uploading } = useProfilePhoto({
-    uid,
+    uid: profileUid,
     user,
     userData,
     updateLocalUserData: setUserData,
   });
+
   useEffect(() => {
     loadMyContent();
   }, [loadMyContent]);
-
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -205,37 +222,27 @@ function AuthedProfileScreen({ navigation, route }) {
     return unsubscribe;
   }, [navigation, refresh, loadMyContent]);
 
-
-
   const smartBadges = useMemo(
     () => getSmartProfileBadges(userData?.smartProfile),
     [userData?.smartProfile]
   );
 
-  const navigateToStack = useCallback(
-    (screenName, params) => {
-      // אם אנחנו בתוך Tabs, ה-parent הוא ה-Stack הראשי
-      const parent = navigation.getParent?.();
-      if (parent?.navigate) return parent.navigate(screenName, params);
-      return navigation.navigate(screenName, params);
-    },
-    [navigation]
-  );
+  const handleOpenComments = (routeId) => {
+    setSelectedRouteId(routeId);
+    setCommentsModalVisible(true);
+  };
 
-  const handleMenuPress = useCallback(
-    (label) => {
-      if (label === 'Edit Profile') {
-        return navigateToStack('EditProfile');
+  const handleDeleteRoute = useCallback(
+    async (routeId) => {
+      try {
+        await deleteDoc(doc(db, 'routes', routeId));
+        setMyRoutes(prev => prev.filter(r => r.id !== routeId));
+      } catch (e) {
+        console.log('delete route error:', e?.message || e);
+        Alert.alert('שגיאה', 'לא הצלחנו למחוק את המסלול');
       }
-
-      if (label === 'Help & Support') {
-        setSupportOpen(true);
-        return;
-      }
-
-      Alert.alert('Coming soon', label);
     },
-    [navigateToStack]
+    []
   );
 
   const handleSignOut = useCallback(async () => {
@@ -273,105 +280,143 @@ function AuthedProfileScreen({ navigation, route }) {
       </TouchableOpacity>
 
       <FlatList
-        data={activeData}
-        keyExtractor={(item) => item.id}
-        extraData={contentTab}
-        contentContainerStyle={common.profileScrollContent}
-        ListHeaderComponent={
-          <>
-            <ProfileHeader
-              userData={userData}
-              stats={stats}
-              smartBadges={smartBadges}
-              onPickImage={onPickImage}
-              uploading={uploading}
-              onEditSmartProfile={() => handleMenuPress('Edit Profile')}
-            />
-
-            <ProfileStatsCard stats={stats} />
-
-            {/* Tabs */}
-            <View style={{ marginTop: 14 }}>
-              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' }}>
-                <TouchableOpacity
-                  onPress={() => setContentTab('recommendations')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                    borderBottomWidth: 2,
-                    borderBottomColor: contentTab === 'recommendations' ? colors.textPrimary : 'transparent',
-                  }}
-                >
-                  <Text style={{ fontWeight: '700', opacity: contentTab === 'recommendations' ? 1 : 0.5 }}>
-                    Recommendations
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setContentTab('routes')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                    borderBottomWidth: 2,
-                    borderBottomColor: contentTab === 'routes' ? colors.textPrimary : 'transparent',
-                  }}
-                >
-                  <Text style={{ fontWeight: '700', opacity: contentTab === 'routes' ? 1 : 0.5 }}>
-                    Routes
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {contentLoading ? (
-                <View style={{ paddingTop: 18, alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                </View>
-              ) : null}
-            </View>
-          </>
-        }
-        renderItem={({ item }) => {
-          if (contentLoading) return null;
-
-          if (contentTab === 'recommendations') {
-            // 👈 כאן זה נהיה כמו Community
-            return (
-              <RecommendationCard
-                item={item}
-                navigation={navigation}
-                currentUserId={uid}
-                onDeleted={(deletedId) => {
-                  setMyRecs(prev => prev.filter(r => r.id !== deletedId));
-                }}
-                onUpdated={(updatedItem) => {
-                  setMyRecs(prev => prev.map(r => (r.id === updatedItem.id ? updatedItem : r)));
-                }}
-                onRefresh={loadMyContent}
-              />
-            );
-          }
-          return (
-            <TouchableOpacity
-              style={{ marginHorizontal: 16, marginTop: 12, padding: 14, borderRadius: 12, backgroundColor: '#fff' }}
-            >
-              <Text style={{ fontWeight: '800' }}>{item.title || item.name || 'Untitled route'}</Text>
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          !contentLoading ? (
-            <View style={{ paddingTop: 18, paddingHorizontal: 16 }}>
-              <Text style={{ opacity: 0.6 }}>
-                {contentTab === 'recommendations' ? 'No recommendations yet.' : 'No routes yet.'}
-              </Text>
-            </View>
-          ) : null
-        }
+  key={contentTab} // חשוב: מכריח remount כדי שה-layout יתאפס כמו שצריך בין הטאבים
+  data={activeData}
+  keyExtractor={(item) => item.id}
+  extraData={contentTab}
+  // 👇 כשהטאב הוא routes – בדיוק כמו RoutesScreen
+  contentContainerStyle={
+    contentTab === 'routes'
+      ? { padding: 15, paddingBottom: 40 }
+      : common.profileScrollContent
+  }
+  ListHeaderComponent={
+    // 👇 אם routes: מבטלים את padding של הרשימה רק על ההדר כדי שיישאר Full width
+    <View style={contentTab === 'routes' ? { marginHorizontal: -15 } : null}>
+      <ProfileHeader
+        userData={userData}
+        stats={stats}
+        smartBadges={smartBadges}
+        onPickImage={isMyProfile ? onPickImage : undefined}
+        uploading={isMyProfile ? uploading : false}
+        onEditSmartProfile={() => navigation.getParent?.()?.navigate?.('EditProfile')}
       />
 
+      <ProfileStatsCard stats={stats} />
+
+      {/* Tabs */}
+      <View style={{ marginTop: 14 }}>
+        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' }}>
+          <TouchableOpacity
+            onPress={() => setContentTab('recommendations')}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              alignItems: 'center',
+              borderBottomWidth: 2,
+              borderBottomColor: contentTab === 'recommendations' ? colors.textPrimary : 'transparent',
+            }}
+          >
+            <Text style={{ fontWeight: '700', opacity: contentTab === 'recommendations' ? 1 : 0.5 }}>
+              Recommendations
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setContentTab('routes')}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              alignItems: 'center',
+              borderBottomWidth: 2,
+              borderBottomColor: contentTab === 'routes' ? colors.textPrimary : 'transparent',
+            }}
+          >
+            <Text style={{ fontWeight: '700', opacity: contentTab === 'routes' ? 1 : 0.5 }}>
+              Routes
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {contentLoading ? (
+          <View style={{ paddingTop: 18, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={colors.accent} />
+          </View>
+        ) : null}
+      </View>
+    </View>
+  }
+  renderItem={({ item }) => {
+    if (contentLoading) return null;
+
+    if (contentTab === 'recommendations') {
+      return (
+        <RecommendationCard
+          item={item}
+          navigation={navigation}
+          currentUserId={user?.uid}
+          onDeleted={(deletedId) => setMyRecs(prev => prev.filter(r => r.id !== deletedId))}
+          onUpdated={(updatedItem) => setMyRecs(prev => prev.map(r => (r.id === updatedItem.id ? updatedItem : r)))}
+          onRefresh={loadMyContent}
+        />
+      );
+    }
+
+    // ROUTES – כמו במסך Routes
+    const currentUser = auth.currentUser;
+    const isOwner = currentUser && item.userId === currentUser.uid;
+
+    return (
+      <RouteCard
+        item={item}
+        onPress={() => navigation.navigate('RouteDetail', { routeData: item })}
+        isOwner={isOwner}                // תן ל-RouteCard להחליט על התפריט (…)
+        onEdit={() => navigation.navigate('AddRoutesScreen', { routeToEdit: item })}
+        onDelete={() => {
+          Alert.alert("Delete Route", "Are you sure you want to delete this route?", [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await deleteDoc(doc(db, "routes", item.id));
+                  setMyRoutes(prev => prev.filter(r => r.id !== item.id));
+                } catch (e) {
+                  Alert.alert("Error", "Failed to delete route");
+                }
+              },
+            },
+          ]);
+        }}
+        onCommentPress={(routeId) => {
+          setSelectedRouteId(routeId);
+          setCommentsModalVisible(true);
+        }}
+      />
+    );
+  }}
+  ListEmptyComponent={
+    !contentLoading ? (
+      <View style={{ paddingTop: 18, paddingHorizontal: 16 }}>
+        <Text style={{ opacity: 0.6 }}>
+          {contentTab === 'recommendations' ? 'No recommendations yet.' : 'No routes yet.'}
+        </Text>
+      </View>
+    ) : null
+  }
+/>
+
+
       <SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
+
+      {/* Routes comments */}
+      <CommentsModal
+        visible={commentsModalVisible}
+        onClose={() => setCommentsModalVisible(false)}
+        postId={selectedRouteId}
+        collectionName="routes"
+      />
     </SafeAreaView>
   );
 }

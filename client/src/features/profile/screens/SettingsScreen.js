@@ -1,13 +1,24 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SettingsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>הגדרות</Text>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-back" size={22} color="#111" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>הגדרות</Text>
+        <View style={styles.rightSpacer} />
+      </View>
 
+      <View style={styles.container}>
         <TouchableOpacity
           style={styles.primaryBtn}
           activeOpacity={0.9}
@@ -23,10 +34,6 @@ export default function SettingsScreen({ navigation }) {
         >
           <Text style={styles.primaryBtnText}>שינוי סיסמה</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Text style={styles.backBtnText}>חזרה</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -34,25 +41,39 @@ export default function SettingsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
+
+  header: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  rightSpacer: {
+    width: 44, // אותו רוחב כמו backBtn כדי לשמור סימטריה
+    height: 44,
+  },
+
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
-  title: { fontSize: 18, fontWeight: '800', textAlign: 'right', marginBottom: 6 },
 
   primaryBtn: {
     height: 56,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22375B', // כמו בתמונה
+    backgroundColor: '#22375B',
   },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-
-  backBtn: {
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(34,55,91,0.08)',
-    marginTop: 6,
-  },
-  backBtnText: { color: '#22375B', fontWeight: '800' },
 });
