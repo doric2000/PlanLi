@@ -280,132 +280,129 @@ function AuthedProfileScreen({ navigation, route }) {
       </TouchableOpacity>
 
       <FlatList
-  key={contentTab} // חשוב: מכריח remount כדי שה-layout יתאפס כמו שצריך בין הטאבים
-  data={activeData}
-  keyExtractor={(item) => item.id}
-  extraData={contentTab}
-  // 👇 כשהטאב הוא routes – בדיוק כמו RoutesScreen
-  contentContainerStyle={
-    contentTab === 'routes'
-      ? { padding: 15, paddingBottom: 40 }
-      : common.profileScrollContent
-  }
-  ListHeaderComponent={
-    // 👇 אם routes: מבטלים את padding של הרשימה רק על ההדר כדי שיישאר Full width
-    <View style={contentTab === 'routes' ? { marginHorizontal: -15 } : null}>
-      <ProfileHeader
-        userData={userData}
-        stats={stats}
-        smartBadges={smartBadges}
-        onPickImage={isMyProfile ? onPickImage : undefined}
-        uploading={isMyProfile ? uploading : false}
-        onEditSmartProfile={() => navigation.getParent?.()?.navigate?.('EditProfile')}
-      />
+        key={contentTab} 
+        data={activeData}
+        keyExtractor={(item) => item.id}
+        extraData={contentTab}
+        contentContainerStyle={
+          contentTab === 'routes'
+            ? { padding: 15, paddingBottom: 40 }
+            : common.profileScrollContent
+        }
+        ListHeaderComponent={
+          <View style={contentTab === 'routes' ? { marginHorizontal: -15 } : null}>
+            <ProfileHeader
+              userData={userData}
+              stats={stats}
+              smartBadges={smartBadges}
+              onPickImage={isMyProfile ? onPickImage : undefined}
+              uploading={isMyProfile ? uploading : false}
+              onEditSmartProfile={() => navigation.getParent?.()?.navigate?.('EditProfile')}
+            />
 
-      <ProfileStatsCard stats={stats} />
+            <ProfileStatsCard stats={stats} />
 
-      {/* Tabs */}
-      <View style={{ marginTop: 14 }}>
-        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' }}>
-          <TouchableOpacity
-            onPress={() => setContentTab('recommendations')}
-            style={{
-              flex: 1,
-              paddingVertical: 12,
-              alignItems: 'center',
-              borderBottomWidth: 2,
-              borderBottomColor: contentTab === 'recommendations' ? colors.textPrimary : 'transparent',
-            }}
-          >
-            <Text style={{ fontWeight: '700', opacity: contentTab === 'recommendations' ? 1 : 0.5 }}>
-              Recommendations
-            </Text>
-          </TouchableOpacity>
+            {/* Tabs */}
+            <View style={{ marginTop: 14 }}>
+              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' }}>
+                <TouchableOpacity
+                  onPress={() => setContentTab('recommendations')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                    borderBottomWidth: 2,
+                    borderBottomColor: contentTab === 'recommendations' ? colors.textPrimary : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontWeight: '700', opacity: contentTab === 'recommendations' ? 1 : 0.5 }}>
+                    Recommendations
+                  </Text>
+                </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setContentTab('routes')}
-            style={{
-              flex: 1,
-              paddingVertical: 12,
-              alignItems: 'center',
-              borderBottomWidth: 2,
-              borderBottomColor: contentTab === 'routes' ? colors.textPrimary : 'transparent',
-            }}
-          >
-            <Text style={{ fontWeight: '700', opacity: contentTab === 'routes' ? 1 : 0.5 }}>
-              Routes
-            </Text>
-          </TouchableOpacity>
-        </View>
+                <TouchableOpacity
+                  onPress={() => setContentTab('routes')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                    borderBottomWidth: 2,
+                    borderBottomColor: contentTab === 'routes' ? colors.textPrimary : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontWeight: '700', opacity: contentTab === 'routes' ? 1 : 0.5 }}>
+                    Routes
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-        {contentLoading ? (
-          <View style={{ paddingTop: 18, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={colors.accent} />
+              {contentLoading ? (
+                <View style={{ paddingTop: 18, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                </View>
+              ) : null}
+            </View>
           </View>
-        ) : null}
-      </View>
-    </View>
-  }
-  renderItem={({ item }) => {
-    if (contentLoading) return null;
+        }
+        renderItem={({ item }) => {
+          if (contentLoading) return null;
 
-    if (contentTab === 'recommendations') {
-      return (
-        <RecommendationCard
-          item={item}
-          navigation={navigation}
-          currentUserId={user?.uid}
-          onDeleted={(deletedId) => setMyRecs(prev => prev.filter(r => r.id !== deletedId))}
-          onUpdated={(updatedItem) => setMyRecs(prev => prev.map(r => (r.id === updatedItem.id ? updatedItem : r)))}
-          onRefresh={loadMyContent}
-        />
-      );
-    }
+          if (contentTab === 'recommendations') {
+            return (
+              <RecommendationCard
+                item={item}
+                navigation={navigation}
+                currentUserId={user?.uid}
+                onDeleted={(deletedId) => setMyRecs(prev => prev.filter(r => r.id !== deletedId))}
+                onUpdated={(updatedItem) => setMyRecs(prev => prev.map(r => (r.id === updatedItem.id ? updatedItem : r)))}
+                onRefresh={loadMyContent}
+              />
+            );
+          }
 
-    // ROUTES – כמו במסך Routes
-    const currentUser = auth.currentUser;
-    const isOwner = currentUser && item.userId === currentUser.uid;
+          const currentUser = auth.currentUser;
+          const isOwner = currentUser && item.userId === currentUser.uid;
 
-    return (
-      <RouteCard
-        item={item}
-        onPress={() => navigation.navigate('RouteDetail', { routeData: item })}
-        isOwner={isOwner}                // תן ל-RouteCard להחליט על התפריט (…)
-        onEdit={() => navigation.navigate('AddRoutesScreen', { routeToEdit: item })}
-        onDelete={() => {
-          Alert.alert("Delete Route", "Are you sure you want to delete this route?", [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Delete",
-              style: "destructive",
-              onPress: async () => {
-                try {
-                  await deleteDoc(doc(db, "routes", item.id));
-                  setMyRoutes(prev => prev.filter(r => r.id !== item.id));
-                } catch (e) {
-                  Alert.alert("Error", "Failed to delete route");
-                }
-              },
-            },
-          ]);
+          return (
+            <RouteCard
+              item={item}
+              onPress={() => navigation.navigate('RouteDetail', { routeData: item })}
+              isOwner={isOwner}                
+              onEdit={() => navigation.navigate('AddRoutesScreen', { routeToEdit: item })}
+              onDelete={() => {
+                Alert.alert("Delete Route", "Are you sure you want to delete this route?", [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                      try {
+                        await deleteDoc(doc(db, "routes", item.id));
+                        setMyRoutes(prev => prev.filter(r => r.id !== item.id));
+                      } catch (e) {
+                        Alert.alert("Error", "Failed to delete route");
+                      }
+                    },
+                  },
+                ]);
+              }}
+              onCommentPress={(routeId) => {
+                setSelectedRouteId(routeId);
+                setCommentsModalVisible(true);
+              }}
+            />
+          );
         }}
-        onCommentPress={(routeId) => {
-          setSelectedRouteId(routeId);
-          setCommentsModalVisible(true);
-        }}
+        ListEmptyComponent={
+          !contentLoading ? (
+            <View style={{ paddingTop: 18, paddingHorizontal: 16 }}>
+              <Text style={{ opacity: 0.6 }}>
+                {contentTab === 'recommendations' ? 'No recommendations yet.' : 'No routes yet.'}
+              </Text>
+            </View>
+          ) : null
+        }
       />
-    );
-  }}
-  ListEmptyComponent={
-    !contentLoading ? (
-      <View style={{ paddingTop: 18, paddingHorizontal: 16 }}>
-        <Text style={{ opacity: 0.6 }}>
-          {contentTab === 'recommendations' ? 'No recommendations yet.' : 'No routes yet.'}
-        </Text>
-      </View>
-    ) : null
-  }
-/>
 
 
       <SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
