@@ -11,6 +11,8 @@ import { auth } from '../../../config/firebase';
 import ActionBar from '../../../components/ActionBar';
 import { db } from '../../../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
+import { getUserTier } from '../../../utils/userTier';
+import { useAdminClaim } from '../../../hooks/useAdminClaim';
 
 
 /**
@@ -36,6 +38,9 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
   // Check if current user is the owner
   const isOwner = auth.currentUser?.uid === item.userId;
+  const tier = getUserTier(auth.currentUser);
+  const { isAdmin } = useAdminClaim();
+  const canManage = tier === 'verified' && (isOwner || isAdmin);
 
   const handleCardPress = () => {
     navigation.navigate('RecommendationDetail', { item });
@@ -56,6 +61,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   };
 
   const handleDelete = async () => {
+    if (getUserTier(auth.currentUser) !== 'verified') {
+      Alert.alert('נדרש אימות', 'כדי למחוק המלצה צריך לאמת את האימייל.');
+      return;
+    }
+
     const ok =
       Platform.OS === 'web'
         ? window.confirm("בטוח שברצונך למחוק את ההמלצה?")
@@ -96,7 +106,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             )}
           </View>
         </View>
-        {isOwner ? (
+        {canManage ? (
           <ActionMenu
               onEdit={() => {
               handleEdit();

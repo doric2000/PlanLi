@@ -14,6 +14,9 @@ import { ActionMenu } from "../../../components/ActionMenu";
 import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
 import { cards, typography, tags as tagsStyle, colors } from "../../../styles";
+import { auth } from "../../../config/firebase";
+import { getUserTier } from "../../../utils/userTier";
+import { useAdminClaim } from "../../../hooks/useAdminClaim";
 
 /**
  * Component to display tags with a limit on visible items.
@@ -100,6 +103,10 @@ export const RouteCard = ({
         distance: item?.distance,
     };
 
+	const tier = getUserTier(auth.currentUser);
+	const { isAdmin } = useAdminClaim();
+	const canManage = tier === 'verified' && (isOwner || isAdmin);
+
 	return (
 		<TouchableOpacity onPress={onPress} activeOpacity={0.7}>
 			<View style={cards.route}>
@@ -114,7 +121,7 @@ export const RouteCard = ({
 							variant='light'
 							snapshotData={snapshotData}
 						/>
-						{isOwner && showActionMenu && (
+						{canManage && showActionMenu && (
 							<ActionMenu
 								onEdit={onEdit}
 								onDelete={onDelete}

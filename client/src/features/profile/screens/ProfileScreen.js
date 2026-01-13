@@ -20,6 +20,7 @@ import { signOut } from 'firebase/auth';
 import appConfig from '../../../../app.json';
 import { auth } from '../../../config/firebase';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { useAuthUser } from '../../../hooks/useAuthUser';
 import { colors, common, buttons, typography } from '../../../styles';
 import ProfileHeader from '../components/ProfileHeader';
 import ProfileStatsCard from '../components/ProfileStatsCard';
@@ -41,9 +42,53 @@ const MENU_ITEMS = [
   { icon: 'help-circle-outline', label: 'Help & Support' },
 ];
 
-const ProfileScreen = ({ navigation , route }) => {
+function getRootNavigation(navigation) {
+  let current = navigation;
+  let parent = current?.getParent?.();
+  while (parent) {
+    current = parent;
+    parent = current?.getParent?.();
+  }
+  return current;
+}
+
+function ProfileScreen({ navigation, route }) {
+  const { isGuest, loading: authLoading } = useAuthUser();
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isGuest) return;
+
+    // Prefer switching to Auth tab; fallback to root Login.
+    try {
+      navigation.navigate?.('Auth');
+      return;
+    } catch {
+      // ignore
+    }
+
+    const rootNav = getRootNavigation(navigation);
+    rootNav?.navigate?.('Login');
+  }, [authLoading, isGuest, navigation]);
+
+  if (authLoading) {
+    return (
+      <SafeAreaView style={common.container}>
+        <View style={common.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (isGuest) return null;
+
+  return <AuthedProfileScreen navigation={navigation} route={route} />;
+}
+
+function AuthedProfileScreen({ navigation, route }) {
   const { user } = useCurrentUser();
   const uid = user?.uid;
+
   const [supportOpen, setSupportOpen] = useState(false);
   const [contentTab, setContentTab] = useState('recommendations');
   const [myRecs, setMyRecs] = useState([]);
@@ -200,7 +245,7 @@ const ProfileScreen = ({ navigation , route }) => {
 
       navigation.reset({
         index: 0,
-        routes: [{ name: 'Login' }],
+        routes: [{ name: 'Main' }],
       });
     } catch (error) {
       Alert.alert('Error', 'Failed to sign out: ' + error.message);
@@ -329,6 +374,6 @@ const ProfileScreen = ({ navigation , route }) => {
       <SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
     </SafeAreaView>
   );
-};
+}
 
 export default ProfileScreen;

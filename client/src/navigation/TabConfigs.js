@@ -3,6 +3,7 @@ import CommunityScreen from "../features/community/screens/CommunityScreen";
 import RoutesScreen from "../features/roadtrip/screens/RoutesScreen";
 import ProfileScreen from "../features/profile/screens/ProfileScreen";
 import FavoritesScreen from "../features/favorites/screen/FavoritesScreen";
+import AuthEntryScreen from "../features/auth/screens/AuthEntryScreen";
 
 export const tabConfigs = {
 	Home: { icon: "home", activeColor: "#1A73E8", label: "בית" }, // Orange (brand)
@@ -10,6 +11,7 @@ export const tabConfigs = {
 	Routes: { icon: "map", activeColor: "#673AB7", label: "מסלולים" }, // Green (travel)
 	Favorites: { icon: "bookmark", activeColor: "#F9A825", label: "מועדפים" }, // i think bookmark icon looks more modern, dor thinks like a old head and wants a star, if star is chosen as the favorite among our friends, chagne it to 'star'
 	Profile: { icon: "person", activeColor: "#E67C00", label: "פרופיל" }, // Purple (personal)
+	Auth: { icon: "log-in", activeColor: "#1E3A8A", label: "התחברות" },
 };
 
 export const tabScreens = [
@@ -18,4 +20,5 @@ export const tabScreens = [
 	{ name: "Routes", component: RoutesScreen },
 	{ name: "Favorites", component: FavoritesScreen },
 	{ name: "Profile", component: ProfileScreen },
+	{ name: "Auth", component: AuthEntryScreen },
 ];

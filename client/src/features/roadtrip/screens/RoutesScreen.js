@@ -20,6 +20,7 @@ import {
 	doc,
 } from "firebase/firestore";
 import { db, auth } from "../../../config/firebase";
+import { getUserTier } from "../../../utils/userTier";
 import { useRefresh } from "../../community/hooks/useRefresh";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { common, buttons, colors, spacing } from "../../../styles";
@@ -275,7 +276,22 @@ export default function RoutesScreen({ navigation }) {
 			)}
 
 			{/* Floating Action Button (FAB) */}
-			<FabButton onPress={() => navigation.navigate("AddRoutesScreen")} />
+			<FabButton
+				onPress={() => {
+					const tier = getUserTier(auth.currentUser);
+					if (tier === 'guest') {
+						Alert.alert('יש להתחבר', 'כדי ליצור מסלול צריך להתחבר.');
+						navigation.navigate('Login');
+						return;
+					}
+					if (tier === 'unverified') {
+						Alert.alert('נדרש אימות', 'כדי ליצור מסלול צריך לאמת את האימייל.');
+						navigation.navigate('VerifyEmail');
+						return;
+					}
+					navigation.navigate('AddRoutesScreen');
+				}}
+			/>
 
 			{/* --- Filter Modal --- */}
 			<RoutesFilterModal

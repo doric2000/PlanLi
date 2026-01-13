@@ -25,6 +25,7 @@ import { Avatar } from './Avatar';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { notifyCommentEvent } from '../features/notifications/services/NotificationObserver';
 import { PostType } from '../features/notifications/models/NotificationModel';
+import { getUserTier } from '../utils/userTier';
 
 /**
  * CommentItem - Displays a single comment with user info.
@@ -84,6 +85,10 @@ export const CommentsSection = ({ collectionName, postId }) => {
   const [submitting, setSubmitting] = useState(false);
   const [isNewestFirst, setIsNewestFirst] = useState(true);
 
+  const authUser = auth.currentUser;
+  const tier = getUserTier(authUser);
+  const canComment = tier === 'verified';
+
   useEffect(() => {
     if (!postId || !collectionName) return;
 
@@ -117,8 +122,12 @@ export const CommentsSection = ({ collectionName, postId }) => {
   const handleAddComment = async () => {
     if (newComment.trim() === '') return;
     if (!auth.currentUser) {
-        Alert.alert("Error", "You must be logged in to comment");
-        return;
+      Alert.alert('שגיאה', 'יש להתחבר כדי להגיב.');
+      return;
+    }
+    if (!canComment) {
+      Alert.alert('נדרש אימות', 'כדי להגיב צריך לאמת את האימייל.');
+      return;
     }
 
     setSubmitting(true);
@@ -207,15 +216,22 @@ export const CommentsSection = ({ collectionName, postId }) => {
         />
         <TextInput
           style={common.commentInput}
-          placeholder="כתוב תגובה..."
+          placeholder={
+            tier === 'guest'
+              ? 'התחבר/י כדי להגיב...'
+              : tier === 'unverified'
+                ? 'אמת/י אימייל כדי להגיב...'
+                : 'כתוב תגובה...'
+          }
           value={newComment}
           onChangeText={setNewComment}
           multiline
+          editable={canComment}
         />
         <TouchableOpacity 
-          style={[common.commentSendButton, (!newComment.trim() || submitting) && common.commentSendDisabled]} 
+          style={[common.commentSendButton, (!newComment.trim() || submitting || !canComment) && common.commentSendDisabled]} 
           onPress={handleAddComment}
-          disabled={!newComment.trim() || submitting}
+          disabled={!newComment.trim() || submitting || !canComment}
         >
           {submitting ? (
             <ActivityIndicator size="small" color="#fff" />

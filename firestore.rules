@@ -1,8 +1,148 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    // Email verification is only enforced for password accounts.
+    // Social providers (e.g. Google) are treated as verified.
+    function isVerifiedUser() {
+      return isSignedIn()
+        && (
+          request.auth.token.firebase.sign_in_provider != 'password'
+          || request.auth.token.email_verified == true
+        );
+    }
+
+    function canWriteContent() {
+      return isAdmin() || isVerifiedUser();
+    }
+
+    function isOwnerUserId() {
+      return isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    function isOwnerUserIdOnCreate() {
+      return isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Allows authenticated users (including unverified) to update ONLY likes/likedBy.
+    function isLikesOnlyUpdate() {
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes', 'likedBy'])
+        && request.resource.data.userId == resource.data.userId;
+    }
+
+    // --- Recommendations ---
+    match /recommendations/{postId} {
+      allow read: if true;
+
+      // Verified/Admin can create posts; must write their own userId.
+      allow create: if canWriteContent() && isOwnerUserIdOnCreate();
+
+      // Owner (verified) or admin can edit; anyone signed-in can do likes-only updates.
+      allow update: if isLikesOnlyUpdate() || isAdmin() || (isVerifiedUser() && isOwnerUserId());
+
+      // Owner (verified) or admin can delete.
+      allow delete: if isAdmin() || (isVerifiedUser() && isOwnerUserId());
+
+      // Comments
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if canWriteContent() && isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isAdmin() || (isVerifiedUser() && isSignedIn() && resource.data.userId == request.auth.uid);
+      }
+    }
+
+    // --- Routes ---
+    match /routes/{routeId} {
+      allow read: if true;
+
+      allow create: if canWriteContent() && isOwnerUserIdOnCreate();
+      allow update: if isLikesOnlyUpdate() || isAdmin() || (isVerifiedUser() && isOwnerUserId());
+      allow delete: if isAdmin() || (isVerifiedUser() && isOwnerUserId());
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if canWriteContent() && isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isAdmin() || (isVerifiedUser() && isSignedIn() && resource.data.userId == request.auth.uid);
+      }
+    }
+
+    // --- Countries / Cities (Destinations) ---
+    // Support collectionGroup(db, 'cities') reads (e.g. HomeScreen popular destinations).
+    // Without this, a collectionGroup query can fail if there are 'cities' subcollections
+    // outside /countries/{countryId}/cities/{cityId}.
+    match /{parentPath=**}/cities/{cityId} {
+      allow read: if true;
+    }
+
+    match /countries/{countryId} {
+      allow read: if true;
+      allow create, update, delete: if canWriteContent();
+
+      match /cities/{cityId} {
+        allow read: if true;
+        allow create, update, delete: if canWriteContent();
+      }
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      // Public read is needed for author info (displayName/photoURL) used across the app.
+      allow read: if true;
+
+      // Allow user doc creation for any authenticated user (including unverified during registration).
+      allow create: if isSignedIn() && request.auth.uid == userId;
+
+      // Allow:
+      // - Verified users: full self-update
+      // - Unverified users: limited self-update (profile only; no favorites arrays)
+      allow update: if isSignedIn() && request.auth.uid == userId && (
+        isAdmin()
+        || isVerifiedUser()
+        || request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'photoURL',
+          'createdAt',
+          'updatedAt',
+          'smartProfile',
+          'trips',
+          'reviews',
+          'credibilityScore',
+          'isExpert'
+        ])
+      );
+
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+
+      // Favorites subcollection (used by new favorites system)
+      match /favorites/{favId} {
+        allow read, create, update, delete: if (isSignedIn() && request.auth.uid == userId && (isAdmin() || isVerifiedUser()));
+      }
+
+      // Notifications: recipient can read/update/delete; any signed-in user can create *for someone else*
+      // but only if actorId matches the caller.
+      match /notifications/{notificationId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && request.resource.data.userId == userId
+          && request.resource.data.actorId == request.auth.uid;
+        allow update, delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // Deny everything else by default.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
