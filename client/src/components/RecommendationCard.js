@@ -171,7 +171,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     <View style={[cards.recommendation, style]}>
       {/* Header */}
       <View style={cards.recHeader}>
-        <View style={cards.recAuthorInfo}>
+        <TouchableOpacity
+          style={cards.recAuthorInfo}
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
+        >
           <Avatar photoURL={author.photoURL} displayName={author.displayName} />
           <View>
             <Text style={cards.recUsername}>{author.displayName}</Text>
@@ -179,7 +183,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
               <Text style={cards.recDate}>{formatDate(item.createdAt)}</Text>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <FavoriteButton 
             type="recommendations" 
