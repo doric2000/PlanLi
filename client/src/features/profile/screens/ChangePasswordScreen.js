@@ -6,14 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../../config/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, signOut } from 'firebase/auth';
 
-const PasswordField = ({
-  label,
-  value,
-  onChangeText,
-  show,
-  onToggle,
-  placeholder,
-}) => (
+const PasswordField = ({ label, value, onChangeText, show, onToggle, placeholder }) => (
   <View style={{ gap: 6 }}>
     <Text style={styles.label}>{label}</Text>
 
@@ -56,9 +49,7 @@ export default function ChangePasswordScreen({ navigation }) {
 
   const onChangePassword = async () => {
     if (!u) return Alert.alert('שגיאה', 'אין משתמש מחובר');
-    if (!canChangePassword) {
-      return Alert.alert('לא זמין', 'לא ניתן לשנות סיסמה עבור סוג ההתחברות הזה');
-    }
+    if (!canChangePassword) return Alert.alert('לא זמין', 'לא ניתן לשנות סיסמה עבור סוג ההתחברות הזה');
     if (!u.email) return Alert.alert('שגיאה', 'חסר אימייל למשתמש');
 
     if (!currentPw) return Alert.alert('שגיאה', 'נא להזין סיסמה נוכחית');
@@ -72,7 +63,7 @@ export default function ChangePasswordScreen({ navigation }) {
       await reauthenticateWithCredential(u, cred);
       await updatePassword(u, newPw);
 
-      // ✅ logout מיד אחרי שינוי
+      // logout מיד אחרי שינוי
       try {
         await signOut(auth);
       } finally {
@@ -84,8 +75,6 @@ export default function ChangePasswordScreen({ navigation }) {
         Alert.alert('שגיאה', 'הסיסמה הנוכחית שגויה');
       } else if (code === 'auth/requires-recent-login') {
         Alert.alert('שגיאה', 'צריך להתחבר מחדש ואז לנסות שוב');
-      } else if (code === 'auth/too-many-requests') {
-        Alert.alert('שגיאה', 'יותר מדי ניסיונות. נסה שוב מאוחר יותר');
       } else {
         Alert.alert('שגיאה', e?.message || 'שינוי הסיסמה נכשל');
       }
@@ -96,9 +85,18 @@ export default function ChangePasswordScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>שינוי סיסמה</Text>
+      {/* Header: back left + title center */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
+          <Ionicons name="arrow-back" size={22} color="#111" />
+        </TouchableOpacity>
 
+        <Text style={styles.headerTitle}>שינוי סיסמה</Text>
+
+        <View style={styles.rightSpacer} />
+      </View>
+
+      <View style={styles.container}>
         {!canChangePassword ? (
           <Text style={styles.note}>לא ניתן לשנות סיסמה עבור סוג ההתחברות הזה.</Text>
         ) : (
@@ -140,10 +138,6 @@ export default function ChangePasswordScreen({ navigation }) {
             </TouchableOpacity>
           </>
         )}
-
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-          <Text style={styles.backBtnText}>חזרה</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -151,27 +145,43 @@ export default function ChangePasswordScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
+
+  header: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  rightSpacer: { width: 44, height: 44 },
+
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
-  title: { fontSize: 18, fontWeight: '800', textAlign: 'right', marginBottom: 4 },
 
   label: { fontSize: 14, fontWeight: '700', textAlign: 'right', color: '#111827' },
   note: { color: '#6B7280', textAlign: 'right', lineHeight: 18 },
 
   passwordRow: {
     height: 54,
-    flexDirection: 'row-reverse', // מתאים לעברית + שהעין תהיה בצד שמאל
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 12,
     paddingHorizontal: 12,
   },
-  passwordInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    paddingVertical: 0,
-  },
+  passwordInput: { flex: 1, fontSize: 15, color: '#111827', paddingVertical: 0 },
   eyeBtn: { paddingHorizontal: 6, paddingVertical: 10 },
 
   primaryBtn: {
@@ -184,14 +194,4 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   btnDisabled: { opacity: 0.7 },
-
-  backBtn: {
-    height: 52,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(34,55,91,0.08)',
-    marginTop: 6,
-  },
-  backBtnText: { color: '#22375B', fontWeight: '800' },
 });
