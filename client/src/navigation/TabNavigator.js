@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, View, Text } from 'react-native';
-import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useAuthUser } from '../hooks/useAuthUser';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { notifications } from '../styles';
 import {tabConfigs, tabScreens} from './TabConfigs'
@@ -18,7 +18,7 @@ const Tab = createBottomTabNavigator();
  * - Profile: User settings and profile
  */
 export default function TabNavigator() {
-  const { user } = useCurrentUser();
+  const { user } = useAuthUser();
   const unreadCount = useUnreadCount();
   
   console.log('Unread notification count in TabNavigator:', unreadCount);
@@ -72,9 +72,14 @@ export default function TabNavigator() {
         });
       }}
     >
-      {tabScreens.map(({ name, component }) => (
-        <Tab.Screen key={name} name={name} component={component} />
-      ))}
+      {tabScreens
+        .filter(({ name }) => {
+          if (user) return name !== 'Auth';
+          return name !== 'Profile';
+        })
+        .map(({ name, component }) => (
+          <Tab.Screen key={name} name={name} component={component} />
+        ))}
     </Tab.Navigator>
   );
 }

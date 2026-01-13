@@ -13,6 +13,8 @@ import { db } from '../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage';
 import FavoriteButton from './FavoriteButton';
+import { getUserTier } from '../utils/userTier';
+import { useAdminClaim } from '../hooks/useAdminClaim';
 
 
 /**
@@ -50,6 +52,9 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
   // Check if current user is the owner
   const isOwner = auth.currentUser?.uid === item.userId;
+  const tier = getUserTier(auth.currentUser);
+  const { isAdmin } = useAdminClaim();
+  const canManage = tier === 'verified' && (isOwner || isAdmin);
 
   // Create snapshot data for favorites
   const snapshotData = {
@@ -118,6 +123,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
 
   const handleDelete = async () => {
+    if (getUserTier(auth.currentUser) !== 'verified') {
+      Alert.alert('נדרש אימות', 'כדי למחוק המלצה צריך לאמת את האימייל.');
+      return;
+    }
+
     const ok =
       Platform.OS === 'web'
         ? window.confirm("בטוח שברצונך למחוק את ההמלצה?")
@@ -177,7 +187,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             variant="light" 
             snapshotData={snapshotData} 
           />
-          {isOwner ? (
+          {canManage ? (
             <ActionMenu
                 onEdit={() => {
                 handleEdit();

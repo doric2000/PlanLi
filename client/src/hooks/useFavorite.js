@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { doc, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
+import { getUserTier } from '../utils/userTier';
 
 /**
  * useFavorite - Generic hook for favoriting different types of items using sub-collections
@@ -41,9 +42,15 @@ export function useFavorite(type, id, snapshotData = {}) {
     console.log('[FavoriteButton] toggleFavorite called:', { type, id, user, snapshotData });
     if (!user) {
       console.warn('No authenticated user!');
-      Alert && Alert.alert && Alert.alert('Error', 'You must be logged in to favorite.');
+      Alert && Alert.alert && Alert.alert('שגיאה', 'יש להתחבר כדי לשמור למועדפים.');
       return;
     }
+
+    if (getUserTier(user) !== 'verified') {
+      Alert && Alert.alert && Alert.alert('נדרש אימות', 'כדי לשמור למועדפים צריך לאמת את האימייל.');
+      return;
+    }
+
     if (!id) {
       console.warn('No item ID provided!');
       Alert && Alert.alert && Alert.alert('Error', 'No item ID provided.');

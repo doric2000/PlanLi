@@ -4,7 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import LoginScreen from "./src/features/auth/screens/LoginScreen";
 import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
-import TabNavigator from "./src/navigation/TabNavigator";
+import VerifyEmailScreen from "./src/features/auth/screens/VerifyEmailScreen";
 import ChangeNameScreen from "./src/features/profile/screens/ChangeNameScreen";
 import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordScreen";
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
@@ -16,10 +16,19 @@ import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
 import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
+import AdminPanelScreen from "./src/features/admin/screens/AdminPanelScreen";
 import RightDrawerNavigator from "./src/navigation/RightDrawerNavigator";
+import withRequireAuth from "./src/navigation/withRequireAuth";
 
 
 const Stack = createStackNavigator();
+
+const EditProfileAuthed = withRequireAuth(EditProfileScreen);
+const NotificationsAuthed = withRequireAuth(NotificationScreen);
+const SettingsAuthed = withRequireAuth(SettingsScreen);
+const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
+const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
+const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
 
 /**
  * Main App Component.
@@ -42,17 +51,19 @@ export default function App() {
 		<SafeAreaProvider>
 			<NavigationContainer>
 				<Stack.Navigator
-					initialRouteName='Login'
+					initialRouteName='Main'
 					screenOptions={{ headerShown: false }}
 				>
 					<Stack.Screen name='Login' component={LoginScreen} />
 					<Stack.Screen name='Register' component={RegisterScreen} />
+					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />
 					<Stack.Screen name='Main' component={RightDrawerNavigator} />
-					<Stack.Screen name="EditProfile" component={EditProfileScreen} />
-					<Stack.Screen name="Notifications" component={NotificationScreen} />
-					<Stack.Screen name='Settings' component={SettingsScreen} />
-					<Stack.Screen name="ChangeName" component={ChangeNameScreen} />
-					<Stack.Screen name="ChangePassword" component={ChangePasswordScreen} /> 
+					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
+					<Stack.Screen name="Notifications" component={NotificationsAuthed} />
+					<Stack.Screen name='Settings' component={SettingsAuthed} />
+					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} />
+					<Stack.Screen name="ChangePassword" component={ChangePasswordAuthed} /> 
+					<Stack.Screen name="AdminPanel" component={AdminPanelAuthed} />
 					<Stack.Screen name='Route' component={RoutesScreen} />
 					<Stack.Screen
 						name='AddRecommendation'

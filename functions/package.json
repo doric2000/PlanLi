@@ -1,0 +1,19 @@
+{
+  "name": "planli-functions",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "lint": "echo 'no lint configured'",
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "bootstrap-admin": "node scripts/bootstrapAdmin.js",
+    "set-email-verified": "node scripts/setEmailVerified.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^4.9.0"
+  }
+}

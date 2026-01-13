@@ -11,6 +11,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
 import { useGoogleLogin } from '../../../hooks/useGoogleLogin';
+import { getUserTier } from '../../../utils/userTier';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -58,8 +59,13 @@ export default function LoginScreen({ navigation }) {
   const handleLogin = async () => {
     try {
       setError('');
-      await signInWithEmailAndPassword(auth, email, password);
-      navigation.replace('Main');
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const tier = getUserTier(cred?.user);
+      if (tier === 'unverified') {
+        navigation.replace('VerifyEmail');
+      } else {
+        navigation.replace('Main');
+      }
     } catch (err) {
       setError(err.message);
     }

@@ -27,7 +27,7 @@ import {
     ROAD_TRIP_TAGS,
     EXPERIENCE_TAGS,
 } from "../../../constants/Constants.js";
-import { db } from '../../../config/firebase';
+import { db, auth } from '../../../config/firebase';
 import PlacesInput from '../components/PlacesInput';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import DayEditorModal from '../components/DayEditorModal';
@@ -35,6 +35,7 @@ import DayList from '../components/DayList';
 import { FormInput } from '../../../components/FormInput';
 import { TagSelector } from '../../../components/TagSelector';
 import { useBackButton } from '../../../hooks/useBackButton';
+import { getUserTier } from '../../../utils/userTier';
 
 /**
  * Screen for adding/editing a route.
@@ -100,6 +101,21 @@ export default function AddRoutesScreen({ navigation, route }) {
 
     // --- Handlers ---
 
+    const ensureVerifiedForWrite = () => {
+        const tier = getUserTier(auth.currentUser);
+        if (tier === 'guest') {
+            Alert.alert('יש להתחבר', 'כדי ליצור/לערוך מסלול צריך להתחבר.');
+            navigation.navigate('Login');
+            return false;
+        }
+        if (tier === 'unverified') {
+            Alert.alert('נדרש אימות', 'כדי ליצור/לערוך מסלול צריך לאמת את האימייל.');
+            navigation.navigate('VerifyEmail');
+            return false;
+        }
+        return true;
+    };
+
     const handleSaveDay = (dayData, index) => {
         const newTripDays = [...tripDays];
         if (index >= newTripDays.length) {
@@ -127,6 +143,9 @@ export default function AddRoutesScreen({ navigation, route }) {
     };
 
     const addRoute = async () => {
+        if (!ensureVerifiedForWrite()) {
+            return;
+        }
         if (!user) {
             Alert.alert("Error", "User must be authenticated!");
             return;

@@ -1,4 +1,8 @@
 node_modules/
+functions/node_modules/
+functions/serviceAccountKey.json
+functions/.env
+.firebase/
 .env
 .DS_Store
 dist/

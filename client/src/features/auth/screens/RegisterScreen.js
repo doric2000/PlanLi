@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Image, KeyboardAvoidingView, Platform, Sc
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../../../config/firebase';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
 import { forms } from '../../../styles';
@@ -33,8 +33,16 @@ export default function RegisterScreen({ navigation }) {
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: fullName });
         await registerOrUpdateUser(userCredential.user, { displayName: fullName, photoURL: null });
+
+        // Send verification email for password accounts
+        try {
+          await sendEmailVerification(userCredential.user);
+        } catch (e) {
+          // Don't block registration flow if email sending fails
+          console.warn('sendEmailVerification failed:', e?.message || e);
+        }
       }
-      navigation.replace('Main');
+      navigation.replace('VerifyEmail');
     } catch (err) {
       setError(err.message);
     }

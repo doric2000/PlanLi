@@ -3,6 +3,7 @@ import {
   View, 
   Text, 
   TextInput,
+  Alert,
   ActivityIndicator, 
   FlatList, 
   RefreshControl, 
@@ -27,6 +28,8 @@ import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter'
 
 // --- Global Styles ---
 import { colors, common, spacing, typography, shadows } from '../../../styles';
+import { auth } from '../../../config/firebase';
+import { getUserTier } from '../../../utils/userTier';
 
 export default function CommunityScreen({ navigation }) {
   // --- State ---
@@ -159,7 +162,22 @@ export default function CommunityScreen({ navigation }) {
         />
       )}
 
-      <FabButton onPress={() => navigation.navigate('AddRecommendation')} />
+      <FabButton
+        onPress={() => {
+          const tier = getUserTier(auth.currentUser);
+          if (tier === 'guest') {
+            Alert.alert('יש להתחבר', 'כדי ליצור המלצה צריך להתחבר.');
+            navigation.navigate('Login');
+            return;
+          }
+          if (tier === 'unverified') {
+            Alert.alert('נדרש אימות', 'כדי ליצור המלצה צריך לאמת את האימייל.');
+            navigation.navigate('VerifyEmail');
+            return;
+          }
+          navigation.navigate('AddRecommendation');
+        }}
+      />
 
       {/* --- FILTER MODAL --- */}
       <RecommendationsFilterModal

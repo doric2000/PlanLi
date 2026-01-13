@@ -31,6 +31,7 @@ import { getOrCreateDestinationForPlace, searchPlaces } from '../../../services/
 // --- Constants ---
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
+import { getUserTier } from '../../../utils/userTier';
 
 
 
@@ -257,6 +258,18 @@ export default function AddRecommendationScreen({ navigation , route }) {
   };
 
 const handleSubmit = async () => {
+    const tier = getUserTier(auth.currentUser);
+    if (tier === 'guest') {
+      Alert.alert('יש להתחבר', 'כדי ליצור/לערוך המלצה צריך להתחבר.');
+      navigation.navigate('Login');
+      return;
+    }
+    if (tier === 'unverified') {
+      Alert.alert('נדרש אימות', 'כדי ליצור/לערוך המלצה צריך לאמת את האימייל.');
+      navigation.navigate('VerifyEmail');
+      return;
+    }
+
     // Basic form validation
     if (!title || !description || !category || !selectedCountry?.id || !selectedCity?.id) {
       Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
@@ -298,7 +311,7 @@ const handleSubmit = async () => {
       if (!isEdit) {
         await addDoc(collection(db, 'recommendations'), {
           ...postData,
-          userId: auth.currentUser?.uid || 'anonymous',
+          userId: auth.currentUser.uid,
           createdAt: serverTimestamp(),
           likes: 0,
           likedBy: [],
