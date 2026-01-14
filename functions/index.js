@@ -3,6 +3,19 @@ const functions = require('firebase-functions');
 
 admin.initializeApp();
 
+async function updateCityRecommendationsCount({ countryId, cityId, delta }) {
+  if (!countryId || !cityId || typeof delta !== 'number' || !Number.isFinite(delta) || delta === 0) return;
+
+  const cityRef = admin.firestore().doc(`countries/${countryId}/cities/${cityId}`);
+  await cityRef.set(
+    {
+      recommendationsCount: admin.firestore.FieldValue.increment(delta),
+      recommendationsCountUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
 function assertSignedIn(context) {
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -82,3 +95,51 @@ exports.setUserVerified = functions.https.onCall(async (data, context) => {
     actorUid: context.auth?.uid || null,
   };
 });
+
+// Keep an aggregated recommendations count on each city doc.
+// City docs live at: countries/{countryId}/cities/{cityId}
+// Recommendations contain: { countryId, cityId, ... }
+exports.onRecommendationWrite = functions.firestore
+  .document('recommendations/{recommendationId}')
+  .onWrite(async (change) => {
+    const before = change.before.exists ? change.before.data() : null;
+    const after = change.after.exists ? change.after.data() : null;
+
+    // Create
+    if (!before && after) {
+      await updateCityRecommendationsCount({
+        countryId: after.countryId,
+        cityId: after.cityId,
+        delta: 1,
+      });
+      return;
+    }
+
+    // Delete
+    if (before && !after) {
+      await updateCityRecommendationsCount({
+        countryId: before.countryId,
+        cityId: before.cityId,
+        delta: -1,
+      });
+      return;
+    }
+
+    // Update (handle city change)
+    if (before && after) {
+      const beforeKey = `${before.countryId || ''}/${before.cityId || ''}`;
+      const afterKey = `${after.countryId || ''}/${after.cityId || ''}`;
+      if (beforeKey !== afterKey) {
+        await updateCityRecommendationsCount({
+          countryId: before.countryId,
+          cityId: before.cityId,
+          delta: -1,
+        });
+        await updateCityRecommendationsCount({
+          countryId: after.countryId,
+          cityId: after.cityId,
+          delta: 1,
+        });
+      }
+    }
+  });

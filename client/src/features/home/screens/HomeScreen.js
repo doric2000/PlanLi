@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // שימו לב להוספת collectionGroup
-import { getDocs, query, limit, collectionGroup } from "firebase/firestore";
+	import { getDocs, query, limit, collectionGroup, orderBy } from "firebase/firestore";
 import CityCard from "../../../components/CityCard";
 import { db } from "../../../config/firebase";
 import {
@@ -50,8 +50,13 @@ export default function HomeScreen({ navigation }) {
 	// Fetch popular destinations
 	const fetchDestinations = async () => {
 		try {
-			// Query all collections named 'cities' regardless of country
-			const citiesQuery = query(collectionGroup(db, "cities"), limit(10));
+			// Query all collections named 'cities' regardless of country,
+			// ordered by the number of recommendations each city has.
+			const citiesQuery = query(
+				collectionGroup(db, "cities"),
+				orderBy("recommendationsCount", "desc"),
+				limit(10)
+			);
 			const querySnapshot = await getDocs(citiesQuery);
 
 			const citiesList = querySnapshot.docs.map((doc) => {

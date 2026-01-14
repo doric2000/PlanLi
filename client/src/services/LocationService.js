@@ -3,7 +3,28 @@ import { db } from '../config/firebase';
 import { Platform } from 'react-native';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
-const PLACES_PROXY_BASE_URL = process.env.EXPO_PUBLIC_PLACES_PROXY_BASE_URL || 'http://localhost:8081';
+// Web uses an Express proxy (see /server/server.js) to avoid browser CORS.
+// Default server port is 5000; Expo/Metro typically runs on 8081 (which would return HTML).
+const PLACES_PROXY_BASE_URL =
+  process.env.EXPO_PUBLIC_PLACES_PROXY_BASE_URL ||
+  (Platform.OS === 'web' ? 'http://localhost:5000' : '');
+
+const parseJsonResponse = async (response) => {
+  const contentType = response.headers?.get?.('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const text = await response.text();
+  const snippet = String(text || '').slice(0, 140);
+  const err = new Error(
+    `Expected JSON but got ${contentType || 'unknown content-type'} (HTTP ${response.status}). ` +
+      `Response starts with: ${JSON.stringify(snippet)}`
+  );
+  err.status = response.status;
+  err.contentType = contentType;
+  throw err;
+};
 
 const fetchPlacesAutocomplete = async (searchText, { signal, types = '(cities)' } = {}) => {
   // On web, call our own server to avoid browser CORS restrictions.
@@ -11,7 +32,7 @@ const fetchPlacesAutocomplete = async (searchText, { signal, types = '(cities)' 
     const base = `${PLACES_PROXY_BASE_URL}/api/places/autocomplete?input=${encodeURIComponent(searchText)}`;
     const url = types ? `${base}&types=${encodeURIComponent(types)}` : base;
     const response = await fetch(url, { signal });
-    return response.json();
+    return parseJsonResponse(response);
   }
 
   // Native can call Google directly (no browser CORS).
@@ -23,14 +44,14 @@ const fetchPlacesAutocomplete = async (searchText, { signal, types = '(cities)' 
   params.set('language', 'he');
   params.set('key', GOOGLE_API_KEY);
   const response = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`, { signal });
-  return response.json();
+  return parseJsonResponse(response);
 };
 
 const fetchPlacesTextSearch = async (searchText, { signal } = {}) => {
   if (Platform.OS === 'web') {
     const url = `${PLACES_PROXY_BASE_URL}/api/places/textsearch?query=${encodeURIComponent(searchText)}`;
     const response = await fetch(url, { signal });
-    return response.json();
+    return parseJsonResponse(response);
   }
 
   const params = new URLSearchParams();
@@ -38,7 +59,7 @@ const fetchPlacesTextSearch = async (searchText, { signal } = {}) => {
   params.set('language', 'he');
   params.set('key', GOOGLE_API_KEY);
   const response = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`, { signal });
-  return response.json();
+  return parseJsonResponse(response);
 };
 
 export const fetchPlaceDetails = async (placeId, { fields } = {}) => {
@@ -46,7 +67,7 @@ export const fetchPlaceDetails = async (placeId, { fields } = {}) => {
     const base = `${PLACES_PROXY_BASE_URL}/api/places/details?placeId=${encodeURIComponent(placeId)}`;
     const url = fields ? `${base}&fields=${encodeURIComponent(fields)}` : base;
     const response = await fetch(url);
-    return response.json();
+    return parseJsonResponse(response);
   }
 
   const resolvedFields =
@@ -55,7 +76,7 @@ export const fetchPlaceDetails = async (placeId, { fields } = {}) => {
   const response = await fetch(
     `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${encodeURIComponent(resolvedFields)}&language=he&key=${GOOGLE_API_KEY}`
   );
-  return response.json();
+  return parseJsonResponse(response);
 };
 
 /**
