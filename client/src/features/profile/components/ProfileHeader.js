@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Platform,
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -79,29 +80,45 @@ export default function ProfileHeader({
     <View style={common.profileHeader}>
       <View style={common.profileAvatarContainer}>
         {userData?.photoURL ? (
-          <Image source={{ uri: userData.photoURL }} style={common.profileAvatar} />
+          Platform.OS === 'web' ? (
+            <img
+              src={userData.photoURL}
+              alt=""
+              style={{
+                width: common.profileAvatar?.width || 100,
+                height: common.profileAvatar?.height || 100,
+                borderRadius: (common.profileAvatar?.borderRadius ?? 50),
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+          ) : (
+            <Image source={{ uri: userData.photoURL }} style={common.profileAvatar} />
+          )
         ) : (
           <View style={[common.profileAvatar, common.profileAvatarPlaceholder]}>
             <Text style={common.profileAvatarText}>{initial}</Text>
           </View>
         )}
 
-        <TouchableOpacity
-          onPress={onPickImage}
-          style={buttons.editAvatarBadge}
-          disabled={uploading}
-          activeOpacity={0.85}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <Ionicons name="camera" size={14} color={colors.white} />
-          )}
-        </TouchableOpacity>
+        {typeof onPickImage === 'function' ? (
+          <TouchableOpacity
+            onPress={onPickImage}
+            style={buttons.editAvatarBadge}
+            disabled={uploading}
+            activeOpacity={0.85}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="camera" size={14} color={colors.white} />
+            )}
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <Text style={typography.profileName}>{userData?.displayName}</Text>
-      <Text style={typography.profileEmail}>{userData?.email}</Text>
+      {userData?.email ? <Text style={typography.profileEmail}>{userData.email}</Text> : null}
 
       {/* Level + Verified */}
       <View style={styles.badgeRow}>
@@ -115,7 +132,7 @@ export default function ProfileHeader({
           {travelStyleLabel ? <ProfileBadge text={travelStyleLabel} variant="muted" /> : null}
           {tripTypeLabel ? <ProfileBadge text={tripTypeLabel} variant="muted" /> : null}
         </View>
-      ) : (
+      ) : typeof onEditSmartProfile === 'function' ? (
         <TouchableOpacity
           onPress={onEditSmartProfile}
           style={styles.smartProfileCta}
@@ -123,7 +140,7 @@ export default function ProfileHeader({
         >
           <Text style={styles.smartProfileCtaText}>Set your Smart Profile →</Text>
         </TouchableOpacity>
-      )}
+      ) : null}
 
       {/* Existing smart badges row (interests/constraints badges etc.) */}
       {smartBadges?.length ? (

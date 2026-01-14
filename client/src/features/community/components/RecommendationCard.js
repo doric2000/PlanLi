@@ -13,6 +13,7 @@ import { db } from '../../../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { getUserTier } from '../../../utils/userTier';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
+import { formatTimestamp } from '../../../utils/formatTimestamp';
 
 
 /**
@@ -48,8 +49,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return formatTimestamp(timestamp);
   };
 
   const handleEdit = () => {

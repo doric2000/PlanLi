@@ -1,183 +1,340 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, StyleSheet, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from "firebase/firestore";
-import { db } from "../../../config/firebase";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 
-import BackButton from "../../../components/BackButton";
-import { Avatar } from "../../../components/Avatar";
-import RecommendationCard from "../../../components/RecommendationCard";
-import { cards, typography, colors } from "../../../styles";
+import { auth, db } from '../../../config/firebase';
+import { common, colors } from '../../../styles';
+
+import BackButton from '../../../components/BackButton';
+import { RouteCard } from '../../roadtrip/components/RouteCard';
+
+import ProfileHeader from '../components/ProfileHeader';
+import ProfileStatsCard from '../components/ProfileStatsCard';
+import { useProfileData } from '../hooks/useProfileData';
+import { getSmartProfileBadges } from '../utils/smartProfileBadges';
 
 export default function UserProfileScreen({ route, navigation }) {
   const uid = route?.params?.uid;
 
-  const [user, setUser] = useState(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const currentUser = auth.currentUser;
 
-  const [tags, setTags] = useState([]);
-  const [travelerLevel, setTravelerLevel] = useState(null);
+  const [contentTab, setContentTab] = useState('recommendations');
+  const [myRecs, setMyRecs] = useState([]);
+  const [myRoutes, setMyRoutes] = useState([]);
+  const [contentLoading, setContentLoading] = useState(false);
 
-  const [recs, setRecs] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [loadingLists, setLoadingLists] = useState(true);
+  const activeData = contentTab === 'recommendations' ? myRecs : myRoutes;
 
-  const fetchAll = useCallback(async () => {
+  const { userData, stats, loading: profileLoading, refresh } = useProfileData({
+    uid,
+    user: currentUser,
+  });
+
+  // Privacy: do not show email + price preferences (budget/travelStyle)
+  const publicUserData = useMemo(() => {
+    if (!userData) return userData;
+
+    const smartProfile = userData?.smartProfile ? { ...userData.smartProfile } : null;
+    if (smartProfile) {
+      delete smartProfile.travelStyle;
+      delete smartProfile.budget;
+      delete smartProfile.budgetTag;
+      delete smartProfile.travelStyleTag;
+    }
+
+    return {
+      ...userData,
+      email: '',
+      smartProfile,
+    };
+  }, [userData]);
+
+  const smartBadges = useMemo(
+    () => getSmartProfileBadges(publicUserData?.smartProfile),
+    [publicUserData?.smartProfile]
+  );
+
+  const renderTileImage = useCallback((uri) => {
+    if (!uri) return null;
+
+    // On web, routes/recommendations might contain leftover local preview URIs (blob:)
+    // that were never uploaded. Those are not accessible to other users and can
+    // trigger: "Not allowed to load local resource: blob:".
+    if (typeof uri === 'string' && uri.startsWith('blob:')) return null;
+
+    if (Platform.OS === 'web') {
+      return (
+        <img
+          src={uri}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      );
+    }
+
+    return <Image source={{ uri }} style={styles.tileImage} resizeMode="cover" />;
+  }, []);
+
+  const RecommendationTile = useCallback(
+    ({ item }) => {
+      const imageUriRaw = Array.isArray(item?.images) && item.images.length ? item.images[0] : null;
+      const imageUri = typeof imageUriRaw === 'string' && imageUriRaw.startsWith('blob:') ? null : imageUriRaw;
+      const title = item?.title || item?.name || item?.location || 'המלצה';
+
+      return (
+        <TouchableOpacity
+          style={styles.tile}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('RecommendationDetail', { item })}
+        >
+          <View style={styles.tileImageWrap}>
+            {imageUri ? (
+              renderTileImage(imageUri)
+            ) : (
+              <View style={styles.tileImagePlaceholder} />
+            )}
+          </View>
+          <Text style={styles.tileTitle} numberOfLines={2}>
+            {title}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [navigation, renderTileImage]
+  );
+
+  const RouteTile = useCallback(
+    ({ item }) => {
+      const thumbnailUrlRaw = Array.isArray(item?.tripDaysData)
+        ? item.tripDaysData.find((day) => day?.image)?.image || null
+        : null;
+      const thumbnailUrl = typeof thumbnailUrlRaw === 'string' && thumbnailUrlRaw.startsWith('blob:') ? null : thumbnailUrlRaw;
+      const title = item?.Title || item?.title || 'טיול';
+
+      return (
+        <TouchableOpacity
+          style={styles.tile}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('RouteDetail', { routeData: item })}
+        >
+          <View style={styles.tileImageWrap}>
+            {thumbnailUrl ? (
+              renderTileImage(thumbnailUrl)
+            ) : (
+              <View style={styles.tileImagePlaceholder} />
+            )}
+          </View>
+          <Text style={styles.tileTitle} numberOfLines={2}>
+            {title}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [navigation, renderTileImage]
+  );
+
+  const loadContent = useCallback(async () => {
     if (!uid) return;
-
-    setLoadingUser(true);
-    setLoadingLists(true);
+    setContentLoading(true);
 
     try {
-      // ---- user ----
-      const uSnap = await getDoc(doc(db, "users", uid));
-      const u = uSnap.exists() ? { id: uid, ...uSnap.data() } : { id: uid, displayName: "Traveler" };
-      setUser(u);
-
-      // תגיות + "רמת מטייל" (תתמוך בכמה שדות אפשריים אצלך)
-      const t = [
-        ...(Array.isArray(u.tags) ? u.tags : []),
-        ...(Array.isArray(u.smartBadges) ? u.smartBadges : []),
-      ].filter(Boolean);
-      setTags([...new Set(t)]);
-      setTravelerLevel(u.travelerType || u.travelerLevel || u.level || null);
-
-      // ---- recommendations ----
-      const recQ = query(
-        collection(db, "recommendations"),
-        where("userId", "==", uid),
-        // orderBy("createdAt", "desc"),
-        limit(30)
+      // --- Recommendations ---
+      let recSnap;
+      try {
+        const recQ = query(
+          collection(db, 'recommendations'),
+          where('userId', '==', uid),
+          orderBy('createdAt', 'desc'),
+          limit(30)
         );
+        recSnap = await getDocs(recQ);
+      } catch (err) {
+        console.log('Ordered recs query failed, fallback:', err?.message);
+        const recQFallback = query(
+          collection(db, 'recommendations'),
+          where('userId', '==', uid),
+          limit(30)
+        );
+        recSnap = await getDocs(recQFallback);
+      }
+      setMyRecs(recSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 
-
-      const recSnap = await getDocs(recQ);
-      const recList = [];
-      recSnap.forEach((d) => recList.push({ id: d.id, ...d.data() }));
-      setRecs(recList);
-
+      // --- Routes ---
+      let routesSnap;
+      try {
+        const routesQ = query(
+          collection(db, 'routes'),
+          where('userId', '==', uid),
+          orderBy('createdAt', 'desc'),
+          limit(30)
+        );
+        routesSnap = await getDocs(routesQ);
+      } catch (err) {
+        console.log('Ordered routes query failed, fallback:', err?.message);
+        const routesQFallback = query(
+          collection(db, 'routes'),
+          where('userId', '==', uid),
+          limit(30)
+        );
+        routesSnap = await getDocs(routesQFallback);
+      }
+      setMyRoutes(routesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) {
-      console.log("UserProfile fetch error:", e);
-      // נשאיר מה שהצליח, ונמנע קריסה
+      console.log('loadContent error:', e?.message || e);
     } finally {
-      setLoadingUser(false);
-      setLoadingLists(false);
+      setContentLoading(false);
     }
   }, [uid]);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    loadContent();
+  }, [loadContent]);
+
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('focus', () => {
+      refresh?.();
+      loadContent();
+    });
+    return unsubscribe;
+  }, [navigation, refresh, loadContent]);
 
   const header = useMemo(() => {
+    const recCount = myRecs.length;
+    const routesCount = myRoutes.length;
+
     return (
-      <View style={styles.headerWrap}>
+      <View>
         <View style={styles.topRow}>
           <BackButton color="dark" variant="solid" />
           <Text style={styles.title}>פרופיל</Text>
           <View style={{ width: 40 }} />
         </View>
 
-        {loadingUser ? (
-          <View style={{ paddingVertical: 18 }}>
-            <ActivityIndicator />
+        {profileLoading ? (
+          <View style={[common.loadingContainer, { paddingVertical: 18 }]}>
+            <ActivityIndicator size="large" color={colors.accent} />
           </View>
         ) : (
-          <View style={[styles.userRow]}>
-            <Avatar
-              photoURL={user?.photoURL}
-              displayName={user?.displayName}
-              size={56}
+          <>
+            <ProfileHeader
+              userData={publicUserData}
+              stats={stats}
+              smartBadges={smartBadges}
+              onPickImage={undefined}
+              uploading={false}
+              onEditSmartProfile={undefined}
             />
-            <View style={{ marginLeft: 12, flex: 1 }}>
-              <Text style={styles.name}>{user?.displayName || "Traveler"}</Text>
-
-              {!!travelerLevel && (
-                <Text style={styles.sub}>רמת מטייל: {travelerLevel}</Text>
-              )}
-            </View>
-          </View>
+            <ProfileStatsCard stats={stats} />
+          </>
         )}
 
-        {/* תגיות */}
+        {/* Tabs (same style as ProfileScreen) */}
         <View style={{ marginTop: 14 }}>
-          <Text style={styles.sectionLabel}>תגיות</Text>
+          <View style={styles.tabRow}>
+            <TouchableOpacity
+              onPress={() => setContentTab('recommendations')}
+              style={[
+                styles.tabBtn,
+                {
+                  borderBottomColor:
+                    contentTab === 'recommendations' ? colors.textPrimary : 'transparent',
+                },
+              ]}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { opacity: contentTab === 'recommendations' ? 1 : 0.5 },
+                ]}
+              >
+                המלצות 
+              </Text>
+            </TouchableOpacity>
 
-          {tags?.length ? (
-            <View style={styles.tagsRow}>
-              {tags.map((t) => (
-                <View key={t} style={styles.tagChip}>
-                  <Text style={styles.tagText}>{t}</Text>
-                </View>
-              ))}
+            <TouchableOpacity
+              onPress={() => setContentTab('routes')}
+              style={[
+                styles.tabBtn,
+                {
+                  borderBottomColor: contentTab === 'routes' ? colors.textPrimary : 'transparent',
+                },
+              ]}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { opacity: contentTab === 'routes' ? 1 : 0.5 },
+                ]}
+              >
+                טיולים 
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {contentLoading ? (
+            <View style={{ paddingTop: 18, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={colors.accent} />
             </View>
-          ) : (
-            <Text style={styles.emptyHint}>אין תגיות להצגה</Text>
-          )}
+          ) : null}
         </View>
-
-        {/* שורת מספרים: טיולים / המלצות */}
-        <View style={styles.countersRow}>
-          <View style={styles.counterBox}>
-            <Text style={styles.counterLabel}>טיולים - (מספר)</Text>
-            <Text style={styles.counterValue}>{routes.length}</Text>
-          </View>
-
-          <View style={styles.counterBox}>
-            <Text style={styles.counterLabel}>המלצות - (מספר)</Text>
-            <Text style={styles.counterValue}>{recs.length}</Text>
-          </View>
-        </View>
-
-        {/* כותרת לגריד */}
-        <Text style={[styles.sectionLabel, { marginTop: 10 }]}>
-          תוכן
-        </Text>
       </View>
     );
-  }, [loadingUser, user, travelerLevel, tags, routes.length, recs.length]);
+  }, [profileLoading, publicUserData, stats, smartBadges, myRecs.length, myRoutes.length, contentTab, contentLoading]);
 
-  // נציג "גריד" אחד שמכיל גם routes וגם recommendations (או רק אחד מהם)
-  const gridData = useMemo(() => {
-    // אתה יכול להחליט סדר: קודם טיולים ואז המלצות
-    const r1 = routes.map((x) => ({ ...x, __type: "route" }));
-    const r2 = recs.map((x) => ({ ...x, __type: "rec" }));
-    return [...r1, ...r2];
-  }, [routes, recs]);
+  const renderItem = useCallback(
+    ({ item }) => {
+      if (contentLoading) return null;
 
-  const renderItem = ({ item }) => {
-    if (item.__type === "route") {
+      if (contentTab === 'recommendations') {
+        return (
+          <View style={styles.gridItem}>
+            <RecommendationTile item={item} />
+          </View>
+        );
+      }
+
+      // Routes: show the actual RouteCard (routes typically don't have a stable cover photo)
+      const isOwner = currentUser && item.userId === currentUser.uid;
       return (
-        <View style={styles.gridItem}>
-          <RouteCard item={item} />
-        </View>
+        <RouteCard
+          item={item}
+          onPress={() => navigation.navigate('RouteDetail', { routeData: item })}
+          isOwner={isOwner}
+          showActionBar={false}
+          showActionMenu={false}
+        />
       );
-    }
-    return (
-      <View style={styles.gridItem}>
-        <RecommendationCard item={item} />
-      </View>
-    );
-  };
+    },
+    [contentLoading, contentTab, currentUser, navigation, RecommendationTile]
+  );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={common.container}>
       <FlatList
-        data={gridData}
-        keyExtractor={(item) => `${item.__type}_${item.id}`}
+        key={contentTab}
+        data={activeData}
+        keyExtractor={(item) => item.id}
         ListHeaderComponent={header}
+        ListHeaderComponentStyle={contentTab === 'routes' ? { marginBottom: 12 } : null}
         numColumns={2}
-        columnWrapperStyle={{ gap: 12 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 30, gap: 12 }}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={
+          contentTab === 'routes'
+            ? { paddingHorizontal: 12, paddingBottom: 40 }
+            : { ...common.profileScrollContent, paddingHorizontal: 12 }
+        }
         renderItem={renderItem}
         ListEmptyComponent={
-          loadingLists ? (
-            <View style={{ paddingTop: 20 }}>
-              <ActivityIndicator />
+          !contentLoading ? (
+            <View style={{ paddingTop: 18, paddingHorizontal: 16 }}>
+              <Text style={styles.emptyHint}>
+                {contentTab === 'recommendations' ? 'אין המלצות עדיין.' : 'אין טיולים עדיין.'}
+              </Text>
             </View>
-          ) : (
-            <Text style={styles.emptyHint}>אין תוכן להצגה</Text>
-          )
+          ) : null
         }
       />
     </SafeAreaView>
@@ -185,25 +342,76 @@ export default function UserProfileScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  headerWrap: { paddingBottom: 6 },
-  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 16, fontWeight: "800", color: "#111827" },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 6,
+  },
+  title: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  tabRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+  },
+  tabText: {
+    fontWeight: '700',
+  },
+  emptyHint: {
+    opacity: 0.6,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
 
-  userRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
-  name: { fontSize: 16, fontWeight: "800", color: "#111827" },
-  sub: { marginTop: 4, color: "#6B7280", fontSize: 12 },
-
-  sectionLabel: { fontSize: 14, fontWeight: "800", color: "#111827" },
-  emptyHint: { marginTop: 8, color: "#9CA3AF" },
-
-  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  tagChip: { backgroundColor: "#F3F4F6", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  tagText: { fontSize: 12, color: "#111827", fontWeight: "600" },
-
-  countersRow: { flexDirection: "row", gap: 12, marginTop: 14 },
-  counterBox: { flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#E5E7EB" },
-  counterLabel: { color: "#6B7280", fontSize: 12, fontWeight: "700" },
-  counterValue: { marginTop: 6, fontSize: 20, fontWeight: "900", color: "#111827" },
-
-  gridItem: { flex: 1 },
+  columnWrapper: {
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    marginTop: 12,
+    flexBasis: '50%',
+    maxWidth: '50%',
+    paddingHorizontal: 6,
+  },
+  tile: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  tileImageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  tileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  tileImagePlaceholder: {
+    flex: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  tileTitle: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#111827',
+    writingDirection: 'rtl',
+    textAlign: 'right',
+    minHeight: 40,
+  },
 });

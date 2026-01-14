@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Image, Text } from "react-native";
+import { View, Image, Text, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { common } from "../styles";
 
@@ -30,6 +30,25 @@ import { common } from "../styles";
  */
 export const Avatar = ({ photoURL, displayName, size = 36 }) => {
 	if (photoURL) {
+		// On web, RN <Image> often fetches via XHR which can trigger CORS issues
+		// with Firebase Storage. Using <img> avoids that and matches how we render
+		// recommendation carousel images on web.
+		if (Platform.OS === 'web') {
+			return (
+				<img
+					src={photoURL}
+					alt=""
+					style={{
+						width: size,
+						height: size,
+						borderRadius: size / 2,
+						objectFit: 'cover',
+						display: 'block',
+					}}
+				/>
+			);
+		}
+
 		return (
 			<Image
 				source={{ uri: photoURL }}
