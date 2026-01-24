@@ -9,6 +9,8 @@ const ChipSelector = ({
   onSelect,
   multiSelect = false,
   getItemTheme,
+  testIDPrefix,
+  getItemTestId,
 }) => {
 
   const safeItems = Array.isArray(items) ? items : []; 
@@ -30,9 +32,12 @@ const ChipSelector = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipScroll}
       >
-        {safeItems.map((item) => {
+        {safeItems.map((item, index) => {
           const active = isSelected(item);
           const theme = typeof getItemTheme === 'function' ? getItemTheme(item) : null;
+          const resolvedTestId = typeof getItemTestId === 'function'
+            ? getItemTestId(item, index)
+            : (testIDPrefix ? `${testIDPrefix}-${index}` : undefined);
           return (
             <TouchableOpacity
               key={String(item)}
@@ -48,6 +53,7 @@ const ChipSelector = ({
                   : null,
               ]}
               onPress={() => onSelect(item)}
+              testID={resolvedTestId}
             >
               <Text
                 style={[

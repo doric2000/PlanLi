@@ -33,6 +33,7 @@ export const ImagePickerBox = ({
   imageStyle,
   imageFit = 'cover',
   disabled = false,
+  testID,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
 
@@ -90,6 +91,7 @@ export const ImagePickerBox = ({
           onPress={onPress}
           disabled={disabled}
           activeOpacity={0.7}
+          testID={testID}
         >
           <Ionicons name={iconName} size={iconSize} color={iconColor} />
           <Text style={styles.placeholderText}>{placeholderText}</Text>
@@ -171,6 +173,7 @@ export const ImagePickerBox = ({
             onPress={onPress}
             disabled={disabled}
             activeOpacity={0.8}
+            testID={testID}
           >
             <Ionicons name={iconName} size={18} color="#FFFFFF" />
           </TouchableOpacity>

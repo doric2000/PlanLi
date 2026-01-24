@@ -27,6 +27,7 @@ export default function GooglePlacesInput({
   googleFallbackDelayMs = 2000,
   googleSearchFn,
   placeholder = 'חפש עיר...',
+  inputTestID,
 }) {
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
@@ -286,6 +287,7 @@ export default function GooglePlacesInput({
           autoCorrect={false}
           autoCapitalize="none"
           placeholderTextColor={colors.placeholder}
+          testID={inputTestID}
         />
         {loading && (
           <ActivityIndicator

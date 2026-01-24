@@ -343,9 +343,10 @@ const handleSubmit = async () => {
         <ImagePickerBox
           imageUris={editableImageUris}
           onPress={handleAddImages}
-          placeholderText="הוסף תמונות (עד 5)"
+          placeholderText="AddPic"
           imageFit="cover"
           style={{ marginBottom: spacing.xl }}
+          testID="add-rec-image-picker"
         />
 
         {editableImageUris.length > 0 ? (
@@ -376,7 +377,11 @@ const handleSubmit = async () => {
               ))}
             </ScrollView>
             {editableImageUris.length < 5 ? (
-              <TouchableOpacity onPress={handleAddImages} style={styles.addMoreBtn}>
+              <TouchableOpacity
+                onPress={handleAddImages}
+                style={styles.addMoreBtn}
+                testID="add-rec-images-add-more"
+              >
                 <Text style={styles.addMoreText}>הוסף עוד</Text>
               </TouchableOpacity>
             ) : null}
@@ -386,9 +391,10 @@ const handleSubmit = async () => {
         {/* 2. Title Input */}
         <LabeledInput
           label="כותרת"
-          placeholder="לדוגמא: מסעדת שף בתל אביב"
+          placeholder="inputTitle"
           value={title}
           onChangeText={setTitle}
+          testID="add-rec-title-input"
         />
 
         {/* 3. Exact Location Selection (local-first) */}
@@ -411,6 +417,7 @@ const handleSubmit = async () => {
             googleFallbackDelayMs={2000}
             googleSearchFn={(text, opts) => searchPlaces(text, { ...opts, types: 'all' })}
             placeholder="חפש מקום / אטרקציה / מסעדה..."
+            inputTestID="add-rec-location-input"
           />
         </View>
 
@@ -422,6 +429,7 @@ const handleSubmit = async () => {
           onChangeText={setDescription}
           multiline
           numberOfLines={4}
+          testID="add-rec-description-input"
         />
 
         {/* 5. Category Selector - Displays Hebrew Labels but logic uses IDs */}
@@ -434,6 +442,7 @@ const handleSubmit = async () => {
             handleCategoryChange(selectedId);
           }} 
           multiSelect={false}
+          testIDPrefix="add-rec-category"
         />
 
         {/* 6. Tags Selector - Dynamically filtered based on selected category */}
@@ -444,6 +453,7 @@ const handleSubmit = async () => {
             selectedValue={selectedTags}
             onSelect={toggleTag}
             multiSelect={true}
+            testIDPrefix="add-rec-tag"
           />
         ) : (
               <Text style={{ textAlign: 'center', fontSize: 14, marginBottom: 8 }}>
@@ -458,6 +468,7 @@ const handleSubmit = async () => {
           selectedValue={budget}
           onSelect={setBudget}
           getItemTheme={getBudgetTheme}
+          testIDPrefix="add-rec-budget"
         />
 
         {/* 8. Submit Button */}
@@ -465,6 +476,7 @@ const handleSubmit = async () => {
           style={[buttons.submit, submitting && buttons.disabled]}
           onPress={handleSubmit}
           disabled={submitting}
+          testID="add-rec-submit"
         >
           {submitting ? (
             <ActivityIndicator color={colors.white} />

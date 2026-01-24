@@ -17,15 +17,20 @@ const SegmentedControl = ({
   selectedValue, 
   onSelect,
   getItemTheme,
+  testIDPrefix,
+  getItemTestId,
 }) => {
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
       
       <View style={styles.row}>
-        {items.map((item) => {
+        {items.map((item, index) => {
           const isSelected = selectedValue === item;
           const theme = typeof getItemTheme === 'function' ? getItemTheme(item) : null;
+          const resolvedTestId = typeof getItemTestId === 'function'
+            ? getItemTestId(item, index)
+            : (testIDPrefix ? `${testIDPrefix}-${index}` : undefined);
 
           const selectedButtonStyle = isSelected
             ? {
@@ -49,6 +54,7 @@ const SegmentedControl = ({
                 selectedButtonStyle,
               ]}
               onPress={() => onSelect(item)}
+              testID={resolvedTestId}
             >
               <Text style={[
                 styles.text, 

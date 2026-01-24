@@ -26,8 +26,9 @@ export default function ChangeNameScreen({ navigation }) {
         { merge: true }
       );
 
-      Alert.alert('הצלחה', 'השם עודכן בהצלחה');
-      navigation.goBack();
+      Alert.alert('הצלחה', 'השם עודכן בהצלחה', [
+        { text: 'אישור', onPress: () => navigation.goBack() },
+      ]);
     } catch (e) {
       Alert.alert('שגיאה', e?.message || 'עדכון השם נכשל');
     } finally {
@@ -36,10 +37,15 @@ export default function ChangeNameScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} testID="change-name-screen">
       {/* Header: back left + title center */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          activeOpacity={0.8}
+          testID="change-name-back"
+        >
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
 
@@ -59,6 +65,7 @@ export default function ChangeNameScreen({ navigation }) {
           autoCapitalize="words"
           textAlign="right"
           writingDirection="rtl"
+          testID="change-name-input"
         />
 
         <TouchableOpacity
@@ -66,6 +73,7 @@ export default function ChangeNameScreen({ navigation }) {
           activeOpacity={0.9}
           onPress={onSave}
           disabled={saving}
+          testID="change-name-submit"
         >
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>עדכן</Text>}
         </TouchableOpacity>

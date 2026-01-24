@@ -254,6 +254,7 @@ export default function HomeScreen({ navigation }) {
 							onChangeValue={setSearchQuery}
 							localResults={localAutocompleteResults}
 							localResultsLoading={localResultsLoading}
+							inputTestID="home-search-input"
 							onSelectLocal={(city) => {
 								if (!city?.id || !city?.countryId) return;
 								navigation.navigate("LandingPage", {
@@ -297,8 +298,8 @@ export default function HomeScreen({ navigation }) {
 								Loading destinations...
 							</Text>
 						) : filteredDestinations.length === 0 ? (
-							<Text style={common.emptyText}>
-								No destinations match "{searchQuery}"
+							<Text style={common.emptyText} testID="home-empty-state">
+								No Destination match
 							</Text>
 						) : (
 							filteredDestinations.map((city) => (

@@ -85,12 +85,12 @@ jest.mock('../src/utils/userTier', () => ({
 // This allows us to "type" and "select" a location programmatically.
 jest.mock('../src/components/GooglePlacesInput', () => {
   const { View, TextInput, Button } = require('react-native');
-  return ({ onSelect, placeholder, onChangeValue }) => (
+  return ({ onSelect, placeholder, onChangeValue, inputTestID }) => (
     <View>
       <TextInput 
         placeholder={placeholder} 
         onChangeText={onChangeValue} 
-        testID="google-places-input"
+        testID={inputTestID || 'google-places-input'}
       />
       {/* This button simulates the user clicking a result from the dropdown list */}
       <Button 
@@ -135,7 +135,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     };
     
     // Render the screen
-    const { getByPlaceholderText, getByText, getByTestId, getAllByText } = render(
+    const { getByTestId } = render(
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
@@ -144,36 +144,34 @@ describe('AddRecommendationScreen Integration Test', () => {
     // ------------------------------------------------
 
     // 0. Add an image (optional in validation, but required by test requirements)
-    fireEvent.press(getByText('הוסף תמונות (עד 5)'));
+    fireEvent.press(getByTestId('add-rec-image-picker'));
     await waitFor(() => expect(mockPickImages).toHaveBeenCalled());
 
     // 1. Enter Title
-    fireEvent.changeText(getByPlaceholderText('לדוגמא: מסעדת שף בתל אביב'), 'Best Pizza Ever');
+    fireEvent.changeText(getByTestId('add-rec-title-input'), 'Best Pizza Ever');
 
     // 2. Select Location (Simulated)
     // We type 'Tel Aviv' and then click our mock button to simulate a Google API selection.
-    fireEvent.changeText(getByTestId('google-places-input'), 'Tel Aviv'); 
+    fireEvent.changeText(getByTestId('add-rec-location-input'), 'Tel Aviv'); 
     fireEvent.press(getByTestId('google-result-select')); 
     // This triggers the LocationService mock, setting state with 'Israel', 'Tel Aviv', and coordinates.
 
     // 3. Enter Description
-    fireEvent.changeText(getByPlaceholderText('תאר לנו למה אתה ממליץ על המקום הזה...'), 'Great cheese and crust!');
+    fireEvent.changeText(getByTestId('add-rec-description-input'), 'Great cheese and crust!');
 
     // 4. Select Main Category
-    fireEvent.press(getByText('אוכל ובילויים'));
+    fireEvent.press(getByTestId('add-rec-category-0'));
 
     // 5. Select Sub-Category (Tags)
     // We wait for the tags to appear (async UI update) then select 'מסעדה'.
-    await waitFor(() => getByText('מסעדה'));
-    fireEvent.press(getByText('מסעדה'));
+    await waitFor(() => getByTestId('add-rec-tag-0'));
+    fireEvent.press(getByTestId('add-rec-tag-0'));
 
     // 6. Select Budget
-    const budgetOptions = getAllByText('₪₪');
-    fireEvent.press(budgetOptions[0]);
+    fireEvent.press(getByTestId('add-rec-budget-2'));
 
     // 7. Submit Form
-    const submitBtn = getByText('פרסם המלצה');
-    fireEvent.press(submitBtn);
+    fireEvent.press(getByTestId('add-rec-submit'));
 
     // ------------------------------------------------
     // Step 3: Assert (Verify Outcome)
