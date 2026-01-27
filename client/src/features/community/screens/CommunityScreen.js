@@ -21,6 +21,7 @@ import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import FabButton from '../../../components/FabButton';
 import ActiveFiltersList from '../../../components/ActiveFiltersList';
+import { SortMenuModal } from '../components/SortMenuModal';
 
 // --- Hooks ---
 import { useRecommendations } from '../../../hooks/useRecommendations';
@@ -201,33 +202,12 @@ export default function CommunityScreen({ navigation }) {
       />
 
       {/* Sort Menu Modal */}
-      <Modal visible={sortMenuVisible} transparent={true} animationType="fade" onRequestClose={() => setSortMenuVisible(false)}>
-        <TouchableOpacity style={localStyles.modalOverlay} activeOpacity={1} onPress={() => setSortMenuVisible(false)}>
-            <View style={localStyles.sortMenu}>
-                <Text style={{ ...typography.h3, textAlign: 'center', marginBottom: spacing.md }}>מיין לפי</Text>
-                {['popularity', 'newest'].map((option) => (
-                    <TouchableOpacity 
-                        key={option}
-                        style={[localStyles.sortOption, sortBy === option && { backgroundColor: colors.background }]}
-                        onPress={() => handleSortSelect(option)}
-                    >
-                    <View style={localStyles.sortOptionLabelRow}>
-                      <Ionicons
-                        name={option === 'popularity' ? 'trending-up-outline' : 'time-outline'}
-                        size={16}
-                        color={sortBy === option ? colors.primary : colors.textSecondary}
-                        style={{ marginLeft: 6 }}
-                      />
-                      <Text style={{ color: sortBy === option ? colors.primary : colors.textPrimary }}>
-                        {option === 'popularity' ? 'הכי פופולרי' : 'הכי חדש'}
-                      </Text>
-                    </View>
-                        {sortBy === option && <Ionicons name="checkmark" size={18} color={colors.primary} />}
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </TouchableOpacity>
-      </Modal>
+    <SortMenuModal 
+      visible={sortMenuVisible} 
+      onClose={() => setSortMenuVisible(false)} 
+      sortBy={sortBy} 
+      onSelect={handleSortSelect} 
+/>
 
     </SafeAreaView>
   );

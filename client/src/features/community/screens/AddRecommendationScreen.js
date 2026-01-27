@@ -45,6 +45,12 @@ const LabeledInput = ({ label, style, ...props }) => (
   </View>
 );
 
+// function to get category label from ID
+const getCategoryLabel = (categoryId) => {
+  const categoryObj = PARENT_CATEGORIES.find(c => c.id === categoryId);
+  return categoryObj ? categoryObj.label : categoryId;
+};
+
 export default function AddRecommendationScreen({ navigation , route }) {
   // --- Initialization & Params ---
   const isEdit = route?.params?.mode === 'edit';
@@ -288,8 +294,6 @@ const handleSubmit = async () => {
       const uploadedQueue = [...uploadedLocal];
       const finalImages = current.map((uri) => (isRemote(uri) ? uri : uploadedQueue.shift())).filter(Boolean);
 
-      // NEW: Find the label corresponding to the selected ID
-      const categoryLabel = PARENT_CATEGORIES.find(c => c.id === category)?.label || category;
 
       // Prepare Data Object for Firestore
       const postData = {
@@ -299,8 +303,8 @@ const handleSubmit = async () => {
         country: selectedCountry.name || selectedCountry.id,
         countryId: selectedCountry.id,
         cityId: selectedCity.id,
-        category: categoryLabel, // Now saving the Hebrew Label instead of the ID
-        categoryId: category,    // Optional: Keeping the ID as a separate field for easier filtering later
+        category: getCategoryLabel(category),
+        categoryId: category,
         tags: selectedTags,
         budget,
         images: finalImages,

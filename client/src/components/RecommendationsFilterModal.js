@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import FilterModal from './FilterModal';
 import { common, spacing } from '../styles';
+import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // --- Import constants for hierarchical logic ---
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../constants/Constants';
@@ -97,9 +99,11 @@ export default function RecommendationsFilterModal({
       onApply={handleApply}
     >
       {/* 5. ScrollView wrapper: Allows content to grow and ensures scrollability */}
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+    <ScrollView 
+      style={styles.scrollWrapper} 
+      showsVerticalScrollIndicator={false} 
+      contentContainerStyle={styles.scrollContent}
+      bounces={true}
       >
         {/* Destination Section */}
         <View style={styles.section}>
@@ -171,5 +175,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: spacing.xl, // Extra padding ensures bottom content is not hidden
+  },
+scrollWrapper: {
+    // מגביל את אזור הבחירה ל-60% מגובה המסך כדי להשאיר מקום לכותרת ולכפתורים
+    maxHeight: SCREEN_HEIGHT * 0.6, 
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl,
+    flexGrow: 1, // מבטיח שהתוכן יתפרס נכון אם הוא קטן מהגובה המקסימלי
   }
 });
