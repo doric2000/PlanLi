@@ -17,3 +17,6 @@ export { default as useCurrentUser } from './useCurrentUser';
 export { default as useLikes } from './useLikes';
 export { default as useRefresh } from './useRefresh';
 export { default as useUserData } from './useUserData';
+
+// Location
+export { useUserLocation } from './useUserLocation';

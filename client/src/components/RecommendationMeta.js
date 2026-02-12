@@ -2,21 +2,37 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { common, typography, colors } from '../styles';
+import { getPlaceCoordinates } from '../utils/distance';
 
 export const RecommendationMeta = ({ item, navigation }) => {
   const openInGoogleMaps = () => {
-    const coords = item?.place?.coordinates;
-    const placeId = item?.place?.placeId;
-    const fallbackQuery = item?.place?.name || item?.location || '';
+    const place = item?.place;
+    const placeId = place?.placeId;
 
-    const hasCoords = coords && typeof coords.lat === 'number' && typeof coords.lng === 'number';
+    // Best option: open the Google Place URL directly (most precise).
+    if (place?.url) {
+      Linking.openURL(place.url).catch(() => {});
+      return;
+    }
+
+    // Next best: open by coordinates.
+    const coords = getPlaceCoordinates(place);
+    const hasCoords = !!coords;
+
+    const fallbackQuery = [
+      place?.name,
+      place?.address,
+      item?.location,
+      item?.country,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
     const query = hasCoords ? `${coords.lat},${coords.lng}` : fallbackQuery;
     if (!query) return;
 
     let url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-    if (placeId) {
-      url += `&query_place_id=${encodeURIComponent(placeId)}`;
-    }
+    if (placeId) url += `&query_place_id=${encodeURIComponent(placeId)}`;
 
     Linking.openURL(url).catch(() => {});
   };

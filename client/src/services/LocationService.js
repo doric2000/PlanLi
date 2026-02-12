@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Platform } from 'react-native';
+import * as ExpoLocation from 'expo-location';
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
 // Web uses an Express proxy (see /server/server.js) to avoid browser CORS.
@@ -139,16 +140,68 @@ const parsePlaceDetailsBasics = (result) => {
     return null;
   };
 
+  const splitAddressParts = (formattedAddress) => {
+    if (!formattedAddress || typeof formattedAddress !== 'string') return [];
+    return formattedAddress
+      .split(',')
+      .map((p) => String(p).trim())
+      .filter(Boolean);
+  };
+
+  // Heuristic: for Hebrew/English UI, these are common country tokens that may appear
+  // as the last segment in formatted_address.
+  const KNOWN_COUNTRY_TOKENS = new Set([
+    'Israel',
+    'State of Israel',
+    'ישראל',
+  ]);
+
   // IMPORTANT: Don't treat neighborhoods/sublocalities as the "city".
   // Prefer real city-level components first, then fall back to broader admin areas.
-  const cityComp =
+  const realCityComp =
     findByTypePriority(['locality', 'postal_town']) ||
-    findByTypePriority(['administrative_area_level_3', 'administrative_area_level_2', 'administrative_area_level_1']) ||
-    findByTypePriority(['sublocality', 'neighborhood']);
+    findByTypePriority(['administrative_area_level_3', 'administrative_area_level_2', 'administrative_area_level_1']);
 
-  const countryName = countryComp?.long_name || null;
+  const neighborhoodComp = findByTypePriority(['sublocality', 'neighborhood']);
+
+  const addressParts = splitAddressParts(result.formatted_address);
+  const lastPart = addressParts.length >= 1 ? addressParts[addressParts.length - 1] : null;
+  const lastIsKnownCountry = !!lastPart && KNOWN_COUNTRY_TOKENS.has(lastPart);
+
+  // Only trust formatted_address for country when:
+  // - it has 3+ parts (e.g. neighborhood, city, country), OR
+  // - the last part is a known country token.
+  const formattedCountry =
+    addressParts.length >= 3
+      ? lastPart
+      : lastIsKnownCountry
+        ? lastPart
+        : null;
+
+  // City heuristics:
+  // - For 3+ parts: city is second-to-last.
+  // - For 2 parts:
+  //    - If last is a known country: city is first.
+  //    - Else assume it's "neighborhood, city" => city is last.
+  const formattedCity =
+    addressParts.length >= 3
+      ? addressParts[addressParts.length - 2]
+      : addressParts.length === 2
+        ? (lastIsKnownCountry ? addressParts[0] : lastPart)
+        : null;
+
+  const countryName = countryComp?.long_name || formattedCountry || null;
   const countryCode = countryComp?.short_name || null;
-  const cityName = cityComp?.long_name || result.name || null;
+
+  // If only a neighborhood is available, try to derive the city from the formatted address
+  // (e.g. "נווה שאנן, אריאל, ישראל" => city="אריאל").
+  const cityName =
+    realCityComp?.long_name ||
+    (neighborhoodComp ? (formattedCity || null) : null) ||
+    formattedCity ||
+    neighborhoodComp?.long_name ||
+    result.name ||
+    null;
 
   const lat = result?.geometry?.location?.lat;
   const lng = result?.geometry?.location?.lng;
@@ -214,6 +267,16 @@ export const getOrCreateDestination = async (placeId) => {
     if (!result) throw new Error("Google Places API returned no result.");
 
     const parsed = parsePlaceDetailsBasics(result);
+
+    // Some places (e.g. disputed territories) may omit country in Places details.
+    // If we have coordinates, resolve country via reverse geocoding.
+    if (!parsed?.countryName && parsed?.coordinates) {
+      const resolved = await resolveCountryFromCoordinates(parsed.coordinates);
+      if (resolved?.countryName || resolved?.countryCode) {
+        parsed.countryName = parsed.countryName || resolved.countryName;
+        parsed.countryCode = parsed.countryCode || resolved.countryCode;
+      }
+    }
 
     if (!parsed?.countryName) {
       alert('Could not detect Country.');
@@ -341,15 +404,67 @@ export const getOrCreateDestination = async (placeId) => {
  * - ensure destination docs exist (country + city)
  * - return destination ids + a recommendation-ready place payload
  */
-export const getOrCreateDestinationForPlace = async (placeId) => {
+export const getOrCreateDestinationForPlace = async (placeId, { countryOverride } = {}) => {
   const fields = 'name,formatted_address,address_components,geometry,place_id,url';
   const details = await fetchPlaceDetails(placeId, { fields });
   const result = details?.result;
   if (!result) throw new Error('Google Places API returned no result.');
 
   const parsed = parsePlaceDetailsBasics(result);
-  if (!parsed?.countryName || !parsed?.cityName) {
-    throw new Error('Could not derive country/city from place details.');
+
+  // If Google itself returns a disputed/ambiguous country label, require manual confirmation.
+  if (parsed?.countryName && !countryOverride && isDisputedOrAmbiguousCountryName(parsed.countryName)) {
+    const err = new Error('Country is disputed/ambiguous for this place.');
+    err.code = 'DISPUTED_COUNTRY';
+    err.parsed = parsed;
+    err.suggestedCountry = { name: parsed.countryName, code: parsed.countryCode || null };
+    throw err;
+  }
+
+  if (parsed?.coordinates && (!parsed?.countryName || !parsed?.countryCode)) {
+    const resolved = await resolveCountryFromCoordinates(parsed.coordinates);
+    if (resolved?.countryName || resolved?.countryCode) {
+      // If reverse-geocode resolves to a disputed/ambiguous country label, require manual confirmation.
+      if (!countryOverride && resolved?.countryName && isDisputedOrAmbiguousCountryName(resolved.countryName)) {
+        const err = new Error('Country is disputed/ambiguous for this place.');
+        err.code = 'DISPUTED_COUNTRY';
+        err.parsed = parsed;
+        err.suggestedCountry = { name: resolved.countryName, code: resolved.countryCode || null };
+        throw err;
+      }
+
+      parsed.countryName = parsed.countryName || resolved.countryName;
+      parsed.countryCode = parsed.countryCode || resolved.countryCode;
+    }
+  }
+
+  if (!parsed?.countryName && countryOverride) {
+    const overrideName = typeof countryOverride === 'string' ? countryOverride : (countryOverride?.name || countryOverride?.countryName || null);
+    const overrideCode = typeof countryOverride === 'object' ? (countryOverride?.code || countryOverride?.countryCode || null) : null;
+    if (overrideName) parsed.countryName = overrideName;
+    if (overrideCode) parsed.countryCode = String(overrideCode).toUpperCase();
+  }
+
+  if (parsed?.countryName && countryOverride) {
+    // Explicit override wins.
+    const overrideName = typeof countryOverride === 'string' ? countryOverride : (countryOverride?.name || countryOverride?.countryName || null);
+    const overrideCode = typeof countryOverride === 'object' ? (countryOverride?.code || countryOverride?.countryCode || null) : null;
+    if (overrideName) parsed.countryName = overrideName;
+    if (overrideCode) parsed.countryCode = String(overrideCode).toUpperCase();
+  }
+
+  if (!parsed?.cityName) {
+    const err = new Error('Could not derive city from place details.');
+    err.code = 'MISSING_CITY';
+    err.parsed = parsed;
+    throw err;
+  }
+
+  if (!parsed?.countryName) {
+    const err = new Error('Could not derive country from place details.');
+    err.code = 'MISSING_COUNTRY';
+    err.parsed = parsed;
+    throw err;
   }
 
   // Resolve the "real" city place_id so we can:
@@ -437,4 +552,55 @@ export const getOrCreateDestinationForPlace = async (placeId) => {
     },
     place: recommendationPlace,
   };
+};
+
+const resolveCountryFromCoordinates = async ({ lat, lng }) => {
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return { countryName: null, countryCode: null };
+
+  // Strategy 1 (best on native): OS reverse geocoder.
+  try {
+    const results = await ExpoLocation.reverseGeocodeAsync({ latitude: latNum, longitude: lngNum });
+    const first = Array.isArray(results) ? results[0] : null;
+    const countryName = first?.country || null;
+    const countryCode = first?.isoCountryCode || null;
+    if (countryName || countryCode) {
+      return { countryName, countryCode: countryCode ? String(countryCode).toUpperCase() : null };
+    }
+  } catch (e) {
+    // ignore; fall through
+  }
+
+  // Strategy 2 (fallback, especially for web): Nominatim reverse.
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=3&lat=${encodeURIComponent(latNum)}&lon=${encodeURIComponent(lngNum)}`;
+    const res = await fetch(url, {
+      headers: {
+        // Best-effort localization; safe even if ignored.
+        'Accept-Language': 'he',
+      },
+    });
+    const json = await res.json();
+    const countryName = json?.address?.country || null;
+    const cc = json?.address?.country_code || null;
+    const countryCode = cc ? String(cc).toUpperCase() : null;
+    return { countryName, countryCode };
+  } catch (e) {
+    return { countryName: null, countryCode: null };
+  }
+};
+
+const isDisputedOrAmbiguousCountryName = (name) => {
+  if (!name) return false;
+  const n = String(name).toLowerCase();
+  return (
+    n.includes('palestin') ||
+    n.includes('occupied palestinian') ||
+    n.includes('palestinian territory') ||
+    n.includes('west bank') ||
+    n.includes('gaza') ||
+    n.includes('השטח') ||
+    n.includes('פלסטין')
+  );
 };

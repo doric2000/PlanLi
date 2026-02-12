@@ -3,7 +3,7 @@
     "name": "PlanLi",
     "slug": "client",
     "scheme": "client",
-    "version": "0.17.2",
+    "version": "0.18.0",
     "owner": "doric2000",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,14 +17,21 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.planli.planlitravels",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We use your location to sort recommendations by proximity."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

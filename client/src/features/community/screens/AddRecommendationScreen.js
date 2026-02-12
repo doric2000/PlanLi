@@ -22,6 +22,7 @@ import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ChipSelector from '../components/ChipSelector';
 import SegmentedControl from '../components/SegmentedControl';
+import SelectionModal from '../components/SelectionModal';
 
 // --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
@@ -72,6 +73,15 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [selectedCountry, setSelectedCountry] = useState(null); // {id,name}
   const [selectedCity, setSelectedCity] = useState(null); // {id,name}
   const [selectedPlace, setSelectedPlace] = useState(null); // {placeId,name,address,coordinates,url}
+  const [locationResolveError, setLocationResolveError] = useState(null);
+  const [resolvingLocation, setResolvingLocation] = useState(false);
+
+  // Manual country override (for places missing a country in Google details)
+  const [countryPickerVisible, setCountryPickerVisible] = useState(false);
+  const [countriesForPicker, setCountriesForPicker] = useState([]);
+  const [loadingCountriesForPicker, setLoadingCountriesForPicker] = useState(false);
+  const [pendingCountryOverridePlaceId, setPendingCountryOverridePlaceId] = useState(null);
+  const [suggestedCountryForOverride, setSuggestedCountryForOverride] = useState(null);
 
   const [allCitiesForSearch, setAllCitiesForSearch] = useState([]);
   const [hasLoadedAllCitiesForSearch, setHasLoadedAllCitiesForSearch] = useState(false);
@@ -237,6 +247,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
   const handleSelectLocalCity = (city) => {
     if (!city?.id || !city?.countryId) return;
+    setLocationResolveError(null);
     setSelectedCountry({ id: city.countryId, name: city.countryId });
     setSelectedCity({ id: city.id, name: city.name || city.id });
     setSelectedPlace(
@@ -252,14 +263,142 @@ export default function AddRecommendationScreen({ navigation , route }) {
   };
 
   const handleSelectGooglePlace = async (placeId) => {
+    setResolvingLocation(true);
+    setLocationResolveError(null);
     try {
       const result = await getOrCreateDestinationForPlace(placeId);
       setSelectedCountry(result.destination.country);
       setSelectedCity(result.destination.city);
       setSelectedPlace(result.place);
     } catch (error) {
-      console.error(error);
-      Alert.alert('אוי לא!', 'לא הצלחנו לטעון את פרטי המיקום.');
+      // Avoid LogBox/RedBox noise for expected, user-handled flows.
+      if (error?.code !== 'MISSING_COUNTRY' && error?.code !== 'DISPUTED_COUNTRY') {
+        console.error(error);
+      }
+      if ((error?.code === 'MISSING_COUNTRY' || error?.code === 'DISPUTED_COUNTRY') && error?.parsed) {
+        // Keep place + city (when available), and ask user to pick a country manually.
+        const parsed = error.parsed;
+        setPendingCountryOverridePlaceId(placeId);
+        setSuggestedCountryForOverride(error?.suggestedCountry || null);
+        setSelectedCountry(null);
+        setSelectedCity(parsed?.cityName ? { id: parsed.cityName, name: parsed.cityName } : null);
+        setSelectedPlace({
+          placeId: parsed.placeId,
+          name: parsed.name,
+          address: parsed.address,
+          url: parsed.url,
+          ...(parsed.coordinates ? { coordinates: parsed.coordinates } : {}),
+        });
+
+        setLocationResolveError(
+          error?.code === 'DISPUTED_COUNTRY'
+            ? 'המדינה שזוהתה אוטומטית שנויה במחלוקת/לא חד-משמעית.'
+            : 'חסרה מדינה עבור המיקום שנבחר.'
+        );
+        Alert.alert(
+          'צריך לבחור מדינה',
+          error?.code === 'DISPUTED_COUNTRY'
+            ? 'המערכת זיהתה מדינה אוטומטית שעשויה להיות לא מדויקת. בחר מדינה ידנית כדי להמשיך.'
+            : 'למיקום הזה אין מדינה בנתוני המפה. בחר מדינה ידנית כדי להמשיך.',
+          [
+            { text: 'ביטול', style: 'cancel' },
+            ...(error?.code === 'DISPUTED_COUNTRY' && error?.suggestedCountry?.name
+              ? [
+                  {
+                    text: `השתמש ב-${error.suggestedCountry.name}`,
+                    onPress: () => {
+                      handleSelectManualCountry({
+                        id: error.suggestedCountry.name,
+                        name: error.suggestedCountry.name,
+                        code: error.suggestedCountry.code || null,
+                      });
+                    },
+                  },
+                ]
+              : []),
+            {
+              text: 'בחר מדינה',
+              onPress: () => setCountryPickerVisible(true),
+            },
+          ]
+        );
+      } else {
+        // Clear any stale location so the user can't accidentally save with an old city/country.
+        setSelectedCountry(null);
+        setSelectedCity(null);
+        setSelectedPlace(null);
+
+        const message = error?.message || 'לא הצלחנו לטעון את פרטי המיקום.';
+        setLocationResolveError(message);
+        Alert.alert('אוי לא!', 'לא הצלחנו לשמור את המיקום שבחרת. נסה לבחור מיקום אחר (למשל העיר עצמה) ולשמור שוב.');
+      }
+    }
+    finally {
+      setResolvingLocation(false);
+    }
+  };
+
+  const loadCountriesForPicker = async () => {
+    if (loadingCountriesForPicker) return;
+    if (countriesForPicker.length > 0) return;
+
+    setLoadingCountriesForPicker(true);
+    try {
+      const snap = await getDocs(collection(db, 'countries'));
+      const list = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() || {}) }))
+        .map((c) => ({
+          id: c.id,
+          name: c.name || c.id,
+          code: c.code || null,
+        }))
+        .filter((c) => c.id);
+
+      list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he'));
+      setCountriesForPicker(list);
+    } catch (e) {
+      console.error('Failed to load countries for picker:', e);
+      Alert.alert('שגיאה', 'לא הצלחנו לטעון את רשימת המדינות.');
+    } finally {
+      setLoadingCountriesForPicker(false);
+    }
+  };
+
+  useEffect(() => {
+    if (countryPickerVisible) {
+      loadCountriesForPicker();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countryPickerVisible]);
+
+  const handleSelectManualCountry = async (country) => {
+    const placeId = pendingCountryOverridePlaceId || selectedPlace?.placeId;
+    if (!placeId) {
+      setCountryPickerVisible(false);
+      return;
+    }
+
+    setCountryPickerVisible(false);
+    setResolvingLocation(true);
+    setLocationResolveError(null);
+
+    try {
+      const result = await getOrCreateDestinationForPlace(placeId, {
+        countryOverride: { name: country?.name || country?.id, code: country?.code || null },
+      });
+      setSelectedCountry(result.destination.country);
+      setSelectedCity(result.destination.city);
+      setSelectedPlace(result.place);
+      setPendingCountryOverridePlaceId(null);
+      setSuggestedCountryForOverride(null);
+    } catch (e) {
+      // This is still user-visible via Alert; keep console clean unless needed.
+      console.error(e);
+      setSelectedCountry(null);
+      setLocationResolveError(e?.message || 'לא הצלחנו לשמור את המדינה שנבחרה.');
+      Alert.alert('שגיאה', 'לא הצלחנו לשמור את המדינה שנבחרה. נסה לבחור מדינה אחרת.');
+    } finally {
+      setResolvingLocation(false);
     }
   };
 
@@ -273,6 +412,16 @@ const handleSubmit = async () => {
     if (tier === 'unverified') {
       Alert.alert('נדרש אימות', 'כדי ליצור/לערוך המלצה צריך לאמת את האימייל.');
       navigation.navigate('VerifyEmail');
+      return;
+    }
+
+    if (locationResolveError) {
+      Alert.alert('שגיאה במיקום', 'אי אפשר לשמור את ההמלצה כל עוד יש שגיאה בבחירת המיקום.');
+      return;
+    }
+
+    if (resolvingLocation) {
+      Alert.alert('רק רגע', 'אנחנו עדיין טוענים את פרטי המיקום שבחרת.');
       return;
     }
 
@@ -412,6 +561,9 @@ const handleSubmit = async () => {
             onChangeValue={(text) => {
               setLocationQuery(text);
               setSelectedPlace(null);
+              setLocationResolveError(null);
+              setPendingCountryOverridePlaceId(null);
+              setSuggestedCountryForOverride(null);
               // Don't clear selected destination immediately; user may be editing text.
             }}
             localResults={localAutocompleteResults}
@@ -423,6 +575,33 @@ const handleSubmit = async () => {
             placeholder="חפש מקום / אטרקציה / מסעדה..."
             inputTestID="add-rec-location-input"
           />
+
+          {!!(locationResolveError && (pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id) && (
+            <TouchableOpacity
+              onPress={() => setCountryPickerVisible(true)}
+              activeOpacity={0.85}
+              style={{ alignSelf: 'flex-end', marginTop: 8 }}
+            >
+              <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
+                בחר מדינה ידנית
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!!(selectedPlace?.placeId && selectedCountry?.id) && (
+            <TouchableOpacity
+              onPress={() => {
+                setPendingCountryOverridePlaceId(selectedPlace.placeId);
+                setCountryPickerVisible(true);
+              }}
+              activeOpacity={0.85}
+              style={{ alignSelf: 'flex-end', marginTop: 8 }}
+            >
+              <Text style={{ color: colors.textSecondary, fontWeight: 'bold' }}>
+                שנה מדינה
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* 4. Description Input */}
@@ -479,7 +658,7 @@ const handleSubmit = async () => {
         <TouchableOpacity
           style={[buttons.submit, submitting && buttons.disabled]}
           onPress={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || resolvingLocation || !!locationResolveError}
           testID="add-rec-submit"
         >
           {submitting ? (
@@ -492,6 +671,16 @@ const handleSubmit = async () => {
         </TouchableOpacity>
 
       </ScrollView>
+
+      <SelectionModal
+        visible={countryPickerVisible}
+        onClose={() => setCountryPickerVisible(false)}
+        title={loadingCountriesForPicker ? 'טוען מדינות...' : 'בחר מדינה'}
+        data={countriesForPicker}
+        onSelect={handleSelectManualCountry}
+        selectedId={selectedCountry?.id}
+        emptyText={loadingCountriesForPicker ? 'טוען...' : 'אין מדינות להצגה'}
+      />
 
     </View>
   );

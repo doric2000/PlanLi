@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -26,11 +26,13 @@ import { SortMenuModal } from '../components/SortMenuModal';
 // --- Hooks ---
 import { useRecommendations } from '../../../hooks/useRecommendations';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
+import { useUserLocation } from '../../../hooks/useUserLocation';
 
 // --- Global Styles ---
 import { colors, common, spacing, typography, shadows } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
+import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 
 export default function CommunityScreen({ navigation }) {
   // --- State ---
@@ -43,9 +45,23 @@ export default function CommunityScreen({ navigation }) {
   // --- Hooks ---
   const { data: recommendations, loading, refreshing, refresh, removeRecommendation } = useRecommendations(sortBy);
   const { filteredData, filters, isFiltered, updateFilters, clearFilters } = useRecommendationFilter(recommendations);
+  const { location: userLocation, requestLocation } = useUserLocation();
 
   // --- Handlers ---
-  const handleSortSelect = (option) => { setSortBy(option); setSortMenuVisible(false); };
+  const handleSortSelect = async (option) => {
+    setSortBy(option);
+    setSortMenuVisible(false);
+
+    if (option === 'nearby') {
+      const loc = await requestLocation();
+      if (!loc) {
+        Alert.alert(
+          'מיקום לא זמין',
+          'כדי למיין לפי קרבה צריך לאפשר הרשאת מיקום. אם לא ניתן לאשר, הרשימה תישאר במיון רגיל.'
+        );
+      }
+    }
+  };
   const handleOpenComments = (postId) => { setSelectedPostId(postId); setCommentsModalVisible(true); };
   
   // FIXED: Added the logic to handle 'tag' removal
@@ -62,6 +78,31 @@ export default function CommunityScreen({ navigation }) {
     }
   };
 
+  const sortLabel = sortBy === 'popularity' ? 'פופולרי' : sortBy === 'newest' ? 'חדש' : 'קרוב אליי';
+
+  const displayData = useMemo(() => {
+    if (sortBy !== 'nearby') return filteredData;
+    if (!userLocation) return filteredData;
+
+    const from = { lat: userLocation.lat, lng: userLocation.lng };
+
+    return filteredData
+      .map((item, index) => {
+        const coords = getPlaceCoordinates(item?.place);
+        const distanceKm = coords ? haversineDistanceKm(from, coords) : NaN;
+        const normalizedDistance = Number.isFinite(distanceKm) ? distanceKm : null;
+        return { item, index, distanceKm: normalizedDistance };
+      })
+      .sort((a, b) => {
+        if (a.distanceKm === null && b.distanceKm === null) return a.index - b.index;
+        if (a.distanceKm === null) return 1;
+        if (b.distanceKm === null) return -1;
+        if (a.distanceKm === b.distanceKm) return a.index - b.index;
+        return a.distanceKm - b.distanceKm;
+      })
+        .map((x) => (x.distanceKm === null ? x.item : { ...x.item, distanceKm: x.distanceKm }));
+  }, [filteredData, sortBy, userLocation]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       
@@ -77,7 +118,7 @@ export default function CommunityScreen({ navigation }) {
           >
             <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
             <Text style={{ ...typography.caption, fontWeight: 'bold', color: colors.textPrimary }}>
-              {sortBy === 'popularity' ? 'פופולרי' : 'חדש'}
+              {sortLabel}
             </Text>
           </TouchableOpacity>
         )}
@@ -142,7 +183,7 @@ export default function CommunityScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={filteredData}
+          data={displayData}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <RecommendationCard 

@@ -310,6 +310,17 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           </View>
         )}
 
+        {Number.isFinite(Number(item?.distanceKm)) && (
+          <View style={cards.recLocationRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="navigate-outline" size={14} color="#2EC4B6" />
+              <Text style={cards.recLocationText}>
+                {`${Number(item.distanceKm).toFixed(1).replace(/\.0$/, '')} ק\"מ ממך`}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <Text style={cards.recDescription} numberOfLines={3}>
           {item.description}
         </Text>
