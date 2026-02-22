@@ -496,7 +496,7 @@ const handleSubmit = async () => {
         <ImagePickerBox
           imageUris={editableImageUris}
           onPress={handleAddImages}
-          placeholderText="AddPic"
+          placeholderText="הוסף תמונות מהמכשיר שלך (עד 5)"
           imageFit="cover"
           style={{ marginBottom: spacing.xl }}
           testID="add-rec-image-picker"
@@ -544,7 +544,7 @@ const handleSubmit = async () => {
         {/* 2. Title Input */}
         <LabeledInput
           label="כותרת"
-          placeholder="inputTitle"
+          placeholder="למשל: 'המסעדה האיטלקית הכי טובה בעיר!'"
           value={title}
           onChangeText={setTitle}
           testID="add-rec-title-input"
