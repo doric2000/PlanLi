@@ -728,11 +728,11 @@ export const common = {
 	},
 
 	homeSearchBar: {
-		backgroundColor: "#F3F4F6",
+		backgroundColor: "transparent",
 		borderRadius: 25,
 		flexDirection: "row",
 		alignItems: "center",
-		paddingHorizontal: 16,
+		paddingHorizontal: 0,
 		height: 30,
 	},
 

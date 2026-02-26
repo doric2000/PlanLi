@@ -114,16 +114,19 @@ function CustomDrawerContent(props) {
     [navigation, rootStackNav, goToProfile, isGuest]
   );
 
-  const handleSignOut = useCallback(async () => {
+const handleSignOut = useCallback(() => {
     try {
-      await signOut(auth);
       navigation.closeDrawer?.();
 
-      // חוזרים ל-Main (guest mode)
-      (rootStackNav || navigation).reset?.({
-        index: 0,
-        routes: [{ name: 'Main' }],
-      });
+      setTimeout(async () => {
+        await signOut(auth);
+        
+        (rootStackNav || navigation).reset?.({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+      }, 300);
+
     } catch (e) {
       Alert.alert('שגיאה', 'לא ניתן להתנתק: ' + e.message);
     }

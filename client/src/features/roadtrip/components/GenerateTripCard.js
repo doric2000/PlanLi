@@ -26,9 +26,9 @@ export const GenerateTripCard = ({ onPress }) => (
 				color='#ffffffff'
 				style={styles.icon}
 			/>
-			<Text style={styles.title}>Trip Generator</Text>
+			<Text style={styles.title}>מחולל הטיולים</Text>
 			<Text style={styles.subtitle}>
-				Click here to generate your future route
+				לחץ כאן ליצירת המסלול העתידי שלך
 			</Text>
 		</LinearGradient>
 	</TouchableOpacity>

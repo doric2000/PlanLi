@@ -86,9 +86,10 @@ export const useDestinationData = (cityId, countryId) => {
              return;
         }
         try {
-            const res = await fetch(`https://open.er-api.com/v6/latest/${countryData.currencyCode}`);
+            const res = await fetch(`https://open.er-api.com/v6/latest/ILS`);
             const data = await res.json();
-            setCurrencyRate(data.rates.ILS ? `1 ${countryData.currencyCode} ≈ ${data.rates.ILS.toFixed(2)} ₪` : "Unavailable");
+            setCurrencyRate(data.rates[countryData.currencyCode] ? `1 ₪ ≈ ${data.rates[countryData.currencyCode].toFixed(2)} ${countryData.currencyCode}` : "Unavailable");
+
         } catch (e) { setCurrencyRate("Load Error"); }
     };
     fetchCurrency();
