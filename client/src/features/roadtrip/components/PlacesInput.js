@@ -178,12 +178,13 @@ export default function PlacesInput({ places, setPlaces }) {
 				>
 					<TextInput
 						style={styles.input}
-						placeholder={`City or Country ${idx}`}
+						placeholder={`עיר או מדינה ${idx}`}
 						placeholderTextColor={PlaceholderColor}
 						value={item}
 						onChangeText={(t) => handleTextChange(t, index)}
 						autoCapitalize='words'
 						autoCorrect={false}
+						textAlign="right"
 					/>
 					{loading[index] ? (
 						<ActivityIndicator
@@ -203,7 +204,7 @@ export default function PlacesInput({ places, setPlaces }) {
 
 				{showError ? (
 					<Text style={styles.errorText}>
-						Please select a valid city or country from suggestions
+						אנא בחר עיר או מדינה תקפים מהרשימה
 					</Text>
 				) : null}
 
@@ -229,7 +230,7 @@ export default function PlacesInput({ places, setPlaces }) {
 											name={place.type === "country" ? "globe-outline" : "business-outline"}
 											size={12}
 											color={colors.textSecondary}
-											style={{ marginRight: 6 }}
+											style={{ marginLeft: 6 }}
 										/>
 										<Text style={styles.suggestionType}>
 											{place.type === "country" ? "מדינה" : "עיר"}
@@ -255,7 +256,7 @@ export default function PlacesInput({ places, setPlaces }) {
 	return (
 		<View style={{ marginTop: 10 }}>
 			<View style={styles.headerRow}>
-				<Text style={styles.label}>Places (Cities or Countries)</Text>
+				<Text style={styles.label}>יעדים (ערים או מדינות)</Text>
 				<TouchableOpacity onPress={addPlace} style={styles.addBtn}>
 					<Text style={styles.addText}>＋</Text>
 				</TouchableOpacity>
@@ -273,12 +274,12 @@ export default function PlacesInput({ places, setPlaces }) {
 
 const styles = StyleSheet.create({
 	headerRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		justifyContent: "space-between",
 		alignItems: "center",
 		marginBottom: spacing.sm,
 	},
-	label: { ...typography.label, color: colors.textPrimary },
+	label: { ...typography.label, color: colors.textPrimary, textAlign: "right" },
 	addBtn: {
 		paddingHorizontal: 10,
 		paddingVertical: 6,
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
 	},
 	addText: { color: colors.info, fontSize: 16, fontWeight: "700" },
 	row: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		backgroundColor: colors.background,
 		borderRadius: 12,
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
 		borderColor: colors.success,
 		backgroundColor: colors.successLight,
 	},
-	input: { flex: 1, fontSize: 15, color: colors.textPrimary, paddingVertical: 6 },
+	input: { flex: 1, fontSize: 15, color: colors.textPrimary, paddingVertical: 6, textAlign: "right" },
 	removeBtn: {
 		width: 32,
 		height: 32,
@@ -325,7 +326,8 @@ const styles = StyleSheet.create({
 		color: colors.error,
 		fontSize: 12,
 		marginTop: 4,
-		marginLeft: 4,
+		marginRight: 4,
+		textAlign: "right",
 	},
 	suggestionsContainer: {
 		backgroundColor: colors.white,
@@ -342,7 +344,7 @@ const styles = StyleSheet.create({
 		borderBottomColor: colors.borderLight,
 	},
 	suggestionContent: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		justifyContent: "space-between",
 		alignItems: "center",
 	},
@@ -350,6 +352,7 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: colors.textPrimary,
 		flex: 1,
+		textAlign: "right",
 	},
 	suggestionType: {
 		fontSize: 11,
@@ -357,8 +360,8 @@ const styles = StyleSheet.create({
 		marginLeft: spacing.sm,
 	},
 	suggestionTypeRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
-		marginLeft: spacing.sm,
+		marginRight: spacing.sm,
 	},
 });

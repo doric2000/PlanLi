@@ -141,9 +141,11 @@ function AuthedProfileScreen({ navigation, route }) {
     },
   });
 
-  const loadMyContent = useCallback(async () => {
+  const loadMyContent = useCallback(async (isSilent = false) => {
     if (!profileUid) return;
-    setContentLoading(true);
+    if (!isSilent) {
+      setContentLoading(true);
+    }
 
     try {
       // --- Recommendations ---
@@ -192,7 +194,9 @@ function AuthedProfileScreen({ navigation, route }) {
     } catch (e) {
       console.log('loadMyContent error:', e?.message || e);
     } finally {
-      setContentLoading(false);
+      if (!isSilent) {
+        setContentLoading(false);
+      }
     }
   }, [profileUid]);
 
@@ -216,8 +220,8 @@ function AuthedProfileScreen({ navigation, route }) {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      refresh();
-      loadMyContent();
+      refresh(true);
+      loadMyContent(true);
     });
     return unsubscribe;
   }, [navigation, refresh, loadMyContent]);
@@ -280,7 +284,6 @@ function AuthedProfileScreen({ navigation, route }) {
       </TouchableOpacity>
 
       <FlatList
-        key={contentTab} 
         data={activeData}
         keyExtractor={(item) => item.id}
         extraData={contentTab}
@@ -316,7 +319,7 @@ function AuthedProfileScreen({ navigation, route }) {
                   }}
                 >
                   <Text style={{ fontWeight: '700', opacity: contentTab === 'recommendations' ? 1 : 0.5 }}>
-                    Recommendations
+                    המלצות
                   </Text>
                 </TouchableOpacity>
 
@@ -331,7 +334,7 @@ function AuthedProfileScreen({ navigation, route }) {
                   }}
                 >
                   <Text style={{ fontWeight: '700', opacity: contentTab === 'routes' ? 1 : 0.5 }}>
-                    Routes
+                    מסלולים
                   </Text>
                 </TouchableOpacity>
               </View>

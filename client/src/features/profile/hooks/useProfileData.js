@@ -35,7 +35,7 @@ export function useProfileData({ uid, user }) {
 
   const userDocRef = useMemo(() => (uid ? doc(db, 'users', uid) : null), [uid]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (isSilent = false) => {
     if (!uid || !userDocRef) {
       setUserData(buildDefaultUserData(user));
       setStats(DEFAULT_STATS);
@@ -43,7 +43,9 @@ export function useProfileData({ uid, user }) {
       return;
     }
 
-    setLoading(true);
+    if (!isSilent) {
+      setLoading(true);
+    }
 
     try {
       let data = null;
@@ -117,7 +119,9 @@ export function useProfileData({ uid, user }) {
         email: user?.email || prev.email,
       }));
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   }, [uid, userDocRef, user]);
 

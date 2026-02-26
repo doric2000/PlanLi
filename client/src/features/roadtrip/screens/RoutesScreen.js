@@ -6,6 +6,9 @@ import {
   FlatList,
   RefreshControl,
   Alert,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
 } from "react-native";
 import FilterIconButton from '../../../components/FilterIconButton';
 import RoutesFilterModal from "../../../components/RoutesFilterModal";
@@ -23,11 +26,13 @@ import { db, auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useRefresh } from "../../community/hooks/useRefresh";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { common, buttons, colors, spacing } from "../../../styles";
+import { common, colors, spacing, shadows } from "../../../styles";
 import FabButton from "../../../components/FabButton";
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
 import { CommentsModal } from "../../../components/CommentsModal";
+import ScreenHeader from "../../../components/ScreenHeader";
+import ActiveRouteFiltersList from "../components/ActiveRouteFiltersList";
 
 
 export default function RoutesScreen({ navigation }) {
@@ -100,7 +105,7 @@ export default function RoutesScreen({ navigation }) {
 	};
 
 	const handleGenerateTrip = () => {
-		Alert.alert("Generate trip feature coming soon!");
+		Alert.alert("יצירת מסלול אוטומטי בקרוב!");
 	};
 
 	const handleOpenComments = (routeId) => {
@@ -221,6 +226,40 @@ export default function RoutesScreen({ navigation }) {
 		setFilterVisible(false);
 	};
 
+	const handleRemoveFilter = (type, value) => {
+		switch (type) {
+			case "query":
+				setFilterQuery("");
+				break;
+			case "difficulty":
+				setFilterDifficulty("");
+				break;
+			case "travelStyle":
+				setFilterTravelStyle("");
+				break;
+			case "roadTripTag":
+				setFilterRoadTripTags((prev) => prev.filter((t) => t !== value));
+				break;
+			case "experienceTag":
+				setFilterExperienceTags((prev) => prev.filter((t) => t !== value));
+				break;
+			case "minDays":
+				setFilterMinDays("");
+				break;
+			case "maxDays":
+				setFilterMaxDays("");
+				break;
+			case "minDistance":
+				setFilterMinDistance("");
+				break;
+			case "maxDistance":
+				setFilterMaxDistance("");
+				break;
+			default:
+				break;
+		}
+	};
+
 
 	const applyFilters = (next) => {
 		setFilterQuery(next?.query || "");
@@ -237,24 +276,93 @@ export default function RoutesScreen({ navigation }) {
 
 
 	return (
-		<SafeAreaView style={common.container}>
-			<View style={common.screenHeader}>
-				<Text style={common.screenHeaderTitle}>מסלולים</Text>
-				<Text style={common.screenHeaderSubtitle}>המסלולים הכי שווים, ישר מהשטח</Text>
+		<SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+			<ScreenHeader
+				title="מסלולים"
+				subtitle="המסלולים הכי שווים, ישר מהשטח"
+				compact
+			/>
 
-				{/* Filter button */}
-				<FilterIconButton active={isFiltered} onPress={openFilterModal} />
+			{/* --- SEARCH + QUICK FILTER --- */}
+			<View style={localStyles.destinationSearchWrap}>
+				<View style={localStyles.destinationSearchRow}>
+					<TouchableOpacity
+						onPress={openFilterModal}
+						style={localStyles.destinationFilterBtn}
+						accessibilityRole="button"
+						accessibilityLabel="מסננים"
+					>
+						<Ionicons
+							name="filter"
+							size={18}
+							color={isFiltered ? colors.primary : colors.textSecondary}
+						/>
+					</TouchableOpacity>
+
+					<View style={localStyles.destinationSearchPill}>
+						<Ionicons
+							name="search"
+							size={18}
+							color={colors.textSecondary}
+							style={localStyles.destinationSearchPillIcon}
+						/>
+
+						<TextInput
+							value={filterQuery}
+							onChangeText={setFilterQuery}
+							placeholder="חפש מסלול..."
+							placeholderTextColor={colors.textMuted}
+							style={localStyles.destinationSearchInput}
+							textAlign="right"
+							autoCorrect={false}
+							autoCapitalize="none"
+						/>
+
+						{!!filterQuery && (
+							<TouchableOpacity
+								onPress={() => setFilterQuery("")}
+								style={localStyles.destinationClearBtn}
+								accessibilityRole="button"
+								accessibilityLabel="נקה חיפוש"
+							>
+								<Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+							</TouchableOpacity>
+						)}
+					</View>
+				</View>
 			</View>
 
+			{/* --- ACTIVE FILTERS BAR --- */}
+			<ActiveRouteFiltersList
+				filters={{
+					query: filterQuery,
+					difficulty: filterDifficulty,
+					travelStyle: filterTravelStyle,
+					roadTripTags: filterRoadTripTags,
+					experienceTags: filterExperienceTags,
+					minDays: filterMinDays,
+					maxDays: filterMaxDays,
+					minDistance: filterMinDistance,
+					maxDistance: filterMaxDistance,
+				}}
+				onRemove={handleRemoveFilter}
+			/>
+
 			{loading ? (
-				<ActivityIndicator style={{ marginTop: 20 }} size="large" color={colors.primary} />
+				<View style={common.center}>
+					<ActivityIndicator size="large" color={colors.primary} />
+				</View>
 			) : (
 				<FlatList
-					contentContainerStyle={{ padding: 15 }}
+					contentContainerStyle={common.listContent}
 					data={filteredRoutes}
 					keyExtractor={(item) => item.id}
 					renderItem={renderItem}
-					ListHeaderComponent={<GenerateTripCard onPress={handleGenerateTrip} />}
+					ListHeaderComponent={
+						<View style={{ marginBottom: spacing.md }}>
+							<GenerateTripCard onPress={handleGenerateTrip} />
+						</View>
+					}
 					refreshControl={
 						<RefreshControl
 							refreshing={isRefreshing}
@@ -272,6 +380,7 @@ export default function RoutesScreen({ navigation }) {
 							{!isFiltered && <Text style={common.emptySubText}>היה הראשון לשתף מסלול!</Text>}
 						</View>
 					}
+					showsVerticalScrollIndicator={false}
 				/>
 			)}
 
@@ -322,3 +431,54 @@ export default function RoutesScreen({ navigation }) {
 		</SafeAreaView>
 	);
 }
+
+const localStyles = StyleSheet.create({
+	destinationSearchWrap: {
+		paddingHorizontal: spacing.lg,
+		paddingTop: 0,
+		paddingBottom: spacing.xs,
+	},
+	destinationSearchRow: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+	},
+	destinationFilterBtn: {
+		width: 36,
+		height: 36,
+		borderRadius: 18,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#FFFFFF",
+		borderWidth: 1,
+		borderColor: colors.borderLight || "#F3F4F6",
+		...shadows.small,
+		marginLeft: spacing.sm,
+	},
+	destinationSearchPill: {
+		flex: 1,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		backgroundColor: "#FFFFFF",
+		borderWidth: 1,
+		borderColor: colors.borderLight || "#F3F4F6",
+		borderRadius: 18,
+		paddingHorizontal: spacing.md,
+		height: 36,
+		...shadows.small,
+	},
+	destinationSearchPillIcon: {
+		marginLeft: spacing.sm,
+	},
+	destinationSearchInput: {
+		flex: 1,
+		color: colors.textPrimary,
+		fontSize: 14,
+		paddingVertical: 0,
+		writingDirection: "rtl",
+	},
+	destinationClearBtn: {
+		marginRight: spacing.sm,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+});

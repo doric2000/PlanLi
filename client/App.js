@@ -24,6 +24,8 @@ import withRequireAuth from "./src/navigation/withRequireAuth";
 
 const Stack = createStackNavigator();
 
+const modalPresentation = { presentation: "modal" };
+
 const EditProfileAuthed = withRequireAuth(EditProfileScreen);
 const NotificationsAuthed = withRequireAuth(NotificationScreen);
 const SettingsAuthed = withRequireAuth(SettingsScreen);
@@ -70,25 +72,27 @@ export default function App() {
 					<Stack.Screen
 						name='AddRecommendation'
 						component={AddRecommendationScreen}
-						options={{
-							presentation: "modal",
-						}}
+						options={modalPresentation}
 					/>
 					<Stack.Screen
 						name='RecommendationDetail'
 						component={RecommendationDetailScreen}
+
 					/>
 					<Stack.Screen
 						name='LandingPage'
 						component={LandingPageScreen}
+
 					/>
 					<Stack.Screen
 						name='AddRoutesScreen'
 						component={AddRoutesScreen}
+						options={modalPresentation}
 					/>
 					<Stack.Screen
 						name='RouteDetail'
 						component={RouteDetailScreen}
+						options={modalPresentation}
 					/>
 				</Stack.Navigator>
 			</NavigationContainer>
