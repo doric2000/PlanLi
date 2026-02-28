@@ -78,12 +78,8 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         <img
           src={uri}
           alt=""
-          style={{
-            width: pageWidth || '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
+          width={typeof pageWidth === 'number' && pageWidth > 0 ? pageWidth : undefined}
+          style={cards.recWebImage}
         />
       );
     }
@@ -184,7 +180,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             )}
           </View>
         </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={cards.recHeaderActionsRow}>
           <FavoriteButton 
             type="recommendations" 
             id={item.id} 
@@ -223,7 +219,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             scrollEnabled={images.length > 1}
             nestedScrollEnabled
             renderItem={({ item: uri }) => (
-              <View style={{ width: carouselWidth || windowWidth || '100%', height: '100%' }}>
+              <View style={[cards.recCarouselItem, { width: carouselWidth || windowWidth || '100%' }]}>
                 {renderCarouselImage(uri)}
               </View>
             )}
@@ -291,7 +287,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         {(item.location || item.country) && (
           <View style={cards.recLocationRow}>
             <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center' }}
+              style={cards.recLocationPressableRow}
               activeOpacity={0.7}
               onPress={() => {
                 if (item.cityId && item.countryId) {
@@ -312,7 +308,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
         {Number.isFinite(Number(item?.distanceKm)) && (
           <View style={cards.recLocationRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={cards.recLocationPressableRow}>
               <Ionicons name="navigate-outline" size={14} color="#2EC4B6" />
               <Text style={cards.recLocationText}>
                 {`${Number(item.distanceKm).toFixed(1).replace(/\.0$/, '')} ק\"מ ממך`}

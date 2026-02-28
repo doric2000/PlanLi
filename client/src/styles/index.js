@@ -9,3 +9,4 @@ export { tags } from "./tags";
 export { common } from "./common";
 export { googlePlacesInput } from "./googlePlacesInput";
 export { notifications } from "./notifications";
+export { community } from "./community";

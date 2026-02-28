@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -7,9 +7,7 @@ import {
   ActivityIndicator, 
   FlatList, 
   RefreshControl, 
-  TouchableOpacity, 
-  Modal, 
-  StyleSheet 
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +20,7 @@ import { CommentsModal } from '../../../components/CommentsModal';
 import FabButton from '../../../components/FabButton';
 import ActiveFiltersList from '../../../components/ActiveFiltersList';
 import { SortMenuModal } from '../components/SortMenuModal';
+import CommunityInlineMap from '../components/CommunityInlineMap';
 
 // --- Hooks ---
 import { useRecommendations } from '../../../hooks/useRecommendations';
@@ -29,7 +28,7 @@ import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter'
 import { useUserLocation } from '../../../hooks/useUserLocation';
 
 // --- Global Styles ---
-import { colors, common, spacing, typography, shadows } from '../../../styles';
+import { colors, common, community } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
@@ -41,6 +40,8 @@ export default function CommunityScreen({ navigation }) {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [destinationEditing, setDestinationEditing] = useState(false);
 
   // --- Hooks ---
   const { data: recommendations, loading, refreshing, refresh, removeRecommendation } = useRecommendations(sortBy);
@@ -103,21 +104,71 @@ export default function CommunityScreen({ navigation }) {
         .map((x) => (x.distanceKm === null ? x.item : { ...x.item, distanceKm: x.distanceKm }));
   }, [filteredData, sortBy, userLocation]);
 
+  const mapPins = useMemo(() => {
+    return displayData
+      .map((item) => {
+        const coords = getPlaceCoordinates(item?.place);
+        if (!coords) return null;
+        return {
+          id: item.id,
+          title: item.title || item.location || 'המלצה',
+          coordinates: coords,
+        };
+      })
+      .filter(Boolean);
+  }, [displayData]);
+
+  const destinationQuery = (filters?.destination || '').trim();
+
+  // Debounce typing so we don't refocus/re-render native maps on every keystroke.
+  const [debouncedDestinationQuery, setDebouncedDestinationQuery] = useState(destinationQuery);
+  const [debouncedMapPins, setDebouncedMapPins] = useState(mapPins);
+
+  useEffect(() => {
+    if (destinationEditing) return;
+    const t = setTimeout(() => setDebouncedDestinationQuery(destinationQuery), 500);
+    return () => clearTimeout(t);
+  }, [destinationEditing, destinationQuery]);
+
+  useEffect(() => {
+    if (!mapOpen) {
+      setDebouncedMapPins(mapPins);
+      return;
+    }
+    if (destinationEditing) return;
+    const t = setTimeout(() => setDebouncedMapPins(mapPins), 500);
+    return () => clearTimeout(t);
+  }, [destinationEditing, mapPins, mapOpen]);
+
+  const focusMapOnPins = debouncedDestinationQuery.length >= 2;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={community.screen}>
       
       {/* --- HEADER --- */}
       <ScreenHeader
         title="קהילת המטיילים"
         subtitle="גלו המלצות חדשות!"
         compact
+        renderRight={() => (
+          <TouchableOpacity
+            style={community.headerIconButton}
+            onPress={() => {
+              setMapOpen((prev) => !prev);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="מפה"
+          >
+            <Ionicons name="map-outline" size={18} color={colors.textPrimary} />
+          </TouchableOpacity>
+        )}
         renderLeft={() => (
           <TouchableOpacity 
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+            style={community.sortButton}
             onPress={() => setSortMenuVisible(true)}
           >
             <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
-            <Text style={{ ...typography.caption, fontWeight: 'bold', color: colors.textPrimary }}>
+            <Text style={community.sortButtonText}>
               {sortLabel}
             </Text>
           </TouchableOpacity>
@@ -125,11 +176,11 @@ export default function CommunityScreen({ navigation }) {
       />
 
       {/* --- DESTINATION QUICK FILTER (Option A) --- */}
-      <View style={localStyles.destinationSearchWrap}>
-        <View style={localStyles.destinationSearchRow}>
+      <View style={community.destinationSearchWrap}>
+        <View style={community.destinationSearchRow}>
           <TouchableOpacity
             onPress={() => setFilterModalVisible(true)}
-            style={localStyles.destinationFilterBtn}
+            style={community.destinationFilterBtn}
             accessibilityRole="button"
             accessibilityLabel="מסננים"
           >
@@ -140,20 +191,23 @@ export default function CommunityScreen({ navigation }) {
             />
           </TouchableOpacity>
 
-          <View style={localStyles.destinationSearchPill}>
+          <View style={community.destinationSearchPill}>
             <Ionicons
               name="search"
               size={18}
               color={colors.textSecondary}
-              style={localStyles.destinationSearchPillIcon}
+              style={community.destinationSearchPillIcon}
             />
 
             <TextInput
               value={filters.destination}
               onChangeText={(text) => updateFilters({ destination: text })}
+              onFocus={() => setDestinationEditing(true)}
+              onBlur={() => setDestinationEditing(false)}
+              onSubmitEditing={() => setDestinationEditing(false)}
               placeholder="חפש יעד (עיר / מדינה)..."
               placeholderTextColor={colors.textMuted}
-              style={localStyles.destinationSearchInput}
+              style={community.destinationSearchInput}
               textAlign="right"
               autoCorrect={false}
               autoCapitalize="none"
@@ -162,7 +216,7 @@ export default function CommunityScreen({ navigation }) {
             {!!filters.destination && (
               <TouchableOpacity
                 onPress={() => updateFilters({ destination: '' })}
-                style={localStyles.destinationClearBtn}
+                style={community.destinationClearBtn}
                 accessibilityRole="button"
                 accessibilityLabel="נקה יעד"
               >
@@ -176,32 +230,44 @@ export default function CommunityScreen({ navigation }) {
       {/* --- ACTIVE FILTERS BAR --- */}
       <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} />
 
-      {/* --- RECOMMENDATIONS LIST --- */}
-      {loading ? (
-        <View style={common.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
+      {mapOpen && (
+        <View style={community.inlineMapSection}>
+          <CommunityInlineMap
+            pins={debouncedMapPins}
+            focusOnPins={focusMapOnPins}
+            onOpenPost={(postId) => navigation.navigate('RecommendationDetail', { postId })}
+          />
         </View>
-      ) : (
-        <FlatList
-          data={displayData}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <RecommendationCard 
-                item={item} 
-                onCommentPress={handleOpenComments} 
-                onDeleted={removeRecommendation}
-            />
-          )}
-          contentContainerStyle={common.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-          ListEmptyComponent={
-            <View style={common.emptyState}>
-              <Ionicons name="images-outline" size={50} color={colors.textMuted} />
-              <Text style={common.emptyText}>{isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
-            </View>
-          }
-        />
+      )}
+
+      {/* --- RECOMMENDATIONS LIST --- */}
+      {!mapOpen && (
+        loading ? (
+          <View style={common.center}>
+              <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={displayData}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <RecommendationCard 
+                  item={item} 
+                  onCommentPress={handleOpenComments} 
+                  onDeleted={removeRecommendation}
+              />
+            )}
+            contentContainerStyle={common.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+            ListEmptyComponent={
+              <View style={common.emptyState}>
+                <Ionicons name="images-outline" size={50} color={colors.textMuted} />
+                <Text style={common.emptyText}>{isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
+              </View>
+            }
+          />
+        )
       )}
 
       <FabButton
@@ -243,77 +309,13 @@ export default function CommunityScreen({ navigation }) {
       />
 
       {/* Sort Menu Modal */}
-    <SortMenuModal 
-      visible={sortMenuVisible} 
-      onClose={() => setSortMenuVisible(false)} 
-      sortBy={sortBy} 
-      onSelect={handleSortSelect} 
-/>
+      <SortMenuModal 
+        visible={sortMenuVisible} 
+        onClose={() => setSortMenuVisible(false)} 
+        sortBy={sortBy} 
+        onSelect={handleSortSelect} 
+      />
 
     </SafeAreaView>
   );
 }
-
-const localStyles = StyleSheet.create({
-  destinationSearchWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 0,
-    paddingBottom: spacing.xs,
-  },
-  destinationSearchRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-  },
-  destinationFilterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.borderLight || '#F3F4F6',
-    ...shadows.small,
-    marginLeft: spacing.sm,
-  },
-  destinationSearchPill: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.borderLight || '#F3F4F6',
-    borderRadius: 18,
-    paddingHorizontal: spacing.md,
-    height: 36,
-    ...shadows.small,
-  },
-  destinationSearchPillIcon: {
-    marginLeft: spacing.sm,
-  },
-  destinationSearchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-    paddingVertical: 0,
-    writingDirection: 'rtl',
-  },
-  destinationClearBtn: {
-    marginRight: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center'
-  },
-  sortMenu: {
-    width: 220, backgroundColor: 'white', borderRadius: 12, padding: spacing.md, elevation: 5
-  },
-  sortOption: {
-    flexDirection: 'row-reverse', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee'
-  },
-  sortOptionLabelRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-  }
-});

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   TouchableOpacity,
@@ -26,6 +27,7 @@ import LikesModal from '../../../components/LikesModal';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { colors, typography, common, tags as tagsStyle } from '../../../styles';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
+import { useRecommendationById } from '../../../hooks/useRecommendationById';
 
 /**
  * RecommendationDetailScreen - Full view of a recommendation
@@ -37,7 +39,31 @@ import { getBudgetTheme } from '../../../utils/getBudgetTheme';
  * @param {Object} navigation - Navigation object
  */
 export default function RecommendationDetailScreen({ route, navigation }) {
-  const { item } = route.params;
+  const initialItem = route?.params?.item;
+  const postId = route?.params?.postId;
+  const effectivePostId = initialItem ? null : postId;
+  const { data: fetchedItem, loading: loadingItem } = useRecommendationById(effectivePostId);
+
+  const item = useMemo(() => initialItem || fetchedItem, [initialItem, fetchedItem]);
+
+  if (!item) {
+    return (
+      <SafeAreaView style={common.container} edges={['left', 'right']}>
+        <StatusBar barStyle="dark-content" />
+        <View style={common.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          {!loadingItem && (
+            <Text style={typography.caption}>לא הצלחנו לטעון את ההמלצה.</Text>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return <RecommendationDetailLoaded item={item} navigation={navigation} />;
+}
+
+function RecommendationDetailLoaded({ item, navigation }) {
 
   const budgetTheme = getBudgetTheme(item?.budget);
 

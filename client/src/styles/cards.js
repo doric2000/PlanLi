@@ -210,6 +210,24 @@ export const cards = {
 		marginBottom: 8,
 	},
 
+	// Recommendation card helpers
+	recHeaderActionsRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	recLocationPressableRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	recCarouselItem: {
+		height: "100%",
+	},
+	recWebImage: {
+		height: "100%",
+		objectFit: "cover",
+		display: "block",
+	},
+
 	// Card title
 	title: {
 		fontSize: 20,

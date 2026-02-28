@@ -19,7 +19,8 @@
       "bundleIdentifier": "com.planli.planlitravels",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We use your location to sort recommendations by proximity."
+        "NSLocationWhenInUseUsageDescription": "We use your location to sort recommendations by proximity.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -38,6 +39,11 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "04731493-708f-4c82-b417-6ea815ea912e"
+      }
+    }
   }
 }
