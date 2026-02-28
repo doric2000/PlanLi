@@ -12,7 +12,7 @@
  * - Real-time updates via Firestore listener
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +30,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 
 // Components
-import ScreenHeader from '../../../components/ScreenHeader';
 import BackButton from '../../../components/BackButton';
 import { NotificationCard } from '../components/';
 
@@ -151,7 +151,36 @@ export default function NotificationScreen() {
 
   // Header left component - Back button
   const renderHeaderLeft = () => {
-    return <BackButton color="dark" variant="ghost" />;
+    return (
+      <BackButton
+        color="dark"
+        variant="ghost"
+        style={styles.backButtonContainer}
+      />
+    );
+  };
+
+  // Header layout (match SettingsScreen positioning)
+  const renderHeader = () => {
+    const subtitle =
+      notifications.length > 0
+        ? `${notifications.length} התראות`
+        : 'כאן תמצאו עדכונים על הפוסטים שלכם';
+
+    return (
+      <View style={styles.header}>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>התראות</Text>
+          {subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}
+        </View>
+
+        <View style={styles.headerSideLeft}>{renderHeaderLeft()}</View>
+
+        {notifications.length > 0 && (
+          <View style={styles.headerSideRight}>{renderHeaderRight()}</View>
+        )}
+      </View>
+    );
   };
 
   // Render notification item
@@ -167,7 +196,7 @@ export default function NotificationScreen() {
   if (loading) {
     return (
       <SafeAreaView style={notificationStyles.screenContainer}>
-        <ScreenHeader title="התראות" renderLeft={renderHeaderLeft} />
+        {renderHeader()}
         <View style={notificationStyles.loadingCenter}>
           <ActivityIndicator size="large" color="#1E3A5F" />
         </View>
@@ -178,16 +207,7 @@ export default function NotificationScreen() {
   return (
     <SafeAreaView style={notificationStyles.screenContainer}>
       {/* Header */}
-      <ScreenHeader
-        title="התראות"
-        subtitle={
-          notifications.length > 0
-            ? `${notifications.length} התראות`
-            : 'כאן תמצאו עדכונים על הפוסטים שלכם'
-        }
-        renderRight={renderHeaderRight}
-        renderLeft={renderHeaderLeft}
-      />
+      {renderHeader()}
 
       {/* Notifications List */}
       <FlatList
@@ -211,3 +231,61 @@ export default function NotificationScreen() {
     </SafeAreaView>
   );
 }
+
+const HEADER_HEIGHT = 54;
+const SIDE_SIZE = 44;
+const H_PADDING = 10;
+
+const styles = StyleSheet.create({
+  header: {
+    position: 'relative',
+    height: HEADER_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: H_PADDING,
+    backgroundColor: '#F8F9FA',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSideLeft: {
+    position: 'absolute',
+    left: H_PADDING,
+    top: 0,
+    bottom: 0,
+    width: SIDE_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSideRight: {
+    position: 'absolute',
+    right: H_PADDING,
+    top: 0,
+    bottom: 0,
+    minWidth: SIDE_SIZE,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  backButtonContainer: {
+    width: SIDE_SIZE,
+    height: SIDE_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1E3A5F',
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    color: '#6C757D',
+    textAlign: 'center',
+  },
+});

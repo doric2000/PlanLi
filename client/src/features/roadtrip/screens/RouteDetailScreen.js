@@ -50,14 +50,16 @@ export default function RouteDetailScreen({ route, navigation }) {
     // Prepare places array
     const places = Array.isArray(routeData.places) ? routeData.places : [];
 
-    // Collect all tags
-    const allTags = [
-        ...(routeData.tags || []),
+    // Collect all tags (deduped). Prefer stored tags array but merge legacy fields for back-compat.
+    const dedupe = (arr) => Array.from(new Set(arr.filter(Boolean)));
+    const tagsArray = Array.isArray(routeData.tags) ? routeData.tags : [];
+    const legacyTags = [
         routeData.difficultyTag,
         routeData.travelStyleTag,
         ...(routeData.roadTripTags || []),
         ...(routeData.experienceTags || [])
-    ].filter(Boolean);
+    ];
+    const allTags = dedupe([...tagsArray, ...legacyTags]);
 
     return (
         <SafeAreaView style={common.container}>
@@ -95,8 +97,8 @@ export default function RouteDetailScreen({ route, navigation }) {
                         <View style={styles.tagsSection}>
                             <Text style={styles.subsectionTitle}>Tags</Text>
                             <View style={styles.tagsContainer}>
-                                {allTags.map((tag, idx) => (
-                                    <View key={idx} style={tagsStyle.itemSelected}>
+                                {allTags.map((tag) => (
+                                    <View key={tag} style={tagsStyle.itemSelected}>
                                         <Text style={tagsStyle.textSelected}>#{tag}</Text>
                                     </View>
                                 ))}

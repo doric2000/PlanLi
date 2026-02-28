@@ -41,7 +41,7 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 
     const handleSave = () => {
 		if (!description){
-			Alert.alert("Missing Description");
+			Alert.alert("חסר תיאור");
 			return;
 		}
         onSave({ description, image }, dayIndex);
@@ -53,25 +53,26 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={onClose}>
-                        <Text style={styles.headerBtn}>Cancel</Text>
+                        <Text style={styles.headerBtn}>ביטול</Text>
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Day {dayIndex + 1}</Text>
+                    <Text style={styles.headerTitle}>יום {dayIndex + 1}</Text>
                     <TouchableOpacity onPress={handleSave}>
-                        <Text style={[styles.headerBtn, { fontWeight: 'bold' }]}>Save</Text>
+                        <Text style={[styles.headerBtn, { fontWeight: 'bold' }]}>שמור</Text>
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.content}>
                     <FormInput
-                        label="Story of the day"
-                        placeholder="What did you do today? Where did you go?"
+                        label="סיפור היום"
+                        placeholder="מה עשית היום? איפה ביקרת?"
                         value={description}
                         onChangeText={setDescription}
                         multiline
                         style={{ height: 150 }}
+                        textAlign="right"
                     />
 
-                    <Text style={styles.photoLabel}>Photo Memory</Text>
+                    <Text style={styles.photoLabel}>תיעוד מהיום</Text>
                     <ImagePickerBox
                         imageUri={image}
                                   onPress={pickImage}
@@ -85,7 +86,7 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
                     
                     {image && (
                         <TouchableOpacity onPress={clearImage} style={styles.removeBtn}>
-                            <Text style={styles.removeText}>Remove Photo</Text>
+                            <Text style={styles.removeText}>הסר תמונה</Text>
                         </TouchableOpacity>
                     )}
                 </View>
@@ -97,17 +98,17 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff' },
     header: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
     },
-    headerTitle: { fontSize: 18, fontWeight: '700' },
+    headerTitle: { fontSize: 18, fontWeight: '700', textAlign: 'right' },
     headerBtn: { fontSize: 16, color: '#007AFF' },
     content: { padding: 20 },
-    photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155' },
+    photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155', textAlign: 'right' },
     removeBtn: { marginTop: 10, alignItems: 'center' },
     removeText: { color: '#EF4444' }
 });

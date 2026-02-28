@@ -1,30 +1,20 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
 	View,
 	Text,
 	ScrollView,
 	TouchableOpacity,
-	Image,
 	RefreshControl,
 	StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // שימו לב להוספת collectionGroup
-	import { getDocs, query, limit, collectionGroup, orderBy } from "firebase/firestore";
+import { getDocs, query, limit, collectionGroup, orderBy } from "firebase/firestore";
 import CityCard from "../../../components/CityCard";
 import { db } from "../../../config/firebase";
-import {
-	colors,
-	spacing,
-	typography,
-	buttons,
-	shadows,
-	common,
-	cards,
-} from "../../../styles";
+import { colors, spacing, shadows, common, cards } from "../../../styles";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import { getOrCreateDestination } from "../../../services/LocationService";
-import { Ionicons } from "@expo/vector-icons";
 /**
  * Landing screen for the application.
  * Displays trending destinations, popular places, and a community feed.
@@ -243,28 +233,42 @@ export default function HomeScreen({ navigation }) {
 				}
 			>
 				{/* Header */}
-				<View style={common.homeHeader}>
+				<View
+					style={[
+						common.homeHeader,
+						{
+							backgroundColor: "transparent",
+							shadowOpacity: 0,
+							zIndex: 9999,
+							elevation: 9999,
+						},
+					]}
+				>
 					<Text style={common.homeHeaderTitle}>
 						יאלללה, לאן טסים?
 					</Text>
-					<View style={styles.searchContainer}>
-						<GooglePlacesInput
-							mode='google'
-							value={searchQuery}
-							onChangeValue={setSearchQuery}
-							localResults={localAutocompleteResults}
-							localResultsLoading={localResultsLoading}
-							inputTestID="home-search-input"
-							onSelectLocal={(city) => {
-								if (!city?.id || !city?.countryId) return;
-								navigation.navigate("LandingPage", {
-									cityId: city.id,
-									countryId: city.countryId,
-								});
-							}}
-							onSelect={handleGoogleSelect}
-							googleFallbackDelayMs={2000}
-						/>
+					<View style={styles.destinationSearchWrap}>
+						<View style={styles.destinationSearchPill}>
+							<View style={{ flex: 1 }}>
+								<GooglePlacesInput
+									mode='google'
+									value={searchQuery}
+									onChangeValue={setSearchQuery}
+									localResults={localAutocompleteResults}
+									localResultsLoading={localResultsLoading}
+									inputTestID="home-search-input"
+									onSelectLocal={(city) => {
+										if (!city?.id || !city?.countryId) return;
+										navigation.navigate("LandingPage", {
+											cityId: city.id,
+											countryId: city.countryId,
+										});
+									}}
+									onSelect={handleGoogleSelect}
+									googleFallbackDelayMs={2000}
+								/>
+							</View>
+						</View>
 					</View>
 				</View>
 
@@ -332,10 +336,24 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 	},
-	searchContainer: {
+	destinationSearchWrap: {
 		width: "100%",
-		position: "relative",
-		zIndex: 10000,
+		paddingTop: 0,
+		paddingBottom: spacing.xs,
+		zIndex: 9999,
+		elevation: 9999,
+	},
+	destinationSearchPill: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		width: "100%",
+		backgroundColor: "#FFFFFF",
+		borderWidth: 1,
+		borderColor: colors.borderLight || "#F3F4F6",
+		borderRadius: 24,
+		paddingHorizontal: spacing.sm,
+		height: 44,
+		...shadows.small,
 	},
 	spacer: {
 		height: 80,

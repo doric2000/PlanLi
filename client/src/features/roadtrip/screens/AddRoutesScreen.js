@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
     View,
     Text,
@@ -33,9 +33,16 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import DayEditorModal from '../components/DayEditorModal';
 import DayList from '../components/DayList';
 import { FormInput } from '../../../components/FormInput';
-import { TagSelector } from '../../../components/TagSelector';
 import { useBackButton } from '../../../hooks/useBackButton';
 import { getUserTier } from '../../../utils/userTier';
+import ChipSelector from '../../community/components/ChipSelector';
+
+const LabeledInput = ({ label, style, ...props }) => (
+    <View style={[{ marginBottom: spacing.lg }, style]}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <FormInput textAlign="right" {...props} />
+    </View>
+);
 
 /**
  * Screen for adding/editing a route.
@@ -43,7 +50,7 @@ import { getUserTier } from '../../../utils/userTier';
  */
 export default function AddRoutesScreen({ navigation, route }) {
     // Setup back button
-    useBackButton(navigation, { title: route?.params?.routeToEdit ? "Edit Route" : "Create Route" });
+    useBackButton(navigation, { title: route?.params?.routeToEdit ? "עריכת מסלול" : "מסלול חדש" });
 
     // --- State Management ---
     const [title, setTitle] = useState("");
@@ -128,10 +135,10 @@ export default function AddRoutesScreen({ navigation, route }) {
     };
 
     const handleDeleteDay = (index) => {
-        Alert.alert("Delete Day", `Remove Day ${index + 1}?`, [
-            { text: "Cancel", style: "cancel" },
+        Alert.alert("מחיקת יום", `להסיר את יום ${index + 1}?`, [
+            { text: "ביטול", style: "cancel" },
             {
-                text: "Delete",
+                text: "מחק",
                 style: "destructive",
                 onPress: () => {
                     const updated = tripDays.filter((_, i) => i !== index);
@@ -147,11 +154,11 @@ export default function AddRoutesScreen({ navigation, route }) {
             return;
         }
         if (!user) {
-            Alert.alert("Error", "User must be authenticated!");
+            Alert.alert("שגיאה", "משתמש חייב להיות מחובר!");
             return;
         }
         if (!title || !days || !places.length || !distance || !desc) {
-            Alert.alert("Error", "Please fill in all required fields.");
+            Alert.alert("שגיאה", "אנא מלא את כל השדות הנדרשים.");
             return;
         }
 
@@ -182,108 +189,140 @@ export default function AddRoutesScreen({ navigation, route }) {
                     ...routeData,
                     updatedAt: serverTimestamp(),
                 });
-                Alert.alert("Success", "Route updated!");
+                Alert.alert("הצלחה", "המסלול עודכן!");
             } else {
                 await addDoc(collection(db, "routes"), {
                     ...routeData,
                     createdAt: serverTimestamp(),
                 });
-                Alert.alert("Success", "Route added!");
+                Alert.alert("הצלחה", "המסלול נוסף!");
             }
             navigation.goBack();
         } catch (e) {
             console.error("Firestore Error:", e);
-            Alert.alert("Error", "Failed to save route data.");
+            Alert.alert("שגיאה", "לא הצלחנו לשמור את המסלול.");
         } finally {
             setSubmitting(false);
         }
     };
 
     return (
-        <ScrollView
-            style={common.container}
-            keyboardShouldPersistTaps='handled'
-            contentContainerStyle={{ paddingBottom: 120 }}
-        >
-            <View style={{ padding: 20 }}>
-                {/* Basic Details */}
-                <FormInput value={title} onChangeText={setTitle} placeholder='Title' />
-                <FormInput value={days} onChangeText={setDays} placeholder='Total Days' keyboardType='numeric' />
-                
-                {/* Day Logic */}
+        <View style={[common.container, styles.container]}>
+            <ScrollView
+                keyboardShouldPersistTaps='handled'
+                contentContainerStyle={styles.scrollContent}
+            >
+                <Text style={styles.screenTitle}>{routeToEdit ? "עריכת מסלול" : "מסלול חדש"}</Text>
+
+                <LabeledInput
+                    label="כותרת המסלול"
+                    placeholder="לדוגמה: מסלול טבע בנורבגיה"
+                    value={title}
+                    onChangeText={setTitle}
+                    testID="route-title-input"
+                />
+
+                <LabeledInput
+                    label="מספר ימים"
+                    placeholder="כמה ימים כוללת התוכנית?"
+                    value={days}
+                    onChangeText={setDays}
+                    keyboardType='numeric'
+                    testID="route-days-input"
+                />
+
                 <DayList
                     days={tripDays}
                     onAdd={() => { setEditingDayIndex(tripDays.length); setDayModalVisible(true); }}
                     onEdit={(index) => { setEditingDayIndex(index); setDayModalVisible(true); }}
                     onDelete={handleDeleteDay}
+                    style={{ marginBottom: spacing.lg }}
                 />
 
-                <PlacesInput places={places} setPlaces={setPlaces} />
-                
-                <FormInput
+                <View style={{ marginBottom: spacing.lg }}>
+                    <PlacesInput places={places} setPlaces={setPlaces} />
+                </View>
+
+                <LabeledInput
+                    label="מרחק (ק״מ)"
+                    placeholder="לדוגמה: 120"
                     value={distance}
                     onChangeText={setDistance}
-                    placeholder='Distance (km)'
                     keyboardType='numeric'
+                    testID="route-distance-input"
                 />
-                
-                <FormInput
+
+                <LabeledInput
+                    label="תיאור המסלול"
+                    placeholder="תאר בקצרה את המסלול והאווירה"
                     value={desc}
                     onChangeText={setDesc}
-                    placeholder='Description'
                     multiline
-                    style={{ minHeight: 120 }}
+                    numberOfLines={4}
+                    testID="route-description-input"
+                    style={{ marginBottom: spacing.xl }}
                 />
 
-                {/* --- Tag Selectors (Linked to Constants) --- */}
-                
-                <TagSelector
-                    label='Difficulty (Single)'
-                    tags={DIFFICULTY_TAGS.map(getLabel)}
-                    selected={difficultyTag}
+                <ChipSelector
+                    label="רמת קושי"
+                    items={DIFFICULTY_TAGS.map(getLabel)}
+                    selectedValue={difficultyTag}
                     onSelect={setDifficultyTag}
+                    multiSelect={false}
+                    testIDPrefix="route-difficulty"
                 />
 
-                <TagSelector
-                    label='Travel Style (Single)'
-                    tags={TRAVEL_STYLE_TAGS.map(getLabel)}
-                    selected={travelStyleTag}
+                <ChipSelector
+                    label="סגנון טיול"
+                    items={TRAVEL_STYLE_TAGS.map(getLabel)}
+                    selectedValue={travelStyleTag}
                     onSelect={setTravelStyleTag}
+                    multiSelect={false}
+                    testIDPrefix="route-style"
                 />
 
-                <TagSelector
-                    label='Road Trip Tags (Multi)'
-                    tags={ROAD_TRIP_TAGS.map(getLabel)}
-                    selected={roadTripTags}
-                    onSelect={setRoadTripTags}
-                    multi={true}
+                <ChipSelector
+                    label="תגיות רואדטריפ"
+                    items={ROAD_TRIP_TAGS.map(getLabel)}
+                    selectedValue={roadTripTags}
+                    onSelect={(tag) => {
+                        setRoadTripTags((prev) =>
+                            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                        );
+                    }}
+                    multiSelect={true}
+                    testIDPrefix="route-roadtrip"
                 />
 
-                <TagSelector
-                    label='Experience Tags (Multi)'
-                    tags={EXPERIENCE_TAGS.map(getLabel)}
-                    selected={experienceTags}
-                    onSelect={setExperienceTags}
-                    multi={true}
+                <ChipSelector
+                    label="חוויה"
+                    items={EXPERIENCE_TAGS.map(getLabel)}
+                    selectedValue={experienceTags}
+                    onSelect={(tag) => {
+                        setExperienceTags((prev) =>
+                            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                        );
+                    }}
+                    multiSelect={true}
+                    testIDPrefix="route-experience"
                 />
 
-                {/* Submission */}
                 <TouchableOpacity
-                    style={[buttons.submit, submitting && { opacity: 0.7 }]}
+                    style={[buttons.submit, submitting && buttons.disabled]}
                     onPress={addRoute}
                     disabled={submitting}
+                    testID="route-submit"
                 >
                     {submitting ? (
                         <ActivityIndicator color={colors.white} />
                     ) : (
                         <Text style={buttons.submitText}>
-                            {routeToEdit ? "Update Route" : "Add Route"}
+                            {routeToEdit ? "שמור שינויים" : "פרסם מסלול"}
                         </Text>
                     )}
                 </TouchableOpacity>
-            </View>
+            </ScrollView>
 
-            {/* Day Editor Component */}
             <DayEditorModal
                 visible={isDayModalVisible}
                 onClose={() => setDayModalVisible(false)}
@@ -291,6 +330,27 @@ export default function AddRoutesScreen({ navigation, route }) {
                 dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
                 initialData={editingDayIndex !== null ? tripDays[editingDayIndex] : {}}
             />
-        </ScrollView>
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        backgroundColor: colors.white || '#FFFFFF',
+    },
+    scrollContent: { padding: spacing.lg, paddingBottom: 40 },
+    screenTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        textAlign: 'right',
+        marginBottom: spacing.lg,
+        color: colors.textPrimary || '#111827',
+    },
+    fieldLabel: {
+        textAlign: 'right',
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginBottom: 8,
+        color: colors.textPrimary || '#111827',
+    },
+});

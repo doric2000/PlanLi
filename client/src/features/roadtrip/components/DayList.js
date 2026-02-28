@@ -14,9 +14,9 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 	return (
 		<View style={styles.container}>
 			<View style={styles.headerRow}>
-				<Text style={styles.sectionTitle}>Itinerary</Text>
+				<Text style={styles.sectionTitle}>לו״ז המסלול</Text>
 				<TouchableOpacity onPress={onAdd} style={styles.addBtn}>
-					<Text style={styles.addBtnText}>+ Add Day</Text>
+					<Text style={styles.addBtnText}>+ הוסף יום</Text>
 				</TouchableOpacity>
 			</View>
 
@@ -27,7 +27,7 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 					onPress={() => onEdit(index)}
 				>
 					<View style={styles.dayHeader}>
-						<Text style={styles.dayTitle}>Day {index + 1}</Text>
+						<Text style={styles.dayTitle}>יום {index + 1}</Text>
 
 						<View style={styles.actionsContainer}>
 							{/* Delete Button */}
@@ -38,11 +38,11 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 								}}
 								style={styles.deleteBtn}
 							>
-								<Text style={styles.deleteIcon}>Delete</Text>
+								<Text style={styles.deleteIcon}>מחק</Text>
 							</TouchableOpacity>
 
 							{/* Edit Hint */}
-							<Text style={styles.editHint}>Edit ›</Text>
+							<Text style={styles.editHint}>ערוך ›</Text>
 						</View>
 					</View>
 
@@ -50,7 +50,7 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 						<View style={styles.textContainer}>
 							<Text numberOfLines={2} style={styles.description}>
 								{day.description ||
-									"No description added yet..."}
+									"לא נוסף תיאור עדיין..."}
 							</Text>
 						</View>
 						{day.image && (
@@ -65,7 +65,7 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 
 			{days.length === 0 && (
 				<Text style={styles.emptyText}>
-					No days added yet. Start planning your trip!
+					עדיין לא נוספו ימים. התחילו לתכנן את המסלול!
 				</Text>
 			)}
 		</View>
@@ -75,12 +75,12 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 const styles = StyleSheet.create({
 	container: { marginBottom: 20 },
 	headerRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		justifyContent: "space-between",
 		alignItems: "center",
 		marginBottom: 12,
 	},
-	sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1f2937" },
+	sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1f2937", textAlign: "right" },
 	addBtn: {
 		backgroundColor: "#E0F2FE",
 		paddingHorizontal: 12,
@@ -102,15 +102,15 @@ const styles = StyleSheet.create({
 		elevation: 2,
 	},
 	dayHeader: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		justifyContent: "space-between",
 		alignItems: "center",
 		marginBottom: 8,
 	},
-	dayTitle: { fontWeight: "700", color: "#0F172A", fontSize: 16 },
+	dayTitle: { fontWeight: "700", color: "#0F172A", fontSize: 16, textAlign: "right" },
 
 	actionsContainer: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 	},
 	deleteBtn: {
@@ -126,13 +126,13 @@ const styles = StyleSheet.create({
 	editHint: { color: "#94A3B8", fontSize: 14 },
 
 	contentRow: { flexDirection: "row" },
-	textContainer: { flex: 1, paddingRight: 10 },
-	description: { color: "#64748B", fontSize: 14 },
+	textContainer: { flex: 1, paddingLeft: 10 },
+	description: { color: "#64748B", fontSize: 14, textAlign: "right" },
 	thumbnail: {
 		width: 50,
 		height: 50,
 		borderRadius: 8,
 		backgroundColor: "#F1F5F9",
 	},
-	emptyText: { color: "#94A3B8", fontStyle: "italic", fontSize: 13 },
+	emptyText: { color: "#94A3B8", fontStyle: "italic", fontSize: 13, textAlign: "right" },
 });

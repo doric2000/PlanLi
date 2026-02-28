@@ -15,19 +15,21 @@ export const googlePlacesInput = StyleSheet.create({
 		position: 'relative',
 		width: '100%',
 		height: SEARCH_BAR_HEIGHT,
+		backgroundColor: 'transparent',
 	},
 	searchIcon: {
 		position: 'absolute',
 		right: spacing.lg,
 		top: (SEARCH_BAR_HEIGHT - 20) / 2,
 		zIndex: 1,
+		marginLeft: spacing.md,
 	},
 	input: {
 		flex: 1,
 		height: '100%',
 		color: colors.textPrimary,
 		textAlign: 'right',
-		paddingRight: spacing.xxxl,
+		paddingRight: spacing.xxxl + spacing.md,
 	},
 	loader: {
 		position: 'absolute',

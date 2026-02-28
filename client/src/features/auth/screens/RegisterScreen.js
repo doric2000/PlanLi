@@ -60,45 +60,45 @@ export default function RegisterScreen({ navigation }) {
                 <View style={forms.authLogoContainer}>
                    <Image source={require('../../../../assets/logo.png')} style={forms.authLogo} resizeMode="contain" />
                 </View>
-                <Text style={forms.authTitle}>Create Account</Text>
-                <Text style={forms.authSubtitle}>Start your travel journey</Text>
+                <Text style={forms.authTitle}>צרו חשבון</Text>
+                <Text style={forms.authSubtitle}>התחילו את המסע שלכם</Text>
               </View>
 
               <View style={forms.authForm}>
                 
                 {/* --- Reusable Inputs --- */}
                 <AuthInput
-                  label="Full Name"
+                  label="שם מלא"
                   value={fullName}
                   onChangeText={setFullName}
-                  placeholder="Enter your full name"
+                  placeholder="הזן/י את שמך המלא"
                   iconName="person-outline"
                   autoCapitalize="words"
                 />
 
                 <AuthInput
-                  label="Email"
+                  label="אימייל"
                   value={email}
                   onChangeText={setEmail}
-                  placeholder="Enter your email"
+                  placeholder="הזן/י כתובת אימייל"
                   iconName="mail-outline"
                   keyboardType="email-address"
                 />
 
                 <AuthInput
-                  label="Password"
+                  label="סיסמה"
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Create a password"
+                  placeholder="הזן/י סיסמה"
                   iconName="lock-closed-outline"
                   isPassword={true}
                 />
 
                 <AuthInput
-                  label="Confirm Password"
+                  label="אימות סיסמה"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  placeholder="Confirm your password"
+                  placeholder="אימות סיסמה"
                   iconName="lock-closed-outline"
                   isPassword={true}
                 />
@@ -106,9 +106,9 @@ export default function RegisterScreen({ navigation }) {
                 {/* Terms Text */}
                 <View style={forms.authTermsContainer}>
                   <Text style={forms.authTermsText}>
-                    By signing up, you agree to our{' '}
-                    <Text style={forms.authTermsLink}>Terms of Service</Text> and{' '}
-                    <Text style={forms.authTermsLink}>Privacy Policy</Text>
+                    בהרשמה למערכת, הנך מאשר/ת את{' '}
+                    <Text style={forms.authTermsLink}>תנאי השימוש</Text> &{' '}
+                    <Text style={forms.authTermsLink}>מדיניות הפרטיות</Text>
                   </Text>
                 </View>
 
@@ -117,14 +117,14 @@ export default function RegisterScreen({ navigation }) {
                 {/* Register Button */}
                 <TouchableOpacity onPress={handleRegister} activeOpacity={0.8}>
                   <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={forms.authButton}>
-                    <Text style={forms.authButtonText}>Create Account</Text>
+                    <Text style={forms.authButtonText}>צור חשבון</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
                 {/* Divider */}
                 <View style={forms.authDividerContainer}>
                   <View style={forms.authDivider} />
-                  <Text style={forms.authDividerText}>Or continue with</Text>
+                  <Text style={forms.authDividerText}>או המשך/י באמצעות</Text>
                   <View style={forms.authDivider} />
                 </View>
 
@@ -133,13 +133,13 @@ export default function RegisterScreen({ navigation }) {
 
                 {/* Footer */}
                 <View style={forms.authFooter}>
-                  <Text style={forms.authFooterText}>Join thousands of travelers</Text>
-                  <Text style={forms.authFooterText}>exploring the world together</Text>
+                  <Text style={forms.authFooterText}>הצטרף לאלפי מטיילים</Text>
+                  <Text style={forms.authFooterText}>מגלים את העולם ביחד</Text>
 
                   <View style={forms.authLinkContainer}>
-                    <Text style={forms.authLinkText}>Already have an account? </Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                      <Text style={forms.authLink}>Sign in</Text>
+                    <Text style={forms.authLinkText}>כבר יש לך חשבון? </Text>
+                    <TouchableOpacity onPress={() => navigation.replace('Login')}>
+                      <Text style={forms.authLink}>התחבר/י</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

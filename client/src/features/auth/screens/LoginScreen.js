@@ -64,7 +64,7 @@ export default function LoginScreen({ navigation }) {
       if (tier === 'unverified') {
         navigation.replace('VerifyEmail');
       } else {
-        navigation.replace('Main');
+        navigation.reset({index: 0,routes: [{ name: 'Main' }] });
       }
     } catch (err) {
       setError(err.message);
@@ -95,41 +95,41 @@ export default function LoginScreen({ navigation }) {
                 <View style={forms.authLogoContainer}>
                   <Image source={require('../../../../assets/logo.png')} style={forms.authLogo} resizeMode="contain"/>
                 </View>
-                <Text style={forms.authTitle}>Welcome Back</Text>
-                <Text style={forms.authSubtitle}>Sign in to continue planning</Text>
+                <Text style={forms.authTitle}>ברוכים השבים</Text>
+                <Text style={forms.authSubtitle}>כדי להמשיך לתכנן, עליך להתחבר</Text>
               </View>
 
               <View style={forms.authForm}>
                 <AuthInput 
-                    label="Email" 
+                    label="אימייל" 
                     value={email} 
                     onChangeText={setEmail} 
-                    placeholder="Enter your email"
+                    placeholder="הזן/י כתובת אימייל"
                     iconName="mail-outline"
                     keyboardType="email-address"
                 />
                 <AuthInput 
-                    label="Password" 
+                    label="סיסמה" 
                     value={password} 
                     onChangeText={setPassword} 
-                    placeholder="Enter your password"
+                    placeholder="הזן/י סיסמה"
                     iconName="lock-closed-outline"
                     isPassword={true}
                 />
                 <TouchableOpacity style={forms.authForgotPassword}>
-                  <Text style={forms.authForgotPasswordText}>Forgot Password?</Text>
+                  <Text style={forms.authForgotPasswordText}>שכחת סיסמה?</Text>
                 </TouchableOpacity>
                 {error ? <Text style={forms.authErrorText}>{error}</Text> : null}
                 
                 <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
                   <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={forms.authButton}>
-                    <Text style={forms.authButtonText}>Sign In</Text>
+                    <Text style={forms.authButtonText}>התחבר</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
                 <View style={forms.authDividerContainer}>
                   <View style={forms.authDivider} />
-                  <Text style={forms.authDividerText}>Or continue with</Text>
+                  <Text style={forms.authDividerText}>או המשך/י באמצעות</Text>
                   <View style={forms.authDivider} />
                 </View>
 
@@ -137,9 +137,9 @@ export default function LoginScreen({ navigation }) {
 
                 <View style={forms.authFooter}>
                   <View style={forms.authLinkContainer}>
-                    <Text style={forms.authLinkText}>Don't have an account? </Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                      <Text style={forms.authLink}>Sign Up</Text>
+                    <Text style={forms.authLinkText}> אין לך חשבון? </Text>
+                    <TouchableOpacity onPress={() => navigation.replace('Register')}>
+                      <Text style={forms.authLink}>הירשם/י</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

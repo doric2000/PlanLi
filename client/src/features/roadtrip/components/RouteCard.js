@@ -3,9 +3,10 @@ import { useUserData } from "../../../hooks/useUserData";
 import {
 	View,
 	Text,
-	TouchableOpacity,
 	ScrollView,
 	StyleSheet,
+	Image,
+	Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "../../../components/Avatar";
@@ -17,6 +18,7 @@ import { cards, typography, tags as tagsStyle, colors } from "../../../styles";
 import { auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useAdminClaim } from "../../../hooks/useAdminClaim";
+import { formatTimestamp } from "../../../utils/formatTimestamp";
 
 /**
  * Component to display tags with a limit on visible items.
@@ -94,6 +96,11 @@ export const RouteCard = ({
     const thumbnailUrl = Array.isArray(item?.tripDaysData)
         ? item.tripDaysData.find((day) => day?.image)?.image || null
         : null;
+    const isDisplayableImage =
+        typeof thumbnailUrl === "string" &&
+        (thumbnailUrl.startsWith("http") ||
+            thumbnailUrl.startsWith("https") ||
+            thumbnailUrl.startsWith("file:"));
     const snapshotData = {
         name: item?.Title || item?.title || undefined,
         thumbnail_url: thumbnailUrl,
@@ -108,89 +115,139 @@ export const RouteCard = ({
 	const canManage = tier === 'verified' && (isOwner || isAdmin);
 
 	return (
-		<TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-			<View style={cards.route}>
-				<View style={styles.headerRow}>
-					<Text style={[typography.h3, styles.title]}>
-						{item.Title}
-					</Text>
-					<View style={styles.headerActions}>
-						<FavoriteButton
-							type='routes'
-							id={item.id}
-							variant='light'
-							snapshotData={snapshotData}
-						/>
-						{canManage && showActionMenu && (
-							<ActionMenu
-								onEdit={onEdit}
-								onDelete={onDelete}
-								title='Manage Route'
-							/>
+		<Pressable style={cards.recommendation} onPress={onPress}>
+			{/* Header */}
+			<View style={cards.recHeader}>
+				<View style={cards.recAuthorInfo}>
+					<Avatar photoURL={userPhoto} displayName={displayUser} />
+					<View>
+						<Text style={cards.recUsername}>{displayUser}</Text>
+						{item.createdAt && (
+							<Text style={cards.recDate}>{formatTimestamp(item.createdAt)}</Text>
 						)}
 					</View>
 				</View>
-				<View style={styles.userContainer}>
-					<Avatar
-						photoURL={userPhoto}
-						displayName={displayUser}
-						size={24}
-					/>
-					<Text style={typography.meta}>by {displayUser}</Text>
-				</View>
-				<Text style={typography.body}>{item.desc}</Text>
-				<Text style={{ ...typography.bodySmall, marginBottom: 12 }}>
-					<Ionicons
-						name='calendar-outline'
-						size={16}
-						color='#64748B'
-					/>{" "}
-					{item.days} days |{" "}
-					<Ionicons
-						name='navigate-outline'
-						size={16}
-						color='#64748B'
-					/>{" "}
-					{item.distance} km |
-				</Text>
 
-				<PlacesRoute places={item.places} />
+				<View style={styles.headerActions}>
+					<FavoriteButton
+						type='routes'
+						id={item.id}
+						variant='light'
+						snapshotData={snapshotData}
+					/>
+					{canManage && showActionMenu && (
+						<ActionMenu
+							onEdit={onEdit}
+							onDelete={onDelete}
+							title='Manage Route'
+						/>
+					)}
+				</View>
+			</View>
+
+			{/* Media */}
+			{isDisplayableImage ? (
+				<Image source={{ uri: thumbnailUrl }} style={cards.recImage} resizeMode="cover" />
+			) : null}
+
+			{/* Content */}
+			<View style={cards.recContent}>
+				<View style={cards.recTitleRow}>
+					<Text style={cards.recTitle} numberOfLines={1}>
+						{item.Title}
+					</Text>
+					{item.difficultyTag ? (
+						<View style={cards.recCategoryChip}>
+							<Text style={cards.recCategoryText}>{item.difficultyTag}</Text>
+						</View>
+					) : null}
+				</View>
+
+				<View style={styles.metaRow}>
+					{item.days ? (
+						<View style={styles.metaPill}>
+							<Ionicons name="calendar-outline" size={14} color="#1F2937" />
+							<Text style={styles.metaText}>{item.days} ימים</Text>
+						</View>
+					) : null}
+					{item.distance ? (
+						<View style={styles.metaPill}>
+							<Ionicons name="navigate-outline" size={14} color="#1F2937" />
+							<Text style={styles.metaText}>{item.distance} ק\"מ</Text>
+						</View>
+					) : null}
+					{item.travelStyleTag ? (
+						<View style={styles.metaPill}>
+							<Ionicons name="trail-sign-outline" size={14} color="#1F2937" />
+							<Text style={styles.metaText}>{item.travelStyleTag}</Text>
+						</View>
+					) : null}
+				</View>
+
+				{Array.isArray(item.places) && item.places.length > 0 ? (
+					<View style={{ marginBottom: 6 }}>
+						<PlacesRoute places={item.places} />
+					</View>
+				) : null}
+
+				{Array.isArray(item.places) && item.places.length > 0 ? (
+					<View style={styles.locationRow}>
+						<Ionicons name="location-outline" size={14} color="#2EC4B6" />
+						<Text style={cards.recLocationText}>
+							{item.places.join(" • ")}
+						</Text>
+					</View>
+				) : null}
+
+				<Text style={cards.recDescription} numberOfLines={3}>
+					{item.desc}
+				</Text>
 
 				{item.tags && item.tags.length > 0 && (
 					<RenderTags tags={item.tags} />
 				)}
-
-				{showActionBar && (
-					<ActionBar
-						item={item}
-						onCommentPress={onCommentPress}
-						collectionName='routes'
-					/>
-				)}
 			</View>
-		</TouchableOpacity>
+
+			{showActionBar && (
+				<ActionBar
+					item={item}
+					onCommentPress={onCommentPress}
+					collectionName='routes'
+				/>
+			)}
+		</Pressable>
 	);
 };
 
 const styles = StyleSheet.create({
-	headerRow: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		alignItems: "flex-start",
-	},
 	headerActions: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
 	},
-	title: {
-		flex: 1,
-		marginRight: 8,
-	},
-	userContainer: {
+	metaRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		marginBottom: 5,
+		flexWrap: "wrap",
 		gap: 8,
+		marginBottom: 8,
+	},
+	metaPill: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 6,
+		backgroundColor: "#F3F4F6",
+		borderRadius: 12,
+		paddingHorizontal: 10,
+		paddingVertical: 6,
+	},
+	metaText: {
+		...typography.caption,
+		color: "#111827",
+	},
+	locationRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		marginBottom: 6,
 	},
 });
