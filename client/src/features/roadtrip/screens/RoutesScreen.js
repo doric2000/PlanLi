@@ -105,7 +105,7 @@ export default function RoutesScreen({ navigation }) {
 	};
 
 	const handleGenerateTrip = () => {
-		Alert.alert("יצירת מסלול אוטומטי בקרוב!");
+		navigation.navigate("AiTripGeneratorScreen");
 	};
 
 	const handleOpenComments = (routeId) => {

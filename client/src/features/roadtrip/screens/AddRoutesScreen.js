@@ -52,13 +52,30 @@ export default function AddRoutesScreen({ navigation, route }) {
     // Setup back button
     useBackButton(navigation, { title: route?.params?.routeToEdit ? "עריכת מסלול" : "מסלול חדש" });
 
+    const initialData = route?.params?.initialData;
     // --- State Management ---
-    const [title, setTitle] = useState("");
-    const [days, setDays] = useState("");
-    const [places, setPlaces] = useState([""]);
-    const [distance, setDistance] = useState("");
-    const [desc, setDesc] = useState("");
-    const [tripDays, setTripDays] = useState([]);
+    const [title, setTitle] = useState(initialData?.title || "");
+    const [days, setDays] = useState(
+        initialData?.days
+            ? initialData.days.toString()
+            : Array.isArray(initialData?.tripDaysData)
+                ? initialData.tripDaysData.length.toString()
+                : ""
+    );
+    const [places, setPlaces] = useState(initialData?.places || [""]);
+    const [distance, setDistance] = useState(
+        initialData?.distance ? initialData.distance.toString() : ""
+    );
+    const [desc, setDesc] = useState(initialData?.description || initialData?.desc || "");
+    const [tripDays, setTripDays] = useState(
+        Array.isArray(initialData?.tripDaysData)
+            ? initialData.tripDaysData.map((day, index) => ({
+                title: day?.title || `יום ${index + 1}`,
+                description: day?.description || day?.desc || day?.summary || "",
+                image: day?.image || null,
+            }))
+            : []
+    );
     
     // Tag States (Single vs Multi)
     const [difficultyTag, setDifficultyTag] = useState(""); // String
@@ -94,6 +111,31 @@ export default function AddRoutesScreen({ navigation, route }) {
             setExperienceTags(routeToEdit.experienceTags || []);
         }
     }, [routeToEdit]);
+
+    // Prefill from AI generator (only when not editing an existing route)
+    useEffect(() => {
+        if (!initialData || routeToEdit) return;
+
+        setTitle(initialData.title || "");
+        const derivedDays = initialData.days
+            ? initialData.days.toString()
+            : Array.isArray(initialData.tripDaysData)
+                ? initialData.tripDaysData.length.toString()
+                : "";
+        setDays(derivedDays);
+        setPlaces(initialData.places || [""]);
+        setDistance(initialData.distance ? initialData.distance.toString() : "");
+        setDesc(initialData.description || initialData.desc || "");
+        if (Array.isArray(initialData.tripDaysData)) {
+            setTripDays(
+                initialData.tripDaysData.map((day, index) => ({
+                    title: day?.title || `יום ${index + 1}`,
+                    description: day?.description || day?.desc || day?.summary || "",
+                    image: day?.image || null,
+                }))
+            );
+        }
+    }, [initialData, routeToEdit]);
 
     // Update the combined 'tags' array whenever specific tag states change
     useEffect(() => {

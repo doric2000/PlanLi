@@ -10,6 +10,7 @@ import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordS
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
 import RecommendationDetailScreen from "./src/features/community/screens/RecommendationDetailScreen";
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
+import AiTripGeneratorScreen from "./src/features/roadtrip/screens/AiTripGeneratorScreen";
 import UserProfileScreen from "./src/features/profile/screens/UserProfileScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
@@ -84,15 +85,19 @@ export default function App() {
 						component={LandingPageScreen}
 
 					/>
-					<Stack.Screen
-						name='AddRoutesScreen'
-						component={AddRoutesScreen}
-						options={modalPresentation}
-					/>
-					<Stack.Screen
-						name='RouteDetail'
-						component={RouteDetailScreen}
-						options={modalPresentation}
+				<Stack.Screen
+					name='AddRoutesScreen'
+					component={AddRoutesScreen}
+					options={modalPresentation}
+				/>
+				<Stack.Screen
+					name='AiTripGeneratorScreen'
+					component={AiTripGeneratorScreen}
+				/>
+				<Stack.Screen
+					name='RouteDetail'
+					component={RouteDetailScreen}
+					options={modalPresentation}
 					/>
 				</Stack.Navigator>
 			</NavigationContainer>
