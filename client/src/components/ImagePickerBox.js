@@ -33,6 +33,7 @@ export const ImagePickerBox = ({
   imageStyle,
   imageFit = 'cover',
   disabled = false,
+  loading = false,
   testID,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
@@ -85,7 +86,12 @@ export const ImagePickerBox = ({
       style={[styles.container, { height }, style]}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
     >
-      {count === 0 ? (
+      {loading ? (
+        <View style={styles.placeholder}>
+          <Ionicons name="cloud-upload-outline" size={iconSize} color={iconColor} />
+          <Text style={styles.placeholderText}>{placeholderText || 'מעלה תמונה...'}</Text>
+        </View>
+      ) : count === 0 ? (
         <TouchableOpacity
           style={styles.placeholder}
           onPress={onPress}

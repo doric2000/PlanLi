@@ -28,7 +28,7 @@ import { spacing } from '../../../styles';
 export default function DayEditorModal({ visible, onClose, onSave, initialData, dayIndex }) {
     const [description, setDescription] = useState('');
     // Image picker with upload hook (SOLID-based composition)
-    const { imageUri: image, setImageUri: setImage, pickImage, clearImage } = useImagePickerWithUpload({ 
+    const { imageUri: image, setImageUri: setImage, pickImageAndUpload, clearImage, uploading } = useImagePickerWithUpload({ 
         storagePath: 'trips',
     });
 
@@ -43,7 +43,11 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 		if (!description){
 			Alert.alert("חסר תיאור");
 			return;
-		}
+        }
+        if (uploading) {
+            Alert.alert("המתן", "התמונה עדיין בהעלאה...");
+            return;
+        }
         onSave({ description, image }, dayIndex);
         onClose();
     };
@@ -52,12 +56,12 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
         <Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onClose}>
+                    <TouchableOpacity onPress={onClose} disabled={uploading}>
                         <Text style={styles.headerBtn}>ביטול</Text>
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>יום {dayIndex + 1}</Text>
-                    <TouchableOpacity onPress={handleSave}>
-                        <Text style={[styles.headerBtn, { fontWeight: 'bold' }]}>שמור</Text>
+                    <TouchableOpacity onPress={handleSave} disabled={uploading}>
+                        <Text style={[styles.headerBtn, { fontWeight: 'bold', opacity: uploading ? 0.5 : 1 }]}>שמור</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -75,13 +79,13 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
                     <Text style={styles.photoLabel}>תיעוד מהיום</Text>
                     <ImagePickerBox
                         imageUri={image}
-                                  onPress={pickImage}
-                                  placeholderText="הוסף תמונה"
-                                  style={{ marginBottom: spacing.xl }}
-                        // onPress={pickImage}
-                        // placeholderText="Tap to upload photo"
-                        // // iconColor="#64748B"
-                        // iconSize={32}
+                        onPress={() => pickImageAndUpload((url) => {
+                            // url is the remote firestore map, setting it directly
+                            setImage(url);
+                        })}
+                        placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
+                        style={{ marginBottom: spacing.xl }}
+                        loading={uploading}
                     />
                     
                     {image && (
