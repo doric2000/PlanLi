@@ -1,9 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
+import { View, Text, Image, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useUserData } from '../hooks/useUserData';
-import { useLikes } from '../features/community/hooks/useLikes';
 import { Avatar } from './Avatar';
 import { ActionMenu } from './ActionMenu';
 import { cards } from '../styles';
@@ -27,10 +27,11 @@ import { formatTimestamp } from '../utils/formatTimestamp';
  * @param {Function} props.onCommentPress - Callback when comment button is pressed.
  * @param {boolean} [props.showActionBar] - Whether to show the ActionBar (default: true)
  */
-const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true, style }) => {
+const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true, style, variant = 'default' }) => {
   const navigation = useNavigation();
 
   const { width: windowWidth } = useWindowDimensions();
+  const isFeed = variant === 'feed';
 
   const images = useMemo(() => (Array.isArray(item.images) ? item.images.filter(Boolean) : []), [item.images]);
   const [carouselWidth, setCarouselWidth] = useState(null);
@@ -44,13 +45,6 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   
   // Use custom hooks
   const author = useUserData(item.userId);
-  const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
-    'recommendations', 
-    item.id, 
-    item.likes, 
-    item.likedBy
-  );
-
   // Check if current user is the owner
   const isOwner = auth.currentUser?.uid === item.userId;
   const tier = getUserTier(auth.currentUser);
@@ -163,9 +157,60 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       Alert.alert("שגיאה", "לא הצלחנו למחוק את ההמלצה.");
     }
   };
+  const renderHeader = (overlay = false) => (
+    <View style={overlay ? styles.feedHeaderOverlay : cards.recHeader}>
+      <TouchableOpacity
+        style={[cards.recAuthorInfo, overlay && styles.feedAuthorInfo]}
+        activeOpacity={0.75}
+        onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
+      >
+        <View style={overlay ? styles.feedAvatarRing : null}>
+          <Avatar photoURL={author.photoURL} displayName={author.displayName} size={overlay ? 40 : 36} />
+        </View>
+        <View style={overlay ? styles.feedAuthorTextWrap : null}>
+          <Text style={[cards.recUsername, overlay && styles.feedUsername]} numberOfLines={1}>
+            {author.displayName}
+          </Text>
+          {item.createdAt && (
+            <Text style={[cards.recDate, overlay && styles.feedMetaText]} numberOfLines={1}>
+              {formatDate(item.createdAt)}
+            </Text>
+          )}
+          {overlay && (item.location || item.country) ? (
+            <Text style={styles.feedMetaText} numberOfLines={1}>
+              {item.location}{item.country ? `, ${item.country}` : ''}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+      <View style={[cards.recHeaderActionsRow, overlay && styles.feedHeaderActions]}>
+        <FavoriteButton
+          type="recommendations"
+          id={item.id}
+          variant={overlay ? "overlay" : "light"}
+          snapshotData={snapshotData}
+        />
+        {canManage ? (
+          <ActionMenu
+            iconColor={overlay ? "#FFFFFF" : undefined}
+            onEdit={() => {
+              handleEdit();
+            }}
+            onDelete={() => {
+              handleDelete();
+              console.log("DELETE CLICKED", item.id);
+            }}
+            title="ניהול המלצה"
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+
   return (
-    <View style={[cards.recommendation, style]}>
+    <View style={[isFeed ? styles.feedCard : cards.recommendation, style]}>
       {/* Header */}
+      {!isFeed && (
       <View style={cards.recHeader}>
         <TouchableOpacity
           style={cards.recAuthorInfo}
@@ -195,20 +240,31 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
               onDelete={() => {
                 handleDelete();
                 console.log("DELETE CLICKED", item.id);
-                Alert.alert("DEBUG", "לחצת על מחיקה");
               }}
               title="ניהול המלצה"
             />
           ) : null}
         </View>
       </View>
+      )}
 
       {/* Images (swipe like Instagram) */}
       {images.length > 0 && (
         <View
-          style={cards.recCarouselContainer}
+          style={[
+            cards.recCarouselContainer,
+            isFeed && styles.feedCarouselContainer,
+          ]}
           onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
         >
+          {isFeed && (
+            <LinearGradient
+              pointerEvents="none"
+              colors={["rgba(0,0,0,0.72)", "rgba(0,0,0,0.18)", "transparent"]}
+              style={styles.feedTopGradient}
+            />
+          )}
+          {isFeed && renderHeader(true)}
           <FlatList
             ref={carouselRef}
             data={images}
@@ -257,7 +313,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           )}
 
           {images.length > 1 && (
-            <View style={cards.recDotsContainer} pointerEvents="none">
+            <View style={[cards.recDotsContainer, isFeed && styles.feedDotsContainer]} pointerEvents="none">
               {images.map((_, index) => (
                 <View
                   key={`${item.id || 'rec'}:dot:${index}`}
@@ -269,14 +325,51 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
               ))}
             </View>
           )}
+          {isFeed && (
+            <>
+              <LinearGradient
+                pointerEvents="none"
+                colors={["transparent", "rgba(0,0,0,0.36)", "rgba(0,0,0,0.74)"]}
+                style={styles.feedBottomGradient}
+              />
+              {showActionBar && (
+                <View style={styles.feedActionOverlay}>
+                  <ActionBar item={item} onCommentPress={onCommentPress} variant="overlay" />
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      )}
+      {isFeed && images.length === 0 && (
+        <View style={[cards.recCarouselContainer, styles.feedCarouselContainer]}>
+          <View style={styles.feedImagePlaceholder}>
+            <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.62)" />
+          </View>
+          <LinearGradient
+            pointerEvents="none"
+            colors={["rgba(0,0,0,0.72)", "rgba(0,0,0,0.18)", "transparent"]}
+            style={styles.feedTopGradient}
+          />
+          {renderHeader(true)}
+          <LinearGradient
+            pointerEvents="none"
+            colors={["transparent", "rgba(0,0,0,0.36)", "rgba(0,0,0,0.74)"]}
+            style={styles.feedBottomGradient}
+          />
+          {showActionBar && (
+            <View style={styles.feedActionOverlay}>
+              <ActionBar item={item} onCommentPress={onCommentPress} variant="overlay" />
+            </View>
+          )}
         </View>
       )}
 
       {/* Content */}
       <Pressable onPress={handleCardPress}>
-        <View style={cards.recContent}>
+        <View style={[cards.recContent, isFeed && styles.feedContent]}>
         <View style={cards.recTitleRow}>
-          <Text style={cards.recTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={[cards.recTitle, isFeed && styles.feedTitle]} numberOfLines={1}>{item.title}</Text>
           {item.category && (
             <View style={cards.recCategoryChip}>
               <Text style={cards.recCategoryText}>{item.category}</Text>
@@ -317,14 +410,14 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           </View>
         )}
 
-        <Text style={cards.recDescription} numberOfLines={3}>
+        <Text style={[cards.recDescription, isFeed && styles.feedDescription]} numberOfLines={isFeed ? 2 : 3}>
           {item.description}
         </Text>
         </View>
       </Pressable>
 
       {/* Footer / Action Bar */}
-      {showActionBar && (
+      {showActionBar && !isFeed && (
         <ActionBar item={item} onCommentPress={onCommentPress} />
       )}
 
@@ -333,3 +426,116 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 };
 
 export default RecommendationCard;
+
+const styles = StyleSheet.create({
+  feedCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 18,
+    overflow: 'hidden',
+  },
+  feedCarouselContainer: {
+    aspectRatio: 0.78,
+    borderRadius: 0,
+    overflow: 'hidden',
+  },
+  feedImagePlaceholder: {
+    flex: 1,
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedTopGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 150,
+    zIndex: 3,
+  },
+  feedBottomGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 160,
+    zIndex: 3,
+  },
+  feedHeaderOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    zIndex: 6,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  feedAuthorInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  feedAvatarRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.78)',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  feedAuthorTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  feedUsername: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  feedMetaText: {
+    color: 'rgba(255,255,255,0.86)',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  feedHeaderActions: {
+    backgroundColor: 'rgba(15,23,42,0.22)',
+    borderRadius: 22,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  feedDotsContainer: {
+    bottom: 72,
+    zIndex: 6,
+  },
+  feedActionOverlay: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 16,
+    zIndex: 7,
+  },
+  feedContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  feedTitle: {
+    fontSize: 17,
+  },
+  feedDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+});

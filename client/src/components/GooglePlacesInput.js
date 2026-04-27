@@ -28,6 +28,16 @@ export default function GooglePlacesInput({
   googleSearchFn,
   placeholder = 'חפש עיר...',
   inputTestID,
+  containerStyle,
+  inputWrapperStyle,
+  inputStyle,
+  searchIconColor,
+  searchIconStyle,
+  placeholderTextColor,
+  loaderColor,
+  loaderStyle,
+  rightAccessory,
+  listContainerStyle,
 }) {
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
@@ -270,30 +280,34 @@ export default function GooglePlacesInput({
   };
 
   return (
-    <View style={googlePlacesInput.container}>
+    <View style={[googlePlacesInput.container, containerStyle]}>
       {/* Input Field */}
-      <View ref={inputWrapperRef} style={[common.homeSearchBar, googlePlacesInput.inputWrapper]}>
+      <View
+        ref={inputWrapperRef}
+        style={[common.homeSearchBar, googlePlacesInput.inputWrapper, inputWrapperStyle]}
+      >
         <Ionicons
           name="search"
           size={20}
-          color={colors.textSecondary}
-          style={googlePlacesInput.searchIcon}
+          color={searchIconColor || colors.textSecondary}
+          style={[googlePlacesInput.searchIcon, searchIconStyle]}
         />
         <TextInput
-          style={[common.homeSearchInput, googlePlacesInput.input]}
+          style={[common.homeSearchInput, googlePlacesInput.input, inputStyle]}
           placeholder={placeholder}
           value={query}
           onChangeText={handleTextChange}
           autoCorrect={false}
           autoCapitalize="none"
-          placeholderTextColor={colors.placeholder}
+          placeholderTextColor={placeholderTextColor || colors.placeholder}
           testID={inputTestID}
         />
+        {rightAccessory}
         {loading && (
           <ActivityIndicator
             size="small"
-            color={colors.primary}
-            style={googlePlacesInput.loader}
+            color={loaderColor || colors.primary}
+            style={[googlePlacesInput.loader, loaderStyle]}
           />
         )}
       </View>
@@ -313,7 +327,7 @@ export default function GooglePlacesInput({
 
       {/* Suggestions List */}
       {Platform.OS !== 'web' && shouldShowAnyDropdown && (
-        <View style={googlePlacesInput.listContainer}>
+        <View style={[googlePlacesInput.listContainer, listContainerStyle]}>
           {normalizedLocalResults.length > 0 ? (
             <ScrollView keyboardShouldPersistTaps="handled">
               {normalizedLocalResults.map((city) => (
@@ -383,6 +397,7 @@ export default function GooglePlacesInput({
           <View
             style={[
               googlePlacesInput.listContainer,
+              listContainerStyle,
               {
                 position: 'fixed',
                 top: dropdownAnchor.y + dropdownAnchor.height + spacing.sm,

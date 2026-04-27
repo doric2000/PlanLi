@@ -19,6 +19,17 @@ const FavoriteButton = ({ type, id, variant = 'light', style, snapshotData = {} 
 
   const getButtonStyle = () => {
     const baseStyle = common.iconButton;
+    if (variant === 'overlay') {
+      return [
+        baseStyle,
+        {
+          backgroundColor: 'rgba(15,23,42,0.34)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.18)',
+        },
+        style,
+      ];
+    }
     if (variant === 'dark') {
       return [baseStyle, { backgroundColor: colors.background }, style];
     }
@@ -26,6 +37,7 @@ const FavoriteButton = ({ type, id, variant = 'light', style, snapshotData = {} 
   };
 
   const getIconColor = () => {
+    if (variant === 'overlay') return '#FFFFFF';
     if (isFavorite) return colors.primary;
     return colors.textSecondary;
   };

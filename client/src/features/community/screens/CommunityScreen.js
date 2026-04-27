@@ -8,12 +8,14 @@ import {
   FlatList, 
   RefreshControl, 
   TouchableOpacity,
+  StyleSheet,
+  StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // --- Components ---
-import ScreenHeader from '../../../components/ScreenHeader'; 
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
 import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
@@ -34,6 +36,7 @@ import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 
 export default function CommunityScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   // --- State ---
   const [sortBy, setSortBy] = useState('popularity');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -142,90 +145,84 @@ export default function CommunityScreen({ navigation }) {
 
   const focusMapOnPins = debouncedDestinationQuery.length >= 2;
 
-  return (
-    <SafeAreaView style={community.screen}>
-      
-      {/* --- HEADER --- */}
-      <ScreenHeader
-        title="קהילת המטיילים"
-        subtitle="גלו המלצות חדשות!"
-        compact
-        renderRight={() => (
-          <TouchableOpacity
-            style={community.headerIconButton}
-            onPress={() => {
-              setMapOpen((prev) => !prev);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="מפה"
-          >
-            <Ionicons name="map-outline" size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
-        )}
-        renderLeft={() => (
-          <TouchableOpacity 
-            style={community.sortButton}
-            onPress={() => setSortMenuVisible(true)}
-          >
-            <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
-            <Text style={community.sortButtonText}>
-              {sortLabel}
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
+  const renderTopArea = () => (
+    <LinearGradient
+      colors={["#4C72FF", "#3157E7", "#2446C7"]}
+      start={{ x: 0.15, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={[styles.header, { paddingTop: insets.top + 6 }]}
+    >
+      <View style={styles.headerCircleLarge} />
+      <View style={styles.headerCircleSmall} />
 
-      {/* --- DESTINATION QUICK FILTER (Option A) --- */}
-      <View style={community.destinationSearchWrap}>
-        <View style={community.destinationSearchRow}>
-          <TouchableOpacity
-            onPress={() => setFilterModalVisible(true)}
-            style={community.destinationFilterBtn}
-            accessibilityRole="button"
-            accessibilityLabel="מסננים"
-          >
-            <Ionicons
-              name="filter"
-              size={18}
-              color={isFiltered ? colors.primary : colors.textSecondary}
-            />
-          </TouchableOpacity>
+      <View style={styles.topActionsRow}>
+        <TouchableOpacity
+          style={styles.glassIconButton}
+          onPress={() => setMapOpen((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel="×ž×¤×”"
+        >
+          <Ionicons name={mapOpen ? "map" : "map-outline"} size={20} color="#FFFFFF" />
+        </TouchableOpacity>
 
-          <View style={community.destinationSearchPill}>
-            <Ionicons
-              name="search"
-              size={18}
-              color={colors.textSecondary}
-            />
-
-            <TextInput
-              value={filters.destination}
-              onChangeText={(text) => updateFilters({ destination: text })}
-              onFocus={() => setDestinationEditing(true)}
-              onBlur={() => setDestinationEditing(false)}
-              onSubmitEditing={() => setDestinationEditing(false)}
-              placeholder="חפש יעד (עיר / מדינה)..."
-              placeholderTextColor={colors.textMuted}
-              style={community.destinationSearchInput}
-              textAlign="right"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-
-            {!!filters.destination && (
-              <TouchableOpacity
-                onPress={() => updateFilters({ destination: '' })}
-                style={community.destinationClearBtn}
-                accessibilityRole="button"
-                accessibilityLabel="נקה יעד"
-              >
-                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>×§×”×™×œ×”</Text>
+          <Text style={styles.headerSubtitle}>×’×œ×• ×”×ž×œ×¦×•×ª ×—×“×©×•×ª</Text>
         </View>
+
+        <TouchableOpacity
+          style={styles.sortGlassButton}
+          onPress={() => setSortMenuVisible(true)}
+        >
+          <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
+          <Text style={styles.sortGlassText}>{sortLabel}</Text>
+        </TouchableOpacity>
       </View>
 
+      <View style={styles.searchRow}>
+        <TouchableOpacity
+          onPress={() => setFilterModalVisible(true)}
+          style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
+          accessibilityRole="button"
+          accessibilityLabel="×ž×¡× × ×™×"
+        >
+          <Ionicons name="filter" size={19} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <View style={styles.searchPill}>
+          <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
+          <TextInput
+            value={filters.destination}
+            onChangeText={(text) => updateFilters({ destination: text })}
+            onFocus={() => setDestinationEditing(true)}
+            onBlur={() => setDestinationEditing(false)}
+            onSubmitEditing={() => setDestinationEditing(false)}
+            placeholder="×—×¤×© ×™×¢×“..."
+            placeholderTextColor="rgba(255,255,255,0.48)"
+            style={styles.searchInput}
+            textAlign="right"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {!!filters.destination && (
+            <TouchableOpacity
+              onPress={() => updateFilters({ destination: '' })}
+              style={community.destinationClearBtn}
+              accessibilityRole="button"
+              accessibilityLabel="× ×§×” ×™×¢×“"
+            >
+              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.76)" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </LinearGradient>
+  );
+
+  return (
+    <SafeAreaView style={styles.screen} edges={["left", "right"]}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {renderTopArea()}
       {/* --- ACTIVE FILTERS BAR --- */}
       <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} />
 
@@ -254,9 +251,10 @@ export default function CommunityScreen({ navigation }) {
                   item={item} 
                   onCommentPress={handleOpenComments} 
                   onDeleted={removeRecommendation}
+                  variant="feed"
               />
             )}
-            contentContainerStyle={common.listContent}
+            contentContainerStyle={[styles.feedContent, { paddingBottom: 118 + insets.bottom }]}
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             ListEmptyComponent={
@@ -318,3 +316,133 @@ export default function CommunityScreen({ navigation }) {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#F4F5F9',
+  },
+  header: {
+    paddingHorizontal: 18,
+    paddingBottom: 18,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+  },
+  headerCircleLarge: {
+    position: 'absolute',
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    top: -58,
+    right: -44,
+  },
+  headerCircleSmall: {
+    position: 'absolute',
+    width: 134,
+    height: 134,
+    borderRadius: 67,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+    top: 30,
+    right: 24,
+  },
+  topActionsRow: {
+    position: 'relative',
+    zIndex: 2,
+    minHeight: 56,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: '900',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.66)',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  glassIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glassIconButtonActive: {
+    backgroundColor: 'rgba(245,150,29,0.88)',
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  sortGlassButton: {
+    minWidth: 72,
+    height: 42,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  sortGlassText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    writingDirection: 'rtl',
+  },
+  searchRow: {
+    position: 'relative',
+    zIndex: 3,
+    marginTop: 12,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
+  },
+  searchPill: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 14,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 9,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: 0,
+    writingDirection: 'rtl',
+  },
+  feedContent: {
+    paddingTop: 0,
+    paddingHorizontal: 0,
+    backgroundColor: '#F4F5F9',
+  },
+});
