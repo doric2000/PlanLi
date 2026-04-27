@@ -50,7 +50,7 @@ const RenderTags = ({ tags }) => {
 							...tagsStyle.text,
 							color: colors.info,
 							alignSelf: "center",
-							marginLeft: 8,
+							marginRight: 8,
 						}}
 					>
 						+{tags.length - MAX_VISIBLE}
@@ -139,7 +139,7 @@ export const RouteCard = ({
 						<ActionMenu
 							onEdit={onEdit}
 							onDelete={onDelete}
-							title='Manage Route'
+							title='ניהול מסלול'
 						/>
 					)}
 				</View>
@@ -221,19 +221,19 @@ export const RouteCard = ({
 
 const styles = StyleSheet.create({
 	headerActions: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		gap: 8,
 	},
 	metaRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		flexWrap: "wrap",
 		gap: 8,
 		marginBottom: 8,
 	},
 	metaPill: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		gap: 6,
 		backgroundColor: "#F3F4F6",
@@ -244,10 +244,13 @@ const styles = StyleSheet.create({
 	metaText: {
 		...typography.caption,
 		color: "#111827",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 	locationRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: 4,
 		marginBottom: 6,
 	},
 });

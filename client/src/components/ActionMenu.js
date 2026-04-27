@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginBottom: 10,
   },
   title: {
@@ -117,7 +118,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     flex: 1,
   },
-  closeBtn: { padding: 6, marginLeft: 8 },
+  closeBtn: { padding: 6 },
 
   actionBtn: {
     paddingVertical: 14,
@@ -129,7 +130,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
+    gap: 8,
   },
   actionText: {
     fontSize: 16,

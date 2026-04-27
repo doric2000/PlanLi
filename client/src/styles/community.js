@@ -31,6 +31,7 @@ export const community = {
 	destinationSearchRow: {
 		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: spacing.sm,
 	},
 	destinationFilterBtn: {
 		width: 36,
@@ -42,12 +43,12 @@ export const community = {
 		borderWidth: 1,
 		borderColor: colors.borderLight || colors.border,
 		...shadows.small,
-		marginLeft: spacing.sm,
 	},
 	destinationSearchPill: {
 		flex: 1,
 		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: spacing.sm,
 		backgroundColor: colors.card,
 		borderWidth: 1,
 		borderColor: colors.borderLight || colors.border,
@@ -55,9 +56,6 @@ export const community = {
 		paddingHorizontal: spacing.md,
 		height: 36,
 		...shadows.small,
-	},
-	destinationSearchPillIcon: {
-		marginLeft: spacing.sm,
 	},
 	destinationSearchInput: {
 		flex: 1,
@@ -67,7 +65,6 @@ export const community = {
 		writingDirection: "rtl",
 	},
 	destinationClearBtn: {
-		marginRight: spacing.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},

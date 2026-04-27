@@ -54,13 +54,13 @@ const styles = StyleSheet.create({
   sideContainerRight: {
     width: 80, // Fixed width enforces symmetry
     height: 40,
-    alignItems: 'flex-start', // RTL Start
+    alignItems: 'flex-end',
     justifyContent: 'center',
   },
   sideContainerLeft: {
     width: 80, // Fixed width
     height: 40,
-    alignItems: 'flex-end', // RTL End
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   centerContainer: {

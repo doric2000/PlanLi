@@ -196,7 +196,6 @@ export default function CommunityScreen({ navigation }) {
               name="search"
               size={18}
               color={colors.textSecondary}
-              style={community.destinationSearchPillIcon}
             />
 
             <TextInput

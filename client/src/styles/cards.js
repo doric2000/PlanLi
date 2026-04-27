@@ -212,12 +212,14 @@ export const cards = {
 
 	// Recommendation card helpers
 	recHeaderActionsRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: 8,
 	},
 	recLocationPressableRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: 4,
 	},
 	recCarouselItem: {
 		height: "100%",
@@ -279,27 +281,32 @@ export const cards = {
 
 	// Recommendation card detailed styles
 	recHeader: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		justifyContent: "space-between",
 		padding: 12,
 	},
 
 	recAuthorInfo: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: 8,
 	},
 
 	recUsername: {
 		fontSize: 14,
 		fontWeight: "700",
 		color: "#1F2937",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recDate: {
 		fontSize: 11,
 		color: "#9CA3AF",
 		marginTop: 2,
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recImage: {
@@ -313,9 +320,10 @@ export const cards = {
 	},
 
 	recTitleRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		justifyContent: "space-between",
+		gap: 8,
 		marginBottom: 6,
 	},
 
@@ -324,8 +332,8 @@ export const cards = {
 		fontWeight: "700",
 		color: "#111827",
 		flex: 1,
-		marginRight: 8,
-		textAlign: "left",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recCategoryChip: {
@@ -339,10 +347,12 @@ export const cards = {
 		color: "#2563EB",
 		fontSize: 10,
 		fontWeight: "600",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recLocationRow: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		marginBottom: 8,
 	},
@@ -350,19 +360,21 @@ export const cards = {
 	recLocationText: {
 		fontSize: 13,
 		color: "#2EC4B6",
-		marginLeft: 4,
 		fontWeight: "500",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recDescription: {
 		fontSize: 14,
 		color: "#4B5563",
 		lineHeight: 20,
-		textAlign: "left",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recFooter: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		justifyContent: "space-between",
 		paddingHorizontal: 12,
@@ -372,13 +384,13 @@ export const cards = {
 	},
 
 	recActionGroup: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		gap: 12,
 	},
 
 	recActionButton: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		gap: 6,
 	},
@@ -387,12 +399,16 @@ export const cards = {
 		fontSize: 14,
 		color: "#4B5563",
 		fontWeight: "500",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recLikeCount: {
 		fontSize: 14,
 		color: "#4B5563",
 		fontWeight: "500",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	recLikeCountClickable: {

@@ -304,7 +304,6 @@ export default function RoutesScreen({ navigation }) {
 							name="search"
 							size={18}
 							color={colors.textSecondary}
-							style={localStyles.destinationSearchPillIcon}
 						/>
 
 						<TextInput
@@ -441,6 +440,7 @@ const localStyles = StyleSheet.create({
 	destinationSearchRow: {
 		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: spacing.sm,
 	},
 	destinationFilterBtn: {
 		width: 36,
@@ -452,12 +452,12 @@ const localStyles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: colors.borderLight || "#F3F4F6",
 		...shadows.small,
-		marginLeft: spacing.sm,
 	},
 	destinationSearchPill: {
 		flex: 1,
 		flexDirection: "row-reverse",
 		alignItems: "center",
+		gap: spacing.sm,
 		backgroundColor: "#FFFFFF",
 		borderWidth: 1,
 		borderColor: colors.borderLight || "#F3F4F6",
@@ -465,9 +465,6 @@ const localStyles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		height: 36,
 		...shadows.small,
-	},
-	destinationSearchPillIcon: {
-		marginLeft: spacing.sm,
 	},
 	destinationSearchInput: {
 		flex: 1,
@@ -477,7 +474,6 @@ const localStyles = StyleSheet.create({
 		writingDirection: "rtl",
 	},
 	destinationClearBtn: {
-		marginRight: spacing.sm,
 		alignItems: "center",
 		justifyContent: "center",
 	},

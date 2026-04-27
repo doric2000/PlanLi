@@ -116,7 +116,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
               console.log("DELETE CLICKED", item.id);
               Alert.alert("DEBUG", "לחצת על מחיקה");
             }}
-            title="Manage Recommendation"
+            title="ניהול המלצה"
           />
         ) : null}
       </View>
