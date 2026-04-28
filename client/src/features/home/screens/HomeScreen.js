@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-	ActivityIndicator,
-	Image,
-	RefreshControl,
-	ScrollView,
-	StatusBar,
-	StyleSheet,
-	Text,
-	TouchableOpacity,
-	View,
-} from "react-native";
+	ActivityIndicator, Image, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -21,7 +12,7 @@ import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
 import { getOrCreateDestination } from "../../../services/LocationService";
-import { colors } from "../../../styles";
+import { colors, homeScreenStyles as styles } from "../../../styles";
 
 const CATEGORY_CHIPS = [
 	{ id: "all", label: "הכל", icon: "compass-outline" },
@@ -276,7 +267,7 @@ export default function HomeScreen({ navigation }) {
 
 	const renderHeader = () => (
 		<LinearGradient
-			colors={["#4C72FF", "#3157E7", "#2446C7"]}
+			colors={colors.heroBlueGradient}
 			start={{ x: 0.15, y: 0 }}
 			end={{ x: 0.9, y: 1 }}
 			style={[styles.header, { paddingTop: insets.top + 4 }]}
@@ -405,13 +396,13 @@ export default function HomeScreen({ navigation }) {
 					<Text style={styles.sectionLink}>הצג הכל</Text>
 				</TouchableOpacity>
 				<View style={styles.sectionTitleGroup}>
-					<MaterialCommunityIcons name="fire" size={22} color="#F5961D" />
+					<MaterialCommunityIcons name="fire" size={22} color={colors.brandOrange} />
 					<Text style={styles.sectionTitle}>חם עכשיו</Text>
 				</View>
 			</View>
 			{featuredDestinations.length === 0 ? (
 				<View style={styles.loadingRow}>
-					{loading ? <ActivityIndicator color="#1B2D7A" /> : null}
+					{loading ? <ActivityIndicator color={colors.navActive} /> : null}
 					<Text style={styles.statusText}>
 						{loading ? "טוען יעדים..." : "אין יעדים להצגה"}
 					</Text>
@@ -440,7 +431,7 @@ export default function HomeScreen({ navigation }) {
 			<View style={styles.destinationGrid}>
 				{loading && destinations.length === 0 ? (
 					<View style={styles.fullWidthStatus}>
-						<ActivityIndicator color="#1B2D7A" />
+						<ActivityIndicator color={colors.navActive} />
 						<Text style={styles.statusText}>טוען יעדים...</Text>
 					</View>
 				) : filteredDestinations.length === 0 ? (
@@ -495,339 +486,3 @@ export default function HomeScreen({ navigation }) {
 		</SafeAreaView>
 	);
 }
-
-const styles = StyleSheet.create({
-	screen: {
-		flex: 1,
-		backgroundColor: "#3157E7",
-	},
-	scroll: {
-		flex: 1,
-		backgroundColor: "#F4F5F9",
-	},
-	scrollContent: {
-		backgroundColor: "#F4F5F9",
-	},
-	header: {
-		paddingHorizontal: 20,
-		paddingBottom: 18,
-		borderBottomLeftRadius: 30,
-		borderBottomRightRadius: 30,
-		overflow: "hidden",
-	},
-	headerCircleLarge: {
-		position: "absolute",
-		width: 210,
-		height: 210,
-		borderRadius: 105,
-		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.06)",
-		top: -58,
-		right: -44,
-	},
-	headerCircleSmall: {
-		position: "absolute",
-		width: 134,
-		height: 134,
-		borderRadius: 67,
-		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.08)",
-		top: 30,
-		right: 24,
-	},
-	headerTop: {
-		position: "relative",
-		zIndex: 2,
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "center",
-		marginBottom: 0,
-		minHeight: 40,
-	},
-	avatarButton: {
-		position: "absolute",
-		left: 0,
-		top: 0,
-		width: 42,
-		height: 42,
-		borderRadius: 21,
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: "#F5961D",
-		borderWidth: 2,
-		borderColor: "rgba(255,255,255,0.22)",
-	},
-	avatarImage: {
-		width: "100%",
-		height: "100%",
-		borderRadius: 21,
-	},
-	avatarInitial: {
-		color: "#FFFFFF",
-		fontSize: 16,
-		fontWeight: "800",
-	},
-	avatarBadge: {
-		position: "absolute",
-		bottom: 0,
-		right: 0,
-		width: 12,
-		height: 12,
-		borderRadius: 6,
-		backgroundColor: "#00D4AA",
-		borderWidth: 2,
-		borderColor: "#1B2D7A",
-	},
-	headlineWrap: {
-		position: "relative",
-		zIndex: 2,
-		alignItems: "flex-end",
-		marginTop: -4,
-		marginBottom: 12,
-	},
-	headline: {
-		color: "#FFFFFF",
-		fontSize: 34,
-		lineHeight: 34,
-		fontWeight: "800",
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	subtitle: {
-		marginTop: 8,
-		color: "rgba(255,255,255,0.62)",
-		fontSize: 14,
-		fontWeight: "500",
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	searchWrap: {
-		position: "relative",
-		zIndex: 20,
-	},
-	searchInputWrapper: {
-		height: 50,
-		borderRadius: 16,
-		backgroundColor: "rgba(255,255,255,0.12)",
-		borderWidth: 1.5,
-		borderColor: "rgba(255,255,255,0.18)",
-		paddingHorizontal: 0,
-	},
-	searchInput: {
-		color: "#FFFFFF",
-		fontSize: 15,
-		fontWeight: "500",
-		paddingLeft: 58,
-		paddingRight: 48,
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	searchIcon: {
-		top: 15,
-	},
-	searchLoader: {
-		left: 56,
-		top: 16,
-	},
-	filterButton: {
-		position: "absolute",
-		left: 8,
-		top: 8,
-		width: 34,
-		height: 34,
-		borderRadius: 10,
-		backgroundColor: "#F5961D",
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	searchDropdown: {
-		top: 58,
-		borderRadius: 16,
-		borderColor: "rgba(27,45,122,0.12)",
-	},
-	body: {
-		backgroundColor: "#F4F5F9",
-		paddingBottom: 8,
-	},
-	sectionFirst: {
-		paddingTop: 24,
-	},
-	categoryScroll: {
-		direction: "rtl",
-	},
-	categoryContent: {
-		flexDirection: "row",
-		direction: "rtl",
-		gap: 10,
-		paddingHorizontal: 20,
-		paddingBottom: 4,
-	},
-	categoryChip: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 7,
-		paddingHorizontal: 16,
-		paddingVertical: 9,
-		borderRadius: 40,
-		backgroundColor: "#FFFFFF",
-		borderWidth: 1.5,
-		borderColor: "#E8E9F0",
-	},
-	categoryChipActive: {
-		backgroundColor: "#1B2D7A",
-		borderColor: "#1B2D7A",
-	},
-	categoryText: {
-		fontSize: 13,
-		fontWeight: "700",
-		color: "#555A66",
-		writingDirection: "rtl",
-	},
-	categoryTextActive: {
-		color: "#FFFFFF",
-	},
-	section: {
-		paddingTop: 24,
-		paddingHorizontal: 20,
-	},
-	sectionHeader: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		marginBottom: 14,
-	},
-	sectionTitleGroup: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 6,
-	},
-	sectionTitle: {
-		fontSize: 18,
-		fontWeight: "800",
-		color: "#0F1729",
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	sectionLink: {
-		fontSize: 13,
-		color: "#1B2D7A",
-		fontWeight: "700",
-		textAlign: "left",
-		writingDirection: "rtl",
-	},
-	featuredContentScroll: {
-		flexDirection: "row-reverse",
-		gap: 14,
-		paddingRight: 0,
-		paddingLeft: 4,
-	},
-	featuredCard: {
-		width: 280,
-		height: 180,
-		borderRadius: 20,
-		overflow: "hidden",
-		position: "relative",
-		backgroundColor: "#1B2D7A",
-	},
-	featuredImage: {
-		width: "100%",
-		height: "100%",
-	},
-	featuredOverlay: {
-		position: "absolute",
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
-	},
-	featuredTravelers: {
-		position: "absolute",
-		top: 12,
-		right: 12,
-		backgroundColor: "rgba(255,255,255,0.18)",
-		borderRadius: 20,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 4,
-	},
-	featuredTravelersText: {
-		color: "#FFFFFF",
-		fontSize: 11,
-		fontWeight: "700",
-		writingDirection: "rtl",
-	},
-	featuredContent: {
-		position: "absolute",
-		left: 0,
-		right: 0,
-		bottom: 0,
-		paddingHorizontal: 16,
-		paddingBottom: 14,
-		alignItems: "flex-end",
-	},
-	featuredBadge: {
-		backgroundColor: "#F5961D",
-		paddingHorizontal: 9,
-		paddingVertical: 4,
-		borderRadius: 20,
-		marginBottom: 7,
-	},
-	featuredBadgeText: {
-		color: "#FFFFFF",
-		fontSize: 10,
-		fontWeight: "800",
-		writingDirection: "rtl",
-	},
-	featuredCity: {
-		color: "#FFFFFF",
-		fontSize: 21,
-		fontWeight: "800",
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	featuredCountry: {
-		marginTop: 3,
-		color: "rgba(255,255,255,0.74)",
-		fontSize: 12,
-		fontWeight: "600",
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	destinationGrid: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		justifyContent: "space-between",
-	},
-	loadingRow: {
-		minHeight: 80,
-		alignItems: "center",
-		justifyContent: "center",
-		flexDirection: "row-reverse",
-		gap: 8,
-	},
-	fullWidthStatus: {
-		width: "100%",
-		minHeight: 140,
-		alignItems: "center",
-		justifyContent: "center",
-		gap: 8,
-	},
-	statusText: {
-		color: "#6B7280",
-		fontSize: 14,
-		fontWeight: "600",
-		textAlign: "center",
-		writingDirection: "rtl",
-	},
-	emptyText: {
-		width: "100%",
-		color: "#6B7280",
-		fontSize: 16,
-		fontWeight: "700",
-		textAlign: "center",
-		paddingVertical: 36,
-		writingDirection: "rtl",
-	},
-});

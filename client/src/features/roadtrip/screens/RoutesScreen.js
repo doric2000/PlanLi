@@ -1,15 +1,6 @@
 import { useState, useCallback } from "react";
 import {
-  View,
-  Text,
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  Alert,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+  View, Text, ActivityIndicator, FlatList, RefreshControl, Alert, TextInput, TouchableOpacity } from "react-native";
 import FilterIconButton from '../../../components/FilterIconButton';
 import RoutesFilterModal from "../../../components/RoutesFilterModal";
 import { useFocusEffect } from "@react-navigation/native";
@@ -26,7 +17,7 @@ import { db, auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useRefresh } from "../../community/hooks/useRefresh";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { common, colors, spacing, shadows } from "../../../styles";
+import { common, colors, spacing, shadows, routesScreenStyles as localStyles } from "../../../styles";
 import FabButton from "../../../components/FabButton";
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
@@ -430,51 +421,3 @@ export default function RoutesScreen({ navigation }) {
 		</SafeAreaView>
 	);
 }
-
-const localStyles = StyleSheet.create({
-	destinationSearchWrap: {
-		paddingHorizontal: spacing.lg,
-		paddingTop: 0,
-		paddingBottom: spacing.xs,
-	},
-	destinationSearchRow: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: spacing.sm,
-	},
-	destinationFilterBtn: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		alignItems: "center",
-		justifyContent: "center",
-		backgroundColor: "#FFFFFF",
-		borderWidth: 1,
-		borderColor: colors.borderLight || "#F3F4F6",
-		...shadows.small,
-	},
-	destinationSearchPill: {
-		flex: 1,
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: spacing.sm,
-		backgroundColor: "#FFFFFF",
-		borderWidth: 1,
-		borderColor: colors.borderLight || "#F3F4F6",
-		borderRadius: 18,
-		paddingHorizontal: spacing.md,
-		height: 36,
-		...shadows.small,
-	},
-	destinationSearchInput: {
-		flex: 1,
-		color: colors.textPrimary,
-		fontSize: 14,
-		paddingVertical: 0,
-		writingDirection: "rtl",
-	},
-	destinationClearBtn: {
-		alignItems: "center",
-		justifyContent: "center",
-	},
-});

@@ -1,19 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
+import { Alert, ScrollView, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth, db } from "../../../config/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
-import { colors, common, cards, tags, buttons, spacing } from "../../../styles";
+import { colors, common, cards, tags, buttons, spacing, editProfileScreenStyles as styles } from "../../../styles";
 import { useBackButton } from "../../../hooks/useBackButton";
 import { toggleValue } from "./utils/toggleValue";
 import { FormInput } from "../../../components/FormInput";
@@ -27,19 +19,7 @@ import {
 } from "../../../constants/Constants";
 
 // Styles for header/pattern
-const styles = StyleSheet.create({
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: 40,
-  },
-  sectionLabel: {
-    textAlign: "right",
-    fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: colors.textPrimary,
-  },
-});
+
 
 function Chip({ label, selected, onPress }) {
   return (

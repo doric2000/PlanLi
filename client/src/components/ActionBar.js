@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLikes } from "../features/community/hooks/useLikes";
 import { useCommentsCount } from "../features/community/hooks/useCommentsCount";
-import { cards, colors } from "../styles";
+import { cards, colors, actionBarStyles as styles } from "../styles";
 import LikesModal from './LikesModal';
 import { useState } from 'react';
 
@@ -113,29 +113,3 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 };
 
 export default ActionBar;
-
-const styles = StyleSheet.create({
-	overlayFooter: {
-		backgroundColor: 'rgba(15,23,42,0.32)',
-		borderTopWidth: 0,
-		borderRadius: 24,
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		justifyContent: 'flex-start',
-		borderWidth: 1,
-		borderColor: 'rgba(255,255,255,0.14)',
-	},
-	overlayActionGroup: {
-		gap: 14,
-	},
-	overlayActionButton: {
-		gap: 5,
-	},
-	overlayText: {
-		color: '#FFFFFF',
-		fontWeight: '800',
-		textShadowColor: 'rgba(0,0,0,0.35)',
-		textShadowOffset: { width: 0, height: 1 },
-		textShadowRadius: 3,
-	},
-});

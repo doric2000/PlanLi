@@ -1,13 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  View,
-  Text,
-  TouchableOpacity,
-  StatusBar,
-  FlatList,
-  StyleSheet,
-} from 'react-native';
+import { ActivityIndicator, View, Text, TouchableOpacity, StatusBar, FlatList } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -25,16 +17,16 @@ import { RecommendationActionBar } from '../../../components/RecommendationActio
 // Existing Components
 import LikesModal from '../../../components/LikesModal';
 import { CommentsModal } from '../../../components/CommentsModal';
-import { colors, typography, common, tags as tagsStyle } from '../../../styles';
+import { colors, typography, common, tags as tagsStyle, recommendationDetailScreenStyles as styles } from '../../../styles';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
 
 /**
  * RecommendationDetailScreen - Full view of a recommendation
- * 
+ *
  * Shows all details of a recommendation by composing modular components.
  * It's responsible for fetching data and passing it down to the child components.
- * 
+ *
  * @param {Object} route - Route object containing recommendation data
  * @param {Object} navigation - Navigation object
  */
@@ -68,7 +60,7 @@ function RecommendationDetailLoaded({ item, navigation }) {
   const budgetTheme = getBudgetTheme(item?.budget);
 
   const insets = useSafeAreaInsets();
-  
+
   // --- Hooks ---
   const author = useUserData(item.userId);
   const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
@@ -79,7 +71,7 @@ function RecommendationDetailLoaded({ item, navigation }) {
   );
   const commentsCount = useCommentsCount('recommendations', item.id);
   const user = auth.currentUser;
-  
+
   // --- State ---
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
@@ -220,106 +212,3 @@ function RecommendationDetailLoaded({ item, navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  topPillsRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  categoryPill: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#DBEAFE',
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  categoryPillText: {
-    color: '#2563EB',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-
-  pricePill: {
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  pricePillText: {
-    fontWeight: '800',
-    fontSize: 12,
-    textAlign: 'right',
-  },
-
-  titleRtl: {
-    textAlign: 'right',
-    alignSelf: 'stretch',
-    writingDirection: 'rtl',
-  },
-
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E8EEF5',
-    padding: 14,
-    marginTop: 12,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionHeaderText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-    marginRight: 8,
-    textAlign: 'right',
-  },
-
-  bodyText: {
-    lineHeight: 24,
-    textAlign: 'right',
-  },
-
-  tagsWrap: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-  },
-  tagPill: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#DBEAFE',
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    marginLeft: 8,
-    marginBottom: 8,
-  },
-  tagPillText: {
-    color: '#2563EB',
-    fontWeight: '800',
-    fontSize: 12,
-    textAlign: 'right',
-  },
-
-  stickyActionBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E8EEF5',
-    paddingTop: 6,
-    paddingHorizontal: 20,
-  },
-  stickyActionBarInner: {
-    borderBottomWidth: 0,
-  },
-});

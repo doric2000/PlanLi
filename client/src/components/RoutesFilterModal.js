@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import FilterModal from "./FilterModal";
-import { common, spacing } from "../styles";
+import { common, spacing, routesFilterModalStyles as styles } from "../styles";
 
 // Single Source of Truth - Import all constants
-import * as Constants from "../constants/Constants"; 
+import * as Constants from "../constants/Constants";
 import ChipSelector from "../features/community/components/ChipSelector";
 import { FormInput } from "./FormInput";
 import MinMaxInputs from "./MinMaxInputs";
@@ -18,7 +18,7 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
   const [tempTravelStyle, setTempTravelStyle] = useState(''); // Single Select (String)
   const [tempRoadTripTags, setTempRoadTripTags] = useState([]); // Multi Select (Array)
   const [tempExperienceTags, setTempExperienceTags] = useState([]); // Multi Select (Array)
-  
+
   const [tempMinDays, setTempMinDays] = useState('');
   const [tempMaxDays, setTempMaxDays] = useState('');
   const [tempMinDistance, setTempMinDistance] = useState('');
@@ -31,29 +31,29 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
   // --- 3. Configuration Map ---
   // Connects Constant IDs to local state and data sources
   const DIMENSIONS_CONFIG = {
-    difficulty: { 
-      data: Constants.DIFFICULTY_TAGS, 
-      state: tempDifficulty, 
-      setter: setTempDifficulty, 
-      isMulti: false 
+    difficulty: {
+      data: Constants.DIFFICULTY_TAGS,
+      state: tempDifficulty,
+      setter: setTempDifficulty,
+      isMulti: false
     },
-    style: { 
-      data: Constants.TRAVEL_STYLE_TAGS, 
-      state: tempTravelStyle, 
-      setter: setTempTravelStyle, 
-      isMulti: false 
+    style: {
+      data: Constants.TRAVEL_STYLE_TAGS,
+      state: tempTravelStyle,
+      setter: setTempTravelStyle,
+      isMulti: false
     },
-    roadtrip: { 
-      data: Constants.ROAD_TRIP_TAGS, 
-      state: tempRoadTripTags, 
-      setter: setTempRoadTripTags, 
-      isMulti: true 
+    roadtrip: {
+      data: Constants.ROAD_TRIP_TAGS,
+      state: tempRoadTripTags,
+      setter: setTempRoadTripTags,
+      isMulti: true
     },
-    experience: { 
-      data: Constants.EXPERIENCE_TAGS, 
-      state: tempExperienceTags, 
-      setter: setTempExperienceTags, 
-      isMulti: true 
+    experience: {
+      data: Constants.EXPERIENCE_TAGS,
+      state: tempExperienceTags,
+      setter: setTempExperienceTags,
+      isMulti: true
     },
   };
 
@@ -76,13 +76,13 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
     const initialActive = [];
     Constants.ROUTE_PARENT_CATEGORIES.forEach(parent => {
       // Map parent IDs to the corresponding keys in the incoming filters object
-      const keyMap = { 
-        difficulty: current.difficulty, 
-        style: current.travelStyle, 
-        roadtrip: current.roadTripTags, 
-        experience: current.experienceTags 
+      const keyMap = {
+        difficulty: current.difficulty,
+        style: current.travelStyle,
+        roadtrip: current.roadTripTags,
+        experience: current.experienceTags
       };
-      
+
       const val = keyMap[parent.id];
       // If value exists (non-empty string or non-empty array), expand the category
       if (val && (Array.isArray(val) ? val.length > 0 : val !== '')) {
@@ -103,7 +103,7 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
     if (tempTravelStyle) output.travelStyle = tempTravelStyle;
     if (tempRoadTripTags.length > 0) output.roadTripTags = tempRoadTripTags;
     if (tempExperienceTags.length > 0) output.experienceTags = tempExperienceTags;
-    
+
     if (tempMinDays !== "") output.minDays = tempMinDays;
     if (tempMaxDays !== "") output.maxDays = tempMaxDays;
     if (tempMinDistance !== "") output.minDistance = tempMinDistance;
@@ -114,7 +114,7 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
 
   const toggleTag = (val, config) => {
     if (config.isMulti) {
-      config.setter(prev => 
+      config.setter(prev =>
         prev.includes(val) ? prev.filter(i => i !== val) : [...prev, val]
       );
     } else {
@@ -124,7 +124,7 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
   };
 
   const toggleDimension = (label) => {
-    setActiveDimensions(prev => 
+    setActiveDimensions(prev =>
       prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
     );
   };
@@ -138,7 +138,7 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
       onApply={handleApply}
     >
       {/* Scrollable content to prevent overflow when all categories are open */}
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -154,12 +154,12 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
         </View>
 
         {/* Parent Category Selector */}
-        <ChipSelector 
-          label="מה תרצו לסנן?" 
-          items={Constants.ROUTE_PARENT_CATEGORIES.map(d => d.label)} 
-          selectedValue={activeDimensions} 
-          onSelect={toggleDimension} 
-          multiSelect={true} 
+        <ChipSelector
+          label="מה תרצו לסנן?"
+          items={Constants.ROUTE_PARENT_CATEGORIES.map(d => d.label)}
+          selectedValue={activeDimensions}
+          onSelect={toggleDimension}
+          multiSelect={true}
         />
 
         {/* Dynamic Sub-Categories Sections */}
@@ -167,23 +167,23 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
           <View style={styles.dynamicSection}>
             {Constants.ROUTE_PARENT_CATEGORIES.map(parent => {
               if (!activeDimensions.includes(parent.label)) return null;
-              
+
               const config = DIMENSIONS_CONFIG[parent.id];
               if (!config) return null;
 
               // Ensure we only render strings, even if constants are objects
-              const displayItems = config.data.map(item => 
+              const displayItems = config.data.map(item =>
                 typeof item === 'object' ? item.label : item
               );
 
               return (
-                <ChipSelector 
+                <ChipSelector
                   key={parent.id}
-                  label={`בחר ${parent.label}`} 
-                  items={displayItems} 
-                  selectedValue={config.state} 
-                  onSelect={(val) => toggleTag(val, config)} 
-                  multiSelect={config.isMulti} 
+                  label={`בחר ${parent.label}`}
+                  items={displayItems}
+                  selectedValue={config.state}
+                  onSelect={(val) => toggleTag(val, config)}
+                  multiSelect={config.isMulti}
                 />
               );
             })}
@@ -207,20 +207,3 @@ export default function RoutesFilterModal({ visible, onClose, filters, onApply, 
     </FilterModal>
   );
 }
-
-const styles = StyleSheet.create({
-  section: {
-    marginBottom: spacing.md,
-  },
-  dynamicSection: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  rangeSection: {
-    marginTop: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  scrollContent: {
-    paddingBottom: spacing.md,
-  }
-});

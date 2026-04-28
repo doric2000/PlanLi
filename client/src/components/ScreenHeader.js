@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, common, spacing, typography } from '../styles';
+import { View, Text } from 'react-native';
+import { colors, common, spacing, typography, screenHeaderStyles as styles } from '../styles';
 
 /**
  * Reusable Header Component.
@@ -36,49 +36,6 @@ const ScreenHeader = ({ title, subtitle, renderRight, renderLeft, compact = fals
   );
 };
 
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row-reverse', // RTL Support
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background,
-    minHeight: 60,
-  },
-  headerRowCompact: {
-    paddingVertical: spacing.sm,
-    minHeight: 52,
-  },
-  sideContainerRight: {
-    width: 80, // Fixed width enforces symmetry
-    height: 40,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  sideContainerLeft: {
-    width: 80, // Fixed width
-    height: 40,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    ...common.screenHeaderTitle,
-    textAlign: 'center',
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    ...typography.caption,
-    textAlign: 'center',
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-});
+
 
 export default ScreenHeader;

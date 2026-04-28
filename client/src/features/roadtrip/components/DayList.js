@@ -1,4 +1,6 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
+import { dayListStyles as styles } from '../../../styles';
+
 
 /**
  * Component to list the days of a trip.
@@ -71,68 +73,3 @@ export default function DayList({ days, onEdit, onAdd, onDelete }) {
 		</View>
 	);
 }
-
-const styles = StyleSheet.create({
-	container: { marginBottom: 20 },
-	headerRow: {
-		flexDirection: "row-reverse",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: 12,
-	},
-	sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1f2937", textAlign: "right" },
-	addBtn: {
-		backgroundColor: "#E0F2FE",
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 16,
-	},
-	addBtnText: { color: "#0284C7", fontWeight: "600", fontSize: 12 },
-	dayCard: {
-		backgroundColor: "#fff",
-		borderRadius: 12,
-		padding: 12,
-		marginBottom: 10,
-		borderWidth: 1,
-		borderColor: "#E2E8F0",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.05,
-		shadowRadius: 2,
-		elevation: 2,
-	},
-	dayHeader: {
-		flexDirection: "row-reverse",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: 8,
-	},
-	dayTitle: { fontWeight: "700", color: "#0F172A", fontSize: 16, textAlign: "right" },
-
-	actionsContainer: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-	},
-	deleteBtn: {
-		padding: 4,
-		marginRight: 8,
-		backgroundColor: "#FEF2F2",
-		borderRadius: 4,
-	},
-	deleteIcon: {
-		fontSize: 14,
-		color: "#f57c7cff",
-	},
-	editHint: { color: "#94A3B8", fontSize: 14 },
-
-	contentRow: { flexDirection: "row" },
-	textContainer: { flex: 1, paddingLeft: 10 },
-	description: { color: "#64748B", fontSize: 14, textAlign: "right" },
-	thumbnail: {
-		width: 50,
-		height: 50,
-		borderRadius: 8,
-		backgroundColor: "#F1F5F9",
-	},
-	emptyText: { color: "#94A3B8", fontStyle: "italic", fontSize: 13, textAlign: "right" },
-});

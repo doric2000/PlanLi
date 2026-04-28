@@ -77,6 +77,16 @@ export const common = {
 		borderRadius: 20,
 	},
 
+	iconButtonOverlay: {
+		backgroundColor: "rgba(15,23,42,0.34)",
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.18)",
+	},
+
+	iconButtonDark: {
+		backgroundColor: "#F9FAFB",
+	},
+
 	// Hero section (detail screens)
 	heroContainer: {
 		height: 300,

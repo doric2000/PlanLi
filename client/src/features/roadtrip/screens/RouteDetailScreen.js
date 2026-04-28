@@ -1,17 +1,10 @@
 import React, { useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    Dimensions
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import PlacesRoute from '../components/PlacesRoute';
 import DayViewModal from '../components/DayViewModal';
-import { colors, common, tags as tagsStyle, typography, spacing } from '../../../styles';
+import { colors, common, tags as tagsStyle, typography, spacing, routeDetailScreenStyles as styles } from '../../../styles';
 import { Avatar } from '../../../components/Avatar';
 import { TimelineItem } from '../../../components/TimelineItem';
 import { useBackButton } from '../../../hooks/useBackButton';
@@ -72,7 +65,7 @@ export default function RouteDetailScreen({ route, navigation }) {
                         <Text style={typography.meta}>by {displayUser}</Text>
                     </View>
                     <Text style={{ ...typography.body, marginBottom: 16 }}>{routeData.desc}</Text>
-                    
+
                     <View style={styles.metaRow}>
                         <View style={styles.metaItem}>
                             <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} style={{ marginRight: 6 }} />
@@ -111,7 +104,7 @@ export default function RouteDetailScreen({ route, navigation }) {
                 {tripDays.length > 0 && (
                     <View style={styles.timelineSection}>
                         <Text style={{ ...typography.h3, marginBottom: 20 }}>Trip Itinerary</Text>
-                        
+
                         <View style={styles.timeline}>
                             {tripDays.map((day, index) => (
                                 <TimelineItem
@@ -142,61 +135,3 @@ export default function RouteDetailScreen({ route, navigation }) {
         </SafeAreaView>
     );
 }
-
-const styles = StyleSheet.create({
-    headerSection: {
-        backgroundColor: colors.white,
-        padding: spacing.screenHorizontal,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border
-    },
-    authorRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-        marginBottom: spacing.md
-    },
-    metaRow: {
-        flexDirection: 'row',
-        gap: spacing.lg,
-        marginBottom: spacing.lg
-    },
-    metaItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    placesSection: {
-        marginBottom: spacing.lg
-    },
-    subsectionTitle: {
-        ...typography.caption,
-        color: colors.textLight,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: spacing.sm
-    },
-    tagsSection: {
-        marginTop: spacing.sm
-    },
-    tagsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.sm
-    },
-    timelineSection: {
-        padding: spacing.screenHorizontal,
-        backgroundColor: colors.white,
-        marginTop: spacing.sm
-    },
-    timeline: {
-        paddingLeft: 10
-    },
-    emptyState: {
-        padding: spacing.xxxl,
-        alignItems: 'center'
-    },
-    emptyText: {
-        ...typography.bodySmall,
-        color: colors.textMuted,
-    }
-});

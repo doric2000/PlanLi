@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { tags, colors } from '../../../styles';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { tags, colors, chipSelectorStyles as styles } from '../../../styles';
 
 const ChipSelector = ({
   label,
@@ -72,20 +72,6 @@ const ChipSelector = ({
   );
 };
 
-const styles = StyleSheet.create({
-  inputWrapper: {
-    marginBottom: 20,
-  },
-  label: {
-    textAlign: "right",
-    marginBottom: 8,
-    fontWeight: 'bold',
-    fontSize: 14,
-    color: colors.textPrimary || '#333',
-  },
-  chipScroll: {
-    flexDirection: 'row-reverse',
-  }
-});
+
 
 export default ChipSelector;

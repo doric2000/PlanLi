@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from "react";
-import {
-    View,
-    Text,
-    ScrollView,
-    TouchableOpacity,
-    Alert,
-    ActivityIndicator,
-    StyleSheet,
-} from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import {
     colors,
     common,
     buttons,
-    spacing,
-} from "../../../styles";
+    spacing, addRoutesScreenStyles as styles } from "../../../styles";
 import {
     collection,
     addDoc,
@@ -59,13 +50,13 @@ export default function AddRoutesScreen({ navigation, route }) {
     const [distance, setDistance] = useState("");
     const [desc, setDesc] = useState("");
     const [tripDays, setTripDays] = useState([]);
-    
+
     // Tag States (Single vs Multi)
     const [difficultyTag, setDifficultyTag] = useState(""); // String
     const [travelStyleTag, setTravelStyleTag] = useState(""); // String
     const [roadTripTags, setRoadTripTags] = useState([]); // Array
     const [experienceTags, setExperienceTags] = useState([]); // Array
-    
+
     const [tags, setTags] = useState([]); // Combined array for Firestore
     const [submitting, setSubmitting] = useState(false);
     const [isDayModalVisible, setDayModalVisible] = useState(false);
@@ -78,7 +69,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     const getLabel = (item) => (typeof item === 'object' ? item.label : item);
 
     // --- Effects ---
-    
+
     // Load existing data if in Edit Mode
     useEffect(() => {
         if (routeToEdit) {
@@ -333,24 +324,3 @@ export default function AddRoutesScreen({ navigation, route }) {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        backgroundColor: colors.white || '#FFFFFF',
-    },
-    scrollContent: { padding: spacing.lg, paddingBottom: 40 },
-    screenTitle: {
-        fontSize: 20,
-        fontWeight: '800',
-        textAlign: 'right',
-        marginBottom: spacing.lg,
-        color: colors.textPrimary || '#111827',
-    },
-    fieldLabel: {
-        textAlign: 'right',
-        fontSize: 14,
-        fontWeight: 'bold',
-        marginBottom: 8,
-        color: colors.textPrimary || '#111827',
-    },
-});

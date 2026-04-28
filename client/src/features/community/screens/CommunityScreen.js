@@ -1,16 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput,
-  Alert,
-  ActivityIndicator, 
-  FlatList, 
-  RefreshControl, 
-  TouchableOpacity,
-  StyleSheet,
-  StatusBar,
-} from 'react-native';
+import { View, Text, TextInput, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,7 +19,7 @@ import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter'
 import { useUserLocation } from '../../../hooks/useUserLocation';
 
 // --- Global Styles ---
-import { colors, common, community } from '../../../styles';
+import { colors, common, community, communityScreenStyles as styles } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
@@ -67,7 +56,7 @@ export default function CommunityScreen({ navigation }) {
     }
   };
   const handleOpenComments = (postId) => { setSelectedPostId(postId); setCommentsModalVisible(true); };
-  
+
   // FIXED: Added the logic to handle 'tag' removal
   const handleRemoveFilter = (type, value) => {
     if (type === 'destination') {
@@ -147,7 +136,7 @@ export default function CommunityScreen({ navigation }) {
 
   const renderTopArea = () => (
     <LinearGradient
-      colors={["#4C72FF", "#3157E7", "#2446C7"]}
+      colors={colors.heroBlueGradient}
       start={{ x: 0.15, y: 0 }}
       end={{ x: 0.9, y: 1 }}
       style={[styles.header, { paddingTop: insets.top + 6 }]}
@@ -166,8 +155,7 @@ export default function CommunityScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>×§×”×™×œ×”</Text>
-          <Text style={styles.headerSubtitle}>×’×œ×• ×”×ž×œ×¦×•×ª ×—×“×©×•×ª</Text>
+          <Text style={styles.headerTitle}>קהילה</Text>
         </View>
 
         <TouchableOpacity
@@ -247,9 +235,9 @@ export default function CommunityScreen({ navigation }) {
             data={displayData}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <RecommendationCard 
-                  item={item} 
-                  onCommentPress={handleOpenComments} 
+              <RecommendationCard
+                  item={item}
+                  onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
                   variant="feed"
               />
@@ -289,160 +277,30 @@ export default function CommunityScreen({ navigation }) {
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
         filters={filters}
-        onApply={(next) => { 
-          updateFilters(next); 
-          setFilterModalVisible(false); 
+        onApply={(next) => {
+          updateFilters(next);
+          setFilterModalVisible(false);
         }}
-        onClear={() => { 
-          clearFilters(); 
-          setFilterModalVisible(false); 
+        onClear={() => {
+          clearFilters();
+          setFilterModalVisible(false);
         }}
       />
-      
-      <CommentsModal 
-        visible={commentsModalVisible} 
-        onClose={() => setCommentsModalVisible(false)} 
-        postId={selectedPostId} 
+
+      <CommentsModal
+        visible={commentsModalVisible}
+        onClose={() => setCommentsModalVisible(false)}
+        postId={selectedPostId}
       />
 
       {/* Sort Menu Modal */}
-      <SortMenuModal 
-        visible={sortMenuVisible} 
-        onClose={() => setSortMenuVisible(false)} 
-        sortBy={sortBy} 
-        onSelect={handleSortSelect} 
+      <SortMenuModal
+        visible={sortMenuVisible}
+        onClose={() => setSortMenuVisible(false)}
+        sortBy={sortBy}
+        onSelect={handleSortSelect}
       />
 
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#F4F5F9',
-  },
-  header: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-  },
-  headerCircleLarge: {
-    position: 'absolute',
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    top: -58,
-    right: -44,
-  },
-  headerCircleSmall: {
-    position: 'absolute',
-    width: 134,
-    height: 134,
-    borderRadius: 67,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    top: 30,
-    right: 24,
-  },
-  topActionsRow: {
-    position: 'relative',
-    zIndex: 2,
-    minHeight: 56,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: '900',
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  headerSubtitle: {
-    marginTop: 2,
-    color: 'rgba(255,255,255,0.66)',
-    fontSize: 13,
-    fontWeight: '700',
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  glassIconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  glassIconButtonActive: {
-    backgroundColor: 'rgba(245,150,29,0.88)',
-    borderColor: 'rgba(255,255,255,0.32)',
-  },
-  sortGlassButton: {
-    minWidth: 72,
-    height: 42,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  sortGlassText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-    writingDirection: 'rtl',
-  },
-  searchRow: {
-    position: 'relative',
-    zIndex: 3,
-    marginTop: 12,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 10,
-  },
-  searchPill: {
-    flex: 1,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 14,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 9,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    paddingVertical: 0,
-    writingDirection: 'rtl',
-  },
-  feedContent: {
-    paddingTop: 0,
-    paddingHorizontal: 0,
-    backgroundColor: '#F4F5F9',
-  },
-});

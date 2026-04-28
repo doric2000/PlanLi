@@ -7,6 +7,7 @@ export const colors = {
 	// Secondary colors
 	secondary: "#FF9F1C",
 	secondaryLight: "#FEF3C7",
+	brandOrange: "#F5961D",
 
 	// Accent colors
 	accent: "#1E3A5F",
@@ -40,6 +41,10 @@ export const colors = {
 
 	// Header
 	headerBg: "#1E3A5F",
+	heroBlueGradient: ["#4C72FF", "#3157E7", "#2446C7"],
+	navActive: "#1B2D7A",
+	navInactive: "#4B5563",
+	appSurface: "#F4F5F9",
 
 	// Shadows
 	shadow: "#000000",

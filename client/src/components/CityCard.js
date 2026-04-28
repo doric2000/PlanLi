@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { cards } from '../styles';
+import { cards, cityCardStyles as styles } from '../styles';
 
 const DEFAULT_CITY_IMAGE_URL = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
 
@@ -111,97 +111,3 @@ export default function CityCard({
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  homeCard: {
-    width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    marginBottom: 14,
-    overflow: 'hidden',
-    shadowColor: '#0F1729',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  homeImageContainer: {
-    width: '100%',
-    height: 120,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  homeImage: {
-    width: '100%',
-    height: '100%',
-  },
-  homeImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-  },
-  homeImageOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '45%',
-    backgroundColor: 'rgba(10,20,60,0.18)',
-  },
-  saveButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(15,23,41,0.28)',
-  },
-  saveButtonActive: {
-    backgroundColor: 'rgba(245,150,29,0.88)',
-  },
-  homeInfo: {
-    paddingHorizontal: 12,
-    paddingTop: 11,
-    paddingBottom: 12,
-  },
-  homeCity: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F1729',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  homeCountry: {
-    fontSize: 12,
-    color: '#8A90A8',
-    marginTop: 2,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  homeMetaRow: {
-    minHeight: 18,
-    marginTop: 9,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  homeMetaItem: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 3,
-  },
-  homeTravelerText: {
-    fontSize: 11,
-    color: '#1B2D7A',
-    fontWeight: '700',
-    writingDirection: 'rtl',
-  },
-  homeRatingText: {
-    fontSize: 11,
-    color: '#F5961D',
-    fontWeight: '700',
-  },
-});

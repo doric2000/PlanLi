@@ -1,20 +1,14 @@
 import React, { useState } from "react";
 import { useUserData } from "../../../hooks/useUserData";
 import {
-	View,
-	Text,
-	ScrollView,
-	StyleSheet,
-	Image,
-	Pressable,
-} from "react-native";
+	View, Text, ScrollView, Image, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "../../../components/Avatar";
 import PlacesRoute from "./PlacesRoute";
 import { ActionMenu } from "../../../components/ActionMenu";
 import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
-import { cards, typography, tags as tagsStyle, colors } from "../../../styles";
+import { cards, typography, tags as tagsStyle, colors, routeCardStyles as styles } from "../../../styles";
 import { auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useAdminClaim } from "../../../hooks/useAdminClaim";
@@ -218,39 +212,3 @@ export const RouteCard = ({
 		</Pressable>
 	);
 };
-
-const styles = StyleSheet.create({
-	headerActions: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 8,
-	},
-	metaRow: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		flexWrap: "wrap",
-		gap: 8,
-		marginBottom: 8,
-	},
-	metaPill: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 6,
-		backgroundColor: "#F3F4F6",
-		borderRadius: 12,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-	},
-	metaText: {
-		...typography.caption,
-		color: "#111827",
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-	locationRow: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 4,
-		marginBottom: 6,
-	},
-});

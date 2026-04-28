@@ -1,14 +1,7 @@
 import React, { useState } from "react";
-import {
-  Modal,
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  Platform,
-} from "react-native";
+import { Modal, View, Text, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../styles";
+import { colors, actionMenuStyles as styles } from "../styles";
 
 export const ActionMenu = ({
   onEdit,
@@ -85,69 +78,3 @@ export const ActionMenu = ({
     </>
   );
 };
-
-const styles = StyleSheet.create({
-  menuBtn: {
-    padding: 6,
-    borderRadius: 999,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: "white",
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 14,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  header: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    textAlign: "right",
-    flex: 1,
-  },
-  closeBtn: { padding: 6 },
-
-  actionBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: "#F3F4F6",
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 8,
-  },
-  actionText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    textAlign: "right",
-  },
-
-  destructiveBtn: { backgroundColor: "#FEF2F2" },
-  destructiveText: { color: "#EF4444" },
-
-  cancelBtn: { backgroundColor: "#E5E7EB", marginBottom: 0 },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#374151",
-    textAlign: "center",
-  },
-});

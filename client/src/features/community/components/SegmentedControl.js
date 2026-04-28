@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 // Importing global colors to maintain consistency
-import { colors } from '../../../styles'; 
+import { colors, segmentedControlStyles as styles } from '../../../styles';
 
 /**
  * A reusable component for selecting one value from a list of options.
@@ -11,10 +11,10 @@ import { colors } from '../../../styles';
  * @param {string} selectedValue - The currently selected value
  * @param {Function} onSelect - Callback function when an item is selected
  */
-const SegmentedControl = ({ 
-  label, 
-  items, 
-  selectedValue, 
+const SegmentedControl = ({
+  label,
+  items,
+  selectedValue,
   onSelect,
   getItemTheme,
   testIDPrefix,
@@ -23,7 +23,7 @@ const SegmentedControl = ({
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      
+
       <View style={styles.row}>
         {items.map((item, index) => {
           const isSelected = selectedValue === item;
@@ -49,7 +49,7 @@ const SegmentedControl = ({
             <TouchableOpacity
               key={item}
               style={[
-                styles.button, 
+                styles.button,
                 isSelected && styles.buttonSelected,
                 selectedButtonStyle,
               ]}
@@ -57,7 +57,7 @@ const SegmentedControl = ({
               testID={resolvedTestId}
             >
               <Text style={[
-                styles.text, 
+                styles.text,
                 isSelected && styles.textSelected,
                 selectedTextStyle,
               ]}>
@@ -71,42 +71,6 @@ const SegmentedControl = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 20,
-  },
-  label: {
-    textAlign: "right",
-    marginBottom: 8,
-    fontWeight: 'bold',
-    fontSize: 14,
-    color: '#333', 
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  button: {
-    flex: 1, // Distribute width equally
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.borderLight || '#f0f0f0', 
-    borderRadius: 8,
-    marginHorizontal: 4, // Spacing between buttons
-  },
-  buttonSelected: {
-    backgroundColor: colors.primary || '#2EC4B6', // Active color
-  },
-  text: {
-    color: colors.textSecondary || '#666',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  textSelected: {
-    color: '#fff',
-    fontWeight: 'bold',
-  }
-});
+
 
 export default SegmentedControl;

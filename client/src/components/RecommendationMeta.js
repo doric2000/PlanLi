@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { common, typography, colors } from '../styles';
+import { common, typography, colors, recommendationMetaStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
 
 export const RecommendationMeta = ({ item, navigation }) => {
@@ -82,53 +82,3 @@ export const RecommendationMeta = ({ item, navigation }) => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  wrap: {
-    marginBottom: 4,
-  },
-  rowButton: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8EEF5',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 10,
-  },
-  mapsButton: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(46,196,182,0.30)',
-    backgroundColor: 'rgba(46,196,182,0.10)',
-  },
-  icon: {
-    marginLeft: 8,
-  },
-  rowText: {
-    color: colors.textSecondary,
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  mapsText: {
-    color: colors.textPrimary,
-    fontWeight: '800',
-    textAlign: 'right',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E8EEF5',
-    marginVertical: 12,
-  },
-  badgesRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-});

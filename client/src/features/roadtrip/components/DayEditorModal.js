@@ -1,18 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Modal, 
-    View, 
-    Text, 
-    TouchableOpacity, 
-    StyleSheet, 
-    SafeAreaView,
-    Alert
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import { Ionicons } from '@expo/vector-icons';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { spacing } from '../../../styles';
+import { spacing, dayEditorModalStyles as styles } from '../../../styles';
 
 /**
  * Modal for editing day details in a trip.
@@ -28,7 +20,7 @@ import { spacing } from '../../../styles';
 export default function DayEditorModal({ visible, onClose, onSave, initialData, dayIndex }) {
     const [description, setDescription] = useState('');
     // Image picker with upload hook (SOLID-based composition)
-    const { imageUri: image, setImageUri: setImage, pickImageAndUpload, clearImage, uploading } = useImagePickerWithUpload({ 
+    const { imageUri: image, setImageUri: setImage, pickImageAndUpload, clearImage, uploading } = useImagePickerWithUpload({
         storagePath: 'trips',
     });
 
@@ -87,7 +79,7 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
                         style={{ marginBottom: spacing.xl }}
                         loading={uploading}
                     />
-                    
+
                     {image && (
                         <TouchableOpacity onPress={clearImage} style={styles.removeBtn}>
                             <Text style={styles.removeText}>הסר תמונה</Text>
@@ -98,21 +90,3 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
         </Modal>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#fff' },
-    header: {
-        flexDirection: 'row-reverse',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-    },
-    headerTitle: { fontSize: 18, fontWeight: '700', textAlign: 'right' },
-    headerBtn: { fontSize: 16, color: '#007AFF' },
-    content: { padding: 20 },
-    photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155', textAlign: 'right' },
-    removeBtn: { marginTop: 10, alignItems: 'center' },
-    removeText: { color: '#EF4444' }
-});

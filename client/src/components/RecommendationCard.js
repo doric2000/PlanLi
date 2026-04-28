@@ -1,12 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUserData } from '../hooks/useUserData';
 import { Avatar } from './Avatar';
 import { ActionMenu } from './ActionMenu';
-import { cards } from '../styles';
+import { cards, recommendationCardStyles as styles } from '../styles';
 import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import { db } from '../config/firebase';
@@ -42,7 +42,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     const first = viewableItems?.[0]?.index;
     if (typeof first === 'number') setActiveImageIndex(first);
   }).current;
-  
+
   // Use custom hooks
   const author = useUserData(item.userId);
   // Check if current user is the owner
@@ -226,11 +226,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           </View>
         </TouchableOpacity>
         <View style={cards.recHeaderActionsRow}>
-          <FavoriteButton 
-            type="recommendations" 
-            id={item.id} 
-            variant="light" 
-            snapshotData={snapshotData} 
+          <FavoriteButton
+            type="recommendations"
+            id={item.id}
+            variant="light"
+            snapshotData={snapshotData}
           />
           {canManage ? (
             <ActionMenu
@@ -426,116 +426,3 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 };
 
 export default RecommendationCard;
-
-const styles = StyleSheet.create({
-  feedCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 18,
-    overflow: 'hidden',
-  },
-  feedCarouselContainer: {
-    aspectRatio: 0.78,
-    borderRadius: 0,
-    overflow: 'hidden',
-  },
-  feedImagePlaceholder: {
-    flex: 1,
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedTopGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 150,
-    zIndex: 3,
-  },
-  feedBottomGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 160,
-    zIndex: 3,
-  },
-  feedHeaderOverlay: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    zIndex: 6,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  feedAuthorInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  feedAvatarRing: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.78)',
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  feedAuthorTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  feedUsername: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  feedMetaText: {
-    color: 'rgba(255,255,255,0.86)',
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'right',
-    writingDirection: 'rtl',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  feedHeaderActions: {
-    backgroundColor: 'rgba(15,23,42,0.22)',
-    borderRadius: 22,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  feedDotsContainer: {
-    bottom: 72,
-    zIndex: 6,
-  },
-  feedActionOverlay: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 16,
-    zIndex: 7,
-  },
-  feedContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  feedTitle: {
-    fontSize: 17,
-  },
-  feedDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-});

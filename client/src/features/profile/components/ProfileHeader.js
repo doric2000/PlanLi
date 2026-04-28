@@ -1,34 +1,12 @@
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  Platform,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors, common, typography, buttons } from '../../../styles';
+import { colors, common, typography, buttons, profileHeaderStyles as styles } from '../../../styles';
 import ProfileBadge from './ProfileBadge';
 import { TRAVEL_STYLES, TRIP_TYPES } from '../constants/smartProfileOptions';
 
-const styles = StyleSheet.create({
-  badgeRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  smartProfileCta: {
-    marginTop: 10,
-  },
-  smartProfileCtaText: {
-    color: colors.accent,
-    fontWeight: '600',
-  },
-});
+
 
 const labelFromOptions = (options, value) =>
   options?.find((o) => o.value === value)?.label || value;

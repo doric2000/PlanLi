@@ -3,15 +3,7 @@
  * Now composed from smaller hooks/components to keep it maintainable.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-} from 'react-native';
+import { View, FlatList, ActivityIndicator, Alert, TouchableOpacity, Text } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +12,7 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from '../../../config/firebase';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { useAuthUser } from '../../../hooks/useAuthUser';
-import { colors, common } from '../../../styles';
+import { colors, common, createProfileScreenStyles } from '../../../styles';
 
 import ProfileHeader from '../components/ProfileHeader';
 import ProfileStatsCard from '../components/ProfileStatsCard';
@@ -114,32 +106,7 @@ function AuthedProfileScreen({ navigation, route }) {
 
   const insets = useSafeAreaInsets();
 
-  const styles = StyleSheet.create({
-    menuButton: {
-      position: 'absolute',
-      top: insets.top + 8,
-      right: 12,
-      zIndex: 999,
-      elevation: 10,
-      padding: 10,
-      borderRadius: 999,
-      backgroundColor: 'rgba(255,255,255,0.95)',
-    },
-    tabRow: {
-      flexDirection: 'row',
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(0,0,0,0.08)',
-    },
-    tabBtn: {
-      flex: 1,
-      paddingVertical: 12,
-      alignItems: 'center',
-      borderBottomWidth: 2,
-    },
-    tabText: {
-      fontWeight: '700',
-    },
-  });
+  const profileScreenStyles = createProfileScreenStyles(insets);
 
   const loadMyContent = useCallback(async (isSilent = false) => {
     if (!profileUid) return;
@@ -276,7 +243,7 @@ function AuthedProfileScreen({ navigation, route }) {
   return (
     <SafeAreaView style={common.container}>
       <TouchableOpacity
-        style={styles.menuButton}
+        style={profileScreenStyles.menuButton}
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         activeOpacity={0.85}
       >
