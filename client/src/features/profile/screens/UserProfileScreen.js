@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, StyleSheet, Image, Platform } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, Image, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 
 import { auth, db } from '../../../config/firebase';
-import { common, colors } from '../../../styles';
+import { common, colors, userProfileScreenStyles as styles } from '../../../styles';
 
 import BackButton from '../../../components/BackButton';
 import { RouteCard } from '../../roadtrip/components/RouteCard';
@@ -249,7 +249,7 @@ export default function UserProfileScreen({ route, navigation }) {
                   { opacity: contentTab === 'recommendations' ? 1 : 0.5 },
                 ]}
               >
-                המלצות 
+                המלצות
               </Text>
             </TouchableOpacity>
 
@@ -269,7 +269,7 @@ export default function UserProfileScreen({ route, navigation }) {
                   { opacity: contentTab === 'routes' ? 1 : 0.5 },
                 ]}
               >
-                טיולים 
+                טיולים
               </Text>
             </TouchableOpacity>
           </View>
@@ -340,78 +340,3 @@ export default function UserProfileScreen({ route, navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 6,
-  },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#111827",
-  },
-  tabRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-  },
-  tabText: {
-    fontWeight: '700',
-  },
-  emptyHint: {
-    opacity: 0.6,
-    writingDirection: 'rtl',
-    textAlign: 'right',
-  },
-
-  columnWrapper: {
-    justifyContent: 'space-between',
-  },
-  gridItem: {
-    marginTop: 12,
-    flexBasis: '50%',
-    maxWidth: '50%',
-    paddingHorizontal: 6,
-  },
-  tile: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  tileImageWrap: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  tileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  tileImagePlaceholder: {
-    flex: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  tileTitle: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#111827',
-    writingDirection: 'rtl',
-    textAlign: 'right',
-    minHeight: 40,
-  },
-});

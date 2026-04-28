@@ -1,6 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { placesRouteStyles as styles } from '../../../styles';
+
 
 /**
  * Component to display a visual route of places connected by arrows.
@@ -30,7 +32,7 @@ export default function PlacesRoute({ places, style }) {
 						</View>
 						{index < placesArray.length - 1 && (
 							<Ionicons
-								name='arrow-forward'
+								name='arrow-back'
 								size={14}
 								color='#64748B'
 								style={styles.arrow}
@@ -42,34 +44,3 @@ export default function PlacesRoute({ places, style }) {
 		</View>
 	);
 }
-
-const styles = StyleSheet.create({
-	container: {
-		flexDirection: "row",
-		flexWrap: "wrap",
-		alignItems: "center",
-		marginVertical: 8,
-	},
-	routeItem: {
-		flexDirection: "row",
-		alignItems: "center",
-		marginRight: 4,
-	},
-	placeBox: {
-		backgroundColor: "#E0F2FE", // Light blue background
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 8,
-		borderWidth: 1,
-		borderColor: "#BAE6FD", // Border color
-	},
-	placeText: {
-		fontSize: 13,
-		color: "#4d4d4dff",
-		fontWeight: "500",
-		maxWidth: 100,
-	},
-	arrow: {
-		marginHorizontal: 4,
-	},
-});

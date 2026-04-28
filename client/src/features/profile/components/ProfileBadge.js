@@ -1,22 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 
-import { colors } from '../../../styles';
+import { colors, profileBadgeStyles as styles } from '../../../styles';
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  text: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-});
+
 
 export default function ProfileBadge({ text, variant = 'default' }) {
   const isVerified = variant === 'verified';

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ActivityIndicator, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useBackButton } from '../../../hooks/useBackButton';
-import { buttons, colors, common, typography } from '../../../styles';
+import { buttons, colors, common, typography, adminPanelScreenStyles as styles } from '../../../styles';
 
 export default function AdminPanelScreen({ navigation }) {
   const { isGuest, loading: authLoading } = useAuthUser();
@@ -111,7 +111,7 @@ export default function AdminPanelScreen({ navigation }) {
   if (!isAdmin) {
     return (
       <SafeAreaView style={common.container}>
-        <View style={[common.containerCentered, { padding: 16 }]}> 
+        <View style={[common.containerCentered, { padding: 16 }]}>
           <Text style={[typography.sectionTitle, { textAlign: 'right' }]}>אין הרשאה</Text>
           <Text style={[typography.meta, { textAlign: 'right', marginTop: 8 }]}>רק אדמין יכול לגשת לפאנל הזה.</Text>
         </View>
@@ -203,52 +203,3 @@ export default function AdminPanelScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-  headerTitleText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.primary,
-    textAlign: 'right',
-  },
-  input: {
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    writingDirection: 'rtl',
-  },
-  row: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-  },
-  statusWrap: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 10,
-  },
-  statusText: {
-    flex: 1,
-    textAlign: 'right',
-    color: colors.textSecondary,
-    lineHeight: 18,
-  },
-  statusError: {
-    color: colors.error,
-  },
-  statusSuccess: {
-    color: colors.success,
-  },
-});

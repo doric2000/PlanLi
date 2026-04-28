@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import FilterModal from './FilterModal';
-import { common, spacing } from '../styles';
-import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { common, spacing, recommendationsFilterModalStyles as styles } from '../styles';
+import { View, Text, ScrollView, Dimensions } from 'react-native';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -31,14 +31,14 @@ export default function RecommendationsFilterModal({
   // --- 2. Sync state when modal opens ---
   useEffect(() => {
     if (!visible) return;
-    
+
     setTempDestination(current.destination || '');
-    
+
     // Map Hebrew labels back to IDs for internal modal logic
-    const initialCategoryIds = (current.categories || []).map(label => 
+    const initialCategoryIds = (current.categories || []).map(label =>
       PARENT_CATEGORIES.find(c => c.label === label)?.id
     ).filter(Boolean);
-    
+
     setTempCategories(initialCategoryIds);
     setTempTags(Array.isArray(current.tags) ? current.tags : []);
     setTempBudgets(Array.isArray(current.budgets) ? current.budgets : []);
@@ -59,13 +59,13 @@ export default function RecommendationsFilterModal({
   };
 
   const toggleTag = (tag) => {
-    setTempTags((prev) => 
+    setTempTags((prev) =>
       prev.includes(tag) ? prev.filter((i) => i !== tag) : [...prev, tag]
     );
   };
 
   const toggleBudget = (item) => {
-    setTempBudgets((prev) => 
+    setTempBudgets((prev) =>
       prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
     );
   };
@@ -73,7 +73,7 @@ export default function RecommendationsFilterModal({
   // --- 4. Final Apply Logic ---
   const handleApply = () => {
     // Map internal category IDs back to Hebrew Labels for the main screen bar
-    const categoryLabels = tempCategories.map(id => 
+    const categoryLabels = tempCategories.map(id =>
       PARENT_CATEGORIES.find(c => c.id === id)?.label
     ).filter(Boolean);
 
@@ -99,9 +99,9 @@ export default function RecommendationsFilterModal({
       onApply={handleApply}
     >
       {/* 5. ScrollView wrapper: Allows content to grow and ensures scrollability */}
-    <ScrollView 
-      style={styles.scrollWrapper} 
-      showsVerticalScrollIndicator={false} 
+    <ScrollView
+      style={styles.scrollWrapper}
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.scrollContent}
       bounces={true}
       >
@@ -119,8 +119,8 @@ export default function RecommendationsFilterModal({
         {/* Parent Category Selection */}
         <ChipSelector
           label="קטגוריה"
-          items={PARENT_CATEGORIES.map(c => c.label)} 
-          selectedValue={tempCategories.map(id => PARENT_CATEGORIES.find(c => c.id === id)?.label)} 
+          items={PARENT_CATEGORIES.map(c => c.label)}
+          selectedValue={tempCategories.map(id => PARENT_CATEGORIES.find(c => c.id === id)?.label)}
           onSelect={(label) => {
             const id = PARENT_CATEGORIES.find(c => c.label === label)?.id;
             toggleCategory(id);
@@ -162,26 +162,3 @@ export default function RecommendationsFilterModal({
     </FilterModal>
   );
 }
-
-const styles = StyleSheet.create({
-  section: {
-    marginBottom: spacing.md,
-  },
-  dynamicSection: {
-    marginTop: spacing.xs,
-  },
-  lastSection: {
-    marginBottom: spacing.lg,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl, // Extra padding ensures bottom content is not hidden
-  },
-scrollWrapper: {
-    // מגביל את אזור הבחירה ל-60% מגובה המסך כדי להשאיר מקום לכותרת ולכפתורים
-    maxHeight: SCREEN_HEIGHT * 0.6, 
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl,
-    flexGrow: 1, // מבטיח שהתוכן יתפרס נכון אם הוא קטן מהגובה המקסימלי
-  }
-});

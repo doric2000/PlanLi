@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { settingsScreenStyles as styles } from '../../../styles';
+
 
 export default function SettingsScreen({ navigation }) {
   return (
@@ -40,42 +42,3 @@ export default function SettingsScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-
-  header: {
-    height: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  rightSpacer: {
-    width: 44, // אותו רוחב כמו backBtn כדי לשמור סימטריה
-    height: 44,
-  },
-
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
-
-  primaryBtn: {
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#22375B',
-  },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-});

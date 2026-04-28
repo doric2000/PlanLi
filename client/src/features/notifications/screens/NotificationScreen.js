@@ -1,8 +1,8 @@
 /**
  * NotificationScreen.js
- * 
+ *
  * Main notification screen displaying all user notifications.
- * 
+ *
  * Features:
  * - FlatList with notification cards
  * - Pull-to-refresh functionality
@@ -13,16 +13,7 @@
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  RefreshControl,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -38,7 +29,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useClearNotifications } from '../hooks/useClearNotifications';
 
 // Styles
-import { notifications as notificationStyles } from '../../../styles';
+import { notifications as notificationStyles, notificationScreenStyles as styles } from '../../../styles';
 
 // Models
 import { PostType } from '../models/NotificationModel';
@@ -64,7 +55,7 @@ export default function NotificationScreen() {
       if (postType === PostType.RECOMMENDATION) {
         const docRef = doc(db, 'recommendations', postId);
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           const item = { id: docSnap.id, ...docSnap.data() };
           navigation.navigate('RecommendationDetail', { item });
@@ -74,7 +65,7 @@ export default function NotificationScreen() {
       } else if (postType === PostType.ROUTE) {
         const docRef = doc(db, 'routes', postId);
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           const routeData = { id: docSnap.id, ...docSnap.data() };
           navigation.navigate('RouteDetail', { routeData });
@@ -235,57 +226,3 @@ export default function NotificationScreen() {
 const HEADER_HEIGHT = 54;
 const SIDE_SIZE = 44;
 const H_PADDING = 10;
-
-const styles = StyleSheet.create({
-  header: {
-    position: 'relative',
-    height: HEADER_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: H_PADDING,
-    backgroundColor: '#F8F9FA',
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerSideLeft: {
-    position: 'absolute',
-    left: H_PADDING,
-    top: 0,
-    bottom: 0,
-    width: SIDE_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerSideRight: {
-    position: 'absolute',
-    right: H_PADDING,
-    top: 0,
-    bottom: 0,
-    minWidth: SIDE_SIZE,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  backButtonContainer: {
-    width: SIDE_SIZE,
-    height: SIDE_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#1E3A5F',
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#6C757D',
-    textAlign: 'center',
-  },
-});

@@ -1,17 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  FlatList,
-  Platform,
-  useWindowDimensions,
-  Pressable,
-} from 'react-native';
+import { View, Text, Image, TouchableOpacity, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../styles';
+import { colors, imagePickerBoxStyles as styles } from '../styles';
 
 /**
  * Reusable image picker box component.
@@ -195,106 +185,6 @@ export const ImagePickerBox = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    width: '100%',
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: colors.cardBackground || '#FFFFFF',
-  },
-  carouselWrap: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#F3F4F6',
-  },
-  carouselWrapContain: {
-    backgroundColor: '#000000',
-  },
-  image: {
-    height: '100%',
-  },
-  placeholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: colors.textSecondary || '#6B7280',
-  },
-  editBtn: {
-    position: 'absolute',
-    right: 10,
-    bottom: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dots: {
-    position: 'absolute',
-    bottom: 10,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-  },
-  dotActive: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-  },
-  countBadge: {
-    position: 'absolute',
-    right: 10,
-    top: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  countText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  navOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-  },
-  navZoneLeft: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    paddingLeft: 8,
-  },
-  navZoneRight: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingRight: 8,
-  },
-  navBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+
 
 export default ImagePickerBox;

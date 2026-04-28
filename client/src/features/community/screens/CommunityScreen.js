@@ -1,19 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput,
-  Alert,
-  ActivityIndicator, 
-  FlatList, 
-  RefreshControl, 
-  TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TextInput, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // --- Components ---
-import ScreenHeader from '../../../components/ScreenHeader'; 
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
 import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
@@ -28,12 +19,13 @@ import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter'
 import { useUserLocation } from '../../../hooks/useUserLocation';
 
 // --- Global Styles ---
-import { colors, common, community } from '../../../styles';
+import { colors, common, community, communityScreenStyles as styles } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 
 export default function CommunityScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   // --- State ---
   const [sortBy, setSortBy] = useState('popularity');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -64,7 +56,7 @@ export default function CommunityScreen({ navigation }) {
     }
   };
   const handleOpenComments = (postId) => { setSelectedPostId(postId); setCommentsModalVisible(true); };
-  
+
   // FIXED: Added the logic to handle 'tag' removal
   const handleRemoveFilter = (type, value) => {
     if (type === 'destination') {
@@ -142,90 +134,83 @@ export default function CommunityScreen({ navigation }) {
 
   const focusMapOnPins = debouncedDestinationQuery.length >= 2;
 
-  return (
-    <SafeAreaView style={community.screen}>
-      
-      {/* --- HEADER --- */}
-      <ScreenHeader
-        title="קהילת המטיילים"
-        subtitle="גלו המלצות חדשות!"
-        compact
-        renderRight={() => (
-          <TouchableOpacity
-            style={community.headerIconButton}
-            onPress={() => {
-              setMapOpen((prev) => !prev);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="מפה"
-          >
-            <Ionicons name="map-outline" size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
-        )}
-        renderLeft={() => (
-          <TouchableOpacity 
-            style={community.sortButton}
-            onPress={() => setSortMenuVisible(true)}
-          >
-            <Ionicons name="chevron-down" size={20} color={colors.textPrimary} />
-            <Text style={community.sortButtonText}>
-              {sortLabel}
-            </Text>
-          </TouchableOpacity>
-        )}
-      />
+  const renderTopArea = () => (
+    <LinearGradient
+      colors={colors.heroBlueGradient}
+      start={{ x: 0.15, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={[styles.header, { paddingTop: insets.top + 6 }]}
+    >
+      <View style={styles.headerCircleLarge} />
+      <View style={styles.headerCircleSmall} />
 
-      {/* --- DESTINATION QUICK FILTER (Option A) --- */}
-      <View style={community.destinationSearchWrap}>
-        <View style={community.destinationSearchRow}>
-          <TouchableOpacity
-            onPress={() => setFilterModalVisible(true)}
-            style={community.destinationFilterBtn}
-            accessibilityRole="button"
-            accessibilityLabel="מסננים"
-          >
-            <Ionicons
-              name="filter"
-              size={18}
-              color={isFiltered ? colors.primary : colors.textSecondary}
-            />
-          </TouchableOpacity>
+      <View style={styles.topActionsRow}>
+        <TouchableOpacity
+          style={styles.glassIconButton}
+          onPress={() => setMapOpen((prev) => !prev)}
+          accessibilityRole="button"
+          accessibilityLabel="×ž×¤×”"
+        >
+          <Ionicons name={mapOpen ? "map" : "map-outline"} size={20} color="#FFFFFF" />
+        </TouchableOpacity>
 
-          <View style={community.destinationSearchPill}>
-            <Ionicons
-              name="search"
-              size={18}
-              color={colors.textSecondary}
-            />
-
-            <TextInput
-              value={filters.destination}
-              onChangeText={(text) => updateFilters({ destination: text })}
-              onFocus={() => setDestinationEditing(true)}
-              onBlur={() => setDestinationEditing(false)}
-              onSubmitEditing={() => setDestinationEditing(false)}
-              placeholder="חפש יעד (עיר / מדינה)..."
-              placeholderTextColor={colors.textMuted}
-              style={community.destinationSearchInput}
-              textAlign="right"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-
-            {!!filters.destination && (
-              <TouchableOpacity
-                onPress={() => updateFilters({ destination: '' })}
-                style={community.destinationClearBtn}
-                accessibilityRole="button"
-                accessibilityLabel="נקה יעד"
-              >
-                <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>קהילה</Text>
         </View>
+
+        <TouchableOpacity
+          style={styles.sortGlassButton}
+          onPress={() => setSortMenuVisible(true)}
+        >
+          <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
+          <Text style={styles.sortGlassText}>{sortLabel}</Text>
+        </TouchableOpacity>
       </View>
 
+      <View style={styles.searchRow}>
+        <TouchableOpacity
+          onPress={() => setFilterModalVisible(true)}
+          style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
+          accessibilityRole="button"
+          accessibilityLabel="חיפוש"
+        >
+          <Ionicons name="filter" size={19} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <View style={styles.searchPill}>
+          <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
+          <TextInput
+            value={filters.destination}
+            onChangeText={(text) => updateFilters({ destination: text })}
+            onFocus={() => setDestinationEditing(true)}
+            onBlur={() => setDestinationEditing(false)}
+            onSubmitEditing={() => setDestinationEditing(false)}
+            placeholder="חפש המלצה"
+            placeholderTextColor="rgba(255,255,255,0.48)"
+            style={styles.searchInput}
+            textAlign="right"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {!!filters.destination && (
+            <TouchableOpacity
+              onPress={() => updateFilters({ destination: '' })}
+              style={community.destinationClearBtn}
+              accessibilityRole="button"
+              accessibilityLabel="חפש המלצה"
+            >
+              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.76)" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </LinearGradient>
+  );
+
+  return (
+    <SafeAreaView style={styles.screen} edges={["left", "right"]}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {renderTopArea()}
       {/* --- ACTIVE FILTERS BAR --- */}
       <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} />
 
@@ -250,13 +235,14 @@ export default function CommunityScreen({ navigation }) {
             data={displayData}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <RecommendationCard 
-                  item={item} 
-                  onCommentPress={handleOpenComments} 
+              <RecommendationCard
+                  item={item}
+                  onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
+                  variant="feed"
               />
             )}
-            contentContainerStyle={common.listContent}
+            contentContainerStyle={[styles.feedContent, { paddingBottom: 118 + insets.bottom }]}
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             ListEmptyComponent={
@@ -291,28 +277,28 @@ export default function CommunityScreen({ navigation }) {
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
         filters={filters}
-        onApply={(next) => { 
-          updateFilters(next); 
-          setFilterModalVisible(false); 
+        onApply={(next) => {
+          updateFilters(next);
+          setFilterModalVisible(false);
         }}
-        onClear={() => { 
-          clearFilters(); 
-          setFilterModalVisible(false); 
+        onClear={() => {
+          clearFilters();
+          setFilterModalVisible(false);
         }}
       />
-      
-      <CommentsModal 
-        visible={commentsModalVisible} 
-        onClose={() => setCommentsModalVisible(false)} 
-        postId={selectedPostId} 
+
+      <CommentsModal
+        visible={commentsModalVisible}
+        onClose={() => setCommentsModalVisible(false)}
+        postId={selectedPostId}
       />
 
       {/* Sort Menu Modal */}
-      <SortMenuModal 
-        visible={sortMenuVisible} 
-        onClose={() => setSortMenuVisible(false)} 
-        sortBy={sortBy} 
-        onSelect={handleSortSelect} 
+      <SortMenuModal
+        visible={sortMenuVisible}
+        onClose={() => setSortMenuVisible(false)}
+        sortBy={sortBy}
+        onSelect={handleSortSelect}
       />
 
     </SafeAreaView>

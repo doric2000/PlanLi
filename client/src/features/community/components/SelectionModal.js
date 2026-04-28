@@ -1,14 +1,7 @@
 import React from 'react';
-import { 
-  Modal, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  FlatList, 
-  StyleSheet 
-} from 'react-native';
+import { Modal, View, Text, TouchableOpacity, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors} from '../../../styles';
+import { colors, selectionModalStyles as styles } from '../../../styles';
 
 
 const SelectionModal = ({ 
@@ -71,66 +64,6 @@ const SelectionModal = ({
   );
 };
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  content: {
-    width: '100%',
-    maxHeight: '70%',
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  closeButton: {
-    padding: 5,
-  },
-  title: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  item: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemText: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  selectedText: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    color: colors.muted,
-    fontSize: 16,
-  }
-});
+
 
 export default SelectionModal;

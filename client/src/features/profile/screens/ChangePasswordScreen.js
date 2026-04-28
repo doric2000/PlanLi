@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { auth } from '../../../config/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, signOut } from 'firebase/auth';
+import { changePasswordScreenStyles as styles } from '../../../styles';
+
 
 const PasswordField = ({ label, value, onChangeText, show, onToggle, placeholder }) => (
   <View style={{ gap: 6 }}>
@@ -142,56 +144,3 @@ export default function ChangePasswordScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-
-  header: {
-    height: 54,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  rightSpacer: { width: 44, height: 44 },
-
-  container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
-
-  label: { fontSize: 14, fontWeight: '700', textAlign: 'right', color: '#111827' },
-  note: { color: '#6B7280', textAlign: 'right', lineHeight: 18 },
-
-  passwordRow: {
-    height: 54,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  passwordInput: { flex: 1, fontSize: 15, color: '#111827', paddingVertical: 0 },
-  eyeBtn: { paddingHorizontal: 6, paddingVertical: 10 },
-
-  primaryBtn: {
-    height: 56,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#22375B',
-    marginTop: 6,
-  },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  btnDisabled: { opacity: 0.7 },
-});

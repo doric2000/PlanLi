@@ -1,7 +1,7 @@
 import React from "react";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing } from "../../../styles";
+import { colors, spacing, activeRouteFiltersListStyles as styles } from "../../../styles";
 
 /**
  * Horizontal chips row that mirrors the community ActiveFiltersList visuals,
@@ -125,29 +125,6 @@ const ActiveRouteFiltersList = ({ filters, onRemove }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: spacing.md,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    flexDirection: "row-reverse",
-    gap: 8,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.primary,
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  chipText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-});
+
 
 export default ActiveRouteFiltersList;

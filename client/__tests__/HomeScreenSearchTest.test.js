@@ -9,6 +9,7 @@
  */
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
 import { getDocs } from 'firebase/firestore';
 
@@ -18,6 +19,11 @@ jest.mock('firebase/firestore', () => ({
   collectionGroup: jest.fn(() => ({ __type: 'collectionGroup' })),
   orderBy: jest.fn((...args) => ({ __type: 'orderBy', args })),
   limit: jest.fn((...args) => ({ __type: 'limit', args })),
+}));
+
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useIsFocused: () => true,
 }));
 
 jest.mock('../src/config/firebase', () => ({
@@ -52,6 +58,14 @@ jest.mock('../src/services/LocationService', () => ({
   getOrCreateDestination: jest.fn(),
 }));
 
+jest.mock('../src/hooks/useAuthUser', () => ({
+  useAuthUser: () => ({
+    user: null,
+    loading: false,
+    isGuest: true,
+  }),
+}));
+
 describe('HomeScreenSearchTest', () => {
   const makeDoc = (id, countryId, data) => ({
     id,
@@ -79,8 +93,15 @@ describe('HomeScreenSearchTest', () => {
 
   it('filters destinations when searching by text', async () => {
     const navigationMock = { navigate: jest.fn() };
-    const { getByTestId, queryAllByTestId, getByText, queryByText } = render(
-      <HomeScreen navigation={navigationMock} />
+    const { getByTestId, queryAllByTestId, getByText, queryByTestId } = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={navigationMock} />
+      </SafeAreaProvider>
     );
 
     // Wait for initial destinations to load.
@@ -92,8 +113,8 @@ describe('HomeScreenSearchTest', () => {
     fireEvent.changeText(getByTestId('home-search-input'), 'יוון');
     await waitFor(() => {
       expect(queryAllByTestId('city-card')).toHaveLength(1);
-      expect(getByText('אתונה')).toBeTruthy();
-      expect(queryByText('פריז')).toBeNull();
+      expect(getByTestId('city-card-athens')).toBeTruthy();
+      expect(queryByTestId('city-card-paris')).toBeNull();
     });
 
     fireEvent.press(getByTestId('city-card-athens'));
@@ -107,7 +128,7 @@ describe('HomeScreenSearchTest', () => {
     await waitFor(() => {
       expect(queryAllByTestId('city-card')).toHaveLength(0);
       expect(getByTestId('home-empty-state')).toBeTruthy();
-      expect(getByText('No Destination match')).toBeTruthy();
+      expect(getByText('לא נמצאו יעדים')).toBeTruthy();
     });
   });
 });

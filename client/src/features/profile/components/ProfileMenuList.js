@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { cards, typography, colors } from '../../../styles';
+import { cards, typography, colors, profileMenuListStyles as styles } from '../../../styles';
 
 export default function ProfileMenuList({ items, onPressItem, notificationBadge }) {
   return (
@@ -10,7 +10,7 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
       {items.map((item, index) => {
         // Show badge only for Notifications item
         const showBadge = item.key === 'notifications' && notificationBadge > 0;
-        
+
         return (
           <TouchableOpacity
             key={item.key || item.label || index}
@@ -39,28 +39,3 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  iconContainer: {
-    position: 'relative',
-  },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -8,
-    backgroundColor: colors.secondary,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-});

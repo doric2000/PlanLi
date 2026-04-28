@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../styles';
+import { colors, spacing, activeFiltersListStyles as styles } from '../styles';
 
 /**
  * Displays a horizontal list of currently active filters.
@@ -70,35 +70,6 @@ const ActiveFiltersList = ({ filters, onRemove }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: spacing.md,
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg, 
-    flexDirection: 'row-reverse', // Keeps the RTL flow for Hebrew
-    gap: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary, 
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  // Optional: distinct style for tags to differentiate from parent categories
-  tagChip: {
-    backgroundColor: colors.secondary || colors.primary, 
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  chipText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: '600',
-  }
-});
+
 
 export default ActiveFiltersList;

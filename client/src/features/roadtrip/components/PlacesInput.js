@@ -1,15 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import {
-	View,
-	Text,
-	TextInput,
-	TouchableOpacity,
-	StyleSheet,
-	FlatList,
-	ActivityIndicator,
-} from "react-native";
+	View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, typography, shadows } from "../../../styles";
+import { colors, spacing, typography, shadows, placesInputStyles as styles } from "../../../styles";
 
 const PlaceholderColor = colors.placeholder;
 
@@ -271,97 +264,3 @@ export default function PlacesInput({ places, setPlaces }) {
 		</View>
 	);
 }
-
-const styles = StyleSheet.create({
-	headerRow: {
-		flexDirection: "row-reverse",
-		justifyContent: "space-between",
-		alignItems: "center",
-		marginBottom: spacing.sm,
-	},
-	label: { ...typography.label, color: colors.textPrimary, textAlign: "right" },
-	addBtn: {
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-		borderRadius: 12,
-		backgroundColor: colors.infoLight,
-	},
-	addText: { color: colors.info, fontSize: 16, fontWeight: "700" },
-	row: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		backgroundColor: colors.background,
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: colors.border,
-		paddingHorizontal: 10,
-		paddingVertical: 8,
-	},
-	rowError: {
-		borderColor: colors.error,
-		backgroundColor: colors.errorLight,
-	},
-	rowValid: {
-		borderColor: colors.success,
-		backgroundColor: colors.successLight,
-	},
-	input: { flex: 1, fontSize: 15, color: colors.textPrimary, paddingVertical: 6, textAlign: "right" },
-	removeBtn: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
-		backgroundColor: colors.errorLight,
-		alignItems: "center",
-		justifyContent: "center",
-		marginLeft: spacing.sm,
-	},
-	removeText: { color: colors.error, fontSize: 18, fontWeight: "700" },
-	checkmark: {
-		color: colors.success,
-		fontSize: 18,
-		fontWeight: "700",
-		marginLeft: spacing.sm,
-	},
-	errorText: {
-		color: colors.error,
-		fontSize: 12,
-		marginTop: 4,
-		marginRight: 4,
-		textAlign: "right",
-	},
-	suggestionsContainer: {
-		backgroundColor: colors.white,
-		borderRadius: 8,
-		borderWidth: 1,
-		borderColor: colors.border,
-		marginTop: 4,
-		...shadows.small,
-	},
-	suggestionItem: {
-		paddingVertical: 12,
-		paddingHorizontal: 12,
-		borderBottomWidth: 1,
-		borderBottomColor: colors.borderLight,
-	},
-	suggestionContent: {
-		flexDirection: "row-reverse",
-		justifyContent: "space-between",
-		alignItems: "center",
-	},
-	suggestionText: {
-		fontSize: 14,
-		color: colors.textPrimary,
-		flex: 1,
-		textAlign: "right",
-	},
-	suggestionType: {
-		fontSize: 11,
-		color: colors.textSecondary,
-		marginLeft: spacing.sm,
-	},
-	suggestionTypeRow: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		marginRight: spacing.sm,
-	},
-});

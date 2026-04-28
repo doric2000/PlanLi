@@ -1,8 +1,8 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors } from '../styles';
+import { colors, backButtonStyles as styles } from '../styles';
 
 /**
  * BackButton - A beautiful, reusable back button component
@@ -78,13 +78,6 @@ export const BackButton = ({
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
-    padding: 8,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+
 
 export default BackButton;

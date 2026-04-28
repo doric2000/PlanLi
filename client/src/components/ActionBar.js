@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLikes } from "../features/community/hooks/useLikes";
 import { useCommentsCount } from "../features/community/hooks/useCommentsCount";
-import { cards, colors } from "../styles";
+import { cards, colors, actionBarStyles as styles } from "../styles";
 import LikesModal from './LikesModal';
 import { useState } from 'react';
 
@@ -33,8 +33,9 @@ import { useState } from 'react';
  *   collectionName="routes"
  * />
  */
-const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' }) => {
+const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', variant = 'default' }) => {
 	const [showLikesModal, setShowLikesModal] = useState(false);
+	const isOverlay = variant === 'overlay';
 
 	const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
 		collectionName,
@@ -52,16 +53,16 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' })
 	const commentsCount = useCommentsCount(collectionName, item.id);
 
 	return (
-		<View style={cards.recFooter}>
-			<View style={cards.recActionGroup}>
+		<View style={[cards.recFooter, isOverlay && styles.overlayFooter]}>
+			<View style={[cards.recActionGroup, isOverlay && styles.overlayActionGroup]}>
 				<TouchableOpacity
-					style={cards.recActionButton}
+					style={[cards.recActionButton, isOverlay && styles.overlayActionButton]}
 					onPress={toggleLike}
 				>
 					<Ionicons
 						name={isLiked ? "heart" : "heart-outline"}
-						size={24}
-						color={isLiked ? colors.heart : colors.textSecondary}
+						size={isOverlay ? 26 : 24}
+						color={isOverlay ? "#FFFFFF" : (isLiked ? colors.heart : colors.textSecondary)}
 					/>
 				</TouchableOpacity>
 
@@ -72,6 +73,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' })
 						style={[
 							cards.recLikeCount,
 							likeCount > 0 && cards.recLikeCountClickable,
+							isOverlay && styles.overlayText,
 						]}
 					>
 						{likeCount > 0 ? `${likeCount} לייקים` : ""}
@@ -79,15 +81,15 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' })
 				</TouchableOpacity>
 
 				<TouchableOpacity
-					style={cards.recActionButton}
+					style={[cards.recActionButton, isOverlay && styles.overlayActionButton]}
 					onPress={handleCommentPress}
 				>
 					<Ionicons
 						name='chatbubble-outline'
-						size={22}
-						color='#4B5563'
+						size={isOverlay ? 25 : 22}
+						color={isOverlay ? "#FFFFFF" : "#4B5563"}
 					/>
-					<Text style={cards.recActionText}>
+					<Text style={[cards.recActionText, isOverlay && styles.overlayText]}>
 						תגובות {commentsCount > 0 && `(${commentsCount})`}
 					</Text>
 				</TouchableOpacity>

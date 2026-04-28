@@ -1,20 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Image,
-  Pressable,
-  Platform,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, Pressable, Platform } from 'react-native';
 // Firestore imports
 import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, collectionGroup } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
-import { colors, spacing, common, buttons, forms, tags } from '../../../styles';
+import { colors, spacing, common, buttons, forms, tags, addRecommendationScreenStyles as styles } from '../../../styles';
 
 // --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
@@ -618,12 +607,12 @@ const handleSubmit = async () => {
         {/* 5. Category Selector - Displays Hebrew Labels but logic uses IDs */}
         <ChipSelector
           label="קטגוריה"
-          items={PARENT_CATEGORIES.map(c => c.label)} 
+          items={PARENT_CATEGORIES.map(c => c.label)}
           selectedValue={PARENT_CATEGORIES.find(c => c.id === category)?.label || ''}
           onSelect={(selectedLabel) => {
             const selectedId = PARENT_CATEGORIES.find(c => c.label === selectedLabel)?.id;
             handleCategoryChange(selectedId);
-          }} 
+          }}
           multiSelect={false}
           testIDPrefix="add-rec-category"
         />
@@ -685,51 +674,3 @@ const handleSubmit = async () => {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollContent: { padding: spacing.lg, paddingBottom: 40 },
-  imagesRow: {
-    marginTop: -spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  imagesScroll: {
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  thumbWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginLeft: spacing.sm,
-  },
-  thumb: {
-    width: '100%',
-    height: '100%',
-  },
-  thumbRemove: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thumbRemoveText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 18,
-  },
-  addMoreBtn: {
-    alignSelf: 'flex-end',
-    paddingVertical: spacing.sm,
-  },
-  addMoreText: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
-});
