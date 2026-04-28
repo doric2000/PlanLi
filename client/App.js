@@ -14,6 +14,7 @@ import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import UserProfileScreen from "./src/features/profile/screens/UserProfileScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
+import RouteMapScreen from "./src/features/roadtrip/screens/RouteMapScreen";
 import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
@@ -97,6 +98,11 @@ export default function App() {
 					<Stack.Screen
 						name='RouteDetail'
 						component={RouteDetailScreen}
+						options={modalPresentation}
+					/>
+					<Stack.Screen
+						name='RouteMap'
+						component={RouteMapScreen}
 						options={modalPresentation}
 					/>
 				</Stack.Navigator>

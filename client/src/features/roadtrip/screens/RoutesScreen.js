@@ -1,7 +1,15 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
-  View, Text, ActivityIndicator, FlatList, RefreshControl, Alert, TextInput, TouchableOpacity } from "react-native";
-import FilterIconButton from '../../../components/FilterIconButton';
+	ActivityIndicator,
+	Alert,
+	FlatList,
+	RefreshControl,
+	StatusBar,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	View,
+} from "react-native";
 import RoutesFilterModal from "../../../components/RoutesFilterModal";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,25 +21,51 @@ import {
 	deleteDoc,
 	doc,
 } from "firebase/firestore";
+import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { db, auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useRefresh } from "../../community/hooks/useRefresh";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { common, colors, spacing, shadows, routesScreenStyles as localStyles } from "../../../styles";
+import { common, colors, routesScreenStyles as styles } from "../../../styles";
 import FabButton from "../../../components/FabButton";
 import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
 import { CommentsModal } from "../../../components/CommentsModal";
-import ScreenHeader from "../../../components/ScreenHeader";
 import ActiveRouteFiltersList from "../components/ActiveRouteFiltersList";
 
+const text = {
+	title: "\u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd",
+	subtitle: "\u05de\u05e1\u05dc\u05d5\u05dc\u05d9 \u05d8\u05d9\u05d5\u05dc \u05de\u05d4\u05e7\u05d4\u05d9\u05dc\u05d4",
+	filterLabel: "\u05de\u05e1\u05e0\u05e0\u05d9\u05dd",
+	searchPlaceholder: "\u05d7\u05e4\u05e9 \u05de\u05e1\u05dc\u05d5\u05dc...",
+	clearSearch: "\u05e0\u05e7\u05d4 \u05d7\u05d9\u05e4\u05d5\u05e9",
+	deleteTitle: "\u05de\u05d7\u05d9\u05e7\u05ea \u05de\u05e1\u05dc\u05d5\u05dc",
+	deleteMessage: "\u05d1\u05d8\u05d5\u05d7 \u05e9\u05d1\u05e8\u05e6\u05d5\u05e0\u05da \u05dc\u05de\u05d7\u05d5\u05e7 \u05d0\u05ea \u05d4\u05de\u05e1\u05dc\u05d5\u05dc?",
+	cancel: "\u05d1\u05d9\u05d8\u05d5\u05dc",
+	delete: "\u05de\u05d7\u05e7",
+	success: "\u05d4\u05e6\u05dc\u05d7\u05d4",
+	deleteSuccess: "\u05d4\u05de\u05e1\u05dc\u05d5\u05dc \u05e0\u05de\u05d7\u05e7.",
+	error: "\u05e9\u05d2\u05d9\u05d0\u05d4",
+	deleteError: "\u05dc\u05d0 \u05d4\u05e6\u05dc\u05d7\u05e0\u05d5 \u05dc\u05de\u05d7\u05d5\u05e7 \u05d0\u05ea \u05d4\u05de\u05e1\u05dc\u05d5\u05dc.",
+	generateSoon: "\u05d9\u05e6\u05d9\u05e8\u05ea \u05de\u05e1\u05dc\u05d5\u05dc \u05d0\u05d5\u05d8\u05d5\u05de\u05d8\u05d9 \u05d1\u05e7\u05e8\u05d5\u05d1!",
+	noFiltered: "\u05d0\u05d9\u05df \u05ea\u05d5\u05e6\u05d0\u05d5\u05ea \u05de\u05ea\u05d0\u05d9\u05de\u05d5\u05ea \u05dc\u05de\u05e1\u05e0\u05e0\u05d9\u05dd \u05e9\u05d1\u05d7\u05e8\u05ea.",
+	noRoutes: "\u05e2\u05d3\u05d9\u05d9\u05df \u05d0\u05d9\u05df \u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd.",
+	firstRoute: "\u05d4\u05d9\u05d4 \u05d4\u05e8\u05d0\u05e9\u05d5\u05df \u05dc\u05e9\u05ea\u05e3 \u05de\u05e1\u05dc\u05d5\u05dc!",
+	loginRequired: "\u05d9\u05e9 \u05dc\u05d4\u05ea\u05d7\u05d1\u05e8",
+	loginMessage: "\u05db\u05d3\u05d9 \u05dc\u05d9\u05e6\u05d5\u05e8 \u05de\u05e1\u05dc\u05d5\u05dc \u05e6\u05e8\u05d9\u05da \u05dc\u05d4\u05ea\u05d7\u05d1\u05e8.",
+	verifyRequired: "\u05e0\u05d3\u05e8\u05e9 \u05d0\u05d9\u05de\u05d5\u05ea",
+	verifyMessage: "\u05db\u05d3\u05d9 \u05dc\u05d9\u05e6\u05d5\u05e8 \u05de\u05e1\u05dc\u05d5\u05dc \u05e6\u05e8\u05d9\u05da \u05dc\u05d0\u05de\u05ea \u05d0\u05ea \u05d4\u05d0\u05d9\u05de\u05d9\u05d9\u05dc.",
+};
+
+const gradientStart = { x: 0.15, y: 0 };
+const gradientEnd = { x: 0.9, y: 1 };
 
 export default function RoutesScreen({ navigation }) {
+	const insets = useSafeAreaInsets();
 	const [routes, setRoutes] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const currentUser = auth.currentUser;
 
-	// --- Filter Management ---
 	const [filterVisible, setFilterVisible] = useState(false);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [filterDifficulty, setFilterDifficulty] = useState("");
@@ -44,8 +78,6 @@ export default function RoutesScreen({ navigation }) {
 	const [filterMaxDistance, setFilterMaxDistance] = useState("");
 	const [commentsModalVisible, setCommentsModalVisible] = useState(false);
 	const [selectedRouteId, setSelectedRouteId] = useState(null);
-
-
 
 	const fetchRoutes = async () => {
 		try {
@@ -72,19 +104,19 @@ export default function RoutesScreen({ navigation }) {
 	);
 
 	const handleDelete = (routeId) => {
-		Alert.alert("Delete Route", "Are you sure you want to delete this route?", [
-			{ text: "Cancel", style: "cancel" },
+		Alert.alert(text.deleteTitle, text.deleteMessage, [
+			{ text: text.cancel, style: "cancel" },
 			{
-				text: "Delete",
+				text: text.delete,
 				style: "destructive",
 				onPress: async () => {
 					try {
 						await deleteDoc(doc(db, "routes", routeId));
-						Alert.alert("Success", "Route deleted successfully");
+						Alert.alert(text.success, text.deleteSuccess);
 						fetchRoutes();
 					} catch (error) {
 						console.error("Error deleting route:", error);
-						Alert.alert("Error", "Failed to delete route");
+						Alert.alert(text.error, text.deleteError);
 					}
 				},
 			},
@@ -96,7 +128,7 @@ export default function RoutesScreen({ navigation }) {
 	};
 
 	const handleGenerateTrip = () => {
-		Alert.alert("יצירת מסלול אוטומטי בקרוב!");
+		Alert.alert(text.generateSoon);
 	};
 
 	const handleOpenComments = (routeId) => {
@@ -114,11 +146,11 @@ export default function RoutesScreen({ navigation }) {
 				onEdit={() => handleEdit(item)}
 				onDelete={() => handleDelete(item.id)}
 				onCommentPress={handleOpenComments}
+				variant="feed"
 			/>
 		);
 	};
 
-	// --- Filtering Logic ---
 	const parseNumberOrNull = (value) => {
 		if (value === null || value === undefined) return null;
 		const trimmed = String(value).trim();
@@ -128,7 +160,6 @@ export default function RoutesScreen({ navigation }) {
 	};
 
 	const filteredRoutes = routes.filter((item) => {
-		// Text query (supports comma-separated queries like: "rome, food")
 		const queries = filterQuery
 			.split(",")
 			.map((q) => q.trim().toLowerCase())
@@ -143,33 +174,23 @@ export default function RoutesScreen({ navigation }) {
 			const tagsText = Array.isArray(item?.tags)
 				? item.tags.join(" ").toLowerCase()
 				: "";
-			const text = `${title} ${desc} ${places} ${tagsText}`;
-
-			const matchesText = queries.some((q) => text.includes(q));
-			if (!matchesText) return false;
+			const searchText = `${title} ${desc} ${places} ${tagsText}`;
+			if (!queries.some((q) => searchText.includes(q))) return false;
 		}
 
-		// Single-select tags
-		if (filterDifficulty && String(item?.difficultyTag ?? "") !== filterDifficulty)
-			return false;
+		if (filterDifficulty && String(item?.difficultyTag ?? "") !== filterDifficulty) return false;
+		if (filterTravelStyle && String(item?.travelStyleTag ?? "") !== filterTravelStyle) return false;
 
-		if (filterTravelStyle && String(item?.travelStyleTag ?? "") !== filterTravelStyle)
-			return false;
-
-		// Multi-select tags (OR within each group, AND across groups)
 		if (filterRoadTripTags.length > 0) {
 			const itemTags = Array.isArray(item?.roadTripTags) ? item.roadTripTags : [];
-			const hasAny = filterRoadTripTags.some((t) => itemTags.includes(t));
-			if (!hasAny) return false;
+			if (!filterRoadTripTags.some((tag) => itemTags.includes(tag))) return false;
 		}
 
 		if (filterExperienceTags.length > 0) {
 			const itemTags = Array.isArray(item?.experienceTags) ? item.experienceTags : [];
-			const hasAny = filterExperienceTags.some((t) => itemTags.includes(t));
-			if (!hasAny) return false;
+			if (!filterExperienceTags.some((tag) => itemTags.includes(tag))) return false;
 		}
 
-		// Numeric ranges
 		const minDays = parseNumberOrNull(filterMinDays);
 		const maxDays = parseNumberOrNull(filterMaxDays);
 		if (minDays !== null || maxDays !== null) {
@@ -202,8 +223,6 @@ export default function RoutesScreen({ navigation }) {
 		filterMinDistance.trim() !== "" ||
 		filterMaxDistance.trim() !== "";
 
-	const openFilterModal = () => setFilterVisible(true)
-
 	const handleClearFilters = () => {
 		setFilterQuery("");
 		setFilterDifficulty("");
@@ -229,10 +248,10 @@ export default function RoutesScreen({ navigation }) {
 				setFilterTravelStyle("");
 				break;
 			case "roadTripTag":
-				setFilterRoadTripTags((prev) => prev.filter((t) => t !== value));
+				setFilterRoadTripTags((prev) => prev.filter((tag) => tag !== value));
 				break;
 			case "experienceTag":
-				setFilterExperienceTags((prev) => prev.filter((t) => t !== value));
+				setFilterExperienceTags((prev) => prev.filter((tag) => tag !== value));
 				break;
 			case "minDays":
 				setFilterMinDays("");
@@ -251,7 +270,6 @@ export default function RoutesScreen({ navigation }) {
 		}
 	};
 
-
 	const applyFilters = (next) => {
 		setFilterQuery(next?.query || "");
 		setFilterDifficulty(next?.difficulty || "");
@@ -265,64 +283,82 @@ export default function RoutesScreen({ navigation }) {
 		setFilterVisible(false);
 	};
 
+	const openCreateRoute = () => {
+		const tier = getUserTier(auth.currentUser);
+		if (tier === "guest") {
+			Alert.alert(text.loginRequired, text.loginMessage);
+			navigation.navigate("Login");
+			return;
+		}
+		if (tier === "unverified") {
+			Alert.alert(text.verifyRequired, text.verifyMessage);
+			navigation.navigate("VerifyEmail");
+			return;
+		}
+		navigation.navigate("AddRoutesScreen");
+	};
 
-	return (
-		<SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-			<ScreenHeader
-				title="מסלולים"
-				subtitle="המסלולים הכי שווים, ישר מהשטח"
-				compact
-			/>
+	const renderTopArea = () => (
+		<LinearGradient
+			colors={colors.heroBlueGradient}
+			start={gradientStart}
+			end={gradientEnd}
+			style={[styles.header, { paddingTop: insets.top + 6 }]}
+		>
+			<View style={styles.headerCircleLarge} />
+			<View style={styles.headerCircleSmall} />
 
-			{/* --- SEARCH + QUICK FILTER --- */}
-			<View style={localStyles.destinationSearchWrap}>
-				<View style={localStyles.destinationSearchRow}>
-					<TouchableOpacity
-						onPress={openFilterModal}
-						style={localStyles.destinationFilterBtn}
-						accessibilityRole="button"
-						accessibilityLabel="מסננים"
-					>
-						<Ionicons
-							name="filter"
-							size={18}
-							color={isFiltered ? colors.primary : colors.textSecondary}
-						/>
-					</TouchableOpacity>
+			<View style={styles.topActionsRow}>
+				<TouchableOpacity
+					style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
+					onPress={() => setFilterVisible(true)}
+					accessibilityRole="button"
+					accessibilityLabel={text.filterLabel}
+				>
+					<Ionicons name="filter" size={20} color="#FFFFFF" />
+				</TouchableOpacity>
 
-					<View style={localStyles.destinationSearchPill}>
-						<Ionicons
-							name="search"
-							size={18}
-							color={colors.textSecondary}
-						/>
-
-						<TextInput
-							value={filterQuery}
-							onChangeText={setFilterQuery}
-							placeholder="חפש מסלול..."
-							placeholderTextColor={colors.textMuted}
-							style={localStyles.destinationSearchInput}
-							textAlign="right"
-							autoCorrect={false}
-							autoCapitalize="none"
-						/>
-
-						{!!filterQuery && (
-							<TouchableOpacity
-								onPress={() => setFilterQuery("")}
-								style={localStyles.destinationClearBtn}
-								accessibilityRole="button"
-								accessibilityLabel="נקה חיפוש"
-							>
-								<Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-							</TouchableOpacity>
-						)}
-					</View>
+				<View style={styles.headerTitleWrap}>
+					<Text style={styles.headerTitle}>{text.title}</Text>
+					<Text style={styles.headerSubtitle}>{text.subtitle}</Text>
 				</View>
+
+				<View style={styles.headerSideSpacer} />
 			</View>
 
-			{/* --- ACTIVE FILTERS BAR --- */}
+			<View style={styles.searchRow}>
+				<View style={styles.searchPill}>
+					<Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
+					<TextInput
+						value={filterQuery}
+						onChangeText={setFilterQuery}
+						placeholder={text.searchPlaceholder}
+						placeholderTextColor="rgba(255,255,255,0.48)"
+						style={styles.searchInput}
+						textAlign="right"
+						autoCorrect={false}
+						autoCapitalize="none"
+					/>
+					{!!filterQuery && (
+						<TouchableOpacity
+							onPress={() => setFilterQuery("")}
+							style={styles.destinationClearBtn}
+							accessibilityRole="button"
+							accessibilityLabel={text.clearSearch}
+						>
+							<Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.76)" />
+						</TouchableOpacity>
+					)}
+				</View>
+			</View>
+		</LinearGradient>
+	);
+
+	return (
+		<SafeAreaView style={styles.screen} edges={["left", "right"]}>
+			<StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+			{renderTopArea()}
+
 			<ActiveRouteFiltersList
 				filters={{
 					query: filterQuery,
@@ -344,12 +380,12 @@ export default function RoutesScreen({ navigation }) {
 				</View>
 			) : (
 				<FlatList
-					contentContainerStyle={common.listContent}
+					contentContainerStyle={styles.feedContent}
 					data={filteredRoutes}
 					keyExtractor={(item) => item.id}
 					renderItem={renderItem}
 					ListHeaderComponent={
-						<View style={{ marginBottom: spacing.md }}>
+						<View style={styles.generateCardWrap}>
 							<GenerateTripCard onPress={handleGenerateTrip} />
 						</View>
 					}
@@ -365,34 +401,17 @@ export default function RoutesScreen({ navigation }) {
 						<View style={common.emptyState}>
 							<Ionicons name="trail-sign-outline" size={50} color={colors.textMuted} />
 							<Text style={common.emptyText}>
-								{isFiltered ? "אין תוצאות מתאימות למסננים שבחרת." : "עדיין אין מסלולים."}
+								{isFiltered ? text.noFiltered : text.noRoutes}
 							</Text>
-							{!isFiltered && <Text style={common.emptySubText}>היה הראשון לשתף מסלול!</Text>}
+							{!isFiltered && <Text style={common.emptySubText}>{text.firstRoute}</Text>}
 						</View>
 					}
 					showsVerticalScrollIndicator={false}
 				/>
 			)}
 
-			{/* Floating Action Button (FAB) */}
-			<FabButton
-				onPress={() => {
-					const tier = getUserTier(auth.currentUser);
-					if (tier === 'guest') {
-						Alert.alert('יש להתחבר', 'כדי ליצור מסלול צריך להתחבר.');
-						navigation.navigate('Login');
-						return;
-					}
-					if (tier === 'unverified') {
-						Alert.alert('נדרש אימות', 'כדי ליצור מסלול צריך לאמת את האימייל.');
-						navigation.navigate('VerifyEmail');
-						return;
-					}
-					navigation.navigate('AddRoutesScreen');
-				}}
-			/>
+			<FabButton onPress={openCreateRoute} />
 
-			{/* --- Filter Modal --- */}
 			<RoutesFilterModal
 				visible={filterVisible}
 				onClose={() => setFilterVisible(false)}
@@ -417,7 +436,6 @@ export default function RoutesScreen({ navigation }) {
 				postId={selectedRouteId}
 				collectionName="routes"
 			/>
-
 		</SafeAreaView>
 	);
 }

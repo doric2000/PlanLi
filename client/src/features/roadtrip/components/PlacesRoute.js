@@ -32,7 +32,7 @@ export default function PlacesRoute({ places, style }) {
 						</View>
 						{index < placesArray.length - 1 && (
 							<Ionicons
-								name='arrow-forward'
+								name='arrow-back'
 								size={14}
 								color='#64748B'
 								style={styles.arrow}

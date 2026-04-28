@@ -675,7 +675,7 @@ export const common = {
 
 	// Timeline item styles
 	timelineItem: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "flex-start",
 		marginBottom: 20,
 		position: "relative",
@@ -683,14 +683,14 @@ export const common = {
 
 	timelineConnector: {
 		position: "absolute",
-		left: 15,
+		right: 15,
 		top: 40,
 		zIndex: -1,
 	},
 
 	timelinePin: {
 		alignItems: "center",
-		marginRight: 16,
+		marginLeft: 16,
 		position: "relative",
 	},
 
@@ -715,6 +715,32 @@ export const common = {
 		borderRadius: 12,
 		borderWidth: 1,
 		borderColor: "#E5E7EB",
+	},
+
+	timelineTitle: {
+		fontSize: 16,
+		fontWeight: "800",
+		color: "#111827",
+		textAlign: "right",
+		writingDirection: "rtl",
+		marginBottom: 4,
+	},
+
+	timelineDescription: {
+		fontSize: 14,
+		lineHeight: 20,
+		color: "#4B5563",
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+
+	timelineMeta: {
+		marginTop: 6,
+		fontSize: 12,
+		fontWeight: "800",
+		color: "#1E3A8A",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	// HomeScreen specific

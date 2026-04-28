@@ -172,7 +172,7 @@ export default function CommunityScreen({ navigation }) {
           onPress={() => setFilterModalVisible(true)}
           style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
           accessibilityRole="button"
-          accessibilityLabel="×ž×¡× × ×™×"
+          accessibilityLabel="חיפוש"
         >
           <Ionicons name="filter" size={19} color="#FFFFFF" />
         </TouchableOpacity>
@@ -185,7 +185,7 @@ export default function CommunityScreen({ navigation }) {
             onFocus={() => setDestinationEditing(true)}
             onBlur={() => setDestinationEditing(false)}
             onSubmitEditing={() => setDestinationEditing(false)}
-            placeholder="×—×¤×© ×™×¢×“..."
+            placeholder="חפש המלצה"
             placeholderTextColor="rgba(255,255,255,0.48)"
             style={styles.searchInput}
             textAlign="right"
@@ -197,7 +197,7 @@ export default function CommunityScreen({ navigation }) {
               onPress={() => updateFilters({ destination: '' })}
               style={community.destinationClearBtn}
               accessibilityRole="button"
-              accessibilityLabel="× ×§×” ×™×¢×“"
+              accessibilityLabel="חפש המלצה"
             >
               <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.76)" />
             </TouchableOpacity>

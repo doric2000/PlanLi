@@ -30,11 +30,15 @@ export const tags = {
 		fontSize: 11,
 		color: "#6B7280",
 		fontWeight: "500",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	textSelected: {
 		color: "#0284C7",
 		fontWeight: "600",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	// More button

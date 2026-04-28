@@ -1,92 +1,186 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
-import { FormInput } from '../../../components/FormInput';
-import { ImagePickerBox } from '../../../components/ImagePickerBox';
-import { Ionicons } from '@expo/vector-icons';
-import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { spacing, dayEditorModalStyles as styles } from '../../../styles';
+import React, { useEffect, useState } from "react";
+import { Alert, Image, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
-/**
- * Modal for editing day details in a trip.
- * Allows user to add a description and upload an image for a specific day.
- *
- * @param {Object} props
- * @param {boolean} props.visible - Controls visibility of the modal.
- * @param {Function} props.onClose - Callback to close the modal.
- * @param {Function} props.onSave - Callback to save the day's details.
- * @param {Object} props.initialData - Initial data for the day (description, image).
- * @param {number} props.dayIndex - Index of the day being edited.
- */
+import { FormInput } from "../../../components/FormInput";
+import { ImagePickerBox } from "../../../components/ImagePickerBox";
+import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import { dayEditorModalStyles as styles } from "../../../styles";
+import StopEditorModal from "./StopEditorModal";
+
 export default function DayEditorModal({ visible, onClose, onSave, initialData, dayIndex }) {
-    const [description, setDescription] = useState('');
-    // Image picker with upload hook (SOLID-based composition)
-    const { imageUri: image, setImageUri: setImage, pickImageAndUpload, clearImage, uploading } = useImagePickerWithUpload({
-        storagePath: 'trips',
-    });
+	const [description, setDescription] = useState("");
+	const [stops, setStops] = useState([]);
+	const [stopModalVisible, setStopModalVisible] = useState(false);
+	const [editingStopIndex, setEditingStopIndex] = useState(null);
 
-    useEffect(() => {
-        if (visible) {
-            setDescription(initialData?.description || '');
-            setImage(initialData?.image || null);
-        }
-    }, [visible, initialData]);
+	const {
+		imageUri: image,
+		setImageUri: setImage,
+		pickImageAndUpload,
+		clearImage,
+		uploading,
+	} = useImagePickerWithUpload({
+		storagePath: "trips",
+	});
 
-    const handleSave = () => {
-		if (!description){
-			Alert.alert("חסר תיאור");
+	useEffect(() => {
+		if (!visible) return;
+		setDescription(initialData?.description || "");
+		setImage(initialData?.image || null);
+		setStops(Array.isArray(initialData?.stops) ? initialData.stops : []);
+		setEditingStopIndex(null);
+		setStopModalVisible(false);
+	}, [visible, initialData, setImage]);
+
+	const handleSaveStop = (stopData, index) => {
+		setStops((prev) => {
+			const next = [...prev];
+			if (index >= next.length) {
+				next.push(stopData);
+			} else {
+				next[index] = stopData;
+			}
+			return next;
+		});
+	};
+
+	const handleDeleteStop = (index) => {
+		Alert.alert("מחיקת תחנה", `להסיר את תחנה ${index + 1}?`, [
+			{ text: "ביטול", style: "cancel" },
+			{
+				text: "מחק",
+				style: "destructive",
+				onPress: () => setStops((prev) => prev.filter((_, i) => i !== index)),
+			},
+		]);
+	};
+
+	const handleSave = () => {
+		if (!description && stops.length === 0) {
+			Alert.alert("חסר תוכן", "הוסף תיאור או לפחות תחנה אחת ליום.");
 			return;
-        }
-        if (uploading) {
-            Alert.alert("המתן", "התמונה עדיין בהעלאה...");
-            return;
-        }
-        onSave({ description, image }, dayIndex);
-        onClose();
-    };
+		}
+		if (uploading) {
+			Alert.alert("המתן", "התמונה עדיין בהעלאה...");
+			return;
+		}
+		onSave({ description, image, stops }, dayIndex);
+		onClose();
+	};
 
-    return (
-        <Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={onClose} disabled={uploading}>
-                        <Text style={styles.headerBtn}>ביטול</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>יום {dayIndex + 1}</Text>
-                    <TouchableOpacity onPress={handleSave} disabled={uploading}>
-                        <Text style={[styles.headerBtn, { fontWeight: 'bold', opacity: uploading ? 0.5 : 1 }]}>שמור</Text>
-                    </TouchableOpacity>
-                </View>
+	return (
+		<Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
+			<SafeAreaView style={styles.container}>
+				<View style={styles.header}>
+					<TouchableOpacity onPress={onClose} disabled={uploading}>
+						<Text style={styles.headerBtn}>ביטול</Text>
+					</TouchableOpacity>
+					<Text style={styles.headerTitle}>יום {dayIndex + 1}</Text>
+					<TouchableOpacity onPress={handleSave} disabled={uploading}>
+						<Text style={[styles.headerBtn, styles.headerBtnStrong, uploading && styles.headerBtnDisabled]}>
+							שמור
+						</Text>
+					</TouchableOpacity>
+				</View>
 
-                <View style={styles.content}>
-                    <FormInput
-                        label="סיפור היום"
-                        placeholder="מה עשית היום? איפה ביקרת?"
-                        value={description}
-                        onChangeText={setDescription}
-                        multiline
-                        style={{ height: 150 }}
-                        textAlign="right"
-                    />
+				<ScrollView
+					style={styles.content}
+					contentContainerStyle={styles.scrollContent}
+					keyboardShouldPersistTaps="handled"
+				>
+					<FormInput
+						label="סיפור היום"
+						placeholder="מה עשית היום? איפה ביקרת?"
+						value={description}
+						onChangeText={setDescription}
+						multiline
+						style={styles.descriptionInput}
+						textAlign="right"
+					/>
 
-                    <Text style={styles.photoLabel}>תיעוד מהיום</Text>
-                    <ImagePickerBox
-                        imageUri={image}
-                        onPress={() => pickImageAndUpload((url) => {
-                            // url is the remote firestore map, setting it directly
-                            setImage(url);
-                        })}
-                        placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
-                        style={{ marginBottom: spacing.xl }}
-                        loading={uploading}
-                    />
+					<View style={styles.stopsSection}>
+						<View style={styles.stopsHeader}>
+							<TouchableOpacity
+								onPress={() => {
+									setEditingStopIndex(stops.length);
+									setStopModalVisible(true);
+								}}
+								style={styles.addStopButton}
+							>
+								<Text style={styles.addStopText}>+ הוסף תחנה</Text>
+							</TouchableOpacity>
+							<Text style={styles.stopsTitle}>תחנות ביום הזה</Text>
+						</View>
 
-                    {image && (
-                        <TouchableOpacity onPress={clearImage} style={styles.removeBtn}>
-                            <Text style={styles.removeText}>הסר תמונה</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </SafeAreaView>
-        </Modal>
-    );
+						{stops.length === 0 ? (
+							<Text style={styles.emptyStopsText}>
+								עדיין אין תחנות. הוסף נקודות עצירה עם מיקום מדויק.
+							</Text>
+						) : (
+							stops.map((stop, index) => (
+								<TouchableOpacity
+									key={stop.id || `${stop.title}:${index}`}
+									style={styles.stopCard}
+									activeOpacity={0.85}
+									onPress={() => {
+										setEditingStopIndex(index);
+										setStopModalVisible(true);
+									}}
+								>
+									{stop.image ? (
+										<Image source={{ uri: stop.image }} style={styles.stopThumb} />
+									) : (
+										<View style={styles.stopNumberBadge}>
+											<Text style={styles.stopNumberText}>{index + 1}</Text>
+										</View>
+									)}
+									<View style={styles.stopTextWrap}>
+										<Text style={styles.stopTitle} numberOfLines={1}>
+											{stop.title}
+										</Text>
+										<Text style={styles.stopMeta} numberOfLines={1}>
+											{stop.location || stop.place?.name || stop.place?.address}
+										</Text>
+									</View>
+									<TouchableOpacity
+										onPress={(event) => {
+											event.stopPropagation?.();
+											handleDeleteStop(index);
+										}}
+										style={styles.deleteStopButton}
+									>
+										<Text style={styles.deleteStopText}>מחק</Text>
+									</TouchableOpacity>
+								</TouchableOpacity>
+							))
+						)}
+					</View>
+
+					<Text style={styles.photoLabel}>תיעוד מהיום</Text>
+					<ImagePickerBox
+						imageUri={image}
+						onPress={() => pickImageAndUpload((url) => setImage(url))}
+						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
+						style={styles.imagePickerSpacing}
+						loading={uploading}
+					/>
+
+					{!!image && (
+						<TouchableOpacity onPress={clearImage} style={styles.removeBtn}>
+							<Text style={styles.removeText}>הסר תמונה</Text>
+						</TouchableOpacity>
+					)}
+				</ScrollView>
+
+				<StopEditorModal
+					visible={stopModalVisible}
+					onClose={() => setStopModalVisible(false)}
+					onSave={handleSaveStop}
+					initialData={editingStopIndex !== null ? stops[editingStopIndex] : null}
+					dayIndex={dayIndex}
+					stopIndex={editingStopIndex !== null ? editingStopIndex : stops.length}
+				/>
+			</SafeAreaView>
+		</Modal>
+	);
 }

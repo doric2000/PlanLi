@@ -353,7 +353,7 @@ export const recommendationCardStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   feedCarouselContainer: {
-    aspectRatio: 0.78,
+    aspectRatio: 1.10,
     borderRadius: 0,
     overflow: 'hidden',
   },
@@ -368,7 +368,7 @@ export const recommendationCardStyles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 150,
+    height: 118,
     zIndex: 3,
   },
   feedBottomGradient: {
@@ -376,7 +376,7 @@ export const recommendationCardStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 160,
+    height: 118,
     zIndex: 3,
   },
   feedHeaderOverlay: {
@@ -445,8 +445,8 @@ export const recommendationCardStyles = StyleSheet.create({
   },
   feedContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
     backgroundColor: '#FFFFFF',
   },
   feedTitle: {
@@ -1829,6 +1829,69 @@ export const activeRouteFiltersListStyles = StyleSheet.create({
   },
 });
 
+// components/ExactLocationPicker.js
+export const exactLocationPickerStyles = StyleSheet.create({
+	wrap: {
+		width: "100%",
+	},
+	label: {
+		fontSize: 14,
+		fontWeight: "700",
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+		marginBottom: 8,
+	},
+	statusRow: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 8,
+		marginTop: 8,
+	},
+	statusText: {
+		fontSize: 12,
+		color: colors.textSecondary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	selectedText: {
+		marginTop: 8,
+		fontSize: 12,
+		fontWeight: "700",
+		color: colors.success,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	errorWrap: {
+		marginTop: 8,
+		alignItems: "flex-end",
+	},
+	errorText: {
+		fontSize: 12,
+		color: colors.error,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	manualCountryText: {
+		marginTop: 6,
+		fontSize: 13,
+		fontWeight: "800",
+		color: colors.primary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	changeCountryButton: {
+		alignSelf: "flex-end",
+		marginTop: 8,
+	},
+	changeCountryText: {
+		color: colors.textSecondary,
+		fontWeight: "700",
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+});
+
 // features/roadtrip/components/DayEditorModal.js
 export const dayEditorModalStyles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#fff' },
@@ -1842,10 +1905,189 @@ export const dayEditorModalStyles = StyleSheet.create({
     },
     headerTitle: { fontSize: 18, fontWeight: '700', textAlign: 'right' },
     headerBtn: { fontSize: 16, color: '#007AFF' },
-    content: { padding: 20 },
+    headerBtnStrong: { fontWeight: '800' },
+    headerBtnDisabled: { opacity: 0.5 },
+    content: { flex: 1, padding: 20 },
+    scrollContent: { paddingBottom: 36 },
+    descriptionInput: { height: 130 },
+    stopsSection: {
+        marginTop: 18,
+        marginBottom: 22,
+        borderTopWidth: 1,
+        borderTopColor: colors.borderLight,
+        paddingTop: 16,
+    },
+    stopsHeader: {
+        flexDirection: "row-reverse",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 10,
+    },
+    stopsTitle: {
+        fontSize: 16,
+        fontWeight: "800",
+        color: colors.textPrimary,
+        textAlign: "right",
+        writingDirection: "rtl",
+    },
+    addStopButton: {
+        backgroundColor: colors.infoLight,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 16,
+    },
+    addStopText: {
+        color: colors.info,
+        fontSize: 12,
+        fontWeight: "800",
+        writingDirection: "rtl",
+    },
+    emptyStopsText: {
+        color: colors.textMuted,
+        fontSize: 13,
+        textAlign: "right",
+        writingDirection: "rtl",
+        lineHeight: 19,
+    },
+    stopCard: {
+        flexDirection: "row-reverse",
+        alignItems: "center",
+        gap: 10,
+        backgroundColor: colors.background,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
+        borderRadius: 14,
+        padding: 10,
+        marginBottom: 8,
+    },
+    stopThumb: {
+        width: 42,
+        height: 42,
+        borderRadius: 10,
+        backgroundColor: colors.borderLight,
+    },
+    stopNumberBadge: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: colors.primary,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    stopNumberText: {
+        color: colors.white,
+        fontWeight: "900",
+    },
+    stopTextWrap: {
+        flex: 1,
+        minWidth: 0,
+        alignItems: "flex-end",
+    },
+    stopTitle: {
+        fontSize: 14,
+        fontWeight: "800",
+        color: colors.textPrimary,
+        textAlign: "right",
+        writingDirection: "rtl",
+    },
+    stopMeta: {
+        marginTop: 2,
+        fontSize: 12,
+        color: colors.textSecondary,
+        textAlign: "right",
+        writingDirection: "rtl",
+    },
+    deleteStopButton: {
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        borderRadius: 10,
+        backgroundColor: colors.errorLight,
+    },
+    deleteStopText: {
+        color: colors.error,
+        fontSize: 12,
+        fontWeight: "800",
+        writingDirection: "rtl",
+    },
+    imagePickerSpacing: {
+        marginBottom: spacing.xl,
+    },
     photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155', textAlign: 'right' },
     removeBtn: { marginTop: 10, alignItems: 'center' },
     removeText: { color: '#EF4444' }
+});
+
+// features/roadtrip/components/StopEditorModal.js
+export const stopEditorModalStyles = StyleSheet.create({
+	container: {
+		flex: 1,
+		backgroundColor: colors.white,
+	},
+	header: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		justifyContent: "space-between",
+		padding: 16,
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+	},
+	headerTitle: {
+		flex: 1,
+		fontSize: 16,
+		fontWeight: "800",
+		color: colors.textPrimary,
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	headerButton: {
+		fontSize: 15,
+		color: colors.primary,
+		fontWeight: "700",
+		minWidth: 52,
+		textAlign: "center",
+	},
+	headerButtonStrong: {
+		fontWeight: "900",
+	},
+	content: {
+		flex: 1,
+		padding: 18,
+	},
+	scrollContent: {
+		paddingBottom: 36,
+	},
+	locationWrap: {
+		marginTop: 16,
+		marginBottom: 18,
+		zIndex: 20,
+	},
+	descriptionInput: {
+		height: 110,
+	},
+	photoLabel: {
+		fontSize: 14,
+		fontWeight: "800",
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+		marginTop: 12,
+		marginBottom: 8,
+	},
+	imagePickerSpacing: {
+		marginBottom: spacing.lg,
+	},
+	removeButton: {
+		alignSelf: "center",
+		paddingHorizontal: 14,
+		paddingVertical: 8,
+		borderRadius: 14,
+		backgroundColor: colors.errorLight,
+	},
+	removeText: {
+		color: colors.error,
+		fontWeight: "800",
+		writingDirection: "rtl",
+	},
 });
 
 // features/roadtrip/components/DayList.js
@@ -1857,14 +2099,20 @@ export const dayListStyles = StyleSheet.create({
 		alignItems: "center",
 		marginBottom: 12,
 	},
-	sectionTitle: { fontSize: 16, fontWeight: "700", color: "#1f2937", textAlign: "right" },
-	addBtn: {
-		backgroundColor: "#E0F2FE",
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 16,
+	sectionTitle: {
+		fontSize: 16,
+		fontWeight: "800",
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
-	addBtnText: { color: "#0284C7", fontWeight: "600", fontSize: 12 },
+	autoHint: {
+		fontSize: 12,
+		fontWeight: "700",
+		color: colors.textMuted,
+		textAlign: "left",
+		writingDirection: "rtl",
+	},
 	dayCard: {
 		backgroundColor: "#fff",
 		borderRadius: 12,
@@ -1884,34 +2132,49 @@ export const dayListStyles = StyleSheet.create({
 		alignItems: "center",
 		marginBottom: 8,
 	},
-	dayTitle: { fontWeight: "700", color: "#0F172A", fontSize: 16, textAlign: "right" },
-
-	actionsContainer: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
+	dayTitle: {
+		fontWeight: "800",
+		color: "#0F172A",
+		fontSize: 16,
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
-	deleteBtn: {
-		padding: 4,
-		marginRight: 8,
-		backgroundColor: "#FEF2F2",
-		borderRadius: 4,
+	editHint: {
+		color: colors.primary,
+		fontSize: 13,
+		fontWeight: "800",
+		textAlign: "left",
+		writingDirection: "rtl",
 	},
-	deleteIcon: {
-		fontSize: 14,
-		color: "#f57c7cff",
-	},
-	editHint: { color: "#94A3B8", fontSize: 14 },
-
-	contentRow: { flexDirection: "row" },
+	contentRow: { flexDirection: "row", alignItems: "center" },
 	textContainer: { flex: 1, paddingLeft: 10 },
-	description: { color: "#64748B", fontSize: 14, textAlign: "right" },
+	description: {
+		color: "#64748B",
+		fontSize: 14,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
 	thumbnail: {
 		width: 50,
 		height: 50,
 		borderRadius: 8,
 		backgroundColor: "#F1F5F9",
 	},
-	emptyText: { color: "#94A3B8", fontStyle: "italic", fontSize: 13, textAlign: "right" },
+	stopsCount: {
+		marginTop: 8,
+		color: colors.primary,
+		fontSize: 12,
+		fontWeight: "800",
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	emptyText: {
+		color: "#94A3B8",
+		fontStyle: "italic",
+		fontSize: 13,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
 });
 
 // features/roadtrip/components/DayViewModal.js
@@ -1921,12 +2184,20 @@ export const dayViewModalStyles = StyleSheet.create({
 		backgroundColor: "#fff",
 	},
 	header: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		justifyContent: "space-between",
 		alignItems: "center",
 		padding: 16,
 		borderBottomWidth: 1,
 		borderBottomColor: "#E2E8F0",
+	},
+	closeButton: {
+		width: 34,
+		height: 34,
+		alignItems: "center",
+		justifyContent: "center",
+		borderRadius: 17,
+		backgroundColor: colors.background,
 	},
 	closeBtn: {
 		fontSize: 24,
@@ -1937,9 +2208,17 @@ export const dayViewModalStyles = StyleSheet.create({
 		fontSize: 18,
 		fontWeight: "700",
 		color: "#0F172A",
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	headerSpacer: {
+		width: 30,
 	},
 	content: {
 		flex: 1,
+	},
+	scrollContent: {
+		paddingBottom: 32,
 	},
 	image: {
 		width: "100%",
@@ -1951,16 +2230,98 @@ export const dayViewModalStyles = StyleSheet.create({
 	},
 	label: {
 		fontSize: 14,
-		fontWeight: "700",
-		color: "#64748B",
+		fontWeight: "800",
+		color: colors.textPrimary,
 		marginBottom: 8,
-		textTransform: "uppercase",
-		letterSpacing: 0.5,
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 	description: {
 		fontSize: 16,
 		lineHeight: 24,
 		color: "#334155",
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	stopsContainer: {
+		paddingHorizontal: 20,
+		paddingBottom: 28,
+	},
+	stopRow: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 10,
+		backgroundColor: colors.background,
+		borderWidth: 1,
+		borderColor: colors.borderLight,
+		borderRadius: 14,
+		padding: 10,
+		marginBottom: 9,
+	},
+	stopImage: {
+		width: 46,
+		height: 46,
+		borderRadius: 12,
+		backgroundColor: colors.borderLight,
+	},
+	stopNumberBadge: {
+		width: 46,
+		height: 46,
+		borderRadius: 23,
+		backgroundColor: colors.primary,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	stopNumberText: {
+		color: colors.white,
+		fontWeight: "900",
+	},
+	stopTextWrap: {
+		flex: 1,
+		minWidth: 0,
+		alignItems: "flex-end",
+	},
+	stopTitle: {
+		fontSize: 14,
+		fontWeight: "900",
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	stopAddress: {
+		marginTop: 2,
+		fontSize: 12,
+		color: colors.textSecondary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	stopDescription: {
+		marginTop: 3,
+		fontSize: 12,
+		lineHeight: 17,
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	mapIconWrap: {
+		alignItems: "center",
+		justifyContent: "center",
+		minWidth: 38,
+	},
+	mapIconText: {
+		marginTop: 2,
+		fontSize: 10,
+		fontWeight: "800",
+		color: colors.primary,
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	emptyStopsText: {
+		paddingVertical: 12,
+		fontSize: 14,
+		color: colors.textMuted,
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 });
 
@@ -2096,15 +2457,15 @@ export const placesInputStyles = StyleSheet.create({
 // features/roadtrip/components/PlacesRoute.js
 export const placesRouteStyles = StyleSheet.create({
 	container: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		flexWrap: "wrap",
 		alignItems: "center",
 		marginVertical: 8,
 	},
 	routeItem: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
-		marginRight: 4,
+		marginLeft: 4,
 	},
 	placeBox: {
 		backgroundColor: "#E0F2FE", // Light blue background
@@ -2119,6 +2480,8 @@ export const placesRouteStyles = StyleSheet.create({
 		color: "#4d4d4dff",
 		fontWeight: "500",
 		maxWidth: 100,
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 	arrow: {
 		marginHorizontal: 4,
@@ -2127,6 +2490,133 @@ export const placesRouteStyles = StyleSheet.create({
 
 // features/roadtrip/components/RouteCard.js
 export const routeCardStyles = StyleSheet.create({
+	feedCard: {
+		width: "100%",
+		backgroundColor: "#FFFFFF",
+		marginBottom: 18,
+		overflow: "hidden",
+	},
+	feedCarouselContainer: {
+		aspectRatio: 1.25,
+		borderRadius: 0,
+		overflow: "hidden",
+	},
+	feedImagePlaceholder: {
+		flex: 1,
+		backgroundColor: "#1F2937",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	feedPlaceholderText: {
+		marginTop: 8,
+		color: "rgba(255,255,255,0.76)",
+		fontSize: 14,
+		fontWeight: "800",
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	feedTopGradient: {
+		position: "absolute",
+		top: 0,
+		left: 0,
+		right: 0,
+		height: 118,
+		zIndex: 3,
+	},
+	feedBottomGradient: {
+		position: "absolute",
+		left: 0,
+		right: 0,
+		bottom: 0,
+		height: 118,
+		zIndex: 3,
+	},
+	feedHeaderOverlay: {
+		position: "absolute",
+		top: 12,
+		left: 12,
+		right: 12,
+		zIndex: 6,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		justifyContent: "space-between",
+		gap: 12,
+	},
+	feedAuthorInfo: {
+		flex: 1,
+		minWidth: 0,
+	},
+	feedAvatarRing: {
+		width: 44,
+		height: 44,
+		borderRadius: 22,
+		borderWidth: 2,
+		borderColor: "rgba(255,255,255,0.78)",
+		overflow: "hidden",
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "rgba(255,255,255,0.18)",
+	},
+	feedAuthorTextWrap: {
+		flex: 1,
+		minWidth: 0,
+	},
+	feedUsername: {
+		color: "#FFFFFF",
+		fontSize: 16,
+		textShadowColor: "rgba(0,0,0,0.55)",
+		textShadowOffset: { width: 0, height: 1 },
+		textShadowRadius: 4,
+	},
+	feedMetaText: {
+		color: "rgba(255,255,255,0.86)",
+		fontSize: 12,
+		fontWeight: "700",
+		textAlign: "right",
+		writingDirection: "rtl",
+		textShadowColor: "rgba(0,0,0,0.5)",
+		textShadowOffset: { width: 0, height: 1 },
+		textShadowRadius: 3,
+	},
+	feedHeaderActions: {
+		backgroundColor: "rgba(15,23,42,0.22)",
+		borderRadius: 22,
+		paddingHorizontal: 4,
+		paddingVertical: 2,
+	},
+	feedDotsContainer: {
+		bottom: 72,
+		zIndex: 6,
+	},
+	feedActionOverlay: {
+		position: "absolute",
+		left: 12,
+		right: 12,
+		bottom: 16,
+		zIndex: 7,
+	},
+	feedContent: {
+		paddingHorizontal: 16,
+		paddingTop: 10,
+		paddingBottom: 12,
+		backgroundColor: "#FFFFFF",
+	},
+	feedTitle: {
+		fontSize: 17,
+	},
+	feedDescription: {
+		fontSize: 14,
+		lineHeight: 20,
+	},
+	moreTagsText: {
+		...typography.caption,
+		color: colors.info,
+		alignSelf: "center",
+		marginRight: 8,
+	},
+	placesPreview: {
+		marginBottom: 6,
+	},
 	headerActions: {
 		flexDirection: "row-reverse",
 		alignItems: "center",
@@ -2168,10 +2658,14 @@ export const addRoutesScreenStyles = StyleSheet.create({
         backgroundColor: colors.white || '#FFFFFF',
     },
     scrollContent: { padding: spacing.lg, paddingBottom: 40 },
+    fieldWrap: {
+        marginBottom: spacing.lg,
+    },
     screenTitle: {
         fontSize: 20,
         fontWeight: '800',
         textAlign: 'right',
+        writingDirection: 'rtl',
         marginBottom: spacing.lg,
         color: colors.textPrimary || '#111827',
     },
@@ -2181,48 +2675,121 @@ export const addRoutesScreenStyles = StyleSheet.create({
         fontWeight: 'bold',
         marginBottom: 8,
         color: colors.textPrimary || '#111827',
+        writingDirection: 'rtl',
+    },
+    descriptionField: {
+        marginBottom: spacing.xl,
     },
 });
 
 // features/roadtrip/screens/RouteDetailScreen.js
 export const routeDetailScreenStyles = StyleSheet.create({
+    screen: {
+        flex: 1,
+        backgroundColor: colors.background,
+    },
+    headerBar: {
+        minHeight: 58,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.md,
+        backgroundColor: colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    headerBackButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitle: {
+        flex: 1,
+        fontSize: 18,
+        fontWeight: '900',
+        color: colors.textPrimary,
+        textAlign: 'center',
+        writingDirection: 'rtl',
+    },
+    headerSideSpacer: {
+        width: 44,
+        height: 44,
+    },
+    scrollContent: {
+        paddingBottom: spacing.xxxl,
+    },
     headerSection: {
         backgroundColor: colors.white,
         padding: spacing.screenHorizontal,
         borderBottomWidth: 1,
-        borderBottomColor: colors.border
+        borderBottomColor: colors.border,
+        alignItems: 'stretch',
+    },
+    routeTitle: {
+        ...typography.h1,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+        marginBottom: spacing.sm,
     },
     authorRow: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
+        justifyContent: 'flex-start',
         gap: spacing.sm,
         marginBottom: spacing.md
     },
+    authorText: {
+        ...typography.meta,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+    },
+    descriptionText: {
+        ...typography.body,
+        marginBottom: spacing.md,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+    },
     metaRow: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
+        justifyContent: 'flex-start',
         gap: spacing.lg,
         marginBottom: spacing.lg
     },
     metaItem: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         alignItems: 'center',
+    },
+    metaIcon: {
+        marginLeft: 6,
+    },
+    metaText: {
+        ...typography.meta,
+        textAlign: 'right',
+        writingDirection: 'rtl',
     },
     placesSection: {
         marginBottom: spacing.lg
     },
+    placesRouteSpacing: {
+        marginTop: spacing.sm,
+    },
     subsectionTitle: {
-        ...typography.caption,
-        color: colors.textLight,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: spacing.sm
+        fontSize: 15,
+        fontWeight: '800',
+        color: colors.textPrimary,
+        marginBottom: spacing.sm,
+        textAlign: 'right',
+        writingDirection: 'rtl',
     },
     tagsSection: {
         marginTop: spacing.sm
     },
     tagsContainer: {
-        flexDirection: 'row',
+        flexDirection: 'row-reverse',
         flexWrap: 'wrap',
+        justifyContent: 'flex-start',
         gap: spacing.sm
     },
     timelineSection: {
@@ -2230,8 +2797,14 @@ export const routeDetailScreenStyles = StyleSheet.create({
         backgroundColor: colors.white,
         marginTop: spacing.sm
     },
+    timelineTitle: {
+        ...typography.h3,
+        marginBottom: 20,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+    },
     timeline: {
-        paddingLeft: 10
+        paddingRight: 10
     },
     emptyState: {
         padding: spacing.xxxl,
@@ -2240,55 +2813,404 @@ export const routeDetailScreenStyles = StyleSheet.create({
     emptyText: {
         ...typography.bodySmall,
         color: colors.textMuted,
-    }
+        textAlign: 'center',
+        writingDirection: 'rtl',
+    },
+    mapButton: {
+        marginTop: spacing.sm,
+        marginBottom: spacing.md,
+        flexDirection: "row-reverse",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        backgroundColor: colors.primary,
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+    },
+    mapButtonDisabled: {
+        backgroundColor: colors.borderLight,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    mapButtonText: {
+        color: colors.white,
+        fontSize: 14,
+        fontWeight: "800",
+        textAlign: "right",
+        writingDirection: "rtl",
+    },
+    mapButtonTextDisabled: {
+        color: colors.textMuted,
+    },
+});
+
+// features/roadtrip/screens/RouteMapScreen.js
+export const routeMapStyles = StyleSheet.create({
+	screen: {
+		flex: 1,
+		backgroundColor: colors.background,
+	},
+	header: {
+		height: 64,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 10,
+		paddingHorizontal: 14,
+		backgroundColor: colors.white,
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+		zIndex: 5,
+	},
+	headerIconButton: {
+		width: 42,
+		height: 42,
+		borderRadius: 21,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: colors.background,
+	},
+	headerTextWrap: {
+		flex: 1,
+		minWidth: 0,
+		alignItems: "flex-end",
+	},
+	headerTitle: {
+		fontSize: 16,
+		fontWeight: "900",
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	headerSubtitle: {
+		marginTop: 2,
+		fontSize: 12,
+		fontWeight: "700",
+		color: colors.textSecondary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	headerActionButton: {
+		paddingHorizontal: 12,
+		paddingVertical: 9,
+		borderRadius: 14,
+		backgroundColor: colors.primary,
+	},
+	headerActionButtonDisabled: {
+		backgroundColor: colors.borderLight,
+	},
+	headerActionText: {
+		color: colors.white,
+		fontSize: 12,
+		fontWeight: "900",
+		writingDirection: "rtl",
+	},
+	headerActionTextDisabled: {
+		color: colors.textMuted,
+	},
+	map: {
+		flex: 1,
+	},
+	webMapWrap: {
+		flex: 1,
+	},
+	webMap: {
+		width: "100%",
+		height: "100%",
+	},
+	markerWrap: {
+		width: 56,
+		height: 56,
+		alignItems: "center",
+		justifyContent: "center",
+		overflow: "visible",
+	},
+	marker: {
+		width: 42,
+		height: 42,
+		borderRadius: 21,
+		backgroundColor: colors.primary,
+		borderWidth: 3,
+		borderColor: colors.white,
+		alignItems: "center",
+		justifyContent: "center",
+		overflow: "visible",
+		shadowColor: colors.shadow,
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.22,
+		shadowRadius: 8,
+		elevation: 6,
+		position: "relative",
+	},
+	markerImage: {
+		width: "100%",
+		height: "100%",
+		borderRadius: 21,
+	},
+	markerNumberBadge: {
+		position: "absolute",
+		right: -7,
+		bottom: -7,
+		minWidth: 22,
+		height: 22,
+		borderRadius: 11,
+		backgroundColor: colors.brandOrange,
+		borderWidth: 2,
+		borderColor: colors.white,
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: 3,
+	},
+	markerNumberText: {
+		color: colors.white,
+		fontSize: 12,
+		fontWeight: "900",
+		lineHeight: 16,
+		textAlign: "center",
+	},
+	markerText: {
+		color: colors.white,
+		fontWeight: "900",
+		fontSize: 15,
+	},
+	emptyState: {
+		flex: 1,
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: spacing.xl,
+	},
+	emptyTitle: {
+		marginTop: 14,
+		fontSize: 18,
+		fontWeight: "900",
+		color: colors.textPrimary,
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	emptyText: {
+		marginTop: 6,
+		fontSize: 14,
+		color: colors.textSecondary,
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	sheet: {
+		position: "absolute",
+		left: 14,
+		right: 14,
+		bottom: 18,
+		backgroundColor: colors.white,
+		borderRadius: 18,
+		padding: 14,
+		borderWidth: 1,
+		borderColor: colors.borderLight,
+		...shadows.small,
+	},
+	sheetHeader: {
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 10,
+	},
+	sheetCloseButton: {
+		width: 34,
+		height: 34,
+		borderRadius: 17,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: colors.background,
+	},
+	sheetTitleWrap: {
+		flex: 1,
+		minWidth: 0,
+		alignItems: "flex-end",
+	},
+	sheetKicker: {
+		fontSize: 11,
+		color: colors.textMuted,
+		fontWeight: "800",
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	sheetTitle: {
+		marginTop: 2,
+		fontSize: 17,
+		fontWeight: "900",
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	sheetImage: {
+		width: 54,
+		height: 54,
+		borderRadius: 14,
+		backgroundColor: colors.borderLight,
+	},
+	sheetImageFallback: {
+		width: 54,
+		height: 54,
+		borderRadius: 27,
+		backgroundColor: colors.primary,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	sheetImageFallbackText: {
+		color: colors.white,
+		fontWeight: "900",
+		fontSize: 18,
+	},
+	sheetAddress: {
+		marginTop: 10,
+		fontSize: 13,
+		color: colors.textSecondary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	sheetDescription: {
+		marginTop: 8,
+		fontSize: 14,
+		lineHeight: 20,
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	primaryButton: {
+		marginTop: 12,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		justifyContent: "center",
+		gap: 8,
+		backgroundColor: colors.primary,
+		borderRadius: 14,
+		paddingVertical: 12,
+	},
+	primaryButtonText: {
+		color: colors.white,
+		fontSize: 14,
+		fontWeight: "900",
+		writingDirection: "rtl",
+	},
 });
 
 // features/roadtrip/screens/RoutesScreen.js
 export const routesScreenStyles = StyleSheet.create({
-	destinationSearchWrap: {
-		paddingHorizontal: spacing.lg,
-		paddingTop: 0,
-		paddingBottom: spacing.xs,
+	screen: {
+		flex: 1,
+		backgroundColor: colors.appSurface,
 	},
-	destinationSearchRow: {
+	header: {
+		paddingHorizontal: 18,
+		paddingBottom: 18,
+		borderBottomLeftRadius: 30,
+		borderBottomRightRadius: 30,
+		overflow: "hidden",
+	},
+	headerCircleLarge: {
+		position: "absolute",
+		width: 210,
+		height: 210,
+		borderRadius: 105,
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.07)",
+		top: -58,
+		right: -44,
+	},
+	headerCircleSmall: {
+		position: "absolute",
+		width: 134,
+		height: 134,
+		borderRadius: 67,
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.09)",
+		top: 30,
+		right: 24,
+	},
+	topActionsRow: {
+		position: "relative",
+		zIndex: 2,
+		minHeight: 56,
 		flexDirection: "row-reverse",
 		alignItems: "center",
-		gap: spacing.sm,
+		justifyContent: "space-between",
+		gap: 12,
 	},
-	destinationFilterBtn: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
+	headerTitleWrap: {
+		flex: 1,
+		alignItems: "center",
+	},
+	headerTitle: {
+		color: "#FFFFFF",
+		fontSize: 26,
+		lineHeight: 31,
+		fontWeight: "900",
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	headerSubtitle: {
+		marginTop: 2,
+		color: "rgba(255,255,255,0.66)",
+		fontSize: 13,
+		fontWeight: "700",
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	headerSideSpacer: {
+		width: 42,
+		height: 42,
+	},
+	glassIconButton: {
+		width: 42,
+		height: 42,
+		borderRadius: 14,
+		backgroundColor: "rgba(255,255,255,0.13)",
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.18)",
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: "#FFFFFF",
-		borderWidth: 1,
-		borderColor: colors.borderLight || "#F3F4F6",
-		...shadows.small,
 	},
-	destinationSearchPill: {
-		flex: 1,
+	glassIconButtonActive: {
+		backgroundColor: "rgba(245,150,29,0.88)",
+		borderColor: "rgba(255,255,255,0.32)",
+	},
+	searchRow: {
+		position: "relative",
+		zIndex: 3,
+		marginTop: 12,
 		flexDirection: "row-reverse",
 		alignItems: "center",
-		gap: spacing.sm,
-		backgroundColor: "#FFFFFF",
-		borderWidth: 1,
-		borderColor: colors.borderLight || "#F3F4F6",
-		borderRadius: 18,
-		paddingHorizontal: spacing.md,
-		height: 36,
-		...shadows.small,
+		gap: 10,
 	},
-	destinationSearchInput: {
+	searchPill: {
 		flex: 1,
-		color: colors.textPrimary,
-		fontSize: 14,
+		height: 48,
+		borderRadius: 16,
+		backgroundColor: "rgba(255,255,255,0.12)",
+		borderWidth: 1.5,
+		borderColor: "rgba(255,255,255,0.18)",
+		paddingHorizontal: 14,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 9,
+	},
+	searchInput: {
+		flex: 1,
+		height: "100%",
+		color: "#FFFFFF",
+		fontSize: 15,
+		fontWeight: "600",
 		paddingVertical: 0,
 		writingDirection: "rtl",
 	},
 	destinationClearBtn: {
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	feedContent: {
+		paddingBottom: 118,
+	},
+	generateCardWrap: {
+		paddingHorizontal: 16,
+		paddingTop: 16,
+		paddingBottom: 4,
 	},
 });
 
