@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../../config/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, signOut } from 'firebase/auth';
 import { changePasswordScreenStyles as styles } from '../../../styles';
+import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
+import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 
 
 const PasswordField = ({ label, value, onChangeText, show, onToggle, placeholder }) => (
@@ -48,6 +51,38 @@ export default function ChangePasswordScreen({ navigation }) {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
+
+  const hasUnsavedChanges =
+    canChangePassword &&
+    (currentPw.length > 0 || newPw.length > 0 || confirmPw.length > 0);
+
+  const pendingDiscardRef = useRef(null);
+  const dismissUnsavedModal = useCallback(() => {
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+  }, []);
+
+  const confirmUnsavedLeave = useCallback(() => {
+    const onConfirm = pendingDiscardRef.current;
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+    if (onConfirm) onConfirm();
+  }, []);
+
+  const promptDiscardUnsaved = useCallback((onConfirmLeave) => {
+    pendingDiscardRef.current = onConfirmLeave;
+    setUnsavedModalVisible(true);
+  }, []);
+
+  const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
+    navigation,
+    guardActive: Boolean(u && canChangePassword),
+    sessionKey: u?.uid ?? '',
+    hasUnsavedChanges,
+    submitting: saving,
+    openUnsavedPrompt: promptDiscardUnsaved,
+  });
 
   const onChangePassword = async () => {
     if (!u) return Alert.alert('שגיאה', 'אין משתמש מחובר');
@@ -69,6 +104,7 @@ export default function ChangePasswordScreen({ navigation }) {
       try {
         await signOut(auth);
       } finally {
+        allowLeaveRef.current = true;
         navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
       }
     } catch (e) {
@@ -87,9 +123,19 @@ export default function ChangePasswordScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <UnsavedChangesModal
+        visible={unsavedModalVisible}
+        title={UNSAVED_LEAVE_TITLE}
+        message={UNSAVED_LEAVE_MESSAGE}
+        onCancel={dismissUnsavedModal}
+        onConfirm={confirmUnsavedLeave}
+        testID="change-password-unsaved-modal"
+        cancelTestID="change-password-unsaved-cancel"
+        confirmTestID="change-password-unsaved-confirm"
+      />
       {/* Header: back left + title center */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
+        <TouchableOpacity onPress={handleHeaderBackPress} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
 

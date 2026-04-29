@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,12 +7,46 @@ import { auth, db } from '../../../config/firebase';
 import { updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { changeNameScreenStyles as styles } from '../../../styles';
+import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
+import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 
 
 export default function ChangeNameScreen({ navigation }) {
   const u = auth.currentUser;
-  const [name, setName] = useState(u?.displayName || '');
+  const nameBaseline = useMemo(() => (u?.displayName || '').trim(), [u?.displayName]);
+  const [name, setName] = useState(() => (u?.displayName || ''));
   const [saving, setSaving] = useState(false);
+  const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
+
+  const hasUnsavedChanges = name.trim() !== nameBaseline;
+
+  const pendingDiscardRef = useRef(null);
+  const dismissUnsavedModal = useCallback(() => {
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+  }, []);
+
+  const confirmUnsavedLeave = useCallback(() => {
+    const onConfirm = pendingDiscardRef.current;
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+    if (onConfirm) onConfirm();
+  }, []);
+
+  const promptDiscardUnsaved = useCallback((onConfirmLeave) => {
+    pendingDiscardRef.current = onConfirmLeave;
+    setUnsavedModalVisible(true);
+  }, []);
+
+  const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
+    navigation,
+    guardActive: Boolean(u),
+    sessionKey: u?.uid ?? '',
+    hasUnsavedChanges,
+    submitting: saving,
+    openUnsavedPrompt: promptDiscardUnsaved,
+  });
 
   const onSave = async () => {
     if (!u) return Alert.alert('שגיאה', 'אין משתמש מחובר');
@@ -29,7 +63,13 @@ export default function ChangeNameScreen({ navigation }) {
       );
 
       Alert.alert('הצלחה', 'השם עודכן בהצלחה', [
-        { text: 'אישור', onPress: () => navigation.goBack() },
+        {
+          text: 'אישור',
+          onPress: () => {
+            allowLeaveRef.current = true;
+            navigation.goBack();
+          },
+        },
       ]);
     } catch (e) {
       Alert.alert('שגיאה', e?.message || 'עדכון השם נכשל');
@@ -40,10 +80,20 @@ export default function ChangeNameScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} testID="change-name-screen">
+      <UnsavedChangesModal
+        visible={unsavedModalVisible}
+        title={UNSAVED_LEAVE_TITLE}
+        message={UNSAVED_LEAVE_MESSAGE}
+        onCancel={dismissUnsavedModal}
+        onConfirm={confirmUnsavedLeave}
+        testID="change-name-unsaved-modal"
+        cancelTestID="change-name-unsaved-cancel"
+        confirmTestID="change-name-unsaved-confirm"
+      />
       {/* Header: back left + title center */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleHeaderBackPress}
           style={styles.backBtn}
           activeOpacity={0.8}
           testID="change-name-back"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, Pressable, Platform } from 'react-native';
 // Firestore imports
 import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, collectionGroup } from 'firebase/firestore';
@@ -12,9 +12,11 @@ import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ChipSelector from '../components/ChipSelector';
 import SegmentedControl from '../components/SegmentedControl';
 import SelectionModal from '../components/SelectionModal';
+import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 
 // --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
+import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { getOrCreateDestinationForPlace, searchPlaces } from '../../../services/LocationService';
 
@@ -22,6 +24,7 @@ import { getOrCreateDestinationForPlace, searchPlaces } from '../../../services/
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 
 
 
@@ -41,13 +44,119 @@ const getCategoryLabel = (categoryId) => {
   return categoryObj ? categoryObj.label : categoryId;
 };
 
+/** Stable subset for comparing saved place vs form (ignores extra Firestore/Google fields). */
+function placeFingerprint(place) {
+  if (!place || typeof place !== 'object') return '';
+  const placeId = place.placeId || place.place_id || '';
+  const lat =
+    place.coordinates?.lat ??
+    place.geometry?.location?.lat ??
+    place.geometry?.location?.latitude ??
+    '';
+  const lng =
+    place.coordinates?.lng ??
+    place.geometry?.location?.lng ??
+    place.geometry?.location?.longitude ??
+    '';
+  const name = place.name || '';
+  return `${placeId}|${name}|${lat}|${lng}`;
+}
+
+function resolveCategoryIdFromEditItem(editItem) {
+  if (!editItem) return '';
+  const fromId = typeof editItem.categoryId === 'string' ? editItem.categoryId.trim() : '';
+  if (fromId) return fromId;
+
+  const raw = typeof editItem.category === 'string' ? editItem.category.trim() : '';
+  if (!raw) return '';
+
+  const byId = PARENT_CATEGORIES.find((c) => c.id === raw);
+  if (byId) return byId.id;
+  const byLabel = PARENT_CATEGORIES.find((c) => c.label === raw);
+  return byLabel?.id || '';
+}
+
+function resolveTagsFromEditItem(editItem) {
+  if (!editItem || !Array.isArray(editItem.tags)) return [];
+  return editItem.tags
+    .map((t) => (typeof t === 'string' ? t.trim() : String(t).trim()))
+    .filter(Boolean);
+}
+
+function buildEditComparable(editItem) {
+  if (!editItem) return null;
+  const tags = [...resolveTagsFromEditItem(editItem)].sort();
+  const images = Array.isArray(editItem.images) ? [...editItem.images] : [];
+  return JSON.stringify({
+    title: editItem.title || '',
+    description: editItem.description || '',
+    category: resolveCategoryIdFromEditItem(editItem),
+    tags,
+    budget: editItem.budget || '',
+    countryId: editItem.countryId || null,
+    cityId: editItem.cityId || null,
+    place: placeFingerprint(editItem.place),
+    images: JSON.stringify(images),
+  });
+}
+
+/** Params shape for navigation.setParams when merging edit targets (callers use item or recommendation). */
+function buildEditRouteParams(payload, postIdFallback) {
+  const id = payload?.id ?? postIdFallback ?? null;
+  return {
+    mode: 'edit',
+    ...(id ? { postId: id } : {}),
+    item: payload,
+    recommendation: payload,
+  };
+}
+
+function buildFormComparable({
+  title,
+  description,
+  category,
+  selectedTags,
+  budget,
+  selectedCountry,
+  selectedCity,
+  selectedPlace,
+  editableImageUris,
+}) {
+  const tags = [...(selectedTags || [])]
+    .map((t) => String(t).trim())
+    .filter(Boolean)
+    .sort();
+  const images = Array.isArray(editableImageUris) ? [...editableImageUris] : [];
+  return JSON.stringify({
+    title: title || '',
+    description: description || '',
+    category: category || '',
+    tags,
+    budget: budget || '',
+    countryId: selectedCountry?.id ?? null,
+    cityId: selectedCity?.id ?? null,
+    place: placeFingerprint(selectedPlace),
+    images: JSON.stringify(images),
+  });
+}
+
 export default function AddRecommendationScreen({ navigation , route }) {
   // --- Initialization & Params ---
   const isEdit = route?.params?.mode === 'edit';
-  const editItem = route?.params?.item || null;
+  const editItem = route?.params?.item ?? route?.params?.recommendation ?? null;
   const editPostId = route?.params?.postId || null;
+  /** Stable id for the post being edited (avoids re-hydrating when parent passes a new editItem object for the same post). */
+  const editingPostKey = editItem?.id ?? editPostId ?? null;
 
-  useBackButton(navigation, { title: isEdit ? "עריכת המלצה" : "יאלללה להמליץ!" });
+  const pendingDiscardRef = useRef(null);
+  /** Post id last fully hydrated into form + baseline (null in create mode or before first edit hydrate). */
+  const hydratedPostKeyRef = useRef(null);
+  /** Snapshot of route params to restore when blocking an in-place switch to another post. */
+  const lastHydratedRouteParamsRef = useRef(null);
+  /** Target route params when user tried to switch posts while dirty (React Navigation merges params without beforeRemove). */
+  const pendingPostSwitchParamsRef = useRef(null);
+  /** One-shot: user confirmed discard; allow hydrating the pending post even though form still looks dirty vs old baseline. */
+  const forceApplyPendingPostRef = useRef(false);
 
   // --- Local State ---
   const [title, setTitle] = useState('');
@@ -56,6 +165,8 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
+  const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 
   // --- Exact Location Handling (local-first) ---
   const [locationQuery, setLocationQuery] = useState('');
@@ -90,17 +201,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
     normalizeHeight: 1080,
     normalizeCompress: 0.9,
   });
-  const existingImages = isEdit ? (editItem?.images || []) : [];
   const [editableImageUris, setEditableImageUris] = useState([]);
-
-  useEffect(() => {
-    if (isEdit) {
-      setEditableImageUris(Array.isArray(existingImages) ? existingImages : []);
-    } else {
-      setEditableImageUris([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, editItem?.id]);
 
   const handleAddImages = async () => {
     const uris = await pickImages({ limit: 5 });
@@ -124,32 +225,129 @@ export default function AddRecommendationScreen({ navigation , route }) {
     });
   };
 
+  const formComparable = useMemo(
+    () =>
+      buildFormComparable({
+        title,
+        description,
+        category,
+        selectedTags,
+        budget,
+        selectedCountry,
+        selectedCity,
+        selectedPlace,
+        editableImageUris,
+      }),
+    [
+      title,
+      description,
+      category,
+      selectedTags,
+      budget,
+      selectedCountry,
+      selectedCity,
+      selectedPlace,
+      editableImageUris,
+    ]
+  );
+
+  // Applies to any edit session (owner or admin editing another user's post).
+  const hasUnsavedChanges =
+    Boolean(isEdit && editItem && editSnapshotBaseline != null && editSnapshotBaseline !== formComparable);
+
+  const dismissUnsavedModal = useCallback(() => {
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+    pendingPostSwitchParamsRef.current = null;
+  }, []);
+
+  const confirmUnsavedLeave = useCallback(() => {
+    const onConfirm = pendingDiscardRef.current;
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+    if (onConfirm) onConfirm();
+  }, []);
+
+  const promptDiscardUnsaved = useCallback((onConfirmLeave) => {
+    pendingDiscardRef.current = onConfirmLeave;
+    setUnsavedModalVisible(true);
+  }, []);
+
+  const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
+    navigation,
+    guardActive: Boolean(isEdit && editItem),
+    sessionKey: `${Boolean(isEdit)}-${editingPostKey ?? ''}`,
+    hasUnsavedChanges,
+    submitting,
+    openUnsavedPrompt: promptDiscardUnsaved,
+  });
+
+  useBackButton(navigation, {
+    title: isEdit ? 'עריכת המלצה' : 'יאלללה להמליץ!',
+    onPress: handleHeaderBackPress,
+  });
+
+  useEffect(() => {
+    if (!isEdit) {
+      setEditSnapshotBaseline(null);
+      hydratedPostKeyRef.current = null;
+      lastHydratedRouteParamsRef.current = null;
+      setEditableImageUris([]);
+    }
+  }, [isEdit]);
+
   // --- Effects ---
   useEffect(() => {
-    if (!isEdit || !editItem) return;
+    if (!isEdit || !editItem) {
+      if (isEdit && !editItem) {
+        setEditSnapshotBaseline(null);
+        hydratedPostKeyRef.current = null;
+        lastHydratedRouteParamsRef.current = null;
+      }
+      return;
+    }
+
+    if (editingPostKey != null && editingPostKey === hydratedPostKeyRef.current) {
+      return;
+    }
+
+    const sessionDirty =
+      editSnapshotBaseline != null &&
+      formComparable !== editSnapshotBaseline &&
+      !forceApplyPendingPostRef.current;
+
+    if (
+      hydratedPostKeyRef.current != null &&
+      editingPostKey != null &&
+      editingPostKey !== hydratedPostKeyRef.current &&
+      sessionDirty
+    ) {
+      if (pendingPostSwitchParamsRef.current != null) {
+        return;
+      }
+      pendingPostSwitchParamsRef.current = buildEditRouteParams(editItem, editPostId);
+      const restore = lastHydratedRouteParamsRef.current;
+      if (restore) {
+        navigation.setParams(restore);
+      }
+      promptDiscardUnsaved(() => {
+        const next = pendingPostSwitchParamsRef.current;
+        pendingPostSwitchParamsRef.current = null;
+        forceApplyPendingPostRef.current = true;
+        if (next) navigation.setParams(next);
+      });
+      return;
+    }
+
+    if (forceApplyPendingPostRef.current) {
+      forceApplyPendingPostRef.current = false;
+    }
 
     setTitle(editItem.title || '');
     setDescription(editItem.description || '');
 
-    const resolvedCategoryId = (() => {
-      const fromId = typeof editItem.categoryId === 'string' ? editItem.categoryId.trim() : '';
-      if (fromId) return fromId;
-
-      const raw = typeof editItem.category === 'string' ? editItem.category.trim() : '';
-      if (!raw) return '';
-
-      // Backward-compat: older docs may have stored the Hebrew label in `category`.
-      const byId = PARENT_CATEGORIES.find((c) => c.id === raw);
-      if (byId) return byId.id;
-      const byLabel = PARENT_CATEGORIES.find((c) => c.label === raw);
-      return byLabel?.id || '';
-    })();
-
-    const resolvedTags = Array.isArray(editItem.tags)
-      ? editItem.tags
-          .map((t) => (typeof t === 'string' ? t.trim() : String(t).trim()))
-          .filter(Boolean)
-      : [];
+    const resolvedCategoryId = resolveCategoryIdFromEditItem(editItem);
+    const resolvedTags = resolveTagsFromEditItem(editItem);
 
     setCategory(resolvedCategoryId);
     setSelectedTags(resolvedTags);
@@ -161,7 +359,20 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setSelectedCity(initialCityId ? { id: initialCityId, name: editItem.location || initialCityId } : null);
     setSelectedPlace(editItem.place || null);
     setLocationQuery(editItem.place?.name || editItem.location || '');
-  }, [isEdit, editItem]);
+    setEditableImageUris(Array.isArray(editItem.images) ? editItem.images : []);
+    setEditSnapshotBaseline(buildEditComparable(editItem));
+    hydratedPostKeyRef.current = editingPostKey;
+    lastHydratedRouteParamsRef.current = buildEditRouteParams(editItem, editPostId);
+  }, [
+    isEdit,
+    editingPostKey,
+    editItem,
+    editPostId,
+    formComparable,
+    editSnapshotBaseline,
+    navigation,
+    promptDiscardUnsaved,
+  ]);
 
   useEffect(() => {
     const q = locationQuery.trim();
@@ -466,6 +677,7 @@ const handleSubmit = async () => {
         });
         Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
       }
+      allowLeaveRef.current = true;
       navigation.goBack();
 
     } catch (error) {
@@ -669,6 +881,14 @@ const handleSubmit = async () => {
         onSelect={handleSelectManualCountry}
         selectedId={selectedCountry?.id}
         emptyText={loadingCountriesForPicker ? 'טוען...' : 'אין מדינות להצגה'}
+      />
+
+      <UnsavedChangesModal
+        visible={unsavedModalVisible}
+        title={UNSAVED_LEAVE_TITLE}
+        message={UNSAVED_LEAVE_MESSAGE}
+        onCancel={dismissUnsavedModal}
+        onConfirm={confirmUnsavedLeave}
       />
 
     </View>

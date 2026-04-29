@@ -80,15 +80,18 @@ export const typography = {
 	},
 
 	profileStatNumber: {
-		fontSize: 18,
-		fontWeight: "700",
+		fontSize: 20,
+		fontWeight: "900",
 		color: "#111827",
 	},
 
 	profileStatLabel: {
 		fontSize: 12,
 		color: "#6B7280",
+		fontWeight: "800",
 		marginTop: 4,
+		textAlign: "center",
+		writingDirection: "rtl",
 	},
 
 	profileMenuItemText: {

@@ -10,6 +10,8 @@ export { useImagePicker } from './useImagePicker';
 export { useImageUploader, FirebaseUploadStrategy } from './useImageUploader';
 export { useImagePickerWithUpload } from './useImagePickerWithUpload';
 
+export { useUnsavedLeaveGuard } from './useUnsavedLeaveGuard';
+
 // Other hooks
 export { default as useBackButton } from './useBackButton';
 export { default as useCommentsCount } from './useCommentsCount';

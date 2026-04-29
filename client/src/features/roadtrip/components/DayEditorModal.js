@@ -1,17 +1,42 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Alert, Image, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { FormInput } from "../../../components/FormInput";
 import { ImagePickerBox } from "../../../components/ImagePickerBox";
+import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import { getStopCoordinates } from "../utils/routeStops";
 import { dayEditorModalStyles as styles } from "../../../styles";
 import StopEditorModal from "./StopEditorModal";
+
+function buildDayComparable({ description, image, stops }) {
+	return JSON.stringify({
+		d: (description || "").trim(),
+		i: image || null,
+		s: (stops || []).map((stop) => {
+			const coords = getStopCoordinates(stop);
+			return {
+				id: stop.id || "",
+				t: (stop.title || "").trim(),
+				desc: (stop.description || "").trim(),
+				i: stop.image || null,
+				lat: coords?.lat ?? null,
+				lng: coords?.lng ?? null,
+				placeId: stop.place?.placeId || stop.placeId || null,
+			};
+		}),
+	});
+}
 
 export default function DayEditorModal({ visible, onClose, onSave, initialData, dayIndex }) {
 	const [description, setDescription] = useState("");
 	const [stops, setStops] = useState([]);
 	const [stopModalVisible, setStopModalVisible] = useState(false);
 	const [editingStopIndex, setEditingStopIndex] = useState(null);
+	const [dayBaseline, setDayBaseline] = useState(null);
+	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
+	const pendingDiscardRef = useRef(null);
 
 	const {
 		imageUri: image,
@@ -24,13 +49,51 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 	});
 
 	useEffect(() => {
-		if (!visible) return;
-		setDescription(initialData?.description || "");
-		setImage(initialData?.image || null);
-		setStops(Array.isArray(initialData?.stops) ? initialData.stops : []);
+		if (!visible) {
+			setDayBaseline(null);
+			setUnsavedModalVisible(false);
+			pendingDiscardRef.current = null;
+			return;
+		}
+		const desc0 = initialData?.description || "";
+		const img0 = initialData?.image || null;
+		const stops0 = Array.isArray(initialData?.stops) ? initialData.stops : [];
+		setDescription(desc0);
+		setImage(img0);
+		setStops(stops0);
 		setEditingStopIndex(null);
 		setStopModalVisible(false);
+		setDayBaseline(buildDayComparable({ description: desc0, image: img0, stops: stops0 }));
 	}, [visible, initialData, setImage]);
+
+	const dayFormComparable = useMemo(
+		() => buildDayComparable({ description, image, stops }),
+		[description, image, stops]
+	);
+
+	const hasUnsavedChanges = dayBaseline != null && dayFormComparable !== dayBaseline;
+
+	const dismissUnsavedModal = useCallback(() => {
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
+	}, []);
+
+	const confirmUnsavedLeave = useCallback(() => {
+		const onConfirm = pendingDiscardRef.current;
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
+		if (onConfirm) onConfirm();
+	}, []);
+
+	const tryClose = useCallback(() => {
+		if (uploading) return;
+		if (!hasUnsavedChanges) {
+			onClose();
+			return;
+		}
+		pendingDiscardRef.current = () => onClose();
+		setUnsavedModalVisible(true);
+	}, [uploading, hasUnsavedChanges, onClose]);
 
 	const handleSaveStop = (stopData, index) => {
 		setStops((prev) => {
@@ -65,14 +128,26 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 			return;
 		}
 		onSave({ description, image, stops }, dayIndex);
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
 		onClose();
 	};
 
 	return (
-		<Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
+		<Modal visible={visible} animationType="fade" presentationStyle="pageSheet" onRequestClose={tryClose}>
 			<SafeAreaView style={styles.container}>
+				<UnsavedChangesModal
+					visible={unsavedModalVisible}
+					title={UNSAVED_LEAVE_TITLE}
+					message={UNSAVED_LEAVE_MESSAGE}
+					onCancel={dismissUnsavedModal}
+					onConfirm={confirmUnsavedLeave}
+					testID="day-editor-unsaved-modal"
+					cancelTestID="day-editor-unsaved-cancel"
+					confirmTestID="day-editor-unsaved-confirm"
+				/>
 				<View style={styles.header}>
-					<TouchableOpacity onPress={onClose} disabled={uploading}>
+					<TouchableOpacity onPress={tryClose} disabled={uploading}>
 						<Text style={styles.headerBtn}>ביטול</Text>
 					</TouchableOpacity>
 					<Text style={styles.headerTitle}>יום {dayIndex + 1}</Text>

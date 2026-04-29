@@ -1,133 +1,134 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useMemo } from "react";
+import { ActivityIndicator, Image, Platform, Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-import { colors, common, typography, buttons, profileHeaderStyles as styles } from '../../../styles';
-import ProfileBadge from './ProfileBadge';
-import { TRAVEL_STYLES, TRIP_TYPES } from '../constants/smartProfileOptions';
-
-
+import { colors, profileHeaderStyles as styles } from "../../../styles";
+import ProfileBadge from "./ProfileBadge";
+import { TRAVEL_STYLES, TRIP_TYPES } from "../constants/smartProfileOptions";
 
 const labelFromOptions = (options, value) =>
-  options?.find((o) => o.value === value)?.label || value;
+	options?.find((o) => o.value === value)?.label || value;
+
+const translateLevel = (label) => {
+	const match = String(label || "").match(/level\s*(\d+)/i);
+	return match ? `מטייל רמה ${match[1]}` : label || "מטייל רמה 1";
+};
 
 export default function ProfileHeader({
-  userData,
-  stats,
-  smartBadges,
-  onPickImage,
-  uploading,
-  onEditSmartProfile,
+	userData,
+	stats,
+	smartBadges,
+	onPickImage,
+	uploading,
+	onEditSmartProfile,
 }) {
-  const initial = userData?.displayName?.charAt(0)?.toUpperCase() || 'T';
+	const initial = userData?.displayName?.charAt(0)?.toUpperCase() || "T";
+	const smartProfile = userData?.smartProfile || null;
 
-  const smartProfile = userData?.smartProfile || null;
+	const travelStyleValue =
+		smartProfile?.travelStyle ??
+		smartProfile?.budget ??
+		smartProfile?.budgetTag ??
+		smartProfile?.travelStyleTag ??
+		null;
 
-  // support multiple possible field names (because data might be saved differently)
-  const travelStyleValue =
-    smartProfile?.travelStyle ??
-    smartProfile?.budget ??
-    smartProfile?.budgetTag ??
-    smartProfile?.travelStyleTag ??
-    null;
+	const tripTypeValue =
+		smartProfile?.tripType ??
+		smartProfile?.travelerType ??
+		smartProfile?.tripGroup ??
+		smartProfile?.groupType ??
+		null;
 
-  const tripTypeValue =
-    smartProfile?.tripType ??
-    smartProfile?.travelerType ??
-    smartProfile?.tripGroup ??
-    smartProfile?.groupType ??
-    null;
+	const travelStyleLabel = useMemo(() => {
+		if (!travelStyleValue) return null;
+		return labelFromOptions(TRAVEL_STYLES, travelStyleValue) || String(travelStyleValue);
+	}, [travelStyleValue]);
 
-  const travelStyleLabel = useMemo(() => {
-    if (!travelStyleValue) return null;
-    // if value is already a human label (Hebrew), just show it
-    const fromOptions = labelFromOptions(TRAVEL_STYLES, travelStyleValue);
-    return fromOptions || String(travelStyleValue);
-  }, [travelStyleValue]);
+	const tripTypeLabel = useMemo(() => {
+		if (!tripTypeValue) return null;
+		return labelFromOptions(TRIP_TYPES, tripTypeValue) || String(tripTypeValue);
+	}, [tripTypeValue]);
 
-  const tripTypeLabel = useMemo(() => {
-    if (!tripTypeValue) return null;
-    const fromOptions = labelFromOptions(TRIP_TYPES, tripTypeValue);
-    return fromOptions || String(tripTypeValue);
-  }, [tripTypeValue]);
+	const hasSmartProfileMain = Boolean(travelStyleLabel || tripTypeLabel);
+	const levelLabel = translateLevel(stats?.credibilityLabel);
 
+	return (
+		<View style={styles.hero}>
+			<LinearGradient
+				colors={["rgba(76,114,255,0.16)", "rgba(255,255,255,0)"]}
+				style={styles.heroWash}
+				pointerEvents="none"
+			/>
 
-  const hasSmartProfileMain = Boolean(travelStyleLabel || tripTypeLabel);
+			<View style={styles.avatarStage}>
+				<View style={styles.avatarRing}>
+					{userData?.photoURL ? (
+						Platform.OS === "web" ? (
+							<img src={userData.photoURL} alt="" style={styles.webAvatarImage} />
+						) : (
+							<Image source={{ uri: userData.photoURL }} style={styles.avatarImage} />
+						)
+					) : (
+						<View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+							<Text style={styles.avatarInitial}>{initial}</Text>
+						</View>
+					)}
 
-  return (
-    <View style={common.profileHeader}>
-      <View style={common.profileAvatarContainer}>
-        {userData?.photoURL ? (
-          Platform.OS === 'web' ? (
-            <img
-              src={userData.photoURL}
-              alt=""
-              style={{
-                width: common.profileAvatar?.width || 100,
-                height: common.profileAvatar?.height || 100,
-                borderRadius: (common.profileAvatar?.borderRadius ?? 50),
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          ) : (
-            <Image source={{ uri: userData.photoURL }} style={common.profileAvatar} />
-          )
-        ) : (
-          <View style={[common.profileAvatar, common.profileAvatarPlaceholder]}>
-            <Text style={common.profileAvatarText}>{initial}</Text>
-          </View>
-        )}
+					{typeof onPickImage === "function" ? (
+						<TouchableOpacity
+							onPress={onPickImage}
+							style={styles.cameraButton}
+							disabled={uploading}
+							activeOpacity={0.85}
+						>
+							{uploading ? (
+								<ActivityIndicator size="small" color={colors.white} />
+							) : (
+								<Ionicons name="camera" size={18} color={colors.white} />
+							)}
+						</TouchableOpacity>
+					) : null}
+				</View>
+			</View>
 
-        {typeof onPickImage === 'function' ? (
-          <TouchableOpacity
-            onPress={onPickImage}
-            style={buttons.editAvatarBadge}
-            disabled={uploading}
-            activeOpacity={0.85}
-          >
-            {uploading ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Ionicons name="camera" size={14} color={colors.white} />
-            )}
-          </TouchableOpacity>
-        ) : null}
-      </View>
+			<Text style={styles.name} numberOfLines={1}>
+				{userData?.displayName}
+			</Text>
+			{userData?.email ? (
+				<Text style={styles.email} numberOfLines={1}>
+					{userData.email}
+				</Text>
+			) : null}
 
-      <Text style={typography.profileName}>{userData?.displayName}</Text>
-      {userData?.email ? <Text style={typography.profileEmail}>{userData.email}</Text> : null}
+			<View style={styles.badgeRow}>
+				<ProfileBadge text={levelLabel} variant="muted" />
+				{userData?.isExpert ? <ProfileBadge text="מאומת" variant="verified" /> : null}
+			</View>
 
-      {/* Level + Verified */}
-      <View style={styles.badgeRow}>
-        <ProfileBadge text={stats?.credibilityLabel || 'Level 1 Traveler'} variant="muted" />
-        {userData?.isExpert ? <ProfileBadge text="Verified" variant="verified" /> : null}
-      </View>
+			{hasSmartProfileMain ? (
+				<View style={styles.badgeRow}>
+					{travelStyleLabel ? <ProfileBadge text={travelStyleLabel} variant="muted" /> : null}
+					{tripTypeLabel ? <ProfileBadge text={tripTypeLabel} variant="muted" /> : null}
+				</View>
+			) : typeof onEditSmartProfile === "function" ? (
+				<TouchableOpacity
+					onPress={onEditSmartProfile}
+					style={styles.smartProfileCta}
+					activeOpacity={0.85}
+				>
+					<Ionicons name="sparkles" size={15} color={colors.primary} />
+					<Text style={styles.smartProfileCtaText}>התאם פרופיל חכם</Text>
+				</TouchableOpacity>
+			) : null}
 
-      {/* ✅ Smart Profile main fields: Budget + Traveler type */}
-      {hasSmartProfileMain ? (
-        <View style={styles.badgeRow}>
-          {travelStyleLabel ? <ProfileBadge text={travelStyleLabel} variant="muted" /> : null}
-          {tripTypeLabel ? <ProfileBadge text={tripTypeLabel} variant="muted" /> : null}
-        </View>
-      ) : typeof onEditSmartProfile === 'function' ? (
-        <TouchableOpacity
-          onPress={onEditSmartProfile}
-          style={styles.smartProfileCta}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.smartProfileCtaText}>Set your Smart Profile →</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Existing smart badges row (interests/constraints badges etc.) */}
-      {smartBadges?.length ? (
-        <View style={styles.badgeRow}>
-          {smartBadges.map((badge, idx) => (
-            <ProfileBadge key={`${badge}-${idx}`} text={badge} />
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
+			{smartBadges?.length ? (
+				<View style={styles.badgeRow}>
+					{smartBadges.map((badge, idx) => (
+						<ProfileBadge key={`${badge}-${idx}`} text={badge} />
+					))}
+				</View>
+			) : null}
+		</View>
+	);
 }
