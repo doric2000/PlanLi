@@ -1,7 +1,7 @@
 /**
  * Screen for displaying and editing user profile.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { ActivityIndicator, FlatList, TouchableOpacity, View } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,6 +19,7 @@ import SupportModal from "../components/SupportModal";
 
 import { useProfileData } from "../hooks/useProfileData";
 import { useProfilePhoto } from "../hooks/useProfilePhoto";
+import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { getSmartProfileBadges } from "../utils/smartProfileBadges";
 
 import {
@@ -171,6 +172,20 @@ function AuthedProfileScreen({ navigation, route }) {
 		return unsubscribe;
 	}, [navigation, refresh, loadMyContent]);
 
+	const profileListRef = useRef(null);
+	const tabPressRefresh = useCallback(() => {
+		refresh();
+		loadMyContent();
+	}, [refresh, loadMyContent]);
+
+	const { onScroll: profileTabOnScroll } = useTabPressScrollOrRefresh({
+		variant: 'flatlist',
+		scrollRef: profileListRef,
+		onRefresh: tabPressRefresh,
+		enabled: !loading,
+		scrollYResetKey: contentTab,
+	});
+
 	const smartBadges = useMemo(
 		() => getSmartProfileBadges(userData?.smartProfile),
 		[userData?.smartProfile]
@@ -197,11 +212,14 @@ function AuthedProfileScreen({ navigation, route }) {
 			</TouchableOpacity>
 
 			<FlatList
+				ref={profileListRef}
 				key={`profile-grid-${contentTab}`}
 				data={activeData}
 				keyExtractor={(item) => item.id}
 				extraData={contentTab}
 				numColumns={3}
+				onScroll={profileTabOnScroll}
+				scrollEventThrottle={16}
 				columnWrapperStyle={profileStyles.gridRow}
 				contentContainerStyle={profileStyles.listContent}
 				ListHeaderComponent={
@@ -243,8 +261,8 @@ function AuthedProfileScreen({ navigation, route }) {
 				}
 			/>
 
-			<SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
-		</SafeAreaView>
+		<SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
+	</SafeAreaView>
 	);
 }
 

@@ -8,7 +8,7 @@ import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
 import CityCard from '../../../components/CityCard';
 import { useFavoriteCityIds } from '../../../hooks/useFavoriteCityIds';
 
-export default function FavoriteCitiesList() {
+export default function FavoriteCitiesList({ flatListRef, onScroll }) {
   const navigation = useNavigation();
   const { favorites, loading } = useFavoriteCityIds();
 
@@ -31,26 +31,29 @@ export default function FavoriteCitiesList() {
 
   return (
     <FlatList
+      ref={flatListRef}
       data={favorites}
       keyExtractor={(item) => item.id}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       renderItem={({ item }) => (
         <CityCard
           key={item.id}
-					city={{
-						id: item.id,
-						name: item.name || item.title || 'Unknown',
-						countryId: item.countryId,
-						imageUrl: item.thumbnail_url,
-						rating: item.rating,
+          city={{
+            id: item.id,
+            name: item.name || item.title || 'Unknown',
+            countryId: item.countryId,
+            imageUrl: item.thumbnail_url,
+            rating: item.rating,
             travelers: item.travelers || 0,
-					}}
+          }}
           showTravelers={false}
           onPress={() => navigation.navigate('LandingPage', {
             cityId: item.id,
             countryId: item.countryId
           })}
           style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}
-        />                
+        />
       )}
       contentContainerStyle={{ padding: 16, alignItems: 'center' }}
     />

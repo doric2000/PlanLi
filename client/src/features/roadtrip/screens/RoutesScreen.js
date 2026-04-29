@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -26,6 +26,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { db, auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useRefresh } from "../../community/hooks/useRefresh";
+import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { common, colors, routesScreenStyles as styles } from "../../../styles";
 import FabButton from "../../../components/FabButton";
 import { RouteCard } from "../components/RouteCard";
@@ -97,6 +98,14 @@ export default function RoutesScreen({ navigation }) {
 	};
 
 	const { isRefreshing, onRefresh } = useRefresh(fetchRoutes);
+
+	const routesListRef = useRef(null);
+	const { onScroll: routesTabOnScroll } = useTabPressScrollOrRefresh({
+		variant: "flatlist",
+		scrollRef: routesListRef,
+		onRefresh,
+		enabled: !loading,
+	});
 
 	useFocusEffect(
 		useCallback(() => {
@@ -381,12 +390,15 @@ export default function RoutesScreen({ navigation }) {
 				</View>
 			) : (
 				<FlatList
+					ref={routesListRef}
 					contentContainerStyle={[
 						styles.feedContent,
 						{ paddingBottom: getTabSceneListPaddingBottom(insets) },
 					]}
 					data={filteredRoutes}
 					keyExtractor={(item) => item.id}
+					onScroll={routesTabOnScroll}
+					scrollEventThrottle={16}
 					renderItem={renderItem}
 					ListHeaderComponent={
 						<View style={styles.generateCardWrap}>

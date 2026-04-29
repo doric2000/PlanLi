@@ -5,11 +5,9 @@ import { common } from '../../../styles/common';
 import { typography } from '../../../styles/typography';
 import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
 import { RouteCard } from '../../roadtrip/components/RouteCard';
-import { useFavoriteRoadTripsFull } from '../../../hooks/useFavoriteRoadTripsFull';
 
-export default function FavoriteRoadTripsList() {
+export default function FavoriteRoadTripsList({ favorites, loading, flatListRef, onScroll }) {
   const navigation = useNavigation();
-  const { favorites, loading } = useFavoriteRoadTripsFull();
 
   if (loading) {
     return (
@@ -30,8 +28,11 @@ export default function FavoriteRoadTripsList() {
 
   return (
     <FlatList
+      ref={flatListRef}
       data={favorites}
       keyExtractor={(item) => item.id}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       renderItem={({ item }) => (
         <View style={{ alignItems: 'center', width: '100%' }}>
           <View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>

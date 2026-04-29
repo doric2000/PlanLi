@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import CommunityInlineMap from '../components/CommunityInlineMap';
 import { useRecommendations } from '../../../hooks/useRecommendations';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 import { useUserLocation } from '../../../hooks/useUserLocation';
+import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 
 // --- Global Styles ---
 import { colors, common, community, communityScreenStyles as styles } from '../../../styles';
@@ -40,6 +41,15 @@ export default function CommunityScreen({ navigation }) {
   const { data: recommendations, loading, refreshing, refresh, removeRecommendation } = useRecommendations(sortBy);
   const { filteredData, filters, isFiltered, updateFilters, clearFilters } = useRecommendationFilter(recommendations);
   const { location: userLocation, requestLocation } = useUserLocation();
+  const feedListRef = useRef(null);
+
+  const { onScroll } = useTabPressScrollOrRefresh({
+    variant: 'flatlist',
+    scrollRef: feedListRef,
+    onRefresh: refresh,
+    enabled: !mapOpen && !loading,
+    scrollYResetKey: mapOpen,
+  });
 
   // --- Handlers ---
   const handleSortSelect = async (option) => {
@@ -233,8 +243,11 @@ export default function CommunityScreen({ navigation }) {
           </View>
         ) : (
           <FlatList
+            ref={feedListRef}
             data={displayData}
             keyExtractor={(item) => item.id}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
             renderItem={({ item }) => (
               <RecommendationCard
                   item={item}

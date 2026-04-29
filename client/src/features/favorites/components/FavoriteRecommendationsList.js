@@ -5,13 +5,8 @@ import { common } from '../../../styles/common';
 import { typography } from '../../../styles/typography';
 import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
 import RecommendationCard from '../../../components/RecommendationCard';
-import { useFavoriteRecommendationIds } from '../../../hooks/useFavoriteRecommendationIds';
-import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
 
-export default function FavoriteRecommendationsList() {
-  // Use the new hook to get full recommendation objects
-  const { favorites, loading } = useFavoriteRecommendationsFull();
-
+export default function FavoriteRecommendationsList({ favorites, loading, flatListRef, onScroll }) {
   if (loading) {
     return (
       <View style={common.containerCentered}>
@@ -30,12 +25,13 @@ export default function FavoriteRecommendationsList() {
 
   return (
     <FlatList
+      ref={flatListRef}
       data={favorites}
       keyExtractor={item => item.id}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       renderItem={({ item }) => (
         <View style={{ alignItems: 'center', width: '100%' }}>
-          {/* ✅ FIX: We wrap the card in a View with the specific width. 
-              The card will expand to fill this wrapper. */}
           <View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>
             <RecommendationCard
               item={{
@@ -47,7 +43,6 @@ export default function FavoriteRecommendationsList() {
                 ...item
               }}
               showActionBar={false}
-              // ❌ We removed the 'style' prop from here since the component ignores it
             />
           </View>
         </View>
