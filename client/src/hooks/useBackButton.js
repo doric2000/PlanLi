@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -50,18 +50,25 @@ export const useBackButton = (navigation, options = {}) => {
 		style = {},
 	} = options;
 
+	const onPressRef = useRef(onPress);
+	onPressRef.current = onPress;
+
 	useEffect(() => {
 		navigation.setOptions({
 			headerShown: true,
 			title: title,
 			headerLeft: () => (
 				<TouchableOpacity
-					onPress={onPress || (() => navigation.goBack())}
+					onPress={() => {
+						const fn = onPressRef.current;
+						if (fn) fn();
+						else navigation.goBack();
+					}}
 					style={{ paddingLeft: 10, ...style }}
 				>
 					<Ionicons name="chevron-back" size={24} color={color} />
 				</TouchableOpacity>
 			),
 		});
-	}, [navigation, title, color, onPress, style]);
+	}, [navigation, title, color, style]);
 };

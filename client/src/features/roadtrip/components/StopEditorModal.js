@@ -1,14 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import ExactLocationPicker from "../../../components/ExactLocationPicker";
 import { FormInput } from "../../../components/FormInput";
 import { ImagePickerBox } from "../../../components/ImagePickerBox";
+import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
-import { hasValidStopLocation } from "../utils/routeStops";
+import { hasValidStopLocation, getStopCoordinates } from "../utils/routeStops";
 import { stopEditorModalStyles as styles } from "../../../styles";
 
 const createStopId = () => `stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+function buildStopComparable({ title, description, image, locationValue }) {
+	const merged = { ...(locationValue || {}), title, description, image };
+	const coords = getStopCoordinates(merged);
+	return JSON.stringify({
+		title: (title || "").trim(),
+		description: (description || "").trim(),
+		image: image || null,
+		lat: coords?.lat ?? null,
+		lng: coords?.lng ?? null,
+		placeId: merged.place?.placeId ?? merged.placeId ?? null,
+	});
+}
 
 export default function StopEditorModal({
 	visible,
@@ -21,6 +36,9 @@ export default function StopEditorModal({
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [locationValue, setLocationValue] = useState(null);
+	const [stopBaseline, setStopBaseline] = useState(null);
+	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
+	const pendingDiscardRef = useRef(null);
 	const {
 		imageUri: image,
 		setImageUri: setImage,
@@ -32,12 +50,53 @@ export default function StopEditorModal({
 	});
 
 	useEffect(() => {
-		if (!visible) return;
-		setTitle(initialData?.title || "");
-		setDescription(initialData?.description || "");
-		setImage(initialData?.image || null);
-		setLocationValue(initialData || null);
+		if (!visible) {
+			setStopBaseline(null);
+			setUnsavedModalVisible(false);
+			pendingDiscardRef.current = null;
+			return;
+		}
+		const t = initialData?.title || "";
+		const d = initialData?.description || "";
+		const im = initialData?.image || null;
+		const loc = initialData || null;
+		setTitle(t);
+		setDescription(d);
+		setImage(im);
+		setLocationValue(loc);
+		setStopBaseline(
+			buildStopComparable({ title: t, description: d, image: im, locationValue: loc })
+		);
 	}, [visible, initialData, setImage]);
+
+	const stopFormComparable = useMemo(
+		() => buildStopComparable({ title, description, image, locationValue }),
+		[title, description, image, locationValue]
+	);
+
+	const hasUnsavedChanges = stopBaseline != null && stopFormComparable !== stopBaseline;
+
+	const dismissUnsavedModal = useCallback(() => {
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
+	}, []);
+
+	const confirmUnsavedLeave = useCallback(() => {
+		const onConfirm = pendingDiscardRef.current;
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
+		if (onConfirm) onConfirm();
+	}, []);
+
+	const tryClose = useCallback(() => {
+		if (uploading) return;
+		if (!hasUnsavedChanges) {
+			onClose?.();
+			return;
+		}
+		pendingDiscardRef.current = () => onClose?.();
+		setUnsavedModalVisible(true);
+	}, [uploading, hasUnsavedChanges, onClose]);
 
 	const handleSave = () => {
 		const trimmedTitle = title.trim();
@@ -65,14 +124,26 @@ export default function StopEditorModal({
 		}
 
 		onSave?.(nextStop, stopIndex);
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
 		onClose?.();
 	};
 
 	return (
-		<Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+		<Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={tryClose}>
 			<View style={styles.container}>
+				<UnsavedChangesModal
+					visible={unsavedModalVisible}
+					title={UNSAVED_LEAVE_TITLE}
+					message={UNSAVED_LEAVE_MESSAGE}
+					onCancel={dismissUnsavedModal}
+					onConfirm={confirmUnsavedLeave}
+					testID="stop-editor-unsaved-modal"
+					cancelTestID="stop-editor-unsaved-cancel"
+					confirmTestID="stop-editor-unsaved-confirm"
+				/>
 				<View style={styles.header}>
-					<TouchableOpacity onPress={onClose} disabled={uploading}>
+					<TouchableOpacity onPress={tryClose} disabled={uploading}>
 						<Text style={styles.headerButton}>ביטול</Text>
 					</TouchableOpacity>
 					<Text style={styles.headerTitle}>

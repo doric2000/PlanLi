@@ -852,6 +852,67 @@ export const addRecommendationScreenStyles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
+  unsavedDialogOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  unsavedDialogCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 18,
+  },
+  unsavedDialogTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    textAlign: 'center',
+    writingDirection: 'rtl',
+    marginBottom: 8,
+  },
+  unsavedDialogMessage: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400',
+    color: colors.textSecondary,
+    textAlign: 'center',
+    writingDirection: 'rtl',
+    marginBottom: 20,
+  },
+  unsavedDialogActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  unsavedDialogButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  unsavedDialogButtonNeutral: {
+    backgroundColor: '#E5E5EA',
+  },
+  unsavedDialogButtonNeutralText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    writingDirection: 'rtl',
+  },
+  unsavedDialogButtonDestructiveText: {
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.error,
+    writingDirection: 'rtl',
+  },
 });
 
 // features/community/screens/CommunityScreen.js
@@ -3528,6 +3589,7 @@ export const tabNavigatorStyles = StyleSheet.create({
     position: 'absolute',
     left: 14,
     right: 14,
+    // height must match TAB_BAR_HEIGHT in client/src/navigation/tabBarLayout.js
     height: 70,
     borderRadius: 31,
     backgroundColor: 'rgba(236, 239, 246, 0.88)',

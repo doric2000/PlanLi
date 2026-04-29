@@ -45,7 +45,11 @@ describe('ChangeNameFlow', () => {
 
   it('updates the name and navigates back after confirming success', async () => {
     const settingsNav = { navigate: jest.fn(), goBack: jest.fn() };
-    const changeNameNav = { goBack: jest.fn() };
+    const changeNameNav = {
+      goBack: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+      dispatch: jest.fn(),
+    };
 
     const alertSpy = jest
       .spyOn(Alert, 'alert')
