@@ -23,6 +23,7 @@ import { colors, common, community, communityScreenStyles as styles } from '../.
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
+import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -242,7 +243,7 @@ export default function CommunityScreen({ navigation }) {
                   variant="feed"
               />
             )}
-            contentContainerStyle={[styles.feedContent, { paddingBottom: 118 + insets.bottom }]}
+            contentContainerStyle={[styles.feedContent, { paddingBottom: getTabSceneListPaddingBottom(insets) }]}
             showsVerticalScrollIndicator={false}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
             ListEmptyComponent={
@@ -256,6 +257,7 @@ export default function CommunityScreen({ navigation }) {
       )}
 
       <FabButton
+        style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
         onPress={() => {
           const tier = getUserTier(auth.currentUser);
           if (tier === 'guest') {

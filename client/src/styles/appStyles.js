@@ -3528,6 +3528,7 @@ export const tabNavigatorStyles = StyleSheet.create({
     position: 'absolute',
     left: 14,
     right: 14,
+    // height must match TAB_BAR_HEIGHT in client/src/navigation/tabBarLayout.js
     height: 70,
     borderRadius: 31,
     backgroundColor: 'rgba(236, 239, 246, 0.88)',

@@ -32,6 +32,7 @@ import { RouteCard } from "../components/RouteCard";
 import { GenerateTripCard } from "../components/GenerateTripCard";
 import { CommentsModal } from "../../../components/CommentsModal";
 import ActiveRouteFiltersList from "../components/ActiveRouteFiltersList";
+import { getFabBottomInset, getTabSceneListPaddingBottom } from "../../../navigation/tabBarLayout";
 
 const text = {
 	title: "\u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd",
@@ -380,7 +381,10 @@ export default function RoutesScreen({ navigation }) {
 				</View>
 			) : (
 				<FlatList
-					contentContainerStyle={styles.feedContent}
+					contentContainerStyle={[
+						styles.feedContent,
+						{ paddingBottom: getTabSceneListPaddingBottom(insets) },
+					]}
 					data={filteredRoutes}
 					keyExtractor={(item) => item.id}
 					renderItem={renderItem}
@@ -410,7 +414,7 @@ export default function RoutesScreen({ navigation }) {
 				/>
 			)}
 
-			<FabButton onPress={openCreateRoute} />
+			<FabButton style={{ bottom: getFabBottomInset(insets), zIndex: 10 }} onPress={openCreateRoute} />
 
 			<RoutesFilterModal
 				visible={filterVisible}
