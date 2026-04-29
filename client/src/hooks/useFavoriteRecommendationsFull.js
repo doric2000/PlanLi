@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { db } from "../config/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useFavoriteRecommendationIds } from "./useFavoriteRecommendationIds";
@@ -11,10 +11,14 @@ export function useFavoriteRecommendationsFull() {
   const { ids, loading: loadingIds } = useFavoriteRecommendationIds();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reloadTick, setReloadTick] = useState(0);
 
-
-  // Keep track of previous ids to avoid unnecessary fetches
   const prevIdsRef = useRef();
+
+  const reload = useCallback(() => {
+    prevIdsRef.current = undefined;
+    setReloadTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     if (loadingIds) {
@@ -44,7 +48,7 @@ export function useFavoriteRecommendationsFull() {
     )
       .then((results) => setFavorites(results.filter(Boolean)))
       .finally(() => setLoading(false));
-  }, [ids, loadingIds]);
+  }, [ids, loadingIds, reloadTick]);
 
-  return { favorites, loading };
+  return { favorites, loading, reload };
 }

@@ -2,7 +2,7 @@
  * Screen for displaying and editing user profile.
  * Now composed from smaller hooks/components to keep it maintainable.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { View, FlatList, ActivityIndicator, Alert, TouchableOpacity, Text } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import SupportModal from '../components/SupportModal';
 
 import { useProfileData } from '../hooks/useProfileData';
 import { useProfilePhoto } from '../hooks/useProfilePhoto';
+import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSmartProfileBadges } from '../utils/smartProfileBadges';
 
@@ -167,6 +168,20 @@ function AuthedProfileScreen({ navigation, route }) {
     }
   }, [profileUid]);
 
+  const profileListRef = useRef(null);
+  const tabPressRefresh = useCallback(() => {
+    refresh();
+    loadMyContent();
+  }, [refresh, loadMyContent]);
+
+  const { onScroll: profileTabOnScroll } = useTabPressScrollOrRefresh({
+    variant: 'flatlist',
+    scrollRef: profileListRef,
+    onRefresh: tabPressRefresh,
+    enabled: !loading,
+    scrollYResetKey: contentTab,
+  });
+
   useEffect(() => {
     if (route?.params?.openSupport) {
       setSupportOpen(true);
@@ -251,9 +266,12 @@ function AuthedProfileScreen({ navigation, route }) {
       </TouchableOpacity>
 
       <FlatList
+        ref={profileListRef}
         data={activeData}
         keyExtractor={(item) => item.id}
         extraData={contentTab}
+        onScroll={profileTabOnScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={
           contentTab === 'routes'
             ? { padding: 15, paddingBottom: 40 }

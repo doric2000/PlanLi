@@ -11,6 +11,7 @@ import CityCard from "../../../components/CityCard";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
+import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { getOrCreateDestination } from "../../../services/LocationService";
 import { colors, homeScreenStyles as styles } from "../../../styles";
 
@@ -50,6 +51,7 @@ export default function HomeScreen({ navigation }) {
 	const [savedCityIds, setSavedCityIds] = useState({});
 	const isFetchingAllDestinationsForSearchRef = useRef(false);
 	const allDestinationsFetchDebounceRef = useRef(null);
+	const mainScrollRef = useRef(null);
 
 	const fetchDestinations = async () => {
 		try {
@@ -143,6 +145,12 @@ export default function HomeScreen({ navigation }) {
 		isFetchingAllDestinationsForSearchRef.current = false;
 		fetchDestinations();
 	};
+
+	const { onScroll } = useTabPressScrollOrRefresh({
+		variant: "scrollview",
+		scrollRef: mainScrollRef,
+		onRefresh,
+	});
 
 	const searchableDestinations = searchQuery.trim()
 		? hasLoadedAllDestinationsForSearch
@@ -462,11 +470,14 @@ export default function HomeScreen({ navigation }) {
 				<StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 			) : null}
 			<ScrollView
+				ref={mainScrollRef}
 				style={styles.scroll}
 				contentContainerStyle={[
 					styles.scrollContent,
 					{ paddingBottom: 116 + insets.bottom },
 				]}
+				onScroll={onScroll}
+				scrollEventThrottle={16}
 				refreshControl={
 					<RefreshControl
 						refreshing={refreshing}

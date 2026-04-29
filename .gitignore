@@ -12,4 +12,12 @@ package-lock.json
 client/package-lock.json
 server/.env
 server/.env.example
+
+# Agent rules
 agent.md
+AGENTS.md
+CLAUDE.md
+OPENAI.md
+/docs/agent-rules/
+/graphify-out
+/*.zip
