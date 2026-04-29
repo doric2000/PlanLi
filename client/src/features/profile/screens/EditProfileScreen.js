@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Alert, ScrollView, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -7,6 +7,9 @@ import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 import { colors, common, cards, tags, buttons, spacing, editProfileScreenStyles as styles } from "../../../styles";
 import { useBackButton } from "../../../hooks/useBackButton";
+import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
+import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { toggleValue } from "./utils/toggleValue";
 import { FormInput } from "../../../components/FormInput";
 
@@ -45,9 +48,17 @@ const LabeledInput = ({ label, style, ...props }) => (
   </View>
 );
 
+function buildSmartProfileComparable({ budget, travelStyle, interests, vibe }) {
+  return JSON.stringify({
+    budget: budget || "",
+    travelStyle: travelStyle || "",
+    interests: [...(interests || [])].sort(),
+    vibe: [...(vibe || [])].sort(),
+  });
+}
+
 export default function EditProfileScreen({ navigation }) {
   const uid = auth.currentUser?.uid;
-  useBackButton(navigation, { title: "עריכת פרופיל", color: colors.primary });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,6 +74,8 @@ export default function EditProfileScreen({ navigation }) {
   const [travelStyle, setTravelStyle] = useState(""); // TRAVEL_STYLE_TAGS label (single)
   const [interests, setInterests] = useState([]); // multi tags from TAGS_BY_CATEGORY
   const [vibe, setVibe] = useState([]); // multi tags from EXPERIENCE_TAGS
+  const [profileBaseline, setProfileBaseline] = useState(null);
+  const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 
   const userDocRef = useMemo(() => (uid ? doc(db, "users", uid) : null), [uid]);
 
@@ -89,6 +102,7 @@ export default function EditProfileScreen({ navigation }) {
 
     async function load() {
       if (!userDocRef) {
+        setProfileBaseline(null);
         setLoading(false);
         return;
       }
@@ -102,10 +116,15 @@ export default function EditProfileScreen({ navigation }) {
 
         // Backward compatible load:
         // - old travelStyle/tripType/constraints may exist -> we ignore or map softly
-        setBudget(sp.budget ?? sp.price ?? sp.travelStyle ?? ""); // allow older key fallbacks if you had any
-        setTravelStyle(sp.travelStyleTag ?? sp.travelStyle ?? "");
-        setInterests(Array.isArray(sp.interests) ? sp.interests : []);
-        setVibe(Array.isArray(sp.vibe) ? sp.vibe : (Array.isArray(sp.constraints) ? sp.constraints : []));
+        const b = sp.budget ?? sp.price ?? sp.travelStyle ?? "";
+        const ts = sp.travelStyleTag ?? sp.travelStyle ?? "";
+        const intr = Array.isArray(sp.interests) ? sp.interests : [];
+        const vb = Array.isArray(sp.vibe) ? sp.vibe : (Array.isArray(sp.constraints) ? sp.constraints : []);
+        setBudget(b);
+        setTravelStyle(ts);
+        setInterests(intr);
+        setVibe(vb);
+        setProfileBaseline(buildSmartProfileComparable({ budget: b, travelStyle: ts, interests: intr, vibe: vb }));
       } catch (e) {
         console.warn("Failed to load smart profile:", e);
       } finally {
@@ -118,6 +137,47 @@ export default function EditProfileScreen({ navigation }) {
       alive = false;
     };
   }, [userDocRef]);
+
+  const profileFormComparable = useMemo(
+    () => buildSmartProfileComparable({ budget, travelStyle, interests, vibe }),
+    [budget, travelStyle, interests, vibe]
+  );
+
+  const hasUnsavedChanges =
+    profileBaseline != null && profileFormComparable !== profileBaseline;
+
+  const pendingDiscardRef = useRef(null);
+  const dismissUnsavedModal = useCallback(() => {
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+  }, []);
+
+  const confirmUnsavedLeave = useCallback(() => {
+    const onConfirm = pendingDiscardRef.current;
+    setUnsavedModalVisible(false);
+    pendingDiscardRef.current = null;
+    if (onConfirm) onConfirm();
+  }, []);
+
+  const promptDiscardUnsaved = useCallback((onConfirmLeave) => {
+    pendingDiscardRef.current = onConfirmLeave;
+    setUnsavedModalVisible(true);
+  }, []);
+
+  const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
+    navigation,
+    guardActive: Boolean(uid && profileBaseline != null && !loading),
+    sessionKey: uid ?? "",
+    hasUnsavedChanges,
+    submitting: saving,
+    openUnsavedPrompt: promptDiscardUnsaved,
+  });
+
+  useBackButton(navigation, {
+    title: "עריכת פרופיל",
+    color: colors.primary,
+    onPress: handleHeaderBackPress,
+  });
 
   const onSave = async () => {
     if (!uid) return;
@@ -144,8 +204,15 @@ export default function EditProfileScreen({ navigation }) {
         { merge: true }
       );
 
-      Alert.alert("Saved", "Your Smart Profile was updated.");
-      navigation.goBack();
+      Alert.alert("Saved", "Your Smart Profile was updated.", [
+        {
+          text: "OK",
+          onPress: () => {
+            allowLeaveRef.current = true;
+            navigation.goBack();
+          },
+        },
+      ]);
     } catch (e) {
       console.error("Failed to save smart profile:", e);
       Alert.alert("Error", "Could not save profile. Please try again.");
@@ -154,18 +221,16 @@ export default function EditProfileScreen({ navigation }) {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={[common.containerCentered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
-    <SafeAreaView style={common.container}>
-      <View style={[common.container, { backgroundColor: colors.background }]}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+    <>
+      {loading ? (
+        <View style={[common.containerCentered, { backgroundColor: colors.background }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <SafeAreaView style={common.container}>
+          <View style={[common.container, { backgroundColor: colors.background }]}>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Budget (PRICE_TAGS) */}
           <View style={cards.card}>
             <Text style={styles.sectionLabel}>תקציב</Text>
@@ -241,5 +306,17 @@ export default function EditProfileScreen({ navigation }) {
         </ScrollView>
       </View>
     </SafeAreaView>
+      )}
+      <UnsavedChangesModal
+        visible={unsavedModalVisible}
+        title={UNSAVED_LEAVE_TITLE}
+        message={UNSAVED_LEAVE_MESSAGE}
+        onCancel={dismissUnsavedModal}
+        onConfirm={confirmUnsavedLeave}
+        testID="edit-profile-unsaved-modal"
+        cancelTestID="edit-profile-unsaved-cancel"
+        confirmTestID="edit-profile-unsaved-confirm"
+      />
+    </>
   );
 }

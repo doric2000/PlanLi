@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import {
 	colors,
@@ -24,10 +24,52 @@ import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import DayEditorModal from "../components/DayEditorModal";
 import DayList from "../components/DayList";
 import { FormInput } from "../../../components/FormInput";
+import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { useBackButton } from "../../../hooks/useBackButton";
+import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
 import { getUserTier } from "../../../utils/userTier";
 import ChipSelector from "../../community/components/ChipSelector";
 import { derivePlacesFromStops, flattenValidRouteStops } from "../utils/routeStops";
+import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
+
+function buildRouteComparableFromSource(r) {
+	if (!r) return null;
+	return JSON.stringify({
+		title: (r.Title || "").trim(),
+		days: r.days != null && r.days !== "" ? String(r.days) : "",
+		distance: r.distance != null && r.distance !== "" ? String(r.distance) : "",
+		desc: (r.desc || "").trim(),
+		tripDaysData: r.tripDaysData || [],
+		difficultyTag: r.difficultyTag || "",
+		travelStyleTag: r.travelStyleTag || "",
+		roadTripTags: [...(r.roadTripTags || [])].sort(),
+		experienceTags: [...(r.experienceTags || [])].sort(),
+	});
+}
+
+function buildRouteFormComparable({
+	title,
+	days,
+	distance,
+	desc,
+	tripDays,
+	difficultyTag,
+	travelStyleTag,
+	roadTripTags,
+	experienceTags,
+}) {
+	return JSON.stringify({
+		title: (title || "").trim(),
+		days: days != null && days !== "" ? String(days) : "",
+		distance: distance != null && distance !== "" ? String(distance) : "",
+		desc: (desc || "").trim(),
+		tripDaysData: tripDays || [],
+		difficultyTag: difficultyTag || "",
+		travelStyleTag: travelStyleTag || "",
+		roadTripTags: [...(roadTripTags || [])].sort(),
+		experienceTags: [...(experienceTags || [])].sort(),
+	});
+}
 
 const createEmptyDay = () => ({
 	description: "",
@@ -44,7 +86,7 @@ const LabeledInput = ({ label, style, ...props }) => (
 
 export default function AddRoutesScreen({ navigation, route }) {
 	const routeToEdit = route?.params?.routeToEdit;
-	useBackButton(navigation, { title: routeToEdit ? "עריכת מסלול" : "מסלול חדש" });
+	const editingRouteId = routeToEdit?.id ?? null;
 
 	const [title, setTitle] = useState("");
 	const [days, setDays] = useState("");
@@ -59,12 +101,17 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const [submitting, setSubmitting] = useState(false);
 	const [isDayModalVisible, setDayModalVisible] = useState(false);
 	const [editingDayIndex, setEditingDayIndex] = useState(null);
+	const [editRouteBaseline, setEditRouteBaseline] = useState(null);
+	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 
 	const { user } = useCurrentUser();
 	const getLabel = (item) => (typeof item === "object" ? item.label : item);
 
 	useEffect(() => {
-		if (!routeToEdit) return;
+		if (!routeToEdit) {
+			setEditRouteBaseline(null);
+			return;
+		}
 
 		setTitle(routeToEdit.Title || "");
 		setDays(routeToEdit.days ? String(routeToEdit.days) : "");
@@ -75,7 +122,71 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setTravelStyleTag(routeToEdit.travelStyleTag || "");
 		setRoadTripTags(routeToEdit.roadTripTags || []);
 		setExperienceTags(routeToEdit.experienceTags || []);
-	}, [routeToEdit]);
+		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
+	}, [editingRouteId]);
+
+	const routeFormComparable = useMemo(
+		() =>
+			buildRouteFormComparable({
+				title,
+				days,
+				distance,
+				desc,
+				tripDays,
+				difficultyTag,
+				travelStyleTag,
+				roadTripTags,
+				experienceTags,
+			}),
+		[
+			title,
+			days,
+			distance,
+			desc,
+			tripDays,
+			difficultyTag,
+			travelStyleTag,
+			roadTripTags,
+			experienceTags,
+		]
+	);
+
+	const hasUnsavedChanges = Boolean(
+		routeToEdit && editRouteBaseline != null && editRouteBaseline !== routeFormComparable
+	);
+
+	const pendingDiscardRef = useRef(null);
+	const dismissUnsavedModal = useCallback(() => {
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
+	}, []);
+
+	const confirmUnsavedLeave = useCallback(() => {
+		const onConfirm = pendingDiscardRef.current;
+		setUnsavedModalVisible(false);
+		pendingDiscardRef.current = null;
+		if (onConfirm) onConfirm();
+	}, []);
+
+	const promptDiscardUnsaved = useCallback((onConfirmLeave) => {
+		pendingDiscardRef.current = onConfirmLeave;
+		setUnsavedModalVisible(true);
+	}, []);
+
+	const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
+		navigation,
+		guardActive: Boolean(routeToEdit),
+		sessionKey: String(editingRouteId ?? ""),
+		hasUnsavedChanges,
+		submitting,
+		openUnsavedPrompt: promptDiscardUnsaved,
+	});
+
+	useBackButton(navigation, {
+		title: routeToEdit ? "עריכת מסלול" : "מסלול חדש",
+		onPress: handleHeaderBackPress,
+	});
 
 	useEffect(() => {
 		const parsedDays = Number.parseInt(days, 10);
@@ -179,6 +290,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 				});
 				Alert.alert("הצלחה", "המסלול נוסף.");
 			}
+			allowLeaveRef.current = true;
 			navigation.goBack();
 		} catch (error) {
 			console.error("Firestore Error:", error);
@@ -310,6 +422,16 @@ export default function AddRoutesScreen({ navigation, route }) {
 				onSave={handleSaveDay}
 				dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
 				initialData={editingDayIndex !== null ? tripDays[editingDayIndex] : {}}
+			/>
+			<UnsavedChangesModal
+				visible={unsavedModalVisible}
+				title={UNSAVED_LEAVE_TITLE}
+				message={UNSAVED_LEAVE_MESSAGE}
+				onCancel={dismissUnsavedModal}
+				onConfirm={confirmUnsavedLeave}
+				testID="route-unsaved-discard-modal"
+				cancelTestID="route-unsaved-discard-cancel"
+				confirmTestID="route-unsaved-discard-confirm"
 			/>
 		</View>
 	);

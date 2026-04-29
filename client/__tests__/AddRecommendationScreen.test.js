@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
 import { Alert } from 'react-native';
 import { addDoc, serverTimestamp } from 'firebase/firestore';
@@ -109,6 +109,29 @@ jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
 // ==========================================
 // 2. The Integration Test Suite
 // ==========================================
+
+const UNSAVED_EDIT_TITLE = 'שינויים לא שמורים';
+const UNSAVED_EDIT_MESSAGE = 'האם אתה בטוח שברצונך לצאת מבלי לשמור?';
+
+function makeEditItem(overrides = {}) {
+  return {
+    id: 'post-1',
+    userId: 'test-user-id',
+    title: 'Original',
+    description: 'Desc',
+    categoryId: 'food',
+    category: 'אוכל ובילויים',
+    tags: ['מסעדה'],
+    budget: '₪',
+    countryId: 'IL',
+    cityId: 'TLV',
+    country: 'Israel',
+    location: 'Tel Aviv',
+    place: { placeId: 'p1', name: 'Spot', geometry: { location: { lat: 32, lng: 34 } } },
+    images: [],
+    ...overrides,
+  };
+}
 
 describe('AddRecommendationScreen Integration Test', () => {
 
@@ -225,5 +248,243 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     // Verify navigation back to the previous screen
     expect(navigationMock.goBack).toHaveBeenCalled();
+  });
+
+  it('edit mode: beforeRemove shows unsaved alert when dirty; כן dispatches action', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+
+    const editItem = makeEditItem();
+    const { getByTestId, getByText } = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: 'post-1' } }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Original');
+    });
+
+    fireEvent.changeText(getByTestId('add-rec-title-input'), 'Changed');
+
+    const preventDefault = jest.fn();
+    const action = { type: 'POP', source: 'test' };
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault, data: { action } });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getByTestId('unsaved-discard-modal')).toBeTruthy();
+    });
+    expect(getByText(UNSAVED_EDIT_TITLE)).toBeTruthy();
+    expect(getByText(UNSAVED_EDIT_MESSAGE)).toBeTruthy();
+
+    fireEvent.press(getByTestId('unsaved-discard-confirm'));
+    expect(navigationMock.dispatch).toHaveBeenCalledWith(action);
+  });
+
+  it('edit mode: beforeRemove does not prevent when form is clean', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+
+    const editItem = makeEditItem();
+    const { getByTestId } = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: 'post-1' } }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Original');
+    });
+
+    const preventDefault = jest.fn();
+    const action = { type: 'POP' };
+    beforeRemoveHandler({ preventDefault, data: { action } });
+
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('edit mode: לא does not dispatch navigation', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+
+    const editItem = makeEditItem();
+    const { getByTestId } = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: 'post-1' } }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Original');
+    });
+
+    fireEvent.changeText(getByTestId('add-rec-title-input'), 'Changed');
+
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getByTestId('unsaved-discard-modal')).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId('unsaved-discard-cancel'));
+    expect(navigationMock.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('edit mode: uses route.params.recommendation when item is absent', async () => {
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const editItem = makeEditItem();
+    const { getByTestId } = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', recommendation: editItem, postId: 'post-1' } }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Original');
+    });
+  });
+
+  it('edit mode: non-owner post (e.g. admin) still shows unsaved dialog when dirty', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+
+    const editItem = makeEditItem({ userId: 'another-authors-uid' });
+    const { getByTestId, getByText } = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: 'post-1' } }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Original');
+    });
+
+    fireEvent.changeText(getByTestId('add-rec-title-input'), 'Admin edit');
+
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(getByTestId('unsaved-discard-modal')).toBeTruthy();
+    });
+    expect(getByText(UNSAVED_EDIT_TITLE)).toBeTruthy();
+  });
+
+  it('edit mode: in-place route swap to another post when dirty calls setParams(restore) and modal; כן applies pending post', async () => {
+    const itemA = makeEditItem({ id: 'post-a', title: 'Alpha' });
+    const itemB = makeEditItem({ id: 'post-b', title: 'Beta' });
+
+    const setParams = jest.fn();
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      setParams,
+      addListener: jest.fn(() => jest.fn()),
+    };
+
+    let routeParams = { mode: 'edit', item: itemA, postId: 'post-a' };
+
+    const { getByTestId, rerender } = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: routeParams }} />
+    );
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Alpha');
+    });
+
+    fireEvent.changeText(getByTestId('add-rec-title-input'), 'Alpha edited');
+
+    routeParams = { mode: 'edit', item: itemB, postId: 'post-b' };
+    rerender(<AddRecommendationScreen navigation={navigationMock} route={{ params: routeParams }} />);
+
+    await waitFor(() => {
+      expect(setParams).toHaveBeenCalled();
+    });
+
+    const restoreArg = setParams.mock.calls.map((c) => c[0]).find((p) => p?.postId === 'post-a');
+    expect(restoreArg).toBeTruthy();
+    expect(restoreArg.item?.id ?? restoreArg.recommendation?.id).toBe('post-a');
+
+    await waitFor(() => {
+      expect(getByTestId('unsaved-discard-modal')).toBeTruthy();
+    });
+
+    routeParams = { ...restoreArg };
+    rerender(<AddRecommendationScreen navigation={navigationMock} route={{ params: routeParams }} />);
+
+    expect(getByTestId('add-rec-title-input').props.value).toBe('Alpha edited');
+
+    await act(async () => {
+      fireEvent.press(getByTestId('unsaved-discard-confirm'));
+    });
+
+    const pendingArg = [...setParams.mock.calls].reverse().map((c) => c[0]).find((p) => p?.postId === 'post-b');
+    expect(pendingArg).toBeTruthy();
+
+    routeParams = { ...pendingArg };
+    rerender(<AddRecommendationScreen navigation={navigationMock} route={{ params: routeParams }} />);
+
+    await waitFor(() => {
+      expect(getByTestId('add-rec-title-input').props.value).toBe('Beta');
+    });
   });
 });
