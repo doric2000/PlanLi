@@ -511,23 +511,29 @@ export const cards = {
 
 	// ===== Profile Cards =====
 	profileStats: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		backgroundColor: "#FFFFFF",
-		marginHorizontal: 16,
-		paddingVertical: 20,
-		borderRadius: 15,
+		marginHorizontal: 18,
+		paddingVertical: 14,
+		paddingHorizontal: 8,
+		borderRadius: 24,
 		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.1,
-		shadowRadius: 8,
-		elevation: 4,
+		shadowOffset: { width: 0, height: 10 },
+		shadowOpacity: 0.08,
+		shadowRadius: 18,
+		elevation: 5,
 		justifyContent: "space-between",
-		marginVertical: 20,
+		marginTop: -14,
+		marginBottom: 14,
+		borderWidth: 1,
+		borderColor: "rgba(17,24,39,0.06)",
 	},
 
 	profileStatItem: {
 		flex: 1,
 		alignItems: "center",
+		justifyContent: "center",
+		gap: 4,
 	},
 
 	profileStatDivider: {
