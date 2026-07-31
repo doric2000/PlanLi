@@ -1,36 +1,13 @@
 import React from "react";
-import { ActivityIndicator, Image, Platform, Pressable, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import CachedImage from "../../../components/CachedImage";
 import { colors } from "../../../styles";
-
-const asDisplayableImage = (uri) =>
-	typeof uri === "string" &&
-	(uri.startsWith("http") || uri.startsWith("https") || uri.startsWith("file:"));
-
-const getRecommendationImage = (item) => {
-	const images = Array.isArray(item?.images) ? item.images : [];
-	return images.find(asDisplayableImage) || (asDisplayableImage(item?.image) ? item.image : null);
-};
-
-const getRouteImage = (route) => {
-	const images = [];
-	if (Array.isArray(route?.images)) images.push(...route.images);
-	if (route?.image) images.push(route.image);
-
-	if (Array.isArray(route?.tripDaysData)) {
-		route.tripDaysData.forEach((day) => {
-			if (day?.image) images.push(day.image);
-			if (Array.isArray(day?.stops)) {
-				day.stops.forEach((stop) => {
-					if (stop?.image) images.push(stop.image);
-				});
-			}
-		});
-	}
-
-	return images.find(asDisplayableImage) || null;
-};
+import {
+	getRecommendationImageUrls,
+	getRouteImageUrls,
+} from "../../../utils/mediaAssets";
 
 export function ProfileContentHeader({
 	profileStyles,
@@ -86,7 +63,9 @@ export function ProfileGridTile({ item, contentTab, contentLoading, navigation, 
 	if (contentLoading) return null;
 
 	const isRecommendation = contentTab === "recommendations";
-	const image = isRecommendation ? getRecommendationImage(item) : getRouteImage(item);
+	const image = isRecommendation
+		? getRecommendationImageUrls(item, "thumb")[0] || null
+		: getRouteImageUrls(item, "thumb")[0] || null;
 	const title = isRecommendation
 		? item?.title || item?.name || "המלצה"
 		: item?.Title || item?.title || "מסלול";
@@ -107,11 +86,16 @@ export function ProfileGridTile({ item, contentTab, contentLoading, navigation, 
 	return (
 		<Pressable style={profileStyles.gridTile} onPress={handlePress}>
 			{image ? (
-				Platform.OS === "web" ? (
-					<img src={image} alt="" style={profileStyles.gridWebImage} />
-				) : (
-					<Image source={{ uri: image }} style={profileStyles.gridImage} />
-				)
+				<CachedImage
+					source={{ uri: image }}
+					style={
+						Platform.OS === "web"
+							? profileStyles.gridWebImage
+							: profileStyles.gridImage
+					}
+					contentFit="cover"
+					priority="low"
+				/>
 			) : (
 				<View style={profileStyles.gridFallback}>
 					<Ionicons name={fallbackIcon} size={28} color={colors.white} />

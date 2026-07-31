@@ -1,8 +1,10 @@
 import React from "react";
-import { Image, Linking, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Linking, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import CachedImage from "../../../components/CachedImage";
 import { colors, dayViewModalStyles as styles } from "../../../styles";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { buildGoogleMapsPlaceUrl } from "../utils/routeStops";
 
 const text = {
@@ -40,11 +42,18 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 				</View>
 
 				<ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-					{!!dayData.image && (
-						<Image
-							source={{ uri: dayData.image }}
+					{!!(dayData.image || dayData.media) && (
+						<CachedImage
+							source={{
+								uri: getMediaVariantUrl(
+									dayData.media,
+									"large",
+									dayData.image
+								),
+							}}
 							style={styles.image}
-							resizeMode="cover"
+							contentFit="cover"
+							priority="high"
 						/>
 					)}
 
@@ -65,8 +74,19 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 									activeOpacity={0.85}
 									onPress={() => openStop(stop)}
 								>
-									{stop.image ? (
-										<Image source={{ uri: stop.image }} style={styles.stopImage} />
+									{stop.image || stop.media ? (
+										<CachedImage
+											source={{
+												uri: getMediaVariantUrl(
+													stop.media,
+													"thumb",
+													stop.image
+												),
+											}}
+											style={styles.stopImage}
+											contentFit="cover"
+											priority="low"
+										/>
 									) : (
 										<View style={styles.stopNumberBadge}>
 											<Text style={styles.stopNumberText}>{index + 1}</Text>

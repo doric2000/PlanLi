@@ -21,6 +21,7 @@ import {
 } from "../../../constants/Constants.js";
 import { db, auth } from "../../../config/firebase";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
+import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
 import DayEditorModal from "../components/DayEditorModal";
 import DayList from "../components/DayList";
 import { FormInput } from "../../../components/FormInput";
@@ -29,6 +30,10 @@ import { useBackButton } from "../../../hooks/useBackButton";
 import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
 import { getUserTier } from "../../../utils/userTier";
 import ChipSelector from "../../community/components/ChipSelector";
+import {
+	prepareRouteMedia,
+	revokeRouteObjectUrls,
+} from "../utils/routeMedia";
 import { derivePlacesFromStops, flattenValidRouteStops } from "../utils/routeStops";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 
@@ -105,6 +110,12 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 
 	const { user } = useCurrentUser();
+	const { uploadImageAssets } = useImagePickerWithUpload({
+		kind: "route",
+		quality: 1,
+		maxLongEdge: 2560,
+		normalizeCompress: 0.94,
+	});
 	const getLabel = (item) => (typeof item === "object" ? item.label : item);
 
 	useEffect(() => {
@@ -260,23 +271,26 @@ export default function AddRoutesScreen({ navigation, route }) {
 		}
 
 		setSubmitting(true);
-
-		const routeData = {
-			Title: title.trim(),
-			days: parsedDays,
-			tripDaysData: tripDays,
-			places: derivedPlaces,
-			distance: parsedDistance,
-			tags,
-			desc: desc.trim(),
-			difficultyTag,
-			travelStyleTag,
-			roadTripTags,
-			experienceTags,
-			userId: user.uid,
-		};
-
 		try {
+			const preparedMedia = await prepareRouteMedia(
+				tripDays,
+				uploadImageAssets
+			);
+			const routeData = {
+				Title: title.trim(),
+				days: parsedDays,
+				tripDaysData: preparedMedia.tripDaysData,
+				places: derivedPlaces,
+				distance: parsedDistance,
+				tags,
+				desc: desc.trim(),
+				difficultyTag,
+				travelStyleTag,
+				roadTripTags,
+				experienceTags,
+				userId: user.uid,
+			};
+
 			if (routeToEdit) {
 				await updateDoc(doc(db, "routes", routeToEdit.id), {
 					...routeData,
@@ -290,10 +304,12 @@ export default function AddRoutesScreen({ navigation, route }) {
 				});
 				Alert.alert("הצלחה", "המסלול נוסף.");
 			}
+			revokeRouteObjectUrls(tripDays);
 			allowLeaveRef.current = true;
 			navigation.goBack();
 		} catch (error) {
 			console.error("Firestore Error:", error);
+			// Unclaimed prepared media is removed by the scheduled server cleanup.
 			Alert.alert("שגיאה", "לא הצלחנו לשמור את המסלול.");
 		} finally {
 			setSubmitting(false);

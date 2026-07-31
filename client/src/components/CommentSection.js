@@ -41,7 +41,7 @@ const CommentItem = ({ item }) => {
   useEffect(() => {
     const fetchUser = async () => {
       if (!item.userId) return;
-      const snap = await getDoc(doc(db, 'users', item.userId));
+      const snap = await getDoc(doc(db, 'publicProfiles', item.userId));
       if (snap.exists()) setUserData({ 
         name: snap.data().displayName, 
         photo: snap.data().photoURL 

@@ -1,11 +1,12 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, View, Text } from 'react-native';
+import { View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { colors, notifications, tabNavigatorStyles as styles } from '../styles';
 import {tabConfigs, tabScreens} from './TabConfigs'
+import CachedImage from '../components/CachedImage';
 
 const Tab = createBottomTabNavigator();
 const RTL_TAB_ORDER = ['Profile', 'Auth', 'Favorites', 'Routes', 'Community', 'Home'];
@@ -44,7 +45,7 @@ export default function TabNavigator() {
             const iconSize = focused ? 32 : 30;
             if (route.name === 'Profile' && user) {
               const iconContent = user.photoURL ? (
-                <Image
+                <CachedImage
                   source={{ uri: user.photoURL }}
                   style={[
                     styles.profileImage,
@@ -56,7 +57,8 @@ export default function TabNavigator() {
                       borderColor: color,
                     },
                   ]}
-                  resizeMode="cover"
+                  contentFit="cover"
+                  priority="high"
                 />
               ) : (
                 <Ionicons name={focused ? config.icon : `${config.icon}-outline`}

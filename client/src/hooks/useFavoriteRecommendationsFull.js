@@ -7,7 +7,7 @@ import { useFavoriteRecommendationIds } from "./useFavoriteRecommendationIds";
  * Fetches full recommendation objects for the user's favorite recommendation IDs.
  * Returns { favorites, loading }
  */
-export function useFavoriteRecommendationsFull() {
+export function useFavoriteRecommendationsFull({ enabled = true } = {}) {
   const { ids, loading: loadingIds } = useFavoriteRecommendationIds();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,10 @@ export function useFavoriteRecommendationsFull() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (loadingIds) {
       setLoading(true);
       return;
@@ -48,7 +52,7 @@ export function useFavoriteRecommendationsFull() {
     )
       .then((results) => setFavorites(results.filter(Boolean)))
       .finally(() => setLoading(false));
-  }, [ids, loadingIds, reloadTick]);
+  }, [enabled, ids, loadingIds, reloadTick]);
 
   return { favorites, loading, reload };
 }

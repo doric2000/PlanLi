@@ -25,10 +25,6 @@ export function useGoogleLogin(navigationReplace) {
           await registerOrUpdateUser(user, {
             displayName: user.displayName || user.email.split('@')[0],
             photoURL: user.photoURL,
-            trips: 0,
-            reviews: 0,
-            credibilityScore: 10,
-            isExpert: false,
           });
         }
         navigationReplace('Main');

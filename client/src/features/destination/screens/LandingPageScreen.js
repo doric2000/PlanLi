@@ -5,8 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  ActivityIndicator,
-  ImageBackground
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useDestinationData } from '../hooks/useDestinationData';
 import { InfoCard } from '../components/InfoCard';
 import RecommendationCard from '../../../components/RecommendationCard';
+import CachedImage from '../../../components/CachedImage';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { BackButton } from '../../../components/BackButton';
 import FavoriteButton from '../../../components/FavoriteButton';
@@ -97,9 +97,13 @@ export default function LandingPageScreen({ navigation, route }) {
   const transportRecommendation = cityData.widgets?.transport?.recommendation;
 
   // Create snapshot data for city favorites
+  const heroImageUrl =
+    cityData.externalImageUrl ||
+    cityData.imageUrl ||
+    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800';
   const citySnapshotData = {
     name: cityData.name,
-    thumbnail_url: cityData.imageUrl,
+    thumbnail_url: cityData.externalImageUrl || cityData.imageUrl,
     sub_text: `${cityData.travelers || 0} מטיילים`,
     rating: cityData.rating,
     countryId: countryId,
@@ -115,11 +119,22 @@ export default function LandingPageScreen({ navigation, route }) {
       >
         {/* --- Header Section --- */}
         <View style={common.staticHeaderContainer}>
-          <ImageBackground
-            source={{ uri: cityData.imageUrl || 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800' }}
-            style={{ height: 260, width: '100%' }}
-            resizeMode="cover"
-          >
+          <View style={{ height: 260, width: '100%', position: 'relative', overflow: 'hidden' }}>
+            <CachedImage
+              source={{ uri: heroImageUrl }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+              }}
+              contentFit="cover"
+              priority="high"
+              loading="eager"
+            />
             <LinearGradient
               colors={['transparent', 'rgba(0,0,0,0.7)']}
               style={{ flex: 1, justifyContent: 'space-between', padding: 16, paddingTop: 40, paddingBottom: 35 }}
@@ -155,7 +170,7 @@ export default function LandingPageScreen({ navigation, route }) {
                 </View>
               </View>
             </LinearGradient>
-          </ImageBackground>
+          </View>
 
           <TouchableOpacity style={buttons.floatingPlan}>
             <Text style={buttons.floatingPlanText}>התחל לתכנן את הטיול</Text>

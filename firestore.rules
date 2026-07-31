@@ -1,146 +1,351 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isSignedIn() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn() && request.auth.token.admin == true;
+    function admin() {
+      return signedIn()
+        && request.auth.token.keys().hasAny(['admin'])
+        && request.auth.token.admin == true;
     }
 
-    // Email verification is only enforced for password accounts.
-    // Social providers (e.g. Google) are treated as verified.
-    function isVerifiedUser() {
-      return isSignedIn()
+    function verified() {
+      return signedIn()
         && (
           request.auth.token.firebase.sign_in_provider != 'password'
           || request.auth.token.email_verified == true
         );
     }
 
-    function canWriteContent() {
-      return isAdmin() || isVerifiedUser();
+    function ownsResource() {
+      return signedIn() && resource.data.userId == request.auth.uid;
     }
 
-    function isOwnerUserId() {
-      return isSignedIn() && resource.data.userId == request.auth.uid;
+    function validText(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
     }
 
-    function isOwnerUserIdOnCreate() {
-      return isSignedIn() && request.resource.data.userId == request.auth.uid;
+    function validStringList(value, maxItems) {
+      return value is list && value.size() <= maxItems;
     }
 
-    // Allows authenticated users (including unverified) to update ONLY likes/likedBy.
-    function isLikesOnlyUpdate() {
-      return isSignedIn()
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['likes', 'likedBy'])
-        && request.resource.data.userId == resource.data.userId;
+    function validMediaVariant(value, userId, assetId, variant) {
+      return value is map
+        && value.keys().hasOnly([
+          'path', 'url', 'width', 'height', 'bytes', 'contentType'
+        ])
+        && value.path == 'media/' + userId + '/' + assetId + '/' + variant + '.webp'
+        && validText(value.url, 1, 2000)
+        && value.width is int && value.width > 0 && value.width <= 4096
+        && value.height is int && value.height > 0 && value.height <= 4096
+        && value.bytes is int && value.bytes > 0 && value.bytes <= 8 * 1024 * 1024
+        && value.contentType == 'image/webp';
     }
 
-    // --- Recommendations ---
-    match /recommendations/{postId} {
+    function validMediaAsset(value, userId) {
+      return value is map
+        && value.keys().hasOnly([
+          'assetId', 'aspectRatio', 'placeholder', 'large', 'feed', 'thumb'
+        ])
+        && validText(value.assetId, 36, 36)
+        && value.aspectRatio is number
+        && value.aspectRatio > 0
+        && value.aspectRatio <= 20
+        && value.placeholder is map
+        && value.placeholder.keys().hasOnly(['thumbhash', 'color'])
+        && (
+          value.placeholder.thumbhash == null
+          || validText(value.placeholder.thumbhash, 1, 200)
+        )
+        && validText(value.placeholder.color, 4, 9)
+        && validMediaVariant(value.large, userId, value.assetId, 'large')
+        && validMediaVariant(value.feed, userId, value.assetId, 'feed')
+        && validMediaVariant(value.thumb, userId, value.assetId, 'thumb');
+    }
+
+    function onlyOwnLikeChanged() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let hadLikeFields = before.keys().hasAll(['likes', 'likedBy']);
+      let adding = hadLikeFields
+        && after.likes == before.likes + 1
+        && !before.likedBy.hasAny([request.auth.uid])
+        && after.likedBy.hasAll(before.likedBy)
+        && after.likedBy.hasAny([request.auth.uid])
+        && after.likedBy.size() == before.likedBy.size() + 1;
+      let addingFirst = !before.keys().hasAny(['likes', 'likedBy'])
+        && after.likes == 1
+        && after.likedBy is list
+        && after.likedBy.size() == 1
+        && after.likedBy.hasAny([request.auth.uid]);
+      let removing = hadLikeFields
+        && after.likes == before.likes - 1
+        && before.likedBy.hasAny([request.auth.uid])
+        && before.likedBy.hasAll(after.likedBy)
+        && !after.likedBy.hasAny([request.auth.uid])
+        && after.likedBy.size() == before.likedBy.size() - 1;
+      return signedIn()
+        && after.diff(before).changedKeys().hasOnly(['likes', 'likedBy'])
+        && after.likes is int
+        && after.likes >= 0
+        && after.likedBy is list
+        && (adding || addingFirst || removing);
+    }
+
+    function validCommentCreate() {
+      return verified()
+        && request.resource.data.keys().hasOnly([
+          'text', 'userId', 'createdAt'
+        ])
+        && request.resource.data.userId == request.auth.uid
+        && validText(request.resource.data.text, 1, 2000)
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function validCommentUpdate() {
+      return verified()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['text', 'updatedAt'])
+        && validText(request.resource.data.text, 1, 2000)
+        && (
+          !request.resource.data.keys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        );
+    }
+
+    match /recommendations/{recommendationId} {
       allow read: if true;
 
-      // Verified/Admin can create posts; must write their own userId.
-      allow create: if canWriteContent() && isOwnerUserIdOnCreate();
+      // Creation and content editing use the Admin SDK through saveRecommendation.
+      allow create: if false;
+      allow update: if onlyOwnLikeChanged();
+      allow delete: if admin() || (verified() && ownsResource());
 
-      // Owner (verified) or admin can edit; anyone signed-in can do likes-only updates.
-      allow update: if isLikesOnlyUpdate() || isAdmin() || (isVerifiedUser() && isOwnerUserId());
-
-      // Owner (verified) or admin can delete.
-      allow delete: if isAdmin() || (isVerifiedUser() && isOwnerUserId());
-
-      // Comments
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if canWriteContent() && isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow update, delete: if isAdmin() || (isVerifiedUser() && isSignedIn() && resource.data.userId == request.auth.uid);
+        allow create: if validCommentCreate();
+        allow update: if admin() || validCommentUpdate();
+        allow delete: if admin()
+          || (verified() && resource.data.userId == request.auth.uid);
       }
     }
 
-    // --- Routes ---
+    function validRouteShape() {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'Title', 'title', 'days', 'tripDaysData', 'places', 'distance',
+          'tags', 'desc', 'difficultyTag', 'travelStyleTag', 'roadTripTags',
+          'experienceTags', 'userId', 'media', 'createdAt',
+          'updatedAt', 'likes', 'likedBy', 'rating'
+        ])
+        && data.userId == request.auth.uid
+        && (
+          (data.keys().hasAny(['Title']) && validText(data.Title, 1, 120))
+          || (data.keys().hasAny(['title']) && validText(data.title, 1, 120))
+        )
+        && validText(data.desc, 1, 5000)
+        && data.days is int && data.days >= 1 && data.days <= 60
+        && data.distance is number && data.distance >= 0
+        && validStringList(data.tags, 30)
+        && validStringList(data.roadTripTags, 30)
+        && validStringList(data.experienceTags, 30)
+        && (
+          !data.keys().hasAny(['media'])
+          || (data.media is list && data.media.size() <= 20)
+        )
+        && data.places is list && data.places.size() <= 300
+        && data.tripDaysData is list && data.tripDaysData.size() <= 60;
+    }
+
     match /routes/{routeId} {
       allow read: if true;
-
-      allow create: if canWriteContent() && isOwnerUserIdOnCreate();
-      allow update: if isLikesOnlyUpdate() || isAdmin() || (isVerifiedUser() && isOwnerUserId());
-      allow delete: if isAdmin() || (isVerifiedUser() && isOwnerUserId());
+      allow create: if verified()
+        && validRouteShape()
+        && request.resource.data.createdAt == request.time;
+      allow update: if onlyOwnLikeChanged()
+        || (
+          verified()
+          && ownsResource()
+          && validRouteShape()
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+        );
+      allow delete: if admin() || (verified() && ownsResource());
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if canWriteContent() && isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow update, delete: if isAdmin() || (isVerifiedUser() && isSignedIn() && resource.data.userId == request.auth.uid);
+        allow create: if validCommentCreate();
+        allow update: if admin() || validCommentUpdate();
+        allow delete: if admin()
+          || (verified() && resource.data.userId == request.auth.uid);
       }
-    }
-
-    // --- Countries / Cities (Destinations) ---
-    // Support collectionGroup(db, 'cities') reads (e.g. HomeScreen popular destinations).
-    // Without this, a collectionGroup query can fail if there are 'cities' subcollections
-    // outside /countries/{countryId}/cities/{cityId}.
-    match /{parentPath=**}/cities/{cityId} {
-      allow read: if true;
     }
 
     match /countries/{countryId} {
       allow read: if true;
-      allow create, update, delete: if canWriteContent();
+      allow write: if admin();
 
       match /cities/{cityId} {
         allow read: if true;
-        allow create, update, delete: if canWriteContent();
+        allow write: if admin();
       }
     }
 
-    // --- Users ---
-    match /users/{userId} {
-      // Public read is needed for author info (displayName/photoURL) used across the app.
+    // Supports collectionGroup('cities') while keeping all client writes blocked.
+    match /{parentPath=**}/cities/{cityId} {
       allow read: if true;
+      allow write: if false;
+    }
 
-      // Allow user doc creation for any authenticated user (including unverified during registration).
-      allow create: if isSignedIn() && request.auth.uid == userId;
-
-      // Allow:
-      // - Verified users: full self-update
-      // - Unverified users: limited self-update (profile only; no favorites arrays)
-      allow update: if isSignedIn() && request.auth.uid == userId && (
-        isAdmin()
-        || isVerifiedUser()
-        || request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'uid',
-          'email',
-          'displayName',
-          'photoURL',
-          'createdAt',
-          'updatedAt',
-          'smartProfile',
-          'trips',
-          'reviews',
-          'credibilityScore',
-          'isExpert'
+    function validUserCreate(userId) {
+      let data = request.resource.data;
+      return signedIn()
+        && request.auth.uid == userId
+        && data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'photoMedia', 'smartProfile',
+          'createdAt', 'updatedAt'
         ])
-      );
+        && data.uid == userId
+        && data.email == request.auth.token.email
+        && validText(data.displayName, 0, 120)
+        && (
+          !data.keys().hasAny(['photoMedia'])
+          || data.photoMedia == null
+          || validMediaAsset(data.photoMedia, userId)
+        )
+        && data.createdAt == request.time;
+    }
 
-      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+    function validUserUpdate(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'displayName', 'photoURL', 'photoMedia', 'smartProfile', 'updatedAt'
+        ])
+        && (
+          !request.resource.data.keys().hasAny(['displayName'])
+          || validText(request.resource.data.displayName, 0, 120)
+        )
+        && (
+          !request.resource.data.keys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        )
+        && (
+          !request.resource.data.keys().hasAny(['photoMedia'])
+          || request.resource.data.photoMedia == null
+          || validMediaAsset(request.resource.data.photoMedia, userId)
+        );
+    }
 
-      // Favorites subcollection (used by new favorites system)
-      match /favorites/{favId} {
-        allow read, create, update, delete: if (isSignedIn() && request.auth.uid == userId && (isAdmin() || isVerifiedUser()));
+    function favoriteSourceExists(data) {
+      return (
+          data.type == 'recommendations'
+          && exists(
+            /databases/$(database)/documents/recommendations/$(data.id)
+          )
+        ) || (
+          data.type == 'routes'
+          && exists(
+            /databases/$(database)/documents/routes/$(data.id)
+          )
+        ) || (
+          data.type == 'cities'
+          && data.keys().hasAll(['countryId'])
+          && validText(data.countryId, 1, 180)
+          && exists(
+            /databases/$(database)/documents/countries/$(data.countryId)/cities/$(data.id)
+          )
+        );
+    }
+
+    function validFavorite() {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'id', 'type', 'created_at', 'name', 'thumbnail_url', 'sub_text',
+          'rating', 'days', 'distance', 'countryId', 'travelers'
+        ])
+        && data.id is string
+        && data.id.size() >= 1
+        && data.id.size() <= 180
+        && data.type in ['recommendations', 'routes', 'cities']
+        && data.created_at == request.time
+        && favoriteSourceExists(data);
+    }
+
+    function notificationTargetsOwnedPost(data, recipientId) {
+      return (
+          data.postType == 'recommendation'
+          && exists(/databases/$(database)/documents/recommendations/$(data.postId))
+          && get(/databases/$(database)/documents/recommendations/$(data.postId)).data.userId == recipientId
+        ) || (
+          data.postType == 'route'
+          && exists(/databases/$(database)/documents/routes/$(data.postId))
+          && get(/databases/$(database)/documents/routes/$(data.postId)).data.userId == recipientId
+        );
+    }
+
+    function validActorNotification(recipientId) {
+      let data = request.resource.data;
+      return signedIn()
+        && data.keys().hasOnly([
+          'userId', 'type', 'postType', 'postId', 'postTitle', 'actorId',
+          'actorName', 'actorAvatar', 'count', 'batchThreshold', 'isRead',
+          'timestamp'
+        ])
+        && data.userId == recipientId
+        && data.actorId == request.auth.uid
+        && data.actorId != recipientId
+        && data.type in ['like', 'comment']
+        && data.postType in ['recommendation', 'route']
+        && data.count is int && data.count >= 1
+        && data.batchThreshold is int && data.batchThreshold >= 1
+        && data.timestamp == request.time
+        && notificationTargetsOwnedPost(data, recipientId);
+    }
+
+    match /users/{userId} {
+      allow read: if admin() || (signedIn() && request.auth.uid == userId);
+      allow create: if validUserCreate(userId);
+      allow update: if admin() || validUserUpdate(userId);
+      allow delete: if admin() || (signedIn() && request.auth.uid == userId);
+
+      match /favorites/{favoriteId} {
+        allow read, delete: if verified() && request.auth.uid == userId;
+        allow create: if verified()
+          && request.auth.uid == userId
+          && favoriteId == request.resource.data.id
+          && validFavorite();
+        allow update: if false;
       }
 
-      // Notifications: recipient can read/update/delete; any signed-in user can create *for someone else*
-      // but only if actorId matches the caller.
       match /notifications/{notificationId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
-        allow create: if isSignedIn()
-          && request.resource.data.userId == userId
-          && request.resource.data.actorId == request.auth.uid;
-        allow update, delete: if isSignedIn() && request.auth.uid == userId;
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if validActorNotification(userId);
+        allow update: if (
+            signedIn()
+            && request.auth.uid == userId
+            && request.resource.data.diff(resource.data).changedKeys()
+              .hasOnly(['isRead'])
+          ) || validActorNotification(userId);
+        allow delete: if signedIn() && request.auth.uid == userId;
       }
     }
 
-    // Deny everything else by default.
+    match /publicProfiles/{userId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /_migrations/{migrationId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

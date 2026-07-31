@@ -3,6 +3,13 @@
     "source": "functions"
   },
   "firestore": {
-    "rules": "firestore.rules"
-  }
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": [
+    {
+      "target": "media",
+      "rules": "storage.rules"
+    }
+  ]
 }

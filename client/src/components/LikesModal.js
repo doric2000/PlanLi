@@ -49,7 +49,7 @@ const LikesModal = ({ visible, onClose, likedByUserIds }) => {
       try {
         const userPromises = likedByUserIds.map(async (userId) => {
           try {
-            const userDocRef = doc(db, 'users', userId);
+            const userDocRef = doc(db, 'publicProfiles', userId);
             const userDoc = await getDoc(userDocRef);
 
             if (userDoc.exists()) {

@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { doc, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { getUserTier } from '../utils/userTier';
+import { getFavoriteErrorAlert } from '../utils/favoriteErrors';
 
 /**
  * useFavorite - Generic hook for favoriting different types of items using sub-collections
@@ -80,7 +81,8 @@ export function useFavorite(type, id, snapshotData = {}) {
       }
     } catch (e) {
       console.error('Error toggling favorite:', e);
-      Alert.alert('Error', e.message || String(e));
+      const alert = getFavoriteErrorAlert(e, isFavorite ? 'remove' : 'add');
+      Alert.alert(alert.title, alert.message);
     } finally {
       setLoading(false);
     }

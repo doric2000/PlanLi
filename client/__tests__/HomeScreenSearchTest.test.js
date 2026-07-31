@@ -55,7 +55,7 @@ jest.mock('../src/components/CityCard', () => {
 });
 
 jest.mock('../src/services/LocationService', () => ({
-  getOrCreateDestination: jest.fn(),
+  resolveDestinationPreview: jest.fn(),
 }));
 
 jest.mock('../src/hooks/useAuthUser', () => ({

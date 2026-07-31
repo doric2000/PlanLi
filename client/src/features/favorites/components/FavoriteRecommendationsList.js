@@ -30,6 +30,9 @@ export default function FavoriteRecommendationsList({ favorites, loading, flatLi
       keyExtractor={item => item.id}
       onScroll={onScroll}
       scrollEventThrottle={16}
+      initialNumToRender={3}
+      maxToRenderPerBatch={3}
+      windowSize={5}
       renderItem={({ item }) => (
         <View style={{ alignItems: 'center', width: '100%' }}>
           <View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>

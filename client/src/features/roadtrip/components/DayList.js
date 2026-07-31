@@ -1,5 +1,7 @@
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
+import CachedImage from "../../../components/CachedImage";
 import { dayListStyles as styles } from "../../../styles";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 
 export default function DayList({ days, onEdit }) {
 	return (
@@ -27,10 +29,18 @@ export default function DayList({ days, onEdit }) {
 								{day.description || "עדיין אין תיאור ליום הזה."}
 							</Text>
 						</View>
-						{day.image && (
-							<Image
-								source={{ uri: day.image }}
+						{(day.image || day.media) && (
+							<CachedImage
+								source={{
+									uri: getMediaVariantUrl(
+										day.media,
+										"thumb",
+										day.image
+									),
+								}}
 								style={styles.thumbnail}
+								contentFit="cover"
+								priority="low"
 							/>
 						)}
 					</View>

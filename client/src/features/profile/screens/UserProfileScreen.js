@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,28 @@ import { ProfileContentEmpty, ProfileContentHeader, ProfileGridTile } from "../c
 import { useProfileData } from "../hooks/useProfileData";
 import { getSmartProfileBadges } from "../utils/smartProfileBadges";
 
+async function getProfileContentSnapshot(collectionName, uid) {
+	try {
+		return await getDocs(
+			query(
+				collection(db, collectionName),
+				where("userId", "==", uid),
+				orderBy("createdAt", "desc"),
+				limit(30)
+			)
+		);
+	} catch (error) {
+		console.log(`Ordered ${collectionName} query failed, fallback:`, error?.message);
+		return getDocs(
+			query(
+				collection(db, collectionName),
+				where("userId", "==", uid),
+				limit(30)
+			)
+		);
+	}
+}
+
 export default function UserProfileScreen({ route, navigation }) {
 	const uid = route?.params?.uid;
 	const insets = useSafeAreaInsets();
@@ -23,6 +45,7 @@ export default function UserProfileScreen({ route, navigation }) {
 	const [myRecs, setMyRecs] = useState([]);
 	const [myRoutes, setMyRoutes] = useState([]);
 	const [contentLoading, setContentLoading] = useState(false);
+	const profileListRef = useRef(null);
 
 	const activeData = contentTab === "recommendations" ? myRecs : myRoutes;
 
@@ -59,44 +82,12 @@ export default function UserProfileScreen({ route, navigation }) {
 		if (!isSilent) setContentLoading(true);
 
 		try {
-			let recSnap;
-			try {
-				const recQ = query(
-					collection(db, "recommendations"),
-					where("userId", "==", uid),
-					orderBy("createdAt", "desc"),
-					limit(30)
-				);
-				recSnap = await getDocs(recQ);
-			} catch (err) {
-				console.log("Ordered recs query failed, fallback:", err?.message);
-				const recQFallback = query(
-					collection(db, "recommendations"),
-					where("userId", "==", uid),
-					limit(30)
-				);
-				recSnap = await getDocs(recQFallback);
-			}
-			setMyRecs(recSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+			const [recSnap, routesSnap] = await Promise.all([
+				getProfileContentSnapshot("recommendations", uid),
+				getProfileContentSnapshot("routes", uid),
+			]);
 
-			let routesSnap;
-			try {
-				const routesQ = query(
-					collection(db, "routes"),
-					where("userId", "==", uid),
-					orderBy("createdAt", "desc"),
-					limit(30)
-				);
-				routesSnap = await getDocs(routesQ);
-			} catch (err) {
-				console.log("Ordered routes query failed, fallback:", err?.message);
-				const routesQFallback = query(
-					collection(db, "routes"),
-					where("userId", "==", uid),
-					limit(30)
-				);
-				routesSnap = await getDocs(routesQFallback);
-			}
+			setMyRecs(recSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 			setMyRoutes(routesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 		} catch (e) {
 			console.log("loadContent error:", e?.message || e);
@@ -116,6 +107,10 @@ export default function UserProfileScreen({ route, navigation }) {
 		});
 		return unsubscribe;
 	}, [navigation, refresh, loadContent]);
+
+	useEffect(() => {
+		profileListRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+	}, [contentTab]);
 
 	if (profileLoading) {
 		return (
@@ -145,11 +140,14 @@ export default function UserProfileScreen({ route, navigation }) {
 			</TouchableOpacity>
 
 			<FlatList
-				key={`public-profile-grid-${contentTab}`}
+				ref={profileListRef}
 				data={activeData}
 				keyExtractor={(item) => item.id}
 				extraData={contentTab}
 				numColumns={3}
+				initialNumToRender={3}
+				maxToRenderPerBatch={3}
+				windowSize={5}
 				columnWrapperStyle={profileStyles.gridRow}
 				contentContainerStyle={profileStyles.listContent}
 				ListHeaderComponent={

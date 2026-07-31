@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
+import { Linking, Text, TouchableOpacity, View } from "react-native";
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import { Ionicons } from "@expo/vector-icons";
 
+import CachedImage from "../../../components/CachedImage";
 import "../../../styles/leaflet.css";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import {
 	buildGoogleMapsDirectionsUrl,
 	buildGoogleMapsPlaceUrl,
@@ -19,14 +21,21 @@ const escapeAttr = (value) =>
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;");
 
-const createStopIcon = (stop) => L.divIcon({
-	className: "route-stop-marker-wrap",
-	html: stop.image
-		? `<div class="route-stop-marker"><img src="${escapeAttr(stop.image)}" alt="" /><span>${stop.globalIndex + 1}</span></div>`
-		: `<div class="route-stop-marker route-stop-marker-empty"><span>${stop.globalIndex + 1}</span></div>`,
-	iconSize: [56, 56],
-	iconAnchor: [28, 28],
-});
+const createStopIcon = (stop) => {
+	const imageUrl = getMediaVariantUrl(
+		stop.media,
+		"thumb",
+		stop.image
+	);
+	return L.divIcon({
+		className: "route-stop-marker-wrap",
+		html: imageUrl
+			? `<div class="route-stop-marker"><img src="${escapeAttr(imageUrl)}" alt="" loading="lazy" decoding="async" fetchpriority="low" /><span>${stop.globalIndex + 1}</span></div>`
+			: `<div class="route-stop-marker route-stop-marker-empty"><span>${stop.globalIndex + 1}</span></div>`,
+		iconSize: [56, 56],
+		iconAnchor: [28, 28],
+	});
+};
 
 function FitRoute({ positions }) {
 	const map = useMap();
@@ -127,8 +136,19 @@ export default function RouteMapScreen({ route, navigation }) {
 								{selectedStop.title}
 							</Text>
 						</View>
-						{selectedStop.image ? (
-							<Image source={{ uri: selectedStop.image }} style={styles.sheetImage} />
+						{selectedStop.image || selectedStop.media ? (
+							<CachedImage
+								source={{
+									uri: getMediaVariantUrl(
+										selectedStop.media,
+										"thumb",
+										selectedStop.image
+									),
+								}}
+								style={styles.sheetImage}
+								contentFit="cover"
+								priority="high"
+							/>
 						) : (
 							<View style={styles.sheetImageFallback}>
 								<Text style={styles.sheetImageFallbackText}>{selectedStop.globalIndex + 1}</Text>

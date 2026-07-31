@@ -1,0 +1,407 @@
+const crypto = require('crypto');
+const sharp = require('sharp');
+const { HttpsError } = require('firebase-functions/v2/https');
+
+const CACHE_CONTROL = 'public,max-age=31536000,immutable';
+const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+const MAX_SOURCE_PIXELS = 40 * 1000 * 1000;
+const STAGING_PATH_PATTERN =
+  /^media-staging\/([^/]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.jpg$/i;
+const FINAL_PATH_PATTERN =
+  /^media\/([^/]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/(large|feed|thumb)\.webp$/i;
+
+const MEDIA_PRESETS = Object.freeze({
+  recommendation: Object.freeze({
+    square: true,
+    variants: Object.freeze({
+      large: Object.freeze({ width: 1600, height: 1600, quality: 90 }),
+      feed: Object.freeze({ width: 1280, height: 1280, quality: 86 }),
+      thumb: Object.freeze({ width: 384, height: 384, quality: 78 }),
+    }),
+  }),
+  route: Object.freeze({
+    square: false,
+    variants: Object.freeze({
+      large: Object.freeze({ longEdge: 2048, quality: 90 }),
+      feed: Object.freeze({ longEdge: 1280, quality: 86 }),
+      thumb: Object.freeze({ longEdge: 480, quality: 78 }),
+    }),
+  }),
+  avatar: Object.freeze({
+    square: true,
+    variants: Object.freeze({
+      large: Object.freeze({ width: 768, height: 768, quality: 90 }),
+      feed: Object.freeze({ width: 384, height: 384, quality: 86 }),
+      thumb: Object.freeze({ width: 192, height: 192, quality: 80 }),
+    }),
+  }),
+});
+
+function assert(condition, code, message) {
+  if (!condition) throw new HttpsError(code, message);
+}
+
+function normalizeBucketName(value) {
+  return String(value || '').trim().replace(/^gs:\/\//, '').replace(/\/+$/, '');
+}
+
+function getMediaBucket(admin, configuredBucket) {
+  const bucketName = normalizeBucketName(configuredBucket);
+  assert(
+    bucketName,
+    'failed-precondition',
+    'MEDIA_STORAGE_BUCKET is not configured.'
+  );
+  return admin.storage().bucket(bucketName);
+}
+
+function buildDownloadUrl(bucketName, objectPath, token) {
+  return `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(
+    bucketName
+  )}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(
+    token
+  )}`;
+}
+
+async function buildVariantPipeline(sourceBuffer, kind, variant) {
+  const preset = MEDIA_PRESETS[kind];
+  const selected = preset?.variants?.[variant];
+  assert(preset && selected, 'invalid-argument', 'Unsupported media kind or variant.');
+
+  const source = sharp(sourceBuffer, {
+    failOn: 'warning',
+    limitInputPixels: MAX_SOURCE_PIXELS,
+  });
+  const metadata = await source.metadata();
+  const swapsAxes =
+    Number.isInteger(metadata.orientation) &&
+    metadata.orientation >= 5 &&
+    metadata.orientation <= 8;
+  const sourceWidth = swapsAxes ? metadata.height : metadata.width;
+  const sourceHeight = swapsAxes ? metadata.width : metadata.height;
+  const pipeline = source
+    .rotate()
+    .toColorspace('srgb');
+
+  if (preset.square) {
+    const edge = Math.max(
+      1,
+      Math.min(
+        selected.width,
+        selected.height,
+        sourceWidth || selected.width,
+        sourceHeight || selected.height
+      )
+    );
+    return pipeline.resize(edge, edge, {
+      fit: 'cover',
+      position: 'centre',
+    });
+  }
+
+  return pipeline.resize(selected.longEdge, selected.longEdge, {
+    fit: 'inside',
+    withoutEnlargement: true,
+  });
+}
+
+async function encodeVariant(sourceBuffer, kind, variant) {
+  const selected = MEDIA_PRESETS[kind].variants[variant];
+  const pipeline = await buildVariantPipeline(
+    sourceBuffer,
+    kind,
+    variant
+  );
+  const { data, info } = await pipeline
+    .webp({
+      quality: selected.quality,
+      smartSubsample: true,
+      effort: 5,
+    })
+    .toBuffer({ resolveWithObject: true });
+
+  return {
+    buffer: data,
+    width: info.width,
+    height: info.height,
+    bytes: data.length,
+  };
+}
+
+async function createPlaceholder(sourceBuffer) {
+  const { data, info } = await sharp(sourceBuffer, {
+    failOn: 'warning',
+    limitInputPixels: MAX_SOURCE_PIXELS,
+  })
+    .rotate()
+    .resize(100, 100, { fit: 'inside', withoutEnlargement: true })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const stats = await sharp(sourceBuffer, {
+    failOn: 'warning',
+    limitInputPixels: MAX_SOURCE_PIXELS,
+  })
+    .rotate()
+    .resize(1, 1, { fit: 'fill' })
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+  const { rgbaToThumbHash } = await import('thumbhash');
+  const thumbHash = rgbaToThumbHash(info.width, info.height, data);
+  const [red = 238, green = 238, blue = 238] = stats;
+
+  return {
+    thumbhash: Buffer.from(thumbHash).toString('base64'),
+    color: `#${[red, green, blue]
+      .map((channel) => channel.toString(16).padStart(2, '0'))
+      .join('')}`,
+  };
+}
+
+async function writeVariant({
+  bucket,
+  uid,
+  assetId,
+  sourcePath,
+  kind,
+  variant,
+  encoded,
+}) {
+  const objectPath = `media/${uid}/${assetId}/${variant}.webp`;
+  const token = crypto.randomUUID();
+  await bucket.file(objectPath).save(encoded.buffer, {
+    resumable: false,
+    validation: 'crc32c',
+    preconditionOpts: { ifGenerationMatch: 0 },
+    metadata: {
+      contentType: 'image/webp',
+      cacheControl: CACHE_CONTROL,
+      metadata: {
+        firebaseStorageDownloadTokens: token,
+        ownerUid: uid,
+        assetId,
+        variant,
+        kind,
+        sourcePath,
+        state: 'prepared',
+        width: String(encoded.width),
+        height: String(encoded.height),
+      },
+    },
+  });
+
+  return {
+    path: objectPath,
+    url: buildDownloadUrl(bucket.name, objectPath, token),
+    width: encoded.width,
+    height: encoded.height,
+    bytes: encoded.bytes,
+    contentType: 'image/webp',
+  };
+}
+
+async function removeFiles(files) {
+  await Promise.allSettled(
+    files.map((file) => file.delete({ ignoreNotFound: true }))
+  );
+}
+
+async function prepareMedia({
+  admin,
+  auth,
+  data,
+  mediaBucket,
+}) {
+  assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  const kind = String(data?.kind || '');
+  assert(MEDIA_PRESETS[kind], 'invalid-argument', 'Unsupported media kind.');
+  const stagingPath = String(data?.stagingPath || '');
+  const match = stagingPath.match(STAGING_PATH_PATTERN);
+  assert(
+    match && match[1] === auth.uid,
+    'permission-denied',
+    'Staging media is outside the caller folder.'
+  );
+
+  const bucket = getMediaBucket(admin, mediaBucket);
+  const stagingFile = bucket.file(stagingPath);
+  let metadata;
+  try {
+    [metadata] = await stagingFile.getMetadata();
+  } catch {
+    throw new HttpsError('failed-precondition', 'Staging image was not found.');
+  }
+
+  const sourceBytes = Number(metadata.size || 0);
+  assert(
+    metadata.contentType === 'image/jpeg',
+    'invalid-argument',
+    'Staging media must be JPEG.'
+  );
+  assert(
+    metadata.metadata?.ownerUid === auth.uid &&
+      metadata.metadata?.variant === 'staging',
+    'permission-denied',
+    'Staging media metadata is invalid.'
+  );
+  assert(
+    Number.isFinite(sourceBytes) &&
+      sourceBytes > 0 &&
+      sourceBytes <= MAX_SOURCE_BYTES,
+    'invalid-argument',
+    'Staging image is too large.'
+  );
+
+  const [sourceBuffer] = await stagingFile.download();
+  let sourceInfo;
+  try {
+    sourceInfo = await sharp(sourceBuffer, {
+      failOn: 'warning',
+      limitInputPixels: MAX_SOURCE_PIXELS,
+    }).metadata();
+  } catch {
+    throw new HttpsError('invalid-argument', 'Staging image is invalid.');
+  }
+  assert(
+    sourceInfo.width &&
+      sourceInfo.height &&
+      sourceInfo.width * sourceInfo.height <= MAX_SOURCE_PIXELS,
+    'invalid-argument',
+    'Staging image dimensions are too large.'
+  );
+
+  const assetId = crypto.randomUUID();
+  const createdFiles = [];
+  const descriptors = {};
+  try {
+    const placeholder = await createPlaceholder(sourceBuffer);
+    for (const variant of ['large', 'feed', 'thumb']) {
+      // Sequential processing keeps peak memory bounded.
+      // eslint-disable-next-line no-await-in-loop
+      const encoded = await encodeVariant(sourceBuffer, kind, variant);
+      // eslint-disable-next-line no-await-in-loop
+      descriptors[variant] = await writeVariant({
+        bucket,
+        uid: auth.uid,
+        assetId,
+        sourcePath: stagingPath,
+        kind,
+        variant,
+        encoded,
+      });
+      createdFiles.push(bucket.file(descriptors[variant].path));
+    }
+
+    await stagingFile.delete({ ignoreNotFound: true });
+    return {
+      assetId,
+      aspectRatio:
+        descriptors.large.width / Math.max(1, descriptors.large.height),
+      placeholder,
+      large: descriptors.large,
+      feed: descriptors.feed,
+      thumb: descriptors.thumb,
+    };
+  } catch (error) {
+    await removeFiles(createdFiles);
+    if (error instanceof HttpsError) throw error;
+    console.error('Media preparation failed.', {
+      uid: auth.uid,
+      stagingPath,
+      kind,
+      error: error?.message || String(error),
+    });
+    throw new HttpsError('internal', 'Could not prepare this image.');
+  }
+}
+
+function collectCanonicalMediaAssets(data) {
+  const assets = [];
+  const add = (asset) => {
+    if (
+      asset &&
+      typeof asset === 'object' &&
+      typeof asset.assetId === 'string'
+    ) {
+      assets.push(asset);
+    }
+  };
+  if (Array.isArray(data?.media)) data.media.forEach(add);
+  add(data?.photoMedia);
+  if (Array.isArray(data?.tripDaysData)) {
+    data.tripDaysData.forEach((day) => {
+      add(day?.media);
+      if (Array.isArray(day?.stops)) {
+        day.stops.forEach((stop) => add(stop?.media));
+      }
+    });
+  }
+  return assets;
+}
+
+async function markMediaClaimed(admin, data, mediaBucket) {
+  const bucket = getMediaBucket(admin, mediaBucket);
+  const assets = collectCanonicalMediaAssets(data);
+  await Promise.all(
+    assets.flatMap((asset) =>
+      ['large', 'feed', 'thumb'].map(async (variant) => {
+        const path = asset?.[variant]?.path;
+        if (!path || !FINAL_PATH_PATTERN.test(path)) return;
+        const file = bucket.file(path);
+        try {
+          const [metadata] = await file.getMetadata();
+          await file.setMetadata({
+            metadata: {
+              ...(metadata.metadata || {}),
+              state: 'claimed',
+            },
+          });
+        } catch (error) {
+          if (error?.code !== 404 && error?.code !== '404') throw error;
+        }
+      })
+    )
+  );
+}
+
+async function cleanupPreparedMedia({
+  admin,
+  mediaBucket,
+  olderThanMs = 24 * 60 * 60 * 1000,
+  now = Date.now(),
+}) {
+  const bucket = getMediaBucket(admin, mediaBucket);
+  const [files] = await bucket.getFiles({ prefix: 'media/' });
+  const expired = files.filter((file) => {
+    const state = file.metadata?.metadata?.state;
+    const createdAt = Date.parse(
+      file.metadata?.timeCreated || file.metadata?.updated || ''
+    );
+    return (
+      state === 'prepared' &&
+      Number.isFinite(createdAt) &&
+      now - createdAt >= olderThanMs
+    );
+  });
+  await removeFiles(expired);
+  return { inspected: files.length, removed: expired.length };
+}
+
+module.exports = {
+  CACHE_CONTROL,
+  FINAL_PATH_PATTERN,
+  MAX_SOURCE_BYTES,
+  MAX_SOURCE_PIXELS,
+  MEDIA_PRESETS,
+  STAGING_PATH_PATTERN,
+  buildDownloadUrl,
+  cleanupPreparedMedia,
+  collectCanonicalMediaAssets,
+  createPlaceholder,
+  encodeVariant,
+  getMediaBucket,
+  markMediaClaimed,
+  normalizeBucketName,
+  prepareMedia,
+};

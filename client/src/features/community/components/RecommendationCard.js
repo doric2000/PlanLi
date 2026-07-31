@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, Pressable, Alert ,TouchableOpacity , Platform} from 'react-native';
+import { View, Text, Pressable, Alert ,TouchableOpacity , Platform} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../../../hooks/useUserData';
@@ -9,11 +9,13 @@ import { ActionMenu } from '../../../components/ActionMenu';
 import { cards } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import ActionBar from '../../../components/ActionBar';
+import CachedImage from '../../../components/CachedImage';
 import { db } from '../../../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { getUserTier } from '../../../utils/userTier';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { formatTimestamp } from '../../../utils/formatTimestamp';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 
 
 /**
@@ -27,6 +29,7 @@ import { formatTimestamp } from '../../../utils/formatTimestamp';
  */
 const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true }) => {
   const navigation = useNavigation();
+  const imageUrl = getRecommendationImageUrls(item, 'feed')[0];
   
   // Use custom hooks
   const author = useUserData(item.userId);
@@ -98,7 +101,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       {/* Header */}
       <View style={cards.recHeader}>
         <View style={cards.recAuthorInfo}>
-          <Avatar photoURL={author.photoURL} displayName={author.displayName} />
+          <Avatar
+            photoURL={author.photoURL}
+            photoMedia={author.photoMedia}
+            displayName={author.displayName}
+          />
           <View>
             <Text style={cards.recUsername}>{author.displayName}</Text>
             {item.createdAt && (
@@ -122,8 +129,13 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       </View>
 
       {/* Image */}
-      {item.images && item.images.length > 0 && (
-        <Image source={{ uri: item.images[0] }} style={cards.recImage} resizeMode="cover" />
+      {!!imageUrl && (
+        <CachedImage
+          source={{ uri: imageUrl }}
+          style={cards.recImage}
+          contentFit="cover"
+          priority="low"
+        />
       )}
 
       {/* Content */}

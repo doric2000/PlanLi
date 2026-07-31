@@ -1,7 +1,12 @@
 import React from "react";
-import { View, Image, Text, Platform } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { common } from "../styles";
+import CachedImage from "./CachedImage";
+import {
+	getMediaPlaceholder,
+	getMediaVariantUrl,
+} from "../utils/mediaAssets";
 
 /**
  * Avatar - A reusable component for displaying user profile pictures.
@@ -28,34 +33,24 @@ import { common } from "../styles";
  * // No info (shows person icon)
  * <Avatar size={40} />
  */
-export const Avatar = ({ photoURL, displayName, size = 36 }) => {
-	if (photoURL) {
-		// On web, RN <Image> often fetches via XHR which can trigger CORS issues
-		// with Firebase Storage. Using <img> avoids that and matches how we render
-		// recommendation carousel images on web.
-		if (Platform.OS === 'web') {
-			return (
-				<img
-					src={photoURL}
-					alt=""
-					style={{
-						width: size,
-						height: size,
-						borderRadius: size / 2,
-						objectFit: 'cover',
-						display: 'block',
-					}}
-				/>
-			);
-		}
+export const Avatar = ({ photoURL, photoMedia, displayName, size = 36 }) => {
+	const resolvedPhotoURL = getMediaVariantUrl(
+		photoMedia,
+		size > 64 ? "feed" : "thumb",
+		photoURL
+	);
 
+	if (resolvedPhotoURL) {
 		return (
-			<Image
-				source={{ uri: photoURL }}
+			<CachedImage
+				source={{ uri: resolvedPhotoURL }}
+				placeholder={getMediaPlaceholder(photoMedia)}
 				style={[
-					common.avatar,
+					Platform.OS === "web" ? null : common.avatar,
 					{ width: size, height: size, borderRadius: size / 2 },
 				]}
+				contentFit="cover"
+				priority="high"
 			/>
 		);
 	}

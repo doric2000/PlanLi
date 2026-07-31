@@ -1,7 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, imagePickerBoxStyles as styles } from '../styles';
+import CachedImage from './CachedImage';
+import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 
 /**
  * Reusable image picker box component.
@@ -36,6 +38,10 @@ export const ImagePickerBox = ({
   const count = images.length;
   const [containerWidth, setContainerWidth] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const { currentIndex, indices: loadedIndices } = useBoundedImageWindow(
+    activeIndex,
+    count
+  );
   const listRef = useRef(null);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
@@ -56,20 +62,6 @@ export const ImagePickerBox = ({
       // ignore
     }
   };
-
-  const renderWebImg = (uri) => (
-    <img
-      src={uri}
-      alt=""
-      style={{
-        width: pageWidth || '100%',
-        height: '100%',
-        objectFit: imageFit,
-        display: 'block',
-        backgroundColor: imageFit === 'contain' ? '#000000' : '#F3F4F6',
-      }}
-    />
-  );
 
   return (
     <View
@@ -102,20 +94,41 @@ export const ImagePickerBox = ({
           <FlatList
             ref={listRef}
             data={images}
+            extraData={currentIndex}
             keyExtractor={(uri, index) => `${index}:${uri}`}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={canSwipe}
-            renderItem={({ item: uri }) => (
+            renderItem={({ item: uri, index }) => (
               <View style={{ width: pageWidth || '100%', height: '100%' }}>
-                {Platform.OS === 'web' ? (
-                  renderWebImg(uri)
-                ) : (
-                  <Image
+                {loadedIndices.includes(index) ? (
+                  <CachedImage
                     source={{ uri }}
-                    style={[styles.image, imageStyle, { width: pageWidth || '100%' }]}
-                    resizeMode={imageFit}
+                    style={[
+                      styles.image,
+                      imageStyle,
+                      {
+                        width: pageWidth || '100%',
+                        backgroundColor:
+                          imageFit === 'contain' ? '#000000' : '#F3F4F6',
+                      },
+                    ]}
+                    contentFit={imageFit}
+                    priority={index === currentIndex ? 'normal' : 'low'}
+                    recyclingKey={`${index}:${uri}`}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.image,
+                      imageStyle,
+                      {
+                        width: pageWidth || '100%',
+                        backgroundColor:
+                          imageFit === 'contain' ? '#000000' : '#F3F4F6',
+                      },
+                    ]}
                   />
                 )}
               </View>
@@ -126,6 +139,9 @@ export const ImagePickerBox = ({
               const w = pageWidth || 0;
               return { length: w, offset: w * index, index };
             }}
+            initialNumToRender={1}
+            maxToRenderPerBatch={1}
+            windowSize={3}
           />
 
           {Platform.OS === 'web' && count > 1 ? (

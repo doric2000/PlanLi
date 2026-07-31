@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, Pressable, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Pressable } from 'react-native';
 // Firestore imports
-import { collection, addDoc, updateDoc, doc, serverTimestamp, getDocs, query, collectionGroup } from 'firebase/firestore';
+import { collection, getDocs, query, collectionGroup } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags, addRecommendationScreenStyles as styles } from '../../../styles';
 
 // --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
+import CachedImage from '../../../components/CachedImage';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ChipSelector from '../components/ChipSelector';
 import SegmentedControl from '../components/SegmentedControl';
@@ -18,12 +19,17 @@ import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { getOrCreateDestinationForPlace, searchPlaces } from '../../../services/LocationService';
+import { resolveDestinationForPlacePreview, searchPlaces } from '../../../services/LocationService';
+import { saveRecommendation } from '../../../services/RecommendationService';
 
 // --- Constants ---
 import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
+import {
+  findMediaAssetByUrl,
+  getMediaVariantUrl,
+} from '../../../utils/mediaAssets';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 
 
@@ -173,10 +179,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [selectedCountry, setSelectedCountry] = useState(null); // {id,name}
   const [selectedCity, setSelectedCity] = useState(null); // {id,name}
   const [selectedPlace, setSelectedPlace] = useState(null); // {placeId,name,address,coordinates,url}
+  const [selectedCountryOverrideId, setSelectedCountryOverrideId] = useState(null);
   const [locationResolveError, setLocationResolveError] = useState(null);
   const [resolvingLocation, setResolvingLocation] = useState(false);
 
-  // Manual country override (for places missing a country in Google details)
+  // Kept for old in-progress forms; the server resolver is authoritative and
+  // the current UI no longer offers a manual country override.
   const [countryPickerVisible, setCountryPickerVisible] = useState(false);
   const [countriesForPicker, setCountriesForPicker] = useState([]);
   const [loadingCountriesForPicker, setLoadingCountriesForPicker] = useState(false);
@@ -189,19 +197,27 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const allCitiesFetchDebounceRef = useRef(null);
 
   // --- Image Handling ---
-  const { pickImages, uploadImages } = useImagePickerWithUpload({
-    storagePath: 'recommendations',
-    // Instagram-like feed format: square 1:1 at 1080x1080
+  const {
+    pickImages,
+    uploadImageAssets,
+  } = useImagePickerWithUpload({
+    kind: 'recommendation',
     aspect: [1, 1],
     allowsEditing: true,
-    quality: 0.9,
+    quality: 1,
     normalizeToAspect: true,
     normalizeAspect: [1, 1],
-    normalizeWidth: 1080,
-    normalizeHeight: 1080,
-    normalizeCompress: 0.9,
+    normalizeWidth: 2560,
+    normalizeHeight: 2560,
+    normalizeCompress: 0.94,
   });
   const [editableImageUris, setEditableImageUris] = useState([]);
+  const editablePreviewUris = useMemo(() => {
+    return editableImageUris.map((uri) => {
+      const asset = findMediaAssetByUrl(editItem?.media, uri);
+      return asset ? getMediaVariantUrl(asset, 'feed', uri) : uri;
+    });
+  }, [editItem, editableImageUris]);
 
   const handleAddImages = async () => {
     const uris = await pickImages({ limit: 5 });
@@ -359,7 +375,11 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setSelectedCity(initialCityId ? { id: initialCityId, name: editItem.location || initialCityId } : null);
     setSelectedPlace(editItem.place || null);
     setLocationQuery(editItem.place?.name || editItem.location || '');
-    setEditableImageUris(Array.isArray(editItem.images) ? editItem.images : []);
+    setEditableImageUris(
+      (Array.isArray(editItem.media) ? editItem.media : [])
+        .map((asset) => getMediaVariantUrl(asset, 'feed'))
+        .filter(Boolean)
+    );
     setEditSnapshotBaseline(buildEditComparable(editItem));
     hydratedPostKeyRef.current = editingPostKey;
     lastHydratedRouteParamsRef.current = buildEditRouteParams(editItem, editPostId);
@@ -373,6 +393,20 @@ export default function AddRecommendationScreen({ navigation , route }) {
     navigation,
     promptDiscardUnsaved,
   ]);
+
+  useEffect(() => {
+    if (isEdit) return;
+    const prefill = route?.params?.prefillLocation;
+    if (!prefill?.place?.placeId || !prefill?.destination) return;
+
+    setSelectedCountry(prefill.destination.country || null);
+    setSelectedCity(prefill.destination.city || null);
+    setSelectedPlace(prefill.place);
+    setLocationQuery(
+      prefill.place.name || prefill.destination.city?.name || ''
+    );
+    setLocationResolveError(null);
+  }, [isEdit, route?.params?.prefillLocation]);
 
   useEffect(() => {
     const q = locationQuery.trim();
@@ -466,11 +500,23 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setResolvingLocation(true);
     setLocationResolveError(null);
     try {
-      const result = await getOrCreateDestinationForPlace(placeId);
+      const result = await resolveDestinationForPlacePreview(placeId);
       setSelectedCountry(result.destination.country);
       setSelectedCity(result.destination.city);
       setSelectedPlace(result.place);
     } catch (error) {
+      console.error(error);
+      setSelectedCountry(null);
+      setSelectedCity(null);
+      setSelectedPlace(null);
+      setLocationResolveError(
+        error?.message || 'לא הצלחנו לאמת את פרטי המקום. נסה שוב.'
+      );
+      Alert.alert(
+        'שגיאת מיקום',
+        'לא הצלחנו לאמת את המקום כרגע. נסה שוב בעוד רגע או בחר תוצאה אחרת.'
+      );
+      return;
       // Avoid LogBox/RedBox noise for expected, user-handled flows.
       if (error?.code !== 'MISSING_COUNTRY' && error?.code !== 'DISPUTED_COUNTRY') {
         console.error(error);
@@ -502,20 +548,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
             : 'למיקום הזה אין מדינה בנתוני המפה. בחר מדינה ידנית כדי להמשיך.',
           [
             { text: 'ביטול', style: 'cancel' },
-            ...(error?.code === 'DISPUTED_COUNTRY' && error?.suggestedCountry?.name
-              ? [
-                  {
-                    text: `השתמש ב-${error.suggestedCountry.name}`,
-                    onPress: () => {
-                      handleSelectManualCountry({
-                        id: error.suggestedCountry.name,
-                        name: error.suggestedCountry.name,
-                        code: error.suggestedCountry.code || null,
-                      });
-                    },
-                  },
-                ]
-              : []),
             {
               text: 'בחר מדינה',
               onPress: () => setCountryPickerVisible(true),
@@ -583,12 +615,17 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setLocationResolveError(null);
 
     try {
-      const result = await getOrCreateDestinationForPlace(placeId, {
-        countryOverride: { name: country?.name || country?.id, code: country?.code || null },
+      const result = await resolveDestinationForPlacePreview(placeId, {
+        countryOverride: {
+          id: country?.id,
+          name: country?.name || country?.id,
+          code: country?.code || null,
+        },
       });
       setSelectedCountry(result.destination.country);
       setSelectedCity(result.destination.city);
       setSelectedPlace(result.place);
+      setSelectedCountryOverrideId(country?.id || null);
       setPendingCountryOverridePlaceId(null);
       setSuggestedCountryForOverride(null);
     } catch (e) {
@@ -632,56 +669,66 @@ const handleSubmit = async () => {
     }
 
     setSubmitting(true);
-
     try {
       // Build final images list: keep existing remote URLs, upload local URIs.
       const current = Array.isArray(editableImageUris) ? editableImageUris.slice(0, 5) : [];
       const isRemote = (uri) => typeof uri === 'string' && /^https?:\/\//i.test(uri);
       const localUris = current.filter((uri) => !isRemote(uri));
 
-      const uploadedLocal = localUris.length ? await uploadImages(localUris) : [];
+      const uploadedLocal = localUris.length ? await uploadImageAssets(localUris) : [];
       const uploadedQueue = [...uploadedLocal];
-      const finalImages = current.map((uri) => (isRemote(uri) ? uri : uploadedQueue.shift())).filter(Boolean);
-
-
-      // Prepare Data Object for Firestore
-      const postData = {
-        title,
-        description,
-        location: selectedCity.name || selectedCity.id,
-        country: selectedCountry.name || selectedCountry.id,
-        countryId: selectedCountry.id,
-        cityId: selectedCity.id,
-        category: getCategoryLabel(category),
-        categoryId: category,
-        tags: selectedTags,
-        budget,
-        images: finalImages,
-        place: selectedPlace || null,
+      const finalMedia = current.map((uri) => {
+        if (!isRemote(uri)) return uploadedQueue.shift();
+        return findMediaAssetByUrl(editItem?.media, uri);
+      }).filter(Boolean);
+      const destinationPayload = selectedPlace?.placeId
+        ? {
+            placeId: selectedPlace.placeId,
+          }
+        : {
+            destinationRef: {
+              countryId: selectedCountry.id,
+              cityId: selectedCity.id,
+            },
+          };
+      const callablePayload = {
+        ...(isEdit ? { recommendationId: editPostId } : {}),
+        ...destinationPayload,
+        recommendation: {
+          title,
+          description,
+          category: getCategoryLabel(category),
+          categoryId: category,
+          tags: selectedTags,
+          budget,
+          media: finalMedia,
+        },
       };
 
-      // Save to Firestore logic
+      await saveRecommendation(callablePayload);
       if (!isEdit) {
-        await addDoc(collection(db, 'recommendations'), {
-          ...postData,
-          userId: auth.currentUser.uid,
-          createdAt: serverTimestamp(),
-          likes: 0,
-          likedBy: [],
-        });
         Alert.alert("איזה כיף!", "ההמלצה נוספה בהצלחה!");
       } else {
-        await updateDoc(doc(db, 'recommendations', editPostId), {
-          ...postData,
-          updatedAt: serverTimestamp(),
-        });
         Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
+      }
+      if (
+        typeof URL !== 'undefined' &&
+        typeof URL.revokeObjectURL === 'function'
+      ) {
+        Array.from(
+          new Set(
+            editableImageUris.filter(
+              (uri) => typeof uri === 'string' && uri.startsWith('blob:')
+            )
+          )
+        ).forEach((uri) => URL.revokeObjectURL(uri));
       }
       allowLeaveRef.current = true;
       navigation.goBack();
 
     } catch (error) {
       console.error("Error saving document: ", error);
+      // Unclaimed prepared media is removed by the scheduled server cleanup.
       Alert.alert("אוי לא!", "לא הצלחנו לשמור את ההמלצה.");
     } finally {
       setSubmitting(false);
@@ -695,7 +742,7 @@ const handleSubmit = async () => {
 
         {/* 1. Image Picker */}
         <ImagePickerBox
-          imageUris={editableImageUris}
+          imageUris={editablePreviewUris}
           onPress={handleAddImages}
           placeholderText="הוסף תמונות מהמכשיר שלך (עד 5)"
           imageFit="cover"
@@ -709,21 +756,12 @@ const handleSubmit = async () => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesScroll}>
               {editableImageUris.map((uri, index) => (
                 <View key={`${uri}:${index}`} style={styles.thumbWrap}>
-                  {Platform.OS === 'web' ? (
-                    <img
-                      src={uri}
-                      alt=""
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        display: 'block',
-                        backgroundColor: '#F3F4F6',
-                      }}
-                    />
-                  ) : (
-                    <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
-                  )}
+                  <CachedImage
+                    source={{ uri: editablePreviewUris[index] || uri }}
+                    style={styles.thumb}
+                    contentFit="cover"
+                    priority={index === 0 ? "normal" : "low"}
+                  />
                   <Pressable onPress={() => removeImageAt(index)} style={styles.thumbRemove} hitSlop={10}>
                     <Text style={styles.thumbRemoveText}>×</Text>
                   </Pressable>
@@ -777,7 +815,7 @@ const handleSubmit = async () => {
             inputTestID="add-rec-location-input"
           />
 
-          {!!(locationResolveError && (pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id) && (
+          {false && !!(locationResolveError && (pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id) && (
             <TouchableOpacity
               onPress={() => setCountryPickerVisible(true)}
               activeOpacity={0.85}
@@ -789,7 +827,7 @@ const handleSubmit = async () => {
             </TouchableOpacity>
           )}
 
-          {!!(selectedPlace?.placeId && selectedCountry?.id) && (
+          {false && !!(selectedPlace?.placeId && selectedCountry?.id) && (
             <TouchableOpacity
               onPress={() => {
                 setPendingCountryOverridePlaceId(selectedPlace.placeId);
@@ -873,7 +911,7 @@ const handleSubmit = async () => {
 
       </ScrollView>
 
-      <SelectionModal
+      {false && <SelectionModal
         visible={countryPickerVisible}
         onClose={() => setCountryPickerVisible(false)}
         title={loadingCountriesForPicker ? 'טוען מדינות...' : 'בחר מדינה'}
@@ -881,7 +919,7 @@ const handleSubmit = async () => {
         onSelect={handleSelectManualCountry}
         selectedId={selectedCountry?.id}
         emptyText={loadingCountriesForPicker ? 'טוען...' : 'אין מדינות להצגה'}
-      />
+      />}
 
       <UnsavedChangesModal
         visible={unsavedModalVisible}

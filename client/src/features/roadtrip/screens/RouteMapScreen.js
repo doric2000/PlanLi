@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { Image, Linking, Text, TouchableOpacity, View } from "react-native";
+import { Linking, Text, TouchableOpacity, View } from "react-native";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import CachedImage from "../../../components/CachedImage";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import {
 	buildGoogleMapsDirectionsUrl,
 	buildGoogleMapsPlaceUrl,
@@ -114,9 +116,20 @@ export default function RouteMapScreen({ route, navigation }) {
 						>
 							<View style={styles.markerWrap}>
 								<View style={styles.marker}>
-									{stop.image ? (
+									{stop.image || stop.media ? (
 										<>
-											<Image source={{ uri: stop.image }} style={styles.markerImage} />
+											<CachedImage
+												source={{
+													uri: getMediaVariantUrl(
+													stop.media,
+														"thumb",
+														stop.image
+													),
+												}}
+												style={styles.markerImage}
+												contentFit="cover"
+												priority="low"
+											/>
 											<View style={styles.markerNumberBadge}>
 												<Text style={styles.markerNumberText}>{stop.globalIndex + 1}</Text>
 											</View>
@@ -143,8 +156,19 @@ export default function RouteMapScreen({ route, navigation }) {
 								{selectedStop.title}
 							</Text>
 						</View>
-						{selectedStop.image ? (
-							<Image source={{ uri: selectedStop.image }} style={styles.sheetImage} />
+						{selectedStop.image || selectedStop.media ? (
+							<CachedImage
+								source={{
+									uri: getMediaVariantUrl(
+										selectedStop.media,
+										"thumb",
+										selectedStop.image
+									),
+								}}
+								style={styles.sheetImage}
+								contentFit="cover"
+								priority="high"
+							/>
 						) : (
 							<View style={styles.sheetImageFallback}>
 								<Text style={styles.sheetImageFallbackText}>{selectedStop.globalIndex + 1}</Text>

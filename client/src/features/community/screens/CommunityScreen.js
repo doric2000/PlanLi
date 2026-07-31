@@ -246,6 +246,9 @@ export default function CommunityScreen({ navigation }) {
             ref={feedListRef}
             data={displayData}
             keyExtractor={(item) => item.id}
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={5}
             onScroll={onScroll}
             scrollEventThrottle={16}
             renderItem={({ item }) => (

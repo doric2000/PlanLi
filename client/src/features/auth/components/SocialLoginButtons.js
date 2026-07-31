@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, Image } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { forms } from '../../../styles';
+import CachedImage from '../../../components/CachedImage';
 
 const SOCIALS = [
   { logo: "https://cdn-icons-png.flaticon.com/512/300/300221.png", key: "google" },
@@ -16,7 +17,12 @@ export const SocialLoginButtons = ({ onGoogleLogin }) => (
         style={forms.authSocialButton}
         onPress={item.key === "google" ? onGoogleLogin : undefined}
       >
-        <Image source={{ uri: item.logo }} style={forms.authSocialIcon} />
+        <CachedImage
+          source={{ uri: item.logo }}
+          style={forms.authSocialIcon}
+          contentFit="contain"
+          priority="low"
+        />
       </TouchableOpacity>
     ))}
   </View>

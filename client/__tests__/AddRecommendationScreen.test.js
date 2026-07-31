@@ -2,7 +2,6 @@ import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
 import { Alert } from 'react-native';
-import { addDoc, serverTimestamp } from 'firebase/firestore';
 
 // ==========================================
 // 1. Mocks Setup
@@ -36,8 +35,7 @@ jest.mock('../src/config/firebase', () => ({
 // B. Mock Location Service (UPDATED WITH GEOMETRY)
 // This simulates the response from your backend/Google API when a city is selected.
 // Crucial: we return geometry.location lat/lng and the screen saves it in postData.place.
-jest.mock('../src/services/LocationService', () => ({
-  getOrCreateDestinationForPlace: jest.fn(() => Promise.resolve({
+const mockResolveDestinationForPlacePreview = jest.fn(() => Promise.resolve({
     // General destination info used for app routing/filtering
     destination: {
       country: { id: 'IL', name: 'Israel' },
@@ -58,19 +56,41 @@ jest.mock('../src/services/LocationService', () => ({
       types: ['restaurant', 'food', 'establishment'],
       rating: 4.5
     }
-  })),
+  }));
+jest.mock('../src/services/LocationService', () => ({
+  resolveDestinationForPlacePreview: (...args) =>
+    mockResolveDestinationForPlacePreview(...args),
   searchPlaces: jest.fn(() => Promise.resolve([]))
+}));
+
+const mockSaveRecommendation = jest.fn(() =>
+  Promise.resolve({ recommendationId: 'new-doc-id' })
+);
+jest.mock('../src/services/RecommendationService', () => ({
+  saveRecommendation: (...args) => mockSaveRecommendation(...args),
 }));
 
 // C. Mock Image Picker
 // The screen calls pickImages() to obtain local/remote URIs; we return a remote URL.
-const mockPickImages = jest.fn(() => Promise.resolve(['https://fake-url.com/tasty-pizza.jpg']));
-const mockUploadImages = jest.fn(() => Promise.resolve([]));
+const mockPickImages = jest.fn(() => Promise.resolve(['file:///tasty-pizza.jpg']));
+const mockUploadImages = jest.fn(() =>
+  Promise.resolve([
+    {
+      assetId: '123e4567-e89b-42d3-a456-426614174000',
+      large: { url: 'https://cdn/large.webp' },
+      feed: { url: 'https://cdn/feed.webp' },
+      thumb: { url: 'https://cdn/thumb.webp' },
+    },
+  ])
+);
+const mockRemoveUploadedImage = jest.fn(() => Promise.resolve());
 
 jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
   useImagePickerWithUpload: () => ({
     pickImages: mockPickImages,
     uploadImages: mockUploadImages,
+    uploadImageAssets: mockUploadImages,
+    removeUploadedImage: mockRemoveUploadedImage,
   })
 }));
 
@@ -128,7 +148,7 @@ function makeEditItem(overrides = {}) {
     country: 'Israel',
     location: 'Tel Aviv',
     place: { placeId: 'p1', name: 'Spot', geometry: { location: { lat: 32, lng: 34 } } },
-    images: [],
+    media: [],
     ...overrides,
   };
 }
@@ -178,6 +198,12 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.changeText(getByTestId('add-rec-location-input'), 'Tel Aviv'); 
     fireEvent.press(getByTestId('google-result-select')); 
     // This triggers the LocationService mock, setting state with 'Israel', 'Tel Aviv', and coordinates.
+    await waitFor(() =>
+      expect(mockResolveDestinationForPlacePreview).toHaveBeenCalledWith(
+        'dummy-place-id'
+      )
+    );
+    expect(mockUploadImages).not.toHaveBeenCalled();
 
     // 3. Enter Description
     fireEvent.changeText(getByTestId('add-rec-description-input'), 'Great cheese and crust!');
@@ -201,49 +227,18 @@ describe('AddRecommendationScreen Integration Test', () => {
     // ------------------------------------------------
 
     await waitFor(() => {
-      // Verify that Firestore's addDoc was called
-      expect(addDoc).toHaveBeenCalled();
-
-      // Verify the data sent to Firestore matches our inputs AND the mocked service data
-      expect(addDoc).toHaveBeenCalledWith(
-        expect.anything(), // Collection reference
-        expect.objectContaining({
+      expect(mockSaveRecommendation).toHaveBeenCalledWith({
+        placeId: 'google-place-id',
+        recommendation: expect.objectContaining({
           title: 'Best Pizza Ever',
           description: 'Great cheese and crust!',
           category: 'אוכל ובילויים',
           categoryId: 'food',
-          
-          // These fields come from the LocationService mock:
-          country: 'Israel',
-          location: 'Tel Aviv',
-          countryId: 'IL',
-          cityId: 'TLV',
-
-          // Verify tags (sub-category)
           tags: expect.arrayContaining(['מסעדה']),
           budget: '₪₪',
-
-          // Images are stored as an array in current implementation
-          images: ['https://fake-url.com/tasty-pizza.jpg'],
-
-          // Place object should include geometry with coordinates
-          place: expect.objectContaining({
-            placeId: 'google-place-id',
-            geometry: expect.objectContaining({
-              location: expect.objectContaining({
-                lat: 32.0853,
-                lng: 34.7818,
-              }),
-            }),
-          }),
-
-          // Created-by fields
-          userId: 'test-user-id',
-          createdAt: serverTimestamp(),
-          likes: 0,
-          likedBy: [],
+          media: expect.any(Array),
         })
-      );
+      });
     });
 
     // Verify navigation back to the previous screen

@@ -36,6 +36,9 @@ export default function FavoriteCitiesList({ flatListRef, onScroll }) {
       keyExtractor={(item) => item.id}
       onScroll={onScroll}
       scrollEventThrottle={16}
+      initialNumToRender={3}
+      maxToRenderPerBatch={3}
+      windowSize={5}
       renderItem={({ item }) => (
         <CityCard
           key={item.id}

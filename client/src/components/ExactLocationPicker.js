@@ -5,7 +5,7 @@ import { collection, collectionGroup, getDocs, query } from "firebase/firestore"
 import GooglePlacesInput from "./GooglePlacesInput";
 import SelectionModal from "../features/community/components/SelectionModal";
 import { db } from "../config/firebase";
-import { getOrCreateDestinationForPlace, searchPlaces } from "../services/LocationService";
+import { resolveDestinationForPlacePreview, searchPlaces } from "../services/LocationService";
 import { colors, exactLocationPickerStyles as styles } from "../styles";
 
 const getInitialQuery = (value) =>
@@ -149,7 +149,7 @@ export default function ExactLocationPicker({
 		setResolvingLocation(true);
 		setLocationResolveError(null);
 		try {
-			const result = await getOrCreateDestinationForPlace(placeId);
+			const result = await resolveDestinationForPlacePreview(placeId);
 			setSelectedCountry(result.destination.country);
 			setSelectedCity(result.destination.city);
 			setSelectedPlace(result.place);
@@ -262,8 +262,12 @@ export default function ExactLocationPicker({
 		setLocationResolveError(null);
 
 		try {
-			const result = await getOrCreateDestinationForPlace(placeId, {
-				countryOverride: { name: country?.name || country?.id, code: country?.code || null },
+			const result = await resolveDestinationForPlacePreview(placeId, {
+				countryOverride: {
+					id: country?.id,
+					name: country?.name || country?.id,
+					code: country?.code || null,
+				},
 			});
 			setSelectedCountry(result.destination.country);
 			setSelectedCity(result.destination.city);
@@ -319,7 +323,7 @@ export default function ExactLocationPicker({
 			{!!locationResolveError && (
 				<View style={styles.errorWrap}>
 					<Text style={styles.errorText}>{locationResolveError}</Text>
-					{!!(pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id && (
+					{false && !!(pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id && (
 						<TouchableOpacity onPress={() => setCountryPickerVisible(true)} activeOpacity={0.85}>
 							<Text style={styles.manualCountryText}>בחר מדינה ידנית</Text>
 						</TouchableOpacity>
@@ -327,7 +331,7 @@ export default function ExactLocationPicker({
 				</View>
 			)}
 
-			{!!(selectedPlace?.placeId && selectedCountry?.id) && (
+			{false && !!(selectedPlace?.placeId && selectedCountry?.id) && (
 				<TouchableOpacity
 					onPress={() => {
 						setPendingCountryOverridePlaceId(selectedPlace.placeId);
@@ -340,7 +344,7 @@ export default function ExactLocationPicker({
 				</TouchableOpacity>
 			)}
 
-			<SelectionModal
+			{false && <SelectionModal
 				visible={countryPickerVisible}
 				onClose={() => setCountryPickerVisible(false)}
 				title={loadingCountriesForPicker ? "טוען מדינות..." : "בחר מדינה"}
@@ -348,7 +352,7 @@ export default function ExactLocationPicker({
 				onSelect={handleSelectManualCountry}
 				selectedId={selectedCountry?.id || suggestedCountryForOverride?.name}
 				emptyText={loadingCountriesForPicker ? "טוען..." : "אין מדינות להצגה"}
-			/>
+			/>}
 		</View>
 	);
 }

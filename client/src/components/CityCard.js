@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { cards, cityCardStyles as styles } from '../styles';
+import CachedImage from './CachedImage';
 
 const DEFAULT_CITY_IMAGE_URL = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
 
@@ -26,10 +27,11 @@ export default function CityCard({
   onSavePress,
 }) {
   const rawImageUrl = city?.imageUrl;
-  const imageUrl =
+  const legacyImageUrl =
     Platform.OS === 'web' && isGooglePlacesPhotoUrl(rawImageUrl)
       ? DEFAULT_CITY_IMAGE_URL
       : rawImageUrl;
+  const imageUrl = city?.externalImageUrl || legacyImageUrl;
   const isHomeVariant = variant === 'home';
   const cardStyle = isHomeVariant ? styles.homeCard : cards.popular;
   const imageContainerStyle = isHomeVariant ? styles.homeImageContainer : cards.popularImageContainer;
@@ -49,10 +51,11 @@ export default function CityCard({
     >
       <View style={imageContainerStyle}>
         {imageUrl ? (
-          <Image
+          <CachedImage
             source={{ uri: imageUrl }}
             style={imageStyle}
-            resizeMode="cover"
+            contentFit="cover"
+            priority="low"
           />
         ) : (
           <View

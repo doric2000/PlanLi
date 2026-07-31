@@ -1,0 +1,21 @@
+{
+  "projects": {
+    "default": "planli-f0b12"
+  },
+  "targets": {
+    "planli-f0b12": {
+      "storage": {
+        "media": [
+          "planli-f0b12-media-eu"
+        ]
+      }
+    },
+    "planli-rules-test": {
+      "storage": {
+        "media": [
+          "planli-rules-test.appspot.com"
+        ]
+      }
+    }
+  }
+}

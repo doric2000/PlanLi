@@ -31,6 +31,28 @@ import {
 	where,
 } from "firebase/firestore";
 
+async function getProfileContentSnapshot(collectionName, uid) {
+	try {
+		return await getDocs(
+			query(
+				collection(db, collectionName),
+				where("userId", "==", uid),
+				orderBy("createdAt", "desc"),
+				limit(30)
+			)
+		);
+	} catch (error) {
+		console.log(`Ordered ${collectionName} query failed, fallback:`, error?.message);
+		return getDocs(
+			query(
+				collection(db, collectionName),
+				where("userId", "==", uid),
+				limit(30)
+			)
+		);
+	}
+}
+
 function getRootNavigation(navigation) {
 	let current = navigation;
 	let parent = current?.getParent?.();
@@ -98,46 +120,12 @@ function AuthedProfileScreen({ navigation, route }) {
 		if (!isSilent) setContentLoading(true);
 
 		try {
-			let recSnap;
-			try {
-				const recQ = query(
-					collection(db, "recommendations"),
-					where("userId", "==", profileUid),
-					orderBy("createdAt", "desc"),
-					limit(30)
-				);
-				recSnap = await getDocs(recQ);
-			} catch (err) {
-				console.log("Ordered recs query failed, fallback:", err?.message);
-				const recQFallback = query(
-					collection(db, "recommendations"),
-					where("userId", "==", profileUid),
-					limit(30)
-				);
-				recSnap = await getDocs(recQFallback);
-			}
+			const [recSnap, routesSnap] = await Promise.all([
+				getProfileContentSnapshot("recommendations", profileUid),
+				getProfileContentSnapshot("routes", profileUid),
+			]);
 
 			setMyRecs(recSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-
-			let routesSnap;
-			try {
-				const routesQ = query(
-					collection(db, "routes"),
-					where("userId", "==", profileUid),
-					orderBy("createdAt", "desc"),
-					limit(30)
-				);
-				routesSnap = await getDocs(routesQ);
-			} catch (err) {
-				console.log("Ordered routes query failed, fallback:", err?.message);
-				const routesQFallback = query(
-					collection(db, "routes"),
-					where("userId", "==", profileUid),
-					limit(30)
-				);
-				routesSnap = await getDocs(routesQFallback);
-			}
-
 			setMyRoutes(routesSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 		} catch (e) {
 			console.log("loadMyContent error:", e?.message || e);
@@ -173,6 +161,10 @@ function AuthedProfileScreen({ navigation, route }) {
 	}, [navigation, refresh, loadMyContent]);
 
 	const profileListRef = useRef(null);
+	useEffect(() => {
+		profileListRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+	}, [contentTab]);
+
 	const tabPressRefresh = useCallback(() => {
 		refresh();
 		loadMyContent();
@@ -213,11 +205,13 @@ function AuthedProfileScreen({ navigation, route }) {
 
 			<FlatList
 				ref={profileListRef}
-				key={`profile-grid-${contentTab}`}
 				data={activeData}
 				keyExtractor={(item) => item.id}
 				extraData={contentTab}
 				numColumns={3}
+				initialNumToRender={3}
+				maxToRenderPerBatch={3}
+				windowSize={5}
 				onScroll={profileTabOnScroll}
 				scrollEventThrottle={16}
 				columnWrapperStyle={profileStyles.gridRow}

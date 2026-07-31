@@ -1,55 +1,63 @@
 import { useCallback } from 'react';
+
+import { prepareMedia } from '../services/MediaService';
 import { useImagePicker } from './useImagePicker';
-import { useImageUploader, FirebaseUploadStrategy } from './useImageUploader';
+import {
+  FirebaseUploadStrategy,
+  useImageUploader,
+} from './useImageUploader';
 
-/**
- * Combined Options for picker and uploader
- * @typedef {Object} ImagePickerWithUploadOptions
- * @property {number[]} aspect - Aspect ratio [width, height]
- * @property {number} quality - Image quality (0-1)
- * @property {boolean} allowsEditing - Allow image editing
- * @property {string} storagePath - Base path in storage
- * @property {Object} strategy - Upload strategy
- */
-
-/**
- * Default options
- */
 const DEFAULT_OPTIONS = {
-  // Picker options
   aspect: [4, 3],
-  quality: 0.5,
+  quality: 1,
   allowsEditing: true,
-
-  // Optional: normalize to strict aspect/size
   normalizeToAspect: false,
   normalizeAspect: [4, 5],
-  normalizeWidth: 1080,
-  normalizeHeight: 1350,
-  normalizeCompress: 0.9,
-  // Uploader options
-  storagePath: 'images',
+  normalizeWidth: 2560,
+  normalizeHeight: 2560,
+  maxLongEdge: 2560,
+  normalizeCompress: 0.94,
+  processOnSelect: true,
+  kind: 'route',
+  storagePath: 'media-staging',
   strategy: FirebaseUploadStrategy,
 };
 
 /**
- * Combined Image Picker and Uploader Hook
- * 
- * SOLID Principles Applied:
- * - S: Composes two single-responsibility hooks
- * - O: Open for extension via options
- * - D: Uses dependency injection for strategy
- * 
- * This hook follows the Composition over Inheritance principle,
- * combining useImagePicker and useImageUploader into a unified interface.
- * 
- * @param {ImagePickerWithUploadOptions} options - Configuration options
- * @returns {Object} Combined hook state and functions
+ * Run at most two complete image pipelines concurrently while preserving the
+ * selection order.
  */
+export const uploadUrisWithConcurrency = async (
+  uris,
+  uploadImage,
+  maxConcurrency = 2
+) => {
+  if (!Array.isArray(uris) || uris.length === 0) return [];
+  const results = new Array(uris.length);
+  let nextIndex = 0;
+  let firstError = null;
+  const workerCount = Math.min(Math.max(1, maxConcurrency), uris.length);
+
+  const worker = async () => {
+    while (!firstError) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= uris.length) return;
+      try {
+        results[index] = await uploadImage(uris[index]);
+      } catch (error) {
+        firstError = firstError || error;
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  if (firstError) throw firstError;
+  return results;
+};
+
 export const useImagePickerWithUpload = (options = {}) => {
   const config = { ...DEFAULT_OPTIONS, ...options };
-
-  // Compose the two hooks
   const picker = useImagePicker({
     aspect: config.aspect,
     quality: config.quality,
@@ -58,131 +66,138 @@ export const useImagePickerWithUpload = (options = {}) => {
     normalizeAspect: config.normalizeAspect,
     normalizeWidth: config.normalizeWidth,
     normalizeHeight: config.normalizeHeight,
+    maxLongEdge: config.maxLongEdge,
     normalizeCompress: config.normalizeCompress,
+    processOnSelect: config.processOnSelect,
   });
-
   const uploader = useImageUploader({
-    storagePath: config.storagePath,
+    storagePath: 'media-staging',
     strategy: config.strategy,
   });
 
-  /**
-   * Pick an image and immediately upload it
-   * @returns {Promise<string|null>} Download URL or null
-   */
+  const uploadImageAsset = useCallback(
+    async (uri) => {
+      if (!uri) return null;
+      let staging = null;
+      try {
+        staging = await uploader.uploadImageDetailed(uri, {
+          variant: 'staging',
+        });
+        if (!staging?.path) {
+          throw new Error('Staging upload did not return a Storage path.');
+        }
+        const asset = await prepareMedia({
+          stagingPath: staging.path,
+          kind: config.kind,
+        });
+        if (
+          !asset?.assetId ||
+          !asset?.large?.url ||
+          !asset?.feed?.url ||
+          !asset?.thumb?.url
+        ) {
+          throw new Error('Media processing returned an incomplete asset.');
+        }
+        return asset;
+      } catch (error) {
+        if (staging?.path) {
+          await uploader.removeUploadedImage(staging.path).catch(() => {});
+        }
+        throw error;
+      }
+    },
+    [config.kind, uploader]
+  );
+
+  const uploadImageAssets = useCallback(
+    async (uris, { limit = 5 } = {}) => {
+      if (!Array.isArray(uris) || uris.length === 0) return [];
+      const normalizedLimit = Number.isFinite(limit)
+        ? Math.max(0, Math.floor(limit))
+        : uris.length;
+      return uploadUrisWithConcurrency(
+        uris.slice(0, normalizedLimit),
+        uploadImageAsset,
+        2
+      );
+    },
+    [uploadImageAsset]
+  );
+
+  const uploadImages = useCallback(
+    async (uris) => {
+      const assets = await uploadImageAssets(uris);
+      return assets.map((asset) => asset.feed.url);
+    },
+    [uploadImageAssets]
+  );
+
+  const pickImages = useCallback(
+    async ({ limit = 5 } = {}) => {
+      if (typeof document !== 'undefined' && picker.pickMultipleFromWeb) {
+        return picker.pickMultipleFromWeb({ selectionLimit: limit });
+      }
+      if (picker.pickMultipleFromGallery) {
+        return picker.pickMultipleFromGallery({ selectionLimit: limit });
+      }
+      return [];
+    },
+    [picker]
+  );
+
   const pickAndUpload = useCallback(async () => {
     const uri = await picker.pickFromGallery();
-    if (uri) {
-      return uploader.uploadImage(uri);
-    }
-    return null;
-  }, [picker, uploader]);
+    const asset = uri ? await uploadImageAsset(uri) : null;
+    return asset?.feed?.url || null;
+  }, [picker, uploadImageAsset]);
 
-  /**
-   * Pick from camera and immediately upload
-   * @returns {Promise<string|null>} Download URL or null
-   */
   const captureAndUpload = useCallback(async () => {
     const uri = await picker.pickFromCamera();
-    if (uri) {
-      return uploader.uploadImage(uri);
-    }
-    return null;
-  }, [picker, uploader]);
+    const asset = uri ? await uploadImageAsset(uri) : null;
+    return asset?.feed?.url || null;
+  }, [picker, uploadImageAsset]);
 
-  /**
-   * Show picker dialog and upload selected image
-   * @param {Function} [onComplete] - Callback with download URL after upload
-   * @returns {Promise<string|null>} Download URL or null
-   */
-  const pickImageAndUpload = useCallback((onComplete) => {
-    return picker.pickImage(async (uri) => {
-      if (uri) {
+  const pickImageAndUpload = useCallback(
+    (onComplete) =>
+      picker.pickImage(async (uri) => {
+        if (!uri) return;
         try {
-          const downloadUrl = await uploader.uploadImage(uri);
-          if (onComplete) onComplete(downloadUrl);
+          const asset = await uploadImageAsset(uri);
+          onComplete?.(asset?.feed?.url || null);
         } catch (error) {
           console.error('Upload after pick failed:', error);
         }
-      }
-    });
-  }, [picker, uploader]);
+      }),
+    [picker, uploadImageAsset]
+  );
 
-  /**
-   * Clear all state
-   */
   const reset = useCallback(() => {
     picker.clearImage();
     uploader.resetUpload();
   }, [picker, uploader]);
 
-  /**
-   * Pick up to N images (gallery/web) and return their local URIs.
-   * Camera is intentionally not supported for multi-pick.
-   *
-   * @param {Object} opts
-   * @param {number} [opts.limit=5]
-   * @returns {Promise<string[]>}
-   */
-  const pickImages = useCallback(async ({ limit = 5 } = {}) => {
-    // Web: file input supports multiple
-    if (typeof document !== 'undefined' && picker.pickMultipleFromWeb) {
-      return picker.pickMultipleFromWeb({ selectionLimit: limit });
-    }
-    if (picker.pickMultipleFromGallery) {
-      return picker.pickMultipleFromGallery({ selectionLimit: limit });
-    }
-    return [];
-  }, [picker]);
-
-  /**
-   * Upload an array of local URIs and return download URLs.
-   *
-   * @param {string[]} uris
-   * @returns {Promise<string[]>}
-   */
-  const uploadImages = useCallback(async (uris) => {
-    if (!Array.isArray(uris) || uris.length === 0) return [];
-    const limited = uris.slice(0, 5);
-    const results = [];
-    for (const uri of limited) {
-      // eslint-disable-next-line no-await-in-loop
-      const url = await uploader.uploadImage(uri);
-      if (url) results.push(url);
-    }
-    return results;
-  }, [uploader]);
-
   return {
-    // Picker state
     imageUri: picker.imageUri,
     setImageUri: picker.setImageUri,
     pickerError: picker.error,
-
-    // Uploader state
     uploading: uploader.uploading,
     uploadError: uploader.uploadError,
     uploadProgress: uploader.uploadProgress,
-
-    // Picker actions
     pickImage: picker.pickImage,
     pickFromGallery: picker.pickFromGallery,
     pickFromCamera: picker.pickFromCamera,
     clearImage: picker.clearImage,
-
-    // Uploader actions
-    uploadImage: uploader.uploadImage,
+    uploadImage: async (uri) => (await uploadImageAsset(uri))?.feed?.url || null,
+    uploadImageAsset,
+    uploadImageAssets,
+    uploadImages,
+    removeUploadedImage: uploader.removeUploadedImage,
     resetUpload: uploader.resetUpload,
-
-    // Combined actions
     pickAndUpload,
     captureAndUpload,
     pickImageAndUpload,
-    reset,
-
-    // Multi-image helpers
     pickImages,
-    uploadImages,
+    reset,
   };
 };
 

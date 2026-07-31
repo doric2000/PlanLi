@@ -3,6 +3,7 @@ import { getAuth, initializeAuth, getReactNativePersistence } from "firebase/aut
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 import { Platform } from 'react-native'; // <--- Import Platform
 
 const firebaseConfig = {
@@ -30,6 +31,15 @@ if (Platform.OS === 'web') {
 }
 
 const db = getFirestore(app);
-const storage = getStorage(app);
+const mediaBucket =
+  process.env.EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET ||
+  (firebaseConfig.projectId === "planli-f0b12"
+    ? "planli-f0b12-media-eu"
+    : firebaseConfig.storageBucket);
+const storage = getStorage(
+  app,
+  mediaBucket.startsWith("gs://") ? mediaBucket : `gs://${mediaBucket}`
+);
+const cloudFunctions = getFunctions(app, "europe-west1");
 
-export { auth, db, storage };
+export { app, auth, cloudFunctions, db, mediaBucket, storage };

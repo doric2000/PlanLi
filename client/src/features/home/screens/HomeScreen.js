@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-	ActivityIndicator, Image, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
+	ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -8,11 +8,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { collectionGroup, getDocs, limit, orderBy, query } from "firebase/firestore";
 
 import CityCard from "../../../components/CityCard";
+import CachedImage from "../../../components/CachedImage";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
-import { getOrCreateDestination } from "../../../services/LocationService";
+import { resolveDestinationPreview } from "../../../services/LocationService";
 import { colors, homeScreenStyles as styles } from "../../../styles";
 
 const CATEGORY_CHIPS = [
@@ -196,50 +197,51 @@ export default function HomeScreen({ navigation }) {
 
 	const handleGoogleSelect = async (placeId) => {
 		try {
-			const result = await getOrCreateDestination(placeId);
-
-			if (result) {
-				const createdOrExistingCity = {
-					...(result.city || {}),
-					id: result.city?.id,
-					countryId: result.country?.id,
-				};
-
-				if (
-					createdOrExistingCity?.id &&
-					createdOrExistingCity?.countryId
-				) {
-					setDestinations((prev) => {
-						const next = [
-							createdOrExistingCity,
-							...(prev || []).filter(
-								(c) => c.id !== createdOrExistingCity.id
-							),
-						];
-						return next.slice(0, 10);
-					});
-
-					if (hasLoadedAllDestinationsForSearch) {
-						setAllDestinationsForSearch((prev) => {
-							const next = [
-								createdOrExistingCity,
-								...(prev || []).filter(
-									(c) => c.id !== createdOrExistingCity.id
-								),
-							];
-							return next;
-						});
-					}
-				}
-
+			const result = await resolveDestinationPreview(placeId);
+			if (result?.persisted) {
 				navigation.navigate("LandingPage", {
 					cityId: result.city.id,
 					countryId: result.country.id,
 				});
+				return;
 			}
+
+			if (isGuest || !user) {
+				Alert.alert(
+					"יש להתחבר",
+					"כדי להוסיף יעד חדש, יש להתחבר וליצור המלצה עבורו."
+				);
+				navigation.navigate("Login");
+				return;
+			}
+			if (!user.emailVerified) {
+				Alert.alert(
+					"נדרש אימות",
+					"כדי להוסיף יעד חדש, יש לאמת את כתובת האימייל."
+				);
+				navigation.navigate("VerifyEmail");
+				return;
+			}
+
+			navigation.navigate("AddRecommendation", {
+				prefillLocation: {
+					destination: {
+						country: result.country,
+						city: result.city,
+					},
+					place: {
+						placeId,
+						name: result.city?.name || null,
+						address: result.city?.description || null,
+						...(result.city?.coordinates
+							? { coordinates: result.city.coordinates }
+							: {}),
+					},
+				},
+			});
 		} catch (error) {
 			console.error(error);
-			alert("לא ניתן לטעון את היעד.");
+			Alert.alert("שגיאה", "לא ניתן לטעון את היעד.");
 		}
 	};
 
@@ -265,7 +267,12 @@ export default function HomeScreen({ navigation }) {
 			onPress={() => navigation.navigate(isGuest ? "Auth" : "Profile")}
 		>
 			{user?.photoURL ? (
-				<Image source={{ uri: user.photoURL }} style={styles.avatarImage} />
+				<CachedImage
+					source={{ uri: user.photoURL }}
+					style={styles.avatarImage}
+					contentFit="cover"
+					priority="high"
+				/>
 			) : (
 				<Text style={styles.avatarInitial}>{profileInitial}</Text>
 			)}
@@ -360,7 +367,7 @@ export default function HomeScreen({ navigation }) {
 
 	const renderFeaturedCard = (city, index) => {
 		const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
-		const imageUrl = city?.imageUrl;
+		const imageUrl = city?.externalImageUrl || city?.imageUrl;
 
 		return (
 			<TouchableOpacity
@@ -370,7 +377,12 @@ export default function HomeScreen({ navigation }) {
 				onPress={() => goToDestination(city)}
 			>
 				{imageUrl ? (
-					<Image source={{ uri: imageUrl }} style={styles.featuredImage} resizeMode="cover" />
+					<CachedImage
+						source={{ uri: imageUrl }}
+						style={styles.featuredImage}
+						contentFit="cover"
+						priority={index === 0 ? "high" : "low"}
+					/>
 				) : (
 					<LinearGradient colors={gradient} style={styles.featuredImage} />
 				)}

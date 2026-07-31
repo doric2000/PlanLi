@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, ActivityIndicator, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 
+import { cloudFunctions } from '../../../config/firebase';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useBackButton } from '../../../hooks/useBackButton';
@@ -26,8 +27,14 @@ export default function AdminPanelScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null); // { type: 'success'|'error'|'info', message: string }
 
-  const setAdminFn = useMemo(() => httpsCallable(getFunctions(), 'setAdmin'), []);
-  const setUserVerifiedFn = useMemo(() => httpsCallable(getFunctions(), 'setUserVerified'), []);
+  const setAdminFn = useMemo(
+    () => httpsCallable(cloudFunctions, 'setAdmin'),
+    []
+  );
+  const setUserVerifiedFn = useMemo(
+    () => httpsCallable(cloudFunctions, 'setUserVerified'),
+    []
+  );
 
   useEffect(() => {
     if (authLoading) return;

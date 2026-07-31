@@ -397,6 +397,9 @@ export default function RoutesScreen({ navigation }) {
 					]}
 					data={filteredRoutes}
 					keyExtractor={(item) => item.id}
+					initialNumToRender={3}
+					maxToRenderPerBatch={3}
+					windowSize={5}
 					onScroll={routesTabOnScroll}
 					scrollEventThrottle={16}
 					renderItem={renderItem}

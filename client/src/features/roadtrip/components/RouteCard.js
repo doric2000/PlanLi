@@ -1,7 +1,6 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
 	FlatList,
-	Image,
 	Platform,
 	Pressable,
 	Text,
@@ -13,7 +12,9 @@ import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useUserData } from "../../../hooks/useUserData";
+import { useBoundedImageWindow } from "../../../hooks/useBoundedImageWindow";
 import { Avatar } from "../../../components/Avatar";
+import CachedImage, { prefetchImage } from "../../../components/CachedImage";
 import PlacesRoute from "./PlacesRoute";
 import { ActionMenu } from "../../../components/ActionMenu";
 import ActionBar from "../../../components/ActionBar";
@@ -23,6 +24,7 @@ import { auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useAdminClaim } from "../../../hooks/useAdminClaim";
 import { formatTimestamp } from "../../../utils/formatTimestamp";
+import { getRouteImageUrls } from "../../../utils/mediaAssets";
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
@@ -30,29 +32,6 @@ const text = {
 	days: "\u05d9\u05de\u05d9\u05dd",
 	km: "\u05e7\u05f4\u05de",
 	noImage: "\u05de\u05e1\u05dc\u05d5\u05dc \u05d8\u05d9\u05d5\u05dc",
-};
-
-const asDisplayableImage = (uri) =>
-	typeof uri === "string" &&
-	(uri.startsWith("http") || uri.startsWith("https") || uri.startsWith("file:"));
-
-const getRouteImages = (route) => {
-	const images = [];
-	if (Array.isArray(route?.images)) images.push(...route.images);
-	if (route?.image) images.push(route.image);
-
-	if (Array.isArray(route?.tripDaysData)) {
-		route.tripDaysData.forEach((day) => {
-			if (day?.image) images.push(day.image);
-			if (Array.isArray(day?.stops)) {
-				day.stops.forEach((stop) => {
-					if (stop?.image) images.push(stop.image);
-				});
-			}
-		});
-	}
-
-	return Array.from(new Set(images.filter(asDisplayableImage)));
 };
 
 const getAllTags = (route) => {
@@ -120,11 +99,27 @@ export const RouteCard = ({
 	const navigation = useNavigation();
 	const { width: windowWidth } = useWindowDimensions();
 	const isFeed = variant === "feed";
-	const routeImages = useMemo(() => getRouteImages(item), [item]);
+	const routeImages = useMemo(
+		() => getRouteImageUrls(item, "feed"),
+		[item]
+	);
+	const thumbnailUrl = useMemo(
+		() => getRouteImageUrls(item, "thumb")[0] || null,
+		[item]
+	);
 	const allTags = useMemo(() => getAllTags(item), [item]);
 	const [carouselWidth, setCarouselWidth] = useState(null);
 	const [activeImageIndex, setActiveImageIndex] = useState(0);
 	const carouselRef = useRef(null);
+	const imageWindow = useBoundedImageWindow(activeImageIndex, routeImages.length);
+	useEffect(() => {
+		prefetchImage(
+			imageWindow.indices
+				.filter((index) => index !== imageWindow.currentIndex)
+				.map((index) => routeImages[index])
+				.filter(Boolean)
+		).catch(() => {});
+	}, [imageWindow.currentIndex, imageWindow.indices, routeImages]);
 	const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
 	const onViewableItemsChanged = useRef(({ viewableItems }) => {
 		const first = viewableItems?.[0]?.index;
@@ -134,7 +129,6 @@ export const RouteCard = ({
 	const author = useUserData(item.userId);
 	const displayUser = author.displayName || text.defaultUser;
 	const userPhoto = author.photoURL;
-	const thumbnailUrl = routeImages[0] || null;
 	const descriptionPreview = item?.desc
 		? item.desc.length > 100
 			? `${item.desc.substring(0, 100)}...`
@@ -158,25 +152,29 @@ export const RouteCard = ({
 		if (item.userId) navigation.navigate("UserProfile", { uid: item.userId });
 	};
 
-	const renderCarouselImage = (uri) => {
+	const renderCarouselImage = (uri, index) => {
 		const pageWidth = carouselWidth || windowWidth || 0;
 
-		if (Platform.OS === "web") {
+		if (index !== imageWindow.currentIndex) {
 			return (
-				<img
-					src={uri}
-					alt=""
-					width={typeof pageWidth === "number" && pageWidth > 0 ? pageWidth : undefined}
-					style={cards.recWebImage}
+				<View
+					style={[
+						cards.recCarouselImage,
+						{ width: pageWidth || "100%" },
+					]}
 				/>
 			);
 		}
 
 		return (
-			<Image
+			<CachedImage
 				source={{ uri }}
-				style={[cards.recCarouselImage, { width: pageWidth || "100%" }]}
-				resizeMode="cover"
+				style={[
+					Platform.OS === "web" ? cards.recWebImage : cards.recCarouselImage,
+					{ width: pageWidth || "100%" },
+				]}
+				contentFit="cover"
+				priority={index === imageWindow.currentIndex ? "normal" : "low"}
 			/>
 		);
 	};
@@ -200,7 +198,12 @@ export const RouteCard = ({
 				onPress={handleAuthorPress}
 			>
 				<View style={styles.feedAvatarRing}>
-					<Avatar photoURL={userPhoto} displayName={displayUser} size={40} />
+					<Avatar
+						photoURL={userPhoto}
+						photoMedia={author.photoMedia}
+						displayName={displayUser}
+						size={40}
+					/>
 				</View>
 				<View style={styles.feedAuthorTextWrap}>
 					<Text style={[cards.recUsername, styles.feedUsername]} numberOfLines={1}>
@@ -247,15 +250,19 @@ export const RouteCard = ({
 				<FlatList
 					ref={carouselRef}
 					data={routeImages}
+					extraData={imageWindow.currentIndex}
 					keyExtractor={(uri, index) => `${item.id || "route"}:${index}:${uri}`}
 					horizontal
 					pagingEnabled
 					showsHorizontalScrollIndicator={false}
 					scrollEnabled={routeImages.length > 1}
 					nestedScrollEnabled
-					renderItem={({ item: uri }) => (
+					initialNumToRender={1}
+					maxToRenderPerBatch={1}
+					windowSize={3}
+					renderItem={({ item: uri, index }) => (
 						<View style={[cards.recCarouselItem, { width: carouselWidth || windowWidth || "100%" }]}>
-							{renderCarouselImage(uri)}
+							{renderCarouselImage(uri, index)}
 						</View>
 					)}
 					onViewableItemsChanged={onViewableItemsChanged}
@@ -414,7 +421,11 @@ export const RouteCard = ({
 		<Pressable style={cards.recommendation} onPress={onPress}>
 			<View style={cards.recHeader}>
 				<View style={cards.recAuthorInfo}>
-					<Avatar photoURL={userPhoto} displayName={displayUser} />
+					<Avatar
+						photoURL={userPhoto}
+						photoMedia={author.photoMedia}
+						displayName={displayUser}
+					/>
 					<View>
 						<Text style={cards.recUsername}>{displayUser}</Text>
 						{item.createdAt && (
@@ -441,7 +452,12 @@ export const RouteCard = ({
 			</View>
 
 			{thumbnailUrl ? (
-				<Image source={{ uri: thumbnailUrl }} style={cards.recImage} resizeMode="cover" />
+				<CachedImage
+					source={{ uri: thumbnailUrl }}
+					style={cards.recImage}
+					contentFit="cover"
+					priority="normal"
+				/>
 			) : null}
 
 			{renderContent(false)}

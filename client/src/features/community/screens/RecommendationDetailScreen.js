@@ -19,6 +19,7 @@ import LikesModal from '../../../components/LikesModal';
 import { CommentsModal } from '../../../components/CommentsModal';
 import { colors, typography, common, tags as tagsStyle, recommendationDetailScreenStyles as styles } from '../../../styles';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
 
 /**
@@ -80,7 +81,7 @@ function RecommendationDetailLoaded({ item, navigation }) {
   const isOwner = user?.uid === item.userId;
   const snapshotData = {
     name: item.title,
-    thumbnail_url: item.images && item.images.length > 0 ? item.images[0] : null,
+    thumbnail_url: getRecommendationImageUrls(item, 'thumb')[0] || null,
     sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : '',
     rating: item.rating
   };

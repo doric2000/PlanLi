@@ -7,7 +7,7 @@ import { useFavoriteRoadTripIds } from "./useFavoriteRoadTripIds";
  * Fetches full route objects for the user's favorite route IDs.
  * Returns { favorites, loading }
  */
-export function useFavoriteRoadTripsFull() {
+export function useFavoriteRoadTripsFull({ enabled = true } = {}) {
   const { ids, loading: loadingIds } = useFavoriteRoadTripIds();
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,6 +20,10 @@ export function useFavoriteRoadTripsFull() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (loadingIds) {
       setLoading(true);
       return;
@@ -48,7 +52,7 @@ export function useFavoriteRoadTripsFull() {
     )
       .then((results) => setFavorites(results.filter(Boolean)))
       .finally(() => setLoading(false));
-  }, [ids, loadingIds, reloadTick]);
+  }, [enabled, ids, loadingIds, reloadTick]);
 
   return { favorites, loading, reload };
 }

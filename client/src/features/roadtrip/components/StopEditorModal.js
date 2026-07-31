@@ -7,6 +7,7 @@ import { ImagePickerBox } from "../../../components/ImagePickerBox";
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { hasValidStopLocation, getStopCoordinates } from "../utils/routeStops";
 import { stopEditorModalStyles as styles } from "../../../styles";
 
@@ -42,11 +43,14 @@ export default function StopEditorModal({
 	const {
 		imageUri: image,
 		setImageUri: setImage,
-		pickImageAndUpload,
+		pickImage,
 		clearImage,
 		uploading,
 	} = useImagePickerWithUpload({
-		storagePath: "trips/stops",
+		kind: "route",
+		quality: 1,
+		maxLongEdge: 2560,
+		normalizeCompress: 0.94,
 	});
 
 	useEffect(() => {
@@ -58,7 +62,10 @@ export default function StopEditorModal({
 		}
 		const t = initialData?.title || "";
 		const d = initialData?.description || "";
-		const im = initialData?.image || null;
+		const im =
+			initialData?.image ||
+			getMediaVariantUrl(initialData?.media, "feed") ||
+			null;
 		const loc = initialData || null;
 		setTitle(t);
 		setDescription(d);
@@ -116,6 +123,13 @@ export default function StopEditorModal({
 			title: trimmedTitle,
 			description: description.trim(),
 			image: image || null,
+			media:
+				image &&
+				image ===
+					(initialData?.image ||
+						getMediaVariantUrl(initialData?.media, "feed"))
+					? initialData?.media || null
+					: null,
 		};
 
 		if (!hasValidStopLocation(nextStop)) {
@@ -191,7 +205,7 @@ export default function StopEditorModal({
 					<Text style={styles.photoLabel}>תמונה לתחנה</Text>
 					<ImagePickerBox
 						imageUri={image}
-						onPress={() => pickImageAndUpload((url) => setImage(url))}
+						onPress={() => pickImage((uri) => setImage(uri))}
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה לתחנה"}
 						style={styles.imagePickerSpacing}
 						loading={uploading}

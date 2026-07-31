@@ -1,21 +1,27 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUserData } from '../hooks/useUserData';
+import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { Avatar } from './Avatar';
 import { ActionMenu } from './ActionMenu';
+import CachedImage, { prefetchImage } from './CachedImage';
 import { cards, recommendationCardStyles as styles } from '../styles';
 import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import { db } from '../config/firebase';
 import { deleteDoc, doc } from 'firebase/firestore';
-import { getStorage, ref as storageRef, deleteObject } from 'firebase/storage';
 import FavoriteButton from './FavoriteButton';
 import { getUserTier } from '../utils/userTier';
 import { useAdminClaim } from '../hooks/useAdminClaim';
 import { formatTimestamp } from '../utils/formatTimestamp';
+import {
+  getMediaPlaceholder,
+  getMediaSrcSet,
+  getRecommendationImageUrls,
+} from '../utils/mediaAssets';
 
 
 /**
@@ -33,15 +39,31 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   const { width: windowWidth } = useWindowDimensions();
   const isFeed = variant === 'feed';
 
-  const images = useMemo(() => (Array.isArray(item.images) ? item.images.filter(Boolean) : []), [item.images]);
+  const images = useMemo(
+    () => getRecommendationImageUrls(item, 'feed'),
+    [item]
+  );
+  const thumbnailUrl = useMemo(
+    () => getRecommendationImageUrls(item, 'thumb')[0] || null,
+    [item]
+  );
   const [carouselWidth, setCarouselWidth] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const carouselRef = useRef(null);
+  const imageWindow = useBoundedImageWindow(activeImageIndex, images.length);
   const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
     const first = viewableItems?.[0]?.index;
     if (typeof first === 'number') setActiveImageIndex(first);
   }).current;
+
+  useEffect(() => {
+    const neighbors = imageWindow.indices
+      .filter((index) => index !== imageWindow.currentIndex)
+      .map((index) => images[index])
+      .filter(Boolean);
+    prefetchImage(neighbors).catch(() => {});
+  }, [imageWindow.currentIndex, imageWindow.indices, images]);
 
   // Use custom hooks
   const author = useUserData(item.userId);
@@ -54,7 +76,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   // Create snapshot data for favorites
   const snapshotData = {
     name: item.title,
-    thumbnail_url: item.images && item.images.length > 0 ? item.images[0] : null,
+    thumbnail_url: thumbnailUrl,
     sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : '',
     rating: item.rating
   };
@@ -63,26 +85,32 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     navigation.navigate('RecommendationDetail', { item });
   };
 
-  const renderCarouselImage = (uri) => {
+  const renderCarouselImage = (uri, index) => {
     const pageWidth = carouselWidth || windowWidth || 0;
 
-    if (Platform.OS === 'web') {
-      // Using <img> on web avoids RN-web's XHR image loader CORS restrictions.
+    if (index !== imageWindow.currentIndex) {
       return (
-        <img
-          src={uri}
-          alt=""
-          width={typeof pageWidth === 'number' && pageWidth > 0 ? pageWidth : undefined}
-          style={cards.recWebImage}
+        <View
+          style={[
+            cards.recCarouselImage,
+            { width: pageWidth || '100%' },
+          ]}
         />
       );
     }
 
     return (
-      <Image
+      <CachedImage
         source={{ uri }}
-        style={[cards.recCarouselImage, { width: pageWidth || '100%' }]}
-        resizeMode="cover"
+        placeholder={getMediaPlaceholder(item?.media?.[index])}
+        srcSet={getMediaSrcSet(item?.media?.[index])}
+        sizes="100vw"
+        style={[
+          Platform.OS === 'web' ? cards.recWebImage : cards.recCarouselImage,
+          { width: pageWidth || '100%' },
+        ]}
+        contentFit="cover"
+        priority={index === imageWindow.currentIndex ? 'normal' : 'low'}
       />
     );
   };
@@ -135,21 +163,6 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     if (!ok) return;
 
     try {
-      // Delete image from storage if exists
-      if (item.images && item.images[0]) {
-        try {
-          const storage = getStorage();
-          const imageUrl = item.images[0];
-          const match = decodeURIComponent(imageUrl).match(/\/o\/(.+)\?/);
-          if (match && match[1]) {
-            const oldPath = match[1];
-            const oldRef = storageRef(storage, oldPath);
-            await deleteObject(oldRef);
-          }
-        } catch (err) {
-          console.warn('Failed to delete recommendation image from storage:', err);
-        }
-      }
       await deleteDoc(doc(db, "recommendations", item.id));
       onDeleted?.(item.id); // חשוב: לעדכן את הרשימה
     } catch (error) {
@@ -165,7 +178,12 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
       >
         <View style={overlay ? styles.feedAvatarRing : null}>
-          <Avatar photoURL={author.photoURL} displayName={author.displayName} size={overlay ? 40 : 36} />
+          <Avatar
+            photoURL={author.photoURL}
+            photoMedia={author.photoMedia}
+            displayName={author.displayName}
+            size={overlay ? 40 : 36}
+          />
         </View>
         <View style={overlay ? styles.feedAuthorTextWrap : null}>
           <Text style={[cards.recUsername, overlay && styles.feedUsername]} numberOfLines={1}>
@@ -217,7 +235,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           activeOpacity={0.75}
           onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
         >
-          <Avatar photoURL={author.photoURL} displayName={author.displayName} />
+          <Avatar
+            photoURL={author.photoURL}
+            photoMedia={author.photoMedia}
+            displayName={author.displayName}
+          />
           <View>
             <Text style={cards.recUsername}>{author.displayName}</Text>
             {item.createdAt && (
@@ -268,15 +290,19 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           <FlatList
             ref={carouselRef}
             data={images}
+            extraData={imageWindow.currentIndex}
             keyExtractor={(uri, index) => `${item.id || 'rec'}:${index}:${uri}`}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={images.length > 1}
             nestedScrollEnabled
-            renderItem={({ item: uri }) => (
+            initialNumToRender={1}
+            maxToRenderPerBatch={1}
+            windowSize={3}
+            renderItem={({ item: uri, index }) => (
               <View style={[cards.recCarouselItem, { width: carouselWidth || windowWidth || '100%' }]}>
-                {renderCarouselImage(uri)}
+                {renderCarouselImage(uri, index)}
               </View>
             )}
             onViewableItemsChanged={onViewableItemsChanged}

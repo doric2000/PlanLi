@@ -1,11 +1,16 @@
 import React, { useMemo } from "react";
-import { ActivityIndicator, Image, Platform, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
+import CachedImage from "../../../components/CachedImage";
 import { colors, profileHeaderStyles as styles } from "../../../styles";
 import ProfileBadge from "./ProfileBadge";
 import { TRAVEL_STYLES, TRIP_TYPES } from "../constants/smartProfileOptions";
+import {
+	getMediaPlaceholder,
+	getMediaVariantUrl,
+} from "../../../utils/mediaAssets";
 
 const labelFromOptions = (options, value) =>
 	options?.find((o) => o.value === value)?.label || value;
@@ -25,6 +30,11 @@ export default function ProfileHeader({
 }) {
 	const initial = userData?.displayName?.charAt(0)?.toUpperCase() || "T";
 	const smartProfile = userData?.smartProfile || null;
+	const profileImageUrl = getMediaVariantUrl(
+		userData?.photoMedia,
+		"feed",
+		userData?.photoURL
+	);
 
 	const travelStyleValue =
 		smartProfile?.travelStyle ??
@@ -63,12 +73,18 @@ export default function ProfileHeader({
 
 			<View style={styles.avatarStage}>
 				<View style={styles.avatarRing}>
-					{userData?.photoURL ? (
-						Platform.OS === "web" ? (
-							<img src={userData.photoURL} alt="" style={styles.webAvatarImage} />
-						) : (
-							<Image source={{ uri: userData.photoURL }} style={styles.avatarImage} />
-						)
+					{profileImageUrl ? (
+						<CachedImage
+						source={{ uri: profileImageUrl }}
+						placeholder={getMediaPlaceholder(userData?.photoMedia)}
+							style={
+								Platform.OS === "web"
+									? styles.webAvatarImage
+									: styles.avatarImage
+							}
+							contentFit="cover"
+							priority="high"
+						/>
 					) : (
 						<View style={[styles.avatarImage, styles.avatarPlaceholder]}>
 							<Text style={styles.avatarInitial}>{initial}</Text>

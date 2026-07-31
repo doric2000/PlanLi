@@ -16,7 +16,9 @@ import * as ImageManipulator from 'expo-image-manipulator';
  */
 const DEFAULT_OPTIONS = {
   aspect: [4, 3],
-  quality: 0.5,
+  // Keep the picker output lossless-ish and perform one predictable JPEG
+  // encode after resizing below.
+  quality: 1,
   allowsEditing: true,
 
   // Optional: normalize output to a strict aspect/size (Instagram-like)
@@ -24,10 +26,43 @@ const DEFAULT_OPTIONS = {
   normalizeAspect: [4, 5],
   normalizeWidth: 1080,
   normalizeHeight: 1350,
-  normalizeCompress: 0.9,
+  // Non-cropped images (route days/stops) are capped by their long edge.
+  maxLongEdge: 2560,
+  normalizeCompress: 0.94,
+  // Keep a bounded, high-quality staging source; final variants are encoded
+  // exactly once by the European media function.
+  processOnSelect: true,
 };
 
-const getImageSize = (uri) => {
+const revokeObjectUrl = (uri) => {
+  if (
+    typeof uri === 'string' &&
+    uri.startsWith('blob:') &&
+    typeof URL !== 'undefined' &&
+    typeof URL.revokeObjectURL === 'function'
+  ) {
+    URL.revokeObjectURL(uri);
+  }
+};
+
+export const getImageSize = (uri) => {
+  if (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    typeof window.Image === 'function'
+  ) {
+    return new Promise((resolve, reject) => {
+      const image = new window.Image();
+      image.onload = () =>
+        resolve({
+          width: image.naturalWidth || image.width,
+          height: image.naturalHeight || image.height,
+        });
+      image.onerror = reject;
+      image.src = uri;
+    });
+  }
+
   return new Promise((resolve, reject) => {
     RNImage.getSize(
       uri,
@@ -37,47 +72,122 @@ const getImageSize = (uri) => {
   });
 };
 
-const normalizeImageUri = async (uri, config) => {
-  if (!config.normalizeToAspect) return uri;
-  if (!uri) return uri;
+/**
+ * Build crop/resize actions without ever enlarging the source image.
+ * Exported for focused unit tests.
+ */
+export const buildImageTransform = (width, height, options = {}) => {
+  const config = { ...DEFAULT_OPTIONS, ...options };
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { actions: [], width, height };
+  }
 
-  try {
-    const { width, height } = await getImageSize(uri);
-    if (!width || !height) return uri;
-
-    const targetAspect = (config.normalizeAspect?.[0] || 4) / (config.normalizeAspect?.[1] || 5);
+  if (config.normalizeToAspect) {
+    const aspectWidth = Number(config.normalizeAspect?.[0]) || 1;
+    const aspectHeight = Number(config.normalizeAspect?.[1]) || 1;
+    const targetAspect = aspectWidth / aspectHeight;
     const currentAspect = width / height;
 
     let cropWidth = width;
     let cropHeight = height;
     if (currentAspect > targetAspect) {
-      // too wide
       cropWidth = Math.round(height * targetAspect);
-      cropHeight = height;
-    } else {
-      // too tall
-      cropWidth = width;
+    } else if (currentAspect < targetAspect) {
       cropHeight = Math.round(width / targetAspect);
     }
 
     const originX = Math.max(0, Math.round((width - cropWidth) / 2));
     const originY = Math.max(0, Math.round((height - cropHeight) / 2));
+    const targetWidth = Math.max(1, Number(config.normalizeWidth) || cropWidth);
+    const targetHeight = Math.max(1, Number(config.normalizeHeight) || cropHeight);
+    const scale = Math.min(1, targetWidth / cropWidth, targetHeight / cropHeight);
+    const outputWidth = Math.max(1, Math.round(cropWidth * scale));
+    const outputHeight = Math.max(1, Math.round(cropHeight * scale));
+    const actions = [];
 
-    const actions = [
-      { crop: { originX, originY, width: cropWidth, height: cropHeight } },
-      { resize: { width: config.normalizeWidth, height: config.normalizeHeight } },
-    ];
+    if (cropWidth !== width || cropHeight !== height) {
+      actions.push({
+        crop: {
+          originX,
+          originY,
+          width: cropWidth,
+          height: cropHeight,
+        },
+      });
+    }
+    if (outputWidth !== cropWidth || outputHeight !== cropHeight) {
+      actions.push({ resize: { width: outputWidth, height: outputHeight } });
+    }
+
+    return { actions, width: outputWidth, height: outputHeight };
+  }
+
+  const maxLongEdge = Math.max(1, Number(config.maxLongEdge) || 1600);
+  const currentLongEdge = Math.max(width, height);
+  if (currentLongEdge <= maxLongEdge) {
+    return { actions: [], width, height };
+  }
+
+  const scale = maxLongEdge / currentLongEdge;
+  const outputWidth = Math.max(1, Math.round(width * scale));
+  const outputHeight = Math.max(1, Math.round(height * scale));
+  return {
+    actions: [{ resize: { width: outputWidth, height: outputHeight } }],
+    width: outputWidth,
+    height: outputHeight,
+  };
+};
+
+/**
+ * Resize and re-encode every selected image as JPEG on both native and web.
+ */
+export const normalizeImageUri = async (uri, options = {}, knownSize = null) => {
+  if (!uri) return uri;
+  const config = { ...DEFAULT_OPTIONS, ...options };
+
+  try {
+    const size =
+      knownSize?.width && knownSize?.height
+        ? knownSize
+        : await getImageSize(uri);
+    const { actions } = buildImageTransform(size.width, size.height, config);
 
     const result = await ImageManipulator.manipulateAsync(uri, actions, {
       compress: config.normalizeCompress,
       format: ImageManipulator.SaveFormat.JPEG,
     });
 
-    return result?.uri || uri;
+    const normalizedUri = result?.uri || uri;
+    if (normalizedUri !== uri && config.revokeSourceObjectUrl !== false) {
+      revokeObjectUrl(uri);
+    }
+    return normalizedUri;
   } catch (err) {
-    console.warn('normalizeImageUri failed, using original:', err);
-    return uri;
+    if (config.revokeSourceObjectUrl !== false) {
+      revokeObjectUrl(uri);
+    }
+    console.error('normalizeImageUri failed:', err);
+    throw err;
   }
+};
+
+const mapWithConcurrency = async (items, worker, concurrency = 2) => {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+  const runWorker = async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  };
+
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
+  return results;
 };
 
 /**
@@ -96,6 +206,14 @@ export const useImagePicker = (options = {}) => {
   
   const [imageUri, setImageUri] = useState(null);
   const [error, setError] = useState(null);
+
+  const preparePickedUri = useCallback(
+    (uri, knownSize = null) =>
+      config.processOnSelect === false
+        ? Promise.resolve(uri)
+        : normalizeImageUri(uri, config, knownSize),
+    [config]
+  );
 
   /**
    * Request media library permission
@@ -140,7 +258,8 @@ export const useImagePicker = (options = {}) => {
       });
 
       if (!result.canceled && result.assets[0]?.uri) {
-        const uri = await normalizeImageUri(result.assets[0].uri, config);
+        const asset = result.assets[0];
+        const uri = await preparePickedUri(asset.uri, asset);
         setImageUri(uri);
         setError(null);
         return uri;
@@ -152,7 +271,7 @@ export const useImagePicker = (options = {}) => {
       Alert.alert("Error", "Failed to pick image.");
       return null;
     }
-  }, [config, requestGalleryPermission]);
+  }, [config, preparePickedUri, requestGalleryPermission]);
 
   /**
    * Pick multiple images from the device's photo library.
@@ -175,12 +294,12 @@ export const useImagePicker = (options = {}) => {
       });
 
       if (result.canceled) return [];
-      const picked = (result.assets || []).map(a => a?.uri).filter(Boolean);
-      const uris = [];
-      for (const uri of picked) {
-        // eslint-disable-next-line no-await-in-loop
-        uris.push(await normalizeImageUri(uri, config));
-      }
+      const picked = (result.assets || []).filter((asset) => asset?.uri);
+      const uris = await mapWithConcurrency(
+        picked,
+        (asset) => preparePickedUri(asset.uri, asset),
+        2
+      );
       if (uris.length) {
         setImageUri(uris[0]);
         setError(null);
@@ -192,7 +311,7 @@ export const useImagePicker = (options = {}) => {
       Alert.alert("Error", "Failed to pick images.");
       return [];
     }
-  }, [config, requestGalleryPermission]);
+  }, [config, preparePickedUri, requestGalleryPermission]);
 
   /**
    * Capture an image using the device's camera
@@ -210,7 +329,8 @@ export const useImagePicker = (options = {}) => {
       });
 
       if (!result.canceled && result.assets[0]?.uri) {
-        const uri = await normalizeImageUri(result.assets[0].uri, config);
+        const asset = result.assets[0];
+        const uri = await preparePickedUri(asset.uri, asset);
         setImageUri(uri);
         setError(null);
         return uri;
@@ -222,7 +342,7 @@ export const useImagePicker = (options = {}) => {
       Alert.alert("Error", "Failed to take photo.");
       return null;
     }
-  }, [config, requestCameraPermission]);
+  }, [config, preparePickedUri, requestCameraPermission]);
 
   /**
    * Handle web file input
@@ -232,17 +352,24 @@ export const useImagePicker = (options = {}) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const uri = URL.createObjectURL(file);
-        setImageUri(uri);
-        setError(null);
-        if (onSelect) onSelect(uri);
+    input.onchange = async (e) => {
+      try {
+        const file = e.target.files[0];
+        if (file) {
+          const localUri = URL.createObjectURL(file);
+          const uri = await preparePickedUri(localUri);
+          setImageUri(uri);
+          setError(null);
+          if (onSelect) onSelect(uri);
+        }
+      } catch (err) {
+        console.error('Error processing web image:', err);
+        setError(err);
+        Alert.alert('Error', 'Failed to process image.');
       }
     };
     input.click();
-  }, []);
+  }, [config, preparePickedUri]);
 
   /**
    * Handle web file input (multiple)
@@ -256,18 +383,30 @@ export const useImagePicker = (options = {}) => {
       input.type = 'file';
       input.accept = 'image/*';
       input.multiple = true;
-      input.onchange = (e) => {
-        const files = Array.from(e.target.files || []).slice(0, selectionLimit);
-        const uris = files.map((file) => URL.createObjectURL(file));
-        if (uris.length) {
-          setImageUri(uris[0]);
-          setError(null);
+      input.onchange = async (e) => {
+        try {
+          const files = Array.from(e.target.files || []).slice(0, selectionLimit);
+          const localUris = files.map((file) => URL.createObjectURL(file));
+          const uris = await mapWithConcurrency(
+            localUris,
+            (uri) => preparePickedUri(uri),
+            2
+          );
+          if (uris.length) {
+            setImageUri(uris[0]);
+            setError(null);
+          }
+          resolve(uris);
+        } catch (err) {
+          console.error('Error processing web images:', err);
+          setError(err);
+          Alert.alert('Error', 'Failed to process images.');
+          resolve([]);
         }
-        resolve(uris);
       };
       input.click();
     });
-  }, []);
+  }, [config, preparePickedUri]);
 
   /**
    * Show picker dialog (gallery/camera choice on mobile, file picker on web)
@@ -309,7 +448,10 @@ export const useImagePicker = (options = {}) => {
    * Clear the current image selection
    */
   const clearImage = useCallback(() => {
-    setImageUri(null);
+    setImageUri((currentUri) => {
+      revokeObjectUrl(currentUri);
+      return null;
+    });
     setError(null);
   }, []);
 

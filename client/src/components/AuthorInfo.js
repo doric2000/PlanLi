@@ -16,7 +16,12 @@ export const AuthorInfo = ({ author, item, isOwner }) => {
         onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Avatar photoURL={author.photoURL} displayName={author.displayName} size={48} />
+        <Avatar
+          photoURL={author.photoURL}
+          photoMedia={author.photoMedia}
+          displayName={author.displayName}
+          size={48}
+        />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <View style={common.rowBetween}>
             <Text style={typography.label}>{author.displayName}</Text>

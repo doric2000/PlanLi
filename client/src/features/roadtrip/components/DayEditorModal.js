@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Alert, Image, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
+import CachedImage from "../../../components/CachedImage";
 import { FormInput } from "../../../components/FormInput";
 import { ImagePickerBox } from "../../../components/ImagePickerBox";
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { getStopCoordinates } from "../utils/routeStops";
 import { dayEditorModalStyles as styles } from "../../../styles";
 import StopEditorModal from "./StopEditorModal";
@@ -41,11 +43,14 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 	const {
 		imageUri: image,
 		setImageUri: setImage,
-		pickImageAndUpload,
+		pickImage,
 		clearImage,
 		uploading,
 	} = useImagePickerWithUpload({
-		storagePath: "trips",
+		kind: "route",
+		quality: 1,
+		maxLongEdge: 2560,
+		normalizeCompress: 0.94,
 	});
 
 	useEffect(() => {
@@ -56,7 +61,10 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 			return;
 		}
 		const desc0 = initialData?.description || "";
-		const img0 = initialData?.image || null;
+		const img0 =
+			initialData?.image ||
+			getMediaVariantUrl(initialData?.media, "feed") ||
+			null;
 		const stops0 = Array.isArray(initialData?.stops) ? initialData.stops : [];
 		setDescription(desc0);
 		setImage(img0);
@@ -127,7 +135,18 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 			Alert.alert("המתן", "התמונה עדיין בהעלאה...");
 			return;
 		}
-		onSave({ description, image, stops }, dayIndex);
+		onSave({
+			description,
+			image,
+			media:
+				image &&
+				image ===
+					(initialData?.image ||
+						getMediaVariantUrl(initialData?.media, "feed"))
+					? initialData?.media || null
+					: null,
+			stops,
+		}, dayIndex);
 		setUnsavedModalVisible(false);
 		pendingDiscardRef.current = null;
 		onClose();
@@ -202,8 +221,19 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 										setStopModalVisible(true);
 									}}
 								>
-									{stop.image ? (
-										<Image source={{ uri: stop.image }} style={styles.stopThumb} />
+									{stop.image || stop.media ? (
+										<CachedImage
+											source={{
+												uri: getMediaVariantUrl(
+													stop.media,
+													"thumb",
+													stop.image
+												),
+											}}
+											style={styles.stopThumb}
+											contentFit="cover"
+											priority="low"
+										/>
 									) : (
 										<View style={styles.stopNumberBadge}>
 											<Text style={styles.stopNumberText}>{index + 1}</Text>
@@ -234,7 +264,7 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 					<Text style={styles.photoLabel}>תיעוד מהיום</Text>
 					<ImagePickerBox
 						imageUri={image}
-						onPress={() => pickImageAndUpload((url) => setImage(url))}
+						onPress={() => pickImage((uri) => setImage(uri))}
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
 						style={styles.imagePickerSpacing}
 						loading={uploading}

@@ -26,8 +26,12 @@ export default function FavoritesScreen() {
     const recommendationsListRef = useRef(null);
     const roadTripsListRef = useRef(null);
 
-    const recsFull = useFavoriteRecommendationsFull();
-    const roadFull = useFavoriteRoadTripsFull();
+    const recsFull = useFavoriteRecommendationsFull({
+        enabled: activeTab === 'recommendations',
+    });
+    const roadFull = useFavoriteRoadTripsFull({
+        enabled: activeTab === 'roadtrips',
+    });
 
     const getScrollRef = useCallback(() => {
         switch (activeTab) {
@@ -92,37 +96,45 @@ export default function FavoritesScreen() {
             </View>
 
             <View style={{ flex: 1 }}>
-                <View style={{ flex: 1, display: activeTab === 'destinations' ? 'flex' : 'none' }}>
+                {activeTab === 'destinations' && (
+                <View style={{ flex: 1 }}>
                     <FavoriteCitiesList
                         flatListRef={citiesListRef}
-                        onScroll={activeTab === 'destinations' ? favoritesTabOnScroll : undefined}
+                        onScroll={favoritesTabOnScroll}
                     />
                 </View>
+                )}
                 
-                <View style={{ flex: 1, display: activeTab === 'recommendations' ? 'flex' : 'none' }}>
+                {activeTab === 'recommendations' && (
+                <View style={{ flex: 1 }}>
                     <FavoriteRecommendationsList
                         favorites={recsFull.favorites}
                         loading={recsFull.loading}
                         flatListRef={recommendationsListRef}
-                        onScroll={activeTab === 'recommendations' ? favoritesTabOnScroll : undefined}
+                        onScroll={favoritesTabOnScroll}
                     />
                 </View>
+                )}
                 
-                <View style={{ flex: 1, display: activeTab === 'roadtrips' ? 'flex' : 'none' }}>
+                {activeTab === 'roadtrips' && (
+                <View style={{ flex: 1 }}>
                     <FavoriteRoadTripsList
                         favorites={roadFull.favorites}
                         loading={roadFull.loading}
                         flatListRef={roadTripsListRef}
-                        onScroll={activeTab === 'roadtrips' ? favoritesTabOnScroll : undefined}
+                        onScroll={favoritesTabOnScroll}
                     />
                 </View>
+                )}
                 
-                <View style={{ flex: 1, display: activeTab === 'trips' ? 'flex' : 'none' }}>
+                {activeTab === 'trips' && (
+                <View style={{ flex: 1 }}>
                     <View style={common.containerCentered}>
                         <Text style={typography.h2}>טיולים חכמים (בקרוב)</Text>
                         <Text style={typography.body}>הפיצ'ר של מתכנן חכם יגיע בקרוב</Text>
                     </View>
                 </View>
+                )}
             </View>
         </SafeAreaView>
     );
