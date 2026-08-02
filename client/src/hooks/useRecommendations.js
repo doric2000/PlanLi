@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, limit, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -17,11 +17,13 @@ export const useRecommendations = (sortBy = 'popularity') => {
     if (showLoader) setLoading(true);
     try {
       // Determine the field to sort by
-      const sortField = sortBy === 'newest' ? 'createdAt' : 'likes';
+      const sortField = sortBy === 'newest' ? 'createdAt' : 'stats.likeCount';
       
       const q = query(
         collection(db, 'recommendations'),
-        orderBy(sortField, 'desc') // Always descending (Highest likes / Newest date)
+        where('status', '==', 'active'),
+        orderBy(sortField, 'desc'),
+        limit(30)
       );
       
       const querySnapshot = await getDocs(q);

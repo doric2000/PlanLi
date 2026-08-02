@@ -1,103 +1,58 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
+import { auth } from '../../../config/firebase';
 import {
-	doc,
-	updateDoc,
-	increment,
-	arrayUnion,
-	arrayRemove,
-	getDoc,
-} from "firebase/firestore";
-import { db, auth } from "../../../config/firebase";
-import { notifyLikeEvent } from "../../notifications/services/NotificationObserver";
-import { PostType } from "../../notifications/models/NotificationModel";
+  getReactionState,
+  setReaction,
+} from '../../../services/SocialService';
 
-/**
- * Custom hook to handle like functionality for posts.
- *
- * @param {string} collectionName - Firestore collection name.
- * @param {string} postId - ID of the post.
- * @param {string[]} initialLikedBy - Initial array of user IDs who liked the post.
- * @returns {Object} Object containing:
- * - liked: Boolean indicating if the current user liked the post.
- * - likesCount: Total count of likes.
- * - handleLike: Function to toggle like status.
- */
-export const useLikes = (
-	collectionName,
-	itemId,
-	initialLikes = 0,
-	initialLikedBy = []
-) => {
-	const currentUserId = auth.currentUser?.uid;
-	const [isLiked, setIsLiked] = useState(
-		initialLikedBy?.includes(currentUserId) || false
-	);
-	const [likeCount, setLikeCount] = useState(initialLikes);
-	const [likedByList, setLikedByList] = useState(initialLikedBy || []);
+const typeFromCollection = (collectionName) => {
+  if (collectionName === 'routes') return 'route';
+  if (collectionName === 'trips') return 'trip';
+  return 'recommendation';
+};
+export const useLikes = (collectionName, itemId, initialLikes = 0) => {
+  const currentUserId = auth.currentUser?.uid;
+  const target = useMemo(
+    () => ({ type: typeFromCollection(collectionName), id: itemId }),
+    [collectionName, itemId]
+  );
+  const [isLiked, setIsLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(Math.max(0, Number(initialLikes || 0)));
 
-	const toggleLike = async () => {
-		if (!currentUserId) return;
+  useEffect(() => {
+    setLikeCount(Math.max(0, Number(initialLikes || 0)));
+  }, [initialLikes]);
 
-		const newIsLiked = !isLiked;
-		const newLikeCount = newIsLiked ? likeCount + 1 : likeCount - 1;
-		const newLikedByList = newIsLiked
-			? [...likedByList, currentUserId]
-			: likedByList.filter((id) => id !== currentUserId);
+  useEffect(() => {
+    let active = true;
+    if (!currentUserId || !itemId) {
+      setIsLiked(false);
+      return () => { active = false; };
+    }
+    getReactionState(target)
+      .then((result) => {
+        if (active) setIsLiked(result?.liked === true);
+      })
+      .catch((error) => console.error('Failed to load reaction state:', error));
+    return () => { active = false; };
+  }, [currentUserId, itemId, target]);
 
-		// Optimistic update
-		setIsLiked(newIsLiked);
-		setLikeCount(newLikeCount);
-		setLikedByList(newLikedByList);
+  const toggleLike = async () => {
+    if (!currentUserId || !itemId) return;
+    const nextLiked = !isLiked;
+    const previousCount = likeCount;
+    setIsLiked(nextLiked);
+    setLikeCount(Math.max(0, previousCount + (nextLiked ? 1 : -1)));
+    try {
+      const result = await setReaction(target, nextLiked);
+      setIsLiked(result?.liked === true);
+      setLikeCount(Math.max(0, Number(result?.likeCount || 0)));
+    } catch (error) {
+      console.error('Error updating like:', error);
+      setIsLiked(!nextLiked);
+      setLikeCount(previousCount);
+    }
+  };
 
-		try {
-			const docRef = doc(db, collectionName, itemId);
-
-			if (newIsLiked) {
-				await updateDoc(docRef, {
-					likes: increment(1),
-					likedBy: arrayUnion(currentUserId),
-				});
-
-				// Trigger notification after successful like
-				console.log('Attempting to trigger like notification for itemId:', itemId);
-				try {
-					// Fetch post data to get owner and title
-					const postSnap = await getDoc(docRef);
-					if (postSnap.exists()) {
-						const postData = postSnap.data();
-						const currentUserDoc = await getDoc(doc(db, 'users', currentUserId));
-						const currentUserData = currentUserDoc.exists() ? currentUserDoc.data() : {};
-
-						// Trigger notification observer
-						await notifyLikeEvent({
-							postId: itemId,
-							postTitle: postData.name || postData.title || 'Untitled Post',
-							postType: collectionName === 'routes' ? PostType.ROUTE : PostType.RECOMMENDATION,
-							postOwnerId: postData.userId,
-							actorId: currentUserId,
-							actorName: currentUserData.displayName || 'Anonymous',
-							actorAvatar: currentUserData.photoURL || null,
-							currentLikeCount: newLikeCount,
-						});
-					}
-				} catch (notificationError) {
-					console.error('Error sending like notification:', notificationError);
-					// Don't fail the like operation if notification fails
-				}
-			} else {
-				await updateDoc(docRef, {
-					likes: increment(-1),
-					likedBy: arrayRemove(currentUserId),
-				});
-			}
-		} catch (error) {
-			console.error("Error updating like:", error);
-			// Rollback on error
-			setIsLiked(!newIsLiked);
-			setLikeCount(likeCount);
-			setLikedByList(likedByList);
-		}
-	};
-
-	return { isLiked, likeCount, likedByList, toggleLike };
+  return { isLiked, likeCount, toggleLike };
 };

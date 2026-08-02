@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
+import { loadRouteDetails } from '../../../services/RouteService';
 
 // Components
 import BackButton from '../../../components/BackButton';
@@ -63,11 +64,8 @@ export default function NotificationScreen() {
           Alert.alert('שגיאה', 'הפוסט הזה כבר לא קיים.');
         }
       } else if (postType === PostType.ROUTE) {
-        const docRef = doc(db, 'routes', postId);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const routeData = { id: docSnap.id, ...docSnap.data() };
+        const routeData = await loadRouteDetails(postId);
+        if (routeData) {
           navigation.navigate('RouteDetail', { routeData });
         } else {
           Alert.alert('שגיאה', 'המסלול הזה כבר לא קיים.');

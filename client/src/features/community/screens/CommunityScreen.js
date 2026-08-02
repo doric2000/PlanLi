@@ -114,7 +114,7 @@ export default function CommunityScreen({ navigation }) {
         if (!coords) return null;
         return {
           id: item.id,
-          title: item.title || item.location || 'המלצה',
+          title: item.title || item.destination?.cityName || 'המלצה',
           coordinates: coords,
         };
       })

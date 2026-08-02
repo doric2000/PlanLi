@@ -1,27 +1,9 @@
 /* eslint-disable no-console */
-const fs = require('fs');
-const path = require('path');
 const admin = require('firebase-admin');
+const { initializeAdmin } = require('./localCredentials');
 
 function initAdmin() {
-  // Prefer env var GOOGLE_APPLICATION_CREDENTIALS, fallback to a local file for convenience.
-  const keyPath = path.join(__dirname, '..', 'serviceAccountKey.json');
-
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    admin.initializeApp({ credential: admin.credential.applicationDefault() });
-    return;
-  }
-
-  if (fs.existsSync(keyPath)) {
-    // eslint-disable-next-line import/no-dynamic-require, global-require
-    const serviceAccount = require(keyPath);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    return;
-  }
-
-  throw new Error(
-    'Missing credentials. Set GOOGLE_APPLICATION_CREDENTIALS to a service-account JSON path, or place functions/serviceAccountKey.json'
-  );
+  initializeAdmin(admin);
 }
 
 async function main() {

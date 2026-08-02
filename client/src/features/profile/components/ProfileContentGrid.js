@@ -8,6 +8,7 @@ import {
 	getRecommendationImageUrls,
 	getRouteImageUrls,
 } from "../../../utils/mediaAssets";
+import { loadRouteDetails } from "../../../services/RouteService";
 
 export function ProfileContentHeader({
 	profileStyles,
@@ -70,17 +71,20 @@ export function ProfileGridTile({ item, contentTab, contentLoading, navigation, 
 		? item?.title || item?.name || "המלצה"
 		: item?.Title || item?.title || "מסלול";
 	const subtitle = isRecommendation
-		? item?.location || item?.country || ""
-		: Array.isArray(item?.places) ? item.places.filter(Boolean).slice(0, 2).join(" · ") : "";
+		? item?.destination?.cityName || item?.destination?.countryName || ""
+		: Array.isArray(item?.summaryPlaces)
+			? item.summaryPlaces.filter(Boolean).slice(0, 2).join(" · ")
+			: "";
 	const icon = isRecommendation ? "thumbs-up" : "map";
 	const fallbackIcon = isRecommendation ? "image-outline" : "map-outline";
 
-	const handlePress = () => {
+	const handlePress = async () => {
 		if (isRecommendation) {
 			navigation.navigate("RecommendationDetail", { item });
 			return;
 		}
-		navigation.navigate("RouteDetail", { routeData: item });
+		const routeData = await loadRouteDetails(item.id);
+		navigation.navigate("RouteDetail", { routeData });
 	};
 
 	return (

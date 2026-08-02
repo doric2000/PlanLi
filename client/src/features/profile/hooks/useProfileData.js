@@ -31,7 +31,11 @@ const buildDefaultUserData = (user) => ({
 
 const fetchTripsCount = async (uid) => {
   try {
-    const tripsQ = query(collection(db, 'routes'), where('userId', '==', uid));
+    const tripsQ = query(
+      collection(db, 'routes'),
+      where('ownerId', '==', uid),
+      where('status', '==', 'active')
+    );
     const tripsAgg = await getCountFromServer(tripsQ);
     return tripsAgg.data().count || 0;
   } catch (error) {
@@ -42,12 +46,16 @@ const fetchTripsCount = async (uid) => {
 
 const fetchRecommendationStats = async (uid) => {
   try {
-    const recQ = query(collection(db, 'recommendations'), where('userId', '==', uid));
+    const recQ = query(
+      collection(db, 'recommendations'),
+      where('ownerId', '==', uid),
+      where('status', '==', 'active')
+    );
     const recSnap = await getDocs(recQ);
 
     let likesReceived = 0;
     recSnap.forEach((recommendationDoc) => {
-      likesReceived += Number(recommendationDoc.data().likes || 0);
+      likesReceived += Number(recommendationDoc.data()?.stats?.likeCount || 0);
     });
 
     return {

@@ -13,7 +13,7 @@ export const AuthorInfo = ({ author, item, isOwner }) => {
       <TouchableOpacity
         style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
         activeOpacity={0.75}
-        onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
+        onPress={() => item.ownerId && navigation.navigate("UserProfile", { uid: item.ownerId })}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
         <Avatar

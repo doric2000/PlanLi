@@ -1,58 +1,37 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { db } from "../config/firebase";
-import { doc, getDoc } from "firebase/firestore";
-import { useFavoriteRoadTripIds } from "./useFavoriteRoadTripIds";
+import { useCallback, useMemo } from 'react';
+import { useFavorites } from './useFavorites';
 
-/**
- * Fetches full route objects for the user's favorite route IDs.
- * Returns { favorites, loading }
- */
+const asRoutePreview = (favorite) => {
+  const preview = favorite.preview || {};
+  const thumbUrl = preview.thumbUrl;
+  return {
+    id: favorite.target.id,
+    ownerId: preview.owner?.id || null,
+    title: preview.title || '',
+    description: preview.subtitle || '',
+    status: 'active',
+    dayCount: preview.metrics?.days ?? null,
+    distanceKm: preview.metrics?.distanceKm ?? null,
+    media: thumbUrl
+      ? [{
+          assetId: `favorite-${favorite.favoriteKey}`,
+          large: { url: thumbUrl },
+          feed: { url: thumbUrl },
+          thumb: { url: thumbUrl },
+          placeholder: { color: preview.placeholderColor || '#E5E7EB' },
+        }]
+      : [],
+    favoriteTarget: favorite.target,
+    isFavoritePreview: true,
+  };
+};
+
 export function useFavoriteRoadTripsFull({ enabled = true } = {}) {
-  const { ids, loading: loadingIds } = useFavoriteRoadTripIds();
-  const [favorites, setFavorites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [reloadTick, setReloadTick] = useState(0);
-  const prevIdsRef = useRef();
-
-  const reload = useCallback(() => {
-    prevIdsRef.current = undefined;
-    setReloadTick((t) => t + 1);
-  }, []);
-
-  useEffect(() => {
-    if (!enabled) {
-      setLoading(false);
-      return;
-    }
-    if (loadingIds) {
-      setLoading(true);
-      return;
-    }
-
-    const idsString = (ids || []).join(",");
-    if (prevIdsRef.current === idsString) {
-      setLoading(false);
-      return;
-    }
-    prevIdsRef.current = idsString;
-
-    if (!ids || ids.length === 0) {
-      setFavorites([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    Promise.all(
-      ids.map(async (id) => {
-        const ref = doc(db, "routes", id);
-        const snap = await getDoc(ref);
-        return snap.exists() ? { id, ...snap.data() } : null;
-      })
-    )
-      .then((results) => setFavorites(results.filter(Boolean)))
-      .finally(() => setLoading(false));
-  }, [enabled, ids, loadingIds, reloadTick]);
-
-  return { favorites, loading, reload };
+  const result = useFavorites('route', { enabled });
+  const favorites = useMemo(
+    () => result.favorites.map(asRoutePreview),
+    [result.favorites]
+  );
+  const reload = useCallback(() => {}, []);
+  return { favorites, loading: result.loading, reload };
 }

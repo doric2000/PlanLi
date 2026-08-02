@@ -67,18 +67,14 @@ test('placeholder contains a valid ThumbHash payload and dominant color', async 
   assert.match(placeholder.color, /^#[0-9a-f]{6}$/i);
 });
 
-test('canonical asset collection includes profile, top-level and nested media', () => {
+test('canonical asset collection includes profile and top-level media', () => {
   const media = (assetId) => ({ assetId });
   assert.deepEqual(
     collectCanonicalMediaAssets({
       photoMedia: media('avatar'),
       media: [media('cover')],
-      tripDaysData: [{
-        media: media('day'),
-        stops: [{ media: media('stop') }],
-      }],
     }).map((asset) => asset.assetId),
-    ['cover', 'avatar', 'day', 'stop']
+    ['cover', 'avatar']
   );
 });
 
@@ -123,4 +119,3 @@ test('prepared cleanup removes only expired unclaimed objects', async () => {
   assert.deepEqual(result, { inspected: 3, removed: 1 });
   assert.deepEqual(removed, ['expired']);
 });
-

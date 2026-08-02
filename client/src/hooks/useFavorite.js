@@ -1,92 +1,120 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
-import { doc, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
+import * as Crypto from 'expo-crypto';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { auth, db } from '../config/firebase';
+import { setFavorite } from '../services/SocialService';
 import { getUserTier } from '../utils/userTier';
 import { getFavoriteErrorAlert } from '../utils/favoriteErrors';
 
-/**
- * useFavorite - Generic hook for favoriting different types of items using sub-collections
- * @param {string} type - Type of item ('recommendations', 'routes', 'cities', etc.)
- * @param {string} id - ID of the item to favorite
- * @param {Object} snapshotData - Optional snapshot data (name, thumbnail_url, sub_text, rating)
- * @returns { isFavorite, toggleFavorite, loading }
- */
+const TYPE_ALIASES = {
+  recommendations: 'recommendation',
+  recommendation: 'recommendation',
+  routes: 'route',
+  route: 'route',
+  trips: 'trip',
+  trip: 'trip',
+  cities: 'city',
+  city: 'city',
+};
+
+const toBase64Url = (value) => value
+  .replace(/\+/g, '-')
+  .replace(/\//g, '_')
+  .replace(/=+$/g, '');
+
+export const buildFavoriteTarget = (type, id, countryId) => {
+  const normalizedType = TYPE_ALIASES[String(type || '').toLowerCase()];
+  if (!normalizedType || !id) return null;
+  if (normalizedType === 'city' && !countryId) return null;
+  return {
+    type: normalizedType,
+    id,
+    ...(normalizedType === 'city' ? { countryId } : {}),
+  };
+};
+
+export const favoriteTargetPath = (target) => {
+  if (!target) return null;
+  return target.type === 'city'
+    ? `countries/${target.countryId}/cities/${target.id}`
+    : `${target.type === 'recommendation' ? 'recommendations' : `${target.type}s`}/${target.id}`;
+};
+
+export async function buildFavoriteKey(target) {
+  const path = favoriteTargetPath(target);
+  if (!path) return null;
+  const digest = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    path,
+    { encoding: Crypto.CryptoEncoding.BASE64 }
+  );
+  return toBase64Url(digest);
+}
+
 export function useFavorite(type, id, snapshotData = {}) {
   const user = auth.currentUser;
+  const target = useMemo(
+    () => buildFavoriteTarget(type, id, snapshotData?.countryId),
+    [type, id, snapshotData?.countryId]
+  );
+  const [favoriteKey, setFavoriteKey] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!user || !id) {
+    let active = true;
+    setFavoriteKey(null);
+    if (!target) return () => { active = false; };
+    buildFavoriteKey(target).then((key) => {
+      if (active) setFavoriteKey(key);
+    }).catch((error) => console.error('Failed to build favorite key:', error));
+    return () => { active = false; };
+  }, [target]);
+
+  useEffect(() => {
+    if (!user || !favoriteKey) {
       setIsFavorite(false);
       return undefined;
     }
-
-    const favoriteDocRef = doc(db, 'users', user.uid, 'favorites', id);
-    const unsubscribe = onSnapshot(
-      favoriteDocRef,
-      (snap) => {
-        setIsFavorite(snap.exists());
-      },
-      (e) => {
-        console.error('Error checking favorite status:', e);
+    return onSnapshot(
+      doc(db, 'users', user.uid, 'favorites', favoriteKey),
+      (snapshot) => setIsFavorite(snapshot.exists()),
+      (error) => {
+        console.error('Error checking favorite status:', error);
         setIsFavorite(false);
       }
     );
+  }, [user, favoriteKey]);
 
-    return () => unsubscribe();
-  }, [user, id]);
-
-  // Toggle favorite status
-  const toggleFavorite = async () => {
-    console.log('[FavoriteButton] toggleFavorite called:', { type, id, user, snapshotData });
+  const toggleFavorite = useCallback(async () => {
     if (!user) {
-      console.warn('No authenticated user!');
-      Alert && Alert.alert && Alert.alert('שגיאה', 'יש להתחבר כדי לשמור למועדפים.');
+      Alert.alert('שגיאה', 'יש להתחבר כדי לשמור למועדפים.');
       return;
     }
-
     if (getUserTier(user) !== 'verified') {
-      Alert && Alert.alert && Alert.alert('נדרש אימות', 'כדי לשמור למועדפים צריך לאמת את האימייל.');
+      Alert.alert('נדרש אימות', 'כדי לשמור למועדפים צריך לאמת את האימייל.');
+      return;
+    }
+    if (!target || !favoriteKey) {
+      Alert.alert('שגיאה', 'לא ניתן לזהות את הפריט שנבחר.');
       return;
     }
 
-    if (!id) {
-      console.warn('No item ID provided!');
-      Alert && Alert.alert && Alert.alert('Error', 'No item ID provided.');
-      return;
-    }
+    const nextSaved = !isFavorite;
     setLoading(true);
+    setIsFavorite(nextSaved);
     try {
-      const favoriteDocRef = doc(db, 'users', user.uid, 'favorites', id);
-      if (isFavorite) {
-        await deleteDoc(favoriteDocRef);
-        setIsFavorite(false);
-        console.log('[FavoriteButton] Removed from favorites:', id);
-      } else {
-        // Remove undefined fields from snapshotData
-        const cleanSnapshotData = Object.fromEntries(
-          Object.entries(snapshotData).filter(([_, v]) => v !== undefined)
-        );
-        const favoriteData = {
-          id,
-          type,
-          created_at: serverTimestamp(),
-          ...cleanSnapshotData
-        };
-        await setDoc(favoriteDocRef, favoriteData);
-        setIsFavorite(true);
-        console.log('[FavoriteButton] Added to favorites:', favoriteData);
-      }
-    } catch (e) {
-      console.error('Error toggling favorite:', e);
-      const alert = getFavoriteErrorAlert(e, isFavorite ? 'remove' : 'add');
+      await setFavorite(target, nextSaved);
+    } catch (error) {
+      setIsFavorite(!nextSaved);
+      console.error('Error toggling favorite:', error);
+      const alert = getFavoriteErrorAlert(error, nextSaved ? 'add' : 'remove');
       Alert.alert(alert.title, alert.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [favoriteKey, isFavorite, target, user]);
 
   return { isFavorite, toggleFavorite, loading };
 }

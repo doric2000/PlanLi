@@ -49,11 +49,11 @@ describe("routeMedia", () => {
       ["file:///day.jpg", "blob:https://app.local/stop"],
       { limit: Number.POSITIVE_INFINITY }
     );
-    expect(result.tripDaysData[0].image).toBeUndefined();
-    expect(result.tripDaysData[0].media.assetId).toContain("01");
-    expect(result.tripDaysData[0].stops[0].image).toBeUndefined();
-    expect(result.tripDaysData[0].stops[0].media).toBe(remoteAsset);
-    expect(result.tripDaysData[0].stops[1].media.assetId).toContain("02");
+    expect(result.days[0].image).toBeUndefined();
+    expect(result.days[0].media.assetId).toContain("01");
+    expect(result.days[0].stops[0].image).toBeUndefined();
+    expect(result.days[0].stops[0].media).toBe(remoteAsset);
+    expect(result.days[0].stops[1].media.assetId).toContain("02");
     expect(source[0].image).toBe("file:///day.jpg");
   });
 
@@ -102,4 +102,3 @@ describe("routeMedia", () => {
     ]);
   });
 });
-

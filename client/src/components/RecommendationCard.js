@@ -11,8 +11,6 @@ import CachedImage, { prefetchImage } from './CachedImage';
 import { cards, recommendationCardStyles as styles } from '../styles';
 import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
-import { db } from '../config/firebase';
-import { deleteDoc, doc } from 'firebase/firestore';
 import FavoriteButton from './FavoriteButton';
 import { getUserTier } from '../utils/userTier';
 import { useAdminClaim } from '../hooks/useAdminClaim';
@@ -22,6 +20,7 @@ import {
   getMediaSrcSet,
   getRecommendationImageUrls,
 } from '../utils/mediaAssets';
+import { deleteContent } from '../services/SocialService';
 
 
 /**
@@ -66,9 +65,11 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   }, [imageWindow.currentIndex, imageWindow.indices, images]);
 
   // Use custom hooks
-  const author = useUserData(item.userId);
+  const ownerId = item.ownerId;
+  const destination = item.destination || {};
+  const author = useUserData(ownerId);
   // Check if current user is the owner
-  const isOwner = auth.currentUser?.uid === item.userId;
+  const isOwner = auth.currentUser?.uid === ownerId;
   const tier = getUserTier(auth.currentUser);
   const { isAdmin } = useAdminClaim();
   const canManage = tier === 'verified' && (isOwner || isAdmin);
@@ -82,6 +83,10 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   };
 
   const handleCardPress = () => {
+    if (item.isFavoritePreview) {
+      navigation.navigate('RecommendationDetail', { postId: item.id });
+      return;
+    }
     navigation.navigate('RecommendationDetail', { item });
   };
 
@@ -163,7 +168,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     if (!ok) return;
 
     try {
-      await deleteDoc(doc(db, "recommendations", item.id));
+      await deleteContent({ type: 'recommendation', id: item.id });
       onDeleted?.(item.id); // חשוב: לעדכן את הרשימה
     } catch (error) {
       console.error("Delete error:", error);
@@ -175,7 +180,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       <TouchableOpacity
         style={[cards.recAuthorInfo, overlay && styles.feedAuthorInfo]}
         activeOpacity={0.75}
-        onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
+        onPress={() => ownerId && navigation.navigate("UserProfile", { uid: ownerId })}
       >
         <View style={overlay ? styles.feedAvatarRing : null}>
           <Avatar
@@ -194,9 +199,9 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
               {formatDate(item.createdAt)}
             </Text>
           )}
-          {overlay && (item.location || item.country) ? (
+          {overlay && (destination.cityName || destination.countryName) ? (
             <Text style={styles.feedMetaText} numberOfLines={1}>
-              {item.location}{item.country ? `, ${item.country}` : ''}
+              {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
             </Text>
           ) : null}
         </View>
@@ -233,7 +238,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         <TouchableOpacity
           style={cards.recAuthorInfo}
           activeOpacity={0.75}
-          onPress={() => navigation.navigate("UserProfile", { uid: item.userId })}
+          onPress={() => ownerId && navigation.navigate("UserProfile", { uid: ownerId })}
         >
           <Avatar
             photoURL={author.photoURL}
@@ -403,23 +408,23 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           )}
         </View>
 
-        {(item.location || item.country) && (
+        {(destination.cityName || destination.countryName) && (
           <View style={cards.recLocationRow}>
             <TouchableOpacity
               style={cards.recLocationPressableRow}
               activeOpacity={0.7}
               onPress={() => {
-                if (item.cityId && item.countryId) {
+                if (destination.cityId && destination.countryId) {
                   navigation.navigate('LandingPage', {
-                    cityId: item.cityId,
-                    countryId: item.countryId,
+                    cityId: destination.cityId,
+                    countryId: destination.countryId,
                   });
                 }
               }}
             >
               <Ionicons name="location-outline" size={14} color="#2EC4B6" />
               <Text style={cards.recLocationText}>
-                {item.location}{item.country ? `, ${item.country}` : ''}
+                {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
               </Text>
             </TouchableOpacity>
           </View>

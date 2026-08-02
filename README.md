@@ -1,316 +1,233 @@
 # PlanLi
-Our Application for our final Project in Software Engineering.
+
+PlanLi is a photo-first travel application built with Expo and Firebase.
 
 ## Run the client
 
+Run these commands from the `client` directory:
+
 ```powershell
-cd client
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
 npm install
-npm run web
+npx expo start -c
 ```
 
-Use `npm run android` or `npm run ios` for a native Expo target.
+Press `w` for Web or `a` for Android. You can also run `npm run web` or
+`npm run android` directly.
 
-## Web development (Google Places without CORS extensions)
+The local client must contain these bucket values in `client/.env`:
 
-On web, the Google Places API is blocked by browser CORS. This repo includes a small Express proxy so you can keep any CORS-unblock extension **off** (those extensions can break Firebase/Firestore WebChannel).
-
-1. Create `server/.env` (you can copy `server/.env.example`) and set `GOOGLE_MAPS_KEY`.
-2. Start the proxy: `cd server` then `npm install` and `npm run start`.
-3. Run the client web app as usual. The web client defaults to `http://localhost:5000` for the proxy.
-
-Optional: override the proxy base URL via `EXPO_PUBLIC_PLACES_PROXY_BASE_URL`.
-
-### Windows: run the proxy with live Places logs
-
-If you want a dedicated terminal window that shows every Places request/response (autocomplete/details), use:
-
-- `server/run-server-with-logs.cmd`
-
-This script:
-- Runs the server from the correct folder.
-- Loads `server/.env` via `dotenv` (so `GOOGLE_MAPS_KEY` must be set).
-- Keeps the window open so you can see live logs while testing the web app.
-
-## Canonical European image pipeline
-
-PlanLi uses one media schema, without v1/v2 branches:
-
-- `large`: details and hero images.
-- `feed`: full-width cards, editing previews and profile headers.
-- `thumb`: grids, maps, favorites and small avatars.
-
-The client uploads one bounded, high-quality JPEG to a temporary staging path.
-`prepareMedia` runs in `europe-west1`, removes EXIF/GPS data and creates three
-immutable WebP variants directly from that source. The source is removed after
-successful processing. Prepared media that is never attached to a Firestore
-document is removed automatically after 24 hours.
-
-Firestore is already in `eur3`. Create the configured
-`planli-f0b12-media-eu` bucket in `europe-west1` from Firebase Console
-(`Storage` > `Add bucket`). A bucket location cannot be changed after
-creation, so the existing US bucket is retained only as the migration source
-and rollback copy.
-
-Set these values before deployment:
-
-```powershell
-# client/.env (ignored; do not commit)
+```text
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
 EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
-
-# functions/.env.YOUR_PROJECT_ID (ignored; do not commit)
-MEDIA_STORAGE_BUCKET=planli-f0b12-media-eu
 ```
 
-Run the migration from `functions`; it is dry-run by default:
+### Web Places proxy
+
+Browser CORS prevents the web client from calling Google Places directly.
+Run the local proxy in a second terminal:
 
 ```powershell
-cd C:\path\to\PlanLi\functions
-$env:GOOGLE_APPLICATION_CREDENTIALS="C:\secure\service-account.json"
+cd C:\Users\doric\Documents\PlanLi\PlanLi\server
 npm install
-npm run migrate-media -- --source-bucket "planli-f0b12.firebasestorage.app" --target-bucket "planli-f0b12-media-eu"
-npm run migrate-media -- --source-bucket "planli-f0b12.firebasestorage.app" --target-bucket "planli-f0b12-media-eu" --apply
+npm run start
 ```
 
-Resume an interrupted apply:
+Set `GOOGLE_MAPS_KEY` in the ignored `server/.env`. The helper
+`server/run-server-with-logs.cmd` starts the same proxy with visible request
+logs.
 
-```powershell
-npm run migrate-media -- --source-bucket "planli-f0b12.firebasestorage.app" --target-bucket "planli-f0b12-media-eu" --apply --resume
+## Canonical data model
+
+The application has one database and media schema. There are no permanent
+v1/v2 branches.
+
+```text
+users/{uid}
+publicProfiles/{uid}
+
+recommendations/{id}
+recommendations/{id}/likes/{uid}
+recommendations/{id}/comments/{commentId}
+
+routes/{id}
+routes/{id}/days/{dayId}
+routes/{id}/days/{dayId}/stops/{stopId}
+routes/{id}/likes/{uid}
+routes/{id}/comments/{commentId}
+
+trips/{id}
+countries/{countryId}/cities/{cityId}
+
+users/{uid}/favorites/{sha256OfTargetPath}
+users/{uid}/notifications/{notificationId}
+system/**
 ```
 
-State and the JSONL rollback audit are stored locally under
-`functions/.canonical-media-migration/` and ignored by Git. Restore the old
-Firestore media fields with:
+Countries use stable `cty_...` IDs and cities use stable `city_...` IDs.
+Names and provider identifiers can change without breaking references.
 
-```powershell
-npm run migrate-media -- --apply --rollback ".canonical-media-migration\rollback-<timestamp>.jsonl"
+All business writes use callable Functions in `europe-west1`. The client does
+not directly write recommendations, routes, trips, favorites, reactions,
+comments, notifications, public profiles, or destination catalog documents.
+
+Favorites contain a server-generated preview. A favorite tab therefore needs
+one query and does not perform an extra read for every card. Source triggers
+refresh previews and remove favorites when their source is deleted; a bounded
+daily repair job handles rare missed events.
+
+## European image pipeline
+
+The active Firebase Storage bucket is:
+
+```text
+planli-f0b12-media-eu (europe-west1, STANDARD)
 ```
 
-Do not remove the US objects until the European client, Functions, Firestore
-references and visual quality have all been verified.
+Each selected source photo is uploaded to a user-owned staging path.
+`prepareMedia` removes EXIF/GPS metadata and generates three immutable WebP
+files directly from the source:
 
-Cutover order from the repository root:
+- `large` for details and hero views.
+- `feed` for full-width cards and editing previews.
+- `thumb` for grids, maps, favorites and avatars.
+
+The UI keeps at most three image components mounted in each carousel. Feed
+lists render in bounded batches and remote images use memory/disk caching.
+
+The former US bucket `planli-f0b12.firebasestorage.app` is read-only and is
+kept only as a 30-day rollback snapshot. Do not remove it before 30 August
+2026 and before `npm run audit-live` reports zero US references.
+
+## Local Admin authentication
+
+Maintenance scripts do not use a local Service Account JSON key. They use:
+
+1. `GOOGLE_APPLICATION_CREDENTIALS` when standard ADC is explicitly set; or
+2. the signed-in Firebase CLI user and a short-lived temporary ADC file that
+   is deleted when the process exits.
+
+Sign in once:
 
 ```powershell
-# 1. After creating the European bucket, deploy its targeted rules.
-firebase deploy --only storage:media --project planli-f0b12
-gcloud storage buckets update gs://planli-f0b12-media-eu --cors-file=storage.cors.json --lifecycle-file=storage.lifecycle.json
-
-# 2. Deploy the Europe-configured Functions.
-firebase deploy --only functions --project planli-f0b12
+firebase login
 ```
 
-If Firebase detects matching US Functions during the region change, keep them
-temporarily by answering **No** to deletion. Run the dry-run and applied media
-migration, restart the local client with `npx expo start -c`, then test upload,
-save, edit and delete. Finally inspect `firebase functions:list` and delete only
-the confirmed `us-central1` copies:
+The Cloud Functions runtime uses two keyless, least-privilege accounts:
+
+- `planli-core-functions@planli-f0b12.iam.gserviceaccount.com`
+- `planli-media-functions@planli-f0b12.iam.gserviceaccount.com`
+
+IAM setup is dry-run by default:
 
 ```powershell
-firebase functions:delete FUNCTION_NAME --region us-central1 --project planli-f0b12
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run configure-function-iam
+npm run configure-function-iam -- --apply
 ```
 
-All callable clients use `europe-west1` explicitly, and all media reads/writes
-use `planli-f0b12-media-eu`.
+## Verification
 
-## Favorite referential integrity
-
-Favorites are removed automatically for every user when their recommendation,
-route or city source document is deleted. The cleanup triggers run in
-`europe-west1`; Firestore rules also reject a new favorite when its source no
-longer exists.
-
-Deploy the required collection-group indexes first from the repository root,
-wait for them to become `Enabled` in Firebase Console, then deploy Functions
-and rules:
+Run Functions tests from `functions`:
 
 ```powershell
-cd C:\path\to\PlanLi
-firebase deploy --only firestore:indexes --project planli-f0b12
-firebase deploy --only functions --project planli-f0b12
-firebase deploy --only firestore:rules --project planli-f0b12
-```
-
-Clean favorites that became orphaned before the triggers were deployed. Run
-the dry-run first from `functions`; only the second command deletes data:
-
-```powershell
-cd C:\path\to\PlanLi\functions
-$env:GOOGLE_APPLICATION_CREDENTIALS="C:\secure\service-account.json"
-npm run cleanup-orphan-favorites
-npm run cleanup-orphan-favorites -- --apply
-```
-
-Unknown future favorite types and malformed records are reported but never
-deleted automatically by this one-time script.
-
-## Security rollout: destinations, public profiles, Firestore and Storage
-
-The rollout is intentionally staged so an older client is not blocked by the
-new rules. Use Node.js 22 for Firebase Functions and run each command from the
-directory shown below. Replace `YOUR_PROJECT_ID` with the Firebase project ID.
-
-### 1. Local verification
-
-From the repository root:
-
-```powershell
-cd C:\path\to\PlanLi
-cd functions
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
 npm install
 npm test
 npm run test:rules:emulator
-cd ..\client
+npm audit --omit=dev
+```
+
+Run client tests and builds from `client`:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
 npm install
 npm test -- --runInBand
+npx expo export --platform web --output-dir .expo-validation\web
+npx expo export --platform android --output-dir .expo-validation\android
 ```
 
-`test:rules:emulator` starts temporary Firestore and Storage emulators, runs
-the security tests, and stops them automatically.
-
-### 2. Configure the Places secret and deploy Functions
-
-Run from the repository root, not from `client`:
+The read-only live audit checks every Firestore document, favorite target,
+interaction counter, destination ID, media URL and both bucket inventories:
 
 ```powershell
-cd C:\path\to\PlanLi
-firebase login
-firebase functions:secrets:set GOOGLE_MAPS_KEY --project YOUR_PROJECT_ID
-firebase deploy --only functions --project YOUR_PROJECT_ID
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run audit-live
 ```
 
-The secret command prompts for the Google Maps/Places server key without
-writing it to the repository. The Functions deployment adds:
+It writes nothing to Firestore and creates no support collection.
 
-- `saveRecommendation`, which validates the caller, place and uploaded media
-  before atomically writing the destination and recommendation.
-- `resolveRecommendationDestination`, which resolves the exact server-owned
-  country/city preview before media upload. Enable both Places API and
-  Geocoding API for `GOOGLE_MAPS_KEY`; restrict the key to those APIs.
-- `onPublicProfileSync`, which copies only public profile fields from `users`
-  to `publicProfiles`.
-- Existing recommendation counters and media-cleanup triggers.
+## Deployment
 
-Country resolution uses Google place/city details, Google reverse geocoding,
-and a local Natural Earth 5.1.1 fallback. The versioned Israel policy maps the
-West Bank, East Jerusalem and the Golan Heights to Israel; Gaza follows the
-normal provider/local-boundary result. Regenerate the checked-in geography
-file only when intentionally updating its source version:
+Run Firebase deployments from the repository root:
 
 ```powershell
-cd C:\path\to\PlanLi\functions
-npm run build-country-geo
+cd C:\Users\doric\Documents\PlanLi\PlanLi
+firebase deploy --only functions --project planli-f0b12
+firebase deploy --only firestore:indexes,firestore:rules --project planli-f0b12
+firebase deploy --only storage --project planli-f0b12
 ```
 
-### 3. Backfill existing public profiles
+The Storage deployment applies the normal rules to the EU bucket and the
+read-only rollback rules to the US bucket. `storage.cors.json` restricts web
+origins, and `storage.lifecycle.json` removes abandoned staging objects.
 
-The backfill is a dry run by default. Run it from `functions` with Admin
-credentials:
+The server secrets are configured from the repository root:
 
 ```powershell
-cd C:\path\to\PlanLi\functions
-$env:GOOGLE_APPLICATION_CREDENTIALS="C:\secure\service-account.json"
-npm run backfill-public-profiles
-npm run backfill-public-profiles -- --apply
+firebase functions:secrets:set GOOGLE_MAPS_KEY --project planli-f0b12
+firebase functions:secrets:set REST_COUNTRIES_KEY --project planli-f0b12
 ```
 
-If an applied run is interrupted:
+`GOOGLE_MAPS_KEY` must be restricted to Places and Geocoding APIs.
+
+## Maintenance and recovery
+
+Migration commands are dry-run unless `--apply` is present. Their checkpoints
+and rollback reports live only in ignored local directories; they never create
+Firestore migration collections.
 
 ```powershell
-npm run backfill-public-profiles -- --apply --resume
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+
+# Verify or resume US -> EU object copying.
+npm run migrate-storage-eu
+npm run migrate-storage-eu -- --apply --resume
+
+# Verify or restore the read-only US rollback snapshot from verified EU files.
+npm run migrate-storage-eu -- --restore-source
+npm run migrate-storage-eu -- --restore-source --apply --resume
+
+# Verify canonical Firestore data or resume an interrupted migration.
+npm run migrate-database
+npm run migrate-database -- --apply --resume
+
+# Detect or remove orphan favorites.
+npm run cleanup-orphan-favorites
+npm run cleanup-orphan-favorites -- --apply
+
+# Recalculate canonical city recommendation counters (dry-run first).
+node scripts/recalculateCityRecommendationCounts.js
+node scripts/recalculateCityRecommendationCounts.js --apply
 ```
 
-The script never copies email, budget, trust scores or other private fields.
-It stores a resumable checkpoint in `_migrations/publicProfilesV1`.
+Firestore PITR and a seven-day daily backup schedule are enabled. Content and
+account deletion use resumable server jobs because deleting a Firestore parent
+document does not delete its subcollections.
 
-### 4. Release the updated client
+## App Check before public launch
 
-Publish the web/iOS/Android client through the normal release process only
-after Functions and the public-profile backfill are available. The new client
-reads author data from `publicProfiles`, previews unknown destinations without
-writing them, and saves recommendations through `saveRecommendation`.
-
-### 5. Deploy the hardened rules
-
-After confirming that the updated client is active, run from the repository
-root:
+App Check enforcement is intentionally disabled while development uses Expo
+Go. Before a public release, configure platform providers and private debug
+tokens for local/CI builds, then deploy Functions with:
 
 ```powershell
-cd C:\path\to\PlanLi
-firebase deploy --only firestore:rules,storage --project YOUR_PROJECT_ID
+$env:PLANLI_ENFORCE_APP_CHECK="true"
+firebase deploy --only functions --project planli-f0b12
+Remove-Item Env:PLANLI_ENFORCE_APP_CHECK
 ```
 
-Do not deploy these rules before the client rollout: older clients that write
-recommendations or destinations directly will receive `permission-denied`.
-
-### Monitoring and rollback
-
-After deployment, monitor Cloud Functions logs plus Firestore and Storage
-denials in Firebase/Google Cloud. Smoke-test this exact flow:
-
-1. Upload recommendation images.
-2. Save a recommendation for a city that is not yet in Firestore.
-3. Confirm the country/city and public author profile appear.
-4. Edit and then delete the recommendation.
-
-## Destination schema compatibility and country metadata
-
-New countries and cities keep the legacy Firestore layout: the localized
-country/city name is the document ID, while the ISO code and Google Place ID
-are fields used for deduplication. Country documents contain only `name`,
-`code`, `region`, and `currencyCode`; city creation uses the existing city
-field shape.
-
-REST Countries v5 is the live metadata source. Configure its production key
-as a Firebase secret from the repository root:
-
-```powershell
-cd C:\path\to\PlanLi
-firebase functions:secrets:set REST_COUNTRIES_KEY --project YOUR_PROJECT_ID
-```
-
-The scheduled `syncCountryMetadataScheduled` function refreshes existing
-country metadata every Monday at 03:00 Asia/Jerusalem time. If the API is
-temporarily unavailable, the pinned zero-dependency `countries-list` dataset
-is used without writing arbitrary `USD`/`Global` defaults. Sync results and
-errors are written to Cloud Logging; the function does not create support
-collections in Firestore.
-
-Run an on-demand metadata check from `functions`. It is a dry run unless
-`--apply` is present:
-
-```powershell
-cd C:\path\to\PlanLi\functions
-$env:REST_COUNTRIES_KEY="your-local-key"
-npm run sync-country-metadata -- --code MM
-npm run sync-country-metadata -- --code MM --apply
-```
-
-Do not put the key in source control or paste it into logs.
-
-The destination compatibility migration is also dry-run first:
-
-```powershell
-cd C:\path\to\PlanLi\functions
-npm run migrate-destination-schema
-npm run migrate-destination-schema -- --apply
-```
-
-The apply phase retains source documents. After recommendation counters have
-settled, run the guarded cleanup:
-
-```powershell
-npm run migrate-destination-schema -- --cleanup
-```
-
-If apply is interrupted, resume it with:
-
-```powershell
-npm run migrate-destination-schema -- --apply --resume
-```
-5. Confirm removed media is cleaned up.
-
-If permission failures affect production, restore the preceding Firestore and
-Storage rules release from the Firebase Console (Rules → Release history), or
-redeploy the previous rule files from Git. Functions can remain deployed
-because they are additive and use the Admin SDK.
+Do not enable enforcement before every Web, Android and iOS build can attach a
+valid App Check token; otherwise all callable requests from that client are
+rejected.

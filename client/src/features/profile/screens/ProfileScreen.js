@@ -36,7 +36,8 @@ async function getProfileContentSnapshot(collectionName, uid) {
 		return await getDocs(
 			query(
 				collection(db, collectionName),
-				where("userId", "==", uid),
+				where("ownerId", "==", uid),
+				where("status", "==", "active"),
 				orderBy("createdAt", "desc"),
 				limit(30)
 			)
@@ -46,7 +47,8 @@ async function getProfileContentSnapshot(collectionName, uid) {
 		return getDocs(
 			query(
 				collection(db, collectionName),
-				where("userId", "==", uid),
+				where("ownerId", "==", uid),
+				where("status", "==", "active"),
 				limit(30)
 			)
 		);

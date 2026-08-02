@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, query, collection, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 
 const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
@@ -35,7 +35,12 @@ export const useDestinationData = (cityId, countryId) => {
 
     const fetchAdditionalDetails = async () => {
       // Fetch Recommendations
-      const q = query(collection(db, "recommendations"), where("location", "==", cityData.name));
+      const q = query(
+        collection(db, "recommendations"),
+        where("destination.cityId", "==", cityId),
+        where("status", "==", "active"),
+        limit(30)
+      );
       const querySnapshot = await getDocs(q);
       const recs = [];
       querySnapshot.forEach((doc) => recs.push({ id: doc.id, ...doc.data() }));
@@ -75,7 +80,7 @@ export const useDestinationData = (cityId, countryId) => {
       setLoading(false);
     };
     fetchAdditionalDetails();
-  }, [cityData]);
+  }, [cityData, cityId]);
 
   // 3. Fetch Currency (Dependent on countryData)
   useEffect(() => {

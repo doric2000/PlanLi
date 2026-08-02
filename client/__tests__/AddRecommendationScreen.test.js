@@ -17,6 +17,8 @@ jest.mock('firebase/firestore', () => ({
   serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
   getDocs: jest.fn(() => Promise.resolve({ docs: [] })),
   query: jest.fn((...args) => ({ __type: 'query', args })),
+  where: jest.fn((...args) => ({ __type: 'where', args })),
+  limit: jest.fn((...args) => ({ __type: 'limit', args })),
   collectionGroup: jest.fn((...args) => ({ __type: 'collectionGroup', args })),
 }));
 

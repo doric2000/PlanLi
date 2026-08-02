@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Rollback bucket: existing public media can be fetched, but no client may
+    // create, overwrite, delete, or enumerate objects during the 30-day hold.
+    match /{path=**} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+  }
+}

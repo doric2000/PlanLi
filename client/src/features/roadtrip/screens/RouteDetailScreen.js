@@ -35,22 +35,20 @@ export default function RouteDetailScreen({ route, navigation }) {
 	const [modalVisible, setModalVisible] = useState(false);
 	const [mapVisible, setMapVisible] = useState(false);
 
-	const tripDays = routeData.tripDaysData || [];
-	const validStops = flattenValidRouteStops(routeData);
-	const author = useUserData(routeData.userId);
+	const tripDays = routeData.days || [];
+	const validStops = flattenValidRouteStops(tripDays);
+	const author = useUserData(routeData.ownerId);
 	const displayUser = author.displayName || text.defaultUser;
 	const userPhoto = author.photoURL;
-	const places = Array.isArray(routeData.places) ? routeData.places : [];
+	const places = Array.isArray(routeData.summaryPlaces) ? routeData.summaryPlaces : [];
 
 	const dedupe = (values) => Array.from(new Set(values.filter(Boolean)));
-	const tagsArray = Array.isArray(routeData.tags) ? routeData.tags : [];
-	const legacyTags = [
-		routeData.difficultyTag,
-		routeData.travelStyleTag,
-		...(routeData.roadTripTags || []),
-		...(routeData.experienceTags || []),
-	];
-	const allTags = dedupe([...tagsArray, ...legacyTags]);
+	const allTags = dedupe([
+		routeData.tags?.difficulty,
+		routeData.tags?.travelStyle,
+		...(routeData.tags?.roadTrip || []),
+		...(routeData.tags?.experience || []),
+	]);
 
 	const openDay = (index) => {
 		setSelectedDay(index);
@@ -73,23 +71,23 @@ export default function RouteDetailScreen({ route, navigation }) {
 
 			<ScrollView contentContainerStyle={styles.scrollContent}>
 				<View style={styles.headerSection}>
-					<Text style={styles.routeTitle}>{routeData.Title}</Text>
+					<Text style={styles.routeTitle}>{routeData.title}</Text>
 
 					<View style={styles.authorRow}>
 						<Avatar photoURL={userPhoto} displayName={displayUser} size={24} />
 						<Text style={styles.authorText}>{text.authorPrefix} {displayUser}</Text>
 					</View>
 
-					<Text style={styles.descriptionText}>{routeData.desc}</Text>
+					<Text style={styles.descriptionText}>{routeData.description}</Text>
 
 					<View style={styles.metaRow}>
 						<View style={styles.metaItem}>
 							<Ionicons name="calendar-outline" size={16} color={colors.textSecondary} style={styles.metaIcon} />
-							<Text style={styles.metaText}>{routeData.days} {text.days}</Text>
+							<Text style={styles.metaText}>{routeData.dayCount} {text.days}</Text>
 						</View>
 						<View style={styles.metaItem}>
 							<Ionicons name="map-outline" size={16} color={colors.textSecondary} style={styles.metaIcon} />
-							<Text style={styles.metaText}>{routeData.distance} {text.km}</Text>
+							<Text style={styles.metaText}>{routeData.distanceKm} {text.km}</Text>
 						</View>
 					</View>
 

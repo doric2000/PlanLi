@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   canonicalAssetComplete,
   deterministicAssetId,
+  migrateUser,
   parseArgs,
   parseStorageUrl,
 } = require('./migrateCanonicalMedia');
@@ -21,6 +22,24 @@ test('canonical migration is dry-run by default and accepts explicit buckets', (
   assert.equal(options.sourceBucket, 'planli-us');
   assert.equal(options.targetBucket, 'planli-eu');
   assert.equal(options.limit, 25);
+});
+
+test('external provider avatars remain external without creating media variants', async () => {
+  let migrateCalled = false;
+  const result = await migrateUser(
+    {
+      id: 'u1',
+      data: () => ({ photoURL: 'https://lh3.googleusercontent.com/avatar.jpg' }),
+    },
+    async () => {
+      migrateCalled = true;
+      return null;
+    }
+  );
+  assert.equal(migrateCalled, false);
+  assert.equal(result.update.photoMedia, null);
+  assert.equal(result.update.photoURL, 'https://lh3.googleusercontent.com/avatar.jpg');
+  assert.equal(result.authPhotoURL, 'https://lh3.googleusercontent.com/avatar.jpg');
 });
 
 test('deterministic asset IDs are stable UUIDs', () => {
@@ -74,4 +93,3 @@ test('canonical asset check rejects mixed or wrong-region paths', () => {
   assert.equal(canonicalAssetComplete(asset, 'u2', 'planli-eu'), false);
   assert.equal(canonicalAssetComplete(asset, 'u1', 'planli-us'), false);
 });
-

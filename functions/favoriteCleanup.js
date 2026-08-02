@@ -9,7 +9,9 @@ function assertNonEmptyString(value, name) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`${name} must be a non-empty string.`);
   }
-  return value.trim();
+  // Firestore document IDs may legally contain leading or trailing spaces.
+  // Validate with trim(), but preserve the exact identifier for lookups.
+  return value;
 }
 
 function buildDeletedFavoriteQuery(

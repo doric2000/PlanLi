@@ -82,7 +82,7 @@ export async function prepareRouteMedia(tripDays, uploadImageAssets) {
   });
 
   return {
-    tripDaysData: nextDays,
+    days: nextDays,
     uploadedAssets,
   };
 }

@@ -112,8 +112,8 @@ describe('useProfileData loading', () => {
       recommendationsRequest.resolve({
         size: 2,
         forEach: (callback) => {
-          callback({ data: () => ({ likes: 3 }) });
-          callback({ data: () => ({ likes: 4 }) });
+          callback({ data: () => ({ stats: { likeCount: 3 } }) });
+          callback({ data: () => ({ stats: { likeCount: 4 } }) });
         },
       });
     });

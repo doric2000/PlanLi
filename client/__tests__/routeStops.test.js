@@ -8,7 +8,7 @@ import {
 } from "../src/features/roadtrip/utils/routeStops";
 
 const route = {
-	tripDaysData: [
+	days: [
 		{
 			description: "day one",
 			stops: [
@@ -60,8 +60,8 @@ describe("roadtrip route stop helpers", () => {
 	});
 
 	it("filters invalid stop locations", () => {
-		expect(hasValidStopLocation(route.tripDaysData[0].stops[0])).toBe(true);
-		expect(hasValidStopLocation(route.tripDaysData[0].stops[1])).toBe(false);
+		expect(hasValidStopLocation(route.days[0].stops[0])).toBe(true);
+		expect(hasValidStopLocation(route.days[0].stops[1])).toBe(false);
 		expect(flattenValidRouteStops(route).map((stop) => stop.id)).toEqual(["a", "c"]);
 	});
 
@@ -70,7 +70,7 @@ describe("roadtrip route stop helpers", () => {
 	});
 
 	it("builds single stop Google Maps URL", () => {
-		const url = buildGoogleMapsPlaceUrl(route.tripDaysData[0].stops[0]);
+		const url = buildGoogleMapsPlaceUrl(route.days[0].stops[0]);
 
 		expect(url).toContain("https://www.google.com/maps/search/?api=1");
 		expect(url).toContain("48.8584%2C2.2945");

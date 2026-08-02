@@ -3,7 +3,8 @@ import { Alert, ScrollView, Text, TouchableOpacity, View, ActivityIndicator } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth, db } from "../../../config/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
+import { saveProfile } from "../../../services/ProfileService";
 
 import { colors, common, cards, tags, buttons, spacing, editProfileScreenStyles as styles } from "../../../styles";
 import { useBackButton } from "../../../hooks/useBackButton";
@@ -190,19 +191,14 @@ export default function EditProfileScreen({ navigation }) {
 
     setSaving(true);
     try {
-      await setDoc(
-        doc(db, "users", uid),
-        {
-          smartProfile: {
-            budget,
-            travelStyleTag: travelStyle, // keep naming consistent with your routes system
-            interests,
-            vibe,
-          },
-          updatedAt: serverTimestamp(),
+      await saveProfile({
+        smartProfile: {
+          budget,
+          travelStyleTag: travelStyle,
+          interests,
+          vibe,
         },
-        { merge: true }
-      );
+      });
 
       Alert.alert("Saved", "Your Smart Profile was updated.", [
         {

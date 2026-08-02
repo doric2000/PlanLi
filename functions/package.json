@@ -15,21 +15,28 @@
     "bootstrap-admin": "node scripts/bootstrapAdmin.js",
     "set-email-verified": "node scripts/setEmailVerified.js",
     "migrate-media": "node scripts/migrateCanonicalMedia.js",
+    "migrate-storage-eu": "node scripts/migrateStorageToEurope.js",
+    "migrate-database": "node scripts/migrateDatabaseCanonical.js",
+    "audit-live": "node scripts/auditLiveState.js",
+    "configure-function-iam": "node scripts/configureFunctionServiceAccounts.js",
     "cleanup-orphan-favorites": "node scripts/cleanupOrphanFavorites.js",
     "backfill-public-profiles": "node scripts/backfillPublicProfiles.js",
     "sync-country-metadata": "node scripts/syncCountryMetadata.js",
-    "migrate-destination-schema": "node scripts/migrateDestinationSchema.js",
     "build-country-geo": "node scripts/buildCountryGeoData.js"
   },
   "dependencies": {
+    "@google-cloud/storage": "7.21.0",
     "countries-list": "3.4.1",
-    "firebase-admin": "^12.7.0",
-    "firebase-functions": "^4.9.0",
+    "firebase-admin": "13.10.0",
+    "firebase-functions": "7.3.2",
     "sharp": "^0.35.3",
     "thumbhash": "0.1.1"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
-    "firebase": "^12.16.0"
+    "firebase": "12.17.0"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

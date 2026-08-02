@@ -63,12 +63,11 @@ function RecommendationDetailLoaded({ item, navigation }) {
   const insets = useSafeAreaInsets();
 
   // --- Hooks ---
-  const author = useUserData(item.userId);
-  const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
+  const author = useUserData(item.ownerId);
+  const { isLiked, likeCount, toggleLike } = useLikes(
     'recommendations',
     item.id,
-    item.likes,
-    item.likedBy
+    item.stats?.likeCount || 0
   );
   const commentsCount = useCommentsCount('recommendations', item.id);
   const user = auth.currentUser;
@@ -78,7 +77,7 @@ function RecommendationDetailLoaded({ item, navigation }) {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
 
   // --- Computed Values ---
-  const isOwner = user?.uid === item.userId;
+  const isOwner = user?.uid === item.ownerId;
   const snapshotData = {
     name: item.title,
     thumbnail_url: getRecommendationImageUrls(item, 'thumb')[0] || null,
@@ -201,7 +200,9 @@ function RecommendationDetailLoaded({ item, navigation }) {
       <LikesModal
         visible={likesModalVisible}
         onClose={() => setLikesModalVisible(false)}
-        likedByUserIds={likedByList}
+        collectionName="recommendations"
+        itemId={item.id}
+        likeCount={likeCount}
       />
 
       <CommentsModal

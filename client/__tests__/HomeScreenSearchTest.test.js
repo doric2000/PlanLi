@@ -19,6 +19,7 @@ jest.mock('firebase/firestore', () => ({
   collectionGroup: jest.fn(() => ({ __type: 'collectionGroup' })),
   orderBy: jest.fn((...args) => ({ __type: 'orderBy', args })),
   limit: jest.fn((...args) => ({ __type: 'limit', args })),
+  where: jest.fn((...args) => ({ __type: 'where', args })),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -55,7 +56,7 @@ jest.mock('../src/components/CityCard', () => {
 });
 
 jest.mock('../src/services/LocationService', () => ({
-  resolveDestinationPreview: jest.fn(),
+  resolveDestinationForPlacePreview: jest.fn(),
 }));
 
 jest.mock('../src/hooks/useAuthUser', () => ({

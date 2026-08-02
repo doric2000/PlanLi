@@ -10,6 +10,7 @@ const {
   encodeVariant,
   normalizeBucketName,
 } = require('../mediaProcessor');
+const { initializeAdmin } = require('./localCredentials');
 
 const PAGE_SIZE = 20;
 const DEFAULT_STATE_DIR = path.join(
@@ -74,19 +75,7 @@ function parseArgs(argv) {
 }
 
 function initAdmin() {
-  const keyPath = path.join(__dirname, '..', 'serviceAccountKey.json');
-  const options = {};
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    options.credential = admin.credential.applicationDefault();
-  } else if (fs.existsSync(keyPath)) {
-    // eslint-disable-next-line global-require, import/no-dynamic-require
-    options.credential = admin.credential.cert(require(keyPath));
-  } else {
-    throw new Error(
-      'Missing credentials. Set GOOGLE_APPLICATION_CREDENTIALS or add functions/serviceAccountKey.json.'
-    );
-  }
-  if (!admin.apps.length) admin.initializeApp(options);
+  initializeAdmin(admin);
 }
 
 function parseStorageUrl(value) {
@@ -396,9 +385,18 @@ function legacyUrlAt(data, index = 0) {
 async function migrateUser(snapshot, migrate) {
   const data = snapshot.data() || {};
   let photoMedia = data.photoMedia || null;
+  const fallbackUrl = data.photoURL || data.photoMeta?.full?.url || null;
+  let photoURL = fallbackUrl;
   if (!canonicalAssetComplete(photoMedia, snapshot.id)) {
-    const fallbackUrl = data.photoURL || data.photoMeta?.full?.url;
-    if (fallbackUrl || data.photoMeta) {
+    const storageBacked = Boolean(
+      parseStorageUrl(fallbackUrl) ||
+      data.photoMeta?.source?.path ||
+      data.photoMeta?.large?.path ||
+      data.photoMeta?.full?.path ||
+      data.photoMeta?.feed?.path ||
+      data.photoMeta?.display?.path
+    );
+    if (storageBacked) {
       photoMedia = await migrate({
         asset: data.photoMeta,
         fallbackUrl,
@@ -406,17 +404,24 @@ async function migrateUser(snapshot, migrate) {
         kind: 'avatar',
         scope: `users/${snapshot.id}/photo`,
       });
+      photoURL = photoMedia?.feed?.url || null;
+    } else {
+      // OAuth/provider avatars may be intentionally hosted outside Firebase Storage.
+      // They remain valid profile URLs and do not need synthetic media variants.
+      photoMedia = null;
     }
+  } else {
+    photoURL = photoMedia.feed.url;
   }
   return {
     update: {
       photoMedia,
-      photoURL: photoMedia?.feed?.url || null,
+      photoURL,
       photoPath: firestoreDelete(),
       photoMeta: firestoreDelete(),
       photoMediaVersion: firestoreDelete(),
     },
-    authPhotoURL: photoMedia?.feed?.url || null,
+    authPhotoURL: photoURL,
   };
 }
 
