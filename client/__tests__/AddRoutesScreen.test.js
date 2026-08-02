@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRoutesScreen from '../src/features/roadtrip/screens/AddRoutesScreen';
-import { updateDoc } from 'firebase/firestore';
+
+const mockSaveRoute = jest.fn(() => Promise.resolve({ routeId: 'route-1' }));
 
 const mockUploadImageAssets = jest.fn(async () => []);
 const mockRemoveUploadedImage = jest.fn(async () => {});
@@ -21,6 +22,10 @@ jest.mock('../src/config/firebase', () => ({
 
 jest.mock('../src/hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ user: { uid: 'test-user' } }),
+}));
+
+jest.mock('../src/services/RouteService', () => ({
+  saveRoute: (...args) => mockSaveRoute(...args),
 }));
 
 jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
@@ -51,11 +56,11 @@ const UNSAVED_TITLE = 'שינויים לא שמורים';
 function makeRouteToEdit(overrides = {}) {
   return {
     id: 'route-1',
-    Title: 'Original route',
-    days: 1,
-    distance: 100,
-    desc: 'Route description',
-    tripDaysData: [
+    title: 'Original route',
+    dayCount: 1,
+    distanceKm: 100,
+    description: 'Route description',
+    days: [
       {
         description: '',
         image: null,
@@ -69,10 +74,7 @@ function makeRouteToEdit(overrides = {}) {
         ],
       },
     ],
-    difficultyTag: '',
-    travelStyleTag: '',
-    roadTripTags: [],
-    experienceTags: [],
+    tags: { difficulty: '', travelStyle: '', roadTrip: [], experience: [] },
     ...overrides,
   };
 }
@@ -80,7 +82,7 @@ function makeRouteToEdit(overrides = {}) {
 describe('AddRoutesScreen unsaved guard (edit)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    updateDoc.mockResolvedValue();
+    mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
     mockUploadImageAssets.mockResolvedValue([]);
     mockRemoveUploadedImage.mockResolvedValue();
   });
@@ -180,7 +182,7 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
       },
     };
     mockUploadImageAssets.mockResolvedValueOnce([asset]);
-    updateDoc.mockRejectedValueOnce(new Error('write failed'));
+    mockSaveRoute.mockRejectedValueOnce(new Error('write failed'));
     const navigationMock = {
       goBack: jest.fn(),
       setOptions: jest.fn(),
@@ -189,11 +191,11 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
       addListener: jest.fn(() => jest.fn()),
     };
     const routeToEdit = makeRouteToEdit({
-      tripDaysData: [
+      days: [
         {
           description: '',
           image: 'file:///day.jpg',
-          stops: makeRouteToEdit().tripDaysData[0].stops,
+          stops: makeRouteToEdit().days[0].stops,
         },
       ],
     });
@@ -211,7 +213,7 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
       fireEvent.press(getByTestId('route-submit'));
     });
 
-    await waitFor(() => expect(updateDoc).toHaveBeenCalled());
+    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
     expect(mockRemoveUploadedImage).not.toHaveBeenCalled();
     expect(navigationMock.goBack).not.toHaveBeenCalled();
   });
@@ -225,7 +227,7 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
       addListener: jest.fn(() => jest.fn()),
     };
     const routeToEdit = makeRouteToEdit({
-      tripDaysData: [
+      days: [
         {
           description: '',
           image: 'https://cdn.example/day-feed.webp',
@@ -235,7 +237,7 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
             feed: { url: 'https://cdn.example/day-feed.webp' },
             thumb: { url: 'https://cdn.example/day-thumb.webp' },
           },
-          stops: makeRouteToEdit().tripDaysData[0].stops,
+          stops: makeRouteToEdit().days[0].stops,
         },
       ],
     });
@@ -253,11 +255,11 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
       fireEvent.press(getByTestId('route-submit'));
     });
 
-    await waitFor(() => expect(updateDoc).toHaveBeenCalled());
-    expect(updateDoc.mock.calls[0][1].mediaVersion).toBeUndefined();
-    expect(updateDoc.mock.calls[0][1].tripDaysData[0].media.assetId).toBe(
+    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
+    expect(mockSaveRoute.mock.calls[0][0].mediaVersion).toBeUndefined();
+    expect(mockSaveRoute.mock.calls[0][0].days[0].media.assetId).toBe(
       '123e4567-e89b-42d3-a456-426614174000'
     );
-    expect(updateDoc.mock.calls[0][1].tripDaysData[0].image).toBeUndefined();
+    expect(mockSaveRoute.mock.calls[0][0].days[0].image).toBeUndefined();
   });
 });

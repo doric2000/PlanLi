@@ -5,8 +5,12 @@ functions/.env
 functions/.env.*
 functions/.media-migration-state/
 functions/.canonical-media-migration/
+functions/.storage-eu-migration/
+functions/.database-canonical-migration/
+functions/.public-profiles-backfill/
 .codex_tmp/
 client/.codex_tmp/
+client/.expo-validation/
 .firebase/
 firebase-debug.log
 firestore-debug.log

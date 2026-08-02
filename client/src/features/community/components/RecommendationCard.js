@@ -10,12 +10,11 @@ import { cards } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import ActionBar from '../../../components/ActionBar';
 import CachedImage from '../../../components/CachedImage';
-import { db } from '../../../config/firebase';
-import { deleteDoc, doc } from 'firebase/firestore';
 import { getUserTier } from '../../../utils/userTier';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { formatTimestamp } from '../../../utils/formatTimestamp';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import { deleteContent } from '../../../services/SocialService';
 
 
 /**
@@ -32,16 +31,17 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   const imageUrl = getRecommendationImageUrls(item, 'feed')[0];
   
   // Use custom hooks
-  const author = useUserData(item.userId);
-  const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
-    'recommendations', 
-    item.id, 
-    item.likes, 
-    item.likedBy
+  const ownerId = item.ownerId;
+  const destination = item.destination || {};
+  const author = useUserData(ownerId);
+  const { isLiked, likeCount, toggleLike } = useLikes(
+    'recommendations',
+    item.id,
+    item.stats?.likeCount || 0
   );
 
   // Check if current user is the owner
-  const isOwner = auth.currentUser?.uid === item.userId;
+  const isOwner = auth.currentUser?.uid === ownerId;
   const tier = getUserTier(auth.currentUser);
   const { isAdmin } = useAdminClaim();
   const canManage = tier === 'verified' && (isOwner || isAdmin);
@@ -86,7 +86,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     if (!ok) return;
 
     try {
-      await deleteDoc(doc(db, "recommendations", item.id));
+      await deleteContent({ type: 'recommendation', id: item.id });
       onDeleted?.(item.id); // חשוב: לעדכן את הרשימה
     } catch (error) {
       console.error("Delete error:", error);
@@ -149,14 +149,14 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           )}
         </View>
 
-        {(item.location || item.country) && (
+        {(destination.cityName || destination.countryName) && (
           <View style={cards.recLocationRow}>
             <TouchableOpacity
               onPress={() => {
-                if (item.cityId && item.countryId) {
+                if (destination.cityId && destination.countryId) {
                   navigation.navigate('LandingPage', {
-                    cityId: item.cityId,
-                    countryId: item.countryId,
+                    cityId: destination.cityId,
+                    countryId: destination.countryId,
                   });
                 }
               }}
@@ -165,7 +165,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             >
               <Ionicons name="location-outline" size={14} color="#2EC4B6" />
               <Text style={cards.recLocationText}>
-                {item.location}{item.country ? `, ${item.country}` : ''}
+                {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
               </Text>
             </TouchableOpacity>
           </View>

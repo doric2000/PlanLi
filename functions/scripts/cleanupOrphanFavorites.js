@@ -1,7 +1,6 @@
 /* eslint-disable no-await-in-loop, no-console */
-const fs = require('fs');
-const path = require('path');
 const admin = require('firebase-admin');
+const { initializeAdmin } = require('./localCredentials');
 
 const USER_PAGE_SIZE = 100;
 const SOURCE_READ_BATCH_SIZE = 200;
@@ -24,24 +23,12 @@ function parseArgs(argv) {
 }
 
 function initAdmin() {
-  const keyPath = path.join(__dirname, '..', 'serviceAccountKey.json');
-  const options = {};
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    options.credential = admin.credential.applicationDefault();
-  } else if (fs.existsSync(keyPath)) {
-    // eslint-disable-next-line global-require, import/no-dynamic-require
-    options.credential = admin.credential.cert(require(keyPath));
-  } else {
-    throw new Error(
-      'Missing credentials. Set GOOGLE_APPLICATION_CREDENTIALS or add functions/serviceAccountKey.json.'
-    );
-  }
-  if (!admin.apps.length) admin.initializeApp(options);
+  initializeAdmin(admin);
 }
 
 function resolveFavoriteSourcePath(data) {
   const id =
-    typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : null;
+    typeof data?.id === 'string' && data.id.trim() ? data.id : null;
   if (!id) {
     return { status: 'malformed', reason: 'missing-id' };
   }
@@ -55,7 +42,7 @@ function resolveFavoriteSourcePath(data) {
   if (data.type === 'cities') {
     const countryId =
       typeof data.countryId === 'string' && data.countryId.trim()
-        ? data.countryId.trim()
+        ? data.countryId
         : null;
     if (!countryId) {
       return { status: 'malformed', reason: 'missing-country-id' };

@@ -5,7 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useIsFocused } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { collectionGroup, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { collectionGroup, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 
 import CityCard from "../../../components/CityCard";
 import CachedImage from "../../../components/CachedImage";
@@ -13,7 +13,7 @@ import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
-import { resolveDestinationPreview } from "../../../services/LocationService";
+import { resolveDestinationForPlacePreview } from "../../../services/LocationService";
 import { colors, homeScreenStyles as styles } from "../../../styles";
 
 const CATEGORY_CHIPS = [
@@ -58,7 +58,8 @@ export default function HomeScreen({ navigation }) {
 		try {
 			const citiesQuery = query(
 				collectionGroup(db, "cities"),
-				orderBy("recommendationsCount", "desc"),
+				where("status", "==", "active"),
+				orderBy("stats.recommendationCount", "desc"),
 				limit(10)
 			);
 			const querySnapshot = await getDocs(citiesQuery);
@@ -89,7 +90,11 @@ export default function HomeScreen({ navigation }) {
 		if (isFetchingAllDestinationsForSearchRef.current) return;
 		isFetchingAllDestinationsForSearchRef.current = true;
 		try {
-			const citiesQuery = query(collectionGroup(db, "cities"));
+			const citiesQuery = query(
+				collectionGroup(db, "cities"),
+				where("status", "==", "active"),
+				limit(100)
+			);
 			const querySnapshot = await getDocs(citiesQuery);
 
 			const citiesList = querySnapshot.docs.map((doc, index) => {
@@ -197,44 +202,37 @@ export default function HomeScreen({ navigation }) {
 
 	const handleGoogleSelect = async (placeId) => {
 		try {
-			const result = await resolveDestinationPreview(placeId);
-			if (result?.persisted) {
-				navigation.navigate("LandingPage", {
-					cityId: result.city.id,
-					countryId: result.country.id,
-				});
-				return;
-			}
-
 			if (isGuest || !user) {
-				Alert.alert(
-					"יש להתחבר",
-					"כדי להוסיף יעד חדש, יש להתחבר וליצור המלצה עבורו."
-				);
+				Alert.alert("Login required", "Sign in to select a new Google destination.");
 				navigation.navigate("Login");
 				return;
 			}
 			if (!user.emailVerified) {
-				Alert.alert(
-					"נדרש אימות",
-					"כדי להוסיף יעד חדש, יש לאמת את כתובת האימייל."
-				);
+				Alert.alert("Verification required", "Verify your email before adding a destination.");
 				navigation.navigate("VerifyEmail");
+				return;
+			}
+			const result = await resolveDestinationForPlacePreview(placeId);
+			if (result?.persisted) {
+				navigation.navigate("LandingPage", {
+					cityId: result.destination.city.id,
+					countryId: result.destination.country.id,
+				});
 				return;
 			}
 
 			navigation.navigate("AddRecommendation", {
 				prefillLocation: {
 					destination: {
-						country: result.country,
-						city: result.city,
+						country: result.destination.country,
+						city: result.destination.city,
 					},
 					place: {
 						placeId,
-						name: result.city?.name || null,
-						address: result.city?.description || null,
-						...(result.city?.coordinates
-							? { coordinates: result.city.coordinates }
+						name: result.place?.name || result.destination.city?.name || null,
+						address: result.place?.address || result.destination.city?.description || null,
+						...(result.destination.city?.coordinates
+							? { coordinates: result.destination.city.coordinates }
 							: {}),
 					},
 				},

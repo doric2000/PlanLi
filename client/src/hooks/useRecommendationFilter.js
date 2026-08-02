@@ -37,8 +37,8 @@ export const useRecommendationFilter = (recommendations) => {
       // A. Destination Filter
       if (filters.destination) {
         const search = filters.destination.toLowerCase();
-        const inLocation = item.location?.toLowerCase().includes(search);
-        const inCountry = item.country?.toLowerCase().includes(search);
+        const inLocation = item.destination?.cityName?.toLowerCase().includes(search);
+        const inCountry = item.destination?.countryName?.toLowerCase().includes(search);
         if (!inLocation && !inCountry) return false;
       }
 

@@ -9,8 +9,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import SettingsScreen from '../src/features/profile/screens/SettingsScreen';
 import ChangeNameScreen from '../src/features/profile/screens/ChangeNameScreen';
-import { updateProfile } from 'firebase/auth';
-import { setDoc } from 'firebase/firestore';
+import { saveProfile } from '../src/services/ProfileService';
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -19,7 +18,9 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 jest.mock('../src/config/firebase', () => {
-  const mockAuth = { currentUser: { uid: 'user-123', displayName: 'Old Name' } };
+  const mockAuth = {
+    currentUser: { uid: 'user-123', displayName: 'Old Name', reload: jest.fn(() => Promise.resolve()) },
+  };
   return {
     auth: mockAuth,
     db: { __type: 'db' },
@@ -27,13 +28,21 @@ jest.mock('../src/config/firebase', () => {
 });
 
 jest.mock('firebase/auth', () => ({
-  updateProfile: jest.fn(() => Promise.resolve()),
+  signOut: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(() => ({ __type: 'docRef' })),
   setDoc: jest.fn(() => Promise.resolve()),
   serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
+}));
+
+jest.mock('../src/services/ProfileService', () => ({
+  saveProfile: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('../src/services/SocialService', () => ({
+  requestAccountDeletion: jest.fn(() => Promise.resolve()),
 }));
 
 const { auth: mockedAuth } = require('../src/config/firebase');
@@ -78,6 +87,7 @@ describe('ChangeNameFlow', () => {
     expect(mockedAuth.currentUser).toEqual({
       uid: 'user-123',
       displayName: 'Old Name',
+      reload: expect.any(Function),
     });
     expect(getByTestId('change-name-input').props.value).toBe(
       mockedAuth.currentUser.displayName
@@ -86,10 +96,8 @@ describe('ChangeNameFlow', () => {
     fireEvent.press(getByTestId('change-name-submit'));
 
     await waitFor(() => {
-      expect(updateProfile).toHaveBeenCalledWith(mockedAuth.currentUser, {
-        displayName: 'test',
-      });
-      expect(setDoc).toHaveBeenCalled();
+      expect(saveProfile).toHaveBeenCalledWith({ displayName: 'test' });
+      expect(mockedAuth.currentUser.reload).toHaveBeenCalled();
       expect(Alert.alert).toHaveBeenCalledWith(
         'הצלחה',
         'השם עודכן בהצלחה',

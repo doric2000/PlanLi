@@ -16,10 +16,10 @@ import { Ionicons } from "@expo/vector-icons";
 import {
 	collection,
 	getDocs,
+	limit,
 	orderBy,
 	query,
-	deleteDoc,
-	doc,
+	where,
 } from "firebase/firestore";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,6 +34,8 @@ import { GenerateTripCard } from "../components/GenerateTripCard";
 import { CommentsModal } from "../../../components/CommentsModal";
 import ActiveRouteFiltersList from "../components/ActiveRouteFiltersList";
 import { getFabBottomInset, getTabSceneListPaddingBottom } from "../../../navigation/tabBarLayout";
+import { deleteContent } from "../../../services/SocialService";
+import { loadRouteDetails } from "../../../services/RouteService";
 
 const text = {
 	title: "\u05de\u05e1\u05dc\u05d5\u05dc\u05d9\u05dd",
@@ -83,7 +85,12 @@ export default function RoutesScreen({ navigation }) {
 
 	const fetchRoutes = async () => {
 		try {
-			const q = query(collection(db, "routes"), orderBy("createdAt", "desc"));
+			const q = query(
+				collection(db, "routes"),
+				where("status", "==", "active"),
+				orderBy("createdAt", "desc"),
+				limit(20)
+			);
 			const snap = await getDocs(q);
 			const data = snap.docs.map((docSnap) => ({
 				id: docSnap.id,
@@ -121,7 +128,7 @@ export default function RoutesScreen({ navigation }) {
 				style: "destructive",
 				onPress: async () => {
 					try {
-						await deleteDoc(doc(db, "routes", routeId));
+						await deleteContent({ type: "route", id: routeId });
 						Alert.alert(text.success, text.deleteSuccess);
 						fetchRoutes();
 					} catch (error) {
@@ -133,8 +140,14 @@ export default function RoutesScreen({ navigation }) {
 		]);
 	};
 
-	const handleEdit = (route) => {
-		navigation.navigate("AddRoutesScreen", { routeToEdit: route });
+	const handleEdit = async (route) => {
+		const routeToEdit = await loadRouteDetails(route.id);
+		if (routeToEdit) navigation.navigate("AddRoutesScreen", { routeToEdit });
+	};
+
+	const openRoute = async (route) => {
+		const routeData = await loadRouteDetails(route.id);
+		if (routeData) navigation.navigate("RouteDetail", { routeData });
 	};
 
 	const handleGenerateTrip = () => {
@@ -147,11 +160,11 @@ export default function RoutesScreen({ navigation }) {
 	};
 
 	const renderItem = ({ item }) => {
-		const isOwner = currentUser && item.userId === currentUser.uid;
+		const isOwner = currentUser && item.ownerId === currentUser.uid;
 		return (
 			<RouteCard
 				item={item}
-				onPress={() => navigation.navigate("RouteDetail", { routeData: item })}
+				onPress={() => openRoute(item)}
 				isOwner={isOwner}
 				onEdit={() => handleEdit(item)}
 				onDelete={() => handleDelete(item.id)}
@@ -176,10 +189,10 @@ export default function RoutesScreen({ navigation }) {
 			.filter((q) => q.length > 0);
 
 		if (queries.length > 0) {
-			const title = String(item?.Title ?? "").toLowerCase();
-			const desc = String(item?.desc ?? "").toLowerCase();
-			const places = Array.isArray(item?.places)
-				? item.places.join(" ").toLowerCase()
+			const title = String(item?.title ?? "").toLowerCase();
+			const desc = String(item?.description ?? "").toLowerCase();
+			const places = Array.isArray(item?.summaryPlaces)
+				? item.summaryPlaces.join(" ").toLowerCase()
 				: "";
 			const tagsText = Array.isArray(item?.tags)
 				? item.tags.join(" ").toLowerCase()
@@ -188,23 +201,23 @@ export default function RoutesScreen({ navigation }) {
 			if (!queries.some((q) => searchText.includes(q))) return false;
 		}
 
-		if (filterDifficulty && String(item?.difficultyTag ?? "") !== filterDifficulty) return false;
-		if (filterTravelStyle && String(item?.travelStyleTag ?? "") !== filterTravelStyle) return false;
+		if (filterDifficulty && String(item?.tags?.difficulty ?? "") !== filterDifficulty) return false;
+		if (filterTravelStyle && String(item?.tags?.travelStyle ?? "") !== filterTravelStyle) return false;
 
 		if (filterRoadTripTags.length > 0) {
-			const itemTags = Array.isArray(item?.roadTripTags) ? item.roadTripTags : [];
+			const itemTags = Array.isArray(item?.tags?.roadTrip) ? item.tags.roadTrip : [];
 			if (!filterRoadTripTags.some((tag) => itemTags.includes(tag))) return false;
 		}
 
 		if (filterExperienceTags.length > 0) {
-			const itemTags = Array.isArray(item?.experienceTags) ? item.experienceTags : [];
+			const itemTags = Array.isArray(item?.tags?.experience) ? item.tags.experience : [];
 			if (!filterExperienceTags.some((tag) => itemTags.includes(tag))) return false;
 		}
 
 		const minDays = parseNumberOrNull(filterMinDays);
 		const maxDays = parseNumberOrNull(filterMaxDays);
 		if (minDays !== null || maxDays !== null) {
-			const days = parseNumberOrNull(item?.days);
+			const days = parseNumberOrNull(item?.dayCount);
 			if (days === null) return false;
 			if (minDays !== null && days < minDays) return false;
 			if (maxDays !== null && days > maxDays) return false;
@@ -213,7 +226,7 @@ export default function RoutesScreen({ navigation }) {
 		const minDistance = parseNumberOrNull(filterMinDistance);
 		const maxDistance = parseNumberOrNull(filterMaxDistance);
 		if (minDistance !== null || maxDistance !== null) {
-			const distance = parseNumberOrNull(item?.distance);
+			const distance = parseNumberOrNull(item?.distanceKm);
 			if (distance === null) return false;
 			if (minDistance !== null && distance < minDistance) return false;
 			if (maxDistance !== null && distance > maxDistance) return false;

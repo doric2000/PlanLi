@@ -99,6 +99,21 @@ test('city cleanup also scopes by country to avoid same-name collisions', () => 
   ]);
 });
 
+test('cleanup preserves exact Firestore IDs including trailing spaces', () => {
+  const recorder = createQueryRecorder();
+  buildDeletedFavoriteQuery(recorder.firestore, {
+    type: FAVORITE_TYPES.city,
+    itemId: 'Mykonos ',
+    countryId: 'GR ',
+  });
+
+  assert.deepEqual(recorder.filters, [
+    ['type', '==', 'cities'],
+    ['id', '==', 'Mykonos '],
+    ['countryId', '==', 'GR '],
+  ]);
+});
+
 test('cleanup deletes popular content in bounded batches and is idempotent', async () => {
   const paged = createPagedFirestore([400, 17, 0]);
   const result = await deleteFavoritesForItem({

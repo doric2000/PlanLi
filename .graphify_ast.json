@@ -1,0 +1,894 @@
+{
+  "nodes": [
+    {
+      "id": "client_src_components_exactlocationpicker_exactlocationpicker",
+      "label": "ExactLocationPicker",
+      "file_type": "code",
+      "source_file": "client/src/components/ExactLocationPicker.js",
+      "source_location": "L25",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_auth_screens_registerscreen_registerscreen",
+      "label": "RegisterScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/auth/screens/RegisterScreen.js",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_components_communityinlinemap_communityinlinemap",
+      "label": "CommunityInlineMap",
+      "file_type": "code",
+      "source_file": "client/src/features/community/components/CommunityInlineMap.js",
+      "source_location": "L12",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_components_communityinlinemap_web_communityinlinemap",
+      "label": "CommunityInlineMap",
+      "file_type": "code",
+      "source_file": "client/src/features/community/components/CommunityInlineMap.web.js",
+      "source_location": "L51",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_screens_addrecommendationscreen_addrecommendationscreen",
+      "label": "AddRecommendationScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/community/screens/AddRecommendationScreen.js",
+      "source_location": "L151",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_screens_communitymapscreen_communitymapscreen",
+      "label": "CommunityMapScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/community/screens/CommunityMapScreen.js",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_screens_communitymapscreen_web_communitymapscreen",
+      "label": "CommunityMapScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/community/screens/CommunityMapScreen.web.js",
+      "source_location": "L51",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_screens_communityscreen_communityscreen",
+      "label": "CommunityScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/community/screens/CommunityScreen.js",
+      "source_location": "L29",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_community_screens_recommendationdetailscreen_recommendationdetailscreen",
+      "label": "RecommendationDetailScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/community/screens/RecommendationDetailScreen.js",
+      "source_location": "L34",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_favorites_components_favoritecitieslist_favoritecitieslist",
+      "label": "FavoriteCitiesList",
+      "file_type": "code",
+      "source_file": "client/src/features/favorites/components/FavoriteCitiesList.js",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_favorites_components_favoriteroadtripslist_favoriteroadtripslist",
+      "label": "FavoriteRoadTripsList",
+      "file_type": "code",
+      "source_file": "client/src/features/favorites/components/FavoriteRoadTripsList.js",
+      "source_location": "L10",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_home_screens_homescreen_homescreen",
+      "label": "HomeScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/home/screens/HomeScreen.js",
+      "source_location": "L38",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_notifications_screens_notificationscreen_notificationscreen",
+      "label": "NotificationScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/notifications/screens/NotificationScreen.js",
+      "source_location": "L38",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_components_profilecontentgrid_profilecontentheader",
+      "label": "ProfileContentHeader",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/components/ProfileContentGrid.js",
+      "source_location": "L13",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_components_profilecontentgrid_profilegridtile",
+      "label": "ProfileGridTile",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/components/ProfileContentGrid.js",
+      "source_location": "L63",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_components_profilecontentgrid_profilecontentempty",
+      "label": "ProfileContentEmpty",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/components/ProfileContentGrid.js",
+      "source_location": "L126",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_hooks_useprofiledata_useprofiledata",
+      "label": "useProfileData",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/hooks/useProfileData.js",
+      "source_location": "L94",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_hooks_useprofilephoto_useprofilephoto",
+      "label": "useProfilePhoto",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/hooks/useProfilePhoto.js",
+      "source_location": "L19",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_screens_changenamescreen_changenamescreen",
+      "label": "ChangeNameScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/screens/ChangeNameScreen.js",
+      "source_location": "L14",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_screens_editprofilescreen_editprofilescreen",
+      "label": "EditProfileScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/screens/EditProfileScreen.js",
+      "source_location": "L61",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_screens_settingsscreen_settingsscreen",
+      "label": "SettingsScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/screens/SettingsScreen.js",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_profile_screens_userprofilescreen_userprofilescreen",
+      "label": "UserProfileScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/profile/screens/UserProfileScreen.js",
+      "source_location": "L40",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_roadtrip_screens_addroutesscreen_addroutesscreen",
+      "label": "AddRoutesScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/roadtrip/screens/AddRoutesScreen.js",
+      "source_location": "L86",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_roadtrip_screens_routedetailscreen_routedetailscreen",
+      "label": "RouteDetailScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/roadtrip/screens/RouteDetailScreen.js",
+      "source_location": "L28",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_roadtrip_screens_routesscreen_routesscreen",
+      "label": "RoutesScreen",
+      "file_type": "code",
+      "source_file": "client/src/features/roadtrip/screens/RoutesScreen.js",
+      "source_location": "L67",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_features_roadtrip_utils_routemedia_prepareroutemedia",
+      "label": "prepareRouteMedia",
+      "file_type": "code",
+      "source_file": "client/src/features/roadtrip/utils/routeMedia.js",
+      "source_location": "L26",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavorite_buildfavoritekey",
+      "label": "buildFavoriteKey",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavorite.js",
+      "source_location": "L44",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavorite_usefavorite",
+      "label": "useFavorite",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavorite.js",
+      "source_location": "L55",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavoritecityids_usefavoritecityids",
+      "label": "useFavoriteCityIds",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavoriteCityIds.js",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavoriterecommendation_usefavoriterecommendation",
+      "label": "useFavoriteRecommendation",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavoriteRecommendation.js",
+      "source_location": "L8",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavoriterecommendationids_usefavoriterecommendationids",
+      "label": "useFavoriteRecommendationIds",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavoriteRecommendationIds.js",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavoriterecommendationsfull_usefavoriterecommendationsfull",
+      "label": "useFavoriteRecommendationsFull",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavoriteRecommendationsFull.js",
+      "source_location": "L28",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavoriteroadtripids_usefavoriteroadtripids",
+      "label": "useFavoriteRoadTripIds",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavoriteRoadTripIds.js",
+      "source_location": "L3",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavoriteroadtripsfull_usefavoriteroadtripsfull",
+      "label": "useFavoriteRoadTripsFull",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavoriteRoadTripsFull.js",
+      "source_location": "L29",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_usefavorites_usefavorites",
+      "label": "useFavorites",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useFavorites.js",
+      "source_location": "L13",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_hooks_useregisterorupdateuser_useregisterorupdateuser",
+      "label": "useRegisterOrUpdateUser",
+      "file_type": "code",
+      "source_file": "client/src/hooks/useRegisterOrUpdateUser.js",
+      "source_location": "L9",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_utils_mediaassets_getmediavarianturl",
+      "label": "getMediaVariantUrl",
+      "file_type": "code",
+      "source_file": "client/src/utils/mediaAssets.js",
+      "source_location": "L7",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_utils_mediaassets_getmediaplaceholder",
+      "label": "getMediaPlaceholder",
+      "file_type": "code",
+      "source_file": "client/src/utils/mediaAssets.js",
+      "source_location": "L13",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_utils_mediaassets_getmediasrcset",
+      "label": "getMediaSrcSet",
+      "file_type": "code",
+      "source_file": "client/src/utils/mediaAssets.js",
+      "source_location": "L23",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "label": "getRecommendationImageUrls",
+      "file_type": "code",
+      "source_file": "client/src/utils/mediaAssets.js",
+      "source_location": "L35",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_utils_mediaassets_getrouteimageurls",
+      "label": "getRouteImageUrls",
+      "file_type": "code",
+      "source_file": "client/src/utils/mediaAssets.js",
+      "source_location": "L46",
+      "_origin": "ast"
+    },
+    {
+      "id": "client_src_utils_mediaassets_findmediaassetbyurl",
+      "label": "findMediaAssetByUrl",
+      "file_type": "code",
+      "source_file": "client/src/utils/mediaAssets.js",
+      "source_location": "L57",
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "client_tests_addrecommendationscreen_test",
+      "target": "client_src_features_community_screens_addrecommendationscreen_addrecommendationscreen",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/AddRecommendationScreen.test.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_addroutesscreen_test",
+      "target": "client_src_features_roadtrip_screens_addroutesscreen_addroutesscreen",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/AddRoutesScreen.test.js",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_changenameflow_test",
+      "target": "client_src_features_profile_screens_settingsscreen_settingsscreen",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/ChangeNameFlow.test.js",
+      "source_location": "L10",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_changenameflow_test",
+      "target": "client_src_features_profile_screens_changenamescreen_changenamescreen",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/ChangeNameFlow.test.js",
+      "source_location": "L11",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_homescreensearchtest_test",
+      "target": "client_src_features_home_screens_homescreen_homescreen",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/HomeScreenSearchTest.test.js",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_mediaassets_test",
+      "target": "client_src_utils_mediaassets_findmediaassetbyurl",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/mediaAssets.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_mediaassets_test",
+      "target": "client_src_utils_mediaassets_getmediaplaceholder",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/mediaAssets.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_mediaassets_test",
+      "target": "client_src_utils_mediaassets_getmediasrcset",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/mediaAssets.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_mediaassets_test",
+      "target": "client_src_utils_mediaassets_getmediavarianturl",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/mediaAssets.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_mediaassets_test",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/mediaAssets.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_mediaassets_test",
+      "target": "client_src_utils_mediaassets_getrouteimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/mediaAssets.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_routemedia_test",
+      "target": "client_src_features_roadtrip_utils_routemedia_prepareroutemedia",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/routeMedia.test.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_tests_useprofiledata_test",
+      "target": "client_src_features_profile_hooks_useprofiledata_useprofiledata",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/__tests__/useProfileData.test.js",
+      "source_location": "L34",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getmediaplaceholder",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/components/RecommendationCard.js",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getmediasrcset",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/components/RecommendationCard.js",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/components/RecommendationCard.js",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_auth_screens_registerscreen",
+      "target": "client_src_hooks_useregisterorupdateuser_useregisterorupdateuser",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/auth/screens/RegisterScreen.js",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/components/RecommendationCard.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_screens_addrecommendationscreen",
+      "target": "client_src_utils_mediaassets_findmediaassetbyurl",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/screens/AddRecommendationScreen.js",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_screens_addrecommendationscreen",
+      "target": "client_src_utils_mediaassets_getmediavarianturl",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/screens/AddRecommendationScreen.js",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_screens_communityscreen",
+      "target": "client_src_features_community_components_communityinlinemap_communityinlinemap",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/screens/CommunityScreen.js",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_screens_recommendationdetailscreen",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/screens/RecommendationDetailScreen.js",
+      "source_location": "L22",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_favorites_components_favoritecitieslist",
+      "target": "client_src_hooks_usefavoritecityids_usefavoritecityids",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/favorites/components/FavoriteCitiesList.js",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_components_profilecontentgrid",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/components/ProfileContentGrid.js",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_components_profilecontentgrid",
+      "target": "client_src_utils_mediaassets_getrouteimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/components/ProfileContentGrid.js",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_components_profilecontentgrid_profilecontentempty",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_components_profilecontentgrid_profilecontentheader",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_components_profilecontentgrid_profilegridtile",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_hooks_useprofiledata_useprofiledata",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_hooks_useprofilephoto_useprofilephoto",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_userprofilescreen",
+      "target": "client_src_features_profile_components_profilecontentgrid_profilecontentempty",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/UserProfileScreen.js",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_userprofilescreen",
+      "target": "client_src_features_profile_components_profilecontentgrid_profilecontentheader",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/UserProfileScreen.js",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_userprofilescreen",
+      "target": "client_src_features_profile_components_profilecontentgrid_profilegridtile",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/UserProfileScreen.js",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_userprofilescreen",
+      "target": "client_src_features_profile_hooks_useprofiledata_useprofiledata",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/UserProfileScreen.js",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_roadtrip_components_routecard",
+      "target": "client_src_utils_mediaassets_getrouteimageurls",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/roadtrip/components/RouteCard.js",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_roadtrip_screens_addroutesscreen",
+      "target": "client_src_features_roadtrip_utils_routemedia_prepareroutemedia",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/roadtrip/screens/AddRoutesScreen.js",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_hooks_usefavoritecityids",
+      "target": "client_src_hooks_usefavorites_usefavorites",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useFavoriteCityIds.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_hooks_usefavoriterecommendation",
+      "target": "client_src_hooks_usefavorite_usefavorite",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useFavoriteRecommendation.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_hooks_usefavoriterecommendationids",
+      "target": "client_src_hooks_usefavorites_usefavorites",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useFavoriteRecommendationIds.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_hooks_usefavoriterecommendationsfull",
+      "target": "client_src_hooks_usefavorites_usefavorites",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useFavoriteRecommendationsFull.js",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_hooks_usefavoriteroadtripids",
+      "target": "client_src_hooks_usefavorites_usefavorites",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useFavoriteRoadTripIds.js",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_hooks_usefavoriteroadtripsfull",
+      "target": "client_src_hooks_usefavorites_usefavorites",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/hooks/useFavoriteRoadTripsFull.js",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/components/RecommendationCard.js",
+      "source_location": "L42",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getmediaplaceholder",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/components/RecommendationCard.js",
+      "source_location": "L110",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getmediasrcset",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/components/RecommendationCard.js",
+      "source_location": "L111",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_components_recommendationcard",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/components/RecommendationCard.js",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_screens_addrecommendationscreen",
+      "target": "client_src_utils_mediaassets_getmediavarianturl",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/screens/AddRecommendationScreen.js",
+      "source_location": "L96",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_community_screens_recommendationdetailscreen",
+      "target": "client_src_utils_mediaassets_getrecommendationimageurls",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/community/screens/RecommendationDetailScreen.js",
+      "source_location": "L83",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_hooks_useprofiledata_useprofiledata",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L115",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "client_src_features_profile_screens_profilescreen",
+      "target": "client_src_features_profile_hooks_useprofilephoto_useprofilephoto",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "client/src/features/profile/screens/ProfileScreen.js",
+      "source_location": "L146",
+      "weight": 1.0,
+      "_origin": "ast"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

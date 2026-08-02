@@ -10,22 +10,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { 
-  collection, 
-  addDoc, 
+  collection,
   query,
-  getDoc,
-  doc,
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp 
+  orderBy,
+  onSnapshot,
+  limit,
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { common } from '../styles';
 import { Avatar } from './Avatar';
 import { formatTimestamp } from '../utils/formatTimestamp';
-import { notifyCommentEvent } from '../features/notifications/services/NotificationObserver';
-import { PostType } from '../features/notifications/models/NotificationModel';
 import { getUserTier } from '../utils/userTier';
+import { saveComment } from '../services/SocialService';
 
 /**
  * CommentItem - Displays a single comment with user info.
@@ -36,19 +32,10 @@ import { getUserTier } from '../utils/userTier';
  * @param {Object} item - Comment object containing userId and text
  */
 const CommentItem = ({ item }) => {
-  const [userData, setUserData] = useState({ name: 'Loading...', photo: null });
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      if (!item.userId) return;
-      const snap = await getDoc(doc(db, 'publicProfiles', item.userId));
-      if (snap.exists()) setUserData({ 
-        name: snap.data().displayName, 
-        photo: snap.data().photoURL 
-      });
-    };
-    fetchUser();
-  }, [item.userId]);
+  const userData = {
+    name: item.authorPreview?.displayName || 'Traveler',
+    photo: item.authorPreview?.photoURL || null,
+  };
 
   return (
     <View style={common.commentItem}>
@@ -93,7 +80,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
     if (!postId || !collectionName) return;
 
     const commentsRef = collection(db, collectionName, postId, 'comments');
-    const q = query(commentsRef, orderBy('createdAt', 'desc')); 
+    const q = query(commentsRef, orderBy('createdAt', 'desc'), limit(30));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedComments = snapshot.docs.map(doc => ({
@@ -132,45 +119,16 @@ export const CommentsSection = ({ collectionName, postId }) => {
 
     setSubmitting(true);
     try {
-      const commentsRef = collection(db, collectionName, postId, 'comments');
-      
-      await addDoc(commentsRef, {
-        text: newComment,
-        userId: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
-      });
+      await saveComment(
+        {
+          type: collectionName === 'routes' ? 'route' :
+            collectionName === 'trips' ? 'trip' : 'recommendation',
+          id: postId,
+        },
+        newComment
+      );
 
       setNewComment('');
-
-      // Trigger notification after successful comment
-      try {
-        // Fetch post data to get owner and title
-        const postRef = doc(db, collectionName, postId);
-        const postSnap = await getDoc(postRef);
-        if (postSnap.exists()) {
-          const postData = postSnap.data();
-          const currentUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-          const currentUserData = currentUserDoc.exists() ? currentUserDoc.data() : {};
-
-          // Get current comment count (after adding)
-          const currentCommentCount = comments.length + 1;
-
-          // Trigger notification observer
-          await notifyCommentEvent({
-            postId: postId,
-            postTitle: postData.name || postData.title || 'Untitled Post',
-            postType: collectionName === 'routes' ? PostType.ROUTE : PostType.RECOMMENDATION,
-            postOwnerId: postData.userId,
-            actorId: auth.currentUser.uid,
-            actorName: currentUserData.displayName || 'Anonymous',
-            actorAvatar: currentUserData.photoURL || null,
-            currentCommentCount: currentCommentCount,
-          });
-        }
-      } catch (notificationError) {
-        console.error('Error sending comment notification:', notificationError);
-        // Don't fail the comment operation if notification fails
-      }
     } catch (error) {
       console.error("Error adding comment:", error);
       Alert.alert("Error", "Could not send comment");

@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { auth, db } from '../../../config/firebase';
+import { auth } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
 import { forms } from '../../../styles';
 

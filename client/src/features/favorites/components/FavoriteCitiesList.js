@@ -33,7 +33,7 @@ export default function FavoriteCitiesList({ flatListRef, onScroll }) {
     <FlatList
       ref={flatListRef}
       data={favorites}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item) => `${item.countryId}:${item.id}`}
       onScroll={onScroll}
       scrollEventThrottle={16}
       initialNumToRender={3}
@@ -46,7 +46,8 @@ export default function FavoriteCitiesList({ flatListRef, onScroll }) {
             id: item.id,
             name: item.name || item.title || 'Unknown',
             countryId: item.countryId,
-            imageUrl: item.thumbnail_url,
+            imageUrl: item.imageUrl,
+            placeholderColor: item.placeholderColor,
             rating: item.rating,
             travelers: item.travelers || 0,
           }}

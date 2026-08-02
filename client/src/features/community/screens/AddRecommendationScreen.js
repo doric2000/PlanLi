@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Pressable } from 'react-native';
 // Firestore imports
-import { collection, getDocs, query, collectionGroup } from 'firebase/firestore';
+import { collection, getDocs, limit, query, collectionGroup, where } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common, buttons, forms, tags, addRecommendationScreenStyles as styles } from '../../../styles';
 
@@ -92,15 +92,17 @@ function resolveTagsFromEditItem(editItem) {
 function buildEditComparable(editItem) {
   if (!editItem) return null;
   const tags = [...resolveTagsFromEditItem(editItem)].sort();
-  const images = Array.isArray(editItem.images) ? [...editItem.images] : [];
+  const images = (Array.isArray(editItem.media) ? editItem.media : [])
+    .map((asset) => getMediaVariantUrl(asset, 'feed'))
+    .filter(Boolean);
   return JSON.stringify({
     title: editItem.title || '',
     description: editItem.description || '',
     category: resolveCategoryIdFromEditItem(editItem),
     tags,
     budget: editItem.budget || '',
-    countryId: editItem.countryId || null,
-    cityId: editItem.cityId || null,
+    countryId: editItem.destination?.countryId || null,
+    cityId: editItem.destination?.cityId || null,
     place: placeFingerprint(editItem.place),
     images: JSON.stringify(images),
   });
@@ -369,12 +371,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setSelectedTags(resolvedTags);
     setBudget(editItem.budget || '');
 
-    const initialCountryId = editItem.countryId || null;
-    const initialCityId = editItem.cityId || null;
-    setSelectedCountry(initialCountryId ? { id: initialCountryId, name: editItem.country || initialCountryId } : null);
-    setSelectedCity(initialCityId ? { id: initialCityId, name: editItem.location || initialCityId } : null);
+    const initialCountryId = editItem.destination?.countryId || null;
+    const initialCityId = editItem.destination?.cityId || null;
+    setSelectedCountry(initialCountryId ? { id: initialCountryId, name: editItem.destination?.countryName || initialCountryId } : null);
+    setSelectedCity(initialCityId ? { id: initialCityId, name: editItem.destination?.cityName || initialCityId } : null);
     setSelectedPlace(editItem.place || null);
-    setLocationQuery(editItem.place?.name || editItem.location || '');
+    setLocationQuery(editItem.place?.name || editItem.destination?.cityName || '');
     setEditableImageUris(
       (Array.isArray(editItem.media) ? editItem.media : [])
         .map((asset) => getMediaVariantUrl(asset, 'feed'))
@@ -421,7 +423,11 @@ export default function AddRecommendationScreen({ navigation , route }) {
     allCitiesFetchDebounceRef.current = setTimeout(async () => {
       isFetchingAllCitiesForSearchRef.current = true;
       try {
-        const citiesQuery = query(collectionGroup(db, 'cities'));
+        const citiesQuery = query(
+          collectionGroup(db, 'cities'),
+          where('status', '==', 'active'),
+          limit(100)
+        );
         const querySnapshot = await getDocs(citiesQuery);
         const citiesList = querySnapshot.docs.map((cityDoc) => {
           const parentCountry = cityDoc.ref.parent.parent;

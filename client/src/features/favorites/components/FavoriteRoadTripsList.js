@@ -5,9 +5,19 @@ import { common } from '../../../styles/common';
 import { typography } from '../../../styles/typography';
 import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
 import { RouteCard } from '../../roadtrip/components/RouteCard';
+import { loadRouteDetails } from '../../../services/RouteService';
 
 export default function FavoriteRoadTripsList({ favorites, loading, flatListRef, onScroll }) {
   const navigation = useNavigation();
+
+  const openRoute = async (item) => {
+    try {
+      const routeData = await loadRouteDetails(item.id);
+      if (routeData) navigation.navigate('RouteDetail', { routeData });
+    } catch (error) {
+      console.error('Failed to load favorite route:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -41,7 +51,7 @@ export default function FavoriteRoadTripsList({ favorites, loading, flatListRef,
           <View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>
             <RouteCard
               item={item}
-              onPress={() => navigation.navigate('RouteDetail', { routeData: item })}
+              onPress={() => openRoute(item)}
               isOwner={false}
               showActionBar={false}
               showActionMenu={false}

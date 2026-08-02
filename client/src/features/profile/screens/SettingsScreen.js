@@ -1,11 +1,45 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Platform, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { signOut } from 'firebase/auth';
+
+import { auth } from '../../../config/firebase';
+import { requestAccountDeletion } from '../../../services/SocialService';
 import { settingsScreenStyles as styles } from '../../../styles';
 
-
 export default function SettingsScreen({ navigation }) {
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteAccount = async () => {
+    const confirmed = Platform.OS === 'web'
+      ? window.confirm('למחוק לצמיתות את החשבון ואת כל התוכן שלו?')
+      : await new Promise((resolve) => Alert.alert(
+          'מחיקת חשבון',
+          'החשבון, התוכן, המועדפים והתמונות יימחקו לצמיתות.',
+          [
+            { text: 'ביטול', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'מחק', style: 'destructive', onPress: () => resolve(true) },
+          ]
+        ));
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await requestAccountDeletion();
+      await signOut(auth);
+    } catch (error) {
+      Alert.alert(
+        'לא ניתן למחוק את החשבון',
+        String(error?.code || '').includes('unauthenticated')
+          ? 'מטעמי אבטחה יש להתנתק, להתחבר מחדש ואז לנסות שוב.'
+          : (error?.message || 'אירעה שגיאה. נסו שוב מאוחר יותר.')
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} testID="settings-screen">
       <View style={styles.header}>
@@ -37,6 +71,18 @@ export default function SettingsScreen({ navigation }) {
           onPress={() => navigation.navigate('ChangePassword')}
         >
           <Text style={styles.primaryBtnText}>שינוי סיסמה</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, { backgroundColor: '#B42318' }]}
+          activeOpacity={0.9}
+          onPress={deleteAccount}
+          disabled={deleting}
+          testID="settings-delete-account-button"
+        >
+          {deleting
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.primaryBtnText}>מחיקת חשבון</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -5,6 +5,7 @@ import { common, typography, colors, recommendationMetaStyles as styles } from '
 import { getPlaceCoordinates } from '../utils/distance';
 
 export const RecommendationMeta = ({ item, navigation }) => {
+  const destination = item?.destination || {};
   const openInGoogleMaps = () => {
     const place = item?.place;
     const placeId = place?.placeId;
@@ -22,8 +23,8 @@ export const RecommendationMeta = ({ item, navigation }) => {
     const fallbackQuery = [
       place?.name,
       place?.address,
-      item?.location,
-      item?.country,
+      destination.cityName,
+      destination.countryName,
     ]
       .filter(Boolean)
       .join(' ');
@@ -39,22 +40,22 @@ export const RecommendationMeta = ({ item, navigation }) => {
 
   return (
     <View style={styles.wrap}>
-      {(item.location || item.country) && (
+      {(destination.cityName || destination.countryName) && (
         <TouchableOpacity
           style={styles.rowButton}
           activeOpacity={0.75}
           onPress={() => {
-            if (item.cityId && item.countryId) {
+            if (destination.cityId && destination.countryId) {
               navigation.navigate('LandingPage', {
-                cityId: item.cityId,
-                countryId: item.countryId,
+                cityId: destination.cityId,
+                countryId: destination.countryId,
               });
             }
           }}
         >
           <Ionicons name="location" size={16} color={colors.primary} style={styles.icon} />
           <Text style={[typography.body, styles.rowText]}>
-            {item.location}{item.country ? `, ${item.country}` : ''}
+            {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
           </Text>
           <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>

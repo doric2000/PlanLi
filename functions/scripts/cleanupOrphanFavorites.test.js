@@ -35,6 +35,14 @@ test('favorite types resolve to their authoritative document paths', () => {
     }),
     { status: 'known', path: 'countries/US/cities/Springfield' }
   );
+  assert.deepEqual(
+    resolveFavoriteSourcePath({
+      type: 'cities',
+      id: 'Mykonos ',
+      countryId: 'GR',
+    }),
+    { status: 'known', path: 'countries/GR/cities/Mykonos ' }
+  );
   assert.equal(
     resolveFavoriteSourcePath({ type: 'future', id: 'item-1' }).status,
     'unknown'

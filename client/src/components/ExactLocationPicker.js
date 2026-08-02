@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from "react-native";
-import { collection, collectionGroup, getDocs, query } from "firebase/firestore";
+import { collection, collectionGroup, getDocs, limit, query, where } from "firebase/firestore";
 
 import GooglePlacesInput from "./GooglePlacesInput";
 import SelectionModal from "../features/community/components/SelectionModal";
@@ -70,7 +70,11 @@ export default function ExactLocationPicker({
 		allCitiesFetchDebounceRef.current = setTimeout(async () => {
 			isFetchingAllCitiesForSearchRef.current = true;
 			try {
-				const citiesQuery = query(collectionGroup(db, "cities"));
+				const citiesQuery = query(
+					collectionGroup(db, "cities"),
+					where("status", "==", "active"),
+					limit(100)
+				);
 				const querySnapshot = await getDocs(citiesQuery);
 				const citiesList = querySnapshot.docs.map((cityDoc) => {
 					const parentCountry = cityDoc.ref.parent.parent;
@@ -223,7 +227,11 @@ export default function ExactLocationPicker({
 
 		setLoadingCountriesForPicker(true);
 		try {
-			const snap = await getDocs(collection(db, "countries"));
+			const snap = await getDocs(query(
+				collection(db, "countries"),
+				where("status", "==", "active"),
+				limit(250)
+			));
 			const list = snap.docs
 				.map((d) => ({ id: d.id, ...(d.data() || {}) }))
 				.map((c) => ({

@@ -3,9 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { auth, db } from '../../../config/firebase';
-import { updateProfile } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth } from '../../../config/firebase';
+import { saveProfile } from '../../../services/ProfileService';
 import { changeNameScreenStyles as styles } from '../../../styles';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
@@ -55,12 +54,8 @@ export default function ChangeNameScreen({ navigation }) {
 
     setSaving(true);
     try {
-      await updateProfile(u, { displayName: next });
-      await setDoc(
-        doc(db, 'users', u.uid),
-        { displayName: next, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
+      await saveProfile({ displayName: next });
+      await u.reload();
 
       Alert.alert('הצלחה', 'השם עודכן בהצלחה', [
         {

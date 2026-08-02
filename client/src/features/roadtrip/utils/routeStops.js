@@ -15,8 +15,8 @@ export const hasValidStopLocation = (stop) => !!getStopCoordinates(stop);
 export const flattenRouteStops = (routeOrDays) => {
 	const days = Array.isArray(routeOrDays)
 		? routeOrDays
-		: Array.isArray(routeOrDays?.tripDaysData)
-			? routeOrDays.tripDaysData
+		: Array.isArray(routeOrDays?.days)
+			? routeOrDays.days
 			: [];
 
 	return days.flatMap((day, dayIndex) => {

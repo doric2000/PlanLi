@@ -1,17 +1,9 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
-import { updateProfile } from 'firebase/auth';
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
-
-import { auth, db } from '../../../config/firebase';
+import { auth } from '../../../config/firebase';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { primeUserDataCache } from '../../../hooks/useUserData';
+import { saveProfile } from '../../../services/ProfileService';
 
 const IMAGE_PICKER_CONFIG = {
   kind: 'avatar',
@@ -41,34 +33,8 @@ export function useProfilePhoto({ uid, user, userData, updateLocalUserData }) {
         const downloadURL = uploadedAsset?.feed?.url;
         if (!downloadURL) return;
 
-        const uRef = doc(db, 'users', uid);
-        const uDoc = await getDoc(uRef);
-        const profileFields = {
-          photoURL: downloadURL,
-          photoMedia: uploadedAsset,
-          updatedAt: serverTimestamp(),
-        };
-
-        if (uDoc.exists()) {
-          await updateDoc(uRef, profileFields);
-        } else {
-          await setDoc(
-            uRef,
-            {
-              uid,
-              email: user?.email || '',
-              displayName: user?.displayName || userData?.displayName || 'Traveler',
-              ...profileFields,
-              createdAt: serverTimestamp(),
-            },
-            { merge: true }
-          );
-        }
-        try {
-          await updateProfile(auth.currentUser, { photoURL: downloadURL });
-        } catch (authUpdateError) {
-          console.warn('Firebase Auth photo update failed:', authUpdateError);
-        }
+        await saveProfile({ photoMedia: uploadedAsset });
+        await auth.currentUser.reload();
 
         if (typeof updateLocalUserData === 'function') {
           updateLocalUserData({

@@ -3,122 +3,94 @@ const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 const { sanitizePublicProfile } = require('../publicProfiles');
+const { initializeAdmin } = require('./localCredentials');
 
-const MIGRATION_DOC = '_migrations/publicProfilesV1';
 const PAGE_SIZE = 400;
+const DEFAULT_STATE_DIR = path.join(__dirname, '..', '.public-profiles-backfill');
+
+function valueAfter(argv, flag) {
+  const index = argv.indexOf(flag);
+  return index >= 0 ? argv[index + 1] : null;
+}
 
 function parseArgs(argv) {
-  const args = new Set(argv);
-  const limitIndex = argv.indexOf('--limit');
-  const parsedLimit =
-    limitIndex >= 0
-      ? Number.parseInt(argv[limitIndex + 1], 10)
-      : Number.POSITIVE_INFINITY;
+  const parsedLimit = Number.parseInt(valueAfter(argv, '--limit'), 10);
   return {
-    apply: args.has('--apply'),
-    resume: args.has('--resume'),
-    limit:
-      Number.isFinite(parsedLimit) && parsedLimit > 0
-        ? parsedLimit
-        : Number.POSITIVE_INFINITY,
+    apply: argv.includes('--apply'),
+    resume: argv.includes('--resume'),
+    limit: Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? parsedLimit
+      : Number.POSITIVE_INFINITY,
+    stateDir: path.resolve(valueAfter(argv, '--state-dir') || DEFAULT_STATE_DIR),
   };
 }
 
 function initAdmin() {
-  const keyPath = path.join(__dirname, '..', 'serviceAccountKey.json');
-  const options = {};
-
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    options.credential = admin.credential.applicationDefault();
-  } else if (fs.existsSync(keyPath)) {
-    // eslint-disable-next-line global-require, import/no-dynamic-require
-    options.credential = admin.credential.cert(require(keyPath));
-  } else {
-    throw new Error(
-      'Missing credentials. Set GOOGLE_APPLICATION_CREDENTIALS or place functions/serviceAccountKey.json'
-    );
-  }
-
-  admin.initializeApp(options);
+  initializeAdmin(admin);
 }
 
-async function runBackfill({ apply, resume, limit }) {
-  const db = admin.firestore();
-  const migrationRef = db.doc(MIGRATION_DOC);
-  let lastId = null;
-  let processed = 0;
-
-  if (resume) {
-    const checkpoint = await migrationRef.get();
-    lastId = checkpoint.exists ? checkpoint.data()?.lastUserId || null : null;
+function writeState(stateDir, value) {
+  fs.mkdirSync(stateDir, { recursive: true });
+  const filePath = path.join(stateDir, 'state.json');
+  const temporary = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  try {
+    fs.renameSync(temporary, filePath);
+  } catch (error) {
+    if (!['EEXIST', 'EPERM'].includes(error.code)) throw error;
+    fs.copyFileSync(temporary, filePath);
+    fs.unlinkSync(temporary);
   }
+}
 
-  console.log(
-    `${apply ? 'APPLY' : 'DRY RUN'} publicProfiles backfill` +
-      `${lastId ? ` from ${lastId}` : ''}`
-  );
+async function runBackfill({ apply, resume, limit, stateDir }) {
+  const db = admin.firestore();
+  const statePath = path.join(stateDir, 'state.json');
+  const state = resume && fs.existsSync(statePath)
+    ? JSON.parse(fs.readFileSync(statePath, 'utf8'))
+    : {};
+  let lastId = state.lastUserId || null;
+  let processed = 0;
 
   while (processed < limit) {
     const pageLimit = Math.min(PAGE_SIZE, limit - processed);
-    let query = db
-      .collection('users')
+    let query = db.collection('users')
       .orderBy(admin.firestore.FieldPath.documentId())
       .limit(pageLimit);
     if (lastId) query = query.startAfter(lastId);
-
     const snapshot = await query.get();
     if (snapshot.empty) break;
 
     if (apply) {
       const batch = db.batch();
-      for (const userDoc of snapshot.docs) {
-        batch.set(
-          db.doc(`publicProfiles/${userDoc.id}`),
-          {
-            ...sanitizePublicProfile(userDoc.id, userDoc.data()),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: false }
-        );
-      }
-      const pageLastId = snapshot.docs[snapshot.docs.length - 1].id;
-      batch.set(
-        migrationRef,
+      snapshot.docs.forEach((userDoc) => batch.set(
+        db.doc(`publicProfiles/${userDoc.id}`),
         {
-          lastUserId: pageLastId,
-          processed: admin.firestore.FieldValue.increment(snapshot.size),
+          ...sanitizePublicProfile(userDoc.id, userDoc.data()),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          complete: snapshot.size < pageLimit,
-        },
-        { merge: true }
-      );
+        }
+      ));
       await batch.commit();
     }
 
     processed += snapshot.size;
     lastId = snapshot.docs[snapshot.docs.length - 1].id;
-    console.log(`${apply ? 'Wrote' : 'Would write'} ${processed} public profile(s)`);
+    if (apply) writeState(stateDir, {
+      lastUserId: lastId,
+      processed: Number(state.processed || 0) + processed,
+      complete: snapshot.size < pageLimit,
+      updatedAt: new Date().toISOString(),
+    });
     if (snapshot.size < pageLimit) break;
   }
 
-  if (apply) {
-    await migrationRef.set(
-      {
-        lastUserId: lastId,
-        complete: processed < limit,
-        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
-  }
-
-  console.log(`Finished: ${processed} user(s) ${apply ? 'processed' : 'inspected'}.`);
+  return { mode: apply ? 'apply' : 'dry-run', processed, lastUserId: lastId };
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   initAdmin();
-  await runBackfill(options);
+  console.log(JSON.stringify(await runBackfill(options), null, 2));
 }
 
 if (require.main === module) {
@@ -128,7 +100,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  parseArgs,
-  runBackfill,
-};
+module.exports = { parseArgs, runBackfill };

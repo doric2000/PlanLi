@@ -7,6 +7,9 @@
       "storage": {
         "media": [
           "planli-f0b12-media-eu"
+        ],
+        "rollback": [
+          "planli-f0b12.firebasestorage.app"
         ]
       }
     },
@@ -14,6 +17,9 @@
       "storage": {
         "media": [
           "planli-rules-test.appspot.com"
+        ],
+        "rollback": [
+          "planli-rules-test-rollback.appspot.com"
         ]
       }
     }

@@ -9,7 +9,13 @@
   "storage": [
     {
       "target": "media",
+      "bucket": "planli-f0b12-media-eu",
       "rules": "storage.rules"
+    },
+    {
+      "target": "rollback",
+      "bucket": "planli-f0b12.firebasestorage.app",
+      "rules": "storage.us-readonly.rules"
     }
   ]
 }

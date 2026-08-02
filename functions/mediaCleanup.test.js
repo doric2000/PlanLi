@@ -14,20 +14,15 @@ const asset = (uid, id) => ({
   thumb: { path: `media/${uid}/${id}/thumb.webp` },
 });
 
-test('collectManagedMediaPaths reads canonical document and nested route media', () => {
+test('collectManagedMediaPaths reads canonical document media', () => {
   const paths = collectManagedMediaPaths({
     photoMedia: asset('u1', 'avatar'),
     media: [asset('u1', 'cover')],
-    tripDaysData: [{
-      media: asset('u1', 'day'),
-      stops: [{ media: asset('u1', 'stop') }],
-    }],
     unrelated: { path: 'documents/not-media.txt' },
   });
 
-  assert.equal(paths.size, 12);
+  assert.equal(paths.size, 6);
   assert(paths.has('media/u1/avatar/feed.webp'));
-  assert(paths.has('media/u1/stop/thumb.webp'));
   assert.equal(paths.has('documents/not-media.txt'), false);
 });
 
@@ -47,11 +42,11 @@ test('cleanup deletes removed canonical variants only inside the owner prefix', 
     }),
   };
   const before = {
-    userId: 'u1',
+    ownerId: 'u1',
     media: [asset('u1', 'old'), asset('other', 'foreign')],
   };
   const after = {
-    userId: 'u1',
+    ownerId: 'u1',
     media: [asset('u1', 'new')],
   };
 

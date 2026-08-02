@@ -51,14 +51,6 @@ export function getRouteImageUrls(route, variant = 'large') {
   };
 
   if (Array.isArray(route?.media)) route.media.forEach((asset) => add(asset));
-  if (Array.isArray(route?.tripDaysData)) {
-    route.tripDaysData.forEach((day) => {
-      add(day?.media);
-      if (Array.isArray(day?.stops)) {
-        day.stops.forEach((stop) => add(stop?.media));
-      }
-    });
-  }
   return Array.from(new Set(urls));
 }
 

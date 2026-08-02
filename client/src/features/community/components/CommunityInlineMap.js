@@ -169,10 +169,10 @@ export default function CommunityInlineMap({ pins, focusOnPins = false, onOpenPo
 						</TouchableOpacity>
 					</View>
 
-					{!!(selectedRec?.location || selectedRec?.country) && (
+					{!!(selectedRec?.destination?.cityName || selectedRec?.destination?.countryName) && (
 						<Text style={community.mapSheetSubtitle} numberOfLines={1}>
-							{selectedRec?.location}
-							{selectedRec?.country ? `, ${selectedRec.country}` : ""}
+							{selectedRec?.destination?.cityName}
+							{selectedRec?.destination?.countryName ? `, ${selectedRec.destination.countryName}` : ""}
 						</Text>
 					)}
 

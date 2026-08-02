@@ -7,19 +7,12 @@ import {
 	addRoutesScreenStyles as styles,
 } from "../../../styles";
 import {
-	collection,
-	addDoc,
-	updateDoc,
-	doc,
-	serverTimestamp,
-} from "firebase/firestore";
-import {
 	DIFFICULTY_TAGS,
 	TRAVEL_STYLE_TAGS,
 	ROAD_TRIP_TAGS,
 	EXPERIENCE_TAGS,
 } from "../../../constants/Constants.js";
-import { db, auth } from "../../../config/firebase";
+import { auth } from "../../../config/firebase";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
 import DayEditorModal from "../components/DayEditorModal";
@@ -36,19 +29,20 @@ import {
 } from "../utils/routeMedia";
 import { derivePlacesFromStops, flattenValidRouteStops } from "../utils/routeStops";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
+import { saveRoute } from "../../../services/RouteService";
 
 function buildRouteComparableFromSource(r) {
 	if (!r) return null;
 	return JSON.stringify({
-		title: (r.Title || "").trim(),
-		days: r.days != null && r.days !== "" ? String(r.days) : "",
-		distance: r.distance != null && r.distance !== "" ? String(r.distance) : "",
-		desc: (r.desc || "").trim(),
-		tripDaysData: r.tripDaysData || [],
-		difficultyTag: r.difficultyTag || "",
-		travelStyleTag: r.travelStyleTag || "",
-		roadTripTags: [...(r.roadTripTags || [])].sort(),
-		experienceTags: [...(r.experienceTags || [])].sort(),
+		title: (r.title || "").trim(),
+		days: r.dayCount != null && r.dayCount !== "" ? String(r.dayCount) : "",
+		distance: r.distanceKm != null && r.distanceKm !== "" ? String(r.distanceKm) : "",
+		desc: (r.description || "").trim(),
+		routeDays: r.days || [],
+		difficultyTag: r.tags?.difficulty || "",
+		travelStyleTag: r.tags?.travelStyle || "",
+		roadTripTags: [...(r.tags?.roadTrip || [])].sort(),
+		experienceTags: [...(r.tags?.experience || [])].sort(),
 	});
 }
 
@@ -68,7 +62,7 @@ function buildRouteFormComparable({
 		days: days != null && days !== "" ? String(days) : "",
 		distance: distance != null && distance !== "" ? String(distance) : "",
 		desc: (desc || "").trim(),
-		tripDaysData: tripDays || [],
+		routeDays: tripDays || [],
 		difficultyTag: difficultyTag || "",
 		travelStyleTag: travelStyleTag || "",
 		roadTripTags: [...(roadTripTags || [])].sort(),
@@ -124,15 +118,15 @@ export default function AddRoutesScreen({ navigation, route }) {
 			return;
 		}
 
-		setTitle(routeToEdit.Title || "");
-		setDays(routeToEdit.days ? String(routeToEdit.days) : "");
-		setDistance(routeToEdit.distance ? String(routeToEdit.distance) : "");
-		setDesc(routeToEdit.desc || "");
-		setTripDays(routeToEdit.tripDaysData || []);
-		setDifficultyTag(routeToEdit.difficultyTag || "");
-		setTravelStyleTag(routeToEdit.travelStyleTag || "");
-		setRoadTripTags(routeToEdit.roadTripTags || []);
-		setExperienceTags(routeToEdit.experienceTags || []);
+		setTitle(routeToEdit.title || "");
+		setDays(routeToEdit.dayCount ? String(routeToEdit.dayCount) : "");
+		setDistance(routeToEdit.distanceKm ? String(routeToEdit.distanceKm) : "");
+		setDesc(routeToEdit.description || "");
+		setTripDays(routeToEdit.days || []);
+		setDifficultyTag(routeToEdit.tags?.difficulty || "");
+		setTravelStyleTag(routeToEdit.tags?.travelStyle || "");
+		setRoadTripTags(routeToEdit.tags?.roadTrip || []);
+		setExperienceTags(routeToEdit.tags?.experience || []);
 		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
 	}, [editingRouteId]);
@@ -277,31 +271,22 @@ export default function AddRoutesScreen({ navigation, route }) {
 				uploadImageAssets
 			);
 			const routeData = {
-				Title: title.trim(),
-				days: parsedDays,
-				tripDaysData: preparedMedia.tripDaysData,
-				places: derivedPlaces,
-				distance: parsedDistance,
-				tags,
-				desc: desc.trim(),
-				difficultyTag,
-				travelStyleTag,
-				roadTripTags,
-				experienceTags,
-				userId: user.uid,
+				title: title.trim(),
+				description: desc.trim(),
+				distanceKm: parsedDistance,
+				days: preparedMedia.days,
+				tags: {
+					difficulty: difficultyTag,
+					travelStyle: travelStyleTag,
+					roadTrip: roadTripTags,
+					experience: experienceTags,
+				},
 			};
 
+			await saveRoute(routeData, routeToEdit?.id || null);
 			if (routeToEdit) {
-				await updateDoc(doc(db, "routes", routeToEdit.id), {
-					...routeData,
-					updatedAt: serverTimestamp(),
-				});
 				Alert.alert("הצלחה", "המסלול עודכן.");
 			} else {
-				await addDoc(collection(db, "routes"), {
-					...routeData,
-					createdAt: serverTimestamp(),
-				});
 				Alert.alert("הצלחה", "המסלול נוסף.");
 			}
 			revokeRouteObjectUrls(tripDays);

@@ -1,39 +1,23 @@
 /* eslint-disable no-console */
-const fs = require('fs');
-const path = require('path');
 const admin = require('firebase-admin');
+const { initializeAdmin } = require('./localCredentials');
 
 function initAdmin() {
-  // Prefer env var GOOGLE_APPLICATION_CREDENTIALS, fallback to a local file for convenience.
-  const keyPath = path.join(__dirname, '..', 'serviceAccountKey.json');
-
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    admin.initializeApp({ credential: admin.credential.applicationDefault() });
-    return;
-  }
-
-  if (fs.existsSync(keyPath)) {
-    // eslint-disable-next-line import/no-dynamic-require, global-require
-    const serviceAccount = require(keyPath);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-    return;
-  }
-
-  throw new Error(
-    'Missing credentials. Set GOOGLE_APPLICATION_CREDENTIALS to a service-account JSON path, or place functions/serviceAccountKey.json'
-  );
+  initializeAdmin(admin);
 }
 
 async function main() {
   initAdmin();
 
   const snap = await admin.firestore().collection('recommendations').get();
+  const apply = process.argv.includes('--apply');
   const counts = new Map();
 
   snap.forEach((doc) => {
     const data = doc.data() || {};
-    const countryId = data.countryId;
-    const cityId = data.cityId;
+    if (data.status !== 'active') return;
+    const countryId = data.destination?.countryId;
+    const cityId = data.destination?.cityId;
     if (!countryId || !cityId) return;
 
     const key = `${countryId}/${cityId}`;
@@ -42,7 +26,19 @@ async function main() {
 
   console.log(`Found ${snap.size} recommendations across ${counts.size} city keys.`);
 
-  const entries = Array.from(counts.entries());
+  const countrySnapshot = await admin.firestore().collection('countries').get();
+  const cityDocuments = [];
+  for (const country of countrySnapshot.docs) {
+    // eslint-disable-next-line no-await-in-loop
+    const citySnapshot = await country.ref.collection('cities').get();
+    cityDocuments.push(...citySnapshot.docs);
+  }
+  const entries = cityDocuments.map((city) => {
+    const key = `${city.ref.parent.parent.id}/${city.id}`;
+    return [key, counts.get(key) || 0];
+  });
+  console.log(`${apply ? 'APPLY' : 'DRY RUN'}: ${entries.length} city counters.`);
+  if (!apply) return;
   const batchSize = 400;
 
   for (let i = 0; i < entries.length; i += batchSize) {
@@ -55,8 +51,8 @@ async function main() {
       batch.set(
         cityRef,
         {
-          recommendationsCount: count,
-          recommendationsCountUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          'stats.recommendationCount': count,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
       );

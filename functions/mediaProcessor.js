@@ -329,14 +329,6 @@ function collectCanonicalMediaAssets(data) {
   };
   if (Array.isArray(data?.media)) data.media.forEach(add);
   add(data?.photoMedia);
-  if (Array.isArray(data?.tripDaysData)) {
-    data.tripDaysData.forEach((day) => {
-      add(day?.media);
-      if (Array.isArray(day?.stops)) {
-        day.stops.forEach((stop) => add(stop?.media));
-      }
-    });
-  }
   return assets;
 }
 

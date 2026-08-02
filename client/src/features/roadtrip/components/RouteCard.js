@@ -36,11 +36,10 @@ const text = {
 
 const getAllTags = (route) => {
 	const tags = [
-		...(Array.isArray(route?.tags) ? route.tags : []),
-		route?.difficultyTag,
-		route?.travelStyleTag,
-		...(Array.isArray(route?.roadTripTags) ? route.roadTripTags : []),
-		...(Array.isArray(route?.experienceTags) ? route.experienceTags : []),
+		route?.tags?.difficulty,
+		route?.tags?.travelStyle,
+		...(Array.isArray(route?.tags?.roadTrip) ? route.tags.roadTrip : []),
+		...(Array.isArray(route?.tags?.experience) ? route.tags.experience : []),
 	].filter(Boolean);
 
 	return Array.from(new Set(tags));
@@ -126,30 +125,30 @@ export const RouteCard = ({
 		if (typeof first === "number") setActiveImageIndex(first);
 	}).current;
 
-	const author = useUserData(item.userId);
+	const author = useUserData(item.ownerId);
 	const displayUser = author.displayName || text.defaultUser;
 	const userPhoto = author.photoURL;
-	const descriptionPreview = item?.desc
-		? item.desc.length > 100
-			? `${item.desc.substring(0, 100)}...`
-			: item.desc
+	const descriptionPreview = item?.description
+		? item.description.length > 100
+			? `${item.description.substring(0, 100)}...`
+			: item.description
 		: "";
 	const snapshotData = {
-		name: item?.Title || item?.title || undefined,
+		name: item?.title || undefined,
 		thumbnail_url: thumbnailUrl,
 		sub_text: descriptionPreview,
 		rating: item?.rating,
-		days: item?.days,
-		distance: item?.distance,
+		days: item?.dayCount,
+		distance: item?.distanceKm,
 	};
 
 	const tier = getUserTier(auth.currentUser);
 	const { isAdmin } = useAdminClaim();
 	const canManage = tier === "verified" && (isOwner || isAdmin);
-	const places = Array.isArray(item?.places) ? item.places : [];
+	const places = Array.isArray(item?.summaryPlaces) ? item.summaryPlaces : [];
 
 	const handleAuthorPress = () => {
-		if (item.userId) navigation.navigate("UserProfile", { uid: item.userId });
+		if (item.ownerId) navigation.navigate("UserProfile", { uid: item.ownerId });
 	};
 
 	const renderCarouselImage = (uri, index) => {
@@ -348,32 +347,32 @@ export const RouteCard = ({
 			<View style={[cards.recContent, feed && styles.feedContent]}>
 				<View style={cards.recTitleRow}>
 					<Text style={[cards.recTitle, feed && styles.feedTitle]} numberOfLines={1}>
-						{item.Title}
+						{item.title}
 					</Text>
-					{item.difficultyTag ? (
+					{item.tags?.difficulty ? (
 						<View style={cards.recCategoryChip}>
-							<Text style={cards.recCategoryText}>{item.difficultyTag}</Text>
+							<Text style={cards.recCategoryText}>{item.tags.difficulty}</Text>
 						</View>
 					) : null}
 				</View>
 
 				<View style={styles.metaRow}>
-					{item.days ? (
+					{item.dayCount ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="calendar-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{item.days} {text.days}</Text>
+							<Text style={styles.metaText}>{item.dayCount} {text.days}</Text>
 						</View>
 					) : null}
-					{item.distance ? (
+					{item.distanceKm ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="navigate-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{item.distance} {text.km}</Text>
+							<Text style={styles.metaText}>{item.distanceKm} {text.km}</Text>
 						</View>
 					) : null}
-					{item.travelStyleTag ? (
+					{item.tags?.travelStyle ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="trail-sign-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{item.travelStyleTag}</Text>
+							<Text style={styles.metaText}>{item.tags.travelStyle}</Text>
 						</View>
 					) : null}
 				</View>
@@ -394,7 +393,7 @@ export const RouteCard = ({
 				) : null}
 
 				<Text style={[cards.recDescription, feed && styles.feedDescription]} numberOfLines={feed ? 2 : 3}>
-					{item.desc}
+					{item.description}
 				</Text>
 
 				<RenderTags tags={allTags} />

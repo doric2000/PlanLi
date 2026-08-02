@@ -25,15 +25,6 @@ function collectManagedMediaPaths(data) {
   addAsset(data?.photoMedia);
   if (Array.isArray(data?.media)) data.media.forEach(addAsset);
 
-  if (Array.isArray(data?.tripDaysData)) {
-    data.tripDaysData.forEach((day) => {
-      addAsset(day?.media);
-      if (Array.isArray(day?.stops)) {
-        day.stops.forEach((stop) => addAsset(stop?.media));
-      }
-    });
-  }
-
   return paths;
 }
 
@@ -51,7 +42,7 @@ function buildAllowedMediaPrefixes(collectionName, documentId, data) {
     return [`media/${documentId}`];
   }
 
-  const ownerUid = data?.userId;
+  const ownerUid = data?.ownerId;
   if (!ownerUid || typeof ownerUid !== 'string') return [];
   return [`media/${ownerUid}`];
 }

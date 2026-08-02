@@ -5,12 +5,6 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function admin() {
-      return signedIn()
-        && request.auth.token.keys().hasAny(['admin'])
-        && request.auth.token.admin == true;
-    }
-
     function verified() {
       return signedIn()
         && (
@@ -19,15 +13,9 @@ service firebase.storage {
         );
     }
 
-    function uuid(value) {
-      return value.matches(
-        '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
-      );
-    }
-
     match /media-staging/{uid}/{fileName} {
       allow read, delete: if signedIn() && request.auth.uid == uid;
-      allow create: if signedIn()
+      allow create: if verified()
         && request.auth.uid == uid
         && resource == null
         && fileName.matches(
@@ -41,20 +29,45 @@ service firebase.storage {
       allow update: if false;
     }
 
-    // Final immutable media is written and deleted only by Admin SDK code.
     match /media/{uid}/{assetId}/{variantFile} {
-      allow read: if true;
-      allow write: if false;
+      allow get: if true;
+      allow list, write: if false;
     }
 
-    match /destinations/{destinationPath=**} {
-      allow read: if true;
-      allow write: if false;
+    match /destinations/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
     }
 
-    match /countries/{destinationPath=**} {
-      allow read: if true;
-      allow write: if false;
+    match /countries/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // Existing public objects remain readable during the verified EU cutover.
+    match /optimized/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    match /profilePicture/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    match /recommendations/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    match /routes/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    match /trips/{path=**} {
+      allow get: if true;
+      allow list, write: if false;
     }
 
     match /{allPaths=**} {

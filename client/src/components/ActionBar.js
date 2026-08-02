@@ -13,7 +13,7 @@ import { useState } from 'react';
  * comment count, and share button.
  *
  * @param {Object} props
- * @param {Object} props.item - The data object (must have id, likes, likedBy fields)
+ * @param {Object} props.item - Content data with an id and stats counters.
  * @param {Function} props.onCommentPress - Callback when comment button is pressed, receives item.id
  * @param {string} [props.collectionName='recommendations'] - Firestore collection name for likes/comments
  *
@@ -37,11 +37,10 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 	const [showLikesModal, setShowLikesModal] = useState(false);
 	const isOverlay = variant === 'overlay';
 
-	const { isLiked, likeCount, likedByList, toggleLike } = useLikes(
+	const { isLiked, likeCount, toggleLike } = useLikes(
 		collectionName,
 		item.id,
-		item.likes,
-		item.likedBy
+		item.stats?.likeCount || 0
 	);
 
 	const handleCommentPress = () => {
@@ -106,7 +105,9 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 			<LikesModal
 				visible={showLikesModal}
 				onClose={() => setShowLikesModal(false)}
-				likedByUserIds={likedByList}
+				collectionName={collectionName}
+				itemId={item.id}
+				likeCount={likeCount}
 			/>
 		</View>
 	);

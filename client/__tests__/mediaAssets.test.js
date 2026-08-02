@@ -43,25 +43,16 @@ describe('canonical media helpers', () => {
     ).toBe('two');
   });
 
-  test('collects route, day and stop media', () => {
+  test('collects the denormalized route media list', () => {
     expect(
       getRouteImageUrls(
         {
           media: [asset('cover')],
-          tripDaysData: [
-            {
-              media: asset('day'),
-              stops: [{ media: asset('stop') }],
-            },
-          ],
         },
         'thumb'
       )
     ).toEqual([
       'https://cdn/cover-thumb.webp',
-      'https://cdn/day-thumb.webp',
-      'https://cdn/stop-thumb.webp',
     ]);
   });
 });
-
