@@ -45,6 +45,10 @@ jest.mock('../src/services/SocialService', () => ({
   requestAccountDeletion: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../src/services/PersonalizationService', () => ({
+  resetPersonalizationActivity: jest.fn(() => Promise.resolve()),
+}));
+
 const { auth: mockedAuth } = require('../src/config/firebase');
 
 describe('ChangeNameFlow', () => {

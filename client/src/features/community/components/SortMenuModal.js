@@ -3,8 +3,11 @@ import { View, Text, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, community } from '../../../styles';
 
-export const SortMenuModal = ({ visible, onClose, sortBy, onSelect }) => {
+export const SortMenuModal = ({ visible, onClose, sortBy, onSelect, personalizationAvailable = false }) => {
   const options = [
+    ...(personalizationAvailable
+      ? [{ key: 'personalized', label: 'בשבילך', icon: 'sparkles-outline' }]
+      : []),
     { key: 'popularity', label: 'הכי פופולרי', icon: 'trending-up-outline' },
     { key: 'newest', label: 'הכי חדש', icon: 'time-outline' },
     { key: 'nearby', label: 'הכי קרוב אליי', icon: 'navigate-outline' },

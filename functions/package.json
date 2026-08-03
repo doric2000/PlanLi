@@ -17,6 +17,7 @@
     "migrate-media": "node scripts/migrateCanonicalMedia.js",
     "migrate-storage-eu": "node scripts/migrateStorageToEurope.js",
     "migrate-database": "node scripts/migrateDatabaseCanonical.js",
+    "migrate-personalization": "node scripts/migrateTravelPersonalization.js",
     "audit-live": "node scripts/auditLiveState.js",
     "configure-function-iam": "node scripts/configureFunctionServiceAccounts.js",
     "cleanup-orphan-favorites": "node scripts/cleanupOrphanFavorites.js",

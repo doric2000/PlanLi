@@ -7,7 +7,7 @@ const {
   buildAllowedMediaPrefixes,
   cleanupRemovedMedia,
 } = require('./mediaCleanup');
-const { syncPublicProfile } = require('./publicProfiles');
+const { publicProfileProjectionChanged, syncPublicProfile } = require('./publicProfiles');
 const {
   resolveRecommendationDestination,
   saveRecommendation,
@@ -15,6 +15,11 @@ const {
 const { loadRouteDetails, saveRoute } = require('./routeService');
 const { saveTrip } = require('./tripService');
 const { registerUser, updateProfile } = require('./profileService');
+const {
+  getPersonalizedRecommendations,
+  recordDiscoverySignal,
+  resetPersonalizationActivity,
+} = require('./personalizationService');
 const {
   cleanupOrphanFavorites,
   clearNotifications,
@@ -158,6 +163,23 @@ exports.updateProfile = callable(
   })
 );
 
+exports.getPersonalizedRecommendations = callable(
+  { timeoutSeconds: 30 },
+  (request) => getPersonalizedRecommendations({
+    admin,
+    auth: request.auth,
+    data: request.data,
+  })
+);
+
+exports.recordDiscoverySignal = callable({}, (request) =>
+  recordDiscoverySignal({ admin, auth: request.auth, data: request.data })
+);
+
+exports.resetPersonalizationActivity = callable({}, (request) =>
+  resetPersonalizationActivity({ admin, auth: request.auth })
+);
+
 exports.deleteContent = callable(
   {
     timeoutSeconds: 300,
@@ -299,7 +321,9 @@ exports.onUserMediaCleanup = firestoreWritten(
 exports.onPublicProfileSync = firestoreWritten(
   'users/{userId}',
   async (event) => {
+    const before = event.data?.before.exists ? event.data.before.data() : null;
     const after = event.data?.after.exists ? event.data.after.data() : null;
+    if (!publicProfileProjectionChanged(event.params.userId, before, after)) return;
     await syncPublicProfile(admin, event.params.userId, after);
     const publicSnapshot = await admin.firestore().doc(
       `publicProfiles/${event.params.userId}`

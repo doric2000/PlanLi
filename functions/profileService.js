@@ -1,5 +1,15 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { validateMediaAssets } = require('./recommendationService');
+const {
+  BUDGET_IDS,
+  INTEREST_IDS,
+  NEED_IDS,
+  PACE_IDS,
+  TRAVEL_PARTY_IDS,
+  VIBE_IDS,
+  normalizeSmartProfile,
+  uniqueAllowed,
+} = require('./travelTaxonomy');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -13,37 +23,75 @@ function cleanOptionalName(value) {
   return result;
 }
 
-function cleanStringArray(value, field) {
-  if (value == null) return [];
-  assert(Array.isArray(value) && value.length <= 30, 'invalid-argument', `${field} is invalid.`);
-  return Array.from(new Set(value.map((entry) => {
-    assert(typeof entry === 'string', 'invalid-argument', `${field} is invalid.`);
-    const text = entry.trim();
-    assert(text.length >= 1 && text.length <= 80, 'invalid-argument', `${field} is invalid.`);
-    return text;
-  })));
+function assertOnlyAllowed(values, allowed, field, maximum) {
+  assert(Array.isArray(values) && values.length <= maximum, 'invalid-argument', `${field} is invalid.`);
+  assert(values.every((entry) => typeof entry === 'string' && allowed.includes(entry)),
+    'invalid-argument', `${field} is invalid.`);
+  return uniqueAllowed(values, allowed, maximum);
 }
 
-function sanitizeSmartProfile(value) {
+function sanitizeSmartProfile(value, { complete = false } = {}) {
   if (value == null) return undefined;
   assert(value && typeof value === 'object' && !Array.isArray(value), 'invalid-argument', 'smartProfile is invalid.');
-  const budget = typeof value.budget === 'string' ? value.budget.trim().slice(0, 80) : '';
-  const travelStyleTag = typeof value.travelStyleTag === 'string'
-    ? value.travelStyleTag.trim().slice(0, 80)
-    : '';
-  return {
-    budget,
-    travelStyleTag,
-    interests: cleanStringArray(value.interests, 'smartProfile.interests'),
-    vibe: cleanStringArray(value.vibe, 'smartProfile.vibe'),
-  };
+  const allowedFields = ['interests', 'budget', 'travelParties', 'vibe', 'pace', 'needs'];
+  assert(Object.keys(value).every((key) => allowedFields.includes(key)),
+    'invalid-argument', 'smartProfile contains unsupported fields.');
+  for (const [field, allowed, maximum] of [
+    ['interests', INTEREST_IDS, 8],
+    ['travelParties', TRAVEL_PARTY_IDS, 2],
+    ['vibe', VIBE_IDS, 3],
+    ['needs', NEED_IDS, NEED_IDS.length],
+  ]) {
+    if (Object.prototype.hasOwnProperty.call(value, field)) {
+      assertOnlyAllowed(value[field], allowed, `smartProfile.${field}`, maximum);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'budget')) {
+    assert(value.budget === '' || BUDGET_IDS.includes(value.budget),
+      'invalid-argument', 'smartProfile.budget is invalid.');
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'pace')) {
+    assert(value.pace === '' || PACE_IDS.includes(value.pace),
+      'invalid-argument', 'smartProfile.pace is invalid.');
+  }
+  const normalized = normalizeSmartProfile(value);
+  const interests = assertOnlyAllowed(normalized.interests, INTEREST_IDS, 'smartProfile.interests', 8);
+  const travelParties = assertOnlyAllowed(
+    normalized.travelParties,
+    TRAVEL_PARTY_IDS,
+    'smartProfile.travelParties',
+    2
+  );
+  const vibe = assertOnlyAllowed(normalized.vibe, VIBE_IDS, 'smartProfile.vibe', 3);
+  const needs = assertOnlyAllowed(normalized.needs, NEED_IDS, 'smartProfile.needs', NEED_IDS.length);
+  const budget = normalized.budget;
+  const pace = normalized.pace;
+  assert(!budget || BUDGET_IDS.includes(budget), 'invalid-argument', 'smartProfile.budget is invalid.');
+  assert(!pace || PACE_IDS.includes(pace), 'invalid-argument', 'smartProfile.pace is invalid.');
+  if (complete) {
+    assert(interests.length >= 3, 'invalid-argument', 'Choose at least three interests.');
+    assert(interests.length <= 8, 'invalid-argument', 'Choose no more than eight interests.');
+    assert(Boolean(budget), 'invalid-argument', 'Choose a budget preference.');
+    assert(travelParties.length >= 1, 'invalid-argument', 'Choose at least one travel party.');
+  }
+  return { interests, budget, travelParties, vibe, pace, needs };
 }
 
 async function updateProfile({ admin, auth, data, mediaBucket }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  assert(data && typeof data === 'object' && !Array.isArray(data),
+    'invalid-argument', 'Profile update is invalid.');
+  assert(Object.keys(data).every((key) => (
+    ['displayName', 'smartProfile', 'completeSmartProfile', 'photoMedia'].includes(key)
+  )), 'invalid-argument', 'Profile update contains unsupported fields.');
+  if (Object.prototype.hasOwnProperty.call(data, 'completeSmartProfile')) {
+    assert(typeof data.completeSmartProfile === 'boolean',
+      'invalid-argument', 'completeSmartProfile must be boolean.');
+  }
   const uid = auth.uid;
   const displayName = cleanOptionalName(data?.displayName);
-  const smartProfile = sanitizeSmartProfile(data?.smartProfile);
+  const completeSmartProfile = data?.completeSmartProfile === true;
+  const smartProfile = sanitizeSmartProfile(data?.smartProfile, { complete: completeSmartProfile });
   let photoMedia;
   if (data && Object.prototype.hasOwnProperty.call(data, 'photoMedia')) {
     if (data.photoMedia == null) {
@@ -69,9 +117,23 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   const db = admin.firestore();
   const userRef = db.doc(`users/${uid}`);
   const existing = await userRef.get();
+  const existingSmartProfile = existing.data()?.smartProfile || {};
+  const nextSmartProfile = smartProfile === undefined
+    ? undefined
+    : {
+        ...smartProfile,
+        setupRequired: completeSmartProfile
+          ? false
+          : existingSmartProfile.setupRequired === true,
+        ...(completeSmartProfile
+          ? { completedAt: admin.firestore.FieldValue.serverTimestamp() }
+          : existingSmartProfile.completedAt
+            ? { completedAt: existingSmartProfile.completedAt }
+            : {}),
+      };
   const fields = {
     ...(displayName !== undefined ? { displayName } : {}),
-    ...(smartProfile !== undefined ? { smartProfile } : {}),
+    ...(nextSmartProfile !== undefined ? { smartProfile: nextSmartProfile } : {}),
     ...(photoMedia !== undefined
       ? {
           photoMedia,
@@ -104,6 +166,10 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
 
 async function registerUser({ admin, auth, data }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  assert(data == null || (data && typeof data === 'object' && !Array.isArray(data)),
+    'invalid-argument', 'Registration profile is invalid.');
+  assert(Object.keys(data || {}).every((key) => ['displayName', 'photoURL'].includes(key)),
+    'invalid-argument', 'Registration profile contains unsupported fields.');
   const displayName = cleanOptionalName(data?.displayName || auth.token?.name || 'Traveler');
   const photoURL = typeof data?.photoURL === 'string' && data.photoURL.startsWith('https://')
     ? data.photoURL.slice(0, 2000)
@@ -115,7 +181,12 @@ async function registerUser({ admin, auth, data }) {
     email: auth.token?.email || '',
     displayName,
     photoURL,
-    ...(snapshot.exists ? {} : { createdAt: admin.firestore.FieldValue.serverTimestamp() }),
+    ...(snapshot.exists
+      ? {}
+      : {
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          smartProfile: { setupRequired: true },
+        }),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
   return { uid: auth.uid, displayName, photoURL };

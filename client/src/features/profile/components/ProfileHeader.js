@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import CachedImage from "../../../components/CachedImage";
 import { colors, profileHeaderStyles as styles } from "../../../styles";
 import ProfileBadge from "./ProfileBadge";
-import { TRAVEL_STYLES, TRIP_TYPES } from "../constants/smartProfileOptions";
+import { BUDGETS, TRAVEL_PARTIES } from "../constants/smartProfileOptions";
 import {
 	getMediaPlaceholder,
 	getMediaVariantUrl,
@@ -36,28 +36,17 @@ export default function ProfileHeader({
 		userData?.photoURL
 	);
 
-	const travelStyleValue =
-		smartProfile?.travelStyle ??
-		smartProfile?.budget ??
-		smartProfile?.budgetTag ??
-		smartProfile?.travelStyleTag ??
-		null;
-
-	const tripTypeValue =
-		smartProfile?.tripType ??
-		smartProfile?.travelerType ??
-		smartProfile?.tripGroup ??
-		smartProfile?.groupType ??
-		null;
+	const travelStyleValue = smartProfile?.budget || null;
+	const tripTypeValue = smartProfile?.travelParties?.[0] || null;
 
 	const travelStyleLabel = useMemo(() => {
 		if (!travelStyleValue) return null;
-		return labelFromOptions(TRAVEL_STYLES, travelStyleValue) || String(travelStyleValue);
+		return labelFromOptions(BUDGETS, travelStyleValue) || String(travelStyleValue);
 	}, [travelStyleValue]);
 
 	const tripTypeLabel = useMemo(() => {
 		if (!tripTypeValue) return null;
-		return labelFromOptions(TRIP_TYPES, tripTypeValue) || String(tripTypeValue);
+		return labelFromOptions(TRAVEL_PARTIES, tripTypeValue) || String(tripTypeValue);
 	}, [tripTypeValue]);
 
 	const hasSmartProfileMain = Boolean(travelStyleLabel || tripTypeLabel);

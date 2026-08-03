@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, query, collection, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
+import { useSmartProfile } from '../../../hooks/useSmartProfile';
+import { getPersonalizedRecommendations } from '../../../services/PersonalizationService';
 
 const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
 
 export const useDestinationData = (cityId, countryId) => {
+  const { completed: preferencesCompleted } = useSmartProfile();
   const [cityData, setCityData] = useState(null);
   const [countryData, setCountryData] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
@@ -35,16 +38,30 @@ export const useDestinationData = (cityId, countryId) => {
 
     const fetchAdditionalDetails = async () => {
       // Fetch Recommendations
-      const q = query(
-        collection(db, "recommendations"),
-        where("destination.cityId", "==", cityId),
-        where("status", "==", "active"),
-        limit(30)
-      );
-      const querySnapshot = await getDocs(q);
-      const recs = [];
-      querySnapshot.forEach((doc) => recs.push({ id: doc.id, ...doc.data() }));
-      setRecommendations(recs);
+      const fetchGenericRecommendations = async () => {
+        const q = query(
+          collection(db, "recommendations"),
+          where("destination.cityId", "==", cityId),
+          where("status", "==", "active"),
+          limit(30)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
+      };
+      try {
+        if (preferencesCompleted) {
+          const result = await getPersonalizedRecommendations({
+            context: { countryId, cityId },
+            limit: 30,
+          });
+          setRecommendations(Array.isArray(result?.items) ? result.items : []);
+        } else {
+          setRecommendations(await fetchGenericRecommendations());
+        }
+      } catch (error) {
+        console.warn('Personalized destination recommendations failed:', error);
+        setRecommendations(await fetchGenericRecommendations());
+      }
 
       // Fetch Weather
       if (WEATHER_API_KEY) {
@@ -80,7 +97,7 @@ export const useDestinationData = (cityId, countryId) => {
       setLoading(false);
     };
     fetchAdditionalDetails();
-  }, [cityData, cityId]);
+  }, [cityData, cityId, countryId, preferencesCompleted]);
 
   // 3. Fetch Currency (Dependent on countryData)
   useEffect(() => {

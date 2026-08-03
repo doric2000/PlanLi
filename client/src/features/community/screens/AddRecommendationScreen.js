@@ -31,6 +31,11 @@ import {
   getMediaVariantUrl,
 } from '../../../utils/mediaAssets';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
+import {
+  NEEDS,
+  TRAVEL_PARTIES,
+  VIBES,
+} from '../../profile/constants/smartProfileOptions';
 
 
 
@@ -101,6 +106,9 @@ function buildEditComparable(editItem) {
     category: resolveCategoryIdFromEditItem(editItem),
     tags,
     budget: editItem.budget || '',
+    audiences: [...(editItem.facets?.audiences || [])].sort(),
+    vibes: [...(editItem.facets?.vibes || [])].sort(),
+    needs: [...(editItem.facets?.needs || [])].sort(),
     countryId: editItem.destination?.countryId || null,
     cityId: editItem.destination?.cityId || null,
     place: placeFingerprint(editItem.place),
@@ -125,6 +133,9 @@ function buildFormComparable({
   category,
   selectedTags,
   budget,
+  audiences,
+  recommendationVibes,
+  recommendationNeeds,
   selectedCountry,
   selectedCity,
   selectedPlace,
@@ -141,6 +152,9 @@ function buildFormComparable({
     category: category || '',
     tags,
     budget: budget || '',
+    audiences: [...(audiences || [])].sort(),
+    vibes: [...(recommendationVibes || [])].sort(),
+    needs: [...(recommendationNeeds || [])].sort(),
     countryId: selectedCountry?.id ?? null,
     cityId: selectedCity?.id ?? null,
     place: placeFingerprint(selectedPlace),
@@ -172,6 +186,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [category, setCategory] = useState(''); // Stores the ID (e.g., 'food')
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
+  const [audiences, setAudiences] = useState([]);
+  const [recommendationVibes, setRecommendationVibes] = useState([]);
+  const [recommendationNeeds, setRecommendationNeeds] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
@@ -251,6 +268,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
         category,
         selectedTags,
         budget,
+        audiences,
+        recommendationVibes,
+        recommendationNeeds,
         selectedCountry,
         selectedCity,
         selectedPlace,
@@ -262,6 +282,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
       category,
       selectedTags,
       budget,
+      audiences,
+      recommendationVibes,
+      recommendationNeeds,
       selectedCountry,
       selectedCity,
       selectedPlace,
@@ -370,6 +393,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setCategory(resolvedCategoryId);
     setSelectedTags(resolvedTags);
     setBudget(editItem.budget || '');
+    setAudiences(Array.isArray(editItem.facets?.audiences) ? editItem.facets.audiences : []);
+    setRecommendationVibes(Array.isArray(editItem.facets?.vibes) ? editItem.facets.vibes : []);
+    setRecommendationNeeds(Array.isArray(editItem.facets?.needs) ? editItem.facets.needs : []);
 
     const initialCountryId = editItem.destination?.countryId || null;
     const initialCityId = editItem.destination?.cityId || null;
@@ -708,6 +734,11 @@ const handleSubmit = async () => {
           tags: selectedTags,
           budget,
           media: finalMedia,
+          facets: {
+            audiences,
+            vibes: recommendationVibes,
+            needs: recommendationNeeds,
+          },
         },
       };
 
@@ -897,6 +928,51 @@ const handleSubmit = async () => {
           onSelect={setBudget}
           getItemTheme={getBudgetTheme}
           testIDPrefix="add-rec-budget"
+        />
+
+        <ChipSelector
+          label="מתאים למי"
+          items={TRAVEL_PARTIES.map((option) => option.label)}
+          selectedValue={TRAVEL_PARTIES.filter((option) => audiences.includes(option.value)).map((option) => option.label)}
+          onSelect={(label) => {
+            const value = TRAVEL_PARTIES.find((option) => option.label === label)?.value;
+            if (!value) return;
+            setAudiences((current) => current.includes(value)
+              ? current.filter((item) => item !== value)
+              : [...current, value].slice(0, 3));
+          }}
+          multiSelect
+          testIDPrefix="add-rec-audience"
+        />
+
+        <ChipSelector
+          label="אווירה"
+          items={VIBES.map((option) => option.label)}
+          selectedValue={VIBES.filter((option) => recommendationVibes.includes(option.value)).map((option) => option.label)}
+          onSelect={(label) => {
+            const value = VIBES.find((option) => option.label === label)?.value;
+            if (!value) return;
+            setRecommendationVibes((current) => current.includes(value)
+              ? current.filter((item) => item !== value)
+              : [...current, value].slice(0, 3));
+          }}
+          multiSelect
+          testIDPrefix="add-rec-vibe"
+        />
+
+        <ChipSelector
+          label="מידע מעשי ונגישות"
+          items={NEEDS.map((option) => option.label)}
+          selectedValue={NEEDS.filter((option) => recommendationNeeds.includes(option.value)).map((option) => option.label)}
+          onSelect={(label) => {
+            const value = NEEDS.find((option) => option.label === label)?.value;
+            if (!value) return;
+            setRecommendationNeeds((current) => current.includes(value)
+              ? current.filter((item) => item !== value)
+              : [...current, value]);
+          }}
+          multiSelect
+          testIDPrefix="add-rec-need"
         />
 
         {/* 8. Submit Button */}

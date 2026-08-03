@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { collection, getDocs, limit, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useFocusEffect } from '@react-navigation/native';
+import { getPersonalizedRecommendations } from '../services/PersonalizationService';
 
 /**
  * Custom hook to fetch and manage recommendations data.
@@ -12,10 +13,20 @@ export const useRecommendations = (sortBy = 'popularity') => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [personalizationFilters, setPersonalizationFilters] = useState({});
+  const personalizationFilterKey = JSON.stringify(personalizationFilters);
 
   const fetchRecommendations = async ({ showLoader = true } = {}) => {
     if (showLoader) setLoading(true);
     try {
+      if (sortBy === 'personalized') {
+        const response = await getPersonalizedRecommendations({
+          filters: personalizationFilters,
+          limit: 30,
+        });
+        setData(Array.isArray(response?.items) ? response.items : []);
+        return;
+      }
       // Determine the field to sort by
       const sortField = sortBy === 'newest' ? 'createdAt' : 'stats.likeCount';
       
@@ -35,6 +46,20 @@ export const useRecommendations = (sortBy = 'popularity') => {
       setData(recs);
     } catch (error) {
       console.error("Error fetching recommendations: ", error);
+      if (sortBy === 'personalized') {
+        try {
+          const fallback = query(
+            collection(db, 'recommendations'),
+            where('status', '==', 'active'),
+            orderBy('stats.likeCount', 'desc'),
+            limit(30)
+          );
+          const snapshot = await getDocs(fallback);
+          setData(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
+        } catch (fallbackError) {
+          console.error('Personalized fallback failed: ', fallbackError);
+        }
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -45,7 +70,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
   useFocusEffect(
     useCallback(() => {
       fetchRecommendations({ showLoader: false });
-    }, [sortBy])
+    }, [sortBy, personalizationFilterKey])
   );
 
   const refresh = () => {
@@ -62,6 +87,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
     loading, 
     refreshing, 
     refresh, 
-    removeRecommendation 
+    removeRecommendation,
+    setPersonalizationFilters,
   };
 };

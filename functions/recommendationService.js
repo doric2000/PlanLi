@@ -7,6 +7,12 @@ const {
   resolveIsraelPolicy,
   resolveLocalCountry,
 } = require('./countryGeography');
+const {
+  buildRecommendationFacets,
+  NEED_IDS,
+  TRAVEL_PARTY_IDS,
+  VIBE_IDS,
+} = require('./travelTaxonomy');
 
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -69,6 +75,28 @@ function sanitizeRecommendationContent(data) {
       maxLength: 60,
     }),
     budget: cleanOptionalString(data.budget, { field: 'budget', max: 50 }),
+  };
+}
+
+function sanitizeSubmittedFacets(value) {
+  if (value == null) return {};
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', 'facets are invalid.');
+  const allowedFields = ['audiences', 'vibes', 'needs'];
+  assert(Object.keys(value).every((key) => allowedFields.includes(key)),
+    'invalid-argument', 'facets contain unsupported fields.');
+  const validate = (field, allowed, maximum) => {
+    const entries = value[field] || [];
+    assert(Array.isArray(entries) && entries.length <= maximum,
+      'invalid-argument', `${field} facets are invalid.`);
+    assert(entries.every((entry) => typeof entry === 'string' && allowed.includes(entry)),
+      'invalid-argument', `${field} facets are invalid.`);
+    return Array.from(new Set(entries));
+  };
+  return {
+    audiences: validate('audiences', TRAVEL_PARTY_IDS, 4),
+    vibes: validate('vibes', VIBE_IDS, 4),
+    needs: validate('needs', NEED_IDS, NEED_IDS.length),
   };
 }
 
@@ -716,6 +744,10 @@ async function saveRecommendation({
   }
 
   const content = sanitizeRecommendationContent(data?.recommendation);
+  const facets = buildRecommendationFacets(
+    content,
+    sanitizeSubmittedFacets(data?.recommendation?.facets)
+  );
   const media = await validateMediaAssets({
     admin,
     uid,
@@ -734,6 +766,7 @@ async function saveRecommendation({
 
   const payload = {
     ...content,
+    facets,
     status: 'active',
     destination: {
       countryId: destination.countryId,
@@ -860,6 +893,7 @@ module.exports = {
   resolvePlaceCountry,
   resolveRecommendationDestination,
   sanitizeRecommendationContent,
+  sanitizeSubmittedFacets,
   saveRecommendation,
   stableDocumentId,
   validateMediaAssets,
