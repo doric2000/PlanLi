@@ -6,10 +6,37 @@ import { signOut } from 'firebase/auth';
 
 import { auth } from '../../../config/firebase';
 import { requestAccountDeletion } from '../../../services/SocialService';
-import { settingsScreenStyles as styles } from '../../../styles';
+import { resetPersonalizationActivity } from '../../../services/PersonalizationService';
+import { preferenceSetupStyles as preferenceStyles, settingsScreenStyles as styles } from '../../../styles';
 
 export default function SettingsScreen({ navigation }) {
   const [deleting, setDeleting] = useState(false);
+  const [resettingPersonalization, setResettingPersonalization] = useState(false);
+
+  const resetPersonalization = () => {
+    Alert.alert(
+      'איפוס התאמה אישית',
+      'למחוק את הלמידה מלייקים, שמירות ופתיחת המלצות? העדפות הפרופיל יישמרו.',
+      [
+        { text: 'ביטול', style: 'cancel' },
+        {
+          text: 'איפוס',
+          style: 'destructive',
+          onPress: async () => {
+            setResettingPersonalization(true);
+            try {
+              await resetPersonalizationActivity();
+              Alert.alert('הושלם', 'למידת ההתאמה האישית אופסה.');
+            } catch (error) {
+              Alert.alert('שגיאה', error?.message || 'לא הצלחנו לאפס את ההתאמה.');
+            } finally {
+              setResettingPersonalization(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const deleteAccount = async () => {
     const confirmed = Platform.OS === 'web'
@@ -64,6 +91,25 @@ export default function SettingsScreen({ navigation }) {
         >
           <Text style={styles.primaryBtnText}>שינוי שם</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.9}
+          onPress={resetPersonalization}
+          disabled={resettingPersonalization}
+          testID="settings-reset-personalization-button"
+        >
+          {resettingPersonalization
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.primaryBtnText}>איפוס התאמה אישית</Text>}
+        </TouchableOpacity>
+
+        <View style={preferenceStyles.promptCard}>
+          <Text style={preferenceStyles.promptTitle}>התאמה אישית פעילה</Text>
+          <Text style={preferenceStyles.promptText}>
+            לייקים, שמירות ופתיחת המלצות משפרים את סדר התוצאות. נשמרים ציונים מצומצמים בלבד, ואפשר לאפס אותם בכל עת.
+          </Text>
+        </View>
 
         <TouchableOpacity
           style={styles.primaryBtn}

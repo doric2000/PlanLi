@@ -18,6 +18,7 @@ import { useRecommendations } from '../../../hooks/useRecommendations';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 import { useUserLocation } from '../../../hooks/useUserLocation';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
+import { useSmartProfile } from '../../../hooks/useSmartProfile';
 
 // --- Global Styles ---
 import { colors, common, community, communityScreenStyles as styles } from '../../../styles';
@@ -25,6 +26,15 @@ import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
+import { PARENT_CATEGORIES } from '../../../constants/Constants';
+
+const BUDGET_LEVEL_BY_LABEL = {
+  'חינמי': 'economy',
+  '₪': 'economy',
+  '₪₪': 'balanced',
+  '₪₪₪': 'comfort',
+  '₪₪₪₪': 'premium',
+};
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -36,12 +46,37 @@ export default function CommunityScreen({ navigation }) {
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [destinationEditing, setDestinationEditing] = useState(false);
+  const personalizationInitialized = useRef(false);
 
   // --- Hooks ---
-  const { data: recommendations, loading, refreshing, refresh, removeRecommendation } = useRecommendations(sortBy);
+  const {
+    data: recommendations,
+    loading,
+    refreshing,
+    refresh,
+    removeRecommendation,
+    setPersonalizationFilters,
+  } = useRecommendations(sortBy);
   const { filteredData, filters, isFiltered, updateFilters, clearFilters } = useRecommendationFilter(recommendations);
   const { location: userLocation, requestLocation } = useUserLocation();
+  const { completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
   const feedListRef = useRef(null);
+
+  useEffect(() => {
+    if (profileLoading || personalizationInitialized.current) return;
+    personalizationInitialized.current = true;
+    if (personalizationAvailable) setSortBy('personalized');
+  }, [personalizationAvailable, profileLoading]);
+
+  useEffect(() => {
+    const categoryIds = filters.categories
+      .map((label) => PARENT_CATEGORIES.find((category) => category.label === label)?.id)
+      .filter(Boolean);
+    const budgetLevels = Array.from(new Set(filters.budgets
+      .map((label) => BUDGET_LEVEL_BY_LABEL[label])
+      .filter(Boolean)));
+    setPersonalizationFilters({ categoryIds, tags: filters.tags, budgetLevels });
+  }, [filters.budgets, filters.categories, filters.tags, setPersonalizationFilters]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',
@@ -82,7 +117,9 @@ export default function CommunityScreen({ navigation }) {
     }
   };
 
-  const sortLabel = sortBy === 'popularity' ? 'פופולרי' : sortBy === 'newest' ? 'חדש' : 'קרוב אליי';
+  const sortLabel = sortBy === 'personalized'
+    ? 'בשבילך'
+    : sortBy === 'popularity' ? 'פופולרי' : sortBy === 'newest' ? 'חדש' : 'קרוב אליי';
 
   const displayData = useMemo(() => {
     if (sortBy !== 'nearby') return filteredData;
@@ -317,6 +354,7 @@ export default function CommunityScreen({ navigation }) {
         onClose={() => setSortMenuVisible(false)}
         sortBy={sortBy}
         onSelect={handleSortSelect}
+        personalizationAvailable={personalizationAvailable}
       />
 
     </SafeAreaView>

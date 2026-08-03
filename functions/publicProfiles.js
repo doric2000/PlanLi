@@ -1,3 +1,5 @@
+const { INTEREST_IDS, VIBE_IDS } = require('./travelTaxonomy');
+
 const PUBLIC_SMART_PROFILE_FIELDS = [
   'interests',
   'vibe',
@@ -13,14 +15,16 @@ function sanitizePublicSmartProfile(smartProfile) {
   if (!smartProfile || typeof smartProfile !== 'object') return null;
 
   const result = {};
+  const specifications = {
+    interests: { allowed: INTEREST_IDS, maximum: 8 },
+    vibe: { allowed: VIBE_IDS, maximum: 3 },
+  };
   for (const key of PUBLIC_SMART_PROFILE_FIELDS) {
     const value = smartProfile[key];
     if (Array.isArray(value)) {
-      result[key] = value
-        .filter((entry) => typeof entry === 'string')
-        .slice(0, 30);
-    } else if (typeof value === 'string' && value.trim()) {
-      result[key] = value.trim().slice(0, 80);
+      result[key] = Array.from(new Set(value
+        .filter((entry) => specifications[key].allowed.includes(entry))))
+        .slice(0, specifications[key].maximum);
     }
   }
 
@@ -47,6 +51,12 @@ function sanitizePublicProfile(userId, data = {}) {
   });
 }
 
+function publicProfileProjectionChanged(userId, before, after) {
+  const beforeProjection = before ? sanitizePublicProfile(userId, before) : null;
+  const afterProjection = after ? sanitizePublicProfile(userId, after) : null;
+  return JSON.stringify(beforeProjection) !== JSON.stringify(afterProjection);
+}
+
 async function syncPublicProfile(admin, userId, afterData) {
   const publicRef = admin.firestore().doc(`publicProfiles/${userId}`);
 
@@ -68,6 +78,7 @@ async function syncPublicProfile(admin, userId, afterData) {
 
 module.exports = {
   PUBLIC_SMART_PROFILE_FIELDS,
+  publicProfileProjectionChanged,
   sanitizePublicProfile,
   sanitizePublicSmartProfile,
   syncPublicProfile,

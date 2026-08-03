@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View, Text, TouchableOpacity, StatusBar, FlatList } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import { colors, typography, common, tags as tagsStyle, recommendationDetailScre
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
+import { recordRecommendationOpen } from '../../../services/PersonalizationService';
 
 /**
  * RecommendationDetailScreen - Full view of a recommendation
@@ -75,6 +76,13 @@ function RecommendationDetailLoaded({ item, navigation }) {
   // --- State ---
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (!auth.currentUser?.uid || !item?.id) return;
+    recordRecommendationOpen(item.id).catch(() => {
+      // Discovery signals are best-effort and must never block the detail screen.
+    });
+  }, [item?.id]);
 
   // --- Computed Values ---
   const isOwner = user?.uid === item.ownerId;

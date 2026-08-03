@@ -18,9 +18,10 @@ import RouteMapScreen from "./src/features/roadtrip/screens/RouteMapScreen";
 import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
+import PreferenceSetupScreen from "./src/features/profile/screens/PreferenceSetupScreen";
 import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
 import AdminPanelScreen from "./src/features/admin/screens/AdminPanelScreen";
-import RightDrawerNavigator from "./src/navigation/RightDrawerNavigator";
+import PreferenceSetupGate from "./src/navigation/PreferenceSetupGate";
 import withRequireAuth from "./src/navigation/withRequireAuth";
 
 
@@ -34,6 +35,7 @@ const SettingsAuthed = withRequireAuth(SettingsScreen);
 const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
+const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen);
 
 /**
  * Main App Component.
@@ -62,7 +64,8 @@ export default function App() {
 					<Stack.Screen name='Login' component={LoginScreen} />
 					<Stack.Screen name='Register' component={RegisterScreen} />
 					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />
-					<Stack.Screen name='Main' component={RightDrawerNavigator} />
+					<Stack.Screen name='Main' component={PreferenceSetupGate} />
+					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupAuthed} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
 					<Stack.Screen name="Notifications" component={NotificationsAuthed} />
 					<Stack.Screen name='Settings' component={SettingsAuthed} />

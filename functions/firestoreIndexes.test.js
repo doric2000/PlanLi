@@ -5,6 +5,12 @@ const path = require('node:path');
 
 const indexesPath = path.join(__dirname, '..', 'firestore.indexes.json');
 
+function fieldSignature(index) {
+  return index.fields.map((field) => (
+    `${field.fieldPath}:${field.order || field.arrayConfig}`
+  )).join('|');
+}
+
 test('cities.status has a collection-group ascending index', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const override = config.fieldOverrides.find((entry) => (
@@ -18,4 +24,21 @@ test('cities.status has a collection-group ascending index', () => {
     )),
     'cities.status must support ascending collection-group queries'
   );
+});
+
+test('personalized recommendation candidate queries have global and destination indexes', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const recommendationIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'recommendations')
+    .map(fieldSignature);
+
+  assert.ok(recommendationIndexes.includes(
+    'status:ASCENDING|facets.interests:CONTAINS|createdAt:DESCENDING'
+  ));
+  assert.ok(recommendationIndexes.includes(
+    'destination.countryId:ASCENDING|destination.cityId:ASCENDING|status:ASCENDING|stats.likeCount:DESCENDING'
+  ));
+  assert.ok(recommendationIndexes.includes(
+    'destination.countryId:ASCENDING|destination.cityId:ASCENDING|status:ASCENDING|facets.interests:CONTAINS|createdAt:DESCENDING'
+  ));
 });

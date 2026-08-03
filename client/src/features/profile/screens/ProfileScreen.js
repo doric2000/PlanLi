@@ -2,7 +2,7 @@
  * Screen for displaying and editing user profile.
  */
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { ActivityIndicator, FlatList, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { db } from "../../../config/firebase";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { useAuthUser } from "../../../hooks/useAuthUser";
-import { colors, common, createProfileScreenStyles } from "../../../styles";
+import { colors, common, createProfileScreenStyles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
 
 import ProfileHeader from "../components/ProfileHeader";
 import ProfileStatsCard from "../components/ProfileStatsCard";
@@ -184,6 +184,10 @@ function AuthedProfileScreen({ navigation, route }) {
 		() => getSmartProfileBadges(userData?.smartProfile),
 		[userData?.smartProfile]
 	);
+	const preferencesCompleted = Boolean(userData?.smartProfile?.completedAt);
+	const openPreferences = useCallback(() => {
+		getRootNavigation(navigation)?.navigate?.(preferencesCompleted ? "EditProfile" : "PreferenceSetup");
+	}, [navigation, preferencesCompleted]);
 
 	if (loading) {
 		return (
@@ -226,8 +230,17 @@ function AuthedProfileScreen({ navigation, route }) {
 							smartBadges={smartBadges}
 							onPickImage={isMyProfile ? onPickImage : undefined}
 							uploading={isMyProfile ? uploading : false}
-							onEditSmartProfile={() => navigation.getParent?.()?.navigate?.("EditProfile")}
+							onEditSmartProfile={openPreferences}
 						/>
+						{isMyProfile && !preferencesCompleted ? (
+							<View style={preferenceStyles.promptCard} testID="profile-preferences-prompt">
+								<Text style={preferenceStyles.promptTitle}>השלימו את העדפות הטיול</Text>
+								<Text style={preferenceStyles.promptText}>נשתמש בבחירות שלכם כדי להתאים את סדר ההמלצות.</Text>
+								<TouchableOpacity style={preferenceStyles.promptButton} onPress={openPreferences}>
+									<Text style={preferenceStyles.promptButtonText}>להגדרת העדפות</Text>
+								</TouchableOpacity>
+							</View>
+						) : null}
 
 						<ProfileStatsCard stats={stats} />
 

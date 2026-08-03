@@ -10,4 +10,5 @@ export { common } from "./common";
 export { googlePlacesInput } from "./googlePlacesInput";
 export { notifications } from "./notifications";
 export { community } from "./community";
+export { preferenceSetupStyles } from "./preferences";
 export * from "./appStyles";

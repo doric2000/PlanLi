@@ -12,9 +12,10 @@ import CachedImage from "../../../components/CachedImage";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
+import { useSmartProfile } from "../../../hooks/useSmartProfile";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { resolveDestinationForPlacePreview } from "../../../services/LocationService";
-import { colors, homeScreenStyles as styles } from "../../../styles";
+import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
 
 const CATEGORY_CHIPS = [
 	{ id: "all", label: "הכל", icon: "compass-outline" },
@@ -39,6 +40,7 @@ export default function HomeScreen({ navigation }) {
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
+	const { completed: preferencesCompleted, loading: preferencesLoading } = useSmartProfile();
 	const [destinations, setDestinations] = useState([]);
 	const [allDestinationsForSearch, setAllDestinationsForSearch] = useState([]);
 	const [
@@ -363,6 +365,29 @@ export default function HomeScreen({ navigation }) {
 		</View>
 	);
 
+	const openPreferenceSetup = () => {
+		let rootNavigation = navigation;
+		let parent = rootNavigation?.getParent?.();
+		while (parent) {
+			rootNavigation = parent;
+			parent = rootNavigation?.getParent?.();
+		}
+		rootNavigation?.navigate?.('PreferenceSetup');
+	};
+
+	const renderPreferencePrompt = () => {
+		if (isGuest || preferencesLoading || preferencesCompleted) return null;
+		return (
+			<View style={preferenceStyles.promptCard} testID="home-preferences-prompt">
+				<Text style={preferenceStyles.promptTitle}>בואו נתאים את PlanLi אליכם</Text>
+				<Text style={preferenceStyles.promptText}>כמה בחירות קצרות יעזרו לנו להציג קודם המלצות שמתאימות לסגנון שלכם.</Text>
+				<TouchableOpacity style={preferenceStyles.promptButton} onPress={openPreferenceSetup}>
+					<Text style={preferenceStyles.promptButtonText}>הגדרת העדפות</Text>
+				</TouchableOpacity>
+			</View>
+		);
+	};
+
 	const renderFeaturedCard = (city, index) => {
 		const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
 		const imageUrl = city?.externalImageUrl || city?.imageUrl;
@@ -498,6 +523,7 @@ export default function HomeScreen({ navigation }) {
 				}
 			>
 				{renderHeader()}
+				{renderPreferencePrompt()}
 				<View style={styles.body}>
 					{renderCategories()}
 					{renderFeatured()}

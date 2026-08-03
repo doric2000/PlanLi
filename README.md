@@ -76,6 +76,30 @@ one query and does not perform an extra read for every card. Source triggers
 refresh previews and remove favorites when their source is deleted; a bounded
 daily repair job handles rare missed events.
 
+### Travel preferences and recommendation facets
+
+Private travel preferences live only at `users/{uid}.smartProfile` and use
+stable IDs. The canonical fields are `setupRequired`, `completedAt`,
+`interests`, `budget`, `travelParties`, `vibe`, `pace`, and `needs`. Only
+interests and vibes are copied to `publicProfiles`; budget, party, pace,
+practical needs, and learned activity stay private.
+
+Recommendations store server-derived `facets` (`interests`, `audiences`,
+`vibes`, `needs`, and `budgetLevel`). Personalized discovery keeps only
+bounded aggregate scores and recent-open deduplication state inside the private
+user document. Do not add a raw behavioral-event collection.
+
+The personalization migration is dry-run by default and writes local reports
+under the ignored canonical migration state directory:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run migrate-personalization
+npm run migrate-personalization -- --resume
+# Only after reviewing the report and taking the required backup:
+npm run migrate-personalization -- --apply
+```
+
 ## European image pipeline
 
 The active Firebase Storage bucket is:
@@ -164,8 +188,8 @@ Run Firebase deployments from the repository root:
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi
-firebase deploy --only functions --project planli-f0b12
 firebase deploy --only firestore:indexes,firestore:rules --project planli-f0b12
+firebase deploy --only functions --project planli-f0b12
 firebase deploy --only storage --project planli-f0b12
 ```
 

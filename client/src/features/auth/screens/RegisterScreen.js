@@ -1,23 +1,54 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from 'firebase/auth';
 import { useRegisterOrUpdateUser } from '../../../hooks/useRegisterOrUpdateUser';
+import { useGoogleLogin } from '../../../hooks/useGoogleLogin';
 import { forms } from '../../../styles';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 
 // --- Import the new Modular Components ---
 import { AuthInput } from '../../../components/AuthInput';
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function RegisterScreen({ navigation }) {
   const registerOrUpdateUser = useRegisterOrUpdateUser();
+  const navigateAfterGoogle = useCallback(
+    (routeName) => navigation.replace(routeName),
+    [navigation]
+  );
+  const handleGoogleResponse = useGoogleLogin(navigateAfterGoogle);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const proxyUrl = 'https://auth.expo.io/@doric2000/client';
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
+    responseType: 'id_token',
+    redirectUri: Platform.OS === 'web' ? undefined : proxyUrl,
+  });
+
+  useEffect(() => {
+    if (response?.type === 'error') {
+      setError(response.params?.error_description || 'Google Sign-In Error');
+    } else if (response?.type === 'success') {
+      handleGoogleResponse(response).catch((googleError) => setError(googleError.message));
+    }
+  }, [handleGoogleResponse, response]);
+
+  const handleGoogleRegister = () => promptAsync(
+    Platform.OS === 'web' ? undefined : { useProxy: true, redirectUri: proxyUrl }
+  );
 
   const handleRegister = async () => {
     if (password !== confirmPassword) {
@@ -128,7 +159,7 @@ export default function RegisterScreen({ navigation }) {
                 </View>
 
                 {/* --- Reusable Social Buttons --- */}
-                <SocialLoginButtons />
+                <SocialLoginButtons onGoogleLogin={request ? handleGoogleRegister : undefined} />
 
                 {/* Footer */}
                 <View style={forms.authFooter}>

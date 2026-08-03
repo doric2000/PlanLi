@@ -8,7 +8,7 @@ import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { Avatar } from './Avatar';
 import { ActionMenu } from './ActionMenu';
 import CachedImage, { prefetchImage } from './CachedImage';
-import { cards, recommendationCardStyles as styles } from '../styles';
+import { cards, colors, recommendationCardStyles as styles } from '../styles';
 import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import FavoriteButton from './FavoriteButton';
@@ -21,6 +21,7 @@ import {
   getRecommendationImageUrls,
 } from '../utils/mediaAssets';
 import { deleteContent } from '../services/SocialService';
+import { getPersonalizationReasonLabel } from '../features/profile/constants/smartProfileOptions';
 
 
 /**
@@ -119,6 +120,9 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       />
     );
   };
+  const personalizationReason = getPersonalizationReasonLabel(
+    item?.personalization?.reasonCodes?.[0]
+  );
 
   const scrollToImageIndex = (nextIndex) => {
     if (!images.length) return;
@@ -399,6 +403,12 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       {/* Content */}
       <Pressable onPress={handleCardPress}>
         <View style={[cards.recContent, isFeed && styles.feedContent]}>
+        {!!personalizationReason && (
+          <View style={cards.recLocationRow}>
+            <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
+            <Text style={cards.recLocationText}>{personalizationReason}</Text>
+          </View>
+        )}
         <View style={cards.recTitleRow}>
           <Text style={[cards.recTitle, isFeed && styles.feedTitle]} numberOfLines={1}>{item.title}</Text>
           {item.category && (

@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { applyAffinitySignalInTransaction } = require('./personalizationService');
 
 const TARGETS = Object.freeze({
   recommendation: { collection: 'recommendations' },
@@ -172,28 +173,38 @@ async function setFavorite({ admin, auth, data }) {
 
   await db.runTransaction(async (transaction) => {
     const targetSnapshot = await transaction.get(targetRef);
+    const targetData = saved ? assertActiveTarget(targetSnapshot) : targetSnapshot.data();
+    const publicProfile = saved
+      ? await loadAuthorProfile(transaction, db, targetData.ownerId)
+      : null;
+    const existing = await transaction.get(favoriteRef);
+    if (saved !== existing.exists && targetData) {
+      await applyAffinitySignalInTransaction({
+        transaction,
+        db,
+        admin,
+        userId: auth.uid,
+        target,
+        targetData,
+        delta: saved ? (target.type === 'city' ? 6 : 5) : (target.type === 'city' ? -6 : -5),
+        action: saved ? 'favorite' : 'unfavorite',
+      });
+    }
     if (!saved) {
       transaction.delete(favoriteRef);
-      return;
+    } else {
+      transaction.set(favoriteRef, {
+        ownerId: auth.uid,
+        type: target.type,
+        target,
+        preview: buildFavoritePreview({ target, data: targetData, publicProfile }),
+        createdAt: existing.exists
+          ? existing.data().createdAt
+          : admin.firestore.FieldValue.serverTimestamp(),
+        sourceUpdatedAt:
+          targetData.updatedAt || targetData.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
-    const targetData = assertActiveTarget(targetSnapshot);
-    const publicProfile = await loadAuthorProfile(
-      transaction,
-      db,
-      targetData.ownerId
-    );
-    const existing = await transaction.get(favoriteRef);
-    transaction.set(favoriteRef, {
-      ownerId: auth.uid,
-      type: target.type,
-      target,
-      preview: buildFavoritePreview({ target, data: targetData, publicProfile }),
-      createdAt: existing.exists
-        ? existing.data().createdAt
-        : admin.firestore.FieldValue.serverTimestamp(),
-      sourceUpdatedAt:
-        targetData.updatedAt || targetData.createdAt || admin.firestore.FieldValue.serverTimestamp(),
-    });
   });
 
   return { saved, favoriteKey: key };
@@ -241,6 +252,19 @@ async function setReaction({ admin, auth, data }) {
     const actor = liked && !wasLiked
       ? await loadAuthorProfile(transaction, db, auth.uid)
       : null;
+
+    if (liked !== wasLiked) {
+      await applyAffinitySignalInTransaction({
+        transaction,
+        db,
+        admin,
+        userId: auth.uid,
+        target,
+        targetData,
+        delta: liked ? 3 : -3,
+        action: liked ? 'like' : 'unlike',
+      });
+    }
 
     if (liked && !wasLiked) {
       transaction.create(likeRef, {
