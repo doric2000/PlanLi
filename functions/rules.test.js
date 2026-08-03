@@ -8,6 +8,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -85,7 +86,7 @@ test.beforeEach(async () => {
       ownerId: 'owner', type: 'recommendation', target: { id: 'rec-active' },
     });
     await setDoc(doc(db, 'users', 'owner', 'notifications', 'notification-1'), {
-      actorId: 'other', type: 'like',
+      actorId: 'other', type: 'like', isRead: false,
     });
     await setDoc(doc(db, 'system', 'accountDeletion', 'jobs', 'private'), { status: 'running' });
     await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'comment-1'), {
@@ -124,6 +125,23 @@ test('public collection queries require an active filter and bounded limit', {
     collection(db, 'recommendations'),
     where('status', '==', 'active'),
     limit(51)
+  )));
+});
+
+test('city collection-group queries require an active filter and bounded limit', {
+  skip: !hasEmulators,
+}, async () => {
+  const db = env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDocs(query(
+    collectionGroup(db, 'cities'),
+    where('status', '==', 'active'),
+    limit(100)
+  )));
+  await assertFails(getDocs(query(collectionGroup(db, 'cities'), limit(100))));
+  await assertFails(getDocs(query(
+    collectionGroup(db, 'cities'),
+    where('status', '==', 'active'),
+    limit(101)
   )));
 });
 
@@ -174,6 +192,30 @@ test('users can read only their own private data and cannot write projections', 
   await assertFails(setDoc(doc(ownerDb, 'users', 'owner', 'favorites', 'other'), {
     ownerId: 'owner', type: 'recommendation',
   }));
+});
+
+test('notification queries are owner-only and bounded', {
+  skip: !hasEmulators,
+}, async () => {
+  const ownerDb = env.authenticatedContext('owner', verifiedClaims).firestore();
+  const otherDb = env.authenticatedContext('other', verifiedClaims).firestore();
+  const ownerNotifications = collection(ownerDb, 'users', 'owner', 'notifications');
+  const otherNotifications = collection(otherDb, 'users', 'owner', 'notifications');
+
+  await assertSucceeds(getDocs(query(
+    ownerNotifications,
+    where('isRead', '==', false),
+    limit(50)
+  )));
+  await assertFails(getDocs(query(
+    ownerNotifications,
+    where('isRead', '==', false)
+  )));
+  await assertFails(getDocs(query(
+    otherNotifications,
+    where('isRead', '==', false),
+    limit(50)
+  )));
 });
 
 test('storage accepts only verified owned JPEG staging creates', {

@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const admin = require('firebase-admin');
 const {
   canonicalAsset,
+  compact,
   legacyDestinationKey,
   mappedCity,
   parseArgs,
@@ -42,4 +44,16 @@ test('document IDs reject path separators and media requires all variants', () =
     thumb: { url: 'thumb' },
   };
   assert.equal(canonicalAsset(asset), asset);
+});
+
+test('compact preserves Firestore atomic values instead of flattening them', () => {
+  const timestamp = new admin.firestore.Timestamp(123, 456);
+  const geopoint = new admin.firestore.GeoPoint(32.1, 34.8);
+  const date = new Date('2026-01-01T00:00:00.000Z');
+  const compacted = compact({ timestamp, geopoint, date, nested: { keep: true, drop: undefined } });
+
+  assert.equal(compacted.timestamp, timestamp);
+  assert.equal(compacted.geopoint, geopoint);
+  assert.equal(compacted.date, date);
+  assert.deepEqual(compacted.nested, { keep: true });
 });

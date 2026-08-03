@@ -6,8 +6,19 @@
 export function formatTimestamp(timestamp) {
   if (!timestamp) return '';
   let date;
-  if (timestamp.toDate) {
-    date = timestamp.toDate();
+  if (typeof timestamp.toDate === 'function') {
+    try {
+      date = timestamp.toDate();
+    } catch {
+      return '';
+    }
+  } else if (
+    typeof timestamp.seconds === 'number' ||
+    typeof timestamp._seconds === 'number'
+  ) {
+    const seconds = timestamp.seconds ?? timestamp._seconds;
+    const nanoseconds = timestamp.nanoseconds ?? timestamp._nanoseconds ?? 0;
+    date = new Date((seconds * 1000) + (nanoseconds / 1000000));
   } else if (typeof timestamp === 'number') {
     date = new Date(timestamp);
   } else if (timestamp instanceof Date) {
@@ -15,6 +26,8 @@ export function formatTimestamp(timestamp) {
   } else {
     date = new Date(timestamp);
   }
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) return '';
+
   const now = new Date();
   const diffMs = now - date;
   const diffMins = Math.floor(diffMs / 60000);

@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { auth } from '../../../config/firebase';
 import { 
   collection, 
+  limit,
   query, 
   where, 
   onSnapshot 
@@ -35,7 +36,11 @@ export const useUnreadCount = () => {
 
     console.log('Setting up unread count listener for user:', currentUser.uid);
     const notificationsRef = collection(db, 'users', currentUser.uid, 'notifications');
-    const q = query(notificationsRef, where('isRead', '==', false));
+    const q = query(
+      notificationsRef,
+      where('isRead', '==', false),
+      limit(50)
+    );
 
     const unsubscribe = onSnapshot(
       q,

@@ -141,4 +141,27 @@ describe('formatTimestamp (unit)', () => {
     // Assert
     expect(result).toBe('הרגע');
   });
+
+  it('recovers legacy timestamp maps created by the canonical migration', () => {
+    const legacyTimestamp = {
+      _seconds: Date.parse('2025-12-28T12:00:00.000Z') / 1000,
+      _nanoseconds: 0,
+    };
+
+    expect(formatTimestamp(legacyTimestamp)).toBe('לפני 4 ימים');
+  });
+
+  it('supports serialized Firestore timestamps with public field names', () => {
+    const serializedTimestamp = {
+      seconds: Date.parse('2026-01-01T11:55:00.000Z') / 1000,
+      nanoseconds: 0,
+    };
+
+    expect(formatTimestamp(serializedTimestamp)).toBe('לפני 5 דקות');
+  });
+
+  it('returns an empty string instead of exposing NaN for an invalid value', () => {
+    expect(formatTimestamp({ unexpected: true })).toBe('');
+    expect(formatTimestamp('not-a-date')).toBe('');
+  });
 });
