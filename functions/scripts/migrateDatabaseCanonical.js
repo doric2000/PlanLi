@@ -56,6 +56,14 @@ function canonicalAsset(asset) {
 function compact(value) {
   if (Array.isArray(value)) return value.map(compact);
   if (!value || typeof value !== 'object') return value;
+  if (
+    value instanceof Date ||
+    value instanceof admin.firestore.Timestamp ||
+    value instanceof admin.firestore.GeoPoint ||
+    value instanceof admin.firestore.DocumentReference
+  ) {
+    return value;
+  }
   return Object.fromEntries(
     Object.entries(value)
       .filter(([, entry]) => entry !== undefined)
@@ -722,6 +730,7 @@ if (require.main === module) {
 module.exports = {
   buildPlan,
   canonicalAsset,
+  compact,
   legacyDestinationKey,
   mappedCity,
   parseArgs,
