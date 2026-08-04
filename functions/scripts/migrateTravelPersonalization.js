@@ -183,19 +183,35 @@ function migratedRecommendation(data = {}) {
   const rawVibes = Array.isArray(existingFacets.vibes) ? existingFacets.vibes : [];
   const styleAliases = taxonomy.legacy?.travelerStyleAliases || {};
   const submittedFacets = {
-    interests: uniqueAllowed(existingFacets.interests, INTEREST_IDS, 12),
-    audiences: uniqueAllowed(existingFacets.audiences, TRAVEL_PARTY_IDS, 6),
-    vibes: uniqueAllowed(rawVibes, VIBE_IDS, 4),
+    interests: uniqueAllowed([
+      ...(Array.isArray(existingFacets.interests) ? existingFacets.interests : []),
+      ...tagAnalysis.interests,
+    ], INTEREST_IDS, 12),
+    audiences: uniqueAllowed([
+      ...(Array.isArray(existingFacets.audiences) ? existingFacets.audiences : []),
+      ...tagAnalysis.audiences,
+    ], TRAVEL_PARTY_IDS, 6),
+    vibes: uniqueAllowed([...rawVibes, ...tagAnalysis.vibes], VIBE_IDS, 4),
     travelerStyles: uniqueAllowed([
       ...(Array.isArray(existingFacets.travelerStyles) ? existingFacets.travelerStyles : []),
       ...rawVibes.map((value) => styleAliases[value]).filter(Boolean),
+      ...tagAnalysis.travelerStyles,
     ], TRAVELER_STYLE_IDS, 4),
-    needs: uniqueAllowed(existingFacets.needs, NEED_IDS),
-    seasons: uniqueAllowed(existingFacets.seasons, SEASON_IDS),
-    environments: uniqueAllowed(existingFacets.environments, ENVIRONMENT_IDS),
+    needs: uniqueAllowed([
+      ...(Array.isArray(existingFacets.needs) ? existingFacets.needs : []),
+      ...tagAnalysis.needs,
+    ], NEED_IDS),
+    seasons: uniqueAllowed([
+      ...(Array.isArray(existingFacets.seasons) ? existingFacets.seasons : []),
+      ...tagAnalysis.seasons,
+    ], SEASON_IDS),
+    environments: uniqueAllowed([
+      ...(Array.isArray(existingFacets.environments) ? existingFacets.environments : []),
+      ...tagAnalysis.environments,
+    ], ENVIRONMENT_IDS),
   };
   const facets = buildRecommendationFacets(
-    { ...data, categoryId, tags: data.tags || [], budget },
+    { ...data, categoryId, tags: tagIds, budget },
     submittedFacets
   );
   return {
@@ -258,9 +274,15 @@ function migratedRoute(data = {}, stops = []) {
       reviewRequired: true,
     };
   }
-  const metadata = sanitizeRouteMetadata(
+  const initialMetadata = sanitizeRouteMetadata(
     Number(data.taxonomyVersion || 0) >= 3 ? data : { ...data, taxonomyVersion: 0 }
   );
+  const metadata = sanitizeRouteMetadata({
+    ...data,
+    taxonomyVersion: taxonomy.version,
+    ...initialMetadata,
+    facets: initialMetadata.facets,
+  });
   const summaryPlaces = Array.from(new Set([
     ...(Array.isArray(data.summaryPlaces) ? data.summaryPlaces : []),
     ...stops.map((entry) => stopValue(entry).location || stopValue(entry).place?.name),

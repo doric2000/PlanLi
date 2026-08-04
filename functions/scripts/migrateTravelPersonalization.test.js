@@ -131,3 +131,33 @@ test('route migration deactivates an empty route and flags an unresolvable route
   assert.equal(unresolved.patch, null);
   assert.equal(unresolved.reviewRequired, true);
 });
+
+test('recommendation and route migrations are idempotent after one canonical pass', () => {
+  const recommendationInput = {
+    title: 'Europa Park',
+    description: 'Theme park in a small town',
+    categoryId: 'attractions',
+    tags: ['theme_park', 'neighborhood', 'indoor_activity'],
+    budget: '$$$',
+    facets: { interests: ['family_attractions'], audiences: ['friends'] },
+  };
+  const firstRecommendation = migratedRecommendation(recommendationInput);
+  const secondRecommendation = migratedRecommendation({
+    ...recommendationInput,
+    ...firstRecommendation,
+  });
+  assert.deepEqual(secondRecommendation, firstRecommendation);
+
+  const stops = [{
+    location: 'Example city',
+    destination: { countryId: 'cty-example', cityId: 'city-example' },
+  }];
+  const routeInput = {
+    title: 'Legacy roadtrip',
+    description: 'Scenic route',
+    tags: { difficulty: 'easy', roadTrip: ['scenic'], experience: [] },
+  };
+  const firstRoute = migratedRoute(routeInput, stops).patch;
+  const secondRoute = migratedRoute({ ...routeInput, ...firstRoute }, stops).patch;
+  assert.deepEqual(secondRoute, firstRoute);
+});
