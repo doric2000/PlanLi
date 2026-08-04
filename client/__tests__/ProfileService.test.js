@@ -57,4 +57,17 @@ describe('ProfileService smart-profile persistence', () => {
       .resolves.toMatchObject({ smartProfile: persisted });
     expect(verifyPersistedSmartProfile(requested, persisted, { complete: true })).toBe(true);
   });
+
+  it('can save an in-progress draft without requiring an immediate server read-back', async () => {
+    await expect(saveProfile(
+      { smartProfile: requested },
+      { completeSmartProfile: false, verifySmartProfile: false }
+    )).resolves.toEqual({ ok: true });
+
+    expect(mockCallable).toHaveBeenCalledWith({
+      smartProfile: requested,
+      completeSmartProfile: false,
+    });
+    expect(getDocFromServer).not.toHaveBeenCalled();
+  });
 });

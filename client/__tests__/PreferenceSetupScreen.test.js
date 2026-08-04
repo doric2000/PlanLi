@@ -58,6 +58,35 @@ describe('PreferenceSetupScreen', () => {
     expect(screen.getByTestId('preference-interest-photography_viewpoints').props.accessibilityState.selected).toBe(true);
   });
 
+  it('advances after saving a valid in-progress draft without strict read-back verification', async () => {
+    getDoc.mockResolvedValueOnce({
+      data: () => ({
+        smartProfile: {
+          setupRequired: true,
+          interests: ['food', 'cafes', 'nature_scenery'],
+        },
+      }),
+    });
+
+    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset: jest.fn() }} />);
+    await waitFor(() => expect(screen.getByTestId('preference-budget-balanced')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('preference-budget-balanced'));
+    fireEvent.press(screen.getByTestId('preference-party-solo'));
+    fireEvent.press(screen.getByTestId('preference-next'));
+
+    await waitFor(() => expect(screen.getByTestId('preference-review')).toBeTruthy());
+    expect(mockSaveProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        smartProfile: expect.objectContaining({
+          budget: 'balanced',
+          travelParties: ['solo'],
+        }),
+      }),
+      { completeSmartProfile: false, verifySmartProfile: false }
+    );
+  });
+
   it('does not leave setup when the server read-back reports dropped fields', async () => {
     getDoc.mockResolvedValueOnce({
       data: () => ({

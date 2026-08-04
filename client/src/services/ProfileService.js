@@ -44,10 +44,13 @@ async function readBackSmartProfile(requested, { complete }) {
   return persisted;
 }
 
-export const saveProfile = async (fields, { completeSmartProfile = false } = {}) => {
+export const saveProfile = async (
+  fields,
+  { completeSmartProfile = false, verifySmartProfile = true } = {}
+) => {
   updateProfileCallable ||= httpsCallable(cloudFunctions, 'updateProfile');
   const response = await updateProfileCallable({ ...fields, completeSmartProfile });
-  if (!fields?.smartProfile) return response.data;
+  if (!fields?.smartProfile || !verifySmartProfile) return response.data;
   const smartProfile = await readBackSmartProfile(fields.smartProfile, {
     complete: completeSmartProfile,
   });
