@@ -1,93 +1,59 @@
-import { useState, useCallback } from 'react';
-import { collection, getDocs, limit, query, orderBy, where } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { getPersonalizedRecommendations } from '../services/PersonalizationService';
 
-/**
- * Custom hook to fetch and manage recommendations data.
- * Supports sorting by 'popularity' (likes) or 'newest' (date).
- * * @param {string} sortBy - Sort criteria: 'popularity' | 'newest'
- */
+const serverSort = (sortBy) => sortBy === 'personalized'
+  ? 'forYou'
+  : sortBy === 'newest' ? 'newest' : 'popular';
+
 export const useRecommendations = (sortBy = 'popularity') => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [personalizationFilters, setPersonalizationFilters] = useState({});
-  const personalizationFilterKey = JSON.stringify(personalizationFilters);
+  const [error, setError] = useState(null);
+  const [discoveryRequest, setDiscoveryRequest] = useState({});
+  const [debouncedRequest, setDebouncedRequest] = useState({});
+  const requestSerial = useRef(0);
 
-  const fetchRecommendations = async ({ showLoader = true } = {}) => {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedRequest(discoveryRequest), 350);
+    return () => clearTimeout(timer);
+  }, [JSON.stringify(discoveryRequest)]);
+
+  const requestKey = JSON.stringify(debouncedRequest);
+  const fetchRecommendations = useCallback(async ({ showLoader = true } = {}) => {
+    const serial = requestSerial.current + 1;
+    requestSerial.current = serial;
     if (showLoader) setLoading(true);
+    setError(null);
     try {
-      if (sortBy === 'personalized') {
-        const response = await getPersonalizedRecommendations({
-          filters: personalizationFilters,
-          limit: 30,
-        });
-        setData(Array.isArray(response?.items) ? response.items : []);
-        return;
-      }
-      // Determine the field to sort by
-      const sortField = sortBy === 'newest' ? 'createdAt' : 'stats.likeCount';
-      
-      const q = query(
-        collection(db, 'recommendations'),
-        where('status', '==', 'active'),
-        orderBy(sortField, 'desc'),
-        limit(30)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const recs = [];
-      querySnapshot.forEach((doc) => {
-        recs.push({ id: doc.id, ...doc.data() });
+      const response = await getPersonalizedRecommendations({
+        ...debouncedRequest,
+        sort: serverSort(sortBy),
+        limit: 30,
       });
-      
-      setData(recs);
+      if (requestSerial.current !== serial) return;
+      setData(Array.isArray(response?.items) ? response.items : []);
     } catch (error) {
-      console.error("Error fetching recommendations: ", error);
-      if (sortBy === 'personalized') {
-        try {
-          const fallback = query(
-            collection(db, 'recommendations'),
-            where('status', '==', 'active'),
-            orderBy('stats.likeCount', 'desc'),
-            limit(30)
-          );
-          const snapshot = await getDocs(fallback);
-          setData(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
-        } catch (fallbackError) {
-          console.error('Personalized fallback failed: ', fallbackError);
-        }
-      }
+      if (requestSerial.current !== serial) return;
+      console.error('Error fetching recommendations:', error);
+      setData([]);
+      setError(error);
     } finally {
+      if (requestSerial.current !== serial) return;
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [requestKey, sortBy]);
 
-  // Re-fetch when screen focuses or when 'sortBy' changes
-  useFocusEffect(
-    useCallback(() => {
-      fetchRecommendations({ showLoader: false });
-    }, [sortBy, personalizationFilterKey])
-  );
+  useFocusEffect(useCallback(() => {
+    fetchRecommendations({ showLoader: data.length === 0 });
+  }, [fetchRecommendations]));
 
   const refresh = () => {
     setRefreshing(true);
     fetchRecommendations({ showLoader: false });
   };
-
-  const removeRecommendation = (id) => {
-    setData((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  return { 
-    data, 
-    loading, 
-    refreshing, 
-    refresh, 
-    removeRecommendation,
-    setPersonalizationFilters,
-  };
+  const removeRecommendation = (id) => setData((previous) => previous.filter((item) => item.id !== id));
+  return { data, error, loading, refreshing, refresh, removeRecommendation, setDiscoveryRequest };
 };

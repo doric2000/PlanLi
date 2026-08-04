@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
+import { getPersonalizedRoutes, recordRouteOpen } from './PersonalizationService';
 
 let saveRouteCallable;
 let loadRouteDetailsCallable;
@@ -18,4 +19,8 @@ export const loadRouteDetails = async (routeId) => {
   const response = await loadRouteDetailsCallable({ routeId });
   return response.data?.route || null;
 };
+
+export const discoverRoutes = (payload = {}) => getPersonalizedRoutes(payload);
+
+export { recordRouteOpen };
 

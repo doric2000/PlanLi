@@ -80,11 +80,10 @@ daily repair job handles rare missed events.
 
 Private travel preferences live only at `users/{uid}.smartProfile` and use
 stable IDs. The canonical fields are `setupRequired`, `completedAt`,
-`interests`, `budget`, `travelParties`, `vibe`, and `needs`. Only
+`interests`, `budget`, `travelParties`, `vibe`, `travelerStyles`, `pace`,
+and `needs`. Only
 interests and vibes are copied to `publicProfiles`; budget, party,
 practical needs, and learned activity stay private.
-Trip pace is intentionally excluded from this profile and from recommendation
-ranking; it should return only as part of a roadtrip-specific model.
 
 The source of truth for profile options, recommendation categories, and post
 tags is `shared/travelTaxonomy.json`. Generated client and Functions copies
@@ -99,8 +98,20 @@ the supported client, and only then the reviewed personalization migration.
 Never run the migration with `--apply` as part of an ordinary client/backend
 deployment.
 
-Recommendations store server-derived `facets` (`interests`, `audiences`,
-`vibes`, `needs`, and `budgetLevel`). Personalized discovery keeps only
+Recommendations and routes store server-derived `facets` (`interests`,
+`audiences`, `vibes`, `travelerStyles`, `needs`, `budgetLevel`, `seasons`,
+and `environments`). Routes additionally store canonical difficulty,
+experience, transport, pace, duration, distance, and destinations derived from
+verified stops. The server also builds bounded normalized search tokens and
+prefixes; clients never write `facets`, `search`, or route destinations
+directly.
+
+The generated relationship map is `docs/travel-taxonomy-map.md`. Categories
+and subcategories form the content tree; interests, audiences, vibes, traveler
+styles, practical needs, seasons, and environments remain cross-cutting axes.
+Do not edit generated taxonomy copies or the relationship map manually.
+
+Personalized discovery keeps only
 bounded aggregate scores and recent-open deduplication state inside the private
 user document. Do not add a raw behavioral-event collection.
 
@@ -114,6 +125,13 @@ npm run migrate-personalization -- --resume
 # Only after reviewing the report and taking the required backup:
 npm run migrate-personalization -- --apply
 ```
+
+The v3 migration also rebuilds recommendation/route search fields, maps legacy
+`attractions` entries only when their content is unambiguous, migrates legacy
+backpacker/digital-nomad values to traveler styles, seeds bounded route
+affinity, and marks empty broken routes inactive without deleting their media
+or interactions. Any ambiguous recommendation or route keeps the migration
+audit from passing and must be reviewed before `--apply`.
 
 Recommendation content curation is also dry-run by default. A dry run scans
 the live collection, applies canonical taxonomy rules plus an optional ignored

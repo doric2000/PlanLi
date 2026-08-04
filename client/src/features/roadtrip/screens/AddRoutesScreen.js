@@ -7,11 +7,21 @@ import {
 	addRoutesScreenStyles as styles,
 } from "../../../styles";
 import {
-	DIFFICULTY_TAGS,
-	TRAVEL_STYLE_TAGS,
-	ROAD_TRIP_TAGS,
-	EXPERIENCE_TAGS,
-} from "../../../constants/Constants.js";
+	CATEGORIES,
+	ENVIRONMENTS,
+	INTERESTS,
+	NEEDS,
+	PACES,
+	POST_BUDGETS,
+	ROUTE_DIFFICULTIES,
+	ROUTE_EXPERIENCE_LEVELS,
+	SEASONS,
+	TAG_OPTIONS_BY_CATEGORY,
+	TRANSPORT_MODES,
+	TRAVELER_STYLES,
+	TRAVEL_PARTIES,
+	VIBES,
+} from "../../../constants/travelTaxonomy";
 import { auth } from "../../../config/firebase";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
@@ -31,6 +41,17 @@ import { derivePlacesFromStops, flattenValidRouteStops } from "../utils/routeSto
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { saveRoute } from "../../../services/RouteService";
 
+const canonicalFacets = (facets = {}) => ({
+	interests: [...(facets.interests || [])].sort(),
+	audiences: [...(facets.audiences || [])].sort(),
+	vibes: [...(facets.vibes || [])].sort(),
+	travelerStyles: [...(facets.travelerStyles || [])].sort(),
+	needs: [...(facets.needs || [])].sort(),
+	budgetLevel: facets.budgetLevel || "",
+	seasons: [...(facets.seasons || [])].sort(),
+	environments: [...(facets.environments || [])].sort(),
+});
+
 function buildRouteComparableFromSource(r) {
 	if (!r) return null;
 	return JSON.stringify({
@@ -39,10 +60,13 @@ function buildRouteComparableFromSource(r) {
 		distance: r.distanceKm != null && r.distanceKm !== "" ? String(r.distanceKm) : "",
 		desc: (r.description || "").trim(),
 		routeDays: r.days || [],
-		difficultyTag: r.tags?.difficulty || "",
-		travelStyleTag: r.tags?.travelStyle || "",
-		roadTripTags: [...(r.tags?.roadTrip || [])].sort(),
-		experienceTags: [...(r.tags?.experience || [])].sort(),
+		categoryIds: [...(r.categoryIds || [])].sort(),
+		subcategoryIds: [...(r.subcategoryIds || [])].sort(),
+		facets: canonicalFacets(r.facets),
+		difficulty: r.difficulty || "",
+		experienceLevel: r.experienceLevel || "",
+		transportModes: [...(r.transportModes || [])].sort(),
+		pace: r.pace || "",
 	});
 }
 
@@ -52,10 +76,13 @@ function buildRouteFormComparable({
 	distance,
 	desc,
 	tripDays,
-	difficultyTag,
-	travelStyleTag,
-	roadTripTags,
-	experienceTags,
+	categoryIds,
+	subcategoryIds,
+	facets,
+	difficulty,
+	experienceLevel,
+	transportModes,
+	pace,
 }) {
 	return JSON.stringify({
 		title: (title || "").trim(),
@@ -63,10 +90,13 @@ function buildRouteFormComparable({
 		distance: distance != null && distance !== "" ? String(distance) : "",
 		desc: (desc || "").trim(),
 		routeDays: tripDays || [],
-		difficultyTag: difficultyTag || "",
-		travelStyleTag: travelStyleTag || "",
-		roadTripTags: [...(roadTripTags || [])].sort(),
-		experienceTags: [...(experienceTags || [])].sort(),
+		categoryIds: [...(categoryIds || [])].sort(),
+		subcategoryIds: [...(subcategoryIds || [])].sort(),
+		facets: canonicalFacets(facets),
+		difficulty: difficulty || "",
+		experienceLevel: experienceLevel || "",
+		transportModes: [...(transportModes || [])].sort(),
+		pace: pace || "",
 	});
 }
 
@@ -92,11 +122,20 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const [distance, setDistance] = useState("");
 	const [desc, setDesc] = useState("");
 	const [tripDays, setTripDays] = useState([]);
-	const [difficultyTag, setDifficultyTag] = useState("");
-	const [travelStyleTag, setTravelStyleTag] = useState("");
-	const [roadTripTags, setRoadTripTags] = useState([]);
-	const [experienceTags, setExperienceTags] = useState([]);
-	const [tags, setTags] = useState([]);
+	const [categoryIds, setCategoryIds] = useState([]);
+	const [subcategoryIds, setSubcategoryIds] = useState([]);
+	const [interests, setInterests] = useState([]);
+	const [audiences, setAudiences] = useState([]);
+	const [budgetLevel, setBudgetLevel] = useState("");
+	const [difficulty, setDifficulty] = useState("");
+	const [experienceLevel, setExperienceLevel] = useState("");
+	const [transportModes, setTransportModes] = useState([]);
+	const [pace, setPace] = useState("");
+	const [vibes, setVibes] = useState([]);
+	const [travelerStyles, setTravelerStyles] = useState([]);
+	const [needs, setNeeds] = useState([]);
+	const [seasons, setSeasons] = useState([]);
+	const [environments, setEnvironments] = useState([]);
 	const [submitting, setSubmitting] = useState(false);
 	const [isDayModalVisible, setDayModalVisible] = useState(false);
 	const [editingDayIndex, setEditingDayIndex] = useState(null);
@@ -110,7 +149,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 		maxLongEdge: 2560,
 		normalizeCompress: 0.94,
 	});
-	const getLabel = (item) => (typeof item === "object" ? item.label : item);
+	const toggle = (setter, value, maximum = 20) => setter((current) => current.includes(value)
+		? current.filter((item) => item !== value)
+		: [...current, value].slice(0, maximum));
 
 	useEffect(() => {
 		if (!routeToEdit) {
@@ -123,10 +164,20 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setDistance(routeToEdit.distanceKm ? String(routeToEdit.distanceKm) : "");
 		setDesc(routeToEdit.description || "");
 		setTripDays(routeToEdit.days || []);
-		setDifficultyTag(routeToEdit.tags?.difficulty || "");
-		setTravelStyleTag(routeToEdit.tags?.travelStyle || "");
-		setRoadTripTags(routeToEdit.tags?.roadTrip || []);
-		setExperienceTags(routeToEdit.tags?.experience || []);
+		setCategoryIds(routeToEdit.categoryIds || []);
+		setSubcategoryIds(routeToEdit.subcategoryIds || []);
+		setInterests(routeToEdit.facets?.interests || []);
+		setAudiences(routeToEdit.facets?.audiences || []);
+		setBudgetLevel(routeToEdit.facets?.budgetLevel || "");
+		setDifficulty(routeToEdit.difficulty || "");
+		setExperienceLevel(routeToEdit.experienceLevel || "");
+		setTransportModes(routeToEdit.transportModes || []);
+		setPace(routeToEdit.pace || "");
+		setVibes(routeToEdit.facets?.vibes || []);
+		setTravelerStyles(routeToEdit.facets?.travelerStyles || []);
+		setNeeds(routeToEdit.facets?.needs || []);
+		setSeasons(routeToEdit.facets?.seasons || []);
+		setEnvironments(routeToEdit.facets?.environments || []);
 		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
 	}, [editingRouteId]);
@@ -139,10 +190,13 @@ export default function AddRoutesScreen({ navigation, route }) {
 				distance,
 				desc,
 				tripDays,
-				difficultyTag,
-				travelStyleTag,
-				roadTripTags,
-				experienceTags,
+				categoryIds,
+				subcategoryIds,
+				facets: { interests, audiences, budgetLevel, vibes, travelerStyles, needs, seasons, environments },
+				difficulty,
+				experienceLevel,
+				transportModes,
+				pace,
 			}),
 		[
 			title,
@@ -150,10 +204,20 @@ export default function AddRoutesScreen({ navigation, route }) {
 			distance,
 			desc,
 			tripDays,
-			difficultyTag,
-			travelStyleTag,
-			roadTripTags,
-			experienceTags,
+			categoryIds,
+			subcategoryIds,
+			interests,
+			audiences,
+			budgetLevel,
+			difficulty,
+			experienceLevel,
+			transportModes,
+			pace,
+			vibes,
+			travelerStyles,
+			needs,
+			seasons,
+			environments,
 		]
 	);
 
@@ -210,15 +274,6 @@ export default function AddRoutesScreen({ navigation, route }) {
 		});
 	}, [days]);
 
-	useEffect(() => {
-		setTags([
-			difficultyTag,
-			travelStyleTag,
-			...roadTripTags,
-			...experienceTags,
-		].filter(Boolean));
-	}, [difficultyTag, travelStyleTag, roadTripTags, experienceTags]);
-
 	const ensureVerifiedForWrite = () => {
 		const tier = getUserTier(auth.currentUser);
 		if (tier === "guest") {
@@ -259,8 +314,8 @@ export default function AddRoutesScreen({ navigation, route }) {
 		const derivedPlaces = derivePlacesFromStops(tripDays);
 		const validStops = flattenValidRouteStops(tripDays);
 
-		if (!title.trim() || !Number.isFinite(parsedDays) || parsedDays < 1 || !Number.isFinite(parsedDistance) || !desc.trim() || validStops.length === 0) {
-			Alert.alert("שגיאה", "מלא כותרת, מספר ימים, מרחק, תיאור ולפחות תחנה אחת עם מיקום מדויק.");
+		if (!title.trim() || !Number.isFinite(parsedDays) || parsedDays < 1 || !Number.isFinite(parsedDistance) || !desc.trim() || validStops.length === 0 || interests.length === 0 || audiences.length === 0 || !budgetLevel || !difficulty || transportModes.length === 0) {
+			Alert.alert("שגיאה", "מלאו כותרת, ימים, מרחק, תיאור, תחנה מדויקת, תחום עניין, קהל, תקציב, קושי ואמצעי התניידות.");
 			return;
 		}
 
@@ -271,16 +326,18 @@ export default function AddRoutesScreen({ navigation, route }) {
 				uploadImageAssets
 			);
 			const routeData = {
+				taxonomyVersion: 3,
 				title: title.trim(),
 				description: desc.trim(),
 				distanceKm: parsedDistance,
 				days: preparedMedia.days,
-				tags: {
-					difficulty: difficultyTag,
-					travelStyle: travelStyleTag,
-					roadTrip: roadTripTags,
-					experience: experienceTags,
-				},
+				categoryIds,
+				subcategoryIds,
+				facets: { interests, audiences, budgetLevel, vibes, travelerStyles, needs, seasons, environments },
+				difficulty,
+				experienceLevel,
+				transportModes,
+				pace,
 			};
 
 			await saveRoute(routeData, routeToEdit?.id || null);
@@ -353,53 +410,50 @@ export default function AddRoutesScreen({ navigation, route }) {
 					style={styles.descriptionField}
 				/>
 
-				<ChipSelector
-					label="רמת קושי"
-					items={DIFFICULTY_TAGS.map(getLabel)}
-					selectedValue={difficultyTag}
-					onSelect={setDifficultyTag}
-					multiSelect={false}
-					testIDPrefix="route-difficulty"
-				/>
-
-				<ChipSelector
-					label="סגנון טיול"
-					items={TRAVEL_STYLE_TAGS.map(getLabel)}
-					selectedValue={travelStyleTag}
-					onSelect={setTravelStyleTag}
-					multiSelect={false}
-					testIDPrefix="route-style"
-				/>
-
-				<ChipSelector
-					label="תגיות רודטריפ"
-					items={ROAD_TRIP_TAGS.map(getLabel)}
-					selectedValue={roadTripTags}
-					onSelect={(tag) => {
-						setRoadTripTags((previousTags) =>
-							previousTags.includes(tag)
-								? previousTags.filter((item) => item !== tag)
-								: [...previousTags, tag]
-						);
-					}}
-					multiSelect
-					testIDPrefix="route-roadtrip"
-				/>
-
-				<ChipSelector
-					label="חוויה"
-					items={EXPERIENCE_TAGS.map(getLabel)}
-					selectedValue={experienceTags}
-					onSelect={(tag) => {
-						setExperienceTags((previousTags) =>
-							previousTags.includes(tag)
-								? previousTags.filter((item) => item !== tag)
-								: [...previousTags, tag]
-						);
-					}}
-					multiSelect
-					testIDPrefix="route-experience"
-				/>
+				<ChipSelector label="קטגוריות במסלול" items={CATEGORIES.map((item) => item.label)}
+					selectedValue={CATEGORIES.filter((item) => categoryIds.includes(item.id)).map((item) => item.label)}
+					onSelect={(label) => {
+						const id = CATEGORIES.find((item) => item.label === label)?.id;
+						if (!id) return;
+						if (categoryIds.includes(id)) setSubcategoryIds((current) => current.filter((tagId) => !(TAG_OPTIONS_BY_CATEGORY[id] || []).some((tag) => tag.id === tagId)));
+						toggle(setCategoryIds, id, 8);
+					}} multiSelect testIDPrefix="route-category" />
+				{categoryIds.map((categoryId) => <ChipSelector key={categoryId}
+					label={`תתי־קטגוריות · ${CATEGORIES.find((item) => item.id === categoryId)?.label || ''}`}
+					items={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).map((item) => item.label)}
+					selectedValue={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).filter((item) => subcategoryIds.includes(item.id)).map((item) => item.label)}
+					onSelect={(label) => { const id = (TAG_OPTIONS_BY_CATEGORY[categoryId] || []).find((item) => item.label === label)?.id; if (id) toggle(setSubcategoryIds, id, 20); }}
+					multiSelect testIDPrefix={`route-subcategory-${categoryId}`} />)}
+				<ChipSelector label="תחומי עניין (חובה)" items={INTERESTS.map((item) => item.label)}
+					selectedValue={INTERESTS.filter((item) => interests.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = INTERESTS.find((item) => item.label === label)?.value; if (id) toggle(setInterests, id, 12); }} multiSelect testIDPrefix="route-interest" />
+				<ChipSelector label="מתאים למי (חובה)" items={TRAVEL_PARTIES.map((item) => item.label)}
+					selectedValue={TRAVEL_PARTIES.filter((item) => audiences.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = TRAVEL_PARTIES.find((item) => item.label === label)?.value; if (id) toggle(setAudiences, id, 6); }} multiSelect testIDPrefix="route-audience" />
+				<ChipSelector label="תקציב (חובה)" items={POST_BUDGETS.map((item) => item.postLabel)}
+					selectedValue={POST_BUDGETS.find((item) => item.value === budgetLevel)?.postLabel || ''}
+					onSelect={(label) => setBudgetLevel(POST_BUDGETS.find((item) => item.postLabel === label)?.value || '')} testIDPrefix="route-budget" />
+				<ChipSelector label="רמת קושי (חובה)" items={ROUTE_DIFFICULTIES.map((item) => item.label)}
+					selectedValue={ROUTE_DIFFICULTIES.find((item) => item.value === difficulty)?.label || ''}
+					onSelect={(label) => setDifficulty(ROUTE_DIFFICULTIES.find((item) => item.label === label)?.value || '')} testIDPrefix="route-difficulty" />
+				<ChipSelector label="אמצעי התניידות (חובה)" items={TRANSPORT_MODES.map((item) => item.label)}
+					selectedValue={TRANSPORT_MODES.filter((item) => transportModes.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = TRANSPORT_MODES.find((item) => item.label === label)?.value; if (id) toggle(setTransportModes, id, 4); }} multiSelect testIDPrefix="route-transport" />
+				<ChipSelector label="ניסיון נדרש" items={ROUTE_EXPERIENCE_LEVELS.map((item) => item.label)}
+					selectedValue={ROUTE_EXPERIENCE_LEVELS.find((item) => item.value === experienceLevel)?.label || ''}
+					onSelect={(label) => setExperienceLevel(ROUTE_EXPERIENCE_LEVELS.find((item) => item.label === label)?.value || '')} testIDPrefix="route-experience" />
+				<ChipSelector label="אווירה" items={VIBES.map((item) => item.label)} selectedValue={VIBES.filter((item) => vibes.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = VIBES.find((item) => item.label === label)?.value; if (id) toggle(setVibes, id, 4); }} multiSelect testIDPrefix="route-vibe" />
+				<ChipSelector label="סגנון טיול" items={TRAVELER_STYLES.map((item) => item.label)} selectedValue={TRAVELER_STYLES.filter((item) => travelerStyles.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = TRAVELER_STYLES.find((item) => item.label === label)?.value; if (id) toggle(setTravelerStyles, id, 4); }} multiSelect testIDPrefix="route-style" />
+				<ChipSelector label="קצב" items={PACES.map((item) => item.label)} selectedValue={PACES.find((item) => item.value === pace)?.label || ''}
+					onSelect={(label) => setPace(PACES.find((item) => item.label === label)?.value || '')} testIDPrefix="route-pace" />
+				<ChipSelector label="עונה" items={SEASONS.map((item) => item.label)} selectedValue={SEASONS.filter((item) => seasons.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = SEASONS.find((item) => item.label === label)?.value; if (id) toggle(setSeasons, id, 6); }} multiSelect testIDPrefix="route-season" />
+				<ChipSelector label="סביבה" items={ENVIRONMENTS.map((item) => item.label)} selectedValue={ENVIRONMENTS.filter((item) => environments.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = ENVIRONMENTS.find((item) => item.label === label)?.value; if (id) toggle(setEnvironments, id, 3); }} multiSelect testIDPrefix="route-environment" />
+				<ChipSelector label="מידע מעשי ונגישות" items={NEEDS.map((item) => item.label)} selectedValue={NEEDS.filter((item) => needs.includes(item.value)).map((item) => item.label)}
+					onSelect={(label) => { const id = NEEDS.find((item) => item.label === label)?.value; if (id) toggle(setNeeds, id, NEEDS.length); }} multiSelect testIDPrefix="route-need" />
 
 				<TouchableOpacity
 					style={[buttons.submit, submitting && buttons.disabled]}

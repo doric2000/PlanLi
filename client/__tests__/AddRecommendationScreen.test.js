@@ -235,7 +235,7 @@ describe('AddRecommendationScreen Integration Test', () => {
         recommendation: expect.objectContaining({
           title: 'Best Pizza Ever',
           description: 'Great cheese and crust!',
-          category: 'אוכל ובילויים',
+          category: 'אוכל ושתייה',
           categoryId: 'food',
           tags: expect.arrayContaining(['restaurant']),
           budget: 'comfort',

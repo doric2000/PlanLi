@@ -35,9 +35,12 @@ import {
   INTERESTS,
   NEEDS,
   TRAVEL_PARTIES,
+  TRAVELER_STYLES,
   VIBES,
 } from '../../profile/constants/smartProfileOptions';
 import {
+  ENVIRONMENTS,
+  SEASONS,
   normalizeBudgetId,
   normalizeTagIds,
   suggestedInterestIds,
@@ -113,6 +116,9 @@ function buildEditComparable(editItem) {
     interests: [...(editItem.facets?.interests || [])].slice(0, 5).sort(),
     audiences: [...(editItem.facets?.audiences || [])].sort(),
     vibes: [...(editItem.facets?.vibes || [])].sort(),
+    travelerStyles: [...(editItem.facets?.travelerStyles || [])].sort(),
+    seasons: [...(editItem.facets?.seasons || [])].sort(),
+    environments: [...(editItem.facets?.environments || [])].sort(),
     needs: [...(editItem.facets?.needs || [])].sort(),
     countryId: editItem.destination?.countryId || null,
     cityId: editItem.destination?.cityId || null,
@@ -141,6 +147,9 @@ function buildFormComparable({
   recommendationInterests,
   audiences,
   recommendationVibes,
+  recommendationTravelerStyles,
+  recommendationSeasons,
+  recommendationEnvironments,
   recommendationNeeds,
   selectedCountry,
   selectedCity,
@@ -161,6 +170,9 @@ function buildFormComparable({
     interests: [...(recommendationInterests || [])].sort(),
     audiences: [...(audiences || [])].sort(),
     vibes: [...(recommendationVibes || [])].sort(),
+    travelerStyles: [...(recommendationTravelerStyles || [])].sort(),
+    seasons: [...(recommendationSeasons || [])].sort(),
+    environments: [...(recommendationEnvironments || [])].sort(),
     needs: [...(recommendationNeeds || [])].sort(),
     countryId: selectedCountry?.id ?? null,
     cityId: selectedCity?.id ?? null,
@@ -197,6 +209,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [showAllInterests, setShowAllInterests] = useState(false);
   const [audiences, setAudiences] = useState([]);
   const [recommendationVibes, setRecommendationVibes] = useState([]);
+  const [recommendationTravelerStyles, setRecommendationTravelerStyles] = useState([]);
+  const [recommendationSeasons, setRecommendationSeasons] = useState([]);
+  const [recommendationEnvironments, setRecommendationEnvironments] = useState([]);
   const [recommendationNeeds, setRecommendationNeeds] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
@@ -280,6 +295,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
         recommendationInterests,
         audiences,
         recommendationVibes,
+        recommendationTravelerStyles,
+        recommendationSeasons,
+        recommendationEnvironments,
         recommendationNeeds,
         selectedCountry,
         selectedCity,
@@ -295,6 +313,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
       recommendationInterests,
       audiences,
       recommendationVibes,
+      recommendationTravelerStyles,
+      recommendationSeasons,
+      recommendationEnvironments,
       recommendationNeeds,
       selectedCountry,
       selectedCity,
@@ -412,6 +433,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setShowAllInterests(false);
     setAudiences(Array.isArray(editItem.facets?.audiences) ? editItem.facets.audiences : []);
     setRecommendationVibes(Array.isArray(editItem.facets?.vibes) ? editItem.facets.vibes : []);
+    setRecommendationTravelerStyles(Array.isArray(editItem.facets?.travelerStyles) ? editItem.facets.travelerStyles : []);
+    setRecommendationSeasons(Array.isArray(editItem.facets?.seasons) ? editItem.facets.seasons : []);
+    setRecommendationEnvironments(Array.isArray(editItem.facets?.environments) ? editItem.facets.environments : []);
     setRecommendationNeeds(Array.isArray(editItem.facets?.needs) ? editItem.facets.needs : []);
 
     const initialCountryId = editItem.destination?.countryId || null;
@@ -786,6 +810,9 @@ const handleSubmit = async () => {
             interests: recommendationInterests,
             audiences,
             vibes: recommendationVibes,
+            travelerStyles: recommendationTravelerStyles,
+            seasons: recommendationSeasons,
+            environments: recommendationEnvironments,
             needs: recommendationNeeds,
           },
         },
@@ -1047,6 +1074,51 @@ const handleSubmit = async () => {
           }}
           multiSelect
           testIDPrefix="add-rec-vibe"
+        />
+
+        <ChipSelector
+          label="סגנון טיול"
+          items={TRAVELER_STYLES.map((option) => option.label)}
+          selectedValue={TRAVELER_STYLES.filter((option) => recommendationTravelerStyles.includes(option.value)).map((option) => option.label)}
+          onSelect={(label) => {
+            const value = TRAVELER_STYLES.find((option) => option.label === label)?.value;
+            if (!value) return;
+            setRecommendationTravelerStyles((current) => current.includes(value)
+              ? current.filter((item) => item !== value)
+              : [...current, value].slice(0, 4));
+          }}
+          multiSelect
+          testIDPrefix="add-rec-traveler-style"
+        />
+
+        <ChipSelector
+          label="עונה מתאימה"
+          items={SEASONS.map((option) => option.label)}
+          selectedValue={SEASONS.filter((option) => recommendationSeasons.includes(option.value)).map((option) => option.label)}
+          onSelect={(label) => {
+            const value = SEASONS.find((option) => option.label === label)?.value;
+            if (!value) return;
+            setRecommendationSeasons((current) => current.includes(value)
+              ? current.filter((item) => item !== value)
+              : [...current, value]);
+          }}
+          multiSelect
+          testIDPrefix="add-rec-season"
+        />
+
+        <ChipSelector
+          label="סביבה"
+          items={ENVIRONMENTS.map((option) => option.label)}
+          selectedValue={ENVIRONMENTS.filter((option) => recommendationEnvironments.includes(option.value)).map((option) => option.label)}
+          onSelect={(label) => {
+            const value = ENVIRONMENTS.find((option) => option.label === label)?.value;
+            if (!value) return;
+            setRecommendationEnvironments((current) => current.includes(value)
+              ? current.filter((item) => item !== value)
+              : [...current, value]);
+          }}
+          multiSelect
+          testIDPrefix="add-rec-environment"
         />
 
         <ChipSelector

@@ -5,7 +5,9 @@ const path = require('path');
 const {
   migratedSmartProfile,
   migratedRecommendation,
+  migratedRoute,
   parseArgs,
+  resolveLegacyRecommendationClassification,
 } = require('./migrateTravelPersonalization');
 
 test('travel personalization migration is dry-run unless apply is explicit', () => {
@@ -34,7 +36,8 @@ test('legacy labels map to stable IDs without marking the user complete', () => 
   assert.ok(profile.interests.includes('food'));
   assert.ok(profile.interests.includes('nature_scenery'));
   assert.ok(profile.needs.includes('shabbat_friendly'));
-  assert.equal(Object.prototype.hasOwnProperty.call(profile, 'pace'), false);
+  assert.equal(profile.pace, '');
+  assert.deepEqual(profile.travelerStyles, []);
 });
 
 test('recommendation migration replaces display tags with IDs and separates factual facets', () => {
@@ -45,9 +48,9 @@ test('recommendation migration replaces display tags with IDs and separates fact
     facets: {},
   });
 
-  assert.deepEqual(recommendation.tags, ['restaurant', 'chabad_services']);
+  assert.deepEqual(recommendation.tags, ['restaurant']);
   assert.equal(recommendation.categoryId, 'food');
-  assert.equal(recommendation.category, 'אוכל ובילויים');
+  assert.equal(recommendation.category, 'אוכל ושתייה');
   assert.equal(recommendation.budget, 'balanced');
   assert.ok(recommendation.facets.needs.includes('kosher'));
   assert.ok(!recommendation.facets.needs.includes('shabbat_friendly'));
@@ -70,4 +73,61 @@ test('migration clears an invalid completion marker instead of preserving a fals
   });
   assert.equal(profile.completedAt, null);
   assert.equal(profile.setupRequired, false);
+});
+
+test('legacy attractions use content semantics while cross-cutting tags move to facets', () => {
+  const museum = migratedRecommendation({
+    title: 'מוזיאון עתידני', description: 'פעילות בתוך מבנה', categoryId: 'attractions',
+    tags: ['museum', 'indoor_activity', 'instagram_spot'], budget: '$$', facets: {},
+  });
+  assert.equal(museum.categoryId, 'culture');
+  assert.deepEqual(museum.tags, ['museum']);
+  assert.ok(museum.facets.environments.includes('indoor'));
+  assert.ok(museum.facets.interests.includes('photography_viewpoints'));
+
+  const stadium = resolveLegacyRecommendationClassification({
+    title: 'סיור בקאמפ נואו', description: 'אצטדיון', categoryId: 'attractions',
+    tags: ['museum', 'historic_site', 'indoor_activity'],
+  });
+  assert.equal(stadium.categoryId, 'activities');
+  assert.deepEqual(stadium.tagIds, ['sports_stadium']);
+  assert.equal(stadium.confident, true);
+});
+
+test('legacy backpacker and digital-nomad values move from vibe to traveler style', () => {
+  const profile = migratedSmartProfile({
+    interests: ['food', 'cafes', 'nature'],
+    vibe: ['backpacker', 'digital_nomad', 'romantic'],
+    budget: 'balanced',
+    travelParties: ['solo'],
+  });
+  assert.deepEqual(profile.travelerStyles, ['backpacker', 'digital_nomad']);
+  assert.deepEqual(profile.vibe, ['romantic']);
+});
+
+test('route migration builds canonical facets, destinations and search without touching recency fields', () => {
+  const result = migratedRoute({
+    title: 'מסלול חופים',
+    description: 'יום ליד הים',
+    tags: { difficulty: 'קל', roadTrip: ['מסלול נופי'], experience: [] },
+    createdAt: { seconds: 1 },
+  }, [{
+    location: 'חוף לדוגמה',
+    destination: { countryId: 'cty-il', cityId: 'city-tlv', countryName: 'ישראל', cityName: 'תל אביב' },
+  }]);
+
+  assert.equal(result.reviewRequired, false);
+  assert.equal(result.patch.taxonomyVersion, 3);
+  assert.equal(result.patch.difficulty, 'easy');
+  assert.deepEqual(result.patch.transportModes, ['mixed']);
+  assert.deepEqual(result.patch.destinationKeys, ['cty-il:*', 'cty-il:city-tlv']);
+  assert.ok(result.patch.search.prefixes.length > 0);
+  assert.equal(Object.prototype.hasOwnProperty.call(result.patch, 'createdAt'), false);
+});
+
+test('route migration deactivates an empty route and flags an unresolvable route', () => {
+  assert.deepEqual(migratedRoute({ title: 'ריק' }, []).patch, { status: 'inactive' });
+  const unresolved = migratedRoute({ title: 'מסלול', dayCount: 1 }, [{ location: 'מקום לא מזוהה' }]);
+  assert.equal(unresolved.patch, null);
+  assert.equal(unresolved.reviewRequired, true);
 });

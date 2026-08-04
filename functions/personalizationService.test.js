@@ -4,10 +4,14 @@ const assert = require('node:assert/strict');
 const {
   AFFINITY_HALF_LIFE_MS,
   applyPersonalizationSignal,
+  cleanDestinations,
   cleanFilters,
   decayFactor,
   interleaveDiscovery,
+  matchesFilters,
   normalizePersonalization,
+  rankPersonalizedResults,
+  resetPersonalizationActivity,
   scoreRecommendation,
 } = require('./personalizationService');
 
@@ -104,12 +108,121 @@ test('every fifth result is the best eligible discovery candidate with determini
   assert.equal(new Set(result.map((entry) => entry.item.id)).size, 10);
 });
 
+test('text search keeps strict relevance order and does not inject discovery slots', () => {
+  const scored = Array.from({ length: 6 }, (_, index) => ({
+    item: { id: `rec-${index}` },
+    rankingScore: 100 - index,
+    textScore: 10 - index,
+    qualityScore: index === 5 ? 100 : 0,
+  }));
+
+  const result = rankPersonalizedResults(scored, 6, { hasQuery: true });
+  assert.deepEqual(result.map((entry) => entry.item.id), [
+    'rec-0', 'rec-1', 'rec-2', 'rec-3', 'rec-4', 'rec-5',
+  ]);
+});
+
 test('manual filters stay hard constraints and reject malformed values', () => {
   assert.deepEqual(cleanFilters({
     categoryIds: ['food'], tags: ['restaurant'], budgetLevels: ['balanced'],
   }), {
-    categoryIds: ['food'], tags: ['restaurant'], budgetLevels: ['balanced'],
+    categoryIds: ['food'],
+    subcategoryIds: ['restaurant'],
+    interestIds: [],
+    audienceIds: [],
+    vibeIds: [],
+    travelerStyleIds: [],
+    needIds: [],
+    budgetLevels: ['balanced'],
+    seasons: [],
+    environments: [],
   });
-  assert.throws(() => cleanFilters({ tags: [42] }), /filters are invalid/);
-  assert.throws(() => cleanFilters({ budgetLevels: ['unknown'] }), /Budget filters/);
+  assert.throws(() => cleanFilters({ tags: [42] }), /subcategoryIds must be a string/);
+  assert.throws(() => cleanFilters({ budgetLevels: ['unknown'] }), /budgetLevels is invalid/);
+});
+
+test('route filters use OR within each group and AND between groups', () => {
+  const filters = cleanFilters({
+    categoryIds: ['nature', 'food'],
+    interestIds: ['hiking', 'food'],
+    transportModeIds: ['car', 'walking'],
+    difficultyIds: ['easy', 'moderate'],
+    durationDays: { min: 2, max: 5 },
+    distanceKm: { min: 10, max: 100 },
+  }, { route: true });
+  const route = {
+    categoryIds: ['nature'], subcategoryIds: ['hiking'], difficulty: 'moderate',
+    transportModes: ['walking'], dayCount: 3, distanceKm: 25, pace: 'balanced',
+    facets: {
+      interests: ['hiking'], audiences: [], vibes: [], travelerStyles: [], needs: [],
+      budgetLevel: 'balanced', seasons: [], environments: ['outdoor'],
+    },
+  };
+  assert.equal(matchesFilters(route, filters, { route: true }), true);
+  assert.equal(matchesFilters({ ...route, transportModes: ['boat'] }, filters, { route: true }), false);
+  assert.equal(matchesFilters({ ...route, dayCount: 8 }, filters, { route: true }), false);
+});
+
+test('verified practical needs are hard constraints and missing metadata never matches', () => {
+  const filters = cleanFilters({ needIds: ['kosher', 'vegan'] });
+  const base = { categoryId: 'food', tags: [], facets: { interests: ['food'], needs: [] } };
+  assert.equal(matchesFilters(base, filters), false);
+  assert.equal(matchesFilters({ ...base, facets: { ...base.facets, needs: ['vegan'] } }, filters), true);
+});
+
+test('global destination selection allows five OR choices while context remains hard', () => {
+  const five = Array.from({ length: 5 }, (_, index) => ({ countryId: `country-${index}`, cityId: '' }));
+  assert.deepEqual(cleanDestinations({ destinations: five }).destinations, five);
+  assert.throws(() => cleanDestinations({ destinations: [...five, { countryId: 'country-6' }] }), /destinations/);
+  assert.deepEqual(cleanDestinations({
+    destinations: five,
+    context: { countryId: 'context-country', cityId: 'context-city' },
+  }), {
+    destinations: [{ countryId: 'context-country', cityId: 'context-city' }],
+    context: { countryId: 'context-country', cityId: 'context-city' },
+  });
+});
+
+test('reset clears learned activity while preserving declared preferences and seed metadata', async () => {
+  const existingProfile = {
+    interests: ['food'], budget: 'balanced', travelParties: ['couple'],
+  };
+  let writtenPatch;
+  const firestore = () => ({
+    doc: (path) => {
+      assert.equal(path, 'users/user-1');
+      return {
+        get: async () => ({
+          exists: true,
+          data: () => ({
+            smartProfile: existingProfile,
+            personalization: {
+              historySeedVersion: 'travel-taxonomy-v3',
+              facetScores: { interests: { food: 9 } },
+              destinations: [{ countryId: 'country-a', score: 5 }],
+            },
+          }),
+        }),
+        set: async (patch, options) => {
+          writtenPatch = patch;
+          assert.deepEqual(options, { merge: true });
+        },
+      };
+    },
+  });
+  firestore.FieldValue = { serverTimestamp: () => 'server-timestamp' };
+
+  const result = await resetPersonalizationActivity({
+    admin: { firestore },
+    auth: { uid: 'user-1' },
+  });
+
+  assert.deepEqual(result, { reset: true });
+  assert.equal(writtenPatch.smartProfile, undefined);
+  assert.deepEqual(writtenPatch.personalization.facetScores, {
+    interests: {}, audiences: {}, vibes: {}, travelerStyles: {}, needs: {},
+  });
+  assert.deepEqual(writtenPatch.personalization.destinations, []);
+  assert.deepEqual(writtenPatch.personalization.recentOpens, []);
+  assert.equal(writtenPatch.personalization.historySeedVersion, 'travel-taxonomy-v3');
 });

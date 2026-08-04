@@ -3,6 +3,25 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { GoogleAuth } = require('google-auth-library');
 const { googleAuthOptions, initializeAdmin } = require('./localCredentials');
+const {
+  BUDGET_IDS,
+  CATEGORY_IDS,
+  ENVIRONMENT_IDS,
+  INTEREST_IDS,
+  NEED_IDS,
+  PACE_IDS,
+  POST_BUDGET_IDS,
+  ROUTE_DIFFICULTY_IDS,
+  ROUTE_EXPERIENCE_IDS,
+  SEASON_IDS,
+  TAG_IDS,
+  TRANSPORT_MODE_IDS,
+  TRAVELER_STYLE_IDS,
+  TRAVEL_PARTY_IDS,
+  VIBE_IDS,
+  tagsMatchCategory,
+  taxonomy,
+} = require('../travelTaxonomy');
 
 const PROJECT_ID = 'planli-f0b12';
 const US_BUCKET = 'planli-f0b12.firebasestorage.app';
@@ -38,6 +57,65 @@ function initialize() {
 
 function favoriteKeyForPath(targetPath) {
   return crypto.createHash('sha256').update(targetPath).digest('base64url');
+}
+
+function canonicalArray(value, allowed, { minimum = 0 } = {}) {
+  return Array.isArray(value) && value.length >= minimum &&
+    value.every((entry) => typeof entry === 'string' && allowed.includes(entry));
+}
+
+function taxonomyContentErrors(documentPath, data = {}) {
+  const errors = [];
+  const active = data.status === 'active';
+  if (/^recommendations\/[^/]+$/.test(documentPath) && active) {
+    if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
+    if (!CATEGORY_IDS.includes(data.categoryId)) errors.push('category');
+    if (!canonicalArray(data.tags, TAG_IDS) || !tagsMatchCategory(data.tags, data.categoryId)) errors.push('subcategories');
+    if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: 1 })) errors.push('interests');
+    if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('audiences');
+    if (!canonicalArray(data.facets?.vibes, VIBE_IDS)) errors.push('vibes');
+    if (!canonicalArray(data.facets?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('traveler-styles');
+    if (!canonicalArray(data.facets?.needs, NEED_IDS)) errors.push('needs');
+    if (!canonicalArray(data.facets?.seasons, SEASON_IDS)) errors.push('seasons');
+    if (!canonicalArray(data.facets?.environments, ENVIRONMENT_IDS)) errors.push('environments');
+    if (data.budget && !POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
+    if (!Array.isArray(data.search?.tokens) || !Array.isArray(data.search?.prefixes)) errors.push('search');
+  }
+  if (/^routes\/[^/]+$/.test(documentPath) && active) {
+    if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
+    if (!canonicalArray(data.categoryIds, CATEGORY_IDS)) errors.push('categories');
+    if (!canonicalArray(data.subcategoryIds, TAG_IDS)) errors.push('subcategories');
+    if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: 1 })) errors.push('interests');
+    if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS, { minimum: 1 })) errors.push('audiences');
+    if (!canonicalArray(data.facets?.vibes, VIBE_IDS)) errors.push('vibes');
+    if (!canonicalArray(data.facets?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('traveler-styles');
+    if (!canonicalArray(data.facets?.needs, NEED_IDS)) errors.push('needs');
+    if (!canonicalArray(data.facets?.seasons, SEASON_IDS)) errors.push('seasons');
+    if (!canonicalArray(data.facets?.environments, ENVIRONMENT_IDS)) errors.push('environments');
+    if (!BUDGET_IDS.includes(data.facets?.budgetLevel)) errors.push('budget');
+    if (!ROUTE_DIFFICULTY_IDS.includes(data.difficulty)) errors.push('difficulty');
+    if (data.experienceLevel && !ROUTE_EXPERIENCE_IDS.includes(data.experienceLevel)) errors.push('experience');
+    if (!canonicalArray(data.transportModes, TRANSPORT_MODE_IDS, { minimum: 1 })) errors.push('transport');
+    if (data.pace && !PACE_IDS.includes(data.pace)) errors.push('pace');
+    if (!Array.isArray(data.destinations) || !data.destinations.length ||
+      data.destinations.some((entry) => !entry?.countryId || !entry?.cityId)) errors.push('destinations');
+    if (!Array.isArray(data.search?.tokens) || !Array.isArray(data.search?.prefixes)) errors.push('search');
+  }
+  if (/^users\/[^/]+$/.test(documentPath)) {
+    const profile = data.smartProfile || {};
+    const allowedFields = new Set([
+      'setupRequired', 'completedAt', 'interests', 'budget', 'travelParties', 'vibe', 'travelerStyles', 'pace', 'needs',
+    ]);
+    if (Object.keys(profile).some((key) => !allowedFields.has(key))) errors.push('profile-fields');
+    if (!canonicalArray(profile.interests || [], INTEREST_IDS)) errors.push('profile-interests');
+    if (profile.budget && !BUDGET_IDS.includes(profile.budget)) errors.push('profile-budget');
+    if (!canonicalArray(profile.travelParties || [], TRAVEL_PARTY_IDS)) errors.push('profile-parties');
+    if (!canonicalArray(profile.vibe || [], VIBE_IDS)) errors.push('profile-vibes');
+    if (!canonicalArray(profile.travelerStyles || [], TRAVELER_STYLE_IDS)) errors.push('profile-styles');
+    if (profile.pace && !PACE_IDS.includes(profile.pace)) errors.push('profile-pace');
+    if (!canonicalArray(profile.needs || [], NEED_IDS)) errors.push('profile-needs');
+  }
+  return errors;
 }
 
 function inspectValue(value, documentPath, keyPath, report) {
@@ -100,6 +178,7 @@ async function auditFirestore(db) {
     invalidFavorites: [],
     orphanFavorites: [],
     counterMismatches: [],
+    invalidTaxonomyContent: [],
     profileCountMismatch: null,
     sampleMediaPath: null,
   };
@@ -112,6 +191,8 @@ async function auditFirestore(db) {
   for (const document of documents) {
     const data = document.data() || {};
     inspectValue(data, document.ref.path, '', report);
+    const taxonomyErrors = taxonomyContentErrors(document.ref.path, data);
+    if (taxonomyErrors.length) report.invalidTaxonomyContent.push({ documentPath: document.ref.path, errors: taxonomyErrors });
     if (!report.sampleMediaPath && Array.isArray(data.media)) {
       report.sampleMediaPath = data.media.find((asset) => asset?.thumb?.path)?.thumb?.path || null;
     }
@@ -315,6 +396,7 @@ function failures(report) {
     ...firestore.invalidFavorites,
     ...firestore.orphanFavorites,
     ...firestore.counterMismatches,
+    ...firestore.invalidTaxonomyContent,
     ...(firestore.profileCountMismatch ? [firestore.profileCountMismatch] : []),
     ...storage.missingInEurope,
     ...storage.checksumMismatches,
@@ -358,4 +440,5 @@ module.exports = {
   favoriteKeyForPath,
   failures,
   inspectValue,
+  taxonomyContentErrors,
 };

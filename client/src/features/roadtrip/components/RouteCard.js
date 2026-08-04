@@ -25,6 +25,14 @@ import { getUserTier } from "../../../utils/userTier";
 import { useAdminClaim } from "../../../hooks/useAdminClaim";
 import { formatTimestamp } from "../../../utils/formatTimestamp";
 import { getRouteImageUrls } from "../../../utils/mediaAssets";
+import {
+	getOptionLabel,
+	getTagLabel,
+	INTERESTS,
+	ROUTE_DIFFICULTIES,
+	TRANSPORT_MODES,
+} from "../../../constants/travelTaxonomy";
+import { getPersonalizationReasonLabel } from "../../profile/constants/smartProfileOptions";
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
@@ -36,10 +44,10 @@ const text = {
 
 const getAllTags = (route) => {
 	const tags = [
-		route?.tags?.difficulty,
-		route?.tags?.travelStyle,
-		...(Array.isArray(route?.tags?.roadTrip) ? route.tags.roadTrip : []),
-		...(Array.isArray(route?.tags?.experience) ? route.tags.experience : []),
+		...(route?.subcategoryIds || []).map(getTagLabel),
+		...(route?.facets?.interests || [])
+			.slice(0, 2)
+			.map((interestId) => getOptionLabel(INTERESTS, interestId)),
 	].filter(Boolean);
 
 	return Array.from(new Set(tags));
@@ -343,15 +351,18 @@ export const RouteCard = ({
 	);
 
 	const renderContent = (feed = false) => {
+		const difficultyLabel = getOptionLabel(ROUTE_DIFFICULTIES, item.difficulty);
+		const transportLabel = getOptionLabel(TRANSPORT_MODES, item.transportModes?.[0]);
+		const personalizationReason = getPersonalizationReasonLabel(item?.personalization?.reasonCodes?.[0]);
 		const content = (
 			<View style={[cards.recContent, feed && styles.feedContent]}>
 				<View style={cards.recTitleRow}>
 					<Text style={[cards.recTitle, feed && styles.feedTitle]} numberOfLines={1}>
 						{item.title}
 					</Text>
-					{item.tags?.difficulty ? (
+					{difficultyLabel ? (
 						<View style={cards.recCategoryChip}>
-							<Text style={cards.recCategoryText}>{item.tags.difficulty}</Text>
+							<Text style={cards.recCategoryText}>{difficultyLabel}</Text>
 						</View>
 					) : null}
 				</View>
@@ -369,10 +380,10 @@ export const RouteCard = ({
 							<Text style={styles.metaText}>{item.distanceKm} {text.km}</Text>
 						</View>
 					) : null}
-					{item.tags?.travelStyle ? (
+					{transportLabel ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="trail-sign-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{item.tags.travelStyle}</Text>
+							<Text style={styles.metaText}>{transportLabel}</Text>
 						</View>
 					) : null}
 				</View>
@@ -382,6 +393,13 @@ export const RouteCard = ({
 						<PlacesRoute places={places} />
 					</View>
 				) : null}
+
+				{!!personalizationReason && (
+					<View style={styles.locationRow}>
+						<Ionicons name="sparkles-outline" size={14} color="#2EC4B6" />
+						<Text style={cards.recLocationText}>{personalizationReason}</Text>
+					</View>
+				)}
 
 				{places.length > 0 ? (
 					<View style={styles.locationRow}>

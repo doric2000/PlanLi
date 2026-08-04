@@ -60,7 +60,7 @@ test('recommendation content ignores client-controlled ownership and location fi
   assert.deepEqual(result, {
     title: 'Good place',
     description: 'A useful description',
-    category: 'אוכל ובילויים',
+    category: 'אוכל ושתייה',
     categoryId: 'food',
     tags: ['restaurant', 'cafe'],
     budget: 'balanced',
@@ -419,6 +419,9 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.deepEqual(saved.stats, { likeCount: 0, commentCount: 0 });
   assert.equal(saved.destination.countryId, 'IL');
   assert.equal(saved.destination.cityId, 'TLV');
+  assert.equal(saved.taxonomyVersion, 3);
+  assert.ok(Array.isArray(saved.search.tokens));
+  assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
 });
 

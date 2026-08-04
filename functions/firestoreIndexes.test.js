@@ -41,4 +41,25 @@ test('personalized recommendation candidate queries have global and destination 
   assert.ok(recommendationIndexes.includes(
     'destination.countryId:ASCENDING|destination.cityId:ASCENDING|status:ASCENDING|facets.interests:CONTAINS|createdAt:DESCENDING'
   ));
+  assert.ok(recommendationIndexes.includes(
+    'status:ASCENDING|search.prefixes:CONTAINS'
+  ));
+  assert.ok(recommendationIndexes.includes(
+    'destination.countryId:ASCENDING|destination.cityId:ASCENDING|status:ASCENDING|search.prefixes:CONTAINS'
+  ));
+});
+
+test('route discovery candidate queries have search, facet, quality and destination indexes', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const routeIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'routes')
+    .map(fieldSignature);
+
+  for (const signature of [
+    'status:ASCENDING|stats.likeCount:DESCENDING',
+    'status:ASCENDING|search.prefixes:CONTAINS',
+    'status:ASCENDING|facets.interests:CONTAINS',
+    'status:ASCENDING|destinationKeys:CONTAINS|createdAt:DESCENDING',
+    'status:ASCENDING|destinationKeys:CONTAINS|stats.likeCount:DESCENDING',
+  ]) assert.ok(routeIndexes.includes(signature), `Missing route index: ${signature}`);
 });
