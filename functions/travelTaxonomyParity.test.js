@@ -16,7 +16,7 @@ test('client and Functions generated taxonomies match the canonical source', () 
 test('every selectable tag maps to at least one facet or is explicitly display-only', () => {
   const taxonomy = require('./travelTaxonomy.generated.json');
   for (const tag of taxonomy.tags.filter((item) => item.selectable !== false)) {
-    const mapped = ['interests', 'audiences', 'vibes', 'needs']
+    const mapped = ['interests', 'audiences', 'vibes', 'travelerStyles', 'needs', 'seasons', 'environments']
       .some((field) => Array.isArray(tag[field]) && tag[field].length > 0);
     assert.ok(mapped || tag.displayOnly === true, `${tag.id} is neither mapped nor displayOnly`);
   }
@@ -29,7 +29,14 @@ test('taxonomy IDs and cross-references are unique and valid', () => {
     ['budgets', taxonomy.budgets],
     ['travelParties', taxonomy.travelParties],
     ['vibes', taxonomy.vibes],
+    ['travelerStyles', taxonomy.travelerStyles],
+    ['paces', taxonomy.paces],
     ['needs', taxonomy.needs],
+    ['seasons', taxonomy.seasons],
+    ['environments', taxonomy.environments],
+    ['routeDifficulties', taxonomy.routeDifficulties],
+    ['routeExperienceLevels', taxonomy.routeExperienceLevels],
+    ['transportModes', taxonomy.transportModes],
     ['categories', taxonomy.categories],
     ['tags', taxonomy.tags],
   ];
@@ -41,6 +48,9 @@ test('taxonomy IDs and cross-references are unique and valid', () => {
     audiences: new Set(taxonomy.travelParties.map((item) => item.id)),
     vibes: new Set(taxonomy.vibes.map((item) => item.id)),
     needs: new Set(taxonomy.needs.map((item) => item.id)),
+    travelerStyles: new Set(taxonomy.travelerStyles.map((item) => item.id)),
+    seasons: new Set(taxonomy.seasons.map((item) => item.id)),
+    environments: new Set(taxonomy.environments.map((item) => item.id)),
   };
   const categoryIds = new Set(taxonomy.categories.map((item) => item.id));
   for (const tag of taxonomy.tags) {
@@ -53,5 +63,18 @@ test('taxonomy IDs and cross-references are unique and valid', () => {
         assert.ok(values.has(value), `${tag.id}.${field} contains ${value}`);
       }
     }
+  }
+  for (const style of taxonomy.travelerStyles) {
+    for (const interestId of style.relatedInterests || []) {
+      assert.ok(allowed.interests.has(interestId), `${style.id}.relatedInterests contains ${interestId}`);
+    }
+  }
+  const mappedInterests = new Set([
+    ...taxonomy.categories.flatMap((item) => item.interests || []),
+    ...taxonomy.tags.flatMap((item) => item.interests || []),
+    ...taxonomy.travelerStyles.flatMap((item) => item.relatedInterests || []),
+  ]);
+  for (const interest of taxonomy.interests) {
+    assert.ok(mappedInterests.has(interest.id), `${interest.id} is not mapped from any content category or subcategory`);
   }
 });

@@ -67,6 +67,7 @@ function makeRouteToEdit(overrides = {}) {
         stops: [
           {
             place: {
+              placeId: 'place-a',
               geometry: { location: { lat: 32.0, lng: 34.8 } },
               name: 'Stop A',
             },
@@ -74,7 +75,23 @@ function makeRouteToEdit(overrides = {}) {
         ],
       },
     ],
-    tags: { difficulty: '', travelStyle: '', roadTrip: [], experience: [] },
+    taxonomyVersion: 3,
+    categoryIds: ['nature'],
+    subcategoryIds: ['viewpoint'],
+    facets: {
+      interests: ['nature_scenery'],
+      audiences: ['friends'],
+      budgetLevel: 'balanced',
+      vibes: [],
+      travelerStyles: ['roadtrip'],
+      needs: [],
+      seasons: [],
+      environments: ['outdoor'],
+    },
+    difficulty: 'easy',
+    experienceLevel: 'beginner',
+    transportModes: ['car'],
+    pace: 'balanced',
     ...overrides,
   };
 }

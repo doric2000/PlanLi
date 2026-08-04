@@ -55,7 +55,13 @@ test('recommendation author facets reject unknown values and client-derived fiel
   assert.deepEqual(sanitizeSubmittedFacets({
     interests: ['food'], audiences: ['couple'], vibes: ['romantic'], needs: ['vegetarian'],
   }), {
-    interests: ['food'], audiences: ['couple'], vibes: ['romantic'], needs: ['vegetarian'],
+    interests: ['food'],
+    audiences: ['couple'],
+    vibes: ['romantic'],
+    travelerStyles: [],
+    needs: ['vegetarian'],
+    seasons: [],
+    environments: [],
   });
   assert.throws(() => sanitizeSubmittedFacets({ audiences: ['everyone'] }), /audiences facets/);
   assert.throws(() => sanitizeSubmittedFacets({ interests: ['unknown'] }), /interests facets/);

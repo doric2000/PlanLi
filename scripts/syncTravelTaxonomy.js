@@ -8,17 +8,107 @@ const targetPaths = [
   path.join(root, 'client', 'src', 'constants', 'travelTaxonomy.generated.json'),
   path.join(root, 'functions', 'travelTaxonomy.generated.json'),
 ];
+const documentationPath = path.join(root, 'docs', 'travel-taxonomy-map.md');
 
 function canonicalText(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function documentationText(taxonomy) {
+  const labelByAxis = (items) => Object.fromEntries((items || []).map((item) => [item.id, item.label]));
+  const axisLabels = {
+    interests: labelByAxis(taxonomy.interests),
+    audiences: labelByAxis(taxonomy.travelParties),
+    vibes: labelByAxis(taxonomy.vibes),
+    travelerStyles: labelByAxis(taxonomy.travelerStyles),
+    needs: labelByAxis(taxonomy.needs),
+    seasons: labelByAxis(taxonomy.seasons),
+    environments: labelByAxis(taxonomy.environments),
+  };
+  const axisNames = {
+    interests: 'תחומי עניין',
+    audiences: 'קהל',
+    vibes: 'אווירה',
+    travelerStyles: 'סגנון',
+    needs: 'צרכים',
+    seasons: 'עונה',
+    environments: 'סביבה',
+  };
+  const formatRelations = (item) => Object.keys(axisLabels).flatMap((field) => {
+    const values = item[field] || [];
+    if (!values.length) return [];
+    return `${axisNames[field]}: ${values.map((id) => `${axisLabels[field][id] || id} (\`${id}\`)`).join(', ')}`;
+  }).join(' · ');
+  const lines = [
+    '# מפת ה־Travel Taxonomy',
+    '',
+    `> נוצר אוטומטית מ־\`shared/travelTaxonomy.json\` (גרסה ${taxonomy.version}). אין לערוך ידנית.`,
+    '',
+    'הקטגוריות ותתי־הקטגוריות יוצרות עץ. תחומי עניין, אווירה, קהלים ושאר ה־facets הם צירים רוחביים, ולכן תת־קטגוריה יכולה להתחבר ליותר מתחום עניין אחד.',
+    '',
+    '## קטגוריות ותתי־קטגוריות',
+    '',
+  ];
+  for (const category of taxonomy.categories) {
+    lines.push(`- **${category.label}** (\`${category.id}\`)`);
+    const tags = taxonomy.tags.filter((tag) => tag.categoryId === category.id);
+    if (category.id !== 'services') {
+      for (const tag of tags) {
+        lines.push(`  - ${tag.label} (\`${tag.id}\`) → ${formatRelations(tag) || 'ללא נגזרת אוטומטית'}`);
+      }
+      continue;
+    }
+    for (const group of taxonomy.serviceGroups || []) {
+      lines.push(`  - **${group.label}** (\`${group.id}\`)`);
+      for (const tag of tags.filter((item) => item.groupId === group.id)) {
+        lines.push(`    - ${tag.label} (\`${tag.id}\`) → ${formatRelations(tag) || 'ללא נגזרת אוטומטית'}`);
+      }
+    }
+  }
+  const axisSections = [
+    ['תחומי עניין', taxonomy.interests],
+    ['אווירה', taxonomy.vibes],
+    ['סגנון טיול', taxonomy.travelerStyles],
+    ['הרכב מטיילים', taxonomy.travelParties],
+    ['תקציב', taxonomy.budgets],
+    ['קצב', taxonomy.paces],
+    ['צרכים מעשיים', taxonomy.needs],
+    ['עונות', taxonomy.seasons],
+    ['סביבה', taxonomy.environments],
+    ['קושי במסלול', taxonomy.routeDifficulties],
+    ['ניסיון במסלול', taxonomy.routeExperienceLevels],
+    ['אמצעי התניידות', taxonomy.transportModes],
+  ];
+  for (const [title, items] of axisSections) {
+    lines.push('', `## ${title}`, '');
+    lines.push(items.map((item) => {
+      const related = (item.relatedInterests || []).map((id) =>
+        `${axisLabels.interests[id] || id} (\`${id}\`)`
+      );
+      return `- ${item.label} (\`${item.id}\`)${related.length ? ` — קשור ל: ${related.join(', ')}` : ''}`;
+    }).join('\n'));
+  }
+  lines.push('', '## כללי התאמה', '',
+    '- המלצה שומרת קטגוריה אחת וכמה תתי־קטגוריות.',
+    '- מסלול יכול לשמור כמה קטגוריות ותתי־קטגוריות.',
+    '- השרת גוזר facets מהקטגוריות ומתתי־הקטגוריות ומאחד אותם עם בחירות מפורשות.',
+    '- צרכים מעשיים מתווספים רק כעובדות מפורשות; מידע חסר אינו נחשב להתאמה.',
+    '- בתוך ממד סינון פועל OR, ובין ממדים שונים פועל AND.',
+    '',
+  );
+  return `${lines.join('\n').replace(/\n+$/, '')}\n`;
+}
+
 function run({ check = false } = {}) {
   const taxonomy = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
   const expected = canonicalText(taxonomy);
+  const expectedDocumentation = documentationText(taxonomy);
   const drifted = targetPaths.filter((targetPath) => (
     !fs.existsSync(targetPath) || fs.readFileSync(targetPath, 'utf8') !== expected
   ));
+  if (!fs.existsSync(documentationPath) || fs.readFileSync(documentationPath, 'utf8') !== expectedDocumentation) {
+    drifted.push(documentationPath);
+  }
 
   if (check) {
     if (drifted.length) {
@@ -32,7 +122,9 @@ function run({ check = false } = {}) {
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     fs.writeFileSync(targetPath, expected, 'utf8');
   }
-  console.log(`Updated ${targetPaths.length} generated travel taxonomy copies.`);
+  fs.mkdirSync(path.dirname(documentationPath), { recursive: true });
+  fs.writeFileSync(documentationPath, expectedDocumentation, 'utf8');
+  console.log(`Updated ${targetPaths.length} generated travel taxonomy copies and documentation.`);
 }
 
 if (require.main === module) {

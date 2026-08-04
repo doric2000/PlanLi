@@ -11,13 +11,15 @@ import {
   BUDGETS,
   INTERESTS,
   NEEDS,
+  PACES,
   TRAVEL_PARTIES,
+  TRAVELER_STYLES,
   VIBES,
 } from '../constants/smartProfileOptions';
 import { getPreferenceResumeStep, normalizeClientSmartProfile } from '../utils/preferenceSetup';
 
 const EMPTY_PROFILE = {
-  interests: [], budget: '', travelParties: [], vibe: [], needs: [],
+  interests: [], budget: '', travelParties: [], vibe: [], travelerStyles: [], pace: '', needs: [],
 };
 
 function ChoiceChip({ option, selected, onPress, testID }) {
@@ -157,8 +159,13 @@ export default function PreferenceSetupScreen({ navigation }) {
       <>
         <Text style={styles.sectionTitle}>סגנון וצרכים</Text>
         <Text style={styles.sectionHelp}>הבחירות בשלב הזה אופציונליות ותמיד ניתנות לשינוי בפרופיל.</Text>
-        <OptionGroup title="סגנון ואווירה" help="עד שלוש אפשרויות" options={VIBES} values={profile.vibe}
+        <OptionGroup title="אווירה" help="עד שלוש אפשרויות" options={VIBES} values={profile.vibe}
           onToggle={(value) => toggleArray('vibe', value, 3)} prefix="preference-vibe" />
+        <OptionGroup title="סגנון טיול" help="עד שלוש אפשרויות" options={TRAVELER_STYLES} values={profile.travelerStyles}
+          onToggle={(value) => toggleArray('travelerStyles', value, 3)} prefix="preference-traveler-style" />
+        <OptionGroup title="קצב מועדף" options={PACES} values={profile.pace ? [profile.pace] : []}
+          onToggle={(value) => setProfile((previous) => ({ ...previous, pace: previous.pace === value ? '' : value }))}
+          prefix="preference-pace" />
         <OptionGroup title="צרכים והעדפות" options={NEEDS} values={profile.needs}
           onToggle={(value) => toggleArray('needs', value, NEEDS.length)} prefix="preference-need" />
         <View style={styles.privacyCard} testID="preference-review">
@@ -173,7 +180,13 @@ export default function PreferenceSetupScreen({ navigation }) {
             {`הרכב: ${TRAVEL_PARTIES.filter((option) => profile.travelParties.includes(option.value)).map((option) => option.label).join(', ')}`}
           </Text>
           <Text style={styles.privacyText}>
-            {`סגנון ואווירה: ${VIBES.filter((option) => profile.vibe.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
+            {`אווירה: ${VIBES.filter((option) => profile.vibe.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
+          </Text>
+          <Text style={styles.privacyText}>
+            {`סגנון טיול: ${TRAVELER_STYLES.filter((option) => profile.travelerStyles.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
+          </Text>
+          <Text style={styles.privacyText}>
+            {`קצב: ${PACES.find((option) => option.value === profile.pace)?.label || 'לא נבחר'}`}
           </Text>
           <Text style={styles.privacyText}>
             {`צרכים והעדפות: ${NEEDS.filter((option) => profile.needs.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}

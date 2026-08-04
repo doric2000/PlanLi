@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "interests": [
     {
       "id": "nature_scenery",
@@ -12,6 +12,10 @@
     {
       "id": "beaches_water",
       "label": "ים וחופים"
+    },
+    {
+      "id": "freshwater_nature",
+      "label": "אגמים, נהרות ומפלים"
     },
     {
       "id": "food",
@@ -47,7 +51,7 @@
     },
     {
       "id": "entertainment_parks",
-      "label": "פארקים ובידור"
+      "label": "פארקי שעשועים"
     },
     {
       "id": "adventure_extreme",
@@ -59,7 +63,7 @@
     },
     {
       "id": "wellness",
-      "label": "ספא ובריאות"
+      "label": "Wellness וספא"
     },
     {
       "id": "local_experiences",
@@ -71,7 +75,7 @@
     },
     {
       "id": "music_events",
-      "label": "הופעות ואירועים"
+      "label": "מוזיקה ואירועים"
     },
     {
       "id": "winter_sports",
@@ -79,7 +83,11 @@
     },
     {
       "id": "scenic_roadtrips",
-      "label": "רואדטריפים ונסיעות נוף"
+      "label": "Roadtrips נופיים"
+    },
+    {
+      "id": "sports_stadiums",
+      "label": "ספורט ואצטדיונים"
     },
     {
       "id": "stays_accommodation",
@@ -91,7 +99,7 @@
     },
     {
       "id": "travel_tips_services",
-      "label": "טיפים ושירותים למטיילים"
+      "label": "שירותים שימושיים למטיילים"
     }
   ],
   "budgets": [
@@ -159,35 +167,98 @@
   "vibes": [
     {
       "id": "relaxed",
-      "label": "רגוע"
+      "label": "רגועה"
     },
     {
       "id": "romantic",
-      "label": "רומנטי"
+      "label": "רומנטית"
     },
     {
       "id": "adventurous",
-      "label": "הרפתקני"
+      "label": "הרפתקנית"
     },
     {
       "id": "cultural",
-      "label": "תרבותי"
+      "label": "תרבותית"
     },
     {
       "id": "social",
-      "label": "חברתי"
+      "label": "חברתית"
     },
     {
       "id": "local",
-      "label": "מקומי ואותנטי"
+      "label": "מקומית ואותנטית"
     },
     {
+      "id": "lively",
+      "label": "תוססת"
+    },
+    {
+      "id": "quiet_secluded",
+      "label": "שקטה ומבודדת"
+    }
+  ],
+  "travelerStyles": [
+    {
       "id": "backpacker",
-      "label": "תרמילאי"
+      "label": "תרמילאות",
+      "relatedInterests": [
+        "hiking",
+        "local_experiences"
+      ]
     },
     {
       "id": "digital_nomad",
-      "label": "נוודות דיגיטלית"
+      "label": "נוודות דיגיטלית",
+      "relatedInterests": [
+        "cafes",
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "roadtrip",
+      "label": "Roadtrip",
+      "relatedInterests": [
+        "scenic_roadtrips"
+      ]
+    },
+    {
+      "id": "city_break",
+      "label": "חופשה עירונית",
+      "relatedInterests": [
+        "architecture_neighborhoods",
+        "culture_history"
+      ]
+    },
+    {
+      "id": "resort_vacation",
+      "label": "חופשת ריזורט",
+      "relatedInterests": [
+        "stays_accommodation",
+        "wellness"
+      ]
+    },
+    {
+      "id": "slow_travel",
+      "label": "טיול איטי",
+      "relatedInterests": [
+        "local_experiences",
+        "food"
+      ]
+    }
+  ],
+  "paces": [
+    {
+      "id": "relaxed",
+      "label": "רגוע"
+    },
+    {
+      "id": "balanced",
+      "label": "מאוזן"
+    },
+    {
+      "id": "packed",
+      "label": "עמוס"
     }
   ],
   "needs": [
@@ -228,10 +299,104 @@
       "label": "נגיש לעגלות"
     }
   ],
+  "seasons": [
+    {
+      "id": "all_year",
+      "label": "כל השנה"
+    },
+    {
+      "id": "spring",
+      "label": "אביב"
+    },
+    {
+      "id": "summer",
+      "label": "קיץ"
+    },
+    {
+      "id": "autumn",
+      "label": "סתיו"
+    },
+    {
+      "id": "winter",
+      "label": "חורף"
+    },
+    {
+      "id": "rainy",
+      "label": "עונת הגשמים"
+    }
+  ],
+  "environments": [
+    {
+      "id": "indoor",
+      "label": "במקום סגור"
+    },
+    {
+      "id": "outdoor",
+      "label": "בחוץ"
+    },
+    {
+      "id": "mixed",
+      "label": "משולב"
+    }
+  ],
+  "routeDifficulties": [
+    {
+      "id": "easy",
+      "label": "קל"
+    },
+    {
+      "id": "moderate",
+      "label": "בינוני"
+    },
+    {
+      "id": "challenging",
+      "label": "מאתגר"
+    }
+  ],
+  "routeExperienceLevels": [
+    {
+      "id": "beginner",
+      "label": "מתחילים"
+    },
+    {
+      "id": "intermediate",
+      "label": "מנוסים"
+    },
+    {
+      "id": "advanced",
+      "label": "מתקדמים"
+    }
+  ],
+  "transportModes": [
+    {
+      "id": "walking",
+      "label": "הליכה"
+    },
+    {
+      "id": "public_transit",
+      "label": "תחבורה ציבורית"
+    },
+    {
+      "id": "car",
+      "label": "רכב"
+    },
+    {
+      "id": "bicycle",
+      "label": "אופניים"
+    },
+    {
+      "id": "motorcycle",
+      "label": "אופנוע או קטנוע"
+    },
+    {
+      "id": "mixed",
+      "label": "משולב"
+    }
+  ],
   "categories": [
     {
       "id": "food",
-      "label": "אוכל ובילויים",
+      "label": "אוכל ושתייה",
       "icon": "restaurant",
       "interests": [
         "food"
@@ -239,18 +404,34 @@
     },
     {
       "id": "nature",
-      "label": "טבע ומסלולים",
+      "label": "טבע ומים",
       "icon": "landscape",
       "interests": [
         "nature_scenery"
       ]
     },
     {
-      "id": "attractions",
-      "label": "אטרקציות",
+      "id": "culture",
+      "label": "תרבות ואתרים",
+      "icon": "account-balance",
+      "interests": [
+        "culture_history"
+      ]
+    },
+    {
+      "id": "activities",
+      "label": "פעילויות ובידור",
       "icon": "local-activity",
       "interests": [
         "local_experiences"
+      ]
+    },
+    {
+      "id": "shopping",
+      "label": "קניות ושווקים",
+      "icon": "shopping-bag",
+      "interests": [
+        "shopping_markets"
       ]
     },
     {
@@ -263,27 +444,49 @@
     },
     {
       "id": "transportation",
-      "label": "תחבורה",
+      "label": "תחבורה והתניידות",
       "icon": "directions-bus",
       "interests": [
         "transportation_mobility"
       ]
     },
     {
-      "id": "logistics",
-      "label": "לוגיסטיקה",
-      "icon": "info",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
       "id": "services",
-      "label": "שירותים ואנשי מקצוע",
+      "label": "שירותים שימושיים בחו״ל",
       "icon": "handyman",
       "interests": [
         "travel_tips_services"
       ]
+    }
+  ],
+  "serviceGroups": [
+    {
+      "id": "communications_finance",
+      "label": "תקשורת וכספים"
+    },
+    {
+      "id": "planning_guidance",
+      "label": "תכנון והדרכה"
+    },
+    {
+      "id": "health_medical",
+      "label": "בריאות ורפואה"
+    },
+    {
+      "id": "personal_care",
+      "label": "טיפוח ורווחה"
+    },
+    {
+      "id": "laundry_clothing",
+      "label": "כביסה וביגוד"
+    },
+    {
+      "id": "technology_repairs",
+      "label": "טכנולוגיה ותיקונים"
+    },
+    {
+      "id": "documents_equipment",
+      "label": "מסמכים וציוד"
     }
   ],
   "tags": [
@@ -304,6 +507,15 @@
       ]
     },
     {
+      "id": "bakery_desserts",
+      "label": "מאפייה וקינוחים",
+      "categoryId": "food",
+      "interests": [
+        "food",
+        "cafes"
+      ]
+    },
+    {
       "id": "street_food",
       "label": "אוכל רחוב",
       "categoryId": "food",
@@ -313,24 +525,28 @@
       ]
     },
     {
-      "id": "bar",
-      "label": "בר",
+      "id": "bar_nightlife",
+      "label": "ברים וחיי לילה",
       "categoryId": "food",
       "interests": [
         "nightlife"
+      ],
+      "vibes": [
+        "lively",
+        "social"
       ]
     },
     {
-      "id": "nightlife",
-      "label": "חיי לילה",
+      "id": "grocery_supermarket",
+      "label": "סופרמרקט ומכולת",
       "categoryId": "food",
       "interests": [
-        "nightlife"
+        "food"
       ]
     },
     {
-      "id": "israeli_restaurants",
-      "label": "מסעדות ישראליות",
+      "id": "local_cuisine",
+      "label": "מטבח מקומי",
       "categoryId": "food",
       "interests": [
         "food",
@@ -338,90 +554,47 @@
       ]
     },
     {
-      "id": "hiking_trail",
-      "label": "טיול רגלי",
+      "id": "hiking",
+      "label": "מסלול הליכה",
       "categoryId": "nature",
       "interests": [
-        "hiking"
+        "hiking",
+        "nature_scenery"
       ]
     },
     {
-      "id": "viewpoint",
-      "label": "נקודת תצפית",
-      "categoryId": "nature",
-      "interests": [
-        "photography_viewpoints"
-      ]
-    },
-    {
-      "id": "beaches",
-      "label": "חופים",
+      "id": "beach",
+      "label": "ים וחוף",
       "categoryId": "nature",
       "interests": [
         "beaches_water"
+      ],
+      "environments": [
+        "outdoor"
       ]
     },
     {
-      "id": "waterfalls",
-      "label": "מפלים",
+      "id": "freshwater",
+      "label": "אגם ונהר",
       "categoryId": "nature",
       "interests": [
-        "beaches_water",
+        "freshwater_nature",
         "nature_scenery"
+      ],
+      "environments": [
+        "outdoor"
       ]
     },
     {
-      "id": "springs",
-      "label": "מעיינות",
+      "id": "waterfall_spring",
+      "label": "מפל ומעיין",
       "categoryId": "nature",
       "interests": [
-        "beaches_water",
+        "freshwater_nature",
         "nature_scenery"
-      ]
-    },
-    {
-      "id": "difficulty_easy",
-      "label": "קל",
-      "categoryId": "nature",
-      "displayOnly": true
-    },
-    {
-      "id": "difficulty_medium",
-      "label": "בינוני",
-      "categoryId": "nature",
-      "displayOnly": true
-    },
-    {
-      "id": "difficulty_hard",
-      "label": "קשה",
-      "categoryId": "nature",
-      "displayOnly": true
-    },
-    {
-      "id": "winter_season",
-      "label": "חורף",
-      "categoryId": "nature",
-      "displayOnly": true
-    },
-    {
-      "id": "summer_season",
-      "label": "קיץ",
-      "categoryId": "nature",
-      "displayOnly": true
-    },
-    {
-      "id": "rainy_season",
-      "label": "עונת הגשמים",
-      "categoryId": "nature",
-      "displayOnly": true
-    },
-    {
-      "id": "picnic",
-      "label": "פיקניק",
-      "categoryId": "nature",
-      "interests": [
-        "nature_scenery",
-        "local_experiences"
+      ],
+      "environments": [
+        "outdoor"
       ]
     },
     {
@@ -434,42 +607,120 @@
       ]
     },
     {
-      "id": "observatory",
-      "label": "מצפה",
+      "id": "wildlife",
+      "label": "בעלי חיים",
       "categoryId": "nature",
       "interests": [
-        "photography_viewpoints"
+        "wildlife",
+        "nature_scenery"
+      ]
+    },
+    {
+      "id": "viewpoint",
+      "label": "נקודת תצפית",
+      "categoryId": "nature",
+      "interests": [
+        "photography_viewpoints",
+        "nature_scenery"
+      ]
+    },
+    {
+      "id": "picnic",
+      "label": "פיקניק",
+      "categoryId": "nature",
+      "interests": [
+        "nature_scenery",
+        "local_experiences"
+      ]
+    },
+    {
+      "id": "winter_sports",
+      "label": "שלג וספורט חורף",
+      "categoryId": "nature",
+      "interests": [
+        "winter_sports",
+        "adventure_extreme"
+      ],
+      "seasons": [
+        "winter"
+      ],
+      "environments": [
+        "outdoor"
       ]
     },
     {
       "id": "museum",
       "label": "מוזיאון",
-      "categoryId": "attractions",
+      "categoryId": "culture",
+      "interests": [
+        "museums_art",
+        "culture_history"
+      ]
+    },
+    {
+      "id": "art_gallery",
+      "label": "גלריה ואמנות",
+      "categoryId": "culture",
       "interests": [
         "museums_art"
       ]
     },
     {
       "id": "historic_site",
-      "label": "אתר היסטורי",
-      "categoryId": "attractions",
+      "label": "אתר היסטורי ומורשת",
+      "categoryId": "culture",
       "interests": [
         "culture_history"
       ]
     },
     {
-      "id": "amusement_park",
+      "id": "religious_site",
+      "label": "אתר דתי",
+      "categoryId": "culture",
+      "interests": [
+        "culture_history",
+        "architecture_neighborhoods"
+      ]
+    },
+    {
+      "id": "architecture_landmark",
+      "label": "אדריכלות ואתר עירוני",
+      "categoryId": "culture",
+      "interests": [
+        "architecture_neighborhoods",
+        "photography_viewpoints"
+      ]
+    },
+    {
+      "id": "neighborhood",
+      "label": "שכונה מומלצת",
+      "categoryId": "culture",
+      "interests": [
+        "architecture_neighborhoods",
+        "local_experiences"
+      ]
+    },
+    {
+      "id": "family_attraction",
+      "label": "אטרקציה למשפחה",
+      "categoryId": "activities",
+      "interests": [
+        "family_attractions"
+      ]
+    },
+    {
+      "id": "theme_park",
       "label": "פארק שעשועים",
-      "categoryId": "attractions",
+      "categoryId": "activities",
       "interests": [
         "entertainment_parks",
         "family_attractions"
       ]
     },
     {
-      "id": "adventure_activity",
-      "label": "הרפתקה",
-      "categoryId": "attractions",
+      "id": "adventure",
+      "label": "פעילות אתגרית",
+      "categoryId": "activities",
       "interests": [
         "adventure_extreme"
       ],
@@ -478,69 +729,96 @@
       ]
     },
     {
-      "id": "shopping",
-      "label": "קניות",
-      "categoryId": "attractions",
+      "id": "water_activity",
+      "label": "פעילות מים",
+      "categoryId": "activities",
       "interests": [
-        "shopping_markets"
+        "adventure_extreme",
+        "beaches_water",
+        "freshwater_nature"
       ]
     },
     {
-      "id": "markets",
-      "label": "שווקים",
-      "categoryId": "attractions",
+      "id": "performance_event",
+      "label": "הופעה ואירוע",
+      "categoryId": "activities",
+      "interests": [
+        "music_events"
+      ],
+      "vibes": [
+        "lively",
+        "social"
+      ]
+    },
+    {
+      "id": "workshop",
+      "label": "סדנה וחוויה מקומית",
+      "categoryId": "activities",
+      "interests": [
+        "local_experiences"
+      ]
+    },
+    {
+      "id": "indoor_venue_activity",
+      "label": "פעילות במקום סגור",
+      "categoryId": "activities",
+      "interests": [
+        "family_attractions"
+      ],
+      "environments": [
+        "indoor"
+      ]
+    },
+    {
+      "id": "wellness",
+      "label": "ספא ו-Wellness",
+      "categoryId": "activities",
+      "interests": [
+        "wellness"
+      ],
+      "vibes": [
+        "relaxed"
+      ]
+    },
+    {
+      "id": "sports_stadium",
+      "label": "ספורט ואצטדיונים",
+      "categoryId": "activities",
+      "interests": [
+        "sports_stadiums"
+      ]
+    },
+    {
+      "id": "photography_spot",
+      "label": "נקודת צילום",
+      "categoryId": "activities",
+      "interests": [
+        "photography_viewpoints"
+      ]
+    },
+    {
+      "id": "market",
+      "label": "שוק",
+      "categoryId": "shopping",
       "interests": [
         "shopping_markets",
         "local_experiences"
       ]
     },
     {
-      "id": "instagram_spot",
-      "label": "לאינסטגרם",
-      "categoryId": "attractions",
+      "id": "shopping_center",
+      "label": "מרכז קניות וחנויות",
+      "categoryId": "shopping",
       "interests": [
-        "photography_viewpoints"
+        "shopping_markets"
       ]
     },
     {
-      "id": "challenging",
-      "label": "אתגרי",
-      "categoryId": "attractions",
+      "id": "local_crafts",
+      "label": "עבודות יד ומוצרים מקומיים",
+      "categoryId": "shopping",
       "interests": [
-        "adventure_extreme"
-      ],
-      "vibes": [
-        "adventurous"
-      ]
-    },
-    {
-      "id": "live_performances",
-      "label": "הופעות",
-      "categoryId": "attractions",
-      "interests": [
-        "music_events"
-      ]
-    },
-    {
-      "id": "workshops",
-      "label": "סדנאות",
-      "categoryId": "attractions",
-      "interests": [
-        "local_experiences"
-      ]
-    },
-    {
-      "id": "indoor_activity",
-      "label": "פעילות מקורה",
-      "categoryId": "attractions",
-      "displayOnly": true
-    },
-    {
-      "id": "recommended_neighborhoods",
-      "label": "שכונות מומלצות",
-      "categoryId": "attractions",
-      "interests": [
-        "architecture_neighborhoods",
+        "shopping_markets",
         "local_experiences"
       ]
     },
@@ -553,8 +831,17 @@
       ]
     },
     {
+      "id": "resort",
+      "label": "ריזורט",
+      "categoryId": "stay",
+      "interests": [
+        "stays_accommodation",
+        "wellness"
+      ]
+    },
+    {
       "id": "hostel",
-      "label": "אכסניה",
+      "label": "הוסטל",
       "categoryId": "stay",
       "interests": [
         "stays_accommodation"
@@ -565,36 +852,30 @@
       "label": "בית הארחה",
       "categoryId": "stay",
       "interests": [
-        "stays_accommodation"
+        "stays_accommodation",
+        "local_experiences"
       ]
     },
     {
-      "id": "airbnb",
-      "label": "Airbnb",
+      "id": "apartment",
+      "label": "דירה",
       "categoryId": "stay",
       "interests": [
         "stays_accommodation"
       ]
     },
     {
-      "id": "bus",
-      "label": "אוטובוס",
-      "categoryId": "transportation",
+      "id": "camping",
+      "label": "קמפינג",
+      "categoryId": "stay",
       "interests": [
-        "transportation_mobility"
+        "stays_accommodation",
+        "nature_scenery"
       ]
     },
     {
-      "id": "train",
-      "label": "רכבת",
-      "categoryId": "transportation",
-      "interests": [
-        "transportation_mobility"
-      ]
-    },
-    {
-      "id": "metro",
-      "label": "מטרו",
+      "id": "public_transit",
+      "label": "תחבורה ציבורית",
       "categoryId": "transportation",
       "interests": [
         "transportation_mobility"
@@ -609,16 +890,16 @@
       ]
     },
     {
-      "id": "taxi_driver",
-      "label": "נהג מונית",
+      "id": "two_wheel_rental",
+      "label": "השכרת אופניים או קטנוע",
       "categoryId": "transportation",
       "interests": [
         "transportation_mobility"
       ]
     },
     {
-      "id": "shuttle_driver",
-      "label": "נהג הסעות",
+      "id": "taxi_driver",
+      "label": "מונית או נהג",
       "categoryId": "transportation",
       "interests": [
         "transportation_mobility"
@@ -626,24 +907,53 @@
     },
     {
       "id": "airport_transfer",
-      "label": "הסעות משדה התעופה",
+      "label": "הסעה משדה התעופה",
       "categoryId": "transportation",
       "interests": [
         "transportation_mobility"
       ]
     },
     {
-      "id": "sim_card",
-      "label": "סים קארד",
-      "categoryId": "logistics",
+      "id": "ferry",
+      "label": "מעבורת או סירה תחבורתית",
+      "categoryId": "transportation",
+      "interests": [
+        "transportation_mobility"
+      ]
+    },
+    {
+      "id": "sim_esim",
+      "label": "SIM/eSIM",
+      "categoryId": "services",
+      "groupId": "communications_finance",
       "interests": [
         "travel_tips_services"
       ]
     },
     {
       "id": "currency_exchange",
-      "label": "החלפת כספים",
-      "categoryId": "logistics",
+      "label": "המרת כספים",
+      "categoryId": "services",
+      "groupId": "communications_finance",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "tour_guide",
+      "label": "מדריך",
+      "categoryId": "services",
+      "groupId": "planning_guidance",
+      "interests": [
+        "travel_tips_services",
+        "local_experiences"
+      ]
+    },
+    {
+      "id": "travel_agent",
+      "label": "סוכן נסיעות או טיסות",
+      "categoryId": "services",
+      "groupId": "planning_guidance",
       "interests": [
         "travel_tips_services"
       ]
@@ -651,133 +961,45 @@
     {
       "id": "local_tips",
       "label": "טיפים מקומיים",
-      "categoryId": "logistics",
-      "categoryIds": [
-        "logistics",
-        "services"
-      ],
+      "categoryId": "services",
+      "groupId": "planning_guidance",
       "interests": [
         "travel_tips_services",
         "local_experiences"
-      ]
-    },
-    {
-      "id": "tour_guides",
-      "label": "מדריכי טיולים",
-      "categoryId": "logistics",
-      "interests": [
-        "travel_tips_services",
-        "local_experiences"
-      ]
-    },
-    {
-      "id": "travel_agents",
-      "label": "סוכני טיולים",
-      "categoryId": "logistics",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "flight_agents",
-      "label": "סוכני טיסות",
-      "categoryId": "logistics",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "equipment_rental",
-      "label": "השכרת ציוד",
-      "categoryId": "logistics",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "hairdresser",
-      "label": "מספרה / ספר",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "beauty_nails",
-      "label": "מכון יופי / בניית ציפורניים",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "cosmetician",
-      "label": "קוסמטיקאית",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "hair_removal",
-      "label": "מכון הסרת שיער",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "tailor",
-      "label": "תופר / מתפרה",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "shoemaker",
-      "label": "סנדלר",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "watchmaker",
-      "label": "שען",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "mobile_computer_lab",
-      "label": "מעבדת סלולר ומחשבים",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "laundromat",
-      "label": "מכבסה",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
-      ]
-    },
-    {
-      "id": "dry_cleaning",
-      "label": "ניקוי יבש",
-      "categoryId": "services",
-      "interests": [
-        "travel_tips_services"
       ]
     },
     {
       "id": "pharmacy",
       "label": "בית מרקחת",
       "categoryId": "services",
+      "groupId": "health_medical",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "clinic_doctor",
+      "label": "מרפאה או רופא",
+      "categoryId": "services",
+      "groupId": "health_medical",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "urgent_care",
+      "label": "רפואת חירום",
+      "categoryId": "services",
+      "groupId": "health_medical",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "dentist",
+      "label": "רופא שיניים",
+      "categoryId": "services",
+      "groupId": "health_medical",
       "interests": [
         "travel_tips_services"
       ]
@@ -786,68 +1008,157 @@
       "id": "optician",
       "label": "אופטיקה",
       "categoryId": "services",
+      "groupId": "health_medical",
       "interests": [
         "travel_tips_services"
       ]
     },
     {
-      "id": "massage_spa",
-      "label": "עיסוי / ספא",
+      "id": "hairdresser",
+      "label": "מספרה",
       "categoryId": "services",
+      "groupId": "personal_care",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "beauty_care",
+      "label": "יופי וקוסמטיקה",
+      "categoryId": "services",
+      "groupId": "personal_care",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "massage_service",
+      "label": "עיסוי או טיפול",
+      "categoryId": "services",
+      "groupId": "personal_care",
       "interests": [
         "travel_tips_services",
         "wellness"
       ]
     },
     {
-      "id": "printing_documents",
-      "label": "דפוס וצילום מסמכים",
+      "id": "laundry",
+      "label": "מכבסה וניקוי יבש",
       "categoryId": "services",
+      "groupId": "laundry_clothing",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "tailor",
+      "label": "חייט או מתפרה",
+      "categoryId": "services",
+      "groupId": "laundry_clothing",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "shoemaker",
+      "label": "סנדלר",
+      "categoryId": "services",
+      "groupId": "laundry_clothing",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "device_repair",
+      "label": "תיקון טלפון או מחשב",
+      "categoryId": "services",
+      "groupId": "technology_repairs",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "watch_repair",
+      "label": "תיקון שעונים",
+      "categoryId": "services",
+      "groupId": "technology_repairs",
+      "interests": [
+        "travel_tips_services"
+      ]
+    },
+    {
+      "id": "printing_documents",
+      "label": "הדפסה וצילום מסמכים",
+      "categoryId": "services",
+      "groupId": "documents_equipment",
       "interests": [
         "travel_tips_services"
       ]
     },
     {
       "id": "office_supplies",
-      "label": "חנות לציוד משרדי",
+      "label": "ציוד משרדי",
       "categoryId": "services",
+      "groupId": "documents_equipment",
       "interests": [
         "travel_tips_services"
       ]
     },
     {
-      "id": "chabad_services",
-      "label": "חב״ד",
-      "categoryId": "food",
-      "displayOnly": true,
-      "selectable": false
-    },
-    {
-      "id": "accessibility_general",
-      "label": "נגישות",
-      "categoryId": "nature",
-      "displayOnly": true,
-      "selectable": false
-    },
-    {
-      "id": "scenic_route",
-      "label": "מסלול נופי",
-      "categoryId": "nature",
+      "id": "equipment_rental",
+      "label": "השכרת ציוד",
+      "categoryId": "services",
+      "groupId": "documents_equipment",
       "interests": [
-        "scenic_roadtrips"
-      ],
-      "selectable": false
-    },
-    {
-      "id": "photography",
-      "label": "צילום",
-      "categoryId": "attractions",
-      "interests": [
-        "photography_viewpoints"
-      ],
-      "selectable": false
+        "travel_tips_services"
+      ]
     }
   ],
+  "searchSynonyms": {
+    "חוף": [
+      "ים",
+      "חופים"
+    ],
+    "אגם": [
+      "אגמים",
+      "נהר",
+      "נחל"
+    ],
+    "מפל": [
+      "מפלים",
+      "מעיין",
+      "מעיינות"
+    ],
+    "אוכל": [
+      "מסעדה",
+      "קולינריה"
+    ],
+    "קפה": [
+      "בית קפה",
+      "בתי קפה"
+    ],
+    "אטרקציה": [
+      "פעילות",
+      "בילוי"
+    ],
+    "תחבורה": [
+      "התניידות",
+      "הסעה"
+    ],
+    "מסלול": [
+      "טיול",
+      "רואדטריפ",
+      "roadtrip"
+    ],
+    "נוף": [
+      "תצפית",
+      "נופי"
+    ],
+    "לינה": [
+      "מלון",
+      "אירוח"
+    ]
+  },
   "legacy": {
     "interestAliases": {
       "nature": [
@@ -858,7 +1169,17 @@
       ],
       "shopping": [
         "shopping_markets"
+      ],
+      "beaches": [
+        "beaches_water"
       ]
+    },
+    "categoryAliases": {
+      "attractions": "activities",
+      "logistics": "services",
+      "אטרקציות": "activities",
+      "לוגיסטיקה": "services",
+      "שירותים ואנשי מקצוע": "services"
     },
     "budgetAliases": {
       "חינמי": "economy",
@@ -891,9 +1212,17 @@
       "מרגיע": "relaxed",
       "רומנטי": "romantic",
       "אתגרי": "adventurous",
-      "תרבותי": "cultural",
+      "תרבותי": "cultural"
+    },
+    "travelerStyleAliases": {
+      "backpacker": "backpacker",
+      "תרמילאי": "backpacker",
       "תרמילאים": "backpacker",
-      "נוודים דיגיטליים": "digital_nomad"
+      "digital_nomad": "digital_nomad",
+      "נוודות דיגיטלית": "digital_nomad",
+      "נוודים דיגיטליים": "digital_nomad",
+      "רואדטריפ": "roadtrip",
+      "roadtrip": "roadtrip"
     },
     "needAliases": {
       "kosher": "kosher",
@@ -904,9 +1233,109 @@
       "טבעוני": "vegan"
     },
     "tagAliases": {
+      "bar": "bar_nightlife",
+      "nightlife": "bar_nightlife",
+      "israeli_restaurants": "local_cuisine",
+      "hiking_trail": "hiking",
+      "beaches": "beach",
+      "waterfalls": "waterfall_spring",
+      "springs": "waterfall_spring",
+      "observatory": "viewpoint",
+      "amusement_park": "theme_park",
+      "adventure_activity": "adventure",
+      "challenging": "adventure",
+      "shopping": "shopping_center",
+      "markets": "market",
+      "live_performances": "performance_event",
+      "workshops": "workshop",
+      "recommended_neighborhoods": "neighborhood",
+      "airbnb": "apartment",
+      "bus": "public_transit",
+      "train": "public_transit",
+      "metro": "public_transit",
+      "shuttle_driver": "airport_transfer",
+      "sim_card": "sim_esim",
+      "tour_guides": "tour_guide",
+      "travel_agents": "travel_agent",
+      "flight_agents": "travel_agent",
+      "beauty_nails": "beauty_care",
+      "cosmetician": "beauty_care",
+      "hair_removal": "beauty_care",
+      "mobile_computer_lab": "device_repair",
+      "watchmaker": "watch_repair",
+      "laundromat": "laundry",
+      "dry_cleaning": "laundry",
+      "massage_spa": "massage_service",
       "נקודות תצפית": "viewpoint",
-      "חוף": "beaches",
-      "שוק מקומי": "markets"
+      "חוף": "beach",
+      "שוק מקומי": "market",
+      "אוכל רחוב": "street_food",
+      "טיול רגלי": "hiking"
+    },
+    "attributeTagAliases": {
+      "difficulty_easy": {
+        "difficulty": "easy"
+      },
+      "difficulty_medium": {
+        "difficulty": "moderate"
+      },
+      "difficulty_hard": {
+        "difficulty": "challenging"
+      },
+      "winter_season": {
+        "season": "winter"
+      },
+      "summer_season": {
+        "season": "summer"
+      },
+      "rainy_season": {
+        "season": "rainy"
+      },
+      "indoor_activity": {
+        "environment": "indoor"
+      },
+      "instagram_spot": {
+        "interest": "photography_viewpoints"
+      },
+      "photography": {
+        "interest": "photography_viewpoints"
+      },
+      "לאינסטגרם": {
+        "interest": "photography_viewpoints"
+      },
+      "scenic_route": {
+        "travelerStyle": "roadtrip",
+        "interest": "scenic_roadtrips"
+      }
+    },
+    "ignoredTagAliases": [
+      "chabad_services",
+      "accessibility_general",
+      "חב״ד",
+      "נגישות"
+    ],
+    "routeDifficultyAliases": {
+      "קל": "easy",
+      "easy": "easy",
+      "בינוני": "moderate",
+      "med": "moderate",
+      "medium": "moderate",
+      "קשה": "challenging",
+      "hard": "challenging"
+    },
+    "routeExperienceAliases": {
+      "מתחילים": "beginner",
+      "beg": "beginner",
+      "מנוסים": "intermediate",
+      "מתקדמים": "advanced",
+      "adv": "advanced"
+    },
+    "transportModeAliases": {
+      "רגלי": "walking",
+      "הליכה": "walking",
+      "תחבורה ציבורית": "public_transit",
+      "רכב": "car",
+      "משולב": "mixed"
     },
     "tagNeeds": {
       "כשר": [

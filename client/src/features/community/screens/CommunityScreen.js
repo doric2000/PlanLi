@@ -26,6 +26,8 @@ import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
+import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
+import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -36,21 +38,22 @@ export default function CommunityScreen({ navigation }) {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [mapOpen, setMapOpen] = useState(false);
-  const [destinationEditing, setDestinationEditing] = useState(false);
   const personalizationInitialized = useRef(false);
 
   // --- Hooks ---
   const {
     data: recommendations,
+    error,
     loading,
     refreshing,
     refresh,
     removeRecommendation,
-    setPersonalizationFilters,
+    setDiscoveryRequest,
   } = useRecommendations(sortBy);
-  const { filteredData, filters, isFiltered, updateFilters, clearFilters } = useRecommendationFilter(recommendations);
+  const { filteredData, filters, isFiltered, updateFilters, replaceFilters, clearFilters } = useRecommendationFilter(recommendations);
   const { location: userLocation, requestLocation } = useUserLocation();
-  const { completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
+  const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
+  const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
   const feedListRef = useRef(null);
 
   useEffect(() => {
@@ -60,12 +63,8 @@ export default function CommunityScreen({ navigation }) {
   }, [personalizationAvailable, profileLoading]);
 
   useEffect(() => {
-    setPersonalizationFilters({
-      categoryIds: filters.categories,
-      tags: filters.tags,
-      budgetLevels: filters.budgets,
-    });
-  }, [filters.budgets, filters.categories, filters.tags, setPersonalizationFilters]);
+    setDiscoveryRequest(discoveryRequestFromFilters(filters));
+  }, [filters, setDiscoveryRequest]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',
@@ -92,18 +91,8 @@ export default function CommunityScreen({ navigation }) {
   };
   const handleOpenComments = (postId) => { setSelectedPostId(postId); setCommentsModalVisible(true); };
 
-  // FIXED: Added the logic to handle 'tag' removal
   const handleRemoveFilter = (type, value) => {
-    if (type === 'destination') {
-      updateFilters({ destination: '' });
-    } else if (type === 'category') {
-      updateFilters({ categories: filters.categories.filter((c) => c !== value) });
-    } else if (type === 'budget') {
-      updateFilters({ budgets: filters.budgets.filter((b) => b !== value) });
-    } else if (type === 'tag') {
-      // Logic for removing a specific tag from the array
-      updateFilters({ tags: filters.tags.filter((t) => t !== value) });
-    }
+    replaceFilters(removeDiscoveryFilter(filters, type, value));
   };
 
   const sortLabel = sortBy === 'personalized'
@@ -147,29 +136,18 @@ export default function CommunityScreen({ navigation }) {
       .filter(Boolean);
   }, [displayData]);
 
-  const destinationQuery = (filters?.destination || '').trim();
-
-  // Debounce typing so we don't refocus/re-render native maps on every keystroke.
-  const [debouncedDestinationQuery, setDebouncedDestinationQuery] = useState(destinationQuery);
   const [debouncedMapPins, setDebouncedMapPins] = useState(mapPins);
-
-  useEffect(() => {
-    if (destinationEditing) return;
-    const t = setTimeout(() => setDebouncedDestinationQuery(destinationQuery), 500);
-    return () => clearTimeout(t);
-  }, [destinationEditing, destinationQuery]);
 
   useEffect(() => {
     if (!mapOpen) {
       setDebouncedMapPins(mapPins);
       return;
     }
-    if (destinationEditing) return;
     const t = setTimeout(() => setDebouncedMapPins(mapPins), 500);
     return () => clearTimeout(t);
-  }, [destinationEditing, mapPins, mapOpen]);
+  }, [mapPins, mapOpen]);
 
-  const focusMapOnPins = debouncedDestinationQuery.length >= 2;
+  const focusMapOnPins = filters.destinations.length > 0 || Boolean(filters.query.trim());
 
   const renderTopArea = () => (
     <LinearGradient
@@ -217,21 +195,19 @@ export default function CommunityScreen({ navigation }) {
         <View style={styles.searchPill}>
           <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
           <TextInput
-            value={filters.destination}
-            onChangeText={(text) => updateFilters({ destination: text })}
-            onFocus={() => setDestinationEditing(true)}
-            onBlur={() => setDestinationEditing(false)}
-            onSubmitEditing={() => setDestinationEditing(false)}
+            value={filters.query}
+            onChangeText={(text) => updateFilters({ query: text })}
             placeholder="חפש המלצה"
             placeholderTextColor="rgba(255,255,255,0.48)"
             style={styles.searchInput}
             textAlign="right"
             autoCorrect={false}
             autoCapitalize="none"
+            testID="community-search-input"
           />
-          {!!filters.destination && (
+          {!!filters.query && (
             <TouchableOpacity
-              onPress={() => updateFilters({ destination: '' })}
+              onPress={() => updateFilters({ query: '' })}
               style={community.destinationClearBtn}
               accessibilityRole="button"
               accessibilityLabel="חפש המלצה"
@@ -291,7 +267,9 @@ export default function CommunityScreen({ navigation }) {
             ListEmptyComponent={
               <View style={common.emptyState}>
                 <Ionicons name="images-outline" size={50} color={colors.textMuted} />
-                <Text style={common.emptyText}>{isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
+                <Text style={common.emptyText}>{error
+                  ? 'לא הצלחנו לטעון תוצאות. משכו מטה כדי לנסות שוב.'
+                  : isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
               </View>
             }
           />
@@ -329,6 +307,7 @@ export default function CommunityScreen({ navigation }) {
           clearFilters();
           setFilterModalVisible(false);
         }}
+        onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile)}
       />
 
       <CommentsModal

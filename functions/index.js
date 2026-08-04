@@ -17,6 +17,7 @@ const { saveTrip } = require('./tripService');
 const { registerUser, updateProfile } = require('./profileService');
 const {
   getPersonalizedRecommendations,
+  getPersonalizedRoutes,
   recordDiscoverySignal,
   resetPersonalizationActivity,
 } = require('./personalizationService');
@@ -101,12 +102,14 @@ exports.resolveRecommendationDestination = callable(
 );
 
 exports.saveRoute = callable(
-  { timeoutSeconds: 120, memory: '1GiB' },
+  { timeoutSeconds: 300, memory: '1GiB', secrets: [googleMapsKey, restCountriesKey] },
   (request) => saveRoute({
     admin,
     auth: request.auth,
     data: request.data,
     mediaBucket: mediaStorageBucket.value(),
+    mapsKey: googleMapsKey.value(),
+    restCountriesKey: restCountriesKey.value(),
   })
 );
 
@@ -166,6 +169,15 @@ exports.updateProfile = callable(
 exports.getPersonalizedRecommendations = callable(
   { timeoutSeconds: 30 },
   (request) => getPersonalizedRecommendations({
+    admin,
+    auth: request.auth,
+    data: request.data,
+  })
+);
+
+exports.getPersonalizedRoutes = callable(
+  { timeoutSeconds: 30 },
+  (request) => getPersonalizedRoutes({
     admin,
     auth: request.auth,
     data: request.data,

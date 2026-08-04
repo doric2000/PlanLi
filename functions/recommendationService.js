@@ -10,16 +10,22 @@ const {
 const {
   analyzeTagValues,
   buildRecommendationFacets,
+  categoryFromLegacyClassification,
+  ENVIRONMENT_IDS,
   getCategoryLabel,
   INTEREST_IDS,
   NEED_IDS,
   normalizeBudget,
   normalizeCategoryId,
   POST_BUDGET_IDS,
+  SEASON_IDS,
   tagsMatchCategory,
+  taxonomy,
   TRAVEL_PARTY_IDS,
+  TRAVELER_STYLE_IDS,
   VIBE_IDS,
 } = require('./travelTaxonomy');
+const { buildSearchIndex } = require('./discoverySearch');
 
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -59,8 +65,6 @@ function cleanStringArray(value, { field, maxItems, maxLength }) {
 function sanitizeRecommendationContent(data) {
   assert(data && typeof data === 'object', 'invalid-argument', 'Missing recommendation data.');
 
-  const categoryId = normalizeCategoryId(data.categoryId || data.category);
-  assert(categoryId, 'invalid-argument', 'categoryId is invalid.');
   const rawTags = cleanStringArray(data.tags || [], {
     field: 'tags',
     maxItems: 20,
@@ -68,6 +72,8 @@ function sanitizeRecommendationContent(data) {
   });
   const tagAnalysis = analyzeTagValues(rawTags);
   assert(tagAnalysis.recognized, 'invalid-argument', 'tags contain unsupported values.');
+  const categoryId = categoryFromLegacyClassification(data.categoryId || data.category, rawTags);
+  assert(categoryId, 'invalid-argument', 'categoryId is invalid.');
   assert(tagsMatchCategory(rawTags, categoryId), 'invalid-argument', 'tags do not match categoryId.');
   const rawBudget = cleanOptionalString(data.budget, { field: 'budget', max: 50 });
   const budget = normalizeBudget(rawBudget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
@@ -92,7 +98,7 @@ function sanitizeSubmittedFacets(value) {
   if (value == null) return {};
   assert(value && typeof value === 'object' && !Array.isArray(value),
     'invalid-argument', 'facets are invalid.');
-  const allowedFields = ['interests', 'audiences', 'vibes', 'needs'];
+  const allowedFields = ['interests', 'audiences', 'vibes', 'travelerStyles', 'needs', 'seasons', 'environments'];
   assert(Object.keys(value).every((key) => allowedFields.includes(key)),
     'invalid-argument', 'facets contain unsupported fields.');
   const validate = (field, allowed, maximum, minimumWhenProvided = 0) => {
@@ -109,7 +115,10 @@ function sanitizeSubmittedFacets(value) {
     interests: validate('interests', INTEREST_IDS, 5, 1),
     audiences: validate('audiences', TRAVEL_PARTY_IDS, 4),
     vibes: validate('vibes', VIBE_IDS, 3),
+    travelerStyles: validate('travelerStyles', TRAVELER_STYLE_IDS, 4),
     needs: validate('needs', NEED_IDS, NEED_IDS.length),
+    seasons: validate('seasons', SEASON_IDS, SEASON_IDS.length),
+    environments: validate('environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length),
   };
 }
 
@@ -779,6 +788,7 @@ async function saveRecommendation({
 
   const payload = {
     ...content,
+    taxonomyVersion: taxonomy.version,
     facets,
     status: 'active',
     destination: {
@@ -790,6 +800,15 @@ async function saveRecommendation({
     media,
     place: destination.place,
   };
+  payload.search = buildSearchIndex({
+    title: content.title,
+    description: content.description,
+    destination: payload.destination,
+    place: payload.place,
+    categoryIds: [content.categoryId],
+    subcategoryIds: content.tags,
+    interestIds: facets.interests,
+  });
 
   await db.runTransaction(async (transaction) => {
     const current = await transaction.get(recommendationRef);
@@ -904,6 +923,7 @@ module.exports = {
   parsePlaceDetails,
   fetchGoogleReverseCountry,
   resolvePlaceCountry,
+  resolveGoogleDestination,
   resolveRecommendationDestination,
   sanitizeRecommendationContent,
   sanitizeSubmittedFacets,

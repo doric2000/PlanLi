@@ -84,7 +84,7 @@ test('manifest preserves the Firestore updateTime precondition and audit metadat
   });
   assert.equal(result.entry.expectedUpdateTime, '2026-08-04T08:00:00.000Z');
   assert.equal(result.entry.reason, 'Editorial clarity.');
-  assert.deepEqual(result.entry.changes, ['title', 'description']);
+  assert.deepEqual(result.entry.changes, ['title', 'description', 'category', 'facets']);
   assert.deepEqual(result.errors, []);
 });
 

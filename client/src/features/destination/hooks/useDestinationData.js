@@ -41,6 +41,7 @@ export const useDestinationData = (cityId, countryId) => {
       const fetchGenericRecommendations = async () => {
         const q = query(
           collection(db, "recommendations"),
+          where("destination.countryId", "==", countryId),
           where("destination.cityId", "==", cityId),
           where("status", "==", "active"),
           limit(30)
@@ -49,15 +50,12 @@ export const useDestinationData = (cityId, countryId) => {
         return querySnapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
       };
       try {
-        if (preferencesCompleted) {
-          const result = await getPersonalizedRecommendations({
-            context: { countryId, cityId },
-            limit: 30,
-          });
-          setRecommendations(Array.isArray(result?.items) ? result.items : []);
-        } else {
-          setRecommendations(await fetchGenericRecommendations());
-        }
+        const result = await getPersonalizedRecommendations({
+          context: { countryId, cityId },
+          sort: preferencesCompleted ? 'forYou' : 'popular',
+          limit: 30,
+        });
+        setRecommendations(Array.isArray(result?.items) ? result.items : []);
       } catch (error) {
         console.warn('Personalized destination recommendations failed:', error);
         setRecommendations(await fetchGenericRecommendations());

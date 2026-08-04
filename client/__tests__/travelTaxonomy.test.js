@@ -15,7 +15,7 @@ import {
 
 describe('shared travel taxonomy', () => {
   it('uses the same complete facet catalogs for profiles and posts', () => {
-    expect(INTERESTS).toHaveLength(23);
+    expect(INTERESTS).toHaveLength(25);
     expect(INTERESTS.map((item) => item.value)).toEqual(expect.arrayContaining([
       'stays_accommodation',
       'transportation_mobility',
@@ -44,15 +44,15 @@ describe('shared travel taxonomy', () => {
   it('does not turn generic accessibility or Chabad into practical guarantees', () => {
     const analysis = analyzeTagValues(['נגישות', 'חב״ד']);
     expect(analysis.needs).toEqual([]);
-    expect(analysis.tagIds).toEqual(['accessibility_general', 'chabad_services']);
+    expect(analysis.tagIds).toEqual([]);
   });
 
   it('marks every selectable descriptive tag as mapped or display-only', () => {
     for (const tag of TAGS.filter((item) => item.selectable !== false)) {
-      const mapped = ['interests', 'audiences', 'vibes', 'needs']
+      const mapped = ['interests', 'audiences', 'vibes', 'travelerStyles', 'needs', 'seasons', 'environments']
         .some((field) => Array.isArray(tag[field]) && tag[field].length > 0);
       expect(mapped || tag.displayOnly === true).toBe(true);
     }
-    expect(CATEGORIES).toHaveLength(7);
+    expect(CATEGORIES).toHaveLength(8);
   });
 });

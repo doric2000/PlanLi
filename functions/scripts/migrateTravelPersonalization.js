@@ -7,25 +7,37 @@ const {
   analyzeTagValues,
   buildRecommendationFacets,
   CATEGORY_IDS,
+  ENVIRONMENT_IDS,
   getCategoryLabel,
   INTEREST_IDS,
   NEED_IDS,
   normalizeBudget,
   normalizeCategoryId,
   normalizeSmartProfile,
+  PACE_IDS,
   POST_BUDGET_IDS,
+  ROUTE_DIFFICULTY_IDS,
+  ROUTE_EXPERIENCE_IDS,
+  SEASON_IDS,
   TAG_IDS,
   tagsMatchCategory,
+  taxonomy,
+  TRANSPORT_MODE_IDS,
+  TRAVELER_STYLE_IDS,
   TRAVEL_PARTY_IDS,
+  uniqueAllowed,
   VIBE_IDS,
 } = require('../travelTaxonomy');
+const { mapWithConcurrency, sanitizeRouteMetadata } = require('../routeService');
+const { resolveGoogleDestination } = require('../recommendationService');
+const { buildSearchIndex, destinationKey } = require('../discoverySearch');
 const {
   applyPersonalizationSignal,
   normalizePersonalization,
 } = require('../personalizationService');
 
 const PAGE_SIZE = 250;
-const HISTORY_SEED_VERSION = 'travel-preferences-v1';
+const HISTORY_SEED_VERSION = 'travel-taxonomy-v3';
 const DEFAULT_STATE_DIR = path.join(
   __dirname,
   '..',
@@ -48,6 +60,8 @@ function parseArgs(argv) {
       ? parsedLimit
       : Number.POSITIVE_INFINITY,
     stateDir: path.resolve(valueAfter(argv, '--state-dir') || DEFAULT_STATE_DIR),
+    mapsKey: process.env.GOOGLE_MAPS_KEY || '',
+    restCountriesKey: process.env.REST_COUNTRIES_KEY || '',
   };
 }
 
@@ -90,9 +104,12 @@ function writeJson(filePath, value) {
   fs.renameSync(temporary, filePath);
 }
 
-function appendRollback(filePath, documentPath, before) {
+function appendRollback(filePath, documentPath, before, { deleteDocument = false } = {}) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.appendFileSync(filePath, `${JSON.stringify({ path: documentPath, before: encode(before) })}\n`);
+  fs.appendFileSync(filePath, `${JSON.stringify({
+    path: documentPath,
+    ...(deleteDocument ? { deleteDocument: true } : { before: encode(before) }),
+  })}\n`);
 }
 
 function migratedSmartProfile(raw = {}) {
@@ -108,19 +125,159 @@ function migratedSmartProfile(raw = {}) {
   };
 }
 
+const TAG_CATEGORY_BY_ID = Object.fromEntries(taxonomy.tags.map((tag) => [tag.id, tag.categoryId]));
+
+function inferredLegacySubcategory(data = {}) {
+  const text = `${data.title || ''} ${data.description || ''}`.toLocaleLowerCase('he');
+  const rules = [
+    { pattern: /camp nou|קאמפ נואו|אצטדיונ|stadium/i, categoryId: 'activities', tagId: 'sports_stadium' },
+    { pattern: /אקווריום|aquarium/i, categoryId: 'nature', tagId: 'wildlife' },
+    { pattern: /באולינג|bowling/i, categoryId: 'activities', tagId: 'indoor_venue_activity' },
+    { pattern: /dubai frame|מבנה תצפית/i, categoryId: 'culture', tagId: 'architecture_landmark' },
+    { pattern: /miracle garden|גן הפרחימ/i, categoryId: 'activities', tagId: 'family_attraction' },
+    { pattern: /בית הכנסת|כנסי|מקדש|מסגד|synagogue|church|temple|mosque/i, categoryId: 'culture', tagId: 'religious_site' },
+    { pattern: /מוזיאונ|museum/i, categoryId: 'culture', tagId: 'museum' },
+    { pattern: /עיר העתיקה|עייר|old city|neighbou?rhood/i, categoryId: 'culture', tagId: 'neighborhood' },
+  ];
+  return rules.find((rule) => rule.pattern.test(text)) || null;
+}
+
+function resolveLegacyRecommendationClassification(data = {}) {
+  const rawCategory = String(data.categoryId || data.category || '').trim();
+  const analysis = analyzeTagValues(data.tags);
+  const inferred = inferredLegacySubcategory(data);
+  let categoryId = normalizeCategoryId(rawCategory);
+  let confident = Boolean(categoryId);
+  if (['attractions', 'אטרקציות'].includes(rawCategory)) {
+    const tagCategories = Array.from(new Set(analysis.tagIds.map((tagId) => TAG_CATEGORY_BY_ID[tagId]).filter(Boolean)));
+    if (inferred) categoryId = inferred.categoryId;
+    else if (tagCategories.length === 1) categoryId = tagCategories[0];
+    else if (tagCategories.includes('culture')) categoryId = 'culture';
+    else if (tagCategories.includes('activities')) categoryId = 'activities';
+    else if (tagCategories.includes('nature')) categoryId = 'nature';
+    else if (tagCategories.includes('shopping')) categoryId = 'shopping';
+    else confident = false;
+  }
+  const tagIds = Array.from(new Set([
+    ...analysis.tagIds.filter((tagId) => TAG_CATEGORY_BY_ID[tagId] === categoryId),
+    ...(inferred?.categoryId === categoryId ? [inferred.tagId] : []),
+  ]));
+  return { categoryId, tagIds, tagAnalysis: analysis, confident };
+}
+
 function migratedRecommendation(data = {}) {
-  const categoryId = normalizeCategoryId(data.categoryId || data.category);
-  const tagAnalysis = analyzeTagValues(data.tags);
+  const classification = resolveLegacyRecommendationClassification(data);
+  const { categoryId, tagIds, tagAnalysis } = classification;
   const budget = normalizeBudget(data.budget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
+  const existingFacets = data.facets && typeof data.facets === 'object' ? data.facets : {};
+  const rawVibes = Array.isArray(existingFacets.vibes) ? existingFacets.vibes : [];
+  const styleAliases = taxonomy.legacy?.travelerStyleAliases || {};
+  const submittedFacets = {
+    interests: uniqueAllowed(existingFacets.interests, INTEREST_IDS, 12),
+    audiences: uniqueAllowed(existingFacets.audiences, TRAVEL_PARTY_IDS, 6),
+    vibes: uniqueAllowed(rawVibes, VIBE_IDS, 4),
+    travelerStyles: uniqueAllowed([
+      ...(Array.isArray(existingFacets.travelerStyles) ? existingFacets.travelerStyles : []),
+      ...rawVibes.map((value) => styleAliases[value]).filter(Boolean),
+    ], TRAVELER_STYLE_IDS, 4),
+    needs: uniqueAllowed(existingFacets.needs, NEED_IDS),
+    seasons: uniqueAllowed(existingFacets.seasons, SEASON_IDS),
+    environments: uniqueAllowed(existingFacets.environments, ENVIRONMENT_IDS),
+  };
+  const facets = buildRecommendationFacets(
+    { ...data, categoryId, tags: data.tags || [], budget },
+    submittedFacets
+  );
   return {
+    taxonomyVersion: taxonomy.version,
     categoryId,
     category: getCategoryLabel(categoryId),
-    tags: tagAnalysis.tagIds,
+    tags: tagIds,
     budget,
-    facets: buildRecommendationFacets(
-      { ...data, categoryId, tags: data.tags || [], budget },
-      data.facets || {}
-    ),
+    facets,
+    search: buildSearchIndex({
+      title: data.title,
+      description: data.description,
+      destination: data.destination,
+      place: data.place,
+      categoryIds: [categoryId],
+      subcategoryIds: tagIds,
+      interestIds: facets.interests,
+    }),
+  };
+}
+
+function canonicalRouteDestinations(data = {}, stops = []) {
+  const stopValue = (entry) => entry?.data || entry || {};
+  const source = [
+    ...(Array.isArray(data.destinations) ? data.destinations : []),
+    ...stops.map((entry) => stopValue(entry).destination),
+  ];
+  const unique = new Map();
+  for (const entry of source) {
+    const countryId = typeof entry?.countryId === 'string' ? entry.countryId.trim() : '';
+    const cityId = typeof entry?.cityId === 'string' ? entry.cityId.trim() : '';
+    if (!countryId || !cityId) continue;
+    unique.set(`${countryId}:${cityId}`, {
+      countryId,
+      cityId,
+      countryName: typeof entry.countryName === 'string' ? entry.countryName.trim() : '',
+      cityName: typeof entry.cityName === 'string' ? entry.cityName.trim() : '',
+    });
+  }
+  return Array.from(unique.values()).slice(0, 20);
+}
+
+function migratedRoute(data = {}, stops = []) {
+  const stopValue = (entry) => entry?.data || entry || {};
+  const destinations = canonicalRouteDestinations(data, stops);
+  const hasStops = stops.length > 0;
+  if (!hasStops) {
+    return {
+      patch: { status: 'inactive' },
+      confidence: 'high',
+      reason: 'route-without-days-or-stops',
+      reviewRequired: false,
+    };
+  }
+  if (!destinations.length) {
+    return {
+      patch: null,
+      confidence: 'low',
+      reason: 'route-destinations-cannot-be-derived',
+      reviewRequired: true,
+    };
+  }
+  const metadata = sanitizeRouteMetadata(
+    Number(data.taxonomyVersion || 0) >= 3 ? data : { ...data, taxonomyVersion: 0 }
+  );
+  const summaryPlaces = Array.from(new Set([
+    ...(Array.isArray(data.summaryPlaces) ? data.summaryPlaces : []),
+    ...stops.map((entry) => stopValue(entry).location || stopValue(entry).place?.name),
+  ].filter(Boolean))).slice(0, 30);
+  const destinationKeys = Array.from(new Set(destinations.flatMap((destination) => [
+    destinationKey(destination.countryId),
+    destinationKey(destination.countryId, destination.cityId),
+  ])));
+  return {
+    patch: {
+      taxonomyVersion: taxonomy.version,
+      ...metadata,
+      destinations,
+      destinationKeys,
+      summaryPlaces,
+      search: buildSearchIndex({
+        title: data.title,
+        description: `${data.description || ''} ${summaryPlaces.join(' ')}`,
+        destinations,
+        categoryIds: metadata.categoryIds,
+        subcategoryIds: metadata.subcategoryIds,
+        interestIds: metadata.facets.interests,
+      }),
+    },
+    confidence: 'high',
+    reason: 'canonical-route-taxonomy-and-search',
+    reviewRequired: false,
   };
 }
 
@@ -131,10 +288,11 @@ function auditCanonicalPatch(stageName, patch) {
   );
   if (stageName === 'users') {
     const profile = patch.smartProfile;
-    if (!profile || Object.prototype.hasOwnProperty.call(profile, 'pace')) errors.push('profile-shape');
+    if (!profile || !PACE_IDS.includes(profile.pace) && profile.pace !== '') errors.push('profile-pace');
     if (!arraysUseOnly(profile?.interests, INTEREST_IDS)) errors.push('profile-interests');
     if (!arraysUseOnly(profile?.travelParties, TRAVEL_PARTY_IDS)) errors.push('profile-parties');
     if (!arraysUseOnly(profile?.vibe, VIBE_IDS)) errors.push('profile-vibes');
+    if (!arraysUseOnly(profile?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('profile-styles');
     if (!arraysUseOnly(profile?.needs, NEED_IDS)) errors.push('profile-needs');
   }
   if (stageName === 'recommendations') {
@@ -144,7 +302,33 @@ function auditCanonicalPatch(stageName, patch) {
     if (!arraysUseOnly(patch.facets?.interests, INTEREST_IDS)) errors.push('facet-interests');
     if (!arraysUseOnly(patch.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('facet-audiences');
     if (!arraysUseOnly(patch.facets?.vibes, VIBE_IDS)) errors.push('facet-vibes');
+    if (!arraysUseOnly(patch.facets?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('facet-styles');
     if (!arraysUseOnly(patch.facets?.needs, NEED_IDS)) errors.push('facet-needs');
+    if (!arraysUseOnly(patch.facets?.seasons, SEASON_IDS)) errors.push('facet-seasons');
+    if (!arraysUseOnly(patch.facets?.environments, ENVIRONMENT_IDS)) errors.push('facet-environments');
+    if (patch.taxonomyVersion !== taxonomy.version) errors.push('recommendation-version');
+    if (!Array.isArray(patch.search?.prefixes)) errors.push('recommendation-search');
+  }
+  if (stageName === 'routes') {
+    if (patch.status === 'inactive') return errors;
+    if (patch.taxonomyVersion !== taxonomy.version) errors.push('route-version');
+    if (!arraysUseOnly(patch.categoryIds, CATEGORY_IDS)) errors.push('route-categories');
+    if (!arraysUseOnly(patch.subcategoryIds, TAG_IDS)) errors.push('route-subcategories');
+    if (!arraysUseOnly(patch.facets?.interests, INTEREST_IDS)) errors.push('route-interests');
+    if (!arraysUseOnly(patch.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('route-audiences');
+    if (!arraysUseOnly(patch.facets?.vibes, VIBE_IDS)) errors.push('route-vibes');
+    if (!arraysUseOnly(patch.facets?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('route-styles');
+    if (!arraysUseOnly(patch.facets?.needs, NEED_IDS)) errors.push('route-needs');
+    if (!arraysUseOnly(patch.facets?.seasons, SEASON_IDS)) errors.push('route-seasons');
+    if (!arraysUseOnly(patch.facets?.environments, ENVIRONMENT_IDS)) errors.push('route-environments');
+    if (!ROUTE_DIFFICULTY_IDS.includes(patch.difficulty)) errors.push('route-difficulty');
+    if (patch.experienceLevel && !ROUTE_EXPERIENCE_IDS.includes(patch.experienceLevel)) errors.push('route-experience');
+    if (!arraysUseOnly(patch.transportModes, TRANSPORT_MODE_IDS)) errors.push('route-transport');
+    if (!Array.isArray(patch.destinations) || !patch.destinations.length ||
+      patch.destinations.some((entry) => !entry?.countryId || !entry?.cityId)) {
+      errors.push('route-destinations');
+    }
+    if (!Array.isArray(patch.search?.prefixes)) errors.push('route-search');
   }
   return errors;
 }
@@ -185,14 +369,30 @@ async function migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, r
       let writes = 0;
       for (const document of snapshot.docs) {
         const data = document.data();
-        if (stage.name === 'recommendations' && !analyzeTagValues(data.tags).recognized) {
+        const tagAnalysis = stage.name === 'recommendations' ? analyzeTagValues(data.tags) : null;
+        if (stage.name === 'recommendations' && !tagAnalysis.recognized) {
           if (report.audit.errors.length < 50) {
             report.audit.errors.push({ path: document.ref.path, errors: ['unrecognized-legacy-tags'] });
           }
           continue;
         }
+        const classification = stage.name === 'recommendations'
+          ? resolveLegacyRecommendationClassification(data)
+          : null;
+        if (stage.name === 'recommendations' && !classification.confident) {
+            report.recommendations.reviewRequired += 1;
+            report.manifest.push({
+              path: document.ref.path,
+              expectedUpdateTime: document.updateTime?.toDate?.().toISOString() || null,
+              stage: 'recommendations',
+              confidence: 'low',
+              reason: 'ambiguous-legacy-attractions-category',
+              reviewRequired: true,
+            });
+            continue;
+        }
         if (stage.name === 'recommendations' &&
-          !tagsMatchCategory(data.tags, data.categoryId || data.category)) {
+          classification.tagIds.some((tagId) => !tagsMatchCategory([tagId], classification.categoryId))) {
           if (report.audit.errors.length < 50) {
             report.audit.errors.push({ path: document.ref.path, errors: ['tag-category-mismatch'] });
           }
@@ -210,12 +410,21 @@ async function migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, r
         report.audit.checked += 1;
         if (changed(before, next)) {
           report[stage.name].changed += 1;
+          report.manifest.push({
+            path: document.ref.path,
+            expectedUpdateTime: document.updateTime?.toDate?.().toISOString() || null,
+            stage: stage.name,
+            confidence: 'high',
+            reason: stage.name === 'users' ? 'canonical-smart-profile-v3' : 'canonical-recommendation-v3',
+            before: encode(before),
+            after: encode(next),
+          });
           if (options.apply) {
             appendRollback(rollbackPath, document.ref.path, before);
             batch.update(document.ref, {
               ...next,
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
+            }, { lastUpdateTime: document.updateTime });
             writes += 1;
           }
         }
@@ -228,6 +437,166 @@ async function migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, r
       if (options.apply) writeJson(path.join(options.stateDir, 'checkpoint.json'), checkpoint);
       if (snapshot.size < PAGE_SIZE) break;
     }
+  }
+}
+
+async function readRouteStops(routeDocument) {
+  const days = await routeDocument.ref.collection('days').get();
+  const stopSnapshots = await Promise.all(days.docs.map((day) => day.ref.collection('stops').get()));
+  return stopSnapshots.flatMap((snapshot) => snapshot.docs.map((document) => ({
+    document,
+    data: document.data(),
+  })));
+}
+
+async function resolveMigrationRouteStops(stops, options) {
+  if (!options.mapsKey) return { stops, catalogDestinations: [], resolved: false };
+  const placeIds = Array.from(new Set(stops.map((entry) => entry.data?.place?.placeId).filter(Boolean)));
+  if (!placeIds.length) return { stops, catalogDestinations: [], resolved: false };
+  const destinations = await mapWithConcurrency(placeIds, 5, (placeId) => resolveGoogleDestination({
+    admin,
+    placeId,
+    mapsKey: options.mapsKey,
+    restCountriesKey: options.restCountriesKey,
+  }));
+  const byPlaceId = new Map(placeIds.map((placeId, index) => [placeId, destinations[index]]));
+  const nextStops = stops.map((entry) => {
+    const resolved = byPlaceId.get(entry.data?.place?.placeId);
+    if (!resolved) return entry;
+    const patch = {
+      location: resolved.place.name || entry.data.location || '',
+      country: resolved.countryData.name || resolved.countryId,
+      place: resolved.place,
+      destination: {
+        countryId: resolved.countryId,
+        cityId: resolved.cityId,
+        countryName: resolved.countryData.name || resolved.countryId,
+        cityName: resolved.cityData.name || resolved.cityId,
+      },
+    };
+    return { ...entry, data: { ...entry.data, ...patch }, patch };
+  });
+  return {
+    stops: nextStops,
+    catalogDestinations: Array.from(new Map(destinations.map((entry) => [entry.cityRef.path, entry])).values()),
+    resolved: nextStops.every((entry) => entry.data?.destination?.countryId && entry.data?.destination?.cityId),
+  };
+}
+
+async function migrateRoutes(db, options, checkpoint, rollbackPath, report) {
+  let processed = 0;
+  let lastId = options.resume ? checkpoint.routes?.lastId || null : null;
+  while (processed < options.limit) {
+    const snapshot = await readCollection(db, 'routes', options.limit - processed, lastId);
+    if (snapshot.empty) break;
+    const batch = db.batch();
+    let writes = 0;
+    for (const document of snapshot.docs) {
+      const data = document.data();
+      let stops = await readRouteStops(document);
+      let catalogDestinations = [];
+      let result;
+      try {
+        result = migratedRoute(data, stops);
+        if (!result.patch && result.reason === 'route-destinations-cannot-be-derived') {
+          const resolution = await resolveMigrationRouteStops(stops, options);
+          stops = resolution.stops;
+          catalogDestinations = resolution.catalogDestinations;
+          if (resolution.resolved) result = migratedRoute(data, stops);
+        }
+      } catch (error) {
+        result = {
+          patch: null,
+          confidence: 'low',
+          reason: `route-normalization-failed:${error.message}`,
+          reviewRequired: true,
+        };
+      }
+      report.routes.scanned += 1;
+      if (!result.patch) {
+        report.routes.reviewRequired += 1;
+        report.manifest.push({
+          path: document.ref.path,
+          expectedUpdateTime: document.updateTime?.toDate?.().toISOString() || null,
+          stage: 'routes',
+          confidence: result.confidence,
+          reason: result.reason,
+          reviewRequired: true,
+        });
+        continue;
+      }
+      const auditErrors = auditCanonicalPatch('routes', result.patch);
+      if (auditErrors.length) {
+        report.audit.errors.push({ path: document.ref.path, errors: auditErrors });
+        continue;
+      }
+      report.audit.checked += 1;
+      const before = Object.fromEntries(Object.keys(result.patch).map((field) => [field, data[field]]));
+      if (!changed(before, result.patch)) continue;
+      report.routes.changed += 1;
+      if (result.patch.status === 'inactive') report.routes.deactivated += 1;
+      report.manifest.push({
+        path: document.ref.path,
+        expectedUpdateTime: document.updateTime?.toDate?.().toISOString() || null,
+        stage: 'routes',
+        confidence: result.confidence,
+        reason: result.reason,
+        reviewRequired: false,
+        before: encode(before),
+        after: encode(result.patch),
+        stopChanges: stops.filter((entry) => entry.patch).map((entry) => ({
+          path: entry.document.ref.path,
+          expectedUpdateTime: entry.document.updateTime?.toDate?.().toISOString() || null,
+          before: encode(Object.fromEntries(Object.keys(entry.patch).map((field) => [field, entry.document.data()[field]]))),
+          after: encode(entry.patch),
+        })),
+        catalogCreates: Array.from(new Set(catalogDestinations.flatMap((entry) => [
+          ...(entry.createCountry ? [entry.countryRef.path] : []),
+          ...(entry.createCity ? [entry.cityRef.path] : []),
+        ]))),
+      });
+      if (options.apply) {
+        appendRollback(rollbackPath, document.ref.path, before);
+        batch.update(document.ref, {
+          ...result.patch,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { lastUpdateTime: document.updateTime });
+        writes += 1;
+        for (const entry of stops.filter((stop) => stop.patch)) {
+          const beforeStop = Object.fromEntries(Object.keys(entry.patch).map((field) => [field, entry.document.data()[field]]));
+          appendRollback(rollbackPath, entry.document.ref.path, beforeStop);
+          batch.update(entry.document.ref, entry.patch, { lastUpdateTime: entry.document.updateTime });
+          writes += 1;
+        }
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const createdCatalogPaths = new Set();
+        for (const destination of catalogDestinations) {
+          if (destination.createCountry && !createdCatalogPaths.has(destination.countryRef.path)) {
+            createdCatalogPaths.add(destination.countryRef.path);
+            appendRollback(rollbackPath, destination.countryRef.path, null, { deleteDocument: true });
+            batch.create(destination.countryRef, { ...destination.countryData, createdAt: now, updatedAt: now });
+            writes += 1;
+          }
+          if (destination.createCity && !createdCatalogPaths.has(destination.cityRef.path)) {
+            createdCatalogPaths.add(destination.cityRef.path);
+            appendRollback(rollbackPath, destination.cityRef.path, null, { deleteDocument: true });
+            batch.create(destination.cityRef, {
+              ...destination.cityData,
+              stats: { ...(destination.cityData.stats || {}), recommendationCount: 0 },
+              createdAt: now,
+              updatedAt: now,
+            });
+            writes += 1;
+          }
+        }
+      }
+    }
+    if (options.apply && writes) await batch.commit();
+    processed += snapshot.size;
+    lastId = snapshot.docs[snapshot.docs.length - 1].id;
+    checkpoint.routes = { lastId, complete: snapshot.size < PAGE_SIZE };
+    if (options.apply) writeJson(path.join(options.stateDir, 'checkpoint.json'), checkpoint);
+    if (snapshot.size < PAGE_SIZE) break;
   }
 }
 
@@ -249,15 +618,16 @@ async function seedActivity(db, options, checkpoint, rollbackPath, report) {
     const userId = data.ownerId || document.ref.parent.parent?.id;
     const targetPath = data.target?.path;
     const isRecommendation = typeof targetPath === 'string' && targetPath.startsWith('recommendations/');
+    const isRoute = typeof targetPath === 'string' && targetPath.startsWith('routes/');
     const isCity = typeof targetPath === 'string' && /^countries\/[^/]+\/cities\/[^/]+$/.test(targetPath);
-    if (!isRecommendation && !isCity) return;
+    if (!isRecommendation && !isRoute && !isCity) return;
     const delta = data.type === 'city' || targetPath?.includes('/cities/') ? 6 : 5;
     add(userId, targetPath, delta, 'historical-favorite');
   });
   likes.docs.forEach((document) => {
     const data = document.data();
     const targetRef = document.ref.parent.parent;
-    if (targetRef?.parent?.id === 'recommendations') {
+    if (['recommendations', 'routes'].includes(targetRef?.parent?.id)) {
       add(data.userId || document.id, targetRef.path, 3, 'historical-like');
     }
   });
@@ -279,21 +649,24 @@ async function seedActivity(db, options, checkpoint, rollbackPath, report) {
     for (const signal of signals) {
       const target = await db.doc(signal.targetPath).get();
       if (!target.exists) continue;
-      personalization = applyPersonalizationSignal(
-        personalization,
-        {
+      const targetType = target.ref.parent.id === 'recommendations'
+        ? 'recommendation'
+        : target.ref.parent.id === 'routes' ? 'route' : 'city';
+      personalization = applyPersonalizationSignal({
+        existing: personalization,
+        target: {
           id: target.id,
           path: target.ref.path,
-          type: target.ref.parent.id === 'recommendations' ? 'recommendation' : 'city',
+          type: targetType,
           ...(target.ref.parent.id === 'cities'
             ? { countryId: target.ref.parent.parent?.id }
             : {}),
         },
-        target.data(),
-        signal.delta,
-        signal.action,
-        Date.now()
-      ).personalization;
+        targetData: target.data(),
+        delta: signal.delta,
+        action: signal.action,
+        nowMs: Date.now(),
+      }).personalization;
       report.activity.signals += 1;
     }
     if (options.apply && signals.length) {
@@ -315,6 +688,10 @@ async function rollback(db, filePath) {
   const lines = fs.readFileSync(path.resolve(filePath), 'utf8').split(/\r?\n/).filter(Boolean).reverse();
   for (const line of lines) {
     const entry = JSON.parse(line);
+    if (entry.deleteDocument) {
+      await db.doc(entry.path).delete();
+      continue;
+    }
     const before = decode(entry.before, db);
     const update = {};
     for (const [field, value] of Object.entries(before)) {
@@ -345,14 +722,18 @@ async function run(options) {
   const report = {
     mode: options.apply ? 'apply' : 'dry-run',
     users: { scanned: 0, changed: 0 },
-    recommendations: { scanned: 0, changed: 0 },
+    recommendations: { scanned: 0, changed: 0, reviewRequired: 0 },
+    routes: { scanned: 0, changed: 0, deactivated: 0, reviewRequired: 0 },
     activity: { usersScanned: 0, usersChanged: 0, signals: 0 },
     audit: { checked: 0, passed: false, errors: [] },
+    manifest: [],
     rollbackPath: options.apply ? rollbackPath : null,
   };
   await migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, report);
+  await migrateRoutes(db, options, checkpoint, rollbackPath, report);
   await seedActivity(db, options, checkpoint, rollbackPath, report);
-  report.audit.passed = report.audit.errors.length === 0;
+  report.audit.passed = report.audit.errors.length === 0 &&
+    report.routes.reviewRequired === 0 && report.recommendations.reviewRequired === 0;
   writeJson(path.join(options.stateDir, 'report.json'), report);
   if (options.apply && !report.audit.passed) {
     throw new Error('Post-migration canonical audit failed. Review the local report and rollback data.');
@@ -362,7 +743,16 @@ async function run(options) {
 
 if (require.main === module) {
   run(parseArgs(process.argv.slice(2))).then((result) => {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({
+      mode: result.mode,
+      users: result.users,
+      recommendations: result.recommendations,
+      routes: result.routes,
+      activity: result.activity,
+      audit: result.audit,
+      manifestEntries: result.manifest.length,
+      rollbackPath: result.rollbackPath,
+    }, null, 2));
   }).catch((error) => {
     console.error(error);
     process.exitCode = 1;
@@ -372,8 +762,10 @@ if (require.main === module) {
 module.exports = {
   auditCanonicalPatch,
   migratedRecommendation,
+  migratedRoute,
   migratedSmartProfile,
   parseArgs,
+  resolveLegacyRecommendationClassification,
   rollback,
   run,
 };

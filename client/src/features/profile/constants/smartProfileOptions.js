@@ -2,8 +2,10 @@ export {
   BUDGETS,
   INTERESTS,
   NEEDS,
+  PACES,
   POST_BUDGETS,
   TRAVEL_PARTIES,
+  TRAVELER_STYLES,
   VIBES,
 } from '../../../constants/travelTaxonomy';
 
@@ -11,7 +13,9 @@ import {
   BUDGETS,
   INTERESTS,
   NEEDS,
+  PACES,
   TRAVEL_PARTIES,
+  TRAVELER_STYLES,
   VIBES,
 } from '../../../constants/travelTaxonomy';
 
@@ -27,6 +31,8 @@ export const INTEREST_LABELS = labelMapFromOptions(INTERESTS);
 export const BUDGET_LABELS = labelMapFromOptions(BUDGETS);
 export const PARTY_LABELS = labelMapFromOptions(TRAVEL_PARTIES);
 export const VIBE_LABELS = labelMapFromOptions(VIBES);
+export const TRAVELER_STYLE_LABELS = labelMapFromOptions(TRAVELER_STYLES);
+export const PACE_LABELS = labelMapFromOptions(PACES);
 export const NEED_LABELS = labelMapFromOptions(NEEDS);
 
 export function getPersonalizationReasonLabel(reasonCode) {
@@ -35,5 +41,6 @@ export function getPersonalizationReasonLabel(reasonCode) {
   const [kind, value] = reasonCode.split(':');
   if (kind === 'interest' && INTEREST_LABELS[value]) return `מתאים ל${INTEREST_LABELS[value]}`;
   if (kind === 'party' && PARTY_LABELS[value]) return `מתאים ל${PARTY_LABELS[value]}`;
+  if (kind === 'style' && TRAVELER_STYLE_LABELS[value]) return `מתאים ל${TRAVELER_STYLE_LABELS[value]}`;
   return '';
 }

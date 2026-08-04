@@ -4,6 +4,8 @@ const {
   BUDGET_IDS,
   INTEREST_IDS,
   NEED_IDS,
+  PACE_IDS,
+  TRAVELER_STYLE_IDS,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
   normalizeSmartProfile,
@@ -32,13 +34,14 @@ function assertOnlyAllowed(values, allowed, field, maximum) {
 function sanitizeSmartProfile(value, { complete = false } = {}) {
   if (value == null) return undefined;
   assert(value && typeof value === 'object' && !Array.isArray(value), 'invalid-argument', 'smartProfile is invalid.');
-  const allowedFields = ['interests', 'budget', 'travelParties', 'vibe', 'pace', 'needs'];
+  const allowedFields = ['interests', 'budget', 'travelParties', 'vibe', 'travelerStyles', 'pace', 'needs'];
   assert(Object.keys(value).every((key) => allowedFields.includes(key)),
     'invalid-argument', 'smartProfile contains unsupported fields.');
   for (const [field, allowed, maximum] of [
     ['interests', INTEREST_IDS, 8],
     ['travelParties', TRAVEL_PARTY_IDS, 2],
     ['vibe', VIBE_IDS, 3],
+    ['travelerStyles', TRAVELER_STYLE_IDS, 3],
     ['needs', NEED_IDS, NEED_IDS.length],
   ]) {
     if (Object.prototype.hasOwnProperty.call(value, field)) {
@@ -50,7 +53,7 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
       'invalid-argument', 'smartProfile.budget is invalid.');
   }
   if (Object.prototype.hasOwnProperty.call(value, 'pace')) {
-    assert(['', 'relaxed', 'balanced', 'packed'].includes(value.pace),
+    assert(value.pace === '' || PACE_IDS.includes(value.pace),
       'invalid-argument', 'smartProfile.pace is invalid.');
   }
   const normalized = normalizeSmartProfile(value);
@@ -62,6 +65,12 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
     2
   );
   const vibe = assertOnlyAllowed(normalized.vibe, VIBE_IDS, 'smartProfile.vibe', 3);
+  const travelerStyles = assertOnlyAllowed(
+    normalized.travelerStyles,
+    TRAVELER_STYLE_IDS,
+    'smartProfile.travelerStyles',
+    3
+  );
   const needs = assertOnlyAllowed(normalized.needs, NEED_IDS, 'smartProfile.needs', NEED_IDS.length);
   const budget = normalized.budget;
   assert(!budget || BUDGET_IDS.includes(budget), 'invalid-argument', 'smartProfile.budget is invalid.');
@@ -71,7 +80,7 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
     assert(Boolean(budget), 'invalid-argument', 'Choose a budget preference.');
     assert(travelParties.length >= 1, 'invalid-argument', 'Choose at least one travel party.');
   }
-  return { interests, budget, travelParties, vibe, needs };
+  return { interests, budget, travelParties, vibe, travelerStyles, pace: normalized.pace, needs };
 }
 
 async function updateProfile({ admin, auth, data, mediaBucket }) {
