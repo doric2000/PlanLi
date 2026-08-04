@@ -100,7 +100,13 @@ export default function PreferenceSetupScreen({ navigation }) {
   const persist = async (complete = false) => {
     setSaving(true);
     try {
-      await saveProfile({ smartProfile: profile }, { completeSmartProfile: complete });
+      await saveProfile(
+        { smartProfile: profile },
+        {
+          completeSmartProfile: complete,
+          verifySmartProfile: complete,
+        }
+      );
       if (complete) navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       return true;
     } catch (error) {
