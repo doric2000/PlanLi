@@ -11,14 +11,13 @@ import {
   BUDGETS,
   INTERESTS,
   NEEDS,
-  PACES,
   TRAVEL_PARTIES,
   VIBES,
 } from '../constants/smartProfileOptions';
 import { getPreferenceResumeStep, normalizeClientSmartProfile } from '../utils/preferenceSetup';
 
 const EMPTY_PROFILE = {
-  interests: [], budget: '', travelParties: [], vibe: [], pace: '', needs: [],
+  interests: [], budget: '', travelParties: [], vibe: [], needs: [],
 };
 
 function ChoiceChip({ option, selected, onPress, testID }) {
@@ -114,7 +113,7 @@ export default function PreferenceSetupScreen({ navigation }) {
 
   const next = async () => {
     if (!canContinue || saving) return;
-    if (step === 3) {
+    if (step === 2) {
       await persist(true);
       return;
     }
@@ -148,21 +147,12 @@ export default function PreferenceSetupScreen({ navigation }) {
           prefix="preference-party" />
       </>
     );
-    if (step === 2) return (
-      <>
-        <Text style={styles.sectionTitle}>איזה אופי מתאים לכם?</Text>
-        <Text style={styles.sectionHelp}>השלב הזה אופציונלי ותמיד ניתן לשינוי בפרופיל.</Text>
-        <OptionGroup title="אווירה" help="עד שלוש אפשרויות" options={VIBES} values={profile.vibe}
-          onToggle={(value) => toggleArray('vibe', value, 3)} prefix="preference-vibe" />
-        <OptionGroup title="קצב טיול" options={PACES} values={profile.pace ? [profile.pace] : []}
-          onToggle={(value) => setProfile((previous) => ({ ...previous, pace: previous.pace === value ? '' : value }))}
-          prefix="preference-pace" />
-      </>
-    );
     return (
       <>
-        <Text style={styles.sectionTitle}>צרכים שחשוב לנו להכיר</Text>
-        <Text style={styles.sectionHelp}>הבחירה אופציונלית. המידע נשאר פרטי ומשמש רק לדירוג מיטבי.</Text>
+        <Text style={styles.sectionTitle}>סגנון וצרכים</Text>
+        <Text style={styles.sectionHelp}>הבחירות בשלב הזה אופציונליות ותמיד ניתנות לשינוי בפרופיל.</Text>
+        <OptionGroup title="סגנון ואווירה" help="עד שלוש אפשרויות" options={VIBES} values={profile.vibe}
+          onToggle={(value) => toggleArray('vibe', value, 3)} prefix="preference-vibe" />
         <OptionGroup title="צרכים והעדפות" options={NEEDS} values={profile.needs}
           onToggle={(value) => toggleArray('needs', value, NEEDS.length)} prefix="preference-need" />
         <View style={styles.privacyCard} testID="preference-review">
@@ -175,6 +165,12 @@ export default function PreferenceSetupScreen({ navigation }) {
           </Text>
           <Text style={styles.privacyText}>
             {`הרכב: ${TRAVEL_PARTIES.filter((option) => profile.travelParties.includes(option.value)).map((option) => option.label).join(', ')}`}
+          </Text>
+          <Text style={styles.privacyText}>
+            {`סגנון ואווירה: ${VIBES.filter((option) => profile.vibe.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
+          </Text>
+          <Text style={styles.privacyText}>
+            {`צרכים והעדפות: ${NEEDS.filter((option) => profile.needs.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
           </Text>
         </View>
         <View style={styles.privacyCard}>
@@ -199,8 +195,8 @@ export default function PreferenceSetupScreen({ navigation }) {
               </TouchableOpacity>
             ) : <View style={styles.closePlaceholder} />}
           </View>
-          <Text style={styles.headerSubtitle}>שלב {step + 1} מתוך 4</Text>
-          <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${(step + 1) * 25}%` }]} /></View>
+          <Text style={styles.headerSubtitle}>שלב {step + 1} מתוך 3</Text>
+          <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${((step + 1) / 3) * 100}%` }]} /></View>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {renderStep()}
@@ -208,7 +204,7 @@ export default function PreferenceSetupScreen({ navigation }) {
         <View style={styles.footer}>
           <TouchableOpacity testID="preference-next" style={[styles.primaryButton, (!canContinue || saving) && styles.primaryButtonDisabled]}
             onPress={next} disabled={!canContinue || saving}>
-            {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{step === 3 ? 'סיום ושמירה' : 'המשך'}</Text>}
+            {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{step === 2 ? 'סיום ושמירה' : 'המשך'}</Text>}
           </TouchableOpacity>
           {step > 0 ? <TouchableOpacity testID="preference-back" style={styles.secondaryButton} onPress={() => setStep((current) => current - 1)} disabled={saving}>
             <Text style={styles.secondaryButtonText}>חזרה</Text>

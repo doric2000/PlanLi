@@ -21,6 +21,7 @@ import { useProfileData } from "../hooks/useProfileData";
 import { useProfilePhoto } from "../hooks/useProfilePhoto";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { getSmartProfileBadges } from "../utils/smartProfileBadges";
+import { isSmartProfileComplete } from "../../../hooks/useSmartProfile";
 
 import {
 	collection,
@@ -184,7 +185,7 @@ function AuthedProfileScreen({ navigation, route }) {
 		() => getSmartProfileBadges(userData?.smartProfile),
 		[userData?.smartProfile]
 	);
-	const preferencesCompleted = Boolean(userData?.smartProfile?.completedAt);
+	const preferencesCompleted = isSmartProfileComplete(userData?.smartProfile);
 	const openPreferences = useCallback(() => {
 		getRootNavigation(navigation)?.navigate?.(preferencesCompleted ? "EditProfile" : "PreferenceSetup");
 	}, [navigation, preferencesCompleted]);

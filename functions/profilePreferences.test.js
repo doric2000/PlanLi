@@ -11,8 +11,7 @@ test('completed smart profiles enforce canonical core fields and limits', () => 
     budget: 'balanced',
     travelParties: ['couple'],
     vibe: ['romantic'],
-    pace: 'relaxed',
-    needs: ['vegetarian'],
+    needs: ['vegetarian', 'gluten_free'],
   }, { complete: true });
   assert.equal(complete.interests.length, 3);
 
@@ -21,7 +20,6 @@ test('completed smart profiles enforce canonical core fields and limits', () => 
     budget: 'balanced',
     travelParties: ['couple'],
     vibe: [],
-    pace: '',
     needs: [],
   }, { complete: true }), /three interests/);
 });
@@ -29,10 +27,10 @@ test('completed smart profiles enforce canonical core fields and limits', () => 
 test('profile drafts reject unknown enums and server-owned metadata', () => {
   assert.throws(() => sanitizeSmartProfile({
     interests: ['not-a-real-interest'],
-    budget: '', travelParties: [], vibe: [], pace: '', needs: [],
+    budget: '', travelParties: [], vibe: [], needs: [],
   }), /interests is invalid/);
   assert.throws(() => sanitizeSmartProfile({
-    interests: [], budget: '', travelParties: [], vibe: [], pace: '', needs: [],
+    interests: [], budget: '', travelParties: [], vibe: [], needs: [],
     completedAt: 'client-value',
   }), /unsupported fields/);
 });
@@ -55,10 +53,25 @@ test('recommendation facets are derived from legacy display metadata and author 
 
 test('recommendation author facets reject unknown values and client-derived fields', () => {
   assert.deepEqual(sanitizeSubmittedFacets({
-    audiences: ['couple'], vibes: ['romantic'], needs: ['vegetarian'],
+    interests: ['food'], audiences: ['couple'], vibes: ['romantic'], needs: ['vegetarian'],
   }), {
-    audiences: ['couple'], vibes: ['romantic'], needs: ['vegetarian'],
+    interests: ['food'], audiences: ['couple'], vibes: ['romantic'], needs: ['vegetarian'],
   });
   assert.throws(() => sanitizeSubmittedFacets({ audiences: ['everyone'] }), /audiences facets/);
-  assert.throws(() => sanitizeSubmittedFacets({ interests: ['food'] }), /unsupported fields/);
+  assert.throws(() => sanitizeSubmittedFacets({ interests: ['unknown'] }), /interests facets/);
+  assert.throws(() => sanitizeSubmittedFacets({ interests: [] }), /interests facets/);
+});
+
+test('category mappings cover accommodation, mobility and traveler services without forced facets', () => {
+  assert.deepEqual(buildRecommendationFacets({ categoryId: 'stay' }).interests, ['stays_accommodation']);
+  assert.deepEqual(buildRecommendationFacets({ categoryId: 'transportation' }).interests, ['transportation_mobility']);
+  assert.deepEqual(buildRecommendationFacets({ categoryId: 'services' }).interests, ['travel_tips_services']);
+});
+
+test('generic accessibility and Chabad labels never claim practical needs', () => {
+  const facets = buildRecommendationFacets({
+    categoryId: 'food',
+    tags: ['נגישות', 'חב״ד'],
+  });
+  assert.deepEqual(facets.needs, []);
 });

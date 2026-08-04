@@ -18,12 +18,10 @@ import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
-import {
-  BUDGETS, INTERESTS, NEEDS, PACES, TRAVEL_PARTIES, VIBES,
-} from '../constants/smartProfileOptions';
+import { BUDGETS, INTERESTS, NEEDS, TRAVEL_PARTIES, VIBES } from '../constants/smartProfileOptions';
 import { normalizeClientSmartProfile } from '../utils/preferenceSetup';
 
-const EMPTY = { interests: [], budget: '', travelParties: [], vibe: [], pace: '', needs: [] };
+const EMPTY = { interests: [], budget: '', travelParties: [], vibe: [], needs: [] };
 
 function Chip({ option, selected, onPress, testID }) {
   return (
@@ -144,8 +142,7 @@ export default function EditProfileScreen({ navigation }) {
           {section('תחומי עניין', INTERESTS, profile.interests, (value) => toggle('interests', value, 8), 'edit-interest', `${profile.interests.length}/8 נבחרו`)}
           {section('תקציב מועדף', BUDGETS, profile.budget ? [profile.budget] : [], (value) => setProfile((p) => ({ ...p, budget: value })), 'edit-budget')}
           {section('הרכב מטיילים', TRAVEL_PARTIES, profile.travelParties, (value) => toggle('travelParties', value, 2), 'edit-party', `${profile.travelParties.length}/2 נבחרו`)}
-          {section('אווירה', VIBES, profile.vibe, (value) => toggle('vibe', value, 3), 'edit-vibe', 'עד שלוש אפשרויות')}
-          {section('קצב טיול', PACES, profile.pace ? [profile.pace] : [], (value) => setProfile((p) => ({ ...p, pace: p.pace === value ? '' : value })), 'edit-pace')}
+          {section('סגנון ואווירה', VIBES, profile.vibe, (value) => toggle('vibe', value, 3), 'edit-vibe', 'עד שלוש אפשרויות')}
           {section('צרכים והעדפות', NEEDS, profile.needs, (value) => toggle('needs', value, NEEDS.length), 'edit-need')}
           <TouchableOpacity testID="edit-preferences-save" style={[buttons.submit, saving && buttons.disabled]} onPress={save} disabled={saving}>
             {saving ? <ActivityIndicator color={colors.white} /> : <Text style={buttons.submitText}>שמור העדפות</Text>}

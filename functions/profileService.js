@@ -4,7 +4,6 @@ const {
   BUDGET_IDS,
   INTEREST_IDS,
   NEED_IDS,
-  PACE_IDS,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
   normalizeSmartProfile,
@@ -51,7 +50,7 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
       'invalid-argument', 'smartProfile.budget is invalid.');
   }
   if (Object.prototype.hasOwnProperty.call(value, 'pace')) {
-    assert(value.pace === '' || PACE_IDS.includes(value.pace),
+    assert(['', 'relaxed', 'balanced', 'packed'].includes(value.pace),
       'invalid-argument', 'smartProfile.pace is invalid.');
   }
   const normalized = normalizeSmartProfile(value);
@@ -65,16 +64,14 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
   const vibe = assertOnlyAllowed(normalized.vibe, VIBE_IDS, 'smartProfile.vibe', 3);
   const needs = assertOnlyAllowed(normalized.needs, NEED_IDS, 'smartProfile.needs', NEED_IDS.length);
   const budget = normalized.budget;
-  const pace = normalized.pace;
   assert(!budget || BUDGET_IDS.includes(budget), 'invalid-argument', 'smartProfile.budget is invalid.');
-  assert(!pace || PACE_IDS.includes(pace), 'invalid-argument', 'smartProfile.pace is invalid.');
   if (complete) {
     assert(interests.length >= 3, 'invalid-argument', 'Choose at least three interests.');
     assert(interests.length <= 8, 'invalid-argument', 'Choose no more than eight interests.');
     assert(Boolean(budget), 'invalid-argument', 'Choose a budget preference.');
     assert(travelParties.length >= 1, 'invalid-argument', 'Choose at least one travel party.');
   }
-  return { interests, budget, travelParties, vibe, pace, needs };
+  return { interests, budget, travelParties, vibe, needs };
 }
 
 async function updateProfile({ admin, auth, data, mediaBucket }) {

@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { db } from '../config/firebase';
 import { useAuthUser } from './useAuthUser';
+import { normalizeClientSmartProfile } from '../features/profile/utils/preferenceSetup';
 
-export const isSmartProfileComplete = (smartProfile) => Boolean(smartProfile?.completedAt);
+export const isSmartProfileComplete = (smartProfile) => {
+  if (!smartProfile?.completedAt || smartProfile.setupRequired === true) return false;
+  const normalized = normalizeClientSmartProfile(smartProfile);
+  return normalized.interests.length >= 3 && normalized.interests.length <= 8 &&
+    Boolean(normalized.budget) && normalized.travelParties.length >= 1;
+};
 export const shouldRequirePreferenceSetup = (smartProfile) => (
   smartProfile?.setupRequired === true && !isSmartProfileComplete(smartProfile)
 );

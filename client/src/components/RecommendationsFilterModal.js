@@ -6,7 +6,12 @@ import { View, Text, ScrollView, Dimensions } from 'react-native';
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // --- Import constants for hierarchical logic ---
-import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../constants/Constants';
+import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../constants/Constants';
+import {
+  normalizeBudgetId,
+  normalizeCategoryId,
+  normalizeTagIds,
+} from '../constants/travelTaxonomy';
 import { getBudgetTheme } from '../utils/getBudgetTheme';
 
 // --- Import Modular Components ---
@@ -34,14 +39,13 @@ export default function RecommendationsFilterModal({
 
     setTempDestination(current.destination || '');
 
-    // Map Hebrew labels back to IDs for internal modal logic
-    const initialCategoryIds = (current.categories || []).map(label =>
-      PARENT_CATEGORIES.find(c => c.label === label)?.id
-    ).filter(Boolean);
+    const initialCategoryIds = (current.categories || []).map(normalizeCategoryId).filter(Boolean);
 
     setTempCategories(initialCategoryIds);
-    setTempTags(Array.isArray(current.tags) ? current.tags : []);
-    setTempBudgets(Array.isArray(current.budgets) ? current.budgets : []);
+    setTempTags(normalizeTagIds(current.tags));
+    setTempBudgets((current.budgets || [])
+      .map((value) => normalizeBudgetId(value, { allowFlexible: false }))
+      .filter(Boolean));
   }, [visible, filters]);
 
   // --- 3. Toggle Handlers ---
@@ -50,7 +54,7 @@ export default function RecommendationsFilterModal({
     setTempCategories((prev) => {
       if (prev.includes(id)) {
         // Cleanup: Remove sub-tags belonging to this category when category is unselected
-        const tagsToRemove = TAGS_BY_CATEGORY[id] || [];
+        const tagsToRemove = (TAG_OPTIONS_BY_CATEGORY[id] || []).map((item) => item.id);
         setTempTags(currentTags => currentTags.filter(t => !tagsToRemove.includes(t)));
         return prev.filter((i) => i !== id);
       }
@@ -72,20 +76,12 @@ export default function RecommendationsFilterModal({
 
   // --- 4. Final Apply Logic ---
   const handleApply = () => {
-    // Map internal category IDs back to Hebrew Labels for the main screen bar
-    const categoryLabels = tempCategories.map(id =>
-      PARENT_CATEGORIES.find(c => c.id === id)?.label
-    ).filter(Boolean);
-
     const finalFilters = {
       destination: tempDestination.trim(),
-      categories: categoryLabels, // Sending labels (e.g., "טבע ומסלולים")
-      tags: tempTags,             // Sending tags (e.g., "טיול רגלי")
+      categories: tempCategories,
+      tags: tempTags,
       budgets: tempBudgets,
     };
-
-    // DEBUG LOG: Verification of the payload sent back to the main screen
-    console.log("PlanLi Debug - Modal Export:", JSON.stringify(finalFilters, null, 2));
 
     onApply?.(finalFilters);
   };
@@ -137,9 +133,15 @@ export default function RecommendationsFilterModal({
                 <ChipSelector
                   key={catId}
                   label={`תגיות ל${category?.label}`}
-                  items={TAGS_BY_CATEGORY[catId]}
-                  selectedValue={tempTags}
-                  onSelect={toggleTag}
+                  items={(TAG_OPTIONS_BY_CATEGORY[catId] || []).map((item) => item.label)}
+                  selectedValue={(TAG_OPTIONS_BY_CATEGORY[catId] || [])
+                    .filter((item) => tempTags.includes(item.id))
+                    .map((item) => item.label)}
+                  onSelect={(label) => {
+                    const tagId = (TAG_OPTIONS_BY_CATEGORY[catId] || [])
+                      .find((item) => item.label === label)?.id;
+                    if (tagId) toggleTag(tagId);
+                  }}
                   multiSelect={true}
                 />
               );
@@ -151,9 +153,12 @@ export default function RecommendationsFilterModal({
         <View style={styles.lastSection}>
           <ChipSelector
             label="תקציב"
-            items={PRICE_TAGS}
-            selectedValue={tempBudgets}
-            onSelect={toggleBudget}
+            items={POST_BUDGETS.map((item) => item.postLabel)}
+            selectedValue={POST_BUDGETS.filter((item) => tempBudgets.includes(item.value)).map((item) => item.postLabel)}
+            onSelect={(label) => {
+              const budgetId = POST_BUDGETS.find((item) => item.postLabel === label)?.value;
+              if (budgetId) toggleBudget(budgetId);
+            }}
             multiSelect={true}
             getItemTheme={getBudgetTheme}
           />

@@ -17,6 +17,7 @@ export const getBudgetTheme = (budget) => {
 		// 5₪ coin-ish silver
 		case 'חינמי':
 		case 'free':
+		case 'economy':
 			return {
 				backgroundColor: '#E5E7EB',
 				borderColor: '#9CA3AF',
@@ -33,6 +34,7 @@ export const getBudgetTheme = (budget) => {
 
 		// 50₪ bill green
 		case '₪₪':
+		case 'balanced':
 			return {
 				backgroundColor: '#34D399',
 				borderColor: '#059669',
@@ -41,6 +43,7 @@ export const getBudgetTheme = (budget) => {
 
 		// 100₪ bill gold/yellow
 		case '₪₪₪':
+		case 'comfort':
 			return {
 				backgroundColor: '#FBBF24',
 				borderColor: '#D97706',
@@ -49,6 +52,7 @@ export const getBudgetTheme = (budget) => {
 
 		// 200₪ bill blue
 		case '₪₪₪₪':
+		case 'premium':
 			return {
 				backgroundColor: '#60A5FA',
 				borderColor: '#2563EB',

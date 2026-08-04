@@ -1,3 +1,9 @@
+import {
+  CATEGORIES,
+  POST_BUDGETS,
+  TAG_OPTIONS_BY_CATEGORY,
+} from './travelTaxonomy';
+
 // // =======================
 // // Difficulty Tags
 // // =======================
@@ -233,51 +239,14 @@
 // constants/Constants.js
 
 // --- RECOMMENDATION CATEGORIES (For RecommendationsFilterModal) ---
-export const PARENT_CATEGORIES = [
-  { id: 'food', label: 'אוכל ובילויים', icon: 'restaurant' },
-  { id: 'nature', label: 'טבע ומסלולים', icon: 'landscape' },
-  { id: 'attractions', label: 'אטרקציות', icon: 'local-activity' },
-  { id: 'stay', label: 'לינה', icon: 'bed' },
-  { id: 'transportation', label: 'תחבורה', icon: 'directions-bus' },
-  { id: 'logistics', label: 'לוגיסטיקה', icon: 'info' },
-  { id: 'services', label: 'שירותים ואנשי מקצוע', icon: 'handyman' },
-];
-
-export const TAGS_BY_CATEGORY = {
-  food: [
-    "מסעדה", "בית קפה", "אוכל רחוב", "בר", "חיי לילה", 
-    "כשר", "טבעוני", "צמחוני", "חב״ד", "מסעדות ישראליות"
-  ],
-  nature: [
-    "טיול רגלי", "נקודת תצפית", "חופים", "מפלים", "מעיינות", 
-    "קל", "בינוני", "קשה", "חורף", "קיץ", "עונת הגשמים", 
-    "נגישות", "פיקניק", "שמורת טבע", "מצפה"
-  ],
-  attractions: [
-    "מוזיאון", "אתר היסטורי", "פארק שעשועים", "הרפתקה", 
-    "קניות", "שווקים", "לאינסטגרם", "אתגרי", "הופעות", 
-    "סדנאות", "פעילות מקורה", "שכונות מומלצות"
-  ],
-  stay: [
-    "מלון", "אכסניה", "בית הארחה", "Airbnb", "יוקרתי", "תקציב נמוך"
-  ],
-  transportation: [ // תגיות התחבורה בלבד
-    "אוטובוס", "רכבת", "מטרו", "השכרת רכב", 
-    "נהג מונית", "נהג הסעות", "הסעות משדה התעופה"
-  ],
-  logistics: [ // תגיות הלוגיסטיקה בלבד
-    "סים קארד", "החלפת כספים", "טיפים מקומיים", 
-    "מדריכי טיולים", "סוכני טיולים", "סוכני טיסות", "השכרת ציוד"
-  ],
-  services: [ // התגיות החדשות שביקשת
-    "מספרה / ספר", "מכון יופי / בניית ציפורניים", "קוסמטיקאית", "מכון הסרת שיער",
-    "תופר / מתפרה", "סנדלר", "שען", "מעבדת סלולר ומחשבים",
-    "מכבסה", "ניקוי יבש",
-    "בית מרקחת", "אופטיקה", "עיסוי / ספא",
-    "דפוס וצילום מסמכים", "חנות לציוד משרדי"
-  ]
-
-};
+export const PARENT_CATEGORIES = CATEGORIES;
+export { TAG_OPTIONS_BY_CATEGORY };
+export const TAGS_BY_CATEGORY = Object.fromEntries(
+  Object.entries(TAG_OPTIONS_BY_CATEGORY).map(([categoryId, options]) => [
+    categoryId,
+    options.map((option) => option.label),
+  ])
+);
 
 // --- ROUTE CATEGORIES (For RoutesFilterModal) ---
 // These MUST be objects {id, label} for the translation logic to work
@@ -318,7 +287,8 @@ export const EXPERIENCE_TAGS = [
   { id: 'culture', label: 'תרבותי' }
 ];
 
-export const PRICE_TAGS = ["חינמי", "₪", "₪₪", "₪₪₪", "₪₪₪₪"];
+export { POST_BUDGETS };
+export const PRICE_TAGS = POST_BUDGETS.map((option) => option.postLabel);
 
 // --- Destination search mode ---
 // true  -> Developer mode: local filter + button to search Google when no local results

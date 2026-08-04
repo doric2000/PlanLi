@@ -26,15 +26,6 @@ import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
-import { PARENT_CATEGORIES } from '../../../constants/Constants';
-
-const BUDGET_LEVEL_BY_LABEL = {
-  'חינמי': 'economy',
-  '₪': 'economy',
-  '₪₪': 'balanced',
-  '₪₪₪': 'comfort',
-  '₪₪₪₪': 'premium',
-};
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -69,13 +60,11 @@ export default function CommunityScreen({ navigation }) {
   }, [personalizationAvailable, profileLoading]);
 
   useEffect(() => {
-    const categoryIds = filters.categories
-      .map((label) => PARENT_CATEGORIES.find((category) => category.label === label)?.id)
-      .filter(Boolean);
-    const budgetLevels = Array.from(new Set(filters.budgets
-      .map((label) => BUDGET_LEVEL_BY_LABEL[label])
-      .filter(Boolean)));
-    setPersonalizationFilters({ categoryIds, tags: filters.tags, budgetLevels });
+    setPersonalizationFilters({
+      categoryIds: filters.categories,
+      tags: filters.tags,
+      budgetLevels: filters.budgets,
+    });
   }, [filters.budgets, filters.categories, filters.tags, setPersonalizationFilters]);
 
   const { onScroll } = useTabPressScrollOrRefresh({

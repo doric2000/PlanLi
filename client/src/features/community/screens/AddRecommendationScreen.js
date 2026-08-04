@@ -23,7 +23,7 @@ import { resolveDestinationForPlacePreview, searchPlaces } from '../../../servic
 import { saveRecommendation } from '../../../services/RecommendationService';
 
 // --- Constants ---
-import { PARENT_CATEGORIES, TAGS_BY_CATEGORY, PRICE_TAGS } from '../../../constants/Constants';
+import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
 import {
@@ -32,10 +32,16 @@ import {
 } from '../../../utils/mediaAssets';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 import {
+  INTERESTS,
   NEEDS,
   TRAVEL_PARTIES,
   VIBES,
 } from '../../profile/constants/smartProfileOptions';
+import {
+  normalizeBudgetId,
+  normalizeTagIds,
+  suggestedInterestIds,
+} from '../../../constants/travelTaxonomy';
 
 
 
@@ -89,9 +95,7 @@ function resolveCategoryIdFromEditItem(editItem) {
 
 function resolveTagsFromEditItem(editItem) {
   if (!editItem || !Array.isArray(editItem.tags)) return [];
-  return editItem.tags
-    .map((t) => (typeof t === 'string' ? t.trim() : String(t).trim()))
-    .filter(Boolean);
+  return normalizeTagIds(editItem.tags);
 }
 
 function buildEditComparable(editItem) {
@@ -105,7 +109,8 @@ function buildEditComparable(editItem) {
     description: editItem.description || '',
     category: resolveCategoryIdFromEditItem(editItem),
     tags,
-    budget: editItem.budget || '',
+    budget: normalizeBudgetId(editItem.budget, { allowFlexible: false }),
+    interests: [...(editItem.facets?.interests || [])].slice(0, 5).sort(),
     audiences: [...(editItem.facets?.audiences || [])].sort(),
     vibes: [...(editItem.facets?.vibes || [])].sort(),
     needs: [...(editItem.facets?.needs || [])].sort(),
@@ -133,6 +138,7 @@ function buildFormComparable({
   category,
   selectedTags,
   budget,
+  recommendationInterests,
   audiences,
   recommendationVibes,
   recommendationNeeds,
@@ -152,6 +158,7 @@ function buildFormComparable({
     category: category || '',
     tags,
     budget: budget || '',
+    interests: [...(recommendationInterests || [])].sort(),
     audiences: [...(audiences || [])].sort(),
     vibes: [...(recommendationVibes || [])].sort(),
     needs: [...(recommendationNeeds || [])].sort(),
@@ -186,6 +193,8 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [category, setCategory] = useState(''); // Stores the ID (e.g., 'food')
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
+  const [recommendationInterests, setRecommendationInterests] = useState([]);
+  const [showAllInterests, setShowAllInterests] = useState(false);
   const [audiences, setAudiences] = useState([]);
   const [recommendationVibes, setRecommendationVibes] = useState([]);
   const [recommendationNeeds, setRecommendationNeeds] = useState([]);
@@ -268,6 +277,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
         category,
         selectedTags,
         budget,
+        recommendationInterests,
         audiences,
         recommendationVibes,
         recommendationNeeds,
@@ -282,6 +292,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
       category,
       selectedTags,
       budget,
+      recommendationInterests,
       audiences,
       recommendationVibes,
       recommendationNeeds,
@@ -392,7 +403,13 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
     setCategory(resolvedCategoryId);
     setSelectedTags(resolvedTags);
-    setBudget(editItem.budget || '');
+    setBudget(normalizeBudgetId(editItem.budget, { allowFlexible: false }));
+    setRecommendationInterests(
+      Array.isArray(editItem.facets?.interests) && editItem.facets.interests.length
+        ? editItem.facets.interests.slice(0, 5)
+        : suggestedInterestIds(resolvedCategoryId, resolvedTags)
+    );
+    setShowAllInterests(false);
     setAudiences(Array.isArray(editItem.facets?.audiences) ? editItem.facets.audiences : []);
     setRecommendationVibes(Array.isArray(editItem.facets?.vibes) ? editItem.facets.vibes : []);
     setRecommendationNeeds(Array.isArray(editItem.facets?.needs) ? editItem.facets.needs : []);
@@ -486,13 +503,40 @@ export default function AddRecommendationScreen({ navigation , route }) {
   // Custom handler for category change to reset sub-tags
   const handleCategoryChange = (newCatId) => {
     setCategory(newCatId);
-    setSelectedTags((prev) => (newCatId !== category ? [] : prev));
+    if (newCatId !== category) {
+      setSelectedTags([]);
+      setRecommendationInterests(suggestedInterestIds(newCatId, []));
+      setShowAllInterests(false);
+    }
   };
 
-  const toggleTag = (tag) => {
-    if (selectedTags.includes(tag)) setSelectedTags(selectedTags.filter(t => t !== tag));
-    else setSelectedTags([...selectedTags, tag]);
+  const toggleTag = (tagId) => {
+    setSelectedTags((current) => {
+      const next = current.includes(tagId)
+        ? current.filter((item) => item !== tagId)
+        : [...current, tagId];
+      if (!current.includes(tagId)) {
+        const suggested = suggestedInterestIds(category, next);
+        setRecommendationInterests((selected) => Array.from(new Set([...selected, ...suggested])).slice(0, 5));
+      }
+      return next;
+    });
   };
+
+  const toggleRecommendationInterest = (value) => {
+    setRecommendationInterests((current) => current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value].slice(0, 5));
+  };
+
+  const visibleInterestOptions = useMemo(() => {
+    if (showAllInterests) return INTERESTS;
+    const relevant = new Set([
+      ...suggestedInterestIds(category, selectedTags),
+      ...recommendationInterests,
+    ]);
+    return INTERESTS.filter((option) => relevant.has(option.value));
+  }, [category, recommendationInterests, selectedTags, showAllInterests]);
 
   const localCitiesSearchable = locationQuery.trim()
     ? (hasLoadedAllCitiesForSearch ? allCitiesForSearch : [])
@@ -699,6 +743,10 @@ const handleSubmit = async () => {
       Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
       return;
     }
+    if (recommendationInterests.length < 1 || recommendationInterests.length > 5) {
+      Alert.alert('חסר דיוק להתאמה', 'יש לבחור בין תחום עניין אחד לחמישה עבור ההמלצה.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -735,6 +783,7 @@ const handleSubmit = async () => {
           budget,
           media: finalMedia,
           facets: {
+            interests: recommendationInterests,
             audiences,
             vibes: recommendationVibes,
             needs: recommendationNeeds,
@@ -908,9 +957,15 @@ const handleSubmit = async () => {
         {category ? (
           <ChipSelector
             label="תגיות"
-            items={TAGS_BY_CATEGORY[category] || []}
-            selectedValue={selectedTags}
-            onSelect={toggleTag}
+            items={(TAG_OPTIONS_BY_CATEGORY[category] || []).map((option) => option.label)}
+            selectedValue={(TAG_OPTIONS_BY_CATEGORY[category] || [])
+              .filter((option) => selectedTags.includes(option.id))
+              .map((option) => option.label)}
+            onSelect={(label) => {
+              const tagId = (TAG_OPTIONS_BY_CATEGORY[category] || [])
+                .find((option) => option.label === label)?.id;
+              if (tagId) toggleTag(tagId);
+            }}
             multiSelect={true}
             testIDPrefix="add-rec-tag"
           />
@@ -920,12 +975,46 @@ const handleSubmit = async () => {
               </Text>
         )}
 
+        {category ? (
+          <View style={styles.taxonomySection}>
+            <Text style={styles.taxonomyHint}>
+              דיוק ההתאמה · בחרו 1–5 תחומים. הצגנו קודם הצעות לפי הקטגוריה והתגיות.
+            </Text>
+            <ChipSelector
+              label="תחומי עניין"
+              items={visibleInterestOptions.map((option) => option.label)}
+              selectedValue={INTERESTS
+                .filter((option) => recommendationInterests.includes(option.value))
+                .map((option) => option.label)}
+              onSelect={(label) => {
+                const value = INTERESTS.find((option) => option.label === label)?.value;
+                if (value) toggleRecommendationInterest(value);
+              }}
+              multiSelect
+              getItemTestId={(label) => {
+                const value = INTERESTS.find((option) => option.label === label)?.value;
+                return value ? `add-rec-interest-${value}` : undefined;
+              }}
+            />
+            <TouchableOpacity
+              style={styles.taxonomyToggle}
+              onPress={() => setShowAllInterests((current) => !current)}
+              testID="add-rec-interests-toggle"
+            >
+              <Text style={styles.taxonomyToggleText}>{showAllInterests ? 'הצג רק הצעות' : 'הצג את כל התחומים'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* 7. Budget Selector */}
         <SegmentedControl
           label="תקציב"
-          items={PRICE_TAGS}
-          selectedValue={budget}
-          onSelect={setBudget}
+          items={POST_BUDGETS.map((option) => option.postLabel)}
+          selectedValue={POST_BUDGETS.find((option) => option.value === budget)?.postLabel || ''}
+          onSelect={(label) => {
+            const value = POST_BUDGETS.find((option) => option.postLabel === label)?.value;
+            if (value) setBudget(value);
+          }}
           getItemTheme={getBudgetTheme}
           testIDPrefix="add-rec-budget"
         />
@@ -939,7 +1028,7 @@ const handleSubmit = async () => {
             if (!value) return;
             setAudiences((current) => current.includes(value)
               ? current.filter((item) => item !== value)
-              : [...current, value].slice(0, 3));
+              : [...current, value].slice(0, 4));
           }}
           multiSelect
           testIDPrefix="add-rec-audience"

@@ -1,8 +1,11 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const {
-  BUDGET_IDS,
   INTEREST_IDS,
+  isSmartProfileComplete,
   NEED_IDS,
+  normalizeRecommendationTags,
+  normalizeSmartProfile,
+  POST_BUDGET_IDS,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
 } = require('./travelTaxonomy');
@@ -276,18 +279,22 @@ function cleanFilters(filters = {}) {
     )), 'invalid-argument', 'Recommendation filters are invalid.');
     return Array.from(new Set((value || []).map((entry) => entry.trim())));
   };
-  const budgetLevels = stringArray(filters.budgetLevels, 5);
-  assert(budgetLevels.every((entry) => BUDGET_IDS.includes(entry)), 'invalid-argument', 'Budget filters are invalid.');
+  const budgetLevels = stringArray(filters.budgetLevels, 4);
+  assert(budgetLevels.every((entry) => POST_BUDGET_IDS.includes(entry)), 'invalid-argument', 'Budget filters are invalid.');
+  const rawTags = stringArray(filters.tags, 20);
+  const tags = normalizeRecommendationTags(rawTags);
+  assert(tags.length === rawTags.length, 'invalid-argument', 'Tag filters are invalid.');
   return {
     categoryIds: stringArray(filters.categoryIds, 10),
-    tags: stringArray(filters.tags, 20),
+    tags,
     budgetLevels,
   };
 }
 
 function matchesFilters(item, filters) {
   if (filters.categoryIds.length && !filters.categoryIds.includes(item.categoryId)) return false;
-  if (filters.tags.length && !(item.tags || []).some((tag) => filters.tags.includes(tag))) return false;
+  if (filters.tags.length && !normalizeRecommendationTags(item.tags)
+    .some((tag) => filters.tags.includes(tag))) return false;
   if (filters.budgetLevels.length && !filters.budgetLevels.includes(item?.facets?.budgetLevel)) return false;
   return true;
 }
@@ -327,8 +334,9 @@ async function getPersonalizedRecommendations({ admin, auth, data }) {
   const userSnapshot = auth?.uid ? await db.doc(`users/${auth.uid}`).get() : null;
   const userData = userSnapshot?.exists ? userSnapshot.data() : {};
   const profile = userData.smartProfile || {};
-  const personalized = Boolean(auth?.uid && profile.completedAt);
-  const interests = personalized && Array.isArray(profile.interests) ? profile.interests : [];
+  const personalized = Boolean(auth?.uid && isSmartProfileComplete(profile));
+  const declaredProfile = personalized ? normalizeSmartProfile(profile) : {};
+  const interests = declaredProfile.interests || [];
   let snapshots;
   let fallbackReason = null;
   try {
@@ -355,7 +363,7 @@ async function getPersonalizedRecommendations({ admin, auth, data }) {
   let output;
   if (personalized) {
     const normalized = normalizePersonalization(userData.personalization, startedAt);
-    const scored = candidates.map((item) => scoreRecommendation(item, profile, normalized, {
+    const scored = candidates.map((item) => scoreRecommendation(item, declaredProfile, normalized, {
       nowMs: startedAt,
       maxLikes,
     }));

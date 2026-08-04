@@ -143,8 +143,9 @@ function makeEditItem(overrides = {}) {
     description: 'Desc',
     categoryId: 'food',
     category: 'אוכל ובילויים',
-    tags: ['מסעדה'],
-    budget: '₪',
+    tags: ['restaurant'],
+    budget: 'economy',
+    facets: { interests: ['food'], audiences: [], vibes: [], needs: [] },
     countryId: 'IL',
     cityId: 'TLV',
     country: 'Israel',
@@ -236,8 +237,9 @@ describe('AddRecommendationScreen Integration Test', () => {
           description: 'Great cheese and crust!',
           category: 'אוכל ובילויים',
           categoryId: 'food',
-          tags: expect.arrayContaining(['מסעדה']),
-          budget: '₪₪',
+          tags: expect.arrayContaining(['restaurant']),
+          budget: 'comfort',
+          facets: expect.objectContaining({ interests: ['food'] }),
           media: expect.any(Array),
         })
       });

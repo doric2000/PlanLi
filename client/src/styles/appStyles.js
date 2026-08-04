@@ -852,6 +852,28 @@ export const addRecommendationScreenStyles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
   },
+  taxonomySection: {
+    marginBottom: spacing.md,
+  },
+  taxonomyHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    marginBottom: 4,
+  },
+  taxonomyToggle: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  taxonomyToggleText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
   unsavedDialogOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

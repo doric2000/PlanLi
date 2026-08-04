@@ -106,9 +106,9 @@ test('every fifth result is the best eligible discovery candidate with determini
 
 test('manual filters stay hard constraints and reject malformed values', () => {
   assert.deepEqual(cleanFilters({
-    categoryIds: ['food'], tags: ['כשר'], budgetLevels: ['balanced'],
+    categoryIds: ['food'], tags: ['restaurant'], budgetLevels: ['balanced'],
   }), {
-    categoryIds: ['food'], tags: ['כשר'], budgetLevels: ['balanced'],
+    categoryIds: ['food'], tags: ['restaurant'], budgetLevels: ['balanced'],
   });
   assert.throws(() => cleanFilters({ tags: [42] }), /filters are invalid/);
   assert.throws(() => cleanFilters({ budgetLevels: ['unknown'] }), /Budget filters/);

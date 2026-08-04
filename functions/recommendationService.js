@@ -8,8 +8,15 @@ const {
   resolveLocalCountry,
 } = require('./countryGeography');
 const {
+  analyzeTagValues,
   buildRecommendationFacets,
+  getCategoryLabel,
+  INTEREST_IDS,
   NEED_IDS,
+  normalizeBudget,
+  normalizeCategoryId,
+  POST_BUDGET_IDS,
+  tagsMatchCategory,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
 } = require('./travelTaxonomy');
@@ -52,6 +59,21 @@ function cleanStringArray(value, { field, maxItems, maxLength }) {
 function sanitizeRecommendationContent(data) {
   assert(data && typeof data === 'object', 'invalid-argument', 'Missing recommendation data.');
 
+  const categoryId = normalizeCategoryId(data.categoryId || data.category);
+  assert(categoryId, 'invalid-argument', 'categoryId is invalid.');
+  const rawTags = cleanStringArray(data.tags || [], {
+    field: 'tags',
+    maxItems: 20,
+    maxLength: 60,
+  });
+  const tagAnalysis = analyzeTagValues(rawTags);
+  assert(tagAnalysis.recognized, 'invalid-argument', 'tags contain unsupported values.');
+  assert(tagsMatchCategory(rawTags, categoryId), 'invalid-argument', 'tags do not match categoryId.');
+  const rawBudget = cleanOptionalString(data.budget, { field: 'budget', max: 50 });
+  const budget = normalizeBudget(rawBudget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
+  assert(!rawBudget || budget, 'invalid-argument', 'budget is invalid.');
+  assert(!budget || POST_BUDGET_IDS.includes(budget), 'invalid-argument', 'budget is invalid.');
+
   return {
     title: cleanString(data.title, { field: 'title', min: 1, max: 120 }),
     description: cleanString(data.description, {
@@ -59,22 +81,10 @@ function sanitizeRecommendationContent(data) {
       min: 1,
       max: 5000,
     }),
-    category: cleanString(data.category, {
-      field: 'category',
-      min: 1,
-      max: 80,
-    }),
-    categoryId: cleanString(data.categoryId, {
-      field: 'categoryId',
-      min: 1,
-      max: 80,
-    }),
-    tags: cleanStringArray(data.tags || [], {
-      field: 'tags',
-      maxItems: 20,
-      maxLength: 60,
-    }),
-    budget: cleanOptionalString(data.budget, { field: 'budget', max: 50 }),
+    category: getCategoryLabel(categoryId),
+    categoryId,
+    tags: tagAnalysis.tagIds,
+    budget,
   };
 }
 
@@ -82,20 +92,23 @@ function sanitizeSubmittedFacets(value) {
   if (value == null) return {};
   assert(value && typeof value === 'object' && !Array.isArray(value),
     'invalid-argument', 'facets are invalid.');
-  const allowedFields = ['audiences', 'vibes', 'needs'];
+  const allowedFields = ['interests', 'audiences', 'vibes', 'needs'];
   assert(Object.keys(value).every((key) => allowedFields.includes(key)),
     'invalid-argument', 'facets contain unsupported fields.');
-  const validate = (field, allowed, maximum) => {
+  const validate = (field, allowed, maximum, minimumWhenProvided = 0) => {
     const entries = value[field] || [];
-    assert(Array.isArray(entries) && entries.length <= maximum,
+    const provided = Object.prototype.hasOwnProperty.call(value, field);
+    assert(Array.isArray(entries) && entries.length <= maximum &&
+      (!provided || entries.length >= minimumWhenProvided),
       'invalid-argument', `${field} facets are invalid.`);
     assert(entries.every((entry) => typeof entry === 'string' && allowed.includes(entry)),
       'invalid-argument', `${field} facets are invalid.`);
     return Array.from(new Set(entries));
   };
   return {
+    interests: validate('interests', INTEREST_IDS, 5, 1),
     audiences: validate('audiences', TRAVEL_PARTY_IDS, 4),
-    vibes: validate('vibes', VIBE_IDS, 4),
+    vibes: validate('vibes', VIBE_IDS, 3),
     needs: validate('needs', NEED_IDS, NEED_IDS.length),
   };
 }
@@ -745,7 +758,7 @@ async function saveRecommendation({
 
   const content = sanitizeRecommendationContent(data?.recommendation);
   const facets = buildRecommendationFacets(
-    content,
+    { ...content, tags: data?.recommendation?.tags || [] },
     sanitizeSubmittedFacets(data?.recommendation?.facets)
   );
   const media = await validateMediaAssets({

@@ -1,4 +1,9 @@
 import { useState, useMemo } from 'react';
+import {
+  normalizeBudgetId,
+  normalizeCategoryId,
+  normalizeTagIds,
+} from '../constants/travelTaxonomy';
 
 /**
  * Custom hook to handle client-side filtering of recommendations.
@@ -9,9 +14,9 @@ export const useRecommendationFilter = (recommendations) => {
   // --- 1. Filter State ---
   const [filters, setFilters] = useState({
     destination: '',
-    categories: [], // Array of Hebrew labels (e.g., ["טבע ומסלולים"])
-    tags: [],       // Array of Hebrew labels (e.g., ["מפלים", "טיול רגלי"])
-    budgets: [],    // Array of strings (e.g., ["₪", "₪₪"])
+    categories: [],
+    tags: [],
+    budgets: [],
   });
 
   // --- 2. Update Handlers ---
@@ -44,23 +49,20 @@ export const useRecommendationFilter = (recommendations) => {
 
       // B. Category Filter
       if (filters.categories.length > 0) {
-        if (!filters.categories.includes(item.category)) return false;
+        if (!filters.categories.includes(normalizeCategoryId(item.categoryId || item.category))) return false;
       }
 
       // C. Tags Filter (The Fix)
       // Logic: Checks if there is an intersection between item tags and filter tags.
       if (filters.tags.length > 0) {
         // Defensive check: ensure item.tags exists and is an array
-        if (!item.tags || !Array.isArray(item.tags)) return false;
-
-        // Check if AT LEAST ONE selected tag exists in the item's tags (OR logic)
-        const hasMatchingTag = item.tags.some(tag => filters.tags.includes(tag));
+        const hasMatchingTag = normalizeTagIds(item.tags).some(tag => filters.tags.includes(tag));
         if (!hasMatchingTag) return false;
       }
 
       // D. Budget Filter
       if (filters.budgets.length > 0) {
-        if (!filters.budgets.includes(item.budget)) return false;
+        if (!filters.budgets.includes(normalizeBudgetId(item.budget, { allowFlexible: false }))) return false;
       }
 
       return true;

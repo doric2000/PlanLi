@@ -1,159 +1,28 @@
-const INTEREST_IDS = Object.freeze([
-  'nature_scenery',
-  'hiking',
-  'beaches_water',
-  'food',
-  'cafes',
-  'nightlife',
-  'culture_history',
-  'museums_art',
-  'architecture_neighborhoods',
-  'shopping_markets',
-  'family_attractions',
-  'entertainment_parks',
-  'adventure_extreme',
-  'wildlife',
-  'wellness',
-  'local_experiences',
-  'photography_viewpoints',
-  'music_events',
-  'winter_sports',
-  'scenic_roadtrips',
-]);
+const taxonomy = require('./travelTaxonomy.generated.json');
 
-const BUDGET_IDS = Object.freeze([
-  'economy',
-  'balanced',
-  'comfort',
-  'premium',
-  'flexible',
-]);
+const ids = (items) => Object.freeze(items.map((item) => item.id));
 
-const TRAVEL_PARTY_IDS = Object.freeze([
-  'solo',
-  'couple',
-  'friends',
-  'family_young_children',
-  'family_older_children',
-  'multigenerational_group',
-]);
+const INTEREST_IDS = ids(taxonomy.interests);
+const BUDGET_IDS = ids(taxonomy.budgets);
+const POST_BUDGET_IDS = Object.freeze(taxonomy.budgets
+  .filter((item) => item.postApplicable)
+  .map((item) => item.id));
+const TRAVEL_PARTY_IDS = ids(taxonomy.travelParties);
+const VIBE_IDS = ids(taxonomy.vibes);
+const NEED_IDS = ids(taxonomy.needs);
+const CATEGORY_IDS = ids(taxonomy.categories);
+const TAG_IDS = ids(taxonomy.tags);
 
-const VIBE_IDS = Object.freeze([
-  'relaxed',
-  'romantic',
-  'adventurous',
-  'cultural',
-  'social',
-  'local',
-  'backpacker',
-  'digital_nomad',
-]);
-
-const PACE_IDS = Object.freeze(['relaxed', 'balanced', 'packed']);
-
-const NEED_IDS = Object.freeze([
-  'kosher',
-  'shabbat_friendly',
-  'vegetarian',
-  'vegan',
-  'wheelchair_accessible',
-  'reduced_walking',
-]);
-
-const CATEGORY_INTERESTS = Object.freeze({
-  food: ['food'],
-  nature: ['nature_scenery'],
-  attractions: ['local_experiences'],
-  stay: ['wellness'],
-  transportation: ['scenic_roadtrips'],
-  logistics: ['local_experiences'],
-  services: ['local_experiences'],
-});
-
-const LEGACY_INTERESTS = Object.freeze({
-  nature: ['nature_scenery'],
-  museums: ['museums_art'],
-  shopping: ['shopping_markets'],
-});
-
-const TAG_INTERESTS = Object.freeze({
-  'בית קפה': ['cafes'],
-  'אוכל רחוב': ['food', 'local_experiences'],
-  'בר': ['nightlife'],
-  'חיי לילה': ['nightlife'],
-  'טיול רגלי': ['hiking'],
-  'נקודת תצפית': ['photography_viewpoints'],
-  'מצפה': ['photography_viewpoints'],
-  'חופים': ['beaches_water'],
-  'מפלים': ['beaches_water', 'nature_scenery'],
-  'מעיינות': ['beaches_water', 'nature_scenery'],
-  'שמורת טבע': ['nature_scenery', 'wildlife'],
-  'מוזיאון': ['museums_art'],
-  'אתר היסטורי': ['culture_history'],
-  'שכונות מומלצות': ['architecture_neighborhoods', 'local_experiences'],
-  'פארק שעשועים': ['entertainment_parks', 'family_attractions'],
-  'הרפתקה': ['adventure_extreme'],
-  'אתגרי': ['adventure_extreme'],
-  'קניות': ['shopping_markets'],
-  'שווקים': ['shopping_markets', 'local_experiences'],
-  'לאינסטגרם': ['photography_viewpoints'],
-  'הופעות': ['music_events'],
-  'סדנאות': ['local_experiences'],
-  'עיסוי / ספא': ['wellness'],
-  'חורף': ['winter_sports'],
-  'השכרת רכב': ['scenic_roadtrips'],
-});
-
-const TAG_NEEDS = Object.freeze({
-  'כשר': ['kosher'],
-  'חב״ד': ['shabbat_friendly'],
-  'צמחוני': ['vegetarian'],
-  'טבעוני': ['vegan'],
-  'נגישות': ['wheelchair_accessible'],
-});
-
-const LEGACY_NEEDS = Object.freeze({
-  kosher: 'kosher',
-  shabbatObserver: 'shabbat_friendly',
-  accessibility: 'wheelchair_accessible',
-});
-
-const LEGACY_BUDGETS = Object.freeze({
-  'חינמי': 'economy',
-  '₪': 'economy',
-  '$': 'economy',
-  '₪₪': 'balanced',
-  '$$': 'balanced',
-  '₪₪₪': 'comfort',
-  '$$$': 'comfort',
-  '₪₪₪₪': 'premium',
-  '$$$$': 'premium',
-  budget: 'economy',
-  medium: 'balanced',
-  luxury: 'premium',
-});
-
-const LEGACY_PARTIES = Object.freeze({
-  'מטיילים לבד': 'solo',
-  'סולו': 'solo',
-  solo: 'solo',
-  'זוגות': 'couple',
-  'זוג': 'couple',
-  couple: 'couple',
-  'חברים': 'friends',
-  friends: 'friends',
-  'ידידותי למשפחות': 'family_young_children',
-  'משפחה': 'family_young_children',
-  family: 'family_young_children',
-});
-
-const LEGACY_VIBES = Object.freeze({
-  'מרגיע': 'relaxed',
-  'רומנטי': 'romantic',
-  'אתגרי': 'adventurous',
-  'תרבותי': 'cultural',
-  'תרמילאים': 'backpacker',
-  'נוודים דיגיטליים': 'digital_nomad',
+const CATEGORY_BY_ID = Object.freeze(Object.fromEntries(
+  taxonomy.categories.map((item) => [item.id, item])
+));
+const CATEGORY_ID_BY_LABEL = Object.freeze(Object.fromEntries(
+  taxonomy.categories.map((item) => [item.label, item.id])
+));
+const TAG_BY_ID = Object.freeze(Object.fromEntries(taxonomy.tags.map((item) => [item.id, item])));
+const TAG_ID_BY_ALIAS = Object.freeze({
+  ...Object.fromEntries(taxonomy.tags.map((item) => [item.label, item.id])),
+  ...(taxonomy.legacy?.tagAliases || {}),
 });
 
 function uniqueAllowed(values, allowed, maximum) {
@@ -166,33 +35,101 @@ function uniqueAllowed(values, allowed, maximum) {
     .slice(0, maximum);
 }
 
-function normalizeBudget(value) {
+function normalizeBudget(value, { allowFlexible = true } = {}) {
   const text = typeof value === 'string' ? value.trim() : '';
-  if (BUDGET_IDS.includes(text)) return text;
-  return LEGACY_BUDGETS[text] || '';
+  const normalized = BUDGET_IDS.includes(text)
+    ? text
+    : taxonomy.legacy?.budgetAliases?.[text] || '';
+  return normalized === 'flexible' && !allowFlexible ? '' : normalized;
+}
+
+function normalizeCategoryId(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return CATEGORY_IDS.includes(text) ? text : CATEGORY_ID_BY_LABEL[text] || '';
+}
+
+function getCategoryLabel(value) {
+  const categoryId = normalizeCategoryId(value);
+  return CATEGORY_BY_ID[categoryId]?.label || '';
+}
+
+function analyzeTagValues(values) {
+  const tagIds = [];
+  const interests = [];
+  const vibes = [];
+  const needs = [];
+  const audiences = [];
+  let budgetLevel = '';
+  let recognized = true;
+
+  for (const raw of Array.isArray(values) ? values : []) {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    const tagId = TAG_BY_ID[value] ? value : TAG_ID_BY_ALIAS[value];
+    const tag = TAG_BY_ID[tagId];
+    if (tag) {
+      tagIds.push(tag.id);
+      interests.push(...(tag.interests || []));
+      vibes.push(...(tag.vibes || []));
+      needs.push(...(tag.needs || []));
+      audiences.push(...(tag.audiences || []));
+      continue;
+    }
+    const legacyNeeds = taxonomy.legacy?.tagNeeds?.[value];
+    const legacyAudiences = taxonomy.legacy?.tagAudiences?.[value];
+    const legacyBudget = taxonomy.legacy?.tagBudgets?.[value];
+    if (legacyNeeds) needs.push(...legacyNeeds);
+    else if (legacyAudiences) audiences.push(...legacyAudiences);
+    else if (legacyBudget) budgetLevel ||= legacyBudget;
+    else recognized = false;
+  }
+
+  return {
+    recognized,
+    tagIds: uniqueAllowed(tagIds, TAG_IDS, 20),
+    interests: uniqueAllowed(interests, INTEREST_IDS, INTEREST_IDS.length),
+    vibes: uniqueAllowed(vibes, VIBE_IDS, VIBE_IDS.length),
+    needs: uniqueAllowed(needs, NEED_IDS, NEED_IDS.length),
+    audiences: uniqueAllowed(audiences, TRAVEL_PARTY_IDS, TRAVEL_PARTY_IDS.length),
+    budgetLevel,
+  };
+}
+
+const normalizeRecommendationTags = (values) => analyzeTagValues(values).tagIds;
+
+function tagsMatchCategory(values, categoryValue) {
+  const categoryId = normalizeCategoryId(categoryValue);
+  const analysis = analyzeTagValues(values);
+  return Boolean(categoryId) && analysis.recognized && analysis.tagIds.every(
+    (tagId) => TAG_BY_ID[tagId]?.categoryId === categoryId ||
+      TAG_BY_ID[tagId]?.categoryIds?.includes(categoryId)
+  );
 }
 
 function mapLegacyInterests(values) {
   const output = [];
+  const interestAliases = taxonomy.legacy?.interestAliases || {};
   for (const value of Array.isArray(values) ? values : []) {
     if (INTEREST_IDS.includes(value)) output.push(value);
-    output.push(...(LEGACY_INTERESTS[value] || []));
-    output.push(...(TAG_INTERESTS[value] || []));
-    output.push(...(CATEGORY_INTERESTS[value] || []));
+    output.push(...(interestAliases[value] || []));
+    const categoryId = normalizeCategoryId(value);
+    if (categoryId) output.push(...(CATEGORY_BY_ID[categoryId]?.interests || []));
   }
+  output.push(...analyzeTagValues(values).interests);
   return uniqueAllowed(output, INTEREST_IDS, 8);
 }
 
 function normalizeSmartProfile(value = {}) {
-  const legacyParty = LEGACY_PARTIES[value.travelStyleTag] || LEGACY_PARTIES[value.tripType];
+  const partyAliases = taxonomy.legacy?.partyAliases || {};
+  const vibeAliases = taxonomy.legacy?.vibeAliases || {};
+  const needAliases = taxonomy.legacy?.needAliases || {};
+  const legacyParty = partyAliases[value.travelStyleTag] || partyAliases[value.tripType];
   const legacyVibeValues = [
     ...(Array.isArray(value.vibe) ? value.vibe : []),
     value.travelStyleTag,
-  ].filter(Boolean).map((entry) => LEGACY_VIBES[entry] || entry);
-  const needsFromLegacy = (Array.isArray(value.interests) ? value.interests : [])
-    .flatMap((entry) => TAG_NEEDS[entry] || []);
+  ].filter(Boolean).map((entry) => vibeAliases[entry] || entry);
+  const tagAnalysis = analyzeTagValues(value.interests);
   const legacyConstraints = (Array.isArray(value.constraints) ? value.constraints : [])
-    .map((entry) => LEGACY_NEEDS[entry] || entry);
+    .map((entry) => needAliases[entry] || entry);
   return {
     interests: mapLegacyInterests(value.interests),
     budget: normalizeBudget(value.budget || value.price || value.travelStyle),
@@ -202,32 +139,56 @@ function normalizeSmartProfile(value = {}) {
       2
     ),
     vibe: uniqueAllowed(legacyVibeValues, VIBE_IDS, 3),
-    pace: PACE_IDS.includes(value.pace) ? value.pace : '',
     needs: uniqueAllowed(
-      [...(Array.isArray(value.needs) ? value.needs : []), ...needsFromLegacy, ...legacyConstraints],
+      [
+        ...(Array.isArray(value.needs) ? value.needs : []),
+        ...(Array.isArray(value.vibe) ? value.vibe : []),
+        ...tagAnalysis.needs,
+        ...legacyConstraints,
+      ].map((entry) => needAliases[entry] || entry),
       NEED_IDS,
       NEED_IDS.length
     ),
   };
 }
 
+function isSmartProfileComplete(value) {
+  if (!value?.completedAt || value.setupRequired === true) return false;
+  const profile = normalizeSmartProfile(value);
+  return profile.interests.length >= 3 && profile.interests.length <= 8 &&
+    Boolean(profile.budget) && profile.travelParties.length >= 1;
+}
+
 function buildRecommendationFacets(content, submitted = {}) {
-  const tags = Array.isArray(content?.tags) ? content.tags : [];
-  const interests = [
-    ...(CATEGORY_INTERESTS[content?.categoryId] || []),
-    ...tags.flatMap((tag) => TAG_INTERESTS[tag] || []),
-    ...(Array.isArray(submitted.interests) ? submitted.interests : []),
-  ];
-  const needs = [
-    ...tags.flatMap((tag) => TAG_NEEDS[tag] || []),
-    ...(Array.isArray(submitted.needs) ? submitted.needs : []),
-  ];
+  const categoryId = normalizeCategoryId(content?.categoryId || content?.category);
+  const categoryInterests = CATEGORY_BY_ID[categoryId]?.interests || [];
+  const tagAnalysis = analyzeTagValues(content?.tags);
   return {
-    interests: uniqueAllowed(interests, INTEREST_IDS, 8),
-    audiences: uniqueAllowed(submitted.audiences, TRAVEL_PARTY_IDS, 4),
-    vibes: uniqueAllowed(submitted.vibes, VIBE_IDS, 4),
-    needs: uniqueAllowed(needs, NEED_IDS, NEED_IDS.length),
-    budgetLevel: normalizeBudget(content?.budget),
+    interests: uniqueAllowed(
+      [
+        ...(Array.isArray(submitted.interests) ? submitted.interests : []),
+        ...categoryInterests,
+        ...tagAnalysis.interests,
+      ],
+      INTEREST_IDS,
+      8
+    ),
+    audiences: uniqueAllowed(
+      [...tagAnalysis.audiences, ...(Array.isArray(submitted.audiences) ? submitted.audiences : [])],
+      TRAVEL_PARTY_IDS,
+      4
+    ),
+    vibes: uniqueAllowed(
+      [...tagAnalysis.vibes, ...(Array.isArray(submitted.vibes) ? submitted.vibes : [])],
+      VIBE_IDS,
+      3
+    ),
+    needs: uniqueAllowed(
+      [...tagAnalysis.needs, ...(Array.isArray(submitted.needs) ? submitted.needs : [])],
+      NEED_IDS,
+      NEED_IDS.length
+    ),
+    budgetLevel: normalizeBudget(content?.budget, { allowFlexible: false }) || tagAnalysis.budgetLevel,
   };
 }
 
@@ -235,15 +196,24 @@ const buildTravelContentFacets = buildRecommendationFacets;
 
 module.exports = {
   BUDGET_IDS,
+  CATEGORY_IDS,
   INTEREST_IDS,
   NEED_IDS,
-  PACE_IDS,
+  POST_BUDGET_IDS,
+  TAG_IDS,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
+  analyzeTagValues,
   buildRecommendationFacets,
   buildTravelContentFacets,
+  getCategoryLabel,
+  isSmartProfileComplete,
   mapLegacyInterests,
   normalizeBudget,
+  normalizeCategoryId,
+  normalizeRecommendationTags,
   normalizeSmartProfile,
+  tagsMatchCategory,
+  taxonomy,
   uniqueAllowed,
 };

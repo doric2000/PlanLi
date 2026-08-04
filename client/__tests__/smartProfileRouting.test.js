@@ -18,15 +18,25 @@ describe('smart-profile routing', () => {
   it.each([
     ['new password or Google account', { setupRequired: true }, true],
     ['new account after restart', { setupRequired: true, interests: ['food'] }, true],
-    ['completed account', { setupRequired: false, completedAt: { seconds: 1 } }, false],
+    ['completed account', {
+      setupRequired: false,
+      completedAt: { seconds: 1 },
+      interests: ['food', 'cafes', 'nature_scenery'],
+      budget: 'balanced',
+      travelParties: ['couple'],
+    }, false],
     ['legacy existing account', null, false],
     ['existing incomplete account', { setupRequired: false }, false],
   ])('%s setup requirement', (_label, profile, expected) => {
     expect(shouldRequirePreferenceSetup(profile)).toBe(expected);
   });
 
-  it('uses completedAt as the canonical completion marker', () => {
-    expect(isSmartProfileComplete({ completedAt: { seconds: 1 } })).toBe(true);
+  it('requires the server marker and valid canonical core fields', () => {
+    expect(isSmartProfileComplete({ completedAt: { seconds: 1 } })).toBe(false);
+    expect(isSmartProfileComplete({
+      completedAt: { seconds: 1 }, setupRequired: false,
+      interests: ['food', 'cafes', 'nature_scenery'], budget: 'balanced', travelParties: ['couple'],
+    })).toBe(true);
     expect(isSmartProfileComplete({ setupRequired: false })).toBe(false);
   });
 
@@ -42,8 +52,8 @@ describe('smart-profile routing', () => {
       interests: ['food', 'cafes', 'nature_scenery'],
       budget: 'balanced',
       travelParties: ['couple'],
-      pace: 'relaxed',
-    })).toBe(3);
+      vibe: ['relaxed'],
+    })).toBe(2);
   });
 
   it('removes invisible legacy values so visible options remain selectable', () => {
