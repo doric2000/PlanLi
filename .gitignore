@@ -7,6 +7,7 @@ functions/.media-migration-state/
 functions/.canonical-media-migration/
 functions/.storage-eu-migration/
 functions/.database-canonical-migration/
+functions/.recommendation-curation/
 functions/.public-profiles-backfill/
 .codex_tmp/
 client/.codex_tmp/
