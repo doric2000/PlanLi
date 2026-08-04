@@ -115,6 +115,27 @@ npm run migrate-personalization -- --resume
 npm run migrate-personalization -- --apply
 ```
 
+Recommendation content curation is also dry-run by default. A dry run scans
+the live collection, applies canonical taxonomy rules plus an optional ignored
+override file, and writes a reviewable manifest containing each document's
+Firestore `updateTime` precondition. Only high-confidence entries are eligible
+for `--apply`; concurrent edits, ambiguous places, and engaged placeholders are
+reported instead of overwritten. Reports, checkpoints, manifests, and rollback
+data stay under the ignored `functions/.recommendation-curation/` directory.
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run curate-recommendations -- --overrides .recommendation-curation\overrides.json
+npm run curate-recommendations -- --apply --manifest .recommendation-curation\manifests\<manifest>.json
+npm run curate-recommendations -- --apply --resume --manifest .recommendation-curation\manifests\<manifest>.json
+npm run curate-recommendations -- --apply --rollback .recommendation-curation\rollback-<timestamp>.jsonl
+```
+
+Exact-place changes require a verified Place ID, coordinates, a verification
+date, and a source URL. Broad activities remain city-level and must not be
+pinned to a city centre. Current prices or opening hours require a dated
+official source; otherwise the claim must be removed or softened before apply.
+
 ## European image pipeline
 
 The active Firebase Storage bucket is:
