@@ -5,6 +5,14 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { buildFavoritePreview, favoriteKeyForPath } = require('../socialService');
 const { initializeAdmin } = require('./localCredentials');
+const {
+  analyzeTagValues,
+  buildRecommendationFacets,
+  getCategoryLabel,
+  normalizeBudget,
+  normalizeCategoryId,
+  tagsMatchCategory,
+} = require('../travelTaxonomy');
 
 const STATE_DIR = path.join(__dirname, '..', '.database-canonical-migration');
 
@@ -275,6 +283,18 @@ async function buildPlan(db, source) {
       ...(data.place || {}),
       ...(!data.place?.coordinates && data.coords ? { coordinates: data.coords } : {}),
     });
+    const categoryId = normalizeCategoryId(data.categoryId || data.category);
+    const tagAnalysis = analyzeTagValues(data.tags);
+    if (!categoryId) issues.push(`Recommendation ${snapshot.id} has an unknown category.`);
+    if (!tagAnalysis.recognized) issues.push(`Recommendation ${snapshot.id} has unknown legacy tags.`);
+    if (categoryId && !tagsMatchCategory(data.tags, categoryId)) {
+      issues.push(`Recommendation ${snapshot.id} has tags outside its category.`);
+    }
+    const budget = normalizeBudget(data.budget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
+    const facets = buildRecommendationFacets(
+      { ...data, categoryId, tags: data.tags || [], budget },
+      data.facets || {}
+    );
     const next = compact({
       ownerId: data.ownerId || data.userId,
       title: data.title || '',
@@ -283,10 +303,11 @@ async function buildPlan(db, source) {
       destination,
       media,
       stats: { likeCount: likedBy.length, commentCount: comments.length },
-      category: data.category || '',
-      categoryId: data.categoryId || '',
-      tags: Array.isArray(data.tags) ? data.tags : [],
-      budget: data.budget || '',
+      category: getCategoryLabel(categoryId),
+      categoryId,
+      tags: tagAnalysis.tagIds,
+      budget,
+      facets,
       rating: Number(data.rating || 0),
       place,
       createdAt: data.createdAt || admin.firestore.Timestamp.now(),

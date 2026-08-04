@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "sync:travel-taxonomy": "node scripts/syncTravelTaxonomy.js",
+    "test:travel-taxonomy": "node scripts/syncTravelTaxonomy.js --check"
+  },
   "devDependencies": {
     "patch-package": "^8.0.1"
   }

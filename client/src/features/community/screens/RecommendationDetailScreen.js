@@ -22,6 +22,7 @@ import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
 import { recordRecommendationOpen } from '../../../services/PersonalizationService';
+import { getBudgetLabel, getTagLabel } from '../../../constants/travelTaxonomy';
 
 /**
  * RecommendationDetailScreen - Full view of a recommendation
@@ -121,7 +122,7 @@ function RecommendationDetailLoaded({ item, navigation }) {
                       ]}
                     >
                       <Text style={[styles.pricePillText, { color: budgetTheme.textColor }]}>
-                        {item.budget}
+                        {getBudgetLabel(item.budget)}
                       </Text>
                     </View>
                   )}
@@ -169,7 +170,7 @@ function RecommendationDetailLoaded({ item, navigation }) {
                   <View style={styles.tagsWrap}>
                     {item.tags.map((tag, index) => (
                       <View key={`${tag}:${index}`} style={styles.tagPill}>
-                        <Text style={styles.tagPillText}>{tag}</Text>
+                        <Text style={styles.tagPillText}>{getTagLabel(tag)}</Text>
                       </View>
                     ))}
                   </View>

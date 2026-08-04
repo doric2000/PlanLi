@@ -3,6 +3,9 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import PreferenceSetupScreen from '../src/features/profile/screens/PreferenceSetupScreen';
 import { getDoc } from 'firebase/firestore';
+import { Alert } from 'react-native';
+
+const mockSaveProfile = jest.fn(() => Promise.resolve());
 
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
@@ -33,10 +36,15 @@ jest.mock('firebase/firestore', () => ({
 }));
 
 jest.mock('../src/services/ProfileService', () => ({
-  saveProfile: jest.fn(() => Promise.resolve()),
+  saveProfile: (...args) => mockSaveProfile(...args),
 }));
 
 describe('PreferenceSetupScreen', () => {
+  beforeEach(() => {
+    mockSaveProfile.mockReset();
+    mockSaveProfile.mockResolvedValue();
+  });
+
   it('does not let invisible legacy values consume visible selection slots', async () => {
     const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset: jest.fn() }} />);
     await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1));
@@ -48,5 +56,31 @@ describe('PreferenceSetupScreen', () => {
     expect(selectable.props.accessibilityState.selected).toBe(false);
     fireEvent.press(selectable);
     expect(screen.getByTestId('preference-interest-photography_viewpoints').props.accessibilityState.selected).toBe(true);
+  });
+
+  it('does not leave setup when the server read-back reports dropped fields', async () => {
+    getDoc.mockResolvedValueOnce({
+      data: () => ({
+        smartProfile: {
+          setupRequired: true,
+          interests: ['food', 'cafes', 'nature_scenery'],
+          budget: 'balanced',
+          travelParties: ['couple'],
+        },
+      }),
+    });
+    const error = new Error('השרת לא שמר את כל ההעדפות.');
+    error.code = 'profile/persistence-mismatch';
+    mockSaveProfile.mockRejectedValueOnce(error);
+    const reset = jest.fn();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset }} />);
+    await waitFor(() => expect(screen.getByTestId('preference-review')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('preference-next'));
+
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('לא הצלחנו לשמור', error.message));
+    expect(reset).not.toHaveBeenCalled();
+    alert.mockRestore();
   });
 });

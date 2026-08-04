@@ -3,7 +3,22 @@ const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 const { initializeAdmin } = require('./localCredentials');
-const { buildRecommendationFacets, normalizeSmartProfile } = require('../travelTaxonomy');
+const {
+  analyzeTagValues,
+  buildRecommendationFacets,
+  CATEGORY_IDS,
+  getCategoryLabel,
+  INTEREST_IDS,
+  NEED_IDS,
+  normalizeBudget,
+  normalizeCategoryId,
+  normalizeSmartProfile,
+  POST_BUDGET_IDS,
+  TAG_IDS,
+  tagsMatchCategory,
+  TRAVEL_PARTY_IDS,
+  VIBE_IDS,
+} = require('../travelTaxonomy');
 const {
   applyPersonalizationSignal,
   normalizePersonalization,
@@ -82,12 +97,56 @@ function appendRollback(filePath, documentPath, before) {
 
 function migratedSmartProfile(raw = {}) {
   const canonical = normalizeSmartProfile(raw);
-  const completed = Boolean(raw.completedAt);
+  const completed = Boolean(
+    raw.completedAt && canonical.interests.length >= 3 && canonical.budget &&
+    canonical.travelParties.length >= 1
+  );
   return {
     setupRequired: completed ? false : raw.setupRequired === true,
     completedAt: completed ? raw.completedAt : null,
     ...canonical,
   };
+}
+
+function migratedRecommendation(data = {}) {
+  const categoryId = normalizeCategoryId(data.categoryId || data.category);
+  const tagAnalysis = analyzeTagValues(data.tags);
+  const budget = normalizeBudget(data.budget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
+  return {
+    categoryId,
+    category: getCategoryLabel(categoryId),
+    tags: tagAnalysis.tagIds,
+    budget,
+    facets: buildRecommendationFacets(
+      { ...data, categoryId, tags: data.tags || [], budget },
+      data.facets || {}
+    ),
+  };
+}
+
+function auditCanonicalPatch(stageName, patch) {
+  const errors = [];
+  const arraysUseOnly = (values, allowed) => (
+    Array.isArray(values) && values.every((value) => allowed.includes(value))
+  );
+  if (stageName === 'users') {
+    const profile = patch.smartProfile;
+    if (!profile || Object.prototype.hasOwnProperty.call(profile, 'pace')) errors.push('profile-shape');
+    if (!arraysUseOnly(profile?.interests, INTEREST_IDS)) errors.push('profile-interests');
+    if (!arraysUseOnly(profile?.travelParties, TRAVEL_PARTY_IDS)) errors.push('profile-parties');
+    if (!arraysUseOnly(profile?.vibe, VIBE_IDS)) errors.push('profile-vibes');
+    if (!arraysUseOnly(profile?.needs, NEED_IDS)) errors.push('profile-needs');
+  }
+  if (stageName === 'recommendations') {
+    if (!CATEGORY_IDS.includes(patch.categoryId)) errors.push('recommendation-category');
+    if (!arraysUseOnly(patch.tags, TAG_IDS)) errors.push('recommendation-tags');
+    if (patch.budget && !POST_BUDGET_IDS.includes(patch.budget)) errors.push('recommendation-budget');
+    if (!arraysUseOnly(patch.facets?.interests, INTEREST_IDS)) errors.push('facet-interests');
+    if (!arraysUseOnly(patch.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('facet-audiences');
+    if (!arraysUseOnly(patch.facets?.vibes, VIBE_IDS)) errors.push('facet-vibes');
+    if (!arraysUseOnly(patch.facets?.needs, NEED_IDS)) errors.push('facet-needs');
+  }
+  return errors;
 }
 
 function changed(before, after) {
@@ -107,14 +166,12 @@ async function migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, r
     {
       name: 'users',
       path: 'users',
-      field: 'smartProfile',
-      transform: (data) => migratedSmartProfile(data.smartProfile || {}),
+      transform: (data) => ({ smartProfile: migratedSmartProfile(data.smartProfile || {}) }),
     },
     {
       name: 'recommendations',
       path: 'recommendations',
-      field: 'facets',
-      transform: (data) => buildRecommendationFacets(data, data.facets || {}),
+      transform: migratedRecommendation,
     },
   ];
 
@@ -128,13 +185,35 @@ async function migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, r
       let writes = 0;
       for (const document of snapshot.docs) {
         const data = document.data();
+        if (stage.name === 'recommendations' && !analyzeTagValues(data.tags).recognized) {
+          if (report.audit.errors.length < 50) {
+            report.audit.errors.push({ path: document.ref.path, errors: ['unrecognized-legacy-tags'] });
+          }
+          continue;
+        }
+        if (stage.name === 'recommendations' &&
+          !tagsMatchCategory(data.tags, data.categoryId || data.category)) {
+          if (report.audit.errors.length < 50) {
+            report.audit.errors.push({ path: document.ref.path, errors: ['tag-category-mismatch'] });
+          }
+          continue;
+        }
         const next = stage.transform(data);
-        if (changed(data[stage.field], next)) {
+        const before = Object.fromEntries(Object.keys(next).map((field) => [field, data[field]]));
+        const auditErrors = auditCanonicalPatch(stage.name, next);
+        if (auditErrors.length) {
+          if (report.audit.errors.length < 50) {
+            report.audit.errors.push({ path: document.ref.path, errors: auditErrors });
+          }
+          continue;
+        }
+        report.audit.checked += 1;
+        if (changed(before, next)) {
           report[stage.name].changed += 1;
           if (options.apply) {
-            appendRollback(rollbackPath, document.ref.path, { [stage.field]: data[stage.field] });
+            appendRollback(rollbackPath, document.ref.path, before);
             batch.update(document.ref, {
-              [stage.field]: next,
+              ...next,
               updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             writes += 1;
@@ -268,11 +347,16 @@ async function run(options) {
     users: { scanned: 0, changed: 0 },
     recommendations: { scanned: 0, changed: 0 },
     activity: { usersScanned: 0, usersChanged: 0, signals: 0 },
+    audit: { checked: 0, passed: false, errors: [] },
     rollbackPath: options.apply ? rollbackPath : null,
   };
   await migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, report);
   await seedActivity(db, options, checkpoint, rollbackPath, report);
+  report.audit.passed = report.audit.errors.length === 0;
   writeJson(path.join(options.stateDir, 'report.json'), report);
+  if (options.apply && !report.audit.passed) {
+    throw new Error('Post-migration canonical audit failed. Review the local report and rollback data.');
+  }
   return report;
 }
 
@@ -285,4 +369,11 @@ if (require.main === module) {
   });
 }
 
-module.exports = { migratedSmartProfile, parseArgs, rollback, run };
+module.exports = {
+  auditCanonicalPatch,
+  migratedRecommendation,
+  migratedSmartProfile,
+  parseArgs,
+  rollback,
+  run,
+};

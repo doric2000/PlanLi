@@ -50,7 +50,7 @@ test('recommendation content ignores client-controlled ownership and location fi
     description: 'A useful description',
     category: 'Food',
     categoryId: 'food',
-    tags: ['pizza', 'pizza', 'family'],
+    tags: ['מסעדה', 'מסעדה', 'בית קפה'],
     budget: '$$',
     userId: 'spoofed',
     countryId: 'spoofed',
@@ -60,11 +60,20 @@ test('recommendation content ignores client-controlled ownership and location fi
   assert.deepEqual(result, {
     title: 'Good place',
     description: 'A useful description',
-    category: 'Food',
+    category: 'אוכל ובילויים',
     categoryId: 'food',
-    tags: ['pizza', 'family'],
-    budget: '$$',
+    tags: ['restaurant', 'cafe'],
+    budget: 'balanced',
   });
+});
+
+test('recommendation content rejects unknown tag IDs and profile-only budgets', () => {
+  const base = {
+    title: 'Good place', description: 'Useful details', categoryId: 'food', category: 'ignored',
+  };
+  assert.throws(() => sanitizeRecommendationContent({ ...base, tags: ['unknown_tag'] }), /unsupported/);
+  assert.throws(() => sanitizeRecommendationContent({ ...base, tags: ['viewpoint'] }), /match category/);
+  assert.throws(() => sanitizeRecommendationContent({ ...base, tags: [], budget: 'flexible' }), /budget/);
 });
 
 test('place parser derives server-controlled country, city and coordinates', () => {

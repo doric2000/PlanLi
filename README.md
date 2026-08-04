@@ -80,9 +80,24 @@ daily repair job handles rare missed events.
 
 Private travel preferences live only at `users/{uid}.smartProfile` and use
 stable IDs. The canonical fields are `setupRequired`, `completedAt`,
-`interests`, `budget`, `travelParties`, `vibe`, `pace`, and `needs`. Only
-interests and vibes are copied to `publicProfiles`; budget, party, pace,
+`interests`, `budget`, `travelParties`, `vibe`, and `needs`. Only
+interests and vibes are copied to `publicProfiles`; budget, party,
 practical needs, and learned activity stay private.
+Trip pace is intentionally excluded from this profile and from recommendation
+ranking; it should return only as part of a roadtrip-specific model.
+
+The source of truth for profile options, recommendation categories, and post
+tags is `shared/travelTaxonomy.json`. Generated client and Functions copies
+must pass `npm run test:travel-taxonomy` from the repository root. Post tags
+are stored as stable IDs; Hebrew labels are presentation only. Every selectable
+tag must either map explicitly to recommendation facets or be marked
+`displayOnly`. Generic accessibility and proximity to Chabad are never treated
+as wheelchair-accessible or Shabbat-friendly guarantees.
+
+Roll out taxonomy changes in this order: required Firestore indexes, Functions,
+the supported client, and only then the reviewed personalization migration.
+Never run the migration with `--apply` as part of an ordinary client/backend
+deployment.
 
 Recommendations store server-derived `facets` (`interests`, `audiences`,
 `vibes`, `needs`, and `budgetLevel`). Personalized discovery keeps only

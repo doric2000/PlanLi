@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, activeFiltersListStyles as styles } from '../styles';
+import { getBudgetLabel, getCategoryLabel, getTagLabel } from '../constants/travelTaxonomy';
 
 /**
  * Displays a horizontal list of currently active filters.
@@ -42,7 +43,7 @@ const ActiveFiltersList = ({ filters, onRemove }) => {
             <TouchableOpacity onPress={() => onRemove('category', cat)}>
               <Ionicons name="close-circle" size={18} color={colors.white} />
             </TouchableOpacity>
-            <Text style={styles.chipText}>{cat}</Text>
+            <Text style={styles.chipText}>{getCategoryLabel(cat)}</Text>
           </View>
         ))}
 
@@ -52,7 +53,7 @@ const ActiveFiltersList = ({ filters, onRemove }) => {
             <TouchableOpacity onPress={() => onRemove('tag', tag)}>
               <Ionicons name="close-circle" size={18} color={colors.white} />
             </TouchableOpacity>
-            <Text style={styles.chipText}>{tag}</Text>
+            <Text style={styles.chipText}>{getTagLabel(tag)}</Text>
           </View>
         ))}
 
@@ -62,7 +63,7 @@ const ActiveFiltersList = ({ filters, onRemove }) => {
             <TouchableOpacity onPress={() => onRemove('budget', budget)}>
               <Ionicons name="close-circle" size={18} color={colors.white} />
             </TouchableOpacity>
-            <Text style={styles.chipText}>{budget}</Text>
+            <Text style={styles.chipText}>{getBudgetLabel(budget)}</Text>
           </View>
         ))}
       </ScrollView>
