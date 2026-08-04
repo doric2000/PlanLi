@@ -100,8 +100,18 @@ function decode(value, db) {
 function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  fs.renameSync(temporary, filePath);
+  const serialized = `${JSON.stringify(value, null, 2)}\n`;
+  fs.writeFileSync(temporary, serialized);
+  try {
+    fs.renameSync(temporary, filePath);
+  } catch (error) {
+    // Windows does not consistently allow rename() to replace an existing
+    // checkpoint. Keep the temporary write first, then fall back to replacing
+    // the local ignored checkpoint in place.
+    if (!['EPERM', 'EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error;
+    fs.writeFileSync(filePath, serialized);
+    fs.rmSync(temporary, { force: true });
+  }
 }
 
 function appendRollback(filePath, documentPath, before, { deleteDocument = false } = {}) {
