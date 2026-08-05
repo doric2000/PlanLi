@@ -104,7 +104,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     'invalid-argument', 'Profile update is invalid.');
   assert(Object.keys(data).every((key) => (
     ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'].includes(key)
-  )), 'invalid-argument', 'Profile update contains unsupported fields.');
+  )), 'invalid-argument', 'נשלח שדה שאינו נתמך בעדכון הפרופיל.');
   if (Object.prototype.hasOwnProperty.call(data, 'completeSmartProfile')) {
     assert(typeof data.completeSmartProfile === 'boolean',
       'invalid-argument', 'completeSmartProfile must be boolean.');
