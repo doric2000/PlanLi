@@ -3,7 +3,6 @@ export const EMPTY_DISCOVERY_FILTERS = Object.freeze({
   destinations: [],
   categoryIds: [],
   subcategoryIds: [],
-  interestIds: [],
   audienceIds: [],
   vibeIds: [],
   travelerStyleIds: [],
@@ -12,6 +11,7 @@ export const EMPTY_DISCOVERY_FILTERS = Object.freeze({
   seasons: [],
   environments: [],
   difficultyIds: [],
+  experienceLevelIds: [],
   transportModeIds: [],
   paceIds: [],
   durationDays: null,
@@ -23,7 +23,6 @@ export const createEmptyDiscoveryFilters = () => ({
   destinations: [],
   categoryIds: [],
   subcategoryIds: [],
-  interestIds: [],
   audienceIds: [],
   vibeIds: [],
   travelerStyleIds: [],
@@ -32,6 +31,7 @@ export const createEmptyDiscoveryFilters = () => ({
   seasons: [],
   environments: [],
   difficultyIds: [],
+  experienceLevelIds: [],
   transportModeIds: [],
   paceIds: [],
 });
@@ -49,26 +49,41 @@ export function hasDiscoveryFilters(filters, { includeQuery = true } = {}) {
   });
 }
 
-export function applySmartProfileFilters(filters, profile, { includeRoute = false } = {}) {
+export function applySmartProfileFilters(filters, profile, { surface = 'recommendations' } = {}) {
+  const isRoutesSurface = surface === 'routes';
   const budgetLevels = profile?.budget && profile.budget !== 'flexible' ? [profile.budget] : [];
-  return {
+	const result = {
     ...filters,
-    interestIds: [...(profile?.interests || [])],
     audienceIds: [...(profile?.travelParties || [])],
     vibeIds: [...(profile?.vibe || [])],
-    travelerStyleIds: [...(profile?.travelerStyles || [])],
     needIds: [...(profile?.needs || [])],
     budgetLevels,
-    ...(includeRoute && profile?.pace ? { paceIds: [profile.pace] } : {}),
+	...(isRoutesSurface ? {
+		travelerStyleIds: [...(profile?.travelerStyles || [])],
+		...(profile?.pace ? { paceIds: [profile.pace] } : {}),
+	} : { travelerStyleIds: [], seasons: [] }),
   };
+	delete result.interestIds;
+	return result;
 }
 
-export function discoveryRequestFromFilters(filters) {
+export function discoveryRequestFromFilters(filters, { surface = 'recommendations' } = {}) {
   const {
     query,
     destinations,
     ...serverFilters
   } = filters || {};
+	delete serverFilters.interestIds;
+	if (surface !== 'routes') {
+		delete serverFilters.travelerStyleIds;
+		delete serverFilters.seasons;
+		delete serverFilters.difficultyIds;
+		delete serverFilters.experienceLevelIds;
+		delete serverFilters.transportModeIds;
+		delete serverFilters.paceIds;
+		delete serverFilters.durationDays;
+		delete serverFilters.distanceKm;
+	}
   return {
     query: query?.trim() || '',
     destinations: (destinations || []).map(({ countryId, cityId }) => ({ countryId, cityId: cityId || '' })),

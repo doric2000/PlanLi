@@ -1,4 +1,4 @@
-import { StyleSheet, Dimensions } from 'react-native';
+import { StyleSheet, Dimensions, Platform } from 'react-native';
 import { colors } from './colors';
 import { common } from './common';
 import { shadows } from './shadows';
@@ -109,6 +109,24 @@ export const activeFiltersListStyles = StyleSheet.create({
   container: {
     marginBottom: spacing.md,
   },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  summaryText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  clearText: {
+    color: colors.info,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   scrollContent: {
     paddingHorizontal: spacing.lg, 
     flexDirection: 'row-reverse', // Keeps the RTL flow for Hebrew
@@ -133,7 +151,55 @@ export const activeFiltersListStyles = StyleSheet.create({
     color: colors.white,
     fontSize: 13,
     fontWeight: '600',
-  }
+  },
+});
+
+export const discoveryFilterTriggerStyles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brandOrange,
+    borderWidth: 1,
+    borderColor: colors.white,
+    zIndex: 2,
+  },
+  badgeText: {
+    color: colors.white,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  emptyActions: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  emptyAction: {
+    borderRadius: spacing.radiusFull,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  emptyActionPrimary: {
+    backgroundColor: colors.primary,
+  },
+  emptyActionText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyActionTextPrimary: {
+    color: colors.white,
+  },
 });
 
 // components/BackButton.js
@@ -509,47 +575,390 @@ export const recommendationMetaStyles = StyleSheet.create({
   },
 });
 
-// components/RecommendationsFilterModal.js
-export const recommendationsFilterModalStyles = StyleSheet.create({
-  section: {
-    marginBottom: spacing.md,
+// components/Discovery*Filter*.js
+export const discoveryFilterStyles = StyleSheet.create({
+  modalOverlay: {
+    justifyContent: Platform.OS === 'web' ? 'center' : 'flex-end',
+    paddingHorizontal: Platform.OS === 'web' ? spacing.xl : 0,
+    paddingVertical: Platform.OS === 'web' ? spacing.xl : 0,
   },
-  dynamicSection: {
-    marginTop: spacing.xs,
+  modalContent: {
+    width: '100%',
+    maxWidth: 760,
+    height: Platform.OS === 'web' ? '90%' : '92%',
+    maxHeight: Platform.OS === 'web' ? 900 : undefined,
+    alignSelf: 'center',
+    borderRadius: Platform.OS === 'web' ? spacing.radiusXL : undefined,
+    borderTopLeftRadius: spacing.radiusXL,
+    borderTopRightRadius: spacing.radiusXL,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
   },
-  lastSection: {
-    marginBottom: spacing.lg,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl, // Extra padding ensures bottom content is not hidden
-  },
-scrollWrapper: {
-    // מגביל את אזור הבחירה ל-60% מגובה המסך כדי להשאיר מקום לכותרת ולכפתורים
-    maxHeight: SCREEN_HEIGHT * 0.6, 
+  scrollWrapper: {
+    flex: 1,
   },
   scrollContent: {
     paddingBottom: spacing.xl,
-    flexGrow: 1, // מבטיח שהתוכן יתפרס נכון אם הוא קטן מהגובה המקסימלי
-  }
-});
-
-// components/RoutesFilterModal.js
-export const routesFilterModalStyles = StyleSheet.create({
-  section: {
+  },
+  content: {
+    gap: spacing.md,
+  },
+  profilePresetButton: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: spacing.radiusMedium,
+    borderWidth: 1,
+    borderColor: colors.accentLight,
+    backgroundColor: '#F7F9FF',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  profilePresetCopy: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  profilePresetTitle: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  profilePresetText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: spacing.xs,
+    textAlign: 'right',
+  },
+  destinationSection: {
+    zIndex: 20,
+  },
+  primarySectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  primarySectionHelper: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    textAlign: 'right',
+  },
+  destinationInputWrap: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 46,
+    borderRadius: spacing.radiusMedium,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+  },
+  destinationInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 15,
+    paddingVertical: spacing.md,
+    writingDirection: 'rtl',
+  },
+  selectedDestinations: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  selectedDestinationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: spacing.radiusFull,
+    borderWidth: 1,
+    borderColor: colors.accentLight,
+    backgroundColor: '#F7F9FF',
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+  },
+  selectedDestinationText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    writingDirection: 'rtl',
+  },
+  destinationSuggestionsPanel: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.radiusMedium,
+    backgroundColor: colors.white,
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
+  },
+  destinationSuggestionGroup: {
+    paddingTop: spacing.xs,
+  },
+  destinationSuggestionGroupTitle: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    textAlign: 'right',
+  },
+  destinationSuggestion: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderLight,
+  },
+  destinationSuggestionTextWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  destinationSuggestionTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  destinationSuggestionSubtitle: {
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  destinationEmptyText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    padding: spacing.md,
+    textAlign: 'right',
+  },
+  destinationLoadingRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categorySection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.lg,
+  },
+  categoryGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  categoryTile: {
+    flexGrow: 1,
+    flexBasis: 140,
+    maxWidth: Platform.OS === 'web' ? 170 : undefined,
+    minHeight: 64,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.radiusMedium,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  categoryTileSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryTileDisabled: {
+    opacity: 0.45,
+  },
+  categoryTileText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  categoryTileTextSelected: {
+    color: colors.white,
+  },
+  inlineNotice: {
+    color: colors.info,
+    fontSize: 12,
+    marginTop: spacing.sm,
+    textAlign: 'right',
+  },
+  subcategoryPanel: {
+    borderRadius: spacing.radiusMedium,
+    backgroundColor: colors.background,
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  categoryTabs: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginBottom: spacing.md,
   },
-  dynamicSection: {
-    marginTop: spacing.sm,
+  categoryTab: {
+    borderRadius: spacing.radiusFull,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+  },
+  categoryTabActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.accentLight,
+  },
+  categoryTabText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  categoryTabTextActive: {
+    color: colors.primary,
+  },
+  subcategoryTitle: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
     marginBottom: spacing.sm,
+    textAlign: 'right',
   },
-  rangeSection: {
-    marginTop: spacing.md,
-    paddingBottom: spacing.lg,
+  serviceGroupTabs: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
   },
-  scrollContent: {
-    paddingBottom: spacing.md,
-  }
+  serviceGroupTab: {
+    borderRadius: spacing.radiusSmall,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  serviceGroupTabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  serviceGroupTabText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  serviceGroupTabTextActive: {
+    color: colors.white,
+  },
+  disclosureSection: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.radiusMedium,
+    backgroundColor: colors.white,
+    overflow: 'hidden',
+  },
+  disclosureHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 62,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  disclosureTitleWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  disclosureTitle: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  disclosureSummary: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: spacing.xs,
+    maxWidth: '100%',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  disclosureBody: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+  },
+  optionGroup: {
+    marginBottom: spacing.md,
+  },
+  optionGroupLabel: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    textAlign: 'right',
+  },
+  optionGroupHelper: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: spacing.sm,
+    textAlign: 'right',
+  },
+  optionGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  optionChip: {
+    borderRadius: spacing.radiusFull,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
+  optionChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  optionChipText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+    writingDirection: 'rtl',
+  },
+  optionChipTextSelected: {
+    color: colors.white,
+  },
+  showAllButton: {
+    alignSelf: 'flex-end',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  showAllText: {
+    color: colors.info,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  rangeGrid: {
+    gap: spacing.sm,
+  },
 });
+
+export const recommendationsFilterModalStyles = discoveryFilterStyles;
+export const routesFilterModalStyles = discoveryFilterStyles;
 
 // components/ScreenHeader.js
 export const screenHeaderStyles = StyleSheet.create({
@@ -3071,6 +3480,44 @@ export const addRoutesScreenStyles = StyleSheet.create({
     descriptionField: {
         marginBottom: spacing.xl,
     },
+	confirmationRow: {
+		flexDirection: 'row-reverse',
+		alignItems: 'flex-start',
+		gap: spacing.sm,
+		padding: spacing.md,
+		marginBottom: spacing.lg,
+		borderRadius: 12,
+		backgroundColor: colors.background,
+		borderWidth: 1,
+		borderColor: colors.border,
+	},
+	confirmationBox: {
+		width: 22,
+		height: 22,
+		borderRadius: 6,
+		borderWidth: 1.5,
+		borderColor: colors.textSecondary,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: colors.white,
+	},
+	confirmationBoxChecked: {
+		backgroundColor: colors.primary,
+		borderColor: colors.primary,
+	},
+	confirmationCheck: {
+		color: colors.white,
+		fontSize: 14,
+		fontWeight: '900',
+	},
+	confirmationText: {
+		flex: 1,
+		fontSize: 13,
+		lineHeight: 19,
+		color: colors.textPrimary,
+		textAlign: 'right',
+		writingDirection: 'rtl',
+	},
 });
 
 // features/roadtrip/screens/RouteDetailScreen.js

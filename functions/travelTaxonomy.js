@@ -23,6 +23,10 @@ const TAG_IDS = ids(taxonomy.tags);
 
 const CATEGORY_BY_ID = byId(taxonomy.categories);
 const TAG_BY_ID = byId(taxonomy.tags);
+const TRAVELER_STYLE_BY_ID = byId(taxonomy.travelerStyles);
+const RECOMMENDATION_ATTRIBUTE_RULES = taxonomy.contentAttributeRules?.recommendations || {};
+const RECOMMENDATION_VIBE_TAG_IDS = new Set(RECOMMENDATION_ATTRIBUTE_RULES.vibeTagIds || []);
+const RECOMMENDATION_ENVIRONMENT_TAG_IDS = new Set(RECOMMENDATION_ATTRIBUTE_RULES.environmentTagIds || []);
 const CATEGORY_ID_BY_LABEL = Object.freeze(Object.fromEntries(
   taxonomy.categories.map((item) => [item.label, item.id])
 ));
@@ -122,6 +126,19 @@ function analyzeTagValues(values) {
 
 const normalizeRecommendationTags = (values) => analyzeTagValues(values).tagIds;
 
+function recommendationAttributeRequirements(values) {
+  const tagIds = normalizeRecommendationTags(values);
+  const needRules = RECOMMENDATION_ATTRIBUTE_RULES.needTagIds || {};
+  return {
+    vibes: tagIds.some((tagId) => RECOMMENDATION_VIBE_TAG_IDS.has(tagId)),
+    environment: tagIds.some((tagId) => RECOMMENDATION_ENVIRONMENT_TAG_IDS.has(tagId)),
+    needs: NEED_IDS.filter((needId) => {
+      const supportedTags = new Set(needRules[needId] || []);
+      return tagIds.some((tagId) => supportedTags.has(tagId));
+    }),
+  };
+}
+
 function tagsMatchCategory(values, categoryValue) {
   const categoryId = normalizeCategoryId(categoryValue);
   const analysis = analyzeTagValues(values);
@@ -200,7 +217,8 @@ function isSmartProfileComplete(value) {
     Boolean(profile.budget) && profile.travelParties.length >= 1;
 }
 
-function buildTravelContentFacets(content, submitted = {}) {
+function buildTravelContentFacets(content, submitted = {}, { surface = 'recommendation' } = {}) {
+  const isRoute = surface === 'route';
   const categoryIds = normalizeCategoryIds([
     ...(Array.isArray(content?.categoryIds) ? content.categoryIds : []),
     content?.categoryId || content?.category,
@@ -208,21 +226,32 @@ function buildTravelContentFacets(content, submitted = {}) {
   const categoryInterests = categoryIds.flatMap((id) => CATEGORY_BY_ID[id]?.interests || []);
   const tagAnalysis = analyzeTagValues(content?.tags || content?.subcategoryIds);
   const value = (field) => Array.isArray(submitted[field]) ? submitted[field] : [];
+  const travelerStyles = isRoute
+    ? uniqueAllowed([...tagAnalysis.travelerStyles, ...value('travelerStyles')], TRAVELER_STYLE_IDS, 4)
+    : [];
+  const styleInterests = travelerStyles.flatMap(
+    (styleId) => TRAVELER_STYLE_BY_ID[styleId]?.relatedInterests || []
+  );
+  const needs = uniqueAllowed([...tagAnalysis.needs, ...value('needs')], NEED_IDS);
+  const audienceScope = submitted.audienceScope === 'all' ? 'all' : 'selected';
   return {
-    interests: uniqueAllowed([...value('interests'), ...categoryInterests, ...tagAnalysis.interests], INTEREST_IDS, 12),
-    audiences: uniqueAllowed([...tagAnalysis.audiences, ...value('audiences')], TRAVEL_PARTY_IDS, 6),
+    interests: uniqueAllowed([...categoryInterests, ...tagAnalysis.interests, ...styleInterests], INTEREST_IDS, 12),
+    audienceScope,
+    audiences: audienceScope === 'all'
+      ? []
+      : uniqueAllowed([...tagAnalysis.audiences, ...value('audiences')], TRAVEL_PARTY_IDS, 6),
     vibes: uniqueAllowed([...tagAnalysis.vibes, ...value('vibes')], VIBE_IDS, 4),
-    travelerStyles: uniqueAllowed(
-      [...tagAnalysis.travelerStyles, ...value('travelerStyles')], TRAVELER_STYLE_IDS, 4
-    ),
-    needs: uniqueAllowed([...tagAnalysis.needs, ...value('needs')], NEED_IDS),
-    budgetLevel: normalizeBudget(content?.budget || submitted.budgetLevel, { allowFlexible: false }) || tagAnalysis.budgetLevel,
-    seasons: uniqueAllowed([...tagAnalysis.seasons, ...value('seasons')], SEASON_IDS),
+    travelerStyles,
+    needs,
+    needsScope: needs.length ? (isRoute ? 'entire_route' : 'recommendation') : '',
+	budgetLevel: normalizeBudget(content?.budget || submitted.budgetLevel, { allowFlexible: isRoute }) || tagAnalysis.budgetLevel,
+    seasons: isRoute ? uniqueAllowed([...tagAnalysis.seasons, ...value('seasons')], SEASON_IDS) : [],
     environments: uniqueAllowed([...tagAnalysis.environments, ...value('environments')], ENVIRONMENT_IDS),
   };
 }
 
-const buildRecommendationFacets = buildTravelContentFacets;
+const buildRecommendationFacets = (content, submitted) =>
+  buildTravelContentFacets(content, submitted, { surface: 'recommendation' });
 
 module.exports = {
   BUDGET_IDS,
@@ -253,6 +282,7 @@ module.exports = {
   normalizeCategoryIds,
   normalizeRecommendationTags,
   normalizeSmartProfile,
+  recommendationAttributeRequirements,
   tagsMatchCategory,
   taxonomy,
   uniqueAllowed,

@@ -19,7 +19,12 @@ import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import { useSmartProfile } from '../../../hooks/useSmartProfile';
-import { common, colors, routesScreenStyles as styles } from '../../../styles';
+import {
+  common,
+  colors,
+  routesScreenStyles as styles,
+  discoveryFilterTriggerStyles as filterUiStyles,
+} from '../../../styles';
 import FabButton from '../../../components/FabButton';
 import { RouteCard } from '../components/RouteCard';
 import { GenerateTripCard } from '../components/GenerateTripCard';
@@ -37,6 +42,7 @@ import {
   removeDiscoveryFilter,
 } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
+import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
 
 const text = {
   title: 'מסלולים',
@@ -58,7 +64,7 @@ export default function RoutesScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(createEmptyDiscoveryFilters);
-  const [debouncedRequest, setDebouncedRequest] = useState(discoveryRequestFromFilters(filters));
+  const [debouncedRequest, setDebouncedRequest] = useState(discoveryRequestFromFilters(filters, { surface: 'routes' }));
   const [filterVisible, setFilterVisible] = useState(false);
   const [sortVisible, setSortVisible] = useState(false);
   const [sortBy, setSortBy] = useState('popularity');
@@ -78,7 +84,7 @@ export default function RoutesScreen({ navigation }) {
   }, [personalizationAvailable, profileLoading]);
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedRequest(discoveryRequestFromFilters(filters)), 350);
+    const timer = setTimeout(() => setDebouncedRequest(discoveryRequestFromFilters(filters, { surface: 'routes' })), 350);
     return () => clearTimeout(timer);
   }, [filters]);
 
@@ -143,6 +149,7 @@ export default function RoutesScreen({ navigation }) {
     if (routeData) navigation.navigate('RouteDetail', { routeData });
   };
   const isFiltered = hasDiscoveryFilters(filters);
+  const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
   const sortLabel = sortBy === 'personalized' ? 'בשבילך' : sortBy === 'newest' ? 'חדש' : 'פופולרי';
 
   const openCreateRoute = () => {
@@ -169,6 +176,11 @@ export default function RoutesScreen({ navigation }) {
         <TouchableOpacity style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
           onPress={() => setFilterVisible(true)} accessibilityRole="button" accessibilityLabel="מסננים">
           <Ionicons name="filter" size={20} color="#FFFFFF" />
+          {activeFilterCount > 0 && (
+            <View style={filterUiStyles.badge}>
+              <Text style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>{text.title}</Text>
@@ -202,7 +214,8 @@ export default function RoutesScreen({ navigation }) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
       <ActiveRouteFiltersList filters={filters}
-        onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))} />
+        onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
+        onClear={() => setFilters(createEmptyDiscoveryFilters())} />
       {loading ? <View style={common.center}><ActivityIndicator size="large" color={colors.primary} /></View> : (
         <FlatList ref={routesListRef} data={routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.feedContent, { paddingBottom: getTabSceneListPaddingBottom(insets) }]}
@@ -219,13 +232,24 @@ export default function RoutesScreen({ navigation }) {
               ? 'לא הצלחנו לטעון מסלולים. משכו מטה כדי לנסות שוב.'
               : isFiltered ? text.noFiltered : text.noRoutes}</Text>
             {!isFiltered && <Text style={common.emptySubText}>{text.firstRoute}</Text>}
+            {isFiltered && (
+              <View style={filterUiStyles.emptyActions}>
+                <TouchableOpacity style={[filterUiStyles.emptyAction, filterUiStyles.emptyActionPrimary]}
+                  onPress={() => setFilterVisible(true)} accessibilityRole="button">
+                  <Text style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={filterUiStyles.emptyAction}
+                  onPress={() => setFilters(createEmptyDiscoveryFilters())} accessibilityRole="button">
+                  <Text style={filterUiStyles.emptyActionText}>נקה הכול</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>} showsVerticalScrollIndicator={false} />
       )}
       <FabButton style={{ bottom: getFabBottomInset(insets), zIndex: 10 }} onPress={openCreateRoute} />
       <RoutesFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={filters}
         onApply={(next) => { setFilters({ ...createEmptyDiscoveryFilters(), ...next }); setFilterVisible(false); }}
-        onClear={() => { setFilters(createEmptyDiscoveryFilters()); setFilterVisible(false); }}
-        onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile, { includeRoute: true })} />
+        onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile, { surface: 'routes' })} />
       <SortMenuModal visible={sortVisible} onClose={() => setSortVisible(false)} sortBy={sortBy}
         onSelect={(value) => { setSortBy(value); setSortVisible(false); }}
         personalizationAvailable={personalizationAvailable} includeNearby={false} />

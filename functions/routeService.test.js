@@ -36,14 +36,14 @@ test('canonical route input validates required route facets and exact stops', ()
     destinations: [{ countryId: 'spoofed', cityId: 'spoofed' }],
   }));
   assert.equal(route.dayCount, 1);
-  assert.deepEqual(route.facets.interests, ['hiking', 'nature_scenery']);
+	assert.deepEqual(route.facets.interests, ['nature_scenery', 'hiking', 'scenic_roadtrips']);
   assert.deepEqual(route.transportModes, ['car']);
   assert.equal(Object.prototype.hasOwnProperty.call(route, 'search'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(route, 'destinations'), false);
 });
 
 test('route metadata rejects missing required facets, invalid subcategories and missing Place IDs', () => {
-  assert.throws(() => sanitizeRouteMetadata(canonicalRoute({ facets: { interests: [], audiences: [], budgetLevel: '' } })), /interests/);
+	assert.throws(() => sanitizeRouteMetadata(canonicalRoute({ facets: { interests: [], audiences: [], budgetLevel: '' } })), /audiences/);
   assert.throws(() => sanitizeRouteMetadata(canonicalRoute({ subcategoryIds: ['restaurant'] })), /match category/);
   const withoutPlaceId = canonicalRoute();
   delete withoutPlaceId.days[0].stops[0].place.placeId;
@@ -66,4 +66,38 @@ test('legacy route input is normalized at the server boundary without storing a 
   assert.equal(route.difficulty, 'easy');
   assert.ok(route.facets.interests.includes('scenic_roadtrips'));
   assert.deepEqual(route.facets.audiences, ['couple']);
+});
+
+test('taxonomy v4 route attributes are factual, scoped and derive interests from content', () => {
+	const route = sanitizeRouteInput(canonicalRoute({
+		taxonomyVersion: 4,
+		facets: undefined,
+		attributes: {
+			audienceScope: 'all', audiences: [], budgetLevel: 'balanced', vibes: ['adventurous'],
+			travelerStyles: ['roadtrip'], needs: ['wheelchair_accessible'], needsCoverageConfirmed: true,
+			seasons: ['spring'], environment: 'outdoor',
+		},
+	}));
+	assert.equal(route.facets.audienceScope, 'all');
+	assert.deepEqual(route.facets.audiences, []);
+	assert.equal(route.facets.needsScope, 'entire_route');
+	assert.ok(route.facets.interests.includes('hiking'));
+	assert.throws(() => sanitizeRouteInput(canonicalRoute({
+		taxonomyVersion: 4,
+		facets: undefined,
+		attributes: {
+			audienceScope: 'all', audiences: [], budgetLevel: 'balanced', vibes: [],
+			travelerStyles: [], needs: ['wheelchair_accessible'], needsCoverageConfirmed: false,
+			seasons: ['spring'], environment: 'outdoor',
+		},
+	})), /confirmed/);
+	assert.throws(() => sanitizeRouteInput(canonicalRoute({
+		taxonomyVersion: 4,
+		facets: undefined,
+		attributes: {
+			audienceScope: 'all', audiences: [], budgetLevel: 'flexible', vibes: [],
+			travelerStyles: [], needs: [], needsCoverageConfirmed: false,
+			seasons: ['spring'], environment: 'outdoor',
+		},
+	})), /budgetLevel/);
 });

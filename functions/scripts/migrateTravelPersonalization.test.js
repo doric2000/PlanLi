@@ -83,7 +83,7 @@ test('legacy attractions use content semantics while cross-cutting tags move to 
   assert.equal(museum.categoryId, 'culture');
   assert.deepEqual(museum.tags, ['museum']);
   assert.ok(museum.facets.environments.includes('indoor'));
-  assert.ok(museum.facets.interests.includes('photography_viewpoints'));
+	assert.ok(!museum.facets.interests.includes('photography_viewpoints'));
 
   const stadium = resolveLegacyRecommendationClassification({
     title: 'סיור בקאמפ נואו', description: 'אצטדיון', categoryId: 'attractions',
@@ -107,9 +107,19 @@ test('legacy backpacker and digital-nomad values move from vibe to traveler styl
 
 test('route migration builds canonical facets, destinations and search without touching recency fields', () => {
   const result = migratedRoute({
+	 taxonomyVersion: 3,
     title: 'מסלול חופים',
     description: 'יום ליד הים',
-    tags: { difficulty: 'קל', roadTrip: ['מסלול נופי'], experience: [] },
+	 categoryIds: ['nature'],
+	 subcategoryIds: ['beach'],
+	 facets: {
+		interests: ['beaches_water'], audiences: ['friends'], vibes: ['relaxed'],
+		travelerStyles: ['roadtrip'], needs: [], budgetLevel: 'balanced',
+		seasons: ['summer'], environments: ['outdoor'],
+	 },
+	 difficulty: 'easy',
+	 transportModes: ['mixed'],
+	 pace: 'balanced',
     createdAt: { seconds: 1 },
   }, [{
     location: 'חוף לדוגמה',
@@ -117,7 +127,7 @@ test('route migration builds canonical facets, destinations and search without t
   }]);
 
   assert.equal(result.reviewRequired, false);
-  assert.equal(result.patch.taxonomyVersion, 3);
+	assert.equal(result.patch.taxonomyVersion, 4);
   assert.equal(result.patch.difficulty, 'easy');
   assert.deepEqual(result.patch.transportModes, ['mixed']);
   assert.deepEqual(result.patch.destinationKeys, ['cty-il:*', 'cty-il:city-tlv']);
@@ -130,6 +140,12 @@ test('route migration deactivates an empty route and flags an unresolvable route
   const unresolved = migratedRoute({ title: 'מסלול', dayCount: 1 }, [{ location: 'מקום לא מזוהה' }]);
   assert.equal(unresolved.patch, null);
   assert.equal(unresolved.reviewRequired, true);
+	const incomplete = migratedRoute({
+		title: 'מסלול ישן', description: 'אין מספיק מידע לסינון',
+		tags: { difficulty: 'easy', roadTrip: ['scenic'], experience: [] },
+	}, [{ destination: { countryId: 'cty-il', cityId: 'city-tlv' } }]);
+	assert.equal(incomplete.patch, null);
+	assert.match(incomplete.reason, /route-missing-factual-metadata/);
 });
 
 test('recommendation and route migrations are idempotent after one canonical pass', () => {
@@ -153,9 +169,19 @@ test('recommendation and route migrations are idempotent after one canonical pas
     destination: { countryId: 'cty-example', cityId: 'city-example' },
   }];
   const routeInput = {
+	 taxonomyVersion: 3,
     title: 'Legacy roadtrip',
     description: 'Scenic route',
-    tags: { difficulty: 'easy', roadTrip: ['scenic'], experience: [] },
+	 categoryIds: ['nature'],
+	 subcategoryIds: ['viewpoint'],
+	 facets: {
+		interests: ['nature_scenery'], audiences: ['friends'], vibes: ['relaxed'],
+		travelerStyles: ['roadtrip'], needs: [], budgetLevel: 'balanced',
+		seasons: ['all_year'], environments: ['outdoor'],
+	 },
+	 difficulty: 'easy',
+	 transportModes: ['car'],
+	 pace: 'balanced',
   };
   const firstRoute = migratedRoute(routeInput, stops).patch;
   const secondRoute = migratedRoute({ ...routeInput, ...firstRoute }, stops).patch;

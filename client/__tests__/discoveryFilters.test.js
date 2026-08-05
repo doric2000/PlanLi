@@ -15,10 +15,11 @@ describe('shared community and route filters', () => {
     const result = applySmartProfileFilters(current, {
       interests: ['food'], travelParties: ['couple'], vibe: ['romantic'],
       travelerStyles: ['city_break'], needs: ['vegetarian'], budget: 'balanced', pace: 'relaxed',
-    }, { includeRoute: true });
+    }, { surface: 'routes' });
     expect(result.destinations).toEqual(current.destinations);
-    expect(result.interestIds).toEqual(['food']);
+	expect(result.interestIds).toBeUndefined();
     expect(result.audienceIds).toEqual(['couple']);
+	expect(result.travelerStyleIds).toEqual(['city_break']);
     expect(result.paceIds).toEqual(['relaxed']);
     expect(hasDiscoveryFilters(result)).toBe(true);
   });
@@ -29,7 +30,7 @@ describe('shared community and route filters', () => {
       query: '  חוף  ',
       destinations: [{ countryId: 'cty-il', cityId: 'city-tlv', label: 'תל אביב' }],
       durationDays: { min: '2', max: '5' },
-    });
+	}, { surface: 'routes' });
     expect(request.query).toBe('חוף');
     expect(request.destinations).toEqual([{ countryId: 'cty-il', cityId: 'city-tlv' }]);
     expect(request.filters.durationDays).toEqual({ min: '2', max: '5' });
@@ -38,11 +39,11 @@ describe('shared community and route filters', () => {
   it('removes array, destination, text and range filters deterministically', () => {
     const filters = {
       ...createEmptyDiscoveryFilters(),
-      query: 'ים', interestIds: ['beaches_water', 'food'],
+	  query: 'ים', audienceIds: ['couple', 'friends'],
       destinations: [{ countryId: 'cty-il', cityId: 'city-tlv' }],
       distanceKm: { min: 10, max: 20 },
     };
-    expect(removeDiscoveryFilter(filters, 'interestIds', 'food').interestIds).toEqual(['beaches_water']);
+	expect(removeDiscoveryFilter(filters, 'audienceIds', 'friends').audienceIds).toEqual(['couple']);
     expect(removeDiscoveryFilter(filters, 'destinations', 'cty-il:city-tlv').destinations).toEqual([]);
     expect(removeDiscoveryFilter(filters, 'query').query).toBe('');
     expect(removeDiscoveryFilter(filters, 'distanceKm').distanceKm).toBeNull();

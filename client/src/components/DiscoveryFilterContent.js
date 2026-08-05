@@ -1,174 +1,265 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
-import ChipSelector from '../features/community/components/ChipSelector';
-import { FormInput } from './FormInput';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import DiscoveryCategorySelector from './DiscoveryCategorySelector';
+import DiscoveryDestinationAutocomplete from './DiscoveryDestinationAutocomplete';
+import DiscoveryDisclosureSection from './DiscoveryDisclosureSection';
+import DiscoveryOptionGroup from './DiscoveryOptionGroup';
 import MinMaxInputs from './MinMaxInputs';
-import { buttons, colors, common, recommendationsFilterModalStyles as styles } from '../styles';
 import {
-  CATEGORIES,
   ENVIRONMENTS,
-  INTERESTS,
   NEEDS,
   PACES,
   POST_BUDGETS,
   ROUTE_DIFFICULTIES,
+	ROUTE_EXPERIENCE_LEVELS,
   SEASONS,
-  TAG_OPTIONS_BY_CATEGORY,
   TRANSPORT_MODES,
   TRAVELER_STYLES,
   TRAVEL_PARTIES,
   VIBES,
 } from '../constants/travelTaxonomy';
-import { useDestinationFilterOptions } from '../hooks/useDestinationFilterOptions';
-
-const selectedLabels = (options, values) => options
-  .filter((option) => values.includes(option.value || option.id))
-  .map((option) => option.label);
+import { colors, discoveryFilterStyles as styles } from '../styles';
+import {
+  getRelevantDiscoveryFacets,
+  summarizeSelections,
+} from '../utils/progressiveDiscoveryFilters';
 
 function toggle(values, value, maximum = 20) {
-  return values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value].slice(0, maximum);
+  const current = Array.isArray(values) ? values : [];
+  return current.includes(value)
+    ? current.filter((entry) => entry !== value)
+    : [...current, value].slice(0, maximum);
 }
 
-export default function DiscoveryFilterContent({ filters, onChange, includeRoute = false, onUseProfile }) {
-  const current = filters || {};
-  const [destinationQuery, setDestinationQuery] = useState('');
-  const { options: destinationOptions, loading: destinationsLoading } = useDestinationFilterOptions(true);
-  const selectedDestinationKeys = (current.destinations || []).map((item) => (
-    item.cityId ? `city:${item.countryId}:${item.cityId}` : `country:${item.countryId}`
-  ));
-  const visibleDestinations = useMemo(() => {
-    const normalized = destinationQuery.trim().toLocaleLowerCase('he');
-    const matching = destinationOptions.filter((option) => (
-      !normalized || option.label.toLocaleLowerCase('he').includes(normalized)
-    )).slice(0, 20);
-    const selected = destinationOptions.filter((option) => selectedDestinationKeys.includes(option.key));
-    return Array.from(new Map([...selected, ...matching].map((item) => [item.key, item])).values());
-  }, [destinationOptions, destinationQuery, selectedDestinationKeys.join('|')]);
+function joinSummaries(...summaries) {
+  const visible = summaries.filter((summary) => summary && summary !== 'לא נבחר');
+  return visible.length ? visible.join(' · ') : 'לא נבחר';
+}
 
+function rangeSummary(label, range, suffix = '') {
+  if (!range || (range.min == null || range.min === '') && (range.max == null || range.max === '')) return '';
+  return `${label}: ${range.min || '0'}–${range.max || '∞'}${suffix}`;
+}
+
+export default function DiscoveryFilterContent({
+  filters,
+  onChange,
+  surface = 'recommendations',
+  onUseProfile,
+  destinationsEnabled = true,
+}) {
+  const current = filters || {};
+  const isRoute = surface === 'routes';
+  const [expandedSections, setExpandedSections] = useState({});
+  const relevant = useMemo(() => getRelevantDiscoveryFacets(current), [
+    (current.categoryIds || []).join('|'),
+    (current.subcategoryIds || []).join('|'),
+  ]);
   const patch = (value) => onChange?.({ ...current, ...value });
   const toggleField = (field, value, maximum) => patch({
-    [field]: toggle(Array.isArray(current[field]) ? current[field] : [], value, maximum),
+    [field]: toggle(current[field], value, maximum),
   });
-  const toggleDestination = (key) => {
-    const option = destinationOptions.find((item) => item.key === key);
-    if (!option) return;
-    const destinations = Array.isArray(current.destinations) ? current.destinations : [];
-    const exists = selectedDestinationKeys.includes(key);
-    patch({
-      destinations: exists
-        ? destinations.filter((item) => (item.cityId ? `city:${item.countryId}:${item.cityId}` : `country:${item.countryId}`) !== key)
-        : [...destinations, { countryId: option.countryId, cityId: option.cityId, label: option.label }].slice(0, 5),
-    });
-  };
+  const toggleSection = (id) => setExpandedSections((previous) => ({
+    ...previous,
+    [id]: !previous[id],
+  }));
+
+  const audienceBudgetSummary = joinSummaries(
+    summarizeSelections(TRAVEL_PARTIES, current.audienceIds),
+    summarizeSelections(POST_BUDGETS, current.budgetLevels, 1),
+  );
+  const atmosphereSummary = joinSummaries(
+    summarizeSelections(VIBES, current.vibeIds),
+	isRoute ? summarizeSelections(TRAVELER_STYLES, current.travelerStyleIds, 1) : '',
+	isRoute ? summarizeSelections(SEASONS, current.seasons, 1) : '',
+	summarizeSelections(ENVIRONMENTS, current.environments, 1),
+  );
+  const routeSummary = joinSummaries(
+    summarizeSelections(ROUTE_DIFFICULTIES, current.difficultyIds, 1),
+	summarizeSelections(ROUTE_EXPERIENCE_LEVELS, current.experienceLevelIds, 1),
+    summarizeSelections(TRANSPORT_MODES, current.transportModeIds, 1),
+    summarizeSelections(PACES, current.paceIds, 1),
+    rangeSummary('ימים', current.durationDays),
+    rangeSummary('מרחק', current.distanceKm, ' ק״מ'),
+  );
 
   return (
-    <>
+    <View style={styles.content}>
       {!!onUseProfile && (
-        <TouchableOpacity style={buttons.secondary} onPress={onUseProfile} testID="discovery-use-profile">
-          <Text style={buttons.secondaryText}>ההעדפות שלי</Text>
+        <TouchableOpacity
+          style={styles.profilePresetButton}
+          onPress={onUseProfile}
+          accessibilityRole="button"
+          testID="discovery-use-profile"
+        >
+          <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+          <View style={styles.profilePresetCopy}>
+            <Text style={styles.profilePresetTitle}>מלאו מההעדפות שלי</Text>
+            <Text style={styles.profilePresetText}>הבחירות יופיעו כאן לפני ההחלה</Text>
+          </View>
         </TouchableOpacity>
       )}
 
-      <View style={styles.section}>
-        <Text style={[common.modalLabel, { textAlign: 'right' }]}>יעדים (עד 5)</Text>
-        <FormInput placeholder="חפשו מדינה או עיר" value={destinationQuery} onChangeText={setDestinationQuery} textAlign="right" />
-        {destinationsLoading ? <ActivityIndicator color={colors.primary} /> : (
-          <ChipSelector
-            label="בחרו יעדים"
-            items={visibleDestinations.map((item) => item.label)}
-            selectedValue={visibleDestinations.filter((item) => selectedDestinationKeys.includes(item.key)).map((item) => item.label)}
-            onSelect={(label) => {
-              const key = visibleDestinations.find((item) => item.label === label)?.key;
-              if (key) toggleDestination(key);
-            }}
-            multiSelect
-            testIDPrefix="discovery-destination"
+      <DiscoveryDestinationAutocomplete
+        destinations={current.destinations || []}
+        onChange={(destinations) => patch({ destinations })}
+        enabled={destinationsEnabled}
+      />
+
+      <DiscoveryCategorySelector filters={current} onChange={onChange} />
+
+      {isRoute && (
+        <DiscoveryDisclosureSection
+          id="route-details"
+          title="פרטי המסלול"
+          summary={routeSummary}
+          expanded={expandedSections.routeDetails}
+          onToggle={() => toggleSection('routeDetails')}
+        >
+          <DiscoveryOptionGroup
+            label="רמת קושי"
+            options={ROUTE_DIFFICULTIES}
+            selectedIds={current.difficultyIds || []}
+            onToggle={(id) => toggleField('difficultyIds', id, 3)}
+            alwaysShowAll
+            testIDPrefix="discovery-difficulty"
           />
-        )}
-      </View>
-
-      <ChipSelector label="קטגוריה" items={CATEGORIES.map((item) => item.label)}
-        selectedValue={CATEGORIES.filter((item) => (current.categoryIds || []).includes(item.id)).map((item) => item.label)}
-        onSelect={(label) => {
-          const categoryId = CATEGORIES.find((item) => item.label === label)?.id;
-          if (!categoryId) return;
-          const removing = (current.categoryIds || []).includes(categoryId);
-          patch({
-            categoryIds: toggle(current.categoryIds || [], categoryId, 8),
-            ...(removing ? {
-              subcategoryIds: (current.subcategoryIds || []).filter((tagId) => (
-                !(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).some((tag) => tag.id === tagId)
-              )),
-            } : {}),
-          });
-        }} multiSelect testIDPrefix="discovery-category" />
-
-      {(current.categoryIds || []).map((categoryId) => (
-        <ChipSelector key={categoryId}
-          label={`תתי־קטגוריות · ${CATEGORIES.find((item) => item.id === categoryId)?.label || ''}`}
-          items={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).map((item) => item.label)}
-          selectedValue={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).filter((item) => (current.subcategoryIds || []).includes(item.id)).map((item) => item.label)}
-          onSelect={(label) => {
-            const id = (TAG_OPTIONS_BY_CATEGORY[categoryId] || []).find((item) => item.label === label)?.id;
-            if (id) toggleField('subcategoryIds', id, 20);
-          }} multiSelect testIDPrefix={`discovery-subcategory-${categoryId}`} />
-      ))}
-
-      <ChipSelector label="תחומי עניין" items={INTERESTS.map((item) => item.label)}
-        selectedValue={selectedLabels(INTERESTS, current.interestIds || [])}
-        onSelect={(label) => { const id = INTERESTS.find((item) => item.label === label)?.value; if (id) toggleField('interestIds', id, 12); }}
-        multiSelect testIDPrefix="discovery-interest" />
-      <ChipSelector label="מתאים למי" items={TRAVEL_PARTIES.map((item) => item.label)}
-        selectedValue={selectedLabels(TRAVEL_PARTIES, current.audienceIds || [])}
-        onSelect={(label) => { const id = TRAVEL_PARTIES.find((item) => item.label === label)?.value; if (id) toggleField('audienceIds', id, 6); }}
-        multiSelect testIDPrefix="discovery-audience" />
-      <ChipSelector label="אווירה" items={VIBES.map((item) => item.label)}
-        selectedValue={selectedLabels(VIBES, current.vibeIds || [])}
-        onSelect={(label) => { const id = VIBES.find((item) => item.label === label)?.value; if (id) toggleField('vibeIds', id, 8); }}
-        multiSelect testIDPrefix="discovery-vibe" />
-      <ChipSelector label="סגנון טיול" items={TRAVELER_STYLES.map((item) => item.label)}
-        selectedValue={selectedLabels(TRAVELER_STYLES, current.travelerStyleIds || [])}
-        onSelect={(label) => { const id = TRAVELER_STYLES.find((item) => item.label === label)?.value; if (id) toggleField('travelerStyleIds', id, 6); }}
-        multiSelect testIDPrefix="discovery-style" />
-      <ChipSelector label="תקציב" items={POST_BUDGETS.map((item) => item.postLabel)}
-        selectedValue={POST_BUDGETS.filter((item) => (current.budgetLevels || []).includes(item.value)).map((item) => item.postLabel)}
-        onSelect={(label) => { const id = POST_BUDGETS.find((item) => item.postLabel === label)?.value; if (id) toggleField('budgetLevels', id, 4); }}
-        multiSelect testIDPrefix="discovery-budget" />
-      <ChipSelector label="עונה" items={SEASONS.map((item) => item.label)}
-        selectedValue={selectedLabels(SEASONS, current.seasons || [])}
-        onSelect={(label) => { const id = SEASONS.find((item) => item.label === label)?.value; if (id) toggleField('seasons', id, 6); }}
-        multiSelect testIDPrefix="discovery-season" />
-      <ChipSelector label="סביבה" items={ENVIRONMENTS.map((item) => item.label)}
-        selectedValue={selectedLabels(ENVIRONMENTS, current.environments || [])}
-        onSelect={(label) => { const id = ENVIRONMENTS.find((item) => item.label === label)?.value; if (id) toggleField('environments', id, 3); }}
-        multiSelect testIDPrefix="discovery-environment" />
-      <ChipSelector label="מידע מעשי ונגישות" items={NEEDS.map((item) => item.label)}
-        selectedValue={selectedLabels(NEEDS, current.needIds || [])}
-        onSelect={(label) => { const id = NEEDS.find((item) => item.label === label)?.value; if (id) toggleField('needIds', id, NEEDS.length); }}
-        multiSelect testIDPrefix="discovery-need" />
-
-      {includeRoute && (
-        <View style={styles.dynamicSection}>
-          <ChipSelector label="רמת קושי" items={ROUTE_DIFFICULTIES.map((item) => item.label)}
-            selectedValue={selectedLabels(ROUTE_DIFFICULTIES, current.difficultyIds || [])}
-            onSelect={(label) => { const id = ROUTE_DIFFICULTIES.find((item) => item.label === label)?.value; if (id) toggleField('difficultyIds', id, 3); }}
-            multiSelect testIDPrefix="discovery-difficulty" />
-          <ChipSelector label="אמצעי התניידות" items={TRANSPORT_MODES.map((item) => item.label)}
-            selectedValue={selectedLabels(TRANSPORT_MODES, current.transportModeIds || [])}
-            onSelect={(label) => { const id = TRANSPORT_MODES.find((item) => item.label === label)?.value; if (id) toggleField('transportModeIds', id, 6); }}
-            multiSelect testIDPrefix="discovery-transport" />
-          <ChipSelector label="קצב" items={PACES.map((item) => item.label)}
-            selectedValue={selectedLabels(PACES, current.paceIds || [])}
-            onSelect={(label) => { const id = PACES.find((item) => item.label === label)?.value; if (id) toggleField('paceIds', id, 3); }}
-            multiSelect testIDPrefix="discovery-pace" />
-          <MinMaxInputs label="טווח ימים" minValue={current.durationDays?.min ?? ''} maxValue={current.durationDays?.max ?? ''}
-            onChangeMin={(value) => patch({ durationDays: { ...(current.durationDays || {}), min: value } })}
-            onChangeMax={(value) => patch({ durationDays: { ...(current.durationDays || {}), max: value } })} />
-          <MinMaxInputs label="טווח מרחק" unitSuffix='ק"מ' minValue={current.distanceKm?.min ?? ''} maxValue={current.distanceKm?.max ?? ''}
-            onChangeMin={(value) => patch({ distanceKm: { ...(current.distanceKm || {}), min: value } })}
-            onChangeMax={(value) => patch({ distanceKm: { ...(current.distanceKm || {}), max: value } })} />
-        </View>
+		  <DiscoveryOptionGroup
+			label="ניסיון נדרש"
+			options={ROUTE_EXPERIENCE_LEVELS}
+			selectedIds={current.experienceLevelIds || []}
+			onToggle={(id) => toggleField('experienceLevelIds', id, ROUTE_EXPERIENCE_LEVELS.length)}
+			alwaysShowAll
+			testIDPrefix="discovery-experience"
+		  />
+          <DiscoveryOptionGroup
+            label="אמצעי התניידות"
+            options={TRANSPORT_MODES}
+            selectedIds={current.transportModeIds || []}
+            onToggle={(id) => toggleField('transportModeIds', id, 6)}
+            alwaysShowAll
+            testIDPrefix="discovery-transport"
+          />
+          <DiscoveryOptionGroup
+            label="קצב"
+            options={PACES}
+            selectedIds={current.paceIds || []}
+            onToggle={(id) => toggleField('paceIds', id, 3)}
+            alwaysShowAll
+            testIDPrefix="discovery-pace"
+          />
+          <View style={styles.rangeGrid}>
+            <MinMaxInputs
+              label="טווח ימים"
+              minValue={current.durationDays?.min ?? ''}
+              maxValue={current.durationDays?.max ?? ''}
+              onChangeMin={(value) => patch({ durationDays: { ...(current.durationDays || {}), min: value } })}
+              onChangeMax={(value) => patch({ durationDays: { ...(current.durationDays || {}), max: value } })}
+            />
+            <MinMaxInputs
+              label="טווח מרחק"
+              unitSuffix="ק״מ"
+              minValue={current.distanceKm?.min ?? ''}
+              maxValue={current.distanceKm?.max ?? ''}
+              onChangeMin={(value) => patch({ distanceKm: { ...(current.distanceKm || {}), min: value } })}
+              onChangeMax={(value) => patch({ distanceKm: { ...(current.distanceKm || {}), max: value } })}
+            />
+          </View>
+        </DiscoveryDisclosureSection>
       )}
-    </>
+
+      <DiscoveryDisclosureSection
+        id="audience-budget"
+	title={isRoute ? "מתאים למי ותקציב" : "מתאים למי ורמת מחיר"}
+        summary={audienceBudgetSummary}
+        expanded={expandedSections.audienceBudget}
+        onToggle={() => toggleSection('audienceBudget')}
+      >
+        <DiscoveryOptionGroup
+          label="מתאים למי"
+          options={TRAVEL_PARTIES}
+          selectedIds={current.audienceIds || []}
+          onToggle={(id) => toggleField('audienceIds', id, 6)}
+          alwaysShowAll
+          testIDPrefix="discovery-audience"
+        />
+        <DiscoveryOptionGroup
+		  label={isRoute ? "תקציב" : "רמת מחיר"}
+          options={POST_BUDGETS}
+          selectedIds={current.budgetLevels || []}
+          onToggle={(id) => toggleField('budgetLevels', id, POST_BUDGETS.length)}
+          alwaysShowAll
+          testIDPrefix="discovery-budget"
+        />
+      </DiscoveryDisclosureSection>
+
+      <DiscoveryDisclosureSection
+        id="atmosphere"
+        title={isRoute ? "אופי המסלול" : "אווירה וסביבה"}
+        summary={atmosphereSummary}
+        expanded={expandedSections.atmosphere}
+        onToggle={() => toggleSection('atmosphere')}
+      >
+        <DiscoveryOptionGroup
+          label="אווירה"
+          options={VIBES}
+          selectedIds={current.vibeIds || []}
+          relevantIds={relevant.vibes}
+          onToggle={(id) => toggleField('vibeIds', id, 8)}
+          collapsedLimit={4}
+          testIDPrefix="discovery-vibe"
+        />
+		{isRoute ? (
+		  <>
+			<DiscoveryOptionGroup
+			  label="סגנון טיול"
+			  options={TRAVELER_STYLES}
+			  selectedIds={current.travelerStyleIds || []}
+			  relevantIds={relevant.travelerStyles}
+			  onToggle={(id) => toggleField('travelerStyleIds', id, 6)}
+			  collapsedLimit={4}
+			  testIDPrefix="discovery-style"
+			/>
+			<DiscoveryOptionGroup
+			  label="עונה"
+			  options={SEASONS}
+			  selectedIds={current.seasons || []}
+			  relevantIds={relevant.seasons}
+			  onToggle={(id) => toggleField('seasons', id, SEASONS.length)}
+			  collapsedLimit={4}
+			  testIDPrefix="discovery-season"
+			/>
+		  </>
+		) : null}
+		<DiscoveryOptionGroup
+		  label="סביבה"
+		  options={ENVIRONMENTS}
+		  selectedIds={current.environments || []}
+		  relevantIds={relevant.environments}
+		  onToggle={(id) => toggleField('environments', id, ENVIRONMENTS.length)}
+		  alwaysShowAll
+		  testIDPrefix="discovery-environment"
+		/>
+      </DiscoveryDisclosureSection>
+
+      <DiscoveryDisclosureSection
+        id="needs"
+        title="צרכים חשובים"
+        summary={summarizeSelections(NEEDS, current.needIds)}
+        expanded={expandedSections.needs}
+        onToggle={() => toggleSection('needs')}
+      >
+        <DiscoveryOptionGroup
+          helper="יוצגו רק תוצאות שבהן המידע הזה צוין במפורש"
+          options={NEEDS}
+          selectedIds={current.needIds || []}
+          onToggle={(id) => toggleField('needIds', id, NEEDS.length)}
+          alwaysShowAll
+          testIDPrefix="discovery-need"
+        />
+      </DiscoveryDisclosureSection>
+
+    </View>
   );
 }

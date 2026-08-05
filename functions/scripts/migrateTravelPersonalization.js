@@ -6,6 +6,7 @@ const { initializeAdmin } = require('./localCredentials');
 const {
   analyzeTagValues,
   buildRecommendationFacets,
+	buildTravelContentFacets,
   CATEGORY_IDS,
   ENVIRONMENT_IDS,
   getCategoryLabel,
@@ -16,6 +17,7 @@ const {
   normalizeSmartProfile,
   PACE_IDS,
   POST_BUDGET_IDS,
+	recommendationAttributeRequirements,
   ROUTE_DIFFICULTY_IDS,
   ROUTE_EXPERIENCE_IDS,
   SEASON_IDS,
@@ -37,6 +39,8 @@ const {
 } = require('../personalizationService');
 
 const PAGE_SIZE = 250;
+// Keep the original seed marker: changing it would add historical likes and
+// saves a second time for users already migrated under taxonomy v3.
 const HISTORY_SEED_VERSION = 'travel-taxonomy-v3';
 const DEFAULT_STATE_DIR = path.join(
   __dirname,
@@ -175,40 +179,58 @@ function resolveLegacyRecommendationClassification(data = {}) {
   return { categoryId, tagIds, tagAnalysis: analysis, confident };
 }
 
+const RECOMMENDATION_ENVIRONMENT_BY_TAG = Object.freeze({
+	restaurant: 'indoor', cafe: 'indoor', bakery_desserts: 'indoor', bar_nightlife: 'indoor',
+	grocery_supermarket: 'indoor', local_cuisine: 'indoor', museum: 'indoor', art_gallery: 'indoor',
+	indoor_venue_activity: 'indoor', wellness: 'indoor', shopping_center: 'indoor', hotel: 'indoor',
+	resort: 'indoor', hostel: 'indoor', guesthouse: 'indoor', apartment: 'indoor',
+	street_food: 'outdoor', hiking: 'outdoor', beach: 'outdoor', freshwater: 'outdoor',
+	waterfall_spring: 'outdoor', nature_reserve: 'outdoor', viewpoint: 'outdoor', picnic: 'outdoor',
+	winter_sports: 'outdoor', neighborhood: 'outdoor', theme_park: 'outdoor', adventure: 'outdoor',
+	water_activity: 'outdoor', photography_spot: 'outdoor', market: 'outdoor', camping: 'outdoor',
+	wildlife: 'mixed', historic_site: 'mixed', religious_site: 'mixed', architecture_landmark: 'mixed',
+	family_attraction: 'mixed', performance_event: 'mixed', workshop: 'mixed', sports_stadium: 'mixed',
+	local_crafts: 'mixed',
+});
+
+function migratedRecommendationEnvironment(existingFacets, tagIds) {
+	const existing = uniqueAllowed(existingFacets?.environments, ENVIRONMENT_IDS);
+	if (existing.length > 1) return 'mixed';
+	if (existing.length === 1) return existing[0];
+	const inferred = Array.from(new Set(tagIds.map((tagId) => RECOMMENDATION_ENVIRONMENT_BY_TAG[tagId]).filter(Boolean)));
+	return inferred.length > 1 ? 'mixed' : inferred[0] || '';
+}
+
+function isUnengagedPlaceholder(data = {}) {
+	const title = String(data.title || '').normalize('NFKC').trim().toLocaleLowerCase('he');
+	const placeholder = ['טסט', 'ניסיון', 'test'].includes(title);
+	const stats = data.stats || {};
+	return placeholder && Number(stats.likeCount || 0) === 0 && Number(stats.commentCount || 0) === 0 &&
+		Number(stats.favoriteCount || 0) === 0;
+}
+
 function migratedRecommendation(data = {}) {
   const classification = resolveLegacyRecommendationClassification(data);
   const { categoryId, tagIds, tagAnalysis } = classification;
   const budget = normalizeBudget(data.budget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
   const existingFacets = data.facets && typeof data.facets === 'object' ? data.facets : {};
-  const rawVibes = Array.isArray(existingFacets.vibes) ? existingFacets.vibes : [];
-  const styleAliases = taxonomy.legacy?.travelerStyleAliases || {};
+	const rawVibes = Array.isArray(existingFacets.vibes) ? existingFacets.vibes : [];
+	const audiences = uniqueAllowed([
+		...(Array.isArray(existingFacets.audiences) ? existingFacets.audiences : []),
+		...tagAnalysis.audiences,
+	], TRAVEL_PARTY_IDS, 6);
+	const requirements = recommendationAttributeRequirements(tagIds);
   const submittedFacets = {
-    interests: uniqueAllowed([
-      ...(Array.isArray(existingFacets.interests) ? existingFacets.interests : []),
-      ...tagAnalysis.interests,
-    ], INTEREST_IDS, 12),
-    audiences: uniqueAllowed([
-      ...(Array.isArray(existingFacets.audiences) ? existingFacets.audiences : []),
-      ...tagAnalysis.audiences,
-    ], TRAVEL_PARTY_IDS, 6),
-    vibes: uniqueAllowed([...rawVibes, ...tagAnalysis.vibes], VIBE_IDS, 4),
-    travelerStyles: uniqueAllowed([
-      ...(Array.isArray(existingFacets.travelerStyles) ? existingFacets.travelerStyles : []),
-      ...rawVibes.map((value) => styleAliases[value]).filter(Boolean),
-      ...tagAnalysis.travelerStyles,
-    ], TRAVELER_STYLE_IDS, 4),
+	audienceScope: existingFacets.audienceScope === 'all' || audiences.length === 0 ? 'all' : 'selected',
+	audiences,
+	vibes: requirements.vibes ? uniqueAllowed([...rawVibes, ...tagAnalysis.vibes], VIBE_IDS, 4) : [],
     needs: uniqueAllowed([
       ...(Array.isArray(existingFacets.needs) ? existingFacets.needs : []),
       ...tagAnalysis.needs,
-    ], NEED_IDS),
-    seasons: uniqueAllowed([
-      ...(Array.isArray(existingFacets.seasons) ? existingFacets.seasons : []),
-      ...tagAnalysis.seasons,
-    ], SEASON_IDS),
-    environments: uniqueAllowed([
-      ...(Array.isArray(existingFacets.environments) ? existingFacets.environments : []),
-      ...tagAnalysis.environments,
-    ], ENVIRONMENT_IDS),
+	], NEED_IDS).filter((needId) => requirements.needs.includes(needId)),
+	environments: requirements.environment
+		? [migratedRecommendationEnvironment(existingFacets, tagIds)].filter(Boolean)
+		: [],
   };
   const facets = buildRecommendationFacets(
     { ...data, categoryId, tags: tagIds, budget },
@@ -221,6 +243,7 @@ function migratedRecommendation(data = {}) {
     tags: tagIds,
     budget,
     facets,
+	status: isUnengagedPlaceholder(data) ? 'inactive' : (data.status || 'active'),
     search: buildSearchIndex({
       title: data.title,
       description: data.description,
@@ -274,15 +297,58 @@ function migratedRoute(data = {}, stops = []) {
       reviewRequired: true,
     };
   }
-  const initialMetadata = sanitizeRouteMetadata(
-    Number(data.taxonomyVersion || 0) >= 3 ? data : { ...data, taxonomyVersion: 0 }
-  );
-  const metadata = sanitizeRouteMetadata({
-    ...data,
-    taxonomyVersion: taxonomy.version,
-    ...initialMetadata,
-    facets: initialMetadata.facets,
-  });
+	const legacyFacets = data.facets && typeof data.facets === 'object' ? {
+		interests: data.facets.interests || [],
+		audiences: data.facets.audiences || [],
+		vibes: data.facets.vibes || [],
+		travelerStyles: data.facets.travelerStyles || [],
+		needs: data.facets.needs || [],
+		budgetLevel: data.facets.budgetLevel || '',
+		seasons: data.facets.seasons || [],
+		environments: data.facets.environments || [],
+	} : {};
+	const initialMetadata = sanitizeRouteMetadata(
+		Number(data.taxonomyVersion || 0) >= 3
+			? { ...data, taxonomyVersion: 3, facets: legacyFacets }
+			: { ...data, taxonomyVersion: 0 }
+	);
+	const existingFacets = initialMetadata.facets || {};
+	const confirmedNeeds = data.facets?.needsScope === 'entire_route'
+		? existingFacets.needs || []
+		: [];
+	const facets = buildTravelContentFacets({
+		categoryIds: initialMetadata.categoryIds,
+		subcategoryIds: initialMetadata.subcategoryIds,
+		budget: existingFacets.budgetLevel,
+	}, {
+		audienceScope: data.facets?.audienceScope === 'all' || !(existingFacets.audiences || []).length
+			? 'all'
+			: 'selected',
+		audiences: existingFacets.audiences || [],
+		vibes: existingFacets.vibes || [],
+		travelerStyles: existingFacets.travelerStyles || [],
+		needs: confirmedNeeds,
+		seasons: existingFacets.seasons || [],
+		environments: existingFacets.environments || [],
+	}, { surface: 'route' });
+	const metadata = { ...initialMetadata, facets };
+	const tagCategories = new Set(metadata.subcategoryIds.map((tagId) => TAG_CATEGORY_BY_ID[tagId]).filter(Boolean));
+	const missingMetadata = [
+		...(!metadata.categoryIds.length || !metadata.categoryIds.every((categoryId) => tagCategories.has(categoryId))
+			? ['subcategories'] : []),
+		...(!POST_BUDGET_IDS.includes(metadata.facets.budgetLevel) ? ['budget'] : []),
+		...(!PACE_IDS.includes(metadata.pace) ? ['pace'] : []),
+		...(!metadata.facets.seasons.length ? ['seasons'] : []),
+		...(metadata.facets.environments.length !== 1 ? ['environment'] : []),
+	];
+	if (missingMetadata.length) {
+		return {
+			patch: null,
+			confidence: 'low',
+			reason: `route-missing-factual-metadata:${missingMetadata.join(',')}`,
+			reviewRequired: true,
+		};
+	}
   const summaryPlaces = Array.from(new Set([
     ...(Array.isArray(data.summaryPlaces) ? data.summaryPlaces : []),
     ...stops.map((entry) => stopValue(entry).location || stopValue(entry).place?.name),
@@ -308,7 +374,7 @@ function migratedRoute(data = {}, stops = []) {
       }),
     },
     confidence: 'high',
-    reason: 'canonical-route-taxonomy-and-search',
+	reason: 'canonical-route-taxonomy-v4-and-search',
     reviewRequired: false,
   };
 }
@@ -338,6 +404,17 @@ function auditCanonicalPatch(stageName, patch) {
     if (!arraysUseOnly(patch.facets?.needs, NEED_IDS)) errors.push('facet-needs');
     if (!arraysUseOnly(patch.facets?.seasons, SEASON_IDS)) errors.push('facet-seasons');
     if (!arraysUseOnly(patch.facets?.environments, ENVIRONMENT_IDS)) errors.push('facet-environments');
+	if (!['all', 'selected'].includes(patch.facets?.audienceScope)) errors.push('facet-audience-scope');
+	if (patch.facets?.audienceScope === 'all' && patch.facets.audiences.length) errors.push('facet-universal-audiences');
+	if (patch.facets?.travelerStyles.length) errors.push('recommendation-styles');
+	if (patch.facets?.seasons.length) errors.push('recommendation-seasons');
+	if (patch.facets?.needs.length && patch.facets?.needsScope !== 'recommendation') errors.push('recommendation-needs-scope');
+    if (!patch.facets?.needs.length && patch.facets?.needsScope) errors.push('recommendation-empty-needs-scope');
+	const requirements = recommendationAttributeRequirements(patch.tags);
+	if (patch.status !== 'inactive' && requirements.vibes && !patch.facets?.vibes.length) errors.push('recommendation-required-vibe');
+	if (patch.status !== 'inactive' && !requirements.vibes && patch.facets?.vibes.length) errors.push('recommendation-inapplicable-vibe');
+	if (patch.status !== 'inactive' && requirements.environment && !patch.facets?.environments.length) errors.push('recommendation-required-environment');
+	if (patch.status !== 'inactive' && !requirements.environment && patch.facets?.environments.length) errors.push('recommendation-inapplicable-environment');
     if (patch.taxonomyVersion !== taxonomy.version) errors.push('recommendation-version');
     if (!Array.isArray(patch.search?.prefixes)) errors.push('recommendation-search');
   }
@@ -346,6 +423,11 @@ function auditCanonicalPatch(stageName, patch) {
     if (patch.taxonomyVersion !== taxonomy.version) errors.push('route-version');
     if (!arraysUseOnly(patch.categoryIds, CATEGORY_IDS)) errors.push('route-categories');
     if (!arraysUseOnly(patch.subcategoryIds, TAG_IDS)) errors.push('route-subcategories');
+	const tagCategories = new Set((patch.subcategoryIds || []).map((tagId) => TAG_CATEGORY_BY_ID[tagId]).filter(Boolean));
+	if (!(patch.categoryIds || []).every((categoryId) => tagCategories.has(categoryId)) ||
+		(patch.subcategoryIds || []).some((tagId) => !patch.categoryIds?.includes(TAG_CATEGORY_BY_ID[tagId]))) {
+		errors.push('route-subcategory-category-match');
+	}
     if (!arraysUseOnly(patch.facets?.interests, INTEREST_IDS)) errors.push('route-interests');
     if (!arraysUseOnly(patch.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('route-audiences');
     if (!arraysUseOnly(patch.facets?.vibes, VIBE_IDS)) errors.push('route-vibes');
@@ -353,9 +435,16 @@ function auditCanonicalPatch(stageName, patch) {
     if (!arraysUseOnly(patch.facets?.needs, NEED_IDS)) errors.push('route-needs');
     if (!arraysUseOnly(patch.facets?.seasons, SEASON_IDS)) errors.push('route-seasons');
     if (!arraysUseOnly(patch.facets?.environments, ENVIRONMENT_IDS)) errors.push('route-environments');
+	if (!['all', 'selected'].includes(patch.facets?.audienceScope)) errors.push('route-audience-scope');
+	if (patch.facets?.audienceScope === 'all' && patch.facets.audiences.length) errors.push('route-universal-audiences');
+	if (patch.facets?.needs.length && patch.facets?.needsScope !== 'entire_route') errors.push('route-needs-scope');
     if (!ROUTE_DIFFICULTY_IDS.includes(patch.difficulty)) errors.push('route-difficulty');
     if (patch.experienceLevel && !ROUTE_EXPERIENCE_IDS.includes(patch.experienceLevel)) errors.push('route-experience');
     if (!arraysUseOnly(patch.transportModes, TRANSPORT_MODE_IDS)) errors.push('route-transport');
+	if (!POST_BUDGET_IDS.includes(patch.facets?.budgetLevel)) errors.push('route-budget');
+	if (!PACE_IDS.includes(patch.pace)) errors.push('route-pace');
+	if (!patch.facets?.seasons.length) errors.push('route-seasons-required');
+	if (patch.facets?.environments.length !== 1) errors.push('route-environment-required');
     if (!Array.isArray(patch.destinations) || !patch.destinations.length ||
       patch.destinations.some((entry) => !entry?.countryId || !entry?.cityId)) {
       errors.push('route-destinations');
@@ -447,7 +536,7 @@ async function migrateProfilesAndFacets(db, options, checkpoint, rollbackPath, r
             expectedUpdateTime: document.updateTime?.toDate?.().toISOString() || null,
             stage: stage.name,
             confidence: 'high',
-            reason: stage.name === 'users' ? 'canonical-smart-profile-v3' : 'canonical-recommendation-v3',
+			reason: stage.name === 'users' ? 'canonical-smart-profile-v4' : 'canonical-recommendation-v4',
             before: encode(before),
             after: encode(next),
           });

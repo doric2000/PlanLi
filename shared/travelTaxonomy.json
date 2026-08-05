@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "interests": [
     { "id": "nature_scenery", "label": "טבע ונופים" },
     { "id": "hiking", "label": "מסלולי הליכה" },
@@ -111,7 +111,7 @@
     { "id": "food", "label": "אוכל ושתייה", "icon": "restaurant", "interests": ["food"] },
     { "id": "nature", "label": "טבע ומים", "icon": "landscape", "interests": ["nature_scenery"] },
     { "id": "culture", "label": "תרבות ואתרים", "icon": "account-balance", "interests": ["culture_history"] },
-    { "id": "activities", "label": "פעילויות ובידור", "icon": "local-activity", "interests": ["local_experiences"] },
+    { "id": "activities", "label": "פעילויות ובידור", "icon": "local-activity", "interests": [] },
     { "id": "shopping", "label": "קניות ושווקים", "icon": "shopping-bag", "interests": ["shopping_markets"] },
     { "id": "stay", "label": "לינה", "icon": "bed", "interests": ["stays_accommodation"] },
     { "id": "transportation", "label": "תחבורה והתניידות", "icon": "directions-bus", "interests": ["transportation_mobility"] },
@@ -203,6 +203,39 @@
     { "id": "office_supplies", "label": "ציוד משרדי", "categoryId": "services", "groupId": "documents_equipment", "interests": ["travel_tips_services"] },
     { "id": "equipment_rental", "label": "השכרת ציוד", "categoryId": "services", "groupId": "documents_equipment", "interests": ["travel_tips_services"] }
   ],
+  "contentAttributeRules": {
+    "recommendations": {
+      "vibeTagIds": [
+        "restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "local_cuisine",
+        "hiking", "beach", "freshwater", "waterfall_spring", "nature_reserve", "wildlife", "viewpoint",
+        "picnic", "winter_sports", "museum", "art_gallery", "historic_site", "religious_site",
+        "architecture_landmark", "neighborhood", "family_attraction", "theme_park", "adventure",
+        "water_activity", "performance_event", "workshop", "indoor_venue_activity", "wellness",
+        "sports_stadium", "photography_spot", "market", "shopping_center", "local_crafts", "hotel",
+        "resort", "hostel", "guesthouse", "apartment", "camping", "massage_service"
+      ],
+      "environmentTagIds": [
+        "restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket",
+        "local_cuisine", "hiking", "beach", "freshwater", "waterfall_spring", "nature_reserve", "wildlife",
+        "viewpoint", "picnic", "winter_sports", "museum", "art_gallery", "historic_site", "religious_site",
+        "architecture_landmark", "neighborhood", "family_attraction", "theme_park", "adventure",
+        "water_activity", "performance_event", "workshop", "indoor_venue_activity", "wellness",
+        "sports_stadium", "photography_spot", "market", "shopping_center", "local_crafts", "hotel",
+        "resort", "hostel", "guesthouse", "apartment", "camping"
+      ],
+      "needTagIds": {
+        "kosher": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hotel", "resort", "hostel", "guesthouse"],
+        "shabbat_friendly": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hotel", "resort", "hostel", "guesthouse", "apartment"],
+        "vegetarian": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hotel", "resort", "hostel", "guesthouse"],
+        "vegan": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hotel", "resort", "hostel", "guesthouse"],
+        "gluten_free": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hotel", "resort", "hostel", "guesthouse"],
+        "halal": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hotel", "resort", "hostel", "guesthouse"],
+        "wheelchair_accessible": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hiking", "beach", "freshwater", "waterfall_spring", "nature_reserve", "wildlife", "viewpoint", "picnic", "winter_sports", "museum", "art_gallery", "historic_site", "religious_site", "architecture_landmark", "neighborhood", "family_attraction", "theme_park", "adventure", "water_activity", "performance_event", "workshop", "indoor_venue_activity", "wellness", "sports_stadium", "photography_spot", "market", "shopping_center", "local_crafts", "hotel", "resort", "hostel", "guesthouse", "apartment", "camping"],
+        "reduced_walking": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hiking", "beach", "freshwater", "waterfall_spring", "nature_reserve", "wildlife", "viewpoint", "picnic", "winter_sports", "museum", "art_gallery", "historic_site", "religious_site", "architecture_landmark", "neighborhood", "family_attraction", "theme_park", "adventure", "water_activity", "performance_event", "workshop", "indoor_venue_activity", "wellness", "sports_stadium", "photography_spot", "market", "shopping_center", "local_crafts", "hotel", "resort", "hostel", "guesthouse", "apartment", "camping"],
+        "stroller_accessible": ["restaurant", "cafe", "bakery_desserts", "street_food", "bar_nightlife", "grocery_supermarket", "local_cuisine", "hiking", "beach", "freshwater", "waterfall_spring", "nature_reserve", "wildlife", "viewpoint", "picnic", "winter_sports", "museum", "art_gallery", "historic_site", "religious_site", "architecture_landmark", "neighborhood", "family_attraction", "theme_park", "adventure", "water_activity", "performance_event", "workshop", "indoor_venue_activity", "wellness", "sports_stadium", "photography_spot", "market", "shopping_center", "local_crafts", "hotel", "resort", "hostel", "guesthouse", "apartment", "camping"]
+      }
+    }
+  },
   "searchSynonyms": {
     "חוף": ["ים", "חופים"],
     "אגם": ["אגמים", "נהר", "נחל"],

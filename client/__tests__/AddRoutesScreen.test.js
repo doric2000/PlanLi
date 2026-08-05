@@ -85,7 +85,7 @@ function makeRouteToEdit(overrides = {}) {
       vibes: [],
       travelerStyles: ['roadtrip'],
       needs: [],
-      seasons: [],
+	  seasons: ['all_year'],
       environments: ['outdoor'],
     },
     difficulty: 'easy',

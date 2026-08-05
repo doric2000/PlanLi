@@ -18,6 +18,7 @@ const {
   normalizeBudget,
   normalizeCategoryId,
   POST_BUDGET_IDS,
+  recommendationAttributeRequirements,
   SEASON_IDS,
   tagsMatchCategory,
   taxonomy,
@@ -64,6 +65,7 @@ function cleanStringArray(value, { field, maxItems, maxLength }) {
 
 function sanitizeRecommendationContent(data) {
   assert(data && typeof data === 'object', 'invalid-argument', 'Missing recommendation data.');
+  const strict = Number(data.taxonomyVersion || 0) >= 4;
 
   const rawTags = cleanStringArray(data.tags || [], {
     field: 'tags',
@@ -75,10 +77,13 @@ function sanitizeRecommendationContent(data) {
   const categoryId = categoryFromLegacyClassification(data.categoryId || data.category, rawTags);
   assert(categoryId, 'invalid-argument', 'categoryId is invalid.');
   assert(tagsMatchCategory(rawTags, categoryId), 'invalid-argument', 'tags do not match categoryId.');
+  assert(!strict || tagAnalysis.tagIds.length >= 1,
+    'invalid-argument', 'Choose at least one subcategory.');
   const rawBudget = cleanOptionalString(data.budget, { field: 'budget', max: 50 });
   const budget = normalizeBudget(rawBudget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
   assert(!rawBudget || budget, 'invalid-argument', 'budget is invalid.');
   assert(!budget || POST_BUDGET_IDS.includes(budget), 'invalid-argument', 'budget is invalid.');
+  assert(!strict || budget, 'invalid-argument', 'budget is required.');
 
   return {
     title: cleanString(data.title, { field: 'title', min: 1, max: 120 }),
@@ -119,6 +124,77 @@ function sanitizeSubmittedFacets(value) {
     needs: validate('needs', NEED_IDS, NEED_IDS.length),
     seasons: validate('seasons', SEASON_IDS, SEASON_IDS.length),
     environments: validate('environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length),
+  };
+}
+
+function sanitizeRecommendationAttributes(value, content, { legacyFacets = null, taxonomyVersion = 0 } = {}) {
+  const strict = Number(taxonomyVersion || 0) >= 4;
+  const source = value == null ? legacyFacets : value;
+  const legacy = value == null;
+  if (source == null) {
+    assert(!strict, 'invalid-argument', 'attributes are required.');
+    return {
+      audienceScope: 'selected', audiences: [], vibes: [], environments: [], needs: [],
+    };
+  }
+  assert(source && typeof source === 'object' && !Array.isArray(source),
+    'invalid-argument', 'attributes are invalid.');
+  const allowedFields = legacy
+    ? ['interests', 'audiences', 'vibes', 'travelerStyles', 'needs', 'seasons', 'environments']
+    : ['audienceScope', 'audiences', 'vibes', 'environment', 'needs', 'needsConfirmed'];
+  assert(Object.keys(source).every((key) => allowedFields.includes(key)),
+    'invalid-argument', 'attributes contain unsupported fields.');
+
+  const cleanValues = (field, allowed, maximum) => {
+    const entries = source[field] || [];
+    assert(Array.isArray(entries) && entries.length <= maximum &&
+      entries.every((entry) => typeof entry === 'string' && allowed.includes(entry)),
+    'invalid-argument', `${field} attributes are invalid.`);
+    return Array.from(new Set(entries));
+  };
+  const audiences = cleanValues('audiences', TRAVEL_PARTY_IDS, legacy ? 6 : 4);
+  const vibes = cleanValues('vibes', VIBE_IDS, 3);
+  const needs = cleanValues('needs', NEED_IDS, NEED_IDS.length);
+  const legacyEnvironments = legacy
+    ? cleanValues('environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length)
+    : [];
+  const environment = legacy
+    ? (legacyEnvironments.length > 1 ? 'mixed' : legacyEnvironments[0] || '')
+    : cleanOptionalString(source.environment, { field: 'environment', max: 40 });
+  assert(!environment || ENVIRONMENT_IDS.includes(environment),
+    'invalid-argument', 'environment attributes are invalid.');
+  const audienceScope = legacy
+    ? (audiences.length ? 'selected' : 'all')
+    : source.audienceScope;
+  assert(['all', 'selected'].includes(audienceScope),
+    'invalid-argument', 'audienceScope is invalid.');
+  assert(audienceScope !== 'all' || audiences.length === 0,
+    'invalid-argument', 'Universal recommendations cannot select audiences.');
+  assert(!strict || audienceScope === 'all' || audiences.length >= 1,
+    'invalid-argument', 'Choose an audience or mark the recommendation for everyone.');
+
+  const requirements = recommendationAttributeRequirements(content.tags);
+  if (strict) {
+    assert(!requirements.vibes || vibes.length >= 1,
+      'invalid-argument', 'Choose at least one vibe for this recommendation.');
+	assert(requirements.vibes || !vibes.length,
+	  'invalid-argument', 'Vibe is not applicable to this recommendation.');
+    assert(!requirements.environment || environment,
+      'invalid-argument', 'Choose an environment for this recommendation.');
+    assert(requirements.environment || !environment,
+      'invalid-argument', 'Environment is not applicable to this recommendation.');
+    assert(needs.every((needId) => requirements.needs.includes(needId)),
+      'invalid-argument', 'A selected practical need is not applicable to this recommendation.');
+    assert(!needs.length || source.needsConfirmed === true,
+      'invalid-argument', 'Practical needs require explicit confirmation.');
+  }
+
+  return {
+    audienceScope,
+    audiences,
+    vibes,
+    environments: environment ? [environment] : [],
+    needs,
   };
 }
 
@@ -766,9 +842,22 @@ async function saveRecommendation({
   }
 
   const content = sanitizeRecommendationContent(data?.recommendation);
+  const attributes = sanitizeRecommendationAttributes(
+    data?.recommendation?.attributes,
+    content,
+    {
+      legacyFacets: data?.recommendation?.facets,
+      taxonomyVersion: data?.recommendation?.taxonomyVersion,
+    }
+  );
   const facets = buildRecommendationFacets(
-    { ...content, tags: data?.recommendation?.tags || [] },
-    sanitizeSubmittedFacets(data?.recommendation?.facets)
+	{
+		...content,
+		tags: Number(data?.recommendation?.taxonomyVersion || 0) >= 4
+			? content.tags
+			: data?.recommendation?.tags || [],
+	},
+    attributes
   );
   const media = await validateMediaAssets({
     admin,
@@ -926,6 +1015,7 @@ module.exports = {
   resolveGoogleDestination,
   resolveRecommendationDestination,
   sanitizeRecommendationContent,
+  sanitizeRecommendationAttributes,
   sanitizeSubmittedFacets,
   saveRecommendation,
   stableDocumentId,

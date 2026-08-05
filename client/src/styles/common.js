@@ -241,6 +241,9 @@ export const common = {
 	},
 
 	// Modal styles
+	modalKeyboardAvoiding: {
+		flex: 1,
+	},
 	modalOverlay: {
 		flex: 1,
 		backgroundColor: "rgba(0,0,0,0.5)",

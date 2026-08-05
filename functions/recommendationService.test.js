@@ -7,6 +7,7 @@ const {
   parsePlaceDetails,
   resolvePlaceCountry,
   resolveRecommendationDestination,
+	sanitizeRecommendationAttributes,
   sanitizeRecommendationContent,
   saveRecommendation,
   stableDocumentId,
@@ -74,6 +75,30 @@ test('recommendation content rejects unknown tag IDs and profile-only budgets', 
   assert.throws(() => sanitizeRecommendationContent({ ...base, tags: ['unknown_tag'] }), /unsupported/);
   assert.throws(() => sanitizeRecommendationContent({ ...base, tags: ['viewpoint'] }), /match category/);
   assert.throws(() => sanitizeRecommendationContent({ ...base, tags: [], budget: 'flexible' }), /budget/);
+});
+
+test('taxonomy v4 recommendation attributes require only facts applicable to the selected place type', () => {
+	const content = sanitizeRecommendationContent({
+		taxonomyVersion: 4,
+		title: 'Cafe', description: 'Useful details', categoryId: 'food', tags: ['cafe'], budget: 'balanced',
+	});
+	const attributes = sanitizeRecommendationAttributes({
+		audienceScope: 'all', audiences: [], vibes: ['relaxed'], environment: 'indoor',
+		needs: ['vegetarian'], needsConfirmed: true,
+	}, content, { taxonomyVersion: 4 });
+	assert.equal(attributes.audienceScope, 'all');
+	assert.deepEqual(attributes.needs, ['vegetarian']);
+	assert.throws(() => sanitizeRecommendationAttributes({
+		audienceScope: 'all', audiences: [], vibes: [], environment: '', needs: [], needsConfirmed: false,
+	}, content, { taxonomyVersion: 4 }), /vibe/);
+	const service = sanitizeRecommendationContent({
+		taxonomyVersion: 4,
+		title: 'SIM', description: 'Useful details', categoryId: 'services', tags: ['sim_esim'], budget: 'balanced',
+	});
+	assert.throws(() => sanitizeRecommendationAttributes({
+		audienceScope: 'all', audiences: [], vibes: [], environment: '',
+		needs: ['vegetarian'], needsConfirmed: true,
+	}, service, { taxonomyVersion: 4 }), /not applicable/);
 });
 
 test('place parser derives server-controlled country, city and coordinates', () => {
@@ -419,7 +444,7 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.deepEqual(saved.stats, { likeCount: 0, commentCount: 0 });
   assert.equal(saved.destination.countryId, 'IL');
   assert.equal(saved.destination.cityId, 'TLV');
-  assert.equal(saved.taxonomyVersion, 3);
+	assert.equal(saved.taxonomyVersion, 4);
   assert.ok(Array.isArray(saved.search.tokens));
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');

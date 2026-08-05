@@ -21,6 +21,7 @@ const {
   VIBE_IDS,
   tagsMatchCategory,
   taxonomy,
+	recommendationAttributeRequirements,
 } = require('../travelTaxonomy');
 
 const PROJECT_ID = 'planli-f0b12';
@@ -70,7 +71,7 @@ function taxonomyContentErrors(documentPath, data = {}) {
   if (/^recommendations\/[^/]+$/.test(documentPath) && active) {
     if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
     if (!CATEGORY_IDS.includes(data.categoryId)) errors.push('category');
-    if (!canonicalArray(data.tags, TAG_IDS) || !tagsMatchCategory(data.tags, data.categoryId)) errors.push('subcategories');
+	if (!canonicalArray(data.tags, TAG_IDS, { minimum: 1 }) || !tagsMatchCategory(data.tags, data.categoryId)) errors.push('subcategories');
     if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: 1 })) errors.push('interests');
     if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('audiences');
     if (!canonicalArray(data.facets?.vibes, VIBE_IDS)) errors.push('vibes');
@@ -78,25 +79,52 @@ function taxonomyContentErrors(documentPath, data = {}) {
     if (!canonicalArray(data.facets?.needs, NEED_IDS)) errors.push('needs');
     if (!canonicalArray(data.facets?.seasons, SEASON_IDS)) errors.push('seasons');
     if (!canonicalArray(data.facets?.environments, ENVIRONMENT_IDS)) errors.push('environments');
-    if (data.budget && !POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
+	if (!['all', 'selected'].includes(data.facets?.audienceScope)) errors.push('audience-scope');
+	if (data.facets?.audienceScope === 'all' && data.facets.audiences.length) errors.push('universal-audiences');
+	if (data.facets?.audienceScope === 'selected' && !data.facets.audiences.length) errors.push('selected-audiences');
+	if (data.facets?.travelerStyles.length) errors.push('recommendation-styles');
+	if (data.facets?.seasons.length) errors.push('recommendation-seasons');
+	if (data.facets?.needs.length && data.facets?.needsScope !== 'recommendation') errors.push('needs-scope');
+	if (!data.facets?.needs.length && data.facets?.needsScope) errors.push('empty-needs-scope');
+	const requirements = recommendationAttributeRequirements(data.tags);
+	if (requirements.vibes && !data.facets?.vibes.length) errors.push('required-vibe');
+	if (!requirements.vibes && data.facets?.vibes.length) errors.push('inapplicable-vibe');
+	if (requirements.environment && !data.facets?.environments.length) errors.push('required-environment');
+	if (!requirements.environment && data.facets?.environments.length) errors.push('inapplicable-environment');
+	if (data.facets?.needs.some((needId) => !requirements.needs.includes(needId))) errors.push('inapplicable-need');
+	if (!POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
     if (!Array.isArray(data.search?.tokens) || !Array.isArray(data.search?.prefixes)) errors.push('search');
   }
   if (/^routes\/[^/]+$/.test(documentPath) && active) {
     if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
-    if (!canonicalArray(data.categoryIds, CATEGORY_IDS)) errors.push('categories');
-    if (!canonicalArray(data.subcategoryIds, TAG_IDS)) errors.push('subcategories');
+	if (!canonicalArray(data.categoryIds, CATEGORY_IDS, { minimum: 1 })) errors.push('categories');
+	if (!canonicalArray(data.subcategoryIds, TAG_IDS, { minimum: 1 })) errors.push('subcategories');
+	const routeTagCategories = new Set((data.subcategoryIds || []).map(
+		(tagId) => taxonomy.tags.find((tag) => tag.id === tagId)?.categoryId
+	).filter(Boolean));
+	if (!(data.categoryIds || []).every((categoryId) => routeTagCategories.has(categoryId)) ||
+		(data.subcategoryIds || []).some((tagId) => !data.categoryIds?.includes(
+			taxonomy.tags.find((tag) => tag.id === tagId)?.categoryId
+		))) errors.push('subcategory-category-match');
     if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: 1 })) errors.push('interests');
-    if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS, { minimum: 1 })) errors.push('audiences');
+	if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('audiences');
     if (!canonicalArray(data.facets?.vibes, VIBE_IDS)) errors.push('vibes');
     if (!canonicalArray(data.facets?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('traveler-styles');
     if (!canonicalArray(data.facets?.needs, NEED_IDS)) errors.push('needs');
     if (!canonicalArray(data.facets?.seasons, SEASON_IDS)) errors.push('seasons');
     if (!canonicalArray(data.facets?.environments, ENVIRONMENT_IDS)) errors.push('environments');
-    if (!BUDGET_IDS.includes(data.facets?.budgetLevel)) errors.push('budget');
+	if (!['all', 'selected'].includes(data.facets?.audienceScope)) errors.push('audience-scope');
+	if (data.facets?.audienceScope === 'all' && data.facets.audiences.length) errors.push('universal-audiences');
+	if (data.facets?.audienceScope === 'selected' && !data.facets.audiences.length) errors.push('selected-audiences');
+	if (data.facets?.needs.length && data.facets?.needsScope !== 'entire_route') errors.push('needs-scope');
+	if (!data.facets?.needs.length && data.facets?.needsScope) errors.push('empty-needs-scope');
+	if (!POST_BUDGET_IDS.includes(data.facets?.budgetLevel)) errors.push('budget');
     if (!ROUTE_DIFFICULTY_IDS.includes(data.difficulty)) errors.push('difficulty');
     if (data.experienceLevel && !ROUTE_EXPERIENCE_IDS.includes(data.experienceLevel)) errors.push('experience');
     if (!canonicalArray(data.transportModes, TRANSPORT_MODE_IDS, { minimum: 1 })) errors.push('transport');
-    if (data.pace && !PACE_IDS.includes(data.pace)) errors.push('pace');
+	if (!PACE_IDS.includes(data.pace)) errors.push('pace');
+	if (!data.facets?.seasons.length) errors.push('seasons-required');
+	if (data.facets?.environments.length !== 1) errors.push('environment-required');
     if (!Array.isArray(data.destinations) || !data.destinations.length ||
       data.destinations.some((entry) => !entry?.countryId || !entry?.cityId)) errors.push('destinations');
     if (!Array.isArray(data.search?.tokens) || !Array.isArray(data.search?.prefixes)) errors.push('search');

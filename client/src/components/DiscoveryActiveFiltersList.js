@@ -5,11 +5,11 @@ import { activeFiltersListStyles as styles, colors } from '../styles';
 import {
   CATEGORIES,
   ENVIRONMENTS,
-  INTERESTS,
   NEEDS,
   PACES,
   POST_BUDGETS,
   ROUTE_DIFFICULTIES,
+	ROUTE_EXPERIENCE_LEVELS,
   SEASONS,
   TAGS,
   TRANSPORT_MODES,
@@ -18,12 +18,12 @@ import {
   VIBES,
 } from '../constants/travelTaxonomy';
 import { hasDiscoveryFilters } from '../utils/discoveryFilters';
+import { countDiscoveryFilters } from '../utils/progressiveDiscoveryFilters';
 
 const mapOptions = (options) => Object.fromEntries(options.map((item) => [item.value || item.id, item.label || item.postLabel]));
 const labels = {
   categoryIds: mapOptions(CATEGORIES),
   subcategoryIds: mapOptions(TAGS),
-  interestIds: mapOptions(INTERESTS),
   audienceIds: mapOptions(TRAVEL_PARTIES),
   vibeIds: mapOptions(VIBES),
   travelerStyleIds: mapOptions(TRAVELER_STYLES),
@@ -32,6 +32,7 @@ const labels = {
   seasons: mapOptions(SEASONS),
   environments: mapOptions(ENVIRONMENTS),
   difficultyIds: mapOptions(ROUTE_DIFFICULTIES),
+	experienceLevelIds: mapOptions(ROUTE_EXPERIENCE_LEVELS),
   transportModeIds: mapOptions(TRANSPORT_MODES),
   paceIds: mapOptions(PACES),
 };
@@ -47,15 +48,32 @@ function Chip({ text, onRemove }) {
   );
 }
 
-export default function DiscoveryActiveFiltersList({ filters, onRemove, includeRoute = false }) {
+export default function DiscoveryActiveFiltersList({
+  filters,
+  onRemove,
+  onClear,
+  surface = 'recommendations',
+}) {
   if (!hasDiscoveryFilters(filters)) return null;
+  const isRoutesSurface = surface === 'routes';
+  const activeCount = countDiscoveryFilters(filters);
   const fields = [
-    'categoryIds', 'subcategoryIds', 'interestIds', 'audienceIds', 'vibeIds', 'travelerStyleIds',
-    'budgetLevels', 'seasons', 'environments', 'needIds',
-    ...(includeRoute ? ['difficultyIds', 'transportModeIds', 'paceIds'] : []),
+	'categoryIds', 'subcategoryIds', 'audienceIds', 'vibeIds',
+	'budgetLevels', 'environments', 'needIds',
+	...(isRoutesSurface ? [
+	  'travelerStyleIds', 'seasons', 'difficultyIds', 'experienceLevelIds', 'transportModeIds', 'paceIds',
+	] : []),
   ];
   return (
     <View style={styles.container}>
+      <View style={styles.summaryRow}>
+        {!!onClear && (
+          <TouchableOpacity onPress={onClear} accessibilityRole="button" testID="active-filters-clear">
+            <Text style={styles.clearText}>נקה הכול</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.summaryText}>{activeCount} מסננים פעילים</Text>
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {!!filters.query && <Chip text={filters.query} onRemove={() => onRemove?.('query')} />}
         {(filters.destinations || []).map((destination) => {
@@ -67,11 +85,11 @@ export default function DiscoveryActiveFiltersList({ filters, onRemove, includeR
           <Chip key={`${field}-${value}`} text={labels[field]?.[value] || value}
             onRemove={() => onRemove?.(field, value)} />
         )))}
-        {includeRoute && filters.durationDays && (
+        {isRoutesSurface && filters.durationDays && (
           <Chip text={`ימים: ${filters.durationDays.min || '0'}–${filters.durationDays.max || '∞'}`}
             onRemove={() => onRemove?.('durationDays')} />
         )}
-        {includeRoute && filters.distanceKm && (
+        {isRoutesSurface && filters.distanceKm && (
           <Chip text={`מרחק: ${filters.distanceKm.min || '0'}–${filters.distanceKm.max || '∞'} ק״מ`}
             onRemove={() => onRemove?.('distanceKm')} />
         )}
