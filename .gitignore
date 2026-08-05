@@ -9,6 +9,7 @@ functions/.storage-eu-migration/
 functions/.database-canonical-migration/
 functions/.recommendation-curation/
 functions/.public-profiles-backfill/
+functions/.rating-removal/
 .codex_tmp/
 client/.codex_tmp/
 client/.expo-validation/

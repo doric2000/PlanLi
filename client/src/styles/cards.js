@@ -450,24 +450,6 @@ export const cards = {
 		padding: 8,
 	},
 
-	popularRatingBadge: {
-		position: "absolute",
-		top: 10,
-		right: 10,
-		flexDirection: "row",
-		alignItems: "center",
-		backgroundColor: "rgba(255,255,255,0.9)",
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 12,
-	},
-
-	popularRatingText: {
-		fontSize: 10,
-		fontWeight: "bold",
-		marginLeft: 3,
-	},
-
 	popularInfo: {
 		padding: 12,
 	},

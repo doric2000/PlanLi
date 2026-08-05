@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { common, typography, colors, recommendationMetaStyles as styles } from '../styles';
+import { typography, colors, recommendationMetaStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
 
 export const RecommendationMeta = ({ item, navigation }) => {
@@ -69,17 +69,6 @@ export const RecommendationMeta = ({ item, navigation }) => {
           <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       )}
-
-      {item.rating && <View style={styles.divider} />}
-
-      <View style={styles.badgesRow}>
-        {item.rating && (
-          <View style={common.ratingContainer}>
-            <Text style={common.ratingStar}>★</Text>
-            <Text style={common.ratingText}>{item.rating}</Text>
-          </View>
-        )}
-      </View>
     </View>
   );
 };

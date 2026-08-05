@@ -129,7 +129,7 @@ app.get('/api/places/details', async (req, res) => {
 
     console.log('[places/details] request', { placeIdLength: placeId.length });
 
-    const fields = String(req.query.fields || 'name,formatted_address,address_components,geometry,photos,rating,place_id');
+    const fields = String(req.query.fields || 'name,formatted_address,address_components,geometry,photos,place_id');
 
     const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
     url.searchParams.set('place_id', placeId);
@@ -158,7 +158,11 @@ app.get('/api/places/details', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log('GOOGLE_MAPS_KEY configured:', Boolean(getGoogleMapsKey()));
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('GOOGLE_MAPS_KEY configured:', Boolean(getGoogleMapsKey()));
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;

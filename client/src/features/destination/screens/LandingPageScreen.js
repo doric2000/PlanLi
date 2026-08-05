@@ -105,7 +105,6 @@ export default function LandingPageScreen({ navigation, route }) {
     name: cityData.name,
     thumbnail_url: cityData.externalImageUrl || cityData.imageUrl,
     sub_text: `${cityData.travelers || 0} מטיילים`,
-    rating: cityData.rating,
     countryId: countryId,
     travelers: cityData.travelers || 0
   };
@@ -155,12 +154,6 @@ export default function LandingPageScreen({ navigation, route }) {
                   {cityData.name}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15, marginRight: 10 }}>
-                    <Ionicons name="star" size={14} color="#FFD700" />
-                    <Text style={{ color: colors.white, fontWeight: 'bold', marginLeft: 4, fontSize: 13 }}>
-                      {cityData.rating}
-                    </Text>
-                  </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15 }}>
                     <Ionicons name="people" size={14} color={colors.white} />
                     <Text style={{ color: colors.white, marginLeft: 4, fontSize: 13 }}>

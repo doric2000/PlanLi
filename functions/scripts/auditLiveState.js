@@ -47,6 +47,7 @@ const FORBIDDEN_FIELDS = new Set([
   'likedBy',
   'mediaVersion',
   'photoMediaVersion',
+  'rating',
   'thumbnail_url',
   'tripDaysData',
 ]);

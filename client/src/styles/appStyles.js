@@ -300,11 +300,6 @@ export const cityCardStyles = StyleSheet.create({
     fontWeight: '700',
     writingDirection: 'rtl',
   },
-  homeRatingText: {
-    fontSize: 11,
-    color: colors.brandOrange,
-    fontWeight: '700',
-  },
 });
 
 // components/ImagePickerBox.js
@@ -562,16 +557,6 @@ export const recommendationMetaStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '800',
     textAlign: 'right',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E8EEF5',
-    marginVertical: 12,
-  },
-  badgesRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
   },
 });
 

@@ -11,9 +11,9 @@ const isGooglePlacesPhotoUrl = (uri) =>
   (uri.includes('/maps/api/place/photo') || uri.includes('maps.googleapis.com/maps/api/place/photo'));
 
 /**
- * CityCard - displays a city with image, rating, name, country, and travelers count
+ * CityCard - displays a city with image, name, country, and travelers count
  * @param {Object} props
- * @param {Object} props.city - City data (id, name, countryId, imageUrl, rating, travelers)
+ * @param {Object} props.city - City data (id, name, countryId, imageUrl, travelers)
  * @param {Function} props.onPress - Callback when card is pressed
  */
 export default function CityCard({
@@ -40,7 +40,6 @@ export default function CityCard({
   const cityName = city?.name || city?.id || '';
   const countryName = city?.country || city?.countryName || city?.countryId || '';
   const travelers = city?.travelers ?? 0;
-  const rating = city?.rating || city?.recommendationsCount || null;
 
   return (
     <TouchableOpacity
@@ -94,22 +93,16 @@ export default function CityCard({
         >
           {countryName}
         </Text>
-        <View style={isHomeVariant ? styles.homeMetaRow : cards.popularTravelerRow}>
-          {showTravelers && (
+        {showTravelers && (
+          <View style={isHomeVariant ? styles.homeMetaRow : cards.popularTravelerRow}>
             <View style={isHomeVariant ? styles.homeMetaItem : cards.popularTravelerRow}>
               <Ionicons name="location-outline" size={13} color={isHomeVariant ? '#1B2D7A' : '#666'} />
               <Text style={isHomeVariant ? styles.homeTravelerText : cards.popularTravelerText}>
                 {travelers} מטיילים
               </Text>
             </View>
-          )}
-          {isHomeVariant && rating ? (
-            <View style={styles.homeMetaItem}>
-              <Ionicons name="star" size={12} color="#F5961D" />
-              <Text style={styles.homeRatingText}>{rating}</Text>
-            </View>
-          ) : null}
-        </View>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
