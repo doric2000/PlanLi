@@ -1,11 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import {
-	colors,
-	common,
-	buttons,
-	addRoutesScreenStyles as styles,
-} from "../../../styles";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { common, spacing } from "../../../styles";
 import {
 	CATEGORIES,
 	ENVIRONMENTS,
@@ -28,18 +23,34 @@ import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUploa
 import DayEditorModal from "../components/DayEditorModal";
 import DayList from "../components/DayList";
 import { FormInput } from "../../../components/FormInput";
+import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from "../../../components/GuidedForm";
+import RtlChoiceGroup from "../../../components/RtlChoiceGroup";
+import { guidedFormStyles as guidedStyles } from "../../../components/guidedFormStyles";
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { useBackButton } from "../../../hooks/useBackButton";
 import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
 import { getUserTier } from "../../../utils/userTier";
-import ChipSelector from "../../community/components/ChipSelector";
 import {
 	prepareRouteMedia,
 	revokeRouteObjectUrls,
 } from "../utils/routeMedia";
-import { derivePlacesFromStops, flattenValidRouteStops } from "../utils/routeStops";
+import { flattenValidRouteStops } from "../utils/routeStops";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { saveRoute } from "../../../services/RouteService";
+import {
+	emptyValidation,
+	firstInvalidSection,
+	sectionErrorCount,
+	validateRouteForm,
+} from "../../../utils/guidedFormValidation";
+
+const ROUTE_SECTION_ORDER = ["basics", "days", "category", "fit"];
+const ROUTE_SECTION_FIELDS = {
+	basics: ["title", "days", "distance", "desc"],
+	days: ["stops"],
+	category: ["categoryIds", "subcategoryIds"],
+	fit: ["audiences", "budgetLevel", "difficulty", "transportModes", "pace", "seasons", "environment", "needsCoverageConfirmed"],
+};
 
 const canonicalAttributes = (attributes = {}) => ({
 	audienceScope: attributes.audienceScope || "selected",
@@ -117,12 +128,30 @@ const createEmptyDay = () => ({
 	stops: [],
 });
 
-const LabeledInput = ({ label, style, ...props }) => (
-	<View style={[styles.fieldWrap, style]}>
-		<Text style={styles.fieldLabel}>{label}</Text>
-		<FormInput textAlign="right" {...props} />
-	</View>
-);
+const EMPTY_ROUTE_COMPARABLE = buildRouteFormComparable({
+	title: "",
+	days: "",
+	distance: "",
+	desc: "",
+	tripDays: [],
+	categoryIds: [],
+	subcategoryIds: [],
+	attributes: {
+		audienceScope: "selected",
+		audiences: [],
+		budgetLevel: "",
+		vibes: [],
+		travelerStyles: [],
+		needs: [],
+		needsCoverageConfirmed: false,
+		seasons: [],
+		environment: "",
+	},
+	difficulty: "",
+	experienceLevel: "",
+	transportModes: [],
+	pace: "",
+});
 
 export default function AddRoutesScreen({ navigation, route }) {
 	const routeToEdit = route?.params?.routeToEdit;
@@ -153,6 +182,11 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const [editingDayIndex, setEditingDayIndex] = useState(null);
 	const [editRouteBaseline, setEditRouteBaseline] = useState(null);
 	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
+	const [expandedSection, setExpandedSection] = useState("basics");
+	const [validation, setValidation] = useState(emptyValidation);
+	const [optionalFitOpen, setOptionalFitOpen] = useState(false);
+	const scrollRef = useRef(null);
+	const sectionLayoutsRef = useRef({});
 
 	const { user } = useCurrentUser();
 	const { uploadImageAssets } = useImagePickerWithUpload({
@@ -168,6 +202,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 	useEffect(() => {
 		if (!routeToEdit) {
 			setEditRouteBaseline(null);
+			setExpandedSection("basics");
+			setValidation(emptyValidation());
+			setOptionalFitOpen(false);
 			return;
 		}
 
@@ -191,6 +228,14 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setNeedsCoverageConfirmed(routeToEdit.facets?.needsScope === "entire_route" || Boolean(routeToEdit.facets?.needs?.length));
 		setSeasons(routeToEdit.facets?.seasons || []);
 		setEnvironment(routeToEdit.facets?.environments?.[0] || "");
+		setOptionalFitOpen(Boolean(
+			routeToEdit.experienceLevel
+			|| routeToEdit.facets?.vibes?.length
+			|| routeToEdit.facets?.travelerStyles?.length
+			|| routeToEdit.facets?.needs?.length
+		));
+		setExpandedSection("basics");
+		setValidation(emptyValidation());
 		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
 	}, [editingRouteId]);
@@ -235,9 +280,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 		]
 	);
 
-	const hasUnsavedChanges = Boolean(
-		routeToEdit && editRouteBaseline != null && editRouteBaseline !== routeFormComparable
-	);
+	const hasUnsavedChanges = routeToEdit
+		? Boolean(editRouteBaseline != null && editRouteBaseline !== routeFormComparable)
+		: routeFormComparable !== EMPTY_ROUTE_COMPARABLE;
 
 	const pendingDiscardRef = useRef(null);
 	const dismissUnsavedModal = useCallback(() => {
@@ -259,8 +304,8 @@ export default function AddRoutesScreen({ navigation, route }) {
 
 	const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
 		navigation,
-		guardActive: Boolean(routeToEdit),
-		sessionKey: String(editingRouteId ?? ""),
+		guardActive: true,
+		sessionKey: String(editingRouteId ?? "create"),
 		hasUnsavedChanges,
 		submitting,
 		openUnsavedPrompt: promptDiscardUnsaved,
@@ -291,6 +336,103 @@ export default function AddRoutesScreen({ navigation, route }) {
 	useEffect(() => {
 		if (!needs.length) setNeedsCoverageConfirmed(false);
 	}, [needs.length]);
+
+	const validStops = useMemo(() => flattenValidRouteStops(tripDays), [tripDays]);
+	const validationValues = useMemo(() => ({
+		title,
+		days,
+		distance,
+		desc,
+		validStops,
+		categoryIds,
+		subcategoryIds,
+		tagOptionsByCategory: TAG_OPTIONS_BY_CATEGORY,
+		audienceScope,
+		audiences,
+		budgetLevel,
+		difficulty,
+		transportModes,
+		pace,
+		seasons,
+		environment,
+		needs,
+		needsCoverageConfirmed,
+	}), [
+		title,
+		days,
+		distance,
+		desc,
+		validStops,
+		categoryIds,
+		subcategoryIds,
+		audienceScope,
+		audiences,
+		budgetLevel,
+		difficulty,
+		transportModes,
+		pace,
+		seasons,
+		environment,
+		needs,
+		needsCoverageConfirmed,
+	]);
+
+	const scrollToSection = useCallback((sectionId) => {
+		const y = sectionLayoutsRef.current[sectionId];
+		if (typeof y === "number") {
+			scrollRef.current?.scrollTo?.({ y: Math.max(0, y - spacing.sm), animated: true });
+		}
+	}, []);
+
+	const replaceSectionValidation = useCallback((sectionId, nextValidation) => {
+		setValidation((current) => {
+			const fields = { ...(current?.fields || {}) };
+			for (const field of ROUTE_SECTION_FIELDS[sectionId] || []) delete fields[field];
+			Object.assign(fields, nextValidation.fields);
+			const sections = { ...(current?.sections || {}) };
+			delete sections[sectionId];
+			if (nextValidation.sections[sectionId]?.length) sections[sectionId] = nextValidation.sections[sectionId];
+			return { fields, sections };
+		});
+	}, []);
+
+	const continueFromSection = useCallback((sectionId) => {
+		const nextValidation = validateRouteForm(validationValues, sectionId);
+		replaceSectionValidation(sectionId, nextValidation);
+		if (sectionErrorCount(nextValidation, sectionId)) {
+			setExpandedSection(sectionId);
+			scrollToSection(sectionId);
+			return false;
+		}
+		const currentIndex = ROUTE_SECTION_ORDER.indexOf(sectionId);
+		const nextSection = ROUTE_SECTION_ORDER[currentIndex + 1];
+		if (nextSection) {
+			setExpandedSection(nextSection);
+			if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => scrollToSection(nextSection));
+			else scrollToSection(nextSection);
+		}
+		return true;
+	}, [replaceSectionValidation, scrollToSection, validationValues]);
+
+	const sectionIsComplete = useCallback((sectionId) => (
+		sectionErrorCount(validateRouteForm(validationValues, sectionId), sectionId) === 0
+	), [validationValues]);
+
+	useEffect(() => {
+		setValidation((current) => {
+			const touchedSections = Object.keys(current?.sections || {});
+			if (!touchedSections.length) return current;
+			const next = emptyValidation();
+			for (const sectionId of touchedSections) {
+				const sectionValidation = validateRouteForm(validationValues, sectionId);
+				Object.assign(next.fields, sectionValidation.fields);
+				if (sectionValidation.sections[sectionId]?.length) {
+					next.sections[sectionId] = sectionValidation.sections[sectionId];
+				}
+			}
+			return next;
+		});
+	}, [validationValues]);
 
 	const ensureVerifiedForWrite = () => {
 		const tier = getUserTier(auth.currentUser);
@@ -327,19 +469,14 @@ export default function AddRoutesScreen({ navigation, route }) {
 			return;
 		}
 
-		const parsedDays = Number.parseInt(days, 10);
 		const parsedDistance = Number.parseFloat(distance);
-		const derivedPlaces = derivePlacesFromStops(tripDays);
-		const validStops = flattenValidRouteStops(tripDays);
-		const hasSubcategoryForEveryCategory = categoryIds.length > 0 && categoryIds.every(
-			(categoryId) => (TAG_OPTIONS_BY_CATEGORY[categoryId] || []).some(
-				(tag) => subcategoryIds.includes(tag.id)
-			)
-		);
-		const hasAudience = audienceScope === "all" || audiences.length > 0;
-
-		if (!title.trim() || !Number.isFinite(parsedDays) || parsedDays < 1 || !Number.isFinite(parsedDistance) || !desc.trim() || validStops.length === 0 || !hasSubcategoryForEveryCategory || !hasAudience || !budgetLevel || !difficulty || transportModes.length === 0 || !pace || seasons.length === 0 || !environment || (needs.length > 0 && !needsCoverageConfirmed)) {
-			Alert.alert("שגיאה", "מלאו כותרת, ימים, מרחק, תיאור, תחנה מדויקת, תת־קטגוריה לכל קטגוריה, קהל, תקציב, קושי, אמצעי התניידות, קצב, עונה וסביבה. אם סומנו צרכים, אשרו שהם נכונים לכל המסלול.");
+		const nextValidation = validateRouteForm(validationValues);
+		setValidation(nextValidation);
+		const invalidSection = firstInvalidSection(nextValidation, ROUTE_SECTION_ORDER);
+		if (invalidSection) {
+			setExpandedSection(invalidSection);
+			if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => scrollToSection(invalidSection));
+			else scrollToSection(invalidSection);
 			return;
 		}
 
@@ -392,136 +529,170 @@ export default function AddRoutesScreen({ navigation, route }) {
 		}
 	};
 
+	const currentStep = Math.max(1, ROUTE_SECTION_ORDER.indexOf(expandedSection) + 1);
+	const basicsSummary = title.trim()
+		? `${title.trim()}${days ? ` · ${days} ימים` : ""}`
+		: "שם, משך, מרחק ותיאור";
+	const daysSummary = tripDays.length
+		? `${tripDays.length} ימים · ${validStops.length} תחנות`
+		: "בונים כל יום בנפרד";
+	const categorySummary = categoryIds.length
+		? `${categoryIds.length} קטגוריות · ${subcategoryIds.length} תתי־קטגוריות`
+		: "מה מחכה בדרך";
+	const budgetLabel = POST_BUDGETS.find((item) => item.value === budgetLevel)?.postLabel || "";
+	const fitSummary = [
+		budgetLabel,
+		audienceScope === "all" ? "מתאים לכולם" : (audiences.length ? `${audiences.length} קהלים` : ""),
+	].filter(Boolean).join(" · ") || "התאמה, קושי וסגנון";
+
 	return (
-		<View style={[common.container, styles.container]}>
+		<View style={[common.container, guidedStyles.screen]}>
 			<ScrollView
+				ref={scrollRef}
+				style={guidedStyles.scroll}
 				keyboardShouldPersistTaps="handled"
-				contentContainerStyle={styles.scrollContent}
+				contentContainerStyle={guidedStyles.content}
 			>
-				<Text style={styles.screenTitle}>
-					{routeToEdit ? "עריכת מסלול" : "מסלול חדש"}
-				</Text>
-
-				<LabeledInput
-					label="כותרת המסלול"
-					placeholder="לדוגמה: מסלול טבע בנורבגיה"
-					value={title}
-					onChangeText={setTitle}
-					testID="route-title-input"
+				<GuidedFormHeader
+					currentStep={currentStep}
+					totalSteps={ROUTE_SECTION_ORDER.length}
+					title={routeToEdit ? "עריכת המסלול" : "בואו נבנה מסלול מעולה"}
+					intro="מתחילים מהתמונה הגדולה, מסדרים את הימים ורק אז מדייקים למי המסלול מתאים."
+					testID="route-guided-header"
 				/>
 
-				<LabeledInput
-					label="מספר ימים"
-					placeholder="כמה ימים כוללת התוכנית?"
-					value={days}
-					onChangeText={setDays}
-					keyboardType="numeric"
-					testID="route-days-input"
-				/>
-
-				<DayList
-					days={tripDays}
-					onEdit={openDayEditor}
-				/>
-
-				<LabeledInput
-					label="מרחק (ק״מ)"
-					placeholder="לדוגמה: 120"
-					value={distance}
-					onChangeText={setDistance}
-					keyboardType="numeric"
-					testID="route-distance-input"
-				/>
-
-				<LabeledInput
-					label="תיאור המסלול"
-					placeholder="תאר בקצרה את המסלול והאווירה"
-					value={desc}
-					onChangeText={setDesc}
-					multiline
-					numberOfLines={4}
-					testID="route-description-input"
-					style={styles.descriptionField}
-				/>
-
-				<ChipSelector label="קטגוריות במסלול" items={CATEGORIES.map((item) => item.label)}
-					selectedValue={CATEGORIES.filter((item) => categoryIds.includes(item.id)).map((item) => item.label)}
-					onSelect={(label) => {
-						const id = CATEGORIES.find((item) => item.label === label)?.id;
-						if (!id) return;
-						if (categoryIds.includes(id)) setSubcategoryIds((current) => current.filter((tagId) => !(TAG_OPTIONS_BY_CATEGORY[id] || []).some((tag) => tag.id === tagId)));
-						toggle(setCategoryIds, id, 8);
-					}} multiSelect testIDPrefix="route-category" />
-				{categoryIds.map((categoryId) => <ChipSelector key={categoryId}
-					label={`תתי־קטגוריות · ${CATEGORIES.find((item) => item.id === categoryId)?.label || ''}`}
-					items={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).map((item) => item.label)}
-					selectedValue={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).filter((item) => subcategoryIds.includes(item.id)).map((item) => item.label)}
-					onSelect={(label) => { const id = (TAG_OPTIONS_BY_CATEGORY[categoryId] || []).find((item) => item.label === label)?.id; if (id) toggle(setSubcategoryIds, id, 20); }}
-					multiSelect testIDPrefix={`route-subcategory-${categoryId}`} />)}
-				<ChipSelector label="היקף התאמה לקהל (חובה)" items={["מתאים לכולם", "בחירת קהלים"]}
-					selectedValue={audienceScope === "all" ? "מתאים לכולם" : "בחירת קהלים"}
-					onSelect={(label) => {
-						const nextScope = label === "מתאים לכולם" ? "all" : "selected";
-						setAudienceScope(nextScope);
-						if (nextScope === "all") setAudiences([]);
-					}} testIDPrefix="route-audience-scope" />
-				{audienceScope === "selected" ? <ChipSelector label="מתאים למי (חובה)" items={TRAVEL_PARTIES.map((item) => item.label)}
-					selectedValue={TRAVEL_PARTIES.filter((item) => audiences.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = TRAVEL_PARTIES.find((item) => item.label === label)?.value; if (id) toggle(setAudiences, id, 6); }} multiSelect testIDPrefix="route-audience" /> : null}
-				<ChipSelector label="רמת מחיר (חובה)" items={POST_BUDGETS.map((item) => item.postLabel)}
-					selectedValue={POST_BUDGETS.find((item) => item.value === budgetLevel)?.postLabel || ''}
-					onSelect={(label) => setBudgetLevel(POST_BUDGETS.find((item) => item.postLabel === label)?.value || '')} testIDPrefix="route-budget" />
-				<ChipSelector label="רמת קושי (חובה)" items={ROUTE_DIFFICULTIES.map((item) => item.label)}
-					selectedValue={ROUTE_DIFFICULTIES.find((item) => item.value === difficulty)?.label || ''}
-					onSelect={(label) => setDifficulty(ROUTE_DIFFICULTIES.find((item) => item.label === label)?.value || '')} testIDPrefix="route-difficulty" />
-				<ChipSelector label="אמצעי התניידות (חובה)" items={TRANSPORT_MODES.map((item) => item.label)}
-					selectedValue={TRANSPORT_MODES.filter((item) => transportModes.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = TRANSPORT_MODES.find((item) => item.label === label)?.value; if (id) toggle(setTransportModes, id, 4); }} multiSelect testIDPrefix="route-transport" />
-				<ChipSelector label="ניסיון נדרש" items={ROUTE_EXPERIENCE_LEVELS.map((item) => item.label)}
-					selectedValue={ROUTE_EXPERIENCE_LEVELS.find((item) => item.value === experienceLevel)?.label || ''}
-					onSelect={(label) => setExperienceLevel(ROUTE_EXPERIENCE_LEVELS.find((item) => item.label === label)?.value || '')} testIDPrefix="route-experience" />
-				<ChipSelector label="אווירה" items={VIBES.map((item) => item.label)} selectedValue={VIBES.filter((item) => vibes.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = VIBES.find((item) => item.label === label)?.value; if (id) toggle(setVibes, id, 4); }} multiSelect testIDPrefix="route-vibe" />
-				<ChipSelector label="סגנון טיול" items={TRAVELER_STYLES.map((item) => item.label)} selectedValue={TRAVELER_STYLES.filter((item) => travelerStyles.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = TRAVELER_STYLES.find((item) => item.label === label)?.value; if (id) toggle(setTravelerStyles, id, 4); }} multiSelect testIDPrefix="route-style" />
-				<ChipSelector label="קצב (חובה)" items={PACES.map((item) => item.label)} selectedValue={PACES.find((item) => item.value === pace)?.label || ''}
-					onSelect={(label) => setPace(PACES.find((item) => item.label === label)?.value || '')} testIDPrefix="route-pace" />
-				<ChipSelector label="עונה מתאימה (חובה)" items={SEASONS.map((item) => item.label)} selectedValue={SEASONS.filter((item) => seasons.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = SEASONS.find((item) => item.label === label)?.value; if (id) toggle(setSeasons, id, 6); }} multiSelect testIDPrefix="route-season" />
-				<ChipSelector label="סביבה עיקרית (חובה)" items={ENVIRONMENTS.map((item) => item.label)} selectedValue={ENVIRONMENTS.find((item) => item.value === environment)?.label || ''}
-					onSelect={(label) => setEnvironment(ENVIRONMENTS.find((item) => item.label === label)?.value || '')} testIDPrefix="route-environment" />
-				<ChipSelector label="מידע מעשי ונגישות" items={NEEDS.map((item) => item.label)} selectedValue={NEEDS.filter((item) => needs.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = NEEDS.find((item) => item.label === label)?.value; if (id) toggle(setNeeds, id, NEEDS.length); }} multiSelect testIDPrefix="route-need" />
-				{needs.length > 0 ? (
-					<TouchableOpacity
-						style={styles.confirmationRow}
-						onPress={() => setNeedsCoverageConfirmed((current) => !current)}
-						accessibilityRole="checkbox"
-						accessibilityState={{ checked: needsCoverageConfirmed }}
-						testID="route-needs-coverage-confirmation"
+				<View onLayout={(event) => { sectionLayoutsRef.current.basics = event.nativeEvent.layout.y; }}>
+					<GuidedFormSection
+						id="basics"
+						index={1}
+						title="המסלול בקצרה"
+						summary={basicsSummary}
+						expanded={expandedSection === "basics"}
+						completed={sectionIsComplete("basics")}
+						errorCount={sectionErrorCount(validation, "basics")}
+						onToggle={() => setExpandedSection((current) => current === "basics" ? null : "basics")}
+						onContinue={() => continueFromSection("basics")}
+						testIDPrefix="route-section"
 					>
-						<View style={[styles.confirmationBox, needsCoverageConfirmed && styles.confirmationBoxChecked]}>
-							{needsCoverageConfirmed ? <Text style={styles.confirmationCheck}>✓</Text> : null}
-						</View>
-						<Text style={styles.confirmationText}>בדקתי שהמידע שסומן נכון לכל המסלול, ולא רק לחלק מהתחנות.</Text>
-					</TouchableOpacity>
-				) : null}
+						<FormInput label="כותרת המסלול" required rtl placeholder="לדוגמה: מסלול טבע בנורבגיה" value={title} onChangeText={setTitle} error={validation.fields.title} testID="route-title-input" />
+						<FormInput label="מספר ימים" required rtl helperText="ניצור כרטיס נפרד לכל יום." placeholder="לדוגמה: 4" value={days} onChangeText={setDays} keyboardType="numeric" error={validation.fields.days} testID="route-days-input" />
+						<FormInput label="מרחק משוער (ק״מ)" required rtl placeholder="לדוגמה: 120" value={distance} onChangeText={setDistance} keyboardType="numeric" error={validation.fields.distance} testID="route-distance-input" />
+						<FormInput label="תיאור המסלול" required rtl placeholder="מה הופך את המסלול למיוחד?" value={desc} onChangeText={setDesc} multiline numberOfLines={4} error={validation.fields.desc} testID="route-description-input" />
+					</GuidedFormSection>
+				</View>
 
-				<TouchableOpacity
-					style={[buttons.submit, submitting && buttons.disabled]}
-					onPress={addRoute}
-					disabled={submitting}
-					testID="route-submit"
-				>
-					{submitting ? (
-						<ActivityIndicator color={colors.white} />
-					) : (
-						<Text style={buttons.submitText}>
-							{routeToEdit ? "שמור שינויים" : "פרסם מסלול"}
-						</Text>
-					)}
-				</TouchableOpacity>
+				<View onLayout={(event) => { sectionLayoutsRef.current.days = event.nativeEvent.layout.y; }}>
+					<GuidedFormSection
+						id="days"
+						index={2}
+						title="ימים ותחנות"
+						summary={daysSummary}
+						expanded={expandedSection === "days"}
+						completed={sectionIsComplete("days")}
+						errorCount={sectionErrorCount(validation, "days")}
+						onToggle={() => setExpandedSection((current) => current === "days" ? null : "days")}
+						onContinue={() => continueFromSection("days")}
+						continueLabel="המשך לקטגוריות"
+						testIDPrefix="route-section"
+					>
+						<Text style={guidedStyles.fieldHelper}>פתחו כל יום והוסיפו את התחנות לפי סדר הביקור. אפשר לחזור ולערוך בכל רגע.</Text>
+						<DayList days={tripDays} onEdit={openDayEditor} />
+						{!!validation.fields.stops && <Text style={guidedStyles.fieldError}>{validation.fields.stops}</Text>}
+					</GuidedFormSection>
+				</View>
+
+				<View onLayout={(event) => { sectionLayoutsRef.current.category = event.nativeEvent.layout.y; }}>
+					<GuidedFormSection
+						id="category"
+						index={3}
+						title="מה יש במסלול"
+						summary={categorySummary}
+						expanded={expandedSection === "category"}
+						completed={sectionIsComplete("category")}
+						errorCount={sectionErrorCount(validation, "category")}
+						onToggle={() => setExpandedSection((current) => current === "category" ? null : "category")}
+						onContinue={() => continueFromSection("category")}
+						continueLabel="המשך להתאמה"
+						testIDPrefix="route-section"
+					>
+						<RtlChoiceGroup
+							label="קטגוריות במסלול (חובה)"
+							helper="אפשר לבחור כמה תחומים; בגלילה מתחילים תמיד מימין."
+							options={CATEGORIES}
+							selectedIds={categoryIds}
+							onToggle={(id) => {
+								if (categoryIds.includes(id)) {
+									setSubcategoryIds((current) => current.filter((tagId) => !(TAG_OPTIONS_BY_CATEGORY[id] || []).some((tag) => tag.id === tagId)));
+								}
+								toggle(setCategoryIds, id, 8);
+							}}
+							maxSelected={8}
+							variant="tile"
+							layout="responsive"
+							error={validation.fields.categoryIds}
+							testIDPrefix="route-category"
+						/>
+						{categoryIds.map((categoryId) => (
+							<View style={guidedStyles.nestedPanel} key={categoryId}>
+								<Text style={guidedStyles.nestedTitle}>תתי־קטגוריות · {CATEGORIES.find((item) => item.id === categoryId)?.label || ""}</Text>
+								<RtlChoiceGroup
+									options={TAG_OPTIONS_BY_CATEGORY[categoryId] || []}
+									selectedIds={subcategoryIds}
+									onToggle={(id) => toggle(setSubcategoryIds, id, 20)}
+									maxSelected={20}
+									testIDPrefix={`route-subcategory-${categoryId}`}
+								/>
+							</View>
+						))}
+						{!!validation.fields.subcategoryIds && <Text style={guidedStyles.fieldError}>{validation.fields.subcategoryIds}</Text>}
+					</GuidedFormSection>
+				</View>
+
+				<View onLayout={(event) => { sectionLayoutsRef.current.fit = event.nativeEvent.layout.y; }}>
+					<GuidedFormSection
+						id="fit"
+						index={4}
+						title="למי ואיך זה מתאים"
+						summary={fitSummary}
+						expanded={expandedSection === "fit"}
+						completed={sectionIsComplete("fit")}
+						errorCount={sectionErrorCount(validation, "fit")}
+						onToggle={() => setExpandedSection((current) => current === "fit" ? null : "fit")}
+						testIDPrefix="route-section"
+					>
+						<RtlChoiceGroup label="היקף התאמה לקהל (חובה)" options={[{ id: "all", label: "מתאים לכולם" }, { id: "selected", label: "בחירת קהלים" }]} selectedIds={[audienceScope]} selectionMode="single" variant="segment" onToggle={(id) => { setAudienceScope(id); if (id === "all") setAudiences([]); }} testIDPrefix="route-audience-scope" />
+						{audienceScope === "selected" ? <RtlChoiceGroup label="מתאים למי (חובה)" options={TRAVEL_PARTIES} selectedIds={audiences} onToggle={(id) => toggle(setAudiences, id, 6)} maxSelected={6} error={validation.fields.audiences} testIDPrefix="route-audience" /> : null}
+						<RtlChoiceGroup label="רמת מחיר (חובה)" options={POST_BUDGETS} selectedIds={[budgetLevel]} selectionMode="single" variant="segment" onToggle={setBudgetLevel} error={validation.fields.budgetLevel} testIDPrefix="route-budget" />
+						<RtlChoiceGroup label="רמת קושי (חובה)" options={ROUTE_DIFFICULTIES} selectedIds={[difficulty]} selectionMode="single" onToggle={setDifficulty} error={validation.fields.difficulty} testIDPrefix="route-difficulty" />
+						<RtlChoiceGroup label="אמצעי התניידות (חובה)" options={TRANSPORT_MODES} selectedIds={transportModes} onToggle={(id) => toggle(setTransportModes, id, 4)} maxSelected={4} error={validation.fields.transportModes} testIDPrefix="route-transport" />
+						<RtlChoiceGroup label="קצב (חובה)" options={PACES} selectedIds={[pace]} selectionMode="single" onToggle={setPace} error={validation.fields.pace} testIDPrefix="route-pace" />
+						<RtlChoiceGroup label="עונה מתאימה (חובה)" options={SEASONS} selectedIds={seasons} onToggle={(id) => toggle(setSeasons, id, 6)} maxSelected={6} error={validation.fields.seasons} testIDPrefix="route-season" />
+						<RtlChoiceGroup label="סביבה עיקרית (חובה)" options={ENVIRONMENTS} selectedIds={[environment]} selectionMode="single" onToggle={setEnvironment} error={validation.fields.environment} testIDPrefix="route-environment" />
+
+						<TouchableOpacity style={guidedStyles.optionalToggle} onPress={() => setOptionalFitOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: optionalFitOpen }} testID="route-optional-toggle">
+							<Text style={guidedStyles.optionalToggleText}>עוד פרטים שיעזרו למטיילים (רשות)</Text>
+							<Text style={guidedStyles.optionalToggleText}>{optionalFitOpen ? "−" : "+"}</Text>
+						</TouchableOpacity>
+						{optionalFitOpen ? (
+							<View>
+								<RtlChoiceGroup label="ניסיון נדרש" options={ROUTE_EXPERIENCE_LEVELS} selectedIds={[experienceLevel]} selectionMode="single" onToggle={setExperienceLevel} testIDPrefix="route-experience" />
+								<RtlChoiceGroup label="אווירה" options={VIBES} selectedIds={vibes} onToggle={(id) => toggle(setVibes, id, 4)} maxSelected={4} testIDPrefix="route-vibe" />
+								<RtlChoiceGroup label="סגנון טיול" options={TRAVELER_STYLES} selectedIds={travelerStyles} onToggle={(id) => toggle(setTravelerStyles, id, 4)} maxSelected={4} testIDPrefix="route-style" />
+								<RtlChoiceGroup label="מידע מעשי ונגישות" options={NEEDS} selectedIds={needs} onToggle={(id) => toggle(setNeeds, id, NEEDS.length)} maxSelected={NEEDS.length} testIDPrefix="route-need" />
+								{needs.length > 0 ? (
+									<TouchableOpacity style={guidedStyles.checkboxRow} onPress={() => setNeedsCoverageConfirmed((current) => !current)} accessibilityRole="checkbox" accessibilityState={{ checked: needsCoverageConfirmed }} testID="route-needs-coverage-confirmation">
+										<View style={[guidedStyles.checkboxBox, needsCoverageConfirmed && guidedStyles.checkboxBoxChecked]}>{needsCoverageConfirmed ? <Text style={guidedStyles.checkboxCheck}>✓</Text> : null}</View>
+										<Text style={guidedStyles.checkboxText}>בדקתי שהמידע שסומן נכון לכל המסלול, ולא רק לחלק מהתחנות.</Text>
+									</TouchableOpacity>
+								) : null}
+								{!!validation.fields.needsCoverageConfirmed && <Text style={guidedStyles.fieldError}>{validation.fields.needsCoverageConfirmed}</Text>}
+							</View>
+						) : null}
+					</GuidedFormSection>
+				</View>
 			</ScrollView>
+
+			<GuidedFormFooter label={routeToEdit ? "שמור שינויים" : "פרסם מסלול"} onPress={addRoute} loading={submitting} disabled={submitting} testID="route-submit" />
 
 			<DayEditorModal
 				visible={isDayModalVisible}

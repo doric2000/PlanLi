@@ -5,6 +5,24 @@ const REST_COUNTRIES_BASE_URL =
 const DEFAULT_TIMEOUT_MS = 4000;
 const DEFAULT_CONCURRENCY = 3;
 
+function localLanguageFacts(languageCodes) {
+  const displayNames = new Intl.DisplayNames(['he'], { type: 'language' });
+  return [...new Set(Array.isArray(languageCodes) ? languageCodes : [])]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+    .map((code) => ({
+      code,
+      labelHe: displayNames.of(code) || code,
+    }));
+}
+
+function localCallingCodes(phoneValues) {
+  return [...new Set((Array.isArray(phoneValues) ? phoneValues : [])
+    .map((value) => String(value || '').replace(/[^0-9]/g, ''))
+    .filter(Boolean)
+    .map((value) => `+${value}`))];
+}
+
 function normalizeCountryCode(value) {
   const code = String(value || '').trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(code)) {
@@ -54,7 +72,13 @@ function parseRestCountriesMetadata(
     throw new Error(`REST Countries returned incomplete metadata for ${expected}.`);
   }
 
-  return { region, currencyCode };
+  const local = countries[expected] || {};
+  return {
+    region,
+    currencyCode,
+    languages: localLanguageFacts(local.languages),
+    callingCodes: localCallingCodes(local.phone),
+  };
 }
 
 function getLocalCountryMetadata(countryCode, currentCurrencyCode) {
@@ -76,7 +100,12 @@ function getLocalCountryMetadata(countryCode, currentCurrencyCode) {
     throw new Error(`Local country metadata is incomplete for ${code}.`);
   }
 
-  return { region, currencyCode };
+  return {
+    region,
+    currencyCode,
+    languages: localLanguageFacts(country.languages),
+    callingCodes: localCallingCodes(country.phone),
+  };
 }
 
 async function fetchRestCountriesMetadata({
@@ -194,6 +223,24 @@ async function syncCountryMetadata({
         if (metadata.currencyCode !== before.currencyCode) {
           changes.currencyCode = metadata.currencyCode;
         }
+        const previousTravelFacts = before.travelFacts || {};
+        const comparablePreviousFacts = {
+          languages: previousTravelFacts.languages || [],
+          callingCodes: previousTravelFacts.callingCodes || [],
+          source: previousTravelFacts.source || null,
+        };
+        const comparableNextFacts = {
+          languages: metadata.languages || [],
+          callingCodes: metadata.callingCodes || [],
+          source: 'countries-list',
+        };
+        if (JSON.stringify(comparablePreviousFacts) !== JSON.stringify(comparableNextFacts)) {
+          changes.travelFacts = {
+            ...previousTravelFacts,
+            ...comparableNextFacts,
+            updatedAt: attemptedAt,
+          };
+        }
 
         if (apply) {
           if (Object.keys(changes).length > 0) {
@@ -242,6 +289,8 @@ module.exports = {
   fetchRestCountriesMetadata,
   getLocalCountryMetadata,
   normalizeCountryCode,
+  localCallingCodes,
+  localLanguageFacts,
   parseRestCountriesMetadata,
   resolveCountryMetadata,
   syncCountryMetadata,

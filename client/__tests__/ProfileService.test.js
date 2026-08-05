@@ -70,4 +70,21 @@ describe('ProfileService smart-profile persistence', () => {
     });
     expect(getDocFromServer).not.toHaveBeenCalled();
   });
+
+  it('sends only the supported Bio update contract and preserves live text', async () => {
+    await expect(saveProfile({ bio: 'ים וקפה' }, { verifySmartProfile: false }))
+      .resolves.toEqual({ ok: true });
+
+    expect(mockCallable).toHaveBeenCalledWith({
+      bio: 'ים וקפה',
+      completeSmartProfile: false,
+    });
+  });
+
+  it('translates an outdated Functions contract error to Hebrew', async () => {
+    mockCallable.mockRejectedValueOnce(new Error('Profile update contains unsupported fields.'));
+
+    await expect(saveProfile({ bio: 'חדש' }, { verifySmartProfile: false }))
+      .rejects.toThrow('שירות הפרופיל אינו מעודכן');
+  });
 });

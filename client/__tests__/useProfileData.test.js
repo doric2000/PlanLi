@@ -98,12 +98,14 @@ describe('useProfileData loading', () => {
     expect(result.current.userData).toEqual({
       displayName: 'Firestore Name',
       photoURL: 'https://example.com/firestore.jpg',
+      photoMedia: null,
       email: 'firestore@example.com',
+      bio: '',
       isExpert: true,
       smartProfile: null,
     });
     expect(result.current.statsLoading).toBe(true);
-    expect(result.current.stats.trips).toBe(0);
+    expect(result.current.stats.routes).toBe(0);
 
     act(() => {
       tripsRequest.resolve({
@@ -121,11 +123,18 @@ describe('useProfileData loading', () => {
     await waitFor(() => {
       expect(result.current.statsLoading).toBe(false);
       expect(result.current.stats).toEqual({
-        trips: 4,
-        reviews: 2,
+        routes: 4,
+        recommendations: 2,
         likesReceived: 7,
-        credibilityScore: 34,
-        credibilityLabel: 'Level 1 Traveler',
+        contributionScore: 34,
+        standing: {
+          id: 'starting',
+          label: 'בתחילת הדרך',
+          minimumScore: 0,
+          color: '#64748B',
+          icon: 'explore',
+        },
+        dominantCategory: null,
       });
     });
   });

@@ -24,6 +24,21 @@ function cleanOptionalName(value) {
   return result;
 }
 
+function cleanOptionalBio(value) {
+  if (value == null) return undefined;
+  assert(typeof value === 'string', 'invalid-argument', 'bio must be a string.');
+  const result = value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+  assert((result.match(/\n/g) || []).length <= 1, 'invalid-argument', 'bio may contain at most two lines.');
+  assert(Array.from(result).length <= 160, 'invalid-argument', 'bio must be 160 characters or fewer.');
+  return result;
+}
+
 function assertOnlyAllowed(values, allowed, field, maximum) {
   assert(Array.isArray(values) && values.length <= maximum, 'invalid-argument', `${field} is invalid.`);
   assert(values.every((entry) => typeof entry === 'string' && allowed.includes(entry)),
@@ -88,14 +103,15 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   assert(data && typeof data === 'object' && !Array.isArray(data),
     'invalid-argument', 'Profile update is invalid.');
   assert(Object.keys(data).every((key) => (
-    ['displayName', 'smartProfile', 'completeSmartProfile', 'photoMedia'].includes(key)
-  )), 'invalid-argument', 'Profile update contains unsupported fields.');
+    ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'].includes(key)
+  )), 'invalid-argument', 'נשלח שדה שאינו נתמך בעדכון הפרופיל.');
   if (Object.prototype.hasOwnProperty.call(data, 'completeSmartProfile')) {
     assert(typeof data.completeSmartProfile === 'boolean',
       'invalid-argument', 'completeSmartProfile must be boolean.');
   }
   const uid = auth.uid;
   const displayName = cleanOptionalName(data?.displayName);
+  const bio = cleanOptionalBio(data?.bio);
   const completeSmartProfile = data?.completeSmartProfile === true;
   const smartProfile = sanitizeSmartProfile(data?.smartProfile, { complete: completeSmartProfile });
   let photoMedia;
@@ -115,7 +131,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     }
   }
   assert(
-    displayName !== undefined || smartProfile !== undefined || photoMedia !== undefined,
+    displayName !== undefined || bio !== undefined || smartProfile !== undefined || photoMedia !== undefined,
     'invalid-argument',
     'No profile fields were provided.'
   );
@@ -139,6 +155,9 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
       };
   const fields = {
     ...(displayName !== undefined ? { displayName } : {}),
+    ...(bio !== undefined
+      ? (bio ? { bio } : { bio: admin.firestore.FieldValue.delete() })
+      : {}),
     ...(nextSmartProfile !== undefined ? { smartProfile: nextSmartProfile } : {}),
     ...(photoMedia !== undefined
       ? {
@@ -165,6 +184,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   }
   return {
     displayName: displayName ?? existing.data()?.displayName ?? 'Traveler',
+    ...(bio !== undefined ? { bio } : {}),
     ...(photoMedia !== undefined ? { photoMedia, photoURL: photoMedia?.feed?.url || null } : {}),
     ...(smartProfile !== undefined ? { smartProfile } : {}),
   };
@@ -199,6 +219,7 @@ async function registerUser({ admin, auth, data }) {
 }
 
 module.exports = {
+  cleanOptionalBio,
   registerUser,
   sanitizeSmartProfile,
   updateProfile,

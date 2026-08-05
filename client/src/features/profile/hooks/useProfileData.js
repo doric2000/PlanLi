@@ -11,35 +11,42 @@ import {
 
 import { auth, db } from '../../../config/firebase';
 import { primeUserDataCache } from '../../../hooks/useUserData';
-import { calculateCredibilityScore, getCredibilityLevelLabel } from '../utils/credibility';
+import {
+  calculateContributionScore,
+  getDominantRecommendationCategory,
+  getTravelerStanding,
+} from '../utils/profileMetrics';
 
 const DEFAULT_STATS = {
-  trips: 0,
-  reviews: 0,
+  recommendations: 0,
+  routes: 0,
   likesReceived: 0,
-  credibilityScore: 0,
-  credibilityLabel: 'Level 1 Traveler',
+  contributionScore: 0,
+  standing: getTravelerStanding(0),
+  dominantCategory: null,
 };
 
 const buildDefaultUserData = (user) => ({
   displayName: 'Traveler',
   photoURL: null,
+  photoMedia: null,
   email: user?.email || '',
+  bio: '',
   isExpert: false,
   smartProfile: null,
 });
 
-const fetchTripsCount = async (uid) => {
+const fetchRoutesCount = async (uid) => {
   try {
-    const tripsQ = query(
+    const routesQ = query(
       collection(db, 'routes'),
       where('ownerId', '==', uid),
       where('status', '==', 'active')
     );
-    const tripsAgg = await getCountFromServer(tripsQ);
-    return tripsAgg.data().count || 0;
+    const routesAgg = await getCountFromServer(routesQ);
+    return routesAgg.data().count || 0;
   } catch (error) {
-    console.warn('Trips count failed:', error);
+    console.warn('Routes count failed:', error);
     return 0;
   }
 };
@@ -58,36 +65,45 @@ const fetchRecommendationStats = async (uid) => {
       likesReceived += Number(recommendationDoc.data()?.stats?.likeCount || 0);
     });
 
+    const recommendations = Array.isArray(recSnap.docs)
+      ? recSnap.docs.map((recommendationDoc) => ({
+        id: recommendationDoc.id,
+        ...recommendationDoc.data(),
+      }))
+      : [];
     return {
-      reviews: recSnap.size,
+      recommendations: recSnap.size,
       likesReceived,
+      dominantCategory: getDominantRecommendationCategory(recommendations),
     };
   } catch (error) {
     console.warn('Recommendations stats failed:', error);
     return {
-      reviews: 0,
+      recommendations: 0,
       likesReceived: 0,
+      dominantCategory: null,
     };
   }
 };
 
 const fetchProfileStats = async (uid) => {
-  const [trips, recommendationStats] = await Promise.all([
-    fetchTripsCount(uid),
+  const [routes, recommendationStats] = await Promise.all([
+    fetchRoutesCount(uid),
     fetchRecommendationStats(uid),
   ]);
 
-  const credibilityScore = calculateCredibilityScore({
-    recommendationsCount: recommendationStats.reviews,
+  const contributionScore = calculateContributionScore({
+    recommendations: recommendationStats.recommendations,
     likesReceived: recommendationStats.likesReceived,
   });
 
   return {
-    trips,
-    reviews: recommendationStats.reviews,
+    routes,
+    recommendations: recommendationStats.recommendations,
     likesReceived: recommendationStats.likesReceived,
-    credibilityScore,
-    credibilityLabel: getCredibilityLevelLabel(credibilityScore),
+    contributionScore,
+    standing: getTravelerStanding(contributionScore),
+    dominantCategory: recommendationStats.dominantCategory,
   };
 };
 
@@ -151,7 +167,9 @@ export function useProfileData({ uid, user }) {
         displayName:
           data?.displayName || data?.fullName || userDisplayName || 'Traveler',
         photoURL: data?.photoURL || userPhotoURL || null,
+        photoMedia: data?.photoMedia || null,
         email: isOwnProfile ? data?.email || userEmail || '' : '',
+        bio: data?.bio || '',
         isExpert: Boolean(data?.isExpert),
         smartProfile: data?.smartProfile || null,
       };
@@ -162,7 +180,9 @@ export function useProfileData({ uid, user }) {
         ...previousUserData,
         displayName: userDisplayName || previousUserData.displayName,
         photoURL: userPhotoURL || previousUserData.photoURL,
+        photoMedia: previousUserData.photoMedia || null,
         email: isOwnProfile ? userEmail || previousUserData.email : '',
+        bio: previousUserData.bio || '',
       };
     }
 

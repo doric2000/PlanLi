@@ -47,15 +47,31 @@ export const FormInput = ({
 	multiline = false,
 	style,
 	error,
+	helperText,
+	required = false,
+	rtl = false,
+	containerStyle,
+	inputRef,
 	...props
 }) => (
-	<View style={forms.inputWrapper}>
-		{label && <Text style={forms.label}>{label}</Text>}
+	<View style={[forms.inputWrapper, containerStyle]}>
+		{label && (
+			<Text style={[forms.label, rtl && { textAlign: "right", writingDirection: "rtl" }]}>
+				{label}{required ? " (חובה)" : ""}
+			</Text>
+		)}
+		{helperText && (
+			<Text style={{ color: "#6B7280", fontSize: 12, marginBottom: 6, textAlign: rtl ? "right" : undefined, writingDirection: rtl ? "rtl" : undefined }}>
+				{helperText}
+			</Text>
+		)}
 		<TextInput
+			ref={inputRef}
 			style={[
 				forms.input,
 				multiline && forms.inputMultiline,
 				error && forms.inputError,
+				rtl && { textAlign: "right", writingDirection: "rtl" },
 				style,
 			]}
 			placeholder={placeholder}
@@ -66,6 +82,13 @@ export const FormInput = ({
 			multiline={multiline}
 			{...props}
 		/>
-		{error && <Text style={forms.errorText}>{error}</Text>}
+		{error && (
+			<Text
+				style={[forms.errorText, rtl && { textAlign: "right", writingDirection: "rtl" }]}
+				accessibilityLiveRegion="polite"
+			>
+				{error}
+			</Text>
+		)}
 	</View>
 );

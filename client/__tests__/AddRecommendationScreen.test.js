@@ -176,7 +176,9 @@ describe('AddRecommendationScreen Integration Test', () => {
     const navigationMock = { 
       goBack: jest.fn(), 
       setOptions: jest.fn(), 
-      navigate: jest.fn() 
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
     };
     
     // Render the screen
@@ -187,10 +189,6 @@ describe('AddRecommendationScreen Integration Test', () => {
     // ------------------------------------------------
     // Step 2: Act (Simulate User Actions)
     // ------------------------------------------------
-
-    // 0. Add an image (optional in validation, but required by test requirements)
-    fireEvent.press(getByTestId('add-rec-image-picker'));
-    await waitFor(() => expect(mockPickImages).toHaveBeenCalled());
 
     // 1. Enter Title
     fireEvent.changeText(getByTestId('add-rec-title-input'), 'Best Pizza Ever');
@@ -207,8 +205,16 @@ describe('AddRecommendationScreen Integration Test', () => {
     );
     expect(mockUploadImages).not.toHaveBeenCalled();
 
+    fireEvent.press(getByTestId('add-rec-section-place-continue'));
+
     // 3. Enter Description
     fireEvent.changeText(getByTestId('add-rec-description-input'), 'Great cheese and crust!');
+
+    // Add an image (optional in validation, but required by test requirements)
+    fireEvent.press(getByTestId('add-rec-image-picker'));
+    await waitFor(() => expect(mockPickImages).toHaveBeenCalled());
+
+    fireEvent.press(getByTestId('add-rec-section-story-continue'));
 
     // 4. Select Main Category
     fireEvent.press(getByTestId('add-rec-category-0'));
@@ -217,6 +223,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     // We wait for the tags to appear (async UI update) then select 'מסעדה'.
     await waitFor(() => getByTestId('add-rec-tag-0'));
     fireEvent.press(getByTestId('add-rec-tag-0'));
+
+    fireEvent.press(getByTestId('add-rec-section-category-continue'));
 
     // 6. Select Budget
     fireEvent.press(getByTestId('add-rec-budget-2'));
@@ -257,6 +265,32 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     // Verify navigation back to the previous screen
     expect(navigationMock.goBack).toHaveBeenCalled();
+  });
+
+  it('create mode: protects an unfinished recommendation before leaving', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+    const { getByTestId } = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    fireEvent.changeText(getByTestId('add-rec-title-input'), 'טיוטת המלצה');
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(getByTestId('unsaved-discard-modal')).toBeTruthy();
   });
 
   it('edit mode: beforeRemove shows unsaved alert when dirty; כן dispatches action', async () => {

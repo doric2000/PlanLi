@@ -180,7 +180,7 @@ export default function StopEditorModal({
 						placeholder="למשל: תצפית, מסעדה, מפל..."
 						value={title}
 						onChangeText={setTitle}
-						textAlign="right"
+						rtl
 						testID="route-stop-title-input"
 					/>
 
@@ -199,23 +199,19 @@ export default function StopEditorModal({
 						onChangeText={setDescription}
 						multiline
 						style={styles.descriptionInput}
-						textAlign="right"
+						rtl
 					/>
 
 					<Text style={styles.photoLabel}>תמונה לתחנה</Text>
 					<ImagePickerBox
 						imageUri={image}
 						onPress={() => pickImage((uri) => setImage(uri))}
+						onRemove={clearImage}
+						maxImages={1}
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה לתחנה"}
 						style={styles.imagePickerSpacing}
 						loading={uploading}
 					/>
-
-					{!!image && (
-						<TouchableOpacity onPress={clearImage} style={styles.removeButton}>
-							<Text style={styles.removeText}>הסר תמונה</Text>
-						</TouchableOpacity>
-					)}
 				</ScrollView>
 			</View>
 		</Modal>

@@ -71,3 +71,22 @@ test('public smart profile rejects unsupported values and caps canonical arrays'
   assert.equal('vibe' in result, false);
   assert.equal('budget' in result, false);
 });
+
+test('public profile includes a short bio but never private account fields', () => {
+  const result = sanitizePublicProfile('user-bio', {
+    displayName: 'Dana',
+    email: 'private@example.com',
+    bio: '  ים, קפה וטיולים 🌊  ',
+    smartProfile: {
+      interests: ['food'],
+      vibe: ['relaxed'],
+      budget: 'premium',
+      travelParties: ['solo'],
+    },
+  });
+
+  assert.equal(result.bio, 'ים, קפה וטיולים 🌊');
+  assert.equal('email' in result, false);
+  assert.equal('budget' in result.smartProfile, false);
+  assert.equal('travelParties' in result.smartProfile, false);
+});

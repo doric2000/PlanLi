@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Pressable } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 // Firestore imports
 import { collection, getDocs, limit, query, collectionGroup, where } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
-import { colors, spacing, common, buttons, forms, tags, addRecommendationScreenStyles as styles } from '../../../styles';
+import { colors, spacing, common } from '../../../styles';
 
 // --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
-import CachedImage from '../../../components/CachedImage';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
-import ChipSelector from '../components/ChipSelector';
-import SegmentedControl from '../components/SegmentedControl';
 import SelectionModal from '../components/SelectionModal';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
+import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from '../../../components/GuidedForm';
+import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
+import { guidedFormStyles as guidedStyles } from '../../../components/guidedFormStyles';
 
 // --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
@@ -43,18 +43,22 @@ import {
   normalizeBudgetId,
   normalizeTagIds,
 } from '../../../constants/travelTaxonomy';
+import {
+  emptyValidation,
+  firstInvalidSection,
+  sectionErrorCount,
+  validateRecommendationForm,
+} from '../../../utils/guidedFormValidation';
 
 
 
-// --- Local Helper Component ---
-const LabeledInput = ({ label, style, ...props }) => (
-  <View style={[{ marginBottom: 16 }, style]}>
-    <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
-      {label}
-    </Text>
-    <FormInput textAlign="right" {...props} />
-  </View>
-);
+const RECOMMENDATION_SECTION_ORDER = ['place', 'story', 'category', 'fit'];
+const RECOMMENDATION_SECTION_FIELDS = {
+  place: ['title', 'location'],
+  story: ['description'],
+  category: ['category', 'selectedTags'],
+  fit: ['budget', 'audiences', 'vibes', 'environment', 'needsConfirmed'],
+};
 
 // function to get category label from ID
 const getCategoryLabel = (categoryId) => {
@@ -177,6 +181,24 @@ function buildFormComparable({
   });
 }
 
+const EMPTY_RECOMMENDATION_COMPARABLE = buildFormComparable({
+  title: '',
+  description: '',
+  category: '',
+  selectedTags: [],
+  budget: '',
+  audienceScope: 'selected',
+  audiences: [],
+  recommendationVibes: [],
+  recommendationEnvironment: '',
+  recommendationNeeds: [],
+  needsConfirmed: false,
+  selectedCountry: null,
+  selectedCity: null,
+  selectedPlace: null,
+  editableImageUris: [],
+});
+
 export default function AddRecommendationScreen({ navigation , route }) {
   // --- Initialization & Params ---
   const isEdit = route?.params?.mode === 'edit';
@@ -210,6 +232,11 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [submitting, setSubmitting] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
+  const [expandedSection, setExpandedSection] = useState('place');
+  const [validation, setValidation] = useState(() => emptyValidation());
+  const [optionalFitOpen, setOptionalFitOpen] = useState(false);
+  const scrollRef = useRef(null);
+  const sectionLayoutsRef = useRef({});
 
   // --- Exact Location Handling (local-first) ---
   const [locationQuery, setLocationQuery] = useState('');
@@ -317,8 +344,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
   );
 
   // Applies to any edit session (owner or admin editing another user's post).
-  const hasUnsavedChanges =
-    Boolean(isEdit && editItem && editSnapshotBaseline != null && editSnapshotBaseline !== formComparable);
+  const hasUnsavedChanges = isEdit
+    ? Boolean(editItem && editSnapshotBaseline != null && editSnapshotBaseline !== formComparable)
+    : formComparable !== EMPTY_RECOMMENDATION_COMPARABLE;
 
   const dismissUnsavedModal = useCallback(() => {
     setUnsavedModalVisible(false);
@@ -340,7 +368,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
   const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
     navigation,
-    guardActive: Boolean(isEdit && editItem),
+    guardActive: Boolean(!isEdit || editItem),
     sessionKey: `${Boolean(isEdit)}-${editingPostKey ?? ''}`,
     hasUnsavedChanges,
     submitting,
@@ -348,7 +376,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
   });
 
   useBackButton(navigation, {
-    title: isEdit ? 'עריכת המלצה' : 'יאלללה להמליץ!',
+    title: isEdit ? 'עריכת המלצה' : 'המלצה חדשה',
     onPress: handleHeaderBackPress,
   });
 
@@ -358,6 +386,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
       hydratedPostKeyRef.current = null;
       lastHydratedRouteParamsRef.current = null;
       setEditableImageUris([]);
+      setExpandedSection('place');
+      setValidation(emptyValidation());
+      setOptionalFitOpen(false);
     }
   }, [isEdit]);
 
@@ -437,6 +468,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
         .filter(Boolean)
     );
     setEditSnapshotBaseline(buildEditComparable(editItem));
+    setExpandedSection('place');
+    setValidation(emptyValidation());
+    setOptionalFitOpen(Boolean(editItem.facets?.needs?.length));
     hydratedPostKeyRef.current = editingPostKey;
     lastHydratedRouteParamsRef.current = buildEditRouteParams(editItem, editPostId);
   }, [
@@ -547,6 +581,113 @@ export default function AddRecommendationScreen({ navigation , route }) {
   useEffect(() => {
     if (!recommendationNeeds.length) setNeedsConfirmed(false);
   }, [recommendationNeeds.length]);
+
+  const validationValues = useMemo(() => ({
+    title,
+    description,
+    category,
+    selectedTags,
+    budget,
+    audienceScope,
+    audiences,
+    recommendationVibes,
+    recommendationEnvironment,
+    recommendationNeeds,
+    needsConfirmed,
+    selectedCountry,
+    selectedCity,
+    locationResolveError,
+    resolvingLocation,
+    attributeRequirements,
+  }), [
+    title,
+    description,
+    category,
+    selectedTags,
+    budget,
+    audienceScope,
+    audiences,
+    recommendationVibes,
+    recommendationEnvironment,
+    recommendationNeeds,
+    needsConfirmed,
+    selectedCountry,
+    selectedCity,
+    locationResolveError,
+    resolvingLocation,
+    attributeRequirements,
+  ]);
+
+  const scrollToSection = useCallback((sectionId) => {
+    const y = sectionLayoutsRef.current[sectionId];
+    if (typeof y === 'number') {
+      scrollRef.current?.scrollTo?.({ y: Math.max(0, y - spacing.sm), animated: true });
+    }
+  }, []);
+
+  const replaceSectionValidation = useCallback((sectionId, nextValidation) => {
+    setValidation((current) => {
+      const fields = { ...(current?.fields || {}) };
+      for (const field of RECOMMENDATION_SECTION_FIELDS[sectionId] || []) delete fields[field];
+      Object.assign(fields, nextValidation.fields);
+      const sections = { ...(current?.sections || {}) };
+      delete sections[sectionId];
+      if (nextValidation.sections[sectionId]?.length) sections[sectionId] = nextValidation.sections[sectionId];
+      return { fields, sections };
+    });
+  }, []);
+
+  const continueFromSection = useCallback((sectionId) => {
+    const nextValidation = validateRecommendationForm(validationValues, sectionId);
+    replaceSectionValidation(sectionId, nextValidation);
+    if (sectionErrorCount(nextValidation, sectionId)) {
+      setExpandedSection(sectionId);
+      scrollToSection(sectionId);
+      return false;
+    }
+    const currentIndex = RECOMMENDATION_SECTION_ORDER.indexOf(sectionId);
+    const nextSection = RECOMMENDATION_SECTION_ORDER[currentIndex + 1];
+    if (nextSection) {
+      setExpandedSection(nextSection);
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => scrollToSection(nextSection));
+      else scrollToSection(nextSection);
+    }
+    return true;
+  }, [replaceSectionValidation, scrollToSection, validationValues]);
+
+  const sectionIsComplete = useCallback((sectionId) => (
+    sectionErrorCount(validateRecommendationForm(validationValues, sectionId), sectionId) === 0
+  ), [validationValues]);
+
+  const categoryLabel = PARENT_CATEGORIES.find((item) => item.id === category)?.label || '';
+  const budgetLabel = POST_BUDGETS.find((item) => item.value === budget)?.postLabel || '';
+  const placeSummary = [title.trim(), selectedCity?.name || selectedPlace?.name].filter(Boolean).join(' · ');
+  const storySummary = description.trim()
+    ? `${description.trim().slice(0, 48)}${description.trim().length > 48 ? '…' : ''}${editableImageUris.length ? ` · ${editableImageUris.length} תמונות` : ''}`
+    : (editableImageUris.length ? `${editableImageUris.length} תמונות` : 'תיאור ותמונות');
+  const categorySummary = categoryLabel
+    ? `${categoryLabel}${selectedTags.length ? ` · ${selectedTags.length} תתי־קטגוריות` : ''}`
+    : 'קטגוריה ותתי־קטגוריות';
+  const fitSummary = [
+    budgetLabel,
+    audienceScope === 'all' ? 'מתאים לכולם' : (audiences.length ? `${audiences.length} קהלים` : ''),
+  ].filter(Boolean).join(' · ');
+
+  useEffect(() => {
+    setValidation((current) => {
+      const touchedSections = Object.keys(current?.sections || {});
+      if (!touchedSections.length) return current;
+      const next = emptyValidation();
+      for (const sectionId of touchedSections) {
+        const sectionValidation = validateRecommendationForm(validationValues, sectionId);
+        Object.assign(next.fields, sectionValidation.fields);
+        if (sectionValidation.sections[sectionId]?.length) {
+          next.sections[sectionId] = sectionValidation.sections[sectionId];
+        }
+      }
+      return next;
+    });
+  }, [validationValues]);
 
   const localCitiesSearchable = locationQuery.trim()
     ? (hasLoadedAllCitiesForSearch ? allCitiesForSearch : [])
@@ -738,36 +879,13 @@ const handleSubmit = async () => {
       return;
     }
 
-    if (locationResolveError) {
-      Alert.alert('שגיאה במיקום', 'אי אפשר לשמור את ההמלצה כל עוד יש שגיאה בבחירת המיקום.');
-      return;
-    }
-
-    if (resolvingLocation) {
-      Alert.alert('רק רגע', 'אנחנו עדיין טוענים את פרטי המיקום שבחרת.');
-      return;
-    }
-
-    // Basic form validation
-    if (!title || !description || !category || !selectedCountry?.id || !selectedCity?.id) {
-      Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
-      return;
-    }
-    if (!selectedTags.length || !budget ||
-      (audienceScope === 'selected' && audiences.length < 1)) {
-      Alert.alert('חסר מידע לסינון', 'בחרו תת־קטגוריה, רמת מחיר וקהל מתאים.');
-      return;
-    }
-    if (attributeRequirements.vibes && !recommendationVibes.length) {
-      Alert.alert('חסרה אווירה', 'בחרו לפחות אווירה אחת שמתארת את ההמלצה.');
-      return;
-    }
-    if (attributeRequirements.environment && !recommendationEnvironment) {
-      Alert.alert('חסרה סביבה', 'בחרו אם ההמלצה מתקיימת במקום סגור, בחוץ או בשילוב.');
-      return;
-    }
-    if (recommendationNeeds.length && !needsConfirmed) {
-      Alert.alert('נדרש אישור', 'אשרו שהמידע המעשי שסימנתם צוין או נבדק במפורש.');
+    const nextValidation = validateRecommendationForm(validationValues);
+    setValidation(nextValidation);
+    const invalidSection = firstInvalidSection(nextValidation, RECOMMENDATION_SECTION_ORDER);
+    if (invalidSection) {
+      setExpandedSection(invalidSection);
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => scrollToSection(invalidSection));
+      else scrollToSection(invalidSection);
       return;
     }
 
@@ -848,64 +966,50 @@ const handleSubmit = async () => {
   };
 
   // --- Render ---
+  const currentStep = Math.max(1, RECOMMENDATION_SECTION_ORDER.indexOf(expandedSection) + 1);
   return (
-    <View style={common.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        {/* 1. Image Picker */}
-        <ImagePickerBox
-          imageUris={editablePreviewUris}
-          onPress={handleAddImages}
-          placeholderText="הוסף תמונות מהמכשיר שלך (עד 5)"
-          imageFit="cover"
-          style={{ marginBottom: spacing.xl }}
-          testID="add-rec-image-picker"
+    <View style={[common.container, guidedStyles.screen]}>
+      <ScrollView
+        ref={scrollRef}
+        style={guidedStyles.scroll}
+        contentContainerStyle={guidedStyles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <GuidedFormHeader
+          currentStep={currentStep}
+          totalSteps={RECOMMENDATION_SECTION_ORDER.length}
+          title={isEdit ? 'עריכת ההמלצה' : 'בואו נבנה המלצה מעולה'}
+          intro="רק המידע הנחוץ מוצג בכל שלב. תמיד אפשר לחזור ולשנות."
+          testID="add-rec-guided-header"
         />
 
-        {editableImageUris.length > 0 ? (
-          <View style={styles.imagesRow}
+        <View onLayout={(event) => { sectionLayoutsRef.current.place = event.nativeEvent.layout.y; }}>
+          <GuidedFormSection
+            id="place"
+            index={1}
+            title="המקום"
+            summary={placeSummary || 'כותרת ומיקום מדויק'}
+            expanded={expandedSection === 'place'}
+            completed={sectionIsComplete('place')}
+            errorCount={sectionErrorCount(validation, 'place')}
+            onToggle={() => setExpandedSection((current) => current === 'place' ? null : 'place')}
+            onContinue={() => continueFromSection('place')}
+            testIDPrefix="add-rec-section"
           >
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imagesScroll}>
-              {editableImageUris.map((uri, index) => (
-                <View key={`${uri}:${index}`} style={styles.thumbWrap}>
-                  <CachedImage
-                    source={{ uri: editablePreviewUris[index] || uri }}
-                    style={styles.thumb}
-                    contentFit="cover"
-                    priority={index === 0 ? "normal" : "low"}
-                  />
-                  <Pressable onPress={() => removeImageAt(index)} style={styles.thumbRemove} hitSlop={10}>
-                    <Text style={styles.thumbRemoveText}>×</Text>
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-            {editableImageUris.length < 5 ? (
-              <TouchableOpacity
-                onPress={handleAddImages}
-                style={styles.addMoreBtn}
-                testID="add-rec-images-add-more"
-              >
-                <Text style={styles.addMoreText}>הוסף עוד</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* 2. Title Input */}
-        <LabeledInput
+        <FormInput
           label="כותרת"
+          required
+          rtl
           placeholder="למשל: 'המסעדה האיטלקית הכי טובה בעיר!'"
           value={title}
           onChangeText={setTitle}
+          error={validation.fields.title}
           testID="add-rec-title-input"
         />
 
-        {/* 3. Exact Location Selection (local-first) */}
-        <View style={{ marginBottom: spacing.xl }}>
-          <Text style={{ textAlign: 'right', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
-            מיקום מדויק
-          </Text>
+        <View style={guidedStyles.fieldGroup}>
+          <Text style={guidedStyles.fieldLabel}>מיקום מדויק (חובה)</Text>
+          <Text style={guidedStyles.fieldHelper}>חפשו ובחרו תוצאה כדי שנוכל לשייך את ההמלצה לעיר הנכונה</Text>
           <GooglePlacesInput
             mode="google"
             value={locationQuery}
@@ -926,6 +1030,11 @@ const handleSubmit = async () => {
             placeholder="חפש מקום / אטרקציה / מסעדה..."
             inputTestID="add-rec-location-input"
           />
+          {!!validation.fields.location && (
+            <Text style={guidedStyles.fieldError} accessibilityLiveRegion="polite">
+              {validation.fields.location}
+            </Text>
+          )}
 
           {false && !!(locationResolveError && (pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id) && (
             <TouchableOpacity
@@ -954,175 +1063,236 @@ const handleSubmit = async () => {
             </TouchableOpacity>
           )}
         </View>
+          </GuidedFormSection>
+        </View>
 
-        {/* 4. Description Input */}
-        <LabeledInput
-          label="תיאור"
+        <View onLayout={(event) => { sectionLayoutsRef.current.story = event.nativeEvent.layout.y; }}>
+          <GuidedFormSection
+            id="story"
+            index={2}
+            title="הסיפור והתמונות"
+            summary={storySummary}
+            expanded={expandedSection === 'story'}
+            completed={sectionIsComplete('story')}
+            errorCount={sectionErrorCount(validation, 'story')}
+            onToggle={() => setExpandedSection((current) => current === 'story' ? null : 'story')}
+            onContinue={() => continueFromSection('story')}
+            testIDPrefix="add-rec-section"
+          >
+        <FormInput
+          label="למה המקום מומלץ?"
+          required
+          rtl
           placeholder="תאר לנו למה אתה ממליץ על המקום הזה..."
           value={description}
           onChangeText={setDescription}
           multiline
           numberOfLines={4}
+          error={validation.fields.description}
           testID="add-rec-description-input"
         />
 
-        {/* 5. Category Selector - Displays Hebrew Labels but logic uses IDs */}
-        <ChipSelector
-          label="קטגוריה"
-          items={PARENT_CATEGORIES.map(c => c.label)}
-          selectedValue={PARENT_CATEGORIES.find(c => c.id === category)?.label || ''}
-          onSelect={(selectedLabel) => {
-            const selectedId = PARENT_CATEGORIES.find(c => c.label === selectedLabel)?.id;
-            handleCategoryChange(selectedId);
-          }}
-          multiSelect={false}
-          testIDPrefix="add-rec-category"
+        <Text style={guidedStyles.fieldLabel}>תמונות (רשות)</Text>
+        <Text style={guidedStyles.fieldHelper}>אפשר להוסיף עד חמש תמונות ולמחוק את התמונה המוצגת</Text>
+        <ImagePickerBox
+          imageUris={editablePreviewUris}
+          onPress={handleAddImages}
+          onRemove={removeImageAt}
+          maxImages={5}
+          placeholderText="הוספת תמונות"
+          imageFit="cover"
+          style={{ marginBottom: spacing.sm }}
+          testID="add-rec-image-picker"
         />
+          </GuidedFormSection>
+        </View>
 
-        {/* 6. Tags Selector - Dynamically filtered based on selected category */}
-        {category ? (
-          <ChipSelector
-            label="תגיות"
-            items={(TAG_OPTIONS_BY_CATEGORY[category] || []).map((option) => option.label)}
-            selectedValue={(TAG_OPTIONS_BY_CATEGORY[category] || [])
-              .filter((option) => selectedTags.includes(option.id))
-              .map((option) => option.label)}
-            onSelect={(label) => {
-              const tagId = (TAG_OPTIONS_BY_CATEGORY[category] || [])
-                .find((option) => option.label === label)?.id;
-              if (tagId) toggleTag(tagId);
-            }}
-            multiSelect={true}
-            testIDPrefix="add-rec-tag"
-          />
-        ) : (
-              <Text style={{ textAlign: 'center', fontSize: 14, marginBottom: 8 }}>
-               בחר קטגוריה כדי לראות תגיות
-              </Text>
-        )}
+        <View onLayout={(event) => { sectionLayoutsRef.current.category = event.nativeEvent.layout.y; }}>
+          <GuidedFormSection
+            id="category"
+            index={3}
+            title="קטגוריה וסוג"
+            summary={categorySummary}
+            expanded={expandedSection === 'category'}
+            completed={sectionIsComplete('category')}
+            errorCount={sectionErrorCount(validation, 'category')}
+            onToggle={() => setExpandedSection((current) => current === 'category' ? null : 'category')}
+            onContinue={() => continueFromSection('category')}
+            testIDPrefix="add-rec-section"
+          >
+            <RtlChoiceGroup
+              label="מה הכי מתאים להמלצה?"
+              helper="בחרו קטגוריה אחת. הרשימה מתחילה מימין."
+              options={PARENT_CATEGORIES}
+              selectedIds={category ? [category] : []}
+              onToggle={handleCategoryChange}
+              selectionMode="single"
+              variant="tile"
+              layout="responsive"
+              error={validation.fields.category}
+              testIDPrefix="add-rec-category"
+            />
+            {category ? (
+              <View style={guidedStyles.nestedPanel}>
+                <Text style={guidedStyles.nestedTitle}>תתי־קטגוריות · {categoryLabel}</Text>
+                <RtlChoiceGroup
+                  helper="אפשר לבחור יותר מאחת"
+                  options={TAG_OPTIONS_BY_CATEGORY[category] || []}
+                  selectedIds={selectedTags}
+                  onToggle={toggleTag}
+                  variant="chip"
+                  layout="wrap"
+                  error={validation.fields.selectedTags}
+                  testIDPrefix="add-rec-tag"
+                />
+              </View>
+            ) : (
+              <Text style={guidedStyles.fieldHelper}>אחרי בחירת קטגוריה יוצגו כאן האפשרויות המתאימות בלבד.</Text>
+            )}
+          </GuidedFormSection>
+        </View>
 
-        {/* 7. Budget Selector */}
-        <SegmentedControl
+        <View onLayout={(event) => { sectionLayoutsRef.current.fit = event.nativeEvent.layout.y; }}>
+          <GuidedFormSection
+            id="fit"
+            index={4}
+            title="למי זה מתאים"
+            summary={fitSummary || 'מחיר, קהל ומאפיינים'}
+            expanded={expandedSection === 'fit'}
+            completed={sectionIsComplete('fit')}
+            errorCount={sectionErrorCount(validation, 'fit')}
+            onToggle={() => setExpandedSection((current) => current === 'fit' ? null : 'fit')}
+            testIDPrefix="add-rec-section"
+          >
+        <RtlChoiceGroup
           label="רמת מחיר (חובה)"
-          items={POST_BUDGETS.map((option) => option.postLabel)}
-          selectedValue={POST_BUDGETS.find((option) => option.value === budget)?.postLabel || ''}
-          onSelect={(label) => {
-            const value = POST_BUDGETS.find((option) => option.postLabel === label)?.value;
-            if (value) setBudget(value);
-          }}
-          getItemTheme={getBudgetTheme}
+          options={POST_BUDGETS}
+          selectedIds={budget ? [budget] : []}
+          onToggle={setBudget}
+          selectionMode="single"
+          variant="segment"
+          getItemTheme={(label) => getBudgetTheme(label)}
+          error={validation.fields.budget}
           testIDPrefix="add-rec-budget"
         />
 
-        <SegmentedControl
+        <RtlChoiceGroup
           label="למי זה מתאים?"
-          items={['מתאים לכולם', 'בחירת קהלים']}
-          selectedValue={audienceScope === 'all' ? 'מתאים לכולם' : 'בחירת קהלים'}
-          onSelect={(label) => {
-            const nextScope = label === 'מתאים לכולם' ? 'all' : 'selected';
+          options={[
+            { id: 'all', label: 'מתאים לכולם' },
+            { id: 'selected', label: 'בחירת קהלים' },
+          ]}
+          selectedIds={[audienceScope]}
+          onToggle={(nextScope) => {
             setAudienceScope(nextScope);
             if (nextScope === 'all') setAudiences([]);
           }}
+          selectionMode="single"
+          variant="segment"
           testIDPrefix="add-rec-audience-scope"
         />
 
         {audienceScope === 'selected' ? (
-          <ChipSelector
+          <RtlChoiceGroup
             label="מתאים במיוחד למי? (חובה)"
-            items={TRAVEL_PARTIES.map((option) => option.label)}
-            selectedValue={TRAVEL_PARTIES.filter((option) => audiences.includes(option.value)).map((option) => option.label)}
-            onSelect={(label) => {
-              const value = TRAVEL_PARTIES.find((option) => option.label === label)?.value;
-              if (!value) return;
+            options={TRAVEL_PARTIES}
+            selectedIds={audiences}
+            onToggle={(value) => {
               setAudiences((current) => current.includes(value)
                 ? current.filter((item) => item !== value)
                 : [...current, value].slice(0, 4));
             }}
-            multiSelect
+            variant="chip"
+            error={validation.fields.audiences}
             testIDPrefix="add-rec-audience"
           />
         ) : null}
 
         {attributeRequirements.vibes ? (
-          <ChipSelector
+          <RtlChoiceGroup
             label="אווירה (חובה)"
-            items={VIBES.map((option) => option.label)}
-            selectedValue={VIBES.filter((option) => recommendationVibes.includes(option.value)).map((option) => option.label)}
-            onSelect={(label) => {
-              const value = VIBES.find((option) => option.label === label)?.value;
-              if (!value) return;
+            options={VIBES}
+            selectedIds={recommendationVibes}
+            onToggle={(value) => {
               setRecommendationVibes((current) => current.includes(value)
                 ? current.filter((item) => item !== value)
                 : [...current, value].slice(0, 3));
             }}
-            multiSelect
+            variant="chip"
+            error={validation.fields.vibes}
             testIDPrefix="add-rec-vibe"
           />
         ) : null}
 
         {attributeRequirements.environment ? (
-          <SegmentedControl
+          <RtlChoiceGroup
             label="סביבה (חובה)"
-            items={ENVIRONMENTS.map((option) => option.label)}
-            selectedValue={ENVIRONMENTS.find((option) => option.value === recommendationEnvironment)?.label || ''}
-            onSelect={(label) => setRecommendationEnvironment(
-              ENVIRONMENTS.find((option) => option.label === label)?.value || ''
-            )}
+            options={ENVIRONMENTS}
+            selectedIds={recommendationEnvironment ? [recommendationEnvironment] : []}
+            onToggle={setRecommendationEnvironment}
+            selectionMode="single"
+            variant="segment"
+            error={validation.fields.environment}
             testIDPrefix="add-rec-environment"
           />
         ) : null}
 
         {attributeRequirements.needs.length ? (
-          <View style={styles.taxonomySection}>
-            <ChipSelector
-              label="מידע מעשי ונגישות"
-              items={attributeRequirements.needs.map((option) => option.label)}
-              selectedValue={attributeRequirements.needs
-                .filter((option) => recommendationNeeds.includes(option.value))
-                .map((option) => option.label)}
-              onSelect={(label) => {
-                const value = attributeRequirements.needs.find((option) => option.label === label)?.value;
-                if (!value) return;
-                setRecommendationNeeds((current) => current.includes(value)
-                  ? current.filter((item) => item !== value)
-                  : [...current, value]);
-              }}
-              multiSelect
-              testIDPrefix="add-rec-need"
-            />
-            {recommendationNeeds.length ? (
-              <TouchableOpacity
-                style={styles.taxonomyToggle}
-                onPress={() => setNeedsConfirmed((current) => !current)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: needsConfirmed }}
-                testID="add-rec-needs-confirmed"
-              >
-                <Text style={styles.taxonomyToggleText}>
-                  {needsConfirmed ? '✓ ' : '○ '}אישרתי שהמידע הזה צוין או נבדק במפורש
-                </Text>
-              </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={guidedStyles.optionalToggle}
+              onPress={() => setOptionalFitOpen((current) => !current)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: optionalFitOpen }}
+              testID="add-rec-optional-toggle"
+            >
+              <Text style={guidedStyles.optionalToggleText}>מידע מעשי ונגישות (רשות)</Text>
+              <Text style={guidedStyles.optionalToggleText}>{optionalFitOpen ? '−' : '+'}</Text>
+            </TouchableOpacity>
+            {optionalFitOpen ? (
+              <View style={guidedStyles.nestedPanel}>
+                <RtlChoiceGroup
+                  helper="סמנו רק מידע שנבדק או צוין במפורש"
+                  options={attributeRequirements.needs}
+                  selectedIds={recommendationNeeds}
+                  onToggle={(value) => {
+                    setRecommendationNeeds((current) => current.includes(value)
+                      ? current.filter((item) => item !== value)
+                      : [...current, value]);
+                  }}
+                  variant="chip"
+                  testIDPrefix="add-rec-need"
+                />
+                {recommendationNeeds.length ? (
+                  <TouchableOpacity
+                    style={guidedStyles.checkboxRow}
+                    onPress={() => setNeedsConfirmed((current) => !current)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: needsConfirmed }}
+                    testID="add-rec-needs-confirmed"
+                  >
+                    <View style={[guidedStyles.checkboxBox, needsConfirmed && guidedStyles.checkboxBoxChecked]}>
+                      {needsConfirmed ? <Text style={guidedStyles.checkboxCheck}>✓</Text> : null}
+                    </View>
+                    <Text style={guidedStyles.checkboxText}>אישרתי שהמידע הזה צוין או נבדק במפורש</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {!!validation.fields.needsConfirmed && <Text style={guidedStyles.fieldError}>{validation.fields.needsConfirmed}</Text>}
+              </View>
             ) : null}
-          </View>
+          </>
         ) : null}
-
-        {/* 8. Submit Button */}
-        <TouchableOpacity
-          style={[buttons.submit, submitting && buttons.disabled]}
-          onPress={handleSubmit}
-          disabled={submitting || resolvingLocation || !!locationResolveError}
-          testID="add-rec-submit"
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={buttons.submitText}>
-              {isEdit ? 'שמור שינויים' : 'פרסם המלצה'}
-            </Text>
-          )}
-        </TouchableOpacity>
-
+          </GuidedFormSection>
+        </View>
       </ScrollView>
+
+      <GuidedFormFooter
+        label={isEdit ? 'שמור שינויים' : 'פרסם המלצה'}
+        onPress={handleSubmit}
+        loading={submitting}
+        disabled={submitting}
+        testID="add-rec-submit"
+      />
 
       {false && <SelectionModal
         visible={countryPickerVisible}

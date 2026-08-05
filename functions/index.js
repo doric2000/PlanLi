@@ -36,6 +36,8 @@ const {
 } = require('./socialService');
 const { deleteContent, requestAccountDeletion } = require('./deletionService');
 const { syncCountryMetadata } = require('./countryMetadata');
+const { syncAirportFacts } = require('./airportFacts');
+const { getDestinationOverview } = require('./destinationOverviewService');
 const {
   cleanupPreparedMedia,
   markMediaClaimed,
@@ -51,6 +53,7 @@ const MEDIA_SERVICE_ACCOUNT =
   'planli-media-functions@planli-f0b12.iam.gserviceaccount.com';
 const googleMapsKey = defineSecret('GOOGLE_MAPS_KEY');
 const restCountriesKey = defineSecret('REST_COUNTRIES_KEY');
+const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
 const mediaStorageBucket = defineString('MEDIA_STORAGE_BUCKET', {
   description: 'European Cloud Storage bucket used for PlanLi media.',
   default: 'planli-f0b12-media-eu',
@@ -184,6 +187,15 @@ exports.getPersonalizedRoutes = callable(
   })
 );
 
+exports.getDestinationOverview = callable(
+  { timeoutSeconds: 30, secrets: [openWeatherKey] },
+  (request) => getDestinationOverview({
+    admin,
+    data: request.data,
+    weatherApiKey: openWeatherKey.value(),
+  })
+);
+
 exports.recordDiscoverySignal = callable({}, (request) =>
   recordDiscoverySignal({ admin, auth: request.auth, data: request.data })
 );
@@ -254,6 +266,26 @@ exports.syncCountryMetadataScheduled = onSchedule(
       processed: result.processed,
       changed: result.changed,
       failed: result.failed,
+    });
+  }
+);
+
+exports.syncAirportFactsScheduled = onSchedule(
+  {
+    schedule: 'every monday 02:00',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    memory: '512MiB',
+    timeoutSeconds: 540,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const result = await syncAirportFacts({ admin, apply: true });
+    console.log('Airport facts sync complete.', {
+      airports: result.airports,
+      processed: result.processed,
+      changed: result.changed,
+      sourceUpdatedAt: result.sourceUpdatedAt,
     });
   }
 );

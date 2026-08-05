@@ -29,6 +29,7 @@ export const googlePlacesInput = StyleSheet.create({
 		height: '100%',
 		color: colors.textPrimary,
 		textAlign: 'right',
+		writingDirection: 'rtl',
 		paddingRight: spacing.xxxl + spacing.md,
 	},
 	loader: {
@@ -63,18 +64,35 @@ export const googlePlacesInput = StyleSheet.create({
 		textAlign: 'right',
 	},
 	listItem: {
-		flexDirection: 'row',
+		flexDirection: 'row-reverse',
 		alignItems: 'center',
 		padding: spacing.md,
 		borderBottomWidth: 1,
 		borderBottomColor: colors.borderLight,
 	},
 	locationIcon: {
-		marginRight: spacing.sm,
+		marginLeft: spacing.sm,
 	},
 	listText: {
+		flex: 1,
 		fontSize: 14,
 		color: colors.textPrimary,
+		textAlign: 'right',
+		writingDirection: 'rtl',
+	},
+	mainText: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: colors.textPrimary,
+		textAlign: 'right',
+		writingDirection: 'rtl',
+	},
+	subText: {
+		marginTop: 2,
+		fontSize: 12,
+		color: colors.textSecondary,
+		textAlign: 'right',
+		writingDirection: 'rtl',
 	},
 	fallbackContainer: {
 		marginTop: spacing.sm,

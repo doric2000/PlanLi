@@ -1,12 +1,17 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
+import {
+  normalizeProfileBio,
+  validateProfileBio,
+} from '../features/profile/utils/profileBio';
 
 let updateProfileCallable;
 let registerUserCallable;
 
 const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'needs'];
 const PROFILE_SCALAR_FIELDS = ['budget'];
+const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'];
 
 const sortedUnique = (values) => Array.from(new Set(Array.isArray(values) ? values : [])).sort();
 
@@ -49,7 +54,30 @@ export const saveProfile = async (
   { completeSmartProfile = false, verifySmartProfile = true } = {}
 ) => {
   updateProfileCallable ||= httpsCallable(cloudFunctions, 'updateProfile');
-  const response = await updateProfileCallable({ ...fields, completeSmartProfile });
+  const payload = Object.fromEntries(
+    PROFILE_UPDATE_FIELDS
+      .filter((field) => field === 'completeSmartProfile'
+        ? completeSmartProfile !== undefined
+        : Object.prototype.hasOwnProperty.call(fields || {}, field))
+      .map((field) => [field, field === 'completeSmartProfile' ? completeSmartProfile : fields[field]])
+  );
+  if (Object.prototype.hasOwnProperty.call(fields || {}, 'bio')) {
+    const bio = normalizeProfileBio(fields.bio);
+    const error = validateProfileBio(fields.bio);
+    if (error) throw new Error(error);
+    payload.bio = bio;
+  }
+  let response;
+  try {
+    response = await updateProfileCallable(payload);
+  } catch (error) {
+    if (/unsupported field|שדה שאינו נתמך/i.test(String(error?.message || ''))) {
+      const translated = new Error('שירות הפרופיל אינו מעודכן לעדכון Bio. יש לפרוס את Functions החדשים ולנסות שוב.');
+      translated.code = error?.code || 'functions/invalid-argument';
+      throw translated;
+    }
+    throw error;
+  }
   if (!fields?.smartProfile || !verifySmartProfile) return response.data;
   const smartProfile = await readBackSmartProfile(fields.smartProfile, {
     complete: completeSmartProfile,
