@@ -104,6 +104,7 @@ describe('profile presentation', () => {
 
     expect(screen.getByText(/גלוי לקהילת PlanLi/)).toBeTruthy();
     fireEvent.changeText(screen.getByLabelText('משפט פרופיל'), 'חדשה');
+    expect(screen.getByText('4/160')).toBeTruthy();
     fireEvent.press(screen.getByText('שמירה'));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith('חדשה'));
   });

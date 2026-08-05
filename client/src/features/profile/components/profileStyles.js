@@ -630,6 +630,9 @@ export function createProfileStyles(insets = {}, width = 390) {
       justifyContent: 'flex-end',
       backgroundColor: 'rgba(15,23,42,0.42)',
     },
+    modalKeyboardAvoiding: {
+      flex: 1,
+    },
     modalCard: {
       width: '100%',
       maxWidth: 620,
