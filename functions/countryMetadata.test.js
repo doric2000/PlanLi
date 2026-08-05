@@ -9,10 +9,16 @@ const {
   syncCountryMetadata,
 } = require('./countryMetadata');
 
+const MYANMAR_TRAVEL_FACTS = {
+  languages: [{ code: 'my', labelHe: 'בורמזית' }],
+  callingCodes: ['+95'],
+};
+
 test('local metadata supplies Myanmar currency and region without network defaults', () => {
   assert.deepEqual(getLocalCountryMetadata('MM'), {
     region: 'Asia',
     currencyCode: 'MMK',
+    ...MYANMAR_TRAVEL_FACTS,
   });
 });
 
@@ -29,6 +35,7 @@ test('REST Countries v5 parser validates the requested ISO code', () => {
   assert.deepEqual(parseRestCountriesMetadata(payload, 'MM'), {
     region: 'Asia',
     currencyCode: 'MMK',
+    ...MYANMAR_TRAVEL_FACTS,
   });
   assert.throws(
     () => parseRestCountriesMetadata(payload, 'IL'),
@@ -54,10 +61,14 @@ test('a country with no official currency keeps an explicit null currency', () =
   assert.deepEqual(parseRestCountriesMetadata(payload, 'AQ'), {
     region: 'Antarctica',
     currencyCode: null,
+    languages: [],
+    callingCodes: ['+672'],
   });
   assert.deepEqual(getLocalCountryMetadata('AQ'), {
     region: 'Antarctica',
     currencyCode: null,
+    languages: [],
+    callingCodes: ['+672'],
   });
 });
 
@@ -88,6 +99,7 @@ test('live API metadata is preferred when valid', async () => {
     {
       region: 'Updated Asia',
       currencyCode: 'MMK',
+      ...MYANMAR_TRAVEL_FACTS,
       source: 'rest-countries-v5',
     }
   );
@@ -200,15 +212,13 @@ test('scheduled sync changes only country metadata without support collections',
   });
 
   assert.equal(result.changed, 1);
-  assert.deepEqual(
-    admin.documents.get('countries/מיאנמר (בורמה)'),
-    {
-      name: 'מיאנמר (בורמה)',
-      code: 'MM',
-      region: 'Asia',
-      currencyCode: 'MMK',
-    }
-  );
+  const stored = admin.documents.get('countries/מיאנמר (בורמה)');
+  assert.equal(stored.region, 'Asia');
+  assert.equal(stored.currencyCode, 'MMK');
+  assert.deepEqual(stored.travelFacts.languages, MYANMAR_TRAVEL_FACTS.languages);
+  assert.deepEqual(stored.travelFacts.callingCodes, MYANMAR_TRAVEL_FACTS.callingCodes);
+  assert.equal(stored.travelFacts.source, 'countries-list');
+  assert.match(stored.travelFacts.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(
     [...admin.documents.keys()].some(
       (path) =>

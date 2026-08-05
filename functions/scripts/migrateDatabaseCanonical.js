@@ -206,6 +206,7 @@ async function buildPlan(db, source) {
       code: data.code || null,
       region: data.region || null,
       currencyCode: data.currencyCode ?? null,
+      travelFacts: data.travelFacts || undefined,
       status: 'active',
       updatedAt: data.updatedAt || data.createdAt || admin.firestore.Timestamp.now(),
     });
@@ -238,6 +239,9 @@ async function buildPlan(db, source) {
       imageUrl: data.imageUrl || null,
       coordinates: data.coordinates || null,
       closestAirport: data.closestAirport || null,
+      travelFacts: data.travelFacts || (data.closestAirport
+        ? { closestAirport: data.closestAirport }
+        : undefined),
       countryName: countryDataById.get(countryId)?.name || '',
       status: 'active',
       stats: { recommendationCount: 0 },

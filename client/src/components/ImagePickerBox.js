@@ -27,6 +27,8 @@ export const ImagePickerBox = ({
   disabled = false,
   loading = false,
   testID,
+  onRemove,
+  maxImages = 5,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
 
@@ -190,9 +192,22 @@ export const ImagePickerBox = ({
             <Ionicons name={iconName} size={18} color="#FFFFFF" />
           </TouchableOpacity>
 
-          {count > 1 ? (
+          {typeof onRemove === 'function' ? (
+            <TouchableOpacity
+              style={styles.removeOverlayBtn}
+              onPress={() => onRemove(activeIndex)}
+              disabled={disabled}
+              activeOpacity={0.8}
+              accessibilityLabel="הסר תמונה"
+              testID={testID ? `${testID}-remove` : undefined}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : null}
+
+          {count > 1 || maxImages > 1 ? (
             <View style={styles.countBadge} pointerEvents="none">
-              <Text style={styles.countText}>{count}/5</Text>
+              <Text style={styles.countText}>{count}/{maxImages}</Text>
             </View>
           ) : null}
         </View>

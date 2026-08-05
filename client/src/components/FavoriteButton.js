@@ -14,7 +14,14 @@ import { colors, common } from '../styles';
  * @param {Object} [props.style] - Additional styles to apply
  * @param {Object} [props.snapshotData] - Snapshot data used by legacy callers; the server builds the canonical preview
  */
-const FavoriteButton = ({ type, id, variant = 'light', style, snapshotData = {} }) => {
+const FavoriteButton = ({
+  type,
+  id,
+  variant = 'light',
+  style,
+  snapshotData = {},
+  accessibilityLabel = 'שמירה במועדפים',
+}) => {
   const { isFavorite, toggleFavorite, loading: saving } = useFavorite(type, id, snapshotData);
 
   const getButtonStyle = () => {
@@ -39,6 +46,9 @@ const FavoriteButton = ({ type, id, variant = 'light', style, snapshotData = {} 
       style={getButtonStyle()}
       onPress={toggleFavorite}
       disabled={saving}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected: isFavorite, disabled: saving }}
     >
       <Ionicons
         name={isFavorite ? "bookmark" : "bookmark-outline"}

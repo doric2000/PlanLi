@@ -104,6 +104,54 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
     mockRemoveUploadedImage.mockResolvedValue();
   });
 
+  it('guides a new route from basics to the day builder', async () => {
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const { getByTestId, queryByTestId } = render(
+      <AddRoutesScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    expect(queryByTestId('route-section-days-continue')).toBeNull();
+    fireEvent.changeText(getByTestId('route-title-input'), 'מסלול קצר');
+    fireEvent.changeText(getByTestId('route-days-input'), '2');
+    fireEvent.changeText(getByTestId('route-distance-input'), '18');
+    fireEvent.changeText(getByTestId('route-description-input'), 'מסלול נעים ליומיים');
+    fireEvent.press(getByTestId('route-section-basics-continue'));
+
+    await waitFor(() => expect(getByTestId('route-section-days-continue')).toBeTruthy());
+  });
+
+  it('protects unsaved work when creating a new route', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+    const { getByTestId } = render(
+      <AddRoutesScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    fireEvent.changeText(getByTestId('route-title-input'), 'טיוטת מסלול');
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(getByTestId('route-unsaved-discard-modal')).toBeTruthy();
+  });
+
   it('beforeRemove shows unsaved modal when dirty; כן dispatches action', async () => {
     let beforeRemoveHandler;
     const navigationMock = {

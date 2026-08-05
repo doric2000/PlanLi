@@ -184,12 +184,13 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 				>
 					<FormInput
 						label="סיפור היום"
+						helperText="אפשר לכתוב בקצרה; את סדר הביקור מנהלים בתחנות שמתחת."
 						placeholder="מה עשית היום? איפה ביקרת?"
 						value={description}
 						onChangeText={setDescription}
 						multiline
 						style={styles.descriptionInput}
-						textAlign="right"
+						rtl
 					/>
 
 					<View style={styles.stopsSection}>
@@ -265,16 +266,12 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 					<ImagePickerBox
 						imageUri={image}
 						onPress={() => pickImage((uri) => setImage(uri))}
+						onRemove={clearImage}
+						maxImages={1}
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
 						style={styles.imagePickerSpacing}
 						loading={uploading}
 					/>
-
-					{!!image && (
-						<TouchableOpacity onPress={clearImage} style={styles.removeBtn}>
-							<Text style={styles.removeText}>הסר תמונה</Text>
-						</TouchableOpacity>
-					)}
 				</ScrollView>
 
 				<StopEditorModal

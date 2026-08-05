@@ -265,9 +265,12 @@ The server secrets are configured from the repository root:
 ```powershell
 firebase functions:secrets:set GOOGLE_MAPS_KEY --project planli-f0b12
 firebase functions:secrets:set REST_COUNTRIES_KEY --project planli-f0b12
+firebase functions:secrets:set OPENWEATHER_API_KEY --project planli-f0b12
 ```
 
 `GOOGLE_MAPS_KEY` must be restricted to Places and Geocoding APIs.
+`OPENWEATHER_API_KEY` is used only by the server-side destination overview;
+the client does not call the weather provider directly.
 
 ## Maintenance and recovery
 
@@ -288,6 +291,14 @@ npm run migrate-storage-eu -- --restore-source --apply --resume
 
 # Verify canonical Firestore data or resume an interrupted migration.
 npm run migrate-database
+
+# Preview and apply country language/calling-code enrichment.
+npm run sync-country-metadata
+npm run sync-country-metadata -- --apply
+
+# Preview and apply nearest-airport facts from OurAirports.
+npm run sync-airport-facts
+npm run sync-airport-facts -- --apply
 npm run migrate-database -- --apply --resume
 
 # Detect or remove orphan favorites.

@@ -342,6 +342,17 @@ export const imagePickerBoxStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  removeOverlayBtn: {
+    position: 'absolute',
+    left: 10,
+    bottom: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(153,27,27,0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dots: {
     position: 'absolute',
     bottom: 10,
