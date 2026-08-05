@@ -1,6 +1,10 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
+import {
+  normalizeProfileBio,
+  validateProfileBio,
+} from '../features/profile/utils/profileBio';
 
 let updateProfileCallable;
 let registerUserCallable;
@@ -49,7 +53,14 @@ export const saveProfile = async (
   { completeSmartProfile = false, verifySmartProfile = true } = {}
 ) => {
   updateProfileCallable ||= httpsCallable(cloudFunctions, 'updateProfile');
-  const response = await updateProfileCallable({ ...fields, completeSmartProfile });
+  const payload = { ...fields, completeSmartProfile };
+  if (Object.prototype.hasOwnProperty.call(fields || {}, 'bio')) {
+    const bio = normalizeProfileBio(fields.bio);
+    const error = validateProfileBio(fields.bio);
+    if (error) throw new Error(error);
+    payload.bio = bio;
+  }
+  const response = await updateProfileCallable(payload);
   if (!fields?.smartProfile || !verifySmartProfile) return response.data;
   const smartProfile = await readBackSmartProfile(fields.smartProfile, {
     complete: completeSmartProfile,

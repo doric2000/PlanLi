@@ -11,6 +11,20 @@ function compactObject(value) {
   );
 }
 
+function sanitizePublicBio(value) {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .split('\n')
+    .slice(0, 2)
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+  if (!normalized) return undefined;
+  return Array.from(normalized).slice(0, 160).join('');
+}
+
 function sanitizePublicSmartProfile(smartProfile) {
   if (!smartProfile || typeof smartProfile !== 'object') return null;
 
@@ -46,6 +60,7 @@ function sanitizePublicProfile(userId, data = {}) {
       data.photoMedia && typeof data.photoMedia === 'object'
         ? data.photoMedia
         : null,
+    bio: sanitizePublicBio(data.bio),
     isExpert: data.isExpert === true,
     smartProfile: sanitizePublicSmartProfile(data.smartProfile),
   });
@@ -80,6 +95,7 @@ module.exports = {
   PUBLIC_SMART_PROFILE_FIELDS,
   publicProfileProjectionChanged,
   sanitizePublicProfile,
+  sanitizePublicBio,
   sanitizePublicSmartProfile,
   syncPublicProfile,
 };

@@ -46,6 +46,19 @@ function safeId(value, fallback) {
   return text && !text.includes('/') && text.length <= 180 ? text : fallback;
 }
 
+function canonicalBio(value) {
+  if (typeof value !== 'string') return '';
+  const normalized = value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .split('\n')
+    .slice(0, 2)
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+  return Array.from(normalized).slice(0, 160).join('');
+}
+
 function legacyDestinationKey(countryId, cityId) {
   return `${String(countryId || '').trim()}/${String(cityId || '').trim()}`;
 }
@@ -448,12 +461,14 @@ async function buildPlan(db, source) {
     if (data.photoURL && !photoMedia && data.photoMeta) {
       issues.push(`User ${userSnapshot.id} still needs canonical media migration.`);
     }
+    const bio = canonicalBio(data.bio);
     const user = compact({
       uid: userSnapshot.id,
       email: data.email || '',
       displayName: data.displayName || 'Traveler',
       photoURL: photoMedia?.feed?.url || data.photoURL || null,
       photoMedia,
+      ...(bio ? { bio } : {}),
       smartProfile: data.smartProfile || null,
       isExpert: Boolean(data.isExpert),
       credibilityScore: Number(data.credibilityScore || 0),
@@ -469,6 +484,7 @@ async function buildPlan(db, source) {
       displayName: user.displayName,
       photoURL: user.photoURL,
       photoMedia: user.photoMedia || null,
+      ...(user.bio ? { bio: user.bio } : {}),
       isExpert: user.isExpert,
       smartProfile: {
         interests: Array.isArray(smartProfile.interests) ? smartProfile.interests.slice(0, 30) : [],
@@ -748,6 +764,7 @@ if (require.main === module) {
 
 module.exports = {
   buildPlan,
+  canonicalBio,
   canonicalAsset,
   compact,
   legacyDestinationKey,

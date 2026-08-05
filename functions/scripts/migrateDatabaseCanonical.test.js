@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const admin = require('firebase-admin');
 const {
+  canonicalBio,
   canonicalAsset,
   compact,
   legacyDestinationKey,
@@ -44,6 +45,12 @@ test('document IDs reject path separators and media requires all variants', () =
     thumb: { url: 'thumb' },
   };
   assert.equal(canonicalAsset(asset), asset);
+});
+
+test('canonical migration preserves a clean public bio without splitting unicode', () => {
+  assert.equal(canonicalBio('  ים 🌊  \r\n  קפה  \nשורה שלישית'), 'ים 🌊\nקפה');
+  assert.equal(canonicalBio('🌍'.repeat(161)), '🌍'.repeat(160));
+  assert.equal(canonicalBio('   '), '');
 });
 
 test('compact preserves Firestore atomic values instead of flattening them', () => {
