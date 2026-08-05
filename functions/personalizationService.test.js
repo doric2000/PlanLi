@@ -33,6 +33,7 @@ const item = {
     audiences: ['couple'],
     vibes: ['romantic'],
     needs: ['vegetarian'],
+	needsScope: 'recommendation',
     budgetLevel: 'balanced',
   },
 };
@@ -128,13 +129,10 @@ test('manual filters stay hard constraints and reject malformed values', () => {
   }), {
     categoryIds: ['food'],
     subcategoryIds: ['restaurant'],
-    interestIds: [],
     audienceIds: [],
     vibeIds: [],
-    travelerStyleIds: [],
     needIds: [],
     budgetLevels: ['balanced'],
-    seasons: [],
     environments: [],
   });
   assert.throws(() => cleanFilters({ tags: [42] }), /subcategoryIds must be a string/);
@@ -144,7 +142,6 @@ test('manual filters stay hard constraints and reject malformed values', () => {
 test('route filters use OR within each group and AND between groups', () => {
   const filters = cleanFilters({
     categoryIds: ['nature', 'food'],
-    interestIds: ['hiking', 'food'],
     transportModeIds: ['car', 'walking'],
     difficultyIds: ['easy', 'moderate'],
     durationDays: { min: 2, max: 5 },
@@ -167,7 +164,10 @@ test('verified practical needs are hard constraints and missing metadata never m
   const filters = cleanFilters({ needIds: ['kosher', 'vegan'] });
   const base = { categoryId: 'food', tags: [], facets: { interests: ['food'], needs: [] } };
   assert.equal(matchesFilters(base, filters), false);
-  assert.equal(matchesFilters({ ...base, facets: { ...base.facets, needs: ['vegan'] } }, filters), true);
+	assert.equal(matchesFilters({
+		...base,
+		facets: { ...base.facets, needs: ['vegan'], needsScope: 'recommendation' },
+	}, filters), true);
 });
 
 test('global destination selection allows five OR choices while context remains hard', () => {

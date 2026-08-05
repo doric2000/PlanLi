@@ -78,3 +78,21 @@ test('taxonomy IDs and cross-references are unique and valid', () => {
     assert.ok(mappedInterests.has(interest.id), `${interest.id} is not mapped from any content category or subcategory`);
   }
 });
+
+test('recommendation attribute rules reference only canonical subcategories and needs', () => {
+	const taxonomy = require('./travelTaxonomy.generated.json');
+	assert.equal(taxonomy.version, 4);
+	const tagIds = new Set(taxonomy.tags.map((tag) => tag.id));
+	const needIds = new Set(taxonomy.needs.map((need) => need.id));
+	const rules = taxonomy.contentAttributeRules?.recommendations;
+	assert.ok(rules);
+	for (const tagId of [...rules.vibeTagIds, ...rules.environmentTagIds]) {
+		assert.ok(tagIds.has(tagId), `attribute rules contain unknown tag ${tagId}`);
+	}
+	for (const [needId, supportedTags] of Object.entries(rules.needTagIds || {})) {
+		assert.ok(needIds.has(needId), `attribute rules contain unknown need ${needId}`);
+		for (const tagId of supportedTags) {
+			assert.ok(tagIds.has(tagId), `${needId} references unknown tag ${tagId}`);
+		}
+	}
+});

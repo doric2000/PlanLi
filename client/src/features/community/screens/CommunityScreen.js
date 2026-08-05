@@ -21,13 +21,20 @@ import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRe
 import { useSmartProfile } from '../../../hooks/useSmartProfile';
 
 // --- Global Styles ---
-import { colors, common, community, communityScreenStyles as styles } from '../../../styles';
+import {
+  colors,
+  common,
+  community,
+  communityScreenStyles as styles,
+  discoveryFilterTriggerStyles as filterUiStyles,
+} from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
 import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
+import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -148,6 +155,7 @@ export default function CommunityScreen({ navigation }) {
   }, [mapPins, mapOpen]);
 
   const focusMapOnPins = filters.destinations.length > 0 || Boolean(filters.query.trim());
+  const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
 
   const renderTopArea = () => (
     <LinearGradient
@@ -187,9 +195,14 @@ export default function CommunityScreen({ navigation }) {
           onPress={() => setFilterModalVisible(true)}
           style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
           accessibilityRole="button"
-          accessibilityLabel="חיפוש"
+          accessibilityLabel="סינון"
         >
           <Ionicons name="filter" size={19} color="#FFFFFF" />
+          {activeFilterCount > 0 && (
+            <View style={filterUiStyles.badge}>
+              <Text style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <View style={styles.searchPill}>
@@ -225,7 +238,7 @@ export default function CommunityScreen({ navigation }) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
       {/* --- ACTIVE FILTERS BAR --- */}
-      <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} />
+      <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
 
       {mapOpen && (
         <View style={community.inlineMapSection}>
@@ -270,6 +283,17 @@ export default function CommunityScreen({ navigation }) {
                 <Text style={common.emptyText}>{error
                   ? 'לא הצלחנו לטעון תוצאות. משכו מטה כדי לנסות שוב.'
                   : isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
+                {isFiltered && (
+                  <View style={filterUiStyles.emptyActions}>
+                    <TouchableOpacity style={[filterUiStyles.emptyAction, filterUiStyles.emptyActionPrimary]}
+                      onPress={() => setFilterModalVisible(true)} accessibilityRole="button">
+                      <Text style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={filterUiStyles.emptyAction} onPress={clearFilters} accessibilityRole="button">
+                      <Text style={filterUiStyles.emptyActionText}>נקה הכול</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             }
           />
@@ -301,10 +325,6 @@ export default function CommunityScreen({ navigation }) {
         filters={filters}
         onApply={(next) => {
           updateFilters(next);
-          setFilterModalVisible(false);
-        }}
-        onClear={() => {
-          clearFilters();
           setFilterModalVisible(false);
         }}
         onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile)}

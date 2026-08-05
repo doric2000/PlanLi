@@ -222,7 +222,12 @@ describe('AddRecommendationScreen Integration Test', () => {
     // 6. Select Budget
     fireEvent.press(getByTestId('add-rec-budget-2'));
 
-    // 7. Submit Form
+	// 7. Select the factual attributes required for a restaurant recommendation.
+	fireEvent.press(getByTestId('add-rec-audience-0'));
+	fireEvent.press(getByTestId('add-rec-vibe-0'));
+	fireEvent.press(getByTestId('add-rec-environment-0'));
+
+	// 8. Submit Form
     fireEvent.press(getByTestId('add-rec-submit'));
 
     // ------------------------------------------------
@@ -239,7 +244,13 @@ describe('AddRecommendationScreen Integration Test', () => {
           categoryId: 'food',
           tags: expect.arrayContaining(['restaurant']),
           budget: 'comfort',
-          facets: expect.objectContaining({ interests: ['food'] }),
+		  taxonomyVersion: 4,
+		  attributes: expect.objectContaining({
+			audienceScope: 'selected',
+			audiences: ['solo'],
+			vibes: ['relaxed'],
+			environment: 'indoor',
+		  }),
           media: expect.any(Array),
         })
       });

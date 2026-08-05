@@ -98,9 +98,18 @@ the supported client, and only then the reviewed personalization migration.
 Never run the migration with `--apply` as part of an ordinary client/backend
 deployment.
 
-Recommendations and routes store server-derived `facets` (`interests`,
-`audiences`, `vibes`, `travelerStyles`, `needs`, `budgetLevel`, `seasons`,
-and `environments`). Routes additionally store canonical difficulty,
+Recommendations and routes store server-derived `facets`. Interests are
+derived only from canonical categories and subcategories; they are not a
+second author-entered classification. `audienceScope` distinguishes content
+for everyone from content aimed at selected audiences. Practical needs use
+`needsScope: recommendation` for a single recommendation and
+`needsScope: entire_route` only after the author confirms the fact for every
+part of a route. Missing needs metadata never counts as a match.
+
+Recommendation facets may contain interests, audiences, vibes, needs,
+budget level, and environment. Traveler style and season are deliberately
+empty for recommendations because those describe a trip, not an individual
+place. Routes additionally store traveler styles and seasons plus canonical difficulty,
 experience, transport, pace, duration, distance, and destinations derived from
 verified stops. The server also builds bounded normalized search tokens and
 prefixes; clients never write `facets`, `search`, or route destinations
@@ -126,7 +135,7 @@ npm run migrate-personalization -- --resume
 npm run migrate-personalization -- --apply
 ```
 
-The v3 migration also rebuilds recommendation/route search fields, maps legacy
+The v4 migration also rebuilds recommendation/route search fields, maps legacy
 `attractions` entries only when their content is unambiguous, migrates legacy
 backpacker/digital-nomad values to traveler styles, seeds bounded route
 affinity, and marks empty broken routes inactive without deleting their media

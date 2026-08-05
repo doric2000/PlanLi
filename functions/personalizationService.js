@@ -10,6 +10,7 @@ const {
   normalizeSmartProfile,
   PACE_IDS,
   ROUTE_DIFFICULTY_IDS,
+	ROUTE_EXPERIENCE_IDS,
   SEASON_IDS,
   TRANSPORT_MODE_IDS,
   TRAVELER_STYLE_IDS,
@@ -139,8 +140,13 @@ function applyPersonalizationSignal({ existing, target, targetData, delta, actio
   adjustMap(personalization.facetScores.interests, facets.interests, delta, INTEREST_IDS);
   adjustMap(personalization.facetScores.audiences, facets.audiences, delta, TRAVEL_PARTY_IDS);
   adjustMap(personalization.facetScores.vibes, facets.vibes, delta, VIBE_IDS);
-  adjustMap(personalization.facetScores.travelerStyles, facets.travelerStyles, delta, TRAVELER_STYLE_IDS);
-  adjustMap(personalization.facetScores.needs, facets.needs, delta, NEED_IDS);
+	if (target?.type === 'route') {
+		adjustMap(personalization.facetScores.travelerStyles, facets.travelerStyles, delta, TRAVELER_STYLE_IDS);
+	}
+	const expectedNeedsScope = target?.type === 'route' ? 'entire_route' : 'recommendation';
+	if (facets.needsScope === expectedNeedsScope) {
+		adjustMap(personalization.facetScores.needs, facets.needs, delta, NEED_IDS);
+	}
 
   for (const destination of targetDestinations(target, targetData)) {
     const previous = personalization.destinations.find((entry) => (
@@ -209,18 +215,25 @@ function itemDestinationAffinity(item, personalization) {
 }
 
 function scoreRecommendation(item, profile = {}, personalization = {}, {
-  nowMs = Date.now(), maxLikes = 1, textScore = 0,
+  nowMs = Date.now(), maxLikes = 1, textScore = 0, route = false,
 } = {}) {
   const facets = item?.facets || {};
   const interest = overlapScore(profile.interests, facets.interests);
   const budget = budgetScore(profile.budget, facets.budgetLevel);
-  const party = overlapScore(profile.travelParties, facets.audiences);
-  const vibeOrStyle = Math.max(
-    overlapScore(profile.vibe, facets.vibes),
-    overlapScore(profile.travelerStyles, facets.travelerStyles),
-    item?.pace && profile.pace ? (item.pace === profile.pace ? 1 : 0) : 0.5
-  );
-  const needs = overlapScore(profile.needs, facets.needs, 0);
+	const party = facets.audienceScope === 'all'
+		? 1
+		: overlapScore(profile.travelParties, facets.audiences);
+	const vibeOrStyle = route
+		? Math.max(
+			overlapScore(profile.vibe, facets.vibes),
+			overlapScore(profile.travelerStyles, facets.travelerStyles),
+			item?.pace && profile.pace ? (item.pace === profile.pace ? 1 : 0) : 0.5
+		)
+		: overlapScore(profile.vibe, facets.vibes);
+	const expectedNeedsScope = route ? 'entire_route' : 'recommendation';
+	const needs = facets.needsScope === expectedNeedsScope
+		? overlapScore(profile.needs, facets.needs, 0)
+		: 0;
   const explicitScore = interest * 25 + budget * 10 + party * 8 + vibeOrStyle * 7 + needs * 5;
 
   const scores = personalization.facetScores || {};
@@ -228,8 +241,8 @@ function scoreRecommendation(item, profile = {}, personalization = {}, {
     affinityFor(scores.interests, facets.interests),
     affinityFor(scores.audiences, facets.audiences),
     affinityFor(scores.vibes, facets.vibes),
-    affinityFor(scores.travelerStyles, facets.travelerStyles),
-    affinityFor(scores.needs, facets.needs)
+		route ? affinityFor(scores.travelerStyles, facets.travelerStyles) : 0,
+		facets.needsScope === expectedNeedsScope ? affinityFor(scores.needs, facets.needs) : 0
   );
   const behaviorScore = facetAffinity * 15 + clamp(itemDestinationAffinity(item, personalization) / MAX_AFFINITY) * 10;
   const likes = Math.max(0, Number(item?.stats?.likeCount || 0));
@@ -239,7 +252,9 @@ function scoreRecommendation(item, profile = {}, personalization = {}, {
   const reasons = [];
   const matchedInterest = (profile.interests || []).find((id) => facets.interests?.includes(id));
   const matchedParty = (profile.travelParties || []).find((id) => facets.audiences?.includes(id));
-  const matchedStyle = (profile.travelerStyles || []).find((id) => facets.travelerStyles?.includes(id));
+	const matchedStyle = route
+		? (profile.travelerStyles || []).find((id) => facets.travelerStyles?.includes(id))
+		: null;
   if (matchedInterest) reasons.push(`interest:${matchedInterest}`);
   if (budget >= 0.6 && profile.budget && profile.budget !== 'flexible') reasons.push('budget');
   if (matchedParty) reasons.push(`party:${matchedParty}`);
@@ -314,17 +329,17 @@ function cleanFilters(filters = {}, { route = false } = {}) {
   const result = {
     categoryIds: cleanStringArray(filters.categoryIds, 'categoryIds', CATEGORY_IDS, 8),
     subcategoryIds,
-    interestIds: cleanStringArray(filters.interestIds, 'interestIds', INTEREST_IDS, 12),
     audienceIds: cleanStringArray(filters.audienceIds, 'audienceIds', TRAVEL_PARTY_IDS, 6),
     vibeIds: cleanStringArray(filters.vibeIds, 'vibeIds', VIBE_IDS, 8),
-    travelerStyleIds: cleanStringArray(filters.travelerStyleIds, 'travelerStyleIds', TRAVELER_STYLE_IDS, 6),
     needIds: cleanStringArray(filters.needIds, 'needIds', NEED_IDS, NEED_IDS.length),
     budgetLevels: cleanStringArray(filters.budgetLevels, 'budgetLevels', BUDGET_IDS, BUDGET_IDS.length),
-    seasons: cleanStringArray(filters.seasons, 'seasons', SEASON_IDS, SEASON_IDS.length),
     environments: cleanStringArray(filters.environments, 'environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length),
   };
   if (route) Object.assign(result, {
+	travelerStyleIds: cleanStringArray(filters.travelerStyleIds, 'travelerStyleIds', TRAVELER_STYLE_IDS, 6),
+	seasons: cleanStringArray(filters.seasons, 'seasons', SEASON_IDS, SEASON_IDS.length),
     difficultyIds: cleanStringArray(filters.difficultyIds, 'difficultyIds', ROUTE_DIFFICULTY_IDS, 3),
+	experienceLevelIds: cleanStringArray(filters.experienceLevelIds, 'experienceLevelIds', ROUTE_EXPERIENCE_IDS, ROUTE_EXPERIENCE_IDS.length),
     transportModeIds: cleanStringArray(filters.transportModeIds, 'transportModeIds', TRANSPORT_MODE_IDS, 6),
     paceIds: cleanStringArray(filters.paceIds, 'paceIds', PACE_IDS, 3),
     durationDays: cleanRange(filters.durationDays, 'durationDays'),
@@ -352,16 +367,19 @@ function matchesFilters(item, filters, { route = false } = {}) {
   const subcategories = item?.subcategoryIds || normalizeRecommendationTags(item?.tags);
   if (!intersects(filters.categoryIds, categories)) return false;
   if (!intersects(filters.subcategoryIds, subcategories)) return false;
-  if (!intersects(filters.interestIds, facets.interests)) return false;
-  if (!intersects(filters.audienceIds, facets.audiences)) return false;
+	if (filters.audienceIds.length && facets.audienceScope !== 'all' && !intersects(filters.audienceIds, facets.audiences)) return false;
   if (!intersects(filters.vibeIds, facets.vibes)) return false;
-  if (!intersects(filters.travelerStyleIds, facets.travelerStyles)) return false;
-  if (!intersects(filters.needIds, facets.needs)) return false;
+	const expectedNeedsScope = route ? 'entire_route' : 'recommendation';
+	if (filters.needIds.length && (
+		facets.needsScope !== expectedNeedsScope || !intersects(filters.needIds, facets.needs)
+	)) return false;
   if (!intersects(filters.budgetLevels, [facets.budgetLevel].filter(Boolean))) return false;
-  if (!intersects(filters.seasons, facets.seasons)) return false;
   if (!intersects(filters.environments, facets.environments)) return false;
   if (route) {
+	if (!intersects(filters.travelerStyleIds, facets.travelerStyles)) return false;
+	if (!intersects(filters.seasons, facets.seasons)) return false;
     if (!intersects(filters.difficultyIds, [item?.difficulty].filter(Boolean))) return false;
+	if (!intersects(filters.experienceLevelIds, [item?.experienceLevel].filter(Boolean))) return false;
     if (!intersects(filters.transportModeIds, item?.transportModes)) return false;
     if (!intersects(filters.paceIds, [item?.pace].filter(Boolean))) return false;
     if (!inRange(item?.dayCount, filters.durationDays)) return false;
@@ -418,7 +436,7 @@ async function candidateSnapshots(db, {
     const prefixes = Array.from(new Set(parsedQuery.alternatives.flat())).slice(0, 30);
     queries.push(facetBase().where('search.prefixes', 'array-contains-any', prefixes).limit(MAX_CANDIDATES).get());
   }
-  const interestCandidates = filters.interestIds.length ? filters.interestIds : interests;
+	const interestCandidates = interests;
   if (interestCandidates.length) {
     queries.push(facetBase().where('facets.interests', 'array-contains-any', interestCandidates.slice(0, 10)).limit(100).get());
   }
@@ -516,6 +534,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
       nowMs: startedAt,
       maxLikes,
       textScore: item._textScore,
+		route,
     }));
     output = rankPersonalizedResults(scored, requestedLimit, {
       hasQuery: parsedQuery.terms.length > 0,

@@ -8,19 +8,24 @@ const {
   analyzeTagValues,
   buildRecommendationFacets,
   CATEGORY_IDS,
+	ENVIRONMENT_IDS,
   getCategoryLabel,
   INTEREST_IDS,
   NEED_IDS,
   normalizeBudget,
   normalizeCategoryId,
   POST_BUDGET_IDS,
+	recommendationAttributeRequirements,
   TAG_IDS,
   tagsMatchCategory,
   TRAVEL_PARTY_IDS,
+	taxonomy,
   VIBE_IDS,
 } = require('../travelTaxonomy');
 
-const MANIFEST_VERSION = 1;
+const { buildSearchIndex } = require('../discoverySearch');
+
+const MANIFEST_VERSION = 2;
 const DEFAULT_STATE_DIR = path.join(__dirname, '..', '.recommendation-curation');
 const TRACKED_FIELDS = Object.freeze([
   'title',
@@ -30,11 +35,15 @@ const TRACKED_FIELDS = Object.freeze([
   'tags',
   'budget',
   'facets',
+	'taxonomyVersion',
+	'search',
   'status',
   'destination',
   'place',
 ]);
-const OVERRIDE_FIELDS = new Set(TRACKED_FIELDS.filter((field) => field !== 'category'));
+const OVERRIDE_FIELDS = new Set(TRACKED_FIELDS.filter((field) => ![
+	'category', 'taxonomyVersion', 'search',
+].includes(field)));
 const REMOVABLE_FIELDS = new Set(['place']);
 const CONFIDENCE_LEVELS = new Set(['high', 'medium', 'low']);
 const SOURCE_TYPES = new Set(['official', 'google_places', 'author_content', 'other']);
@@ -226,9 +235,21 @@ function canonicalizeRecommendation(data = {}, override = normalizeOverride()) {
   const budget = normalizeBudget(combined.budget, { allowFlexible: false }) || tagAnalysis.budgetLevel;
   if (budget && !POST_BUDGET_IDS.includes(budget)) throw new Error('Recommendation budget is invalid.');
 
-  const submittedFacets = combined.facets && typeof combined.facets === 'object'
+	const existingFacets = combined.facets && typeof combined.facets === 'object'
     ? combined.facets
     : {};
+	const audiences = Array.isArray(existingFacets.audiences) ? existingFacets.audiences : [];
+	const requirements = recommendationAttributeRequirements(tagAnalysis.tagIds);
+	const submittedFacets = {
+		audienceScope: existingFacets.audienceScope === 'all' || audiences.length === 0 ? 'all' : 'selected',
+		audiences,
+		vibes: requirements.vibes && Array.isArray(existingFacets.vibes) ? existingFacets.vibes : [],
+		needs: (Array.isArray(existingFacets.needs) ? existingFacets.needs : [])
+			.filter((needId) => requirements.needs.includes(needId)),
+		environments: requirements.environment && Array.isArray(existingFacets.environments)
+			? existingFacets.environments
+			: [],
+	};
   const facets = buildRecommendationFacets(
     { ...combined, categoryId, tags: combined.tags || [], budget },
     submittedFacets
@@ -242,8 +263,18 @@ function canonicalizeRecommendation(data = {}, override = normalizeOverride()) {
     tags: tagAnalysis.tagIds,
     budget,
     facets,
+	taxonomyVersion: taxonomy.version,
     status: combined.status === 'inactive' ? 'inactive' : 'active',
   };
+	after.search = buildSearchIndex({
+		title: after.title,
+		description: after.description,
+		destination: after.destination,
+		place: after.place,
+		categoryIds: [after.categoryId],
+		subcategoryIds: after.tags,
+		interestIds: after.facets.interests,
+	});
   if (!after.title || !after.description) throw new Error('Recommendation title and description are required.');
   return selectTrackedFields(after);
 }
@@ -256,6 +287,12 @@ function validateCanonicalFacets(facets = {}) {
   if (!valuesAllowed(facets.audiences, TRAVEL_PARTY_IDS)) errors.push('facet-audiences');
   if (!valuesAllowed(facets.vibes, VIBE_IDS)) errors.push('facet-vibes');
   if (!valuesAllowed(facets.needs, NEED_IDS)) errors.push('facet-needs');
+	if (!valuesAllowed(facets.environments, ENVIRONMENT_IDS)) errors.push('facet-environments');
+	if (!['all', 'selected'].includes(facets.audienceScope)) errors.push('facet-audience-scope');
+	if (facets.audienceScope === 'all' && facets.audiences.length) errors.push('facet-universal-audiences');
+	if (!Array.isArray(facets.travelerStyles) || facets.travelerStyles.length) errors.push('facet-styles');
+	if (!Array.isArray(facets.seasons) || facets.seasons.length) errors.push('facet-seasons');
+	if (facets.needs.length && facets.needsScope !== 'recommendation') errors.push('facet-needs-scope');
   if (facets.budgetLevel && !POST_BUDGET_IDS.includes(facets.budgetLevel)) {
     errors.push('facet-budget');
   }
@@ -270,6 +307,19 @@ function validateManifestEntry(entry) {
   if (!entry.reason) errors.push('reason');
   errors.push(...validateSources(entry.sources || []));
   errors.push(...validateCanonicalFacets(entry.after?.facets));
+	const requirements = recommendationAttributeRequirements(entry.after?.tags || []);
+	if (entry.after?.status === 'active' && requirements.vibes && !entry.after?.facets?.vibes?.length) {
+		errors.push('required-vibe');
+	}
+	if (entry.after?.status === 'active' && !requirements.vibes && entry.after?.facets?.vibes?.length) {
+		errors.push('inapplicable-vibe');
+	}
+	if (entry.after?.status === 'active' && requirements.environment && !entry.after?.facets?.environments?.length) {
+		errors.push('required-environment');
+	}
+	if (entry.after?.status === 'active' && !requirements.environment && entry.after?.facets?.environments?.length) {
+		errors.push('inapplicable-environment');
+	}
   errors.push(...validateLocation(entry.after || {}, entry.location || {}));
   errors.push(...validateVolatileFacts(entry.volatileFacts, entry.sources || []));
 

@@ -7,13 +7,13 @@ const { buildSearchIndex } = require('../discoverySearch');
 test('live audit accepts canonical active recommendations and rejects client-era metadata', () => {
   const canonical = {
     status: 'active',
-    taxonomyVersion: 3,
+	taxonomyVersion: 4,
     categoryId: 'nature',
     tags: ['beach'],
     budget: 'balanced',
     facets: {
-      interests: ['nature_scenery', 'beaches_water'], audiences: [], vibes: [], travelerStyles: [],
-      needs: [], budgetLevel: 'balanced', seasons: [], environments: ['outdoor'],
+	  interests: ['nature_scenery', 'beaches_water'], audienceScope: 'all', audiences: [], vibes: ['relaxed'], travelerStyles: [],
+	  needs: [], needsScope: '', budgetLevel: 'balanced', seasons: [], environments: ['outdoor'],
     },
     search: buildSearchIndex({ title: 'חוף', categoryIds: ['nature'], subcategoryIds: ['beach'] }),
   };
@@ -23,11 +23,11 @@ test('live audit accepts canonical active recommendations and rejects client-era
 
 test('live audit requires route-only canonical facets and destinations', () => {
   const route = {
-    status: 'active', taxonomyVersion: 3,
+	status: 'active', taxonomyVersion: 4,
     categoryIds: ['nature'], subcategoryIds: ['hiking'],
     facets: {
-      interests: ['hiking'], audiences: ['friends'], vibes: [], travelerStyles: ['roadtrip'], needs: [],
-      budgetLevel: 'balanced', seasons: [], environments: ['outdoor'],
+	  interests: ['hiking'], audienceScope: 'selected', audiences: ['friends'], vibes: [], travelerStyles: ['roadtrip'], needs: [],
+	  needsScope: '', budgetLevel: 'balanced', seasons: ['spring'], environments: ['outdoor'],
     },
     difficulty: 'moderate', experienceLevel: 'beginner', transportModes: ['car'], pace: 'balanced',
     destinations: [{ countryId: 'cty-il', cityId: 'city-tlv' }],

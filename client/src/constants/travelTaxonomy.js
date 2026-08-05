@@ -16,7 +16,10 @@ export const POST_BUDGETS = taxonomy.budgets
   .map((item) => ({ ...asOption(item), postLabel: item.postLabel || item.label }));
 export const TRAVEL_PARTIES = options('travelParties');
 export const VIBES = options('vibes');
-export const TRAVELER_STYLES = options('travelerStyles');
+export const TRAVELER_STYLES = (taxonomy.travelerStyles || []).map((item) => ({
+  ...asOption(item),
+  relatedInterests: [...(item.relatedInterests || [])],
+}));
 export const PACES = options('paces');
 export const NEEDS = options('needs');
 export const SEASONS = options('seasons');
@@ -59,6 +62,9 @@ const tagIdByAlias = {
   ...Object.fromEntries(TAGS.map((tag) => [tag.label, tag.id])),
   ...(taxonomy.legacy?.tagAliases || {}),
 };
+const recommendationAttributeRules = taxonomy.contentAttributeRules?.recommendations || {};
+const recommendationVibeTags = new Set(recommendationAttributeRules.vibeTagIds || []);
+const recommendationEnvironmentTags = new Set(recommendationAttributeRules.environmentTagIds || []);
 
 function normalizeFromOptions(value, optionList, aliases = {}) {
   const text = typeof value === 'string' ? value.trim() : '';
@@ -131,6 +137,19 @@ export function analyzeTagValues(values) {
 }
 
 export const normalizeTagIds = (values) => analyzeTagValues(values).tagIds;
+
+export function getRecommendationAttributeRequirements(values) {
+  const tagIds = normalizeTagIds(values);
+  const needRules = recommendationAttributeRules.needTagIds || {};
+  return {
+    vibes: tagIds.some((tagId) => recommendationVibeTags.has(tagId)),
+    environment: tagIds.some((tagId) => recommendationEnvironmentTags.has(tagId)),
+    needs: NEEDS.filter((need) => {
+      const supported = new Set(needRules[need.value] || []);
+      return tagIds.some((tagId) => supported.has(tagId));
+    }),
+  };
+}
 
 export function getTagLabel(value) {
   const id = tagById[value] ? value : tagIdByAlias[value];

@@ -9,7 +9,6 @@ import {
 import {
 	CATEGORIES,
 	ENVIRONMENTS,
-	INTERESTS,
 	NEEDS,
 	PACES,
 	POST_BUDGETS,
@@ -20,6 +19,7 @@ import {
 	TRANSPORT_MODES,
 	TRAVELER_STYLES,
 	TRAVEL_PARTIES,
+	TRAVEL_TAXONOMY_VERSION,
 	VIBES,
 } from "../../../constants/travelTaxonomy";
 import { auth } from "../../../config/firebase";
@@ -41,15 +41,16 @@ import { derivePlacesFromStops, flattenValidRouteStops } from "../utils/routeSto
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { saveRoute } from "../../../services/RouteService";
 
-const canonicalFacets = (facets = {}) => ({
-	interests: [...(facets.interests || [])].sort(),
-	audiences: [...(facets.audiences || [])].sort(),
-	vibes: [...(facets.vibes || [])].sort(),
-	travelerStyles: [...(facets.travelerStyles || [])].sort(),
-	needs: [...(facets.needs || [])].sort(),
-	budgetLevel: facets.budgetLevel || "",
-	seasons: [...(facets.seasons || [])].sort(),
-	environments: [...(facets.environments || [])].sort(),
+const canonicalAttributes = (attributes = {}) => ({
+	audienceScope: attributes.audienceScope || "selected",
+	audiences: [...(attributes.audiences || [])].sort(),
+	vibes: [...(attributes.vibes || [])].sort(),
+	travelerStyles: [...(attributes.travelerStyles || [])].sort(),
+	needs: [...(attributes.needs || [])].sort(),
+	needsCoverageConfirmed: Boolean(attributes.needsCoverageConfirmed),
+	budgetLevel: attributes.budgetLevel || "",
+	seasons: [...(attributes.seasons || [])].sort(),
+	environment: attributes.environment || "",
 });
 
 function buildRouteComparableFromSource(r) {
@@ -62,7 +63,17 @@ function buildRouteComparableFromSource(r) {
 		routeDays: r.days || [],
 		categoryIds: [...(r.categoryIds || [])].sort(),
 		subcategoryIds: [...(r.subcategoryIds || [])].sort(),
-		facets: canonicalFacets(r.facets),
+		attributes: canonicalAttributes({
+			audienceScope: r.facets?.audienceScope || (r.facets?.audiences?.length ? "selected" : "all"),
+			audiences: r.facets?.audiences,
+			vibes: r.facets?.vibes,
+			travelerStyles: r.facets?.travelerStyles,
+			needs: r.facets?.needs,
+			needsCoverageConfirmed: r.facets?.needsScope === "entire_route" || Boolean(r.facets?.needs?.length),
+			budgetLevel: r.facets?.budgetLevel,
+			seasons: r.facets?.seasons,
+			environment: r.facets?.environments?.[0] || "",
+		}),
 		difficulty: r.difficulty || "",
 		experienceLevel: r.experienceLevel || "",
 		transportModes: [...(r.transportModes || [])].sort(),
@@ -78,7 +89,7 @@ function buildRouteFormComparable({
 	tripDays,
 	categoryIds,
 	subcategoryIds,
-	facets,
+	attributes,
 	difficulty,
 	experienceLevel,
 	transportModes,
@@ -92,7 +103,7 @@ function buildRouteFormComparable({
 		routeDays: tripDays || [],
 		categoryIds: [...(categoryIds || [])].sort(),
 		subcategoryIds: [...(subcategoryIds || [])].sort(),
-		facets: canonicalFacets(facets),
+		attributes: canonicalAttributes(attributes),
 		difficulty: difficulty || "",
 		experienceLevel: experienceLevel || "",
 		transportModes: [...(transportModes || [])].sort(),
@@ -124,7 +135,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const [tripDays, setTripDays] = useState([]);
 	const [categoryIds, setCategoryIds] = useState([]);
 	const [subcategoryIds, setSubcategoryIds] = useState([]);
-	const [interests, setInterests] = useState([]);
+	const [audienceScope, setAudienceScope] = useState("selected");
 	const [audiences, setAudiences] = useState([]);
 	const [budgetLevel, setBudgetLevel] = useState("");
 	const [difficulty, setDifficulty] = useState("");
@@ -134,8 +145,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const [vibes, setVibes] = useState([]);
 	const [travelerStyles, setTravelerStyles] = useState([]);
 	const [needs, setNeeds] = useState([]);
+	const [needsCoverageConfirmed, setNeedsCoverageConfirmed] = useState(false);
 	const [seasons, setSeasons] = useState([]);
-	const [environments, setEnvironments] = useState([]);
+	const [environment, setEnvironment] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [isDayModalVisible, setDayModalVisible] = useState(false);
 	const [editingDayIndex, setEditingDayIndex] = useState(null);
@@ -166,7 +178,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setTripDays(routeToEdit.days || []);
 		setCategoryIds(routeToEdit.categoryIds || []);
 		setSubcategoryIds(routeToEdit.subcategoryIds || []);
-		setInterests(routeToEdit.facets?.interests || []);
+		setAudienceScope(routeToEdit.facets?.audienceScope || (routeToEdit.facets?.audiences?.length ? "selected" : "all"));
 		setAudiences(routeToEdit.facets?.audiences || []);
 		setBudgetLevel(routeToEdit.facets?.budgetLevel || "");
 		setDifficulty(routeToEdit.difficulty || "");
@@ -176,8 +188,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setVibes(routeToEdit.facets?.vibes || []);
 		setTravelerStyles(routeToEdit.facets?.travelerStyles || []);
 		setNeeds(routeToEdit.facets?.needs || []);
+		setNeedsCoverageConfirmed(routeToEdit.facets?.needsScope === "entire_route" || Boolean(routeToEdit.facets?.needs?.length));
 		setSeasons(routeToEdit.facets?.seasons || []);
-		setEnvironments(routeToEdit.facets?.environments || []);
+		setEnvironment(routeToEdit.facets?.environments?.[0] || "");
 		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
 	}, [editingRouteId]);
@@ -192,7 +205,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 				tripDays,
 				categoryIds,
 				subcategoryIds,
-				facets: { interests, audiences, budgetLevel, vibes, travelerStyles, needs, seasons, environments },
+				attributes: { audienceScope, audiences, budgetLevel, vibes, travelerStyles, needs, needsCoverageConfirmed, seasons, environment },
 				difficulty,
 				experienceLevel,
 				transportModes,
@@ -206,7 +219,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 			tripDays,
 			categoryIds,
 			subcategoryIds,
-			interests,
+			audienceScope,
 			audiences,
 			budgetLevel,
 			difficulty,
@@ -216,8 +229,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 			vibes,
 			travelerStyles,
 			needs,
+			needsCoverageConfirmed,
 			seasons,
-			environments,
+			environment,
 		]
 	);
 
@@ -274,6 +288,10 @@ export default function AddRoutesScreen({ navigation, route }) {
 		});
 	}, [days]);
 
+	useEffect(() => {
+		if (!needs.length) setNeedsCoverageConfirmed(false);
+	}, [needs.length]);
+
 	const ensureVerifiedForWrite = () => {
 		const tier = getUserTier(auth.currentUser);
 		if (tier === "guest") {
@@ -313,9 +331,15 @@ export default function AddRoutesScreen({ navigation, route }) {
 		const parsedDistance = Number.parseFloat(distance);
 		const derivedPlaces = derivePlacesFromStops(tripDays);
 		const validStops = flattenValidRouteStops(tripDays);
+		const hasSubcategoryForEveryCategory = categoryIds.length > 0 && categoryIds.every(
+			(categoryId) => (TAG_OPTIONS_BY_CATEGORY[categoryId] || []).some(
+				(tag) => subcategoryIds.includes(tag.id)
+			)
+		);
+		const hasAudience = audienceScope === "all" || audiences.length > 0;
 
-		if (!title.trim() || !Number.isFinite(parsedDays) || parsedDays < 1 || !Number.isFinite(parsedDistance) || !desc.trim() || validStops.length === 0 || interests.length === 0 || audiences.length === 0 || !budgetLevel || !difficulty || transportModes.length === 0) {
-			Alert.alert("שגיאה", "מלאו כותרת, ימים, מרחק, תיאור, תחנה מדויקת, תחום עניין, קהל, תקציב, קושי ואמצעי התניידות.");
+		if (!title.trim() || !Number.isFinite(parsedDays) || parsedDays < 1 || !Number.isFinite(parsedDistance) || !desc.trim() || validStops.length === 0 || !hasSubcategoryForEveryCategory || !hasAudience || !budgetLevel || !difficulty || transportModes.length === 0 || !pace || seasons.length === 0 || !environment || (needs.length > 0 && !needsCoverageConfirmed)) {
+			Alert.alert("שגיאה", "מלאו כותרת, ימים, מרחק, תיאור, תחנה מדויקת, תת־קטגוריה לכל קטגוריה, קהל, תקציב, קושי, אמצעי התניידות, קצב, עונה וסביבה. אם סומנו צרכים, אשרו שהם נכונים לכל המסלול.");
 			return;
 		}
 
@@ -326,14 +350,24 @@ export default function AddRoutesScreen({ navigation, route }) {
 				uploadImageAssets
 			);
 			const routeData = {
-				taxonomyVersion: 3,
+				taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
 				title: title.trim(),
 				description: desc.trim(),
 				distanceKm: parsedDistance,
 				days: preparedMedia.days,
 				categoryIds,
 				subcategoryIds,
-				facets: { interests, audiences, budgetLevel, vibes, travelerStyles, needs, seasons, environments },
+				attributes: {
+					audienceScope,
+					audiences: audienceScope === "all" ? [] : audiences,
+					budgetLevel,
+					vibes,
+					travelerStyles,
+					needs,
+					needsCoverageConfirmed,
+					seasons,
+					environment,
+				},
 				difficulty,
 				experienceLevel,
 				transportModes,
@@ -424,13 +458,17 @@ export default function AddRoutesScreen({ navigation, route }) {
 					selectedValue={(TAG_OPTIONS_BY_CATEGORY[categoryId] || []).filter((item) => subcategoryIds.includes(item.id)).map((item) => item.label)}
 					onSelect={(label) => { const id = (TAG_OPTIONS_BY_CATEGORY[categoryId] || []).find((item) => item.label === label)?.id; if (id) toggle(setSubcategoryIds, id, 20); }}
 					multiSelect testIDPrefix={`route-subcategory-${categoryId}`} />)}
-				<ChipSelector label="תחומי עניין (חובה)" items={INTERESTS.map((item) => item.label)}
-					selectedValue={INTERESTS.filter((item) => interests.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = INTERESTS.find((item) => item.label === label)?.value; if (id) toggle(setInterests, id, 12); }} multiSelect testIDPrefix="route-interest" />
-				<ChipSelector label="מתאים למי (חובה)" items={TRAVEL_PARTIES.map((item) => item.label)}
+				<ChipSelector label="היקף התאמה לקהל (חובה)" items={["מתאים לכולם", "בחירת קהלים"]}
+					selectedValue={audienceScope === "all" ? "מתאים לכולם" : "בחירת קהלים"}
+					onSelect={(label) => {
+						const nextScope = label === "מתאים לכולם" ? "all" : "selected";
+						setAudienceScope(nextScope);
+						if (nextScope === "all") setAudiences([]);
+					}} testIDPrefix="route-audience-scope" />
+				{audienceScope === "selected" ? <ChipSelector label="מתאים למי (חובה)" items={TRAVEL_PARTIES.map((item) => item.label)}
 					selectedValue={TRAVEL_PARTIES.filter((item) => audiences.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = TRAVEL_PARTIES.find((item) => item.label === label)?.value; if (id) toggle(setAudiences, id, 6); }} multiSelect testIDPrefix="route-audience" />
-				<ChipSelector label="תקציב (חובה)" items={POST_BUDGETS.map((item) => item.postLabel)}
+					onSelect={(label) => { const id = TRAVEL_PARTIES.find((item) => item.label === label)?.value; if (id) toggle(setAudiences, id, 6); }} multiSelect testIDPrefix="route-audience" /> : null}
+				<ChipSelector label="רמת מחיר (חובה)" items={POST_BUDGETS.map((item) => item.postLabel)}
 					selectedValue={POST_BUDGETS.find((item) => item.value === budgetLevel)?.postLabel || ''}
 					onSelect={(label) => setBudgetLevel(POST_BUDGETS.find((item) => item.postLabel === label)?.value || '')} testIDPrefix="route-budget" />
 				<ChipSelector label="רמת קושי (חובה)" items={ROUTE_DIFFICULTIES.map((item) => item.label)}
@@ -446,14 +484,28 @@ export default function AddRoutesScreen({ navigation, route }) {
 					onSelect={(label) => { const id = VIBES.find((item) => item.label === label)?.value; if (id) toggle(setVibes, id, 4); }} multiSelect testIDPrefix="route-vibe" />
 				<ChipSelector label="סגנון טיול" items={TRAVELER_STYLES.map((item) => item.label)} selectedValue={TRAVELER_STYLES.filter((item) => travelerStyles.includes(item.value)).map((item) => item.label)}
 					onSelect={(label) => { const id = TRAVELER_STYLES.find((item) => item.label === label)?.value; if (id) toggle(setTravelerStyles, id, 4); }} multiSelect testIDPrefix="route-style" />
-				<ChipSelector label="קצב" items={PACES.map((item) => item.label)} selectedValue={PACES.find((item) => item.value === pace)?.label || ''}
+				<ChipSelector label="קצב (חובה)" items={PACES.map((item) => item.label)} selectedValue={PACES.find((item) => item.value === pace)?.label || ''}
 					onSelect={(label) => setPace(PACES.find((item) => item.label === label)?.value || '')} testIDPrefix="route-pace" />
-				<ChipSelector label="עונה" items={SEASONS.map((item) => item.label)} selectedValue={SEASONS.filter((item) => seasons.includes(item.value)).map((item) => item.label)}
+				<ChipSelector label="עונה מתאימה (חובה)" items={SEASONS.map((item) => item.label)} selectedValue={SEASONS.filter((item) => seasons.includes(item.value)).map((item) => item.label)}
 					onSelect={(label) => { const id = SEASONS.find((item) => item.label === label)?.value; if (id) toggle(setSeasons, id, 6); }} multiSelect testIDPrefix="route-season" />
-				<ChipSelector label="סביבה" items={ENVIRONMENTS.map((item) => item.label)} selectedValue={ENVIRONMENTS.filter((item) => environments.includes(item.value)).map((item) => item.label)}
-					onSelect={(label) => { const id = ENVIRONMENTS.find((item) => item.label === label)?.value; if (id) toggle(setEnvironments, id, 3); }} multiSelect testIDPrefix="route-environment" />
+				<ChipSelector label="סביבה עיקרית (חובה)" items={ENVIRONMENTS.map((item) => item.label)} selectedValue={ENVIRONMENTS.find((item) => item.value === environment)?.label || ''}
+					onSelect={(label) => setEnvironment(ENVIRONMENTS.find((item) => item.label === label)?.value || '')} testIDPrefix="route-environment" />
 				<ChipSelector label="מידע מעשי ונגישות" items={NEEDS.map((item) => item.label)} selectedValue={NEEDS.filter((item) => needs.includes(item.value)).map((item) => item.label)}
 					onSelect={(label) => { const id = NEEDS.find((item) => item.label === label)?.value; if (id) toggle(setNeeds, id, NEEDS.length); }} multiSelect testIDPrefix="route-need" />
+				{needs.length > 0 ? (
+					<TouchableOpacity
+						style={styles.confirmationRow}
+						onPress={() => setNeedsCoverageConfirmed((current) => !current)}
+						accessibilityRole="checkbox"
+						accessibilityState={{ checked: needsCoverageConfirmed }}
+						testID="route-needs-coverage-confirmation"
+					>
+						<View style={[styles.confirmationBox, needsCoverageConfirmed && styles.confirmationBoxChecked]}>
+							{needsCoverageConfirmed ? <Text style={styles.confirmationCheck}>✓</Text> : null}
+						</View>
+						<Text style={styles.confirmationText}>בדקתי שהמידע שסומן נכון לכל המסלול, ולא רק לחלק מהתחנות.</Text>
+					</TouchableOpacity>
+				) : null}
 
 				<TouchableOpacity
 					style={[buttons.submit, submitting && buttons.disabled]}

@@ -32,18 +32,16 @@ import {
 } from '../../../utils/mediaAssets';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 import {
-  INTERESTS,
   NEEDS,
   TRAVEL_PARTIES,
-  TRAVELER_STYLES,
   VIBES,
 } from '../../profile/constants/smartProfileOptions';
 import {
   ENVIRONMENTS,
-  SEASONS,
+  TRAVEL_TAXONOMY_VERSION,
+  getRecommendationAttributeRequirements,
   normalizeBudgetId,
   normalizeTagIds,
-  suggestedInterestIds,
 } from '../../../constants/travelTaxonomy';
 
 
@@ -113,13 +111,13 @@ function buildEditComparable(editItem) {
     category: resolveCategoryIdFromEditItem(editItem),
     tags,
     budget: normalizeBudgetId(editItem.budget, { allowFlexible: false }),
-    interests: [...(editItem.facets?.interests || [])].slice(0, 5).sort(),
+    audienceScope: editItem.facets?.audienceScope ||
+      (editItem.facets?.audiences?.length ? 'selected' : 'all'),
     audiences: [...(editItem.facets?.audiences || [])].sort(),
     vibes: [...(editItem.facets?.vibes || [])].sort(),
-    travelerStyles: [...(editItem.facets?.travelerStyles || [])].sort(),
-    seasons: [...(editItem.facets?.seasons || [])].sort(),
-    environments: [...(editItem.facets?.environments || [])].sort(),
+    environment: editItem.facets?.environments?.[0] || '',
     needs: [...(editItem.facets?.needs || [])].sort(),
+    needsConfirmed: Boolean(editItem.facets?.needs?.length),
     countryId: editItem.destination?.countryId || null,
     cityId: editItem.destination?.cityId || null,
     place: placeFingerprint(editItem.place),
@@ -144,13 +142,12 @@ function buildFormComparable({
   category,
   selectedTags,
   budget,
-  recommendationInterests,
+  audienceScope,
   audiences,
   recommendationVibes,
-  recommendationTravelerStyles,
-  recommendationSeasons,
-  recommendationEnvironments,
+  recommendationEnvironment,
   recommendationNeeds,
+  needsConfirmed,
   selectedCountry,
   selectedCity,
   selectedPlace,
@@ -167,13 +164,12 @@ function buildFormComparable({
     category: category || '',
     tags,
     budget: budget || '',
-    interests: [...(recommendationInterests || [])].sort(),
+    audienceScope,
     audiences: [...(audiences || [])].sort(),
     vibes: [...(recommendationVibes || [])].sort(),
-    travelerStyles: [...(recommendationTravelerStyles || [])].sort(),
-    seasons: [...(recommendationSeasons || [])].sort(),
-    environments: [...(recommendationEnvironments || [])].sort(),
+    environment: recommendationEnvironment || '',
     needs: [...(recommendationNeeds || [])].sort(),
+    needsConfirmed: Boolean(needsConfirmed),
     countryId: selectedCountry?.id ?? null,
     cityId: selectedCity?.id ?? null,
     place: placeFingerprint(selectedPlace),
@@ -205,14 +201,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const [category, setCategory] = useState(''); // Stores the ID (e.g., 'food')
   const [selectedTags, setSelectedTags] = useState([]);
   const [budget, setBudget] = useState('');
-  const [recommendationInterests, setRecommendationInterests] = useState([]);
-  const [showAllInterests, setShowAllInterests] = useState(false);
+  const [audienceScope, setAudienceScope] = useState('selected');
   const [audiences, setAudiences] = useState([]);
   const [recommendationVibes, setRecommendationVibes] = useState([]);
-  const [recommendationTravelerStyles, setRecommendationTravelerStyles] = useState([]);
-  const [recommendationSeasons, setRecommendationSeasons] = useState([]);
-  const [recommendationEnvironments, setRecommendationEnvironments] = useState([]);
+  const [recommendationEnvironment, setRecommendationEnvironment] = useState('');
   const [recommendationNeeds, setRecommendationNeeds] = useState([]);
+  const [needsConfirmed, setNeedsConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
@@ -292,13 +286,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
         category,
         selectedTags,
         budget,
-        recommendationInterests,
+        audienceScope,
         audiences,
         recommendationVibes,
-        recommendationTravelerStyles,
-        recommendationSeasons,
-        recommendationEnvironments,
+        recommendationEnvironment,
         recommendationNeeds,
+        needsConfirmed,
         selectedCountry,
         selectedCity,
         selectedPlace,
@@ -310,13 +303,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
       category,
       selectedTags,
       budget,
-      recommendationInterests,
+      audienceScope,
       audiences,
       recommendationVibes,
-      recommendationTravelerStyles,
-      recommendationSeasons,
-      recommendationEnvironments,
+      recommendationEnvironment,
       recommendationNeeds,
+      needsConfirmed,
       selectedCountry,
       selectedCity,
       selectedPlace,
@@ -425,18 +417,13 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setCategory(resolvedCategoryId);
     setSelectedTags(resolvedTags);
     setBudget(normalizeBudgetId(editItem.budget, { allowFlexible: false }));
-    setRecommendationInterests(
-      Array.isArray(editItem.facets?.interests) && editItem.facets.interests.length
-        ? editItem.facets.interests.slice(0, 5)
-        : suggestedInterestIds(resolvedCategoryId, resolvedTags)
-    );
-    setShowAllInterests(false);
+    setAudienceScope(editItem.facets?.audienceScope ||
+      (editItem.facets?.audiences?.length ? 'selected' : 'all'));
     setAudiences(Array.isArray(editItem.facets?.audiences) ? editItem.facets.audiences : []);
     setRecommendationVibes(Array.isArray(editItem.facets?.vibes) ? editItem.facets.vibes : []);
-    setRecommendationTravelerStyles(Array.isArray(editItem.facets?.travelerStyles) ? editItem.facets.travelerStyles : []);
-    setRecommendationSeasons(Array.isArray(editItem.facets?.seasons) ? editItem.facets.seasons : []);
-    setRecommendationEnvironments(Array.isArray(editItem.facets?.environments) ? editItem.facets.environments : []);
+    setRecommendationEnvironment(editItem.facets?.environments?.[0] || '');
     setRecommendationNeeds(Array.isArray(editItem.facets?.needs) ? editItem.facets.needs : []);
+    setNeedsConfirmed(Boolean(editItem.facets?.needs?.length));
 
     const initialCountryId = editItem.destination?.countryId || null;
     const initialCityId = editItem.destination?.cityId || null;
@@ -529,38 +516,37 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setCategory(newCatId);
     if (newCatId !== category) {
       setSelectedTags([]);
-      setRecommendationInterests(suggestedInterestIds(newCatId, []));
-      setShowAllInterests(false);
+      setRecommendationVibes([]);
+      setRecommendationEnvironment('');
+      setRecommendationNeeds([]);
+      setNeedsConfirmed(false);
     }
   };
 
   const toggleTag = (tagId) => {
     setSelectedTags((current) => {
-      const next = current.includes(tagId)
+      return current.includes(tagId)
         ? current.filter((item) => item !== tagId)
         : [...current, tagId];
-      if (!current.includes(tagId)) {
-        const suggested = suggestedInterestIds(category, next);
-        setRecommendationInterests((selected) => Array.from(new Set([...selected, ...suggested])).slice(0, 5));
-      }
-      return next;
     });
   };
 
-  const toggleRecommendationInterest = (value) => {
-    setRecommendationInterests((current) => current.includes(value)
-      ? current.filter((item) => item !== value)
-      : [...current, value].slice(0, 5));
-  };
+  const attributeRequirements = useMemo(
+    () => getRecommendationAttributeRequirements(selectedTags),
+    [selectedTags]
+  );
 
-  const visibleInterestOptions = useMemo(() => {
-    if (showAllInterests) return INTERESTS;
-    const relevant = new Set([
-      ...suggestedInterestIds(category, selectedTags),
-      ...recommendationInterests,
-    ]);
-    return INTERESTS.filter((option) => relevant.has(option.value));
-  }, [category, recommendationInterests, selectedTags, showAllInterests]);
+  useEffect(() => {
+    if (!attributeRequirements.vibes) setRecommendationVibes([]);
+    if (!attributeRequirements.environment) setRecommendationEnvironment('');
+    setRecommendationNeeds((current) => current.filter(
+      (needId) => attributeRequirements.needs.some((need) => need.value === needId)
+    ));
+  }, [attributeRequirements]);
+
+  useEffect(() => {
+    if (!recommendationNeeds.length) setNeedsConfirmed(false);
+  }, [recommendationNeeds.length]);
 
   const localCitiesSearchable = locationQuery.trim()
     ? (hasLoadedAllCitiesForSearch ? allCitiesForSearch : [])
@@ -767,8 +753,21 @@ const handleSubmit = async () => {
       Alert.alert("אוי לא!", "אנא מלא את כל השדות הנדרשים (כולל מיקום).");
       return;
     }
-    if (recommendationInterests.length < 1 || recommendationInterests.length > 5) {
-      Alert.alert('חסר דיוק להתאמה', 'יש לבחור בין תחום עניין אחד לחמישה עבור ההמלצה.');
+    if (!selectedTags.length || !budget ||
+      (audienceScope === 'selected' && audiences.length < 1)) {
+      Alert.alert('חסר מידע לסינון', 'בחרו תת־קטגוריה, רמת מחיר וקהל מתאים.');
+      return;
+    }
+    if (attributeRequirements.vibes && !recommendationVibes.length) {
+      Alert.alert('חסרה אווירה', 'בחרו לפחות אווירה אחת שמתארת את ההמלצה.');
+      return;
+    }
+    if (attributeRequirements.environment && !recommendationEnvironment) {
+      Alert.alert('חסרה סביבה', 'בחרו אם ההמלצה מתקיימת במקום סגור, בחוץ או בשילוב.');
+      return;
+    }
+    if (recommendationNeeds.length && !needsConfirmed) {
+      Alert.alert('נדרש אישור', 'אשרו שהמידע המעשי שסימנתם צוין או נבדק במפורש.');
       return;
     }
 
@@ -799,6 +798,7 @@ const handleSubmit = async () => {
         ...(isEdit ? { recommendationId: editPostId } : {}),
         ...destinationPayload,
         recommendation: {
+          taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
           title,
           description,
           category: getCategoryLabel(category),
@@ -806,14 +806,13 @@ const handleSubmit = async () => {
           tags: selectedTags,
           budget,
           media: finalMedia,
-          facets: {
-            interests: recommendationInterests,
+          attributes: {
+            audienceScope,
             audiences,
             vibes: recommendationVibes,
-            travelerStyles: recommendationTravelerStyles,
-            seasons: recommendationSeasons,
-            environments: recommendationEnvironments,
+            environment: recommendationEnvironment,
             needs: recommendationNeeds,
+            needsConfirmed,
           },
         },
       };
@@ -1002,40 +1001,9 @@ const handleSubmit = async () => {
               </Text>
         )}
 
-        {category ? (
-          <View style={styles.taxonomySection}>
-            <Text style={styles.taxonomyHint}>
-              דיוק ההתאמה · בחרו 1–5 תחומים. הצגנו קודם הצעות לפי הקטגוריה והתגיות.
-            </Text>
-            <ChipSelector
-              label="תחומי עניין"
-              items={visibleInterestOptions.map((option) => option.label)}
-              selectedValue={INTERESTS
-                .filter((option) => recommendationInterests.includes(option.value))
-                .map((option) => option.label)}
-              onSelect={(label) => {
-                const value = INTERESTS.find((option) => option.label === label)?.value;
-                if (value) toggleRecommendationInterest(value);
-              }}
-              multiSelect
-              getItemTestId={(label) => {
-                const value = INTERESTS.find((option) => option.label === label)?.value;
-                return value ? `add-rec-interest-${value}` : undefined;
-              }}
-            />
-            <TouchableOpacity
-              style={styles.taxonomyToggle}
-              onPress={() => setShowAllInterests((current) => !current)}
-              testID="add-rec-interests-toggle"
-            >
-              <Text style={styles.taxonomyToggleText}>{showAllInterests ? 'הצג רק הצעות' : 'הצג את כל התחומים'}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
         {/* 7. Budget Selector */}
         <SegmentedControl
-          label="תקציב"
+          label="רמת מחיר (חובה)"
           items={POST_BUDGETS.map((option) => option.postLabel)}
           selectedValue={POST_BUDGETS.find((option) => option.value === budget)?.postLabel || ''}
           onSelect={(label) => {
@@ -1046,95 +1014,97 @@ const handleSubmit = async () => {
           testIDPrefix="add-rec-budget"
         />
 
-        <ChipSelector
-          label="מתאים למי"
-          items={TRAVEL_PARTIES.map((option) => option.label)}
-          selectedValue={TRAVEL_PARTIES.filter((option) => audiences.includes(option.value)).map((option) => option.label)}
+        <SegmentedControl
+          label="למי זה מתאים?"
+          items={['מתאים לכולם', 'בחירת קהלים']}
+          selectedValue={audienceScope === 'all' ? 'מתאים לכולם' : 'בחירת קהלים'}
           onSelect={(label) => {
-            const value = TRAVEL_PARTIES.find((option) => option.label === label)?.value;
-            if (!value) return;
-            setAudiences((current) => current.includes(value)
-              ? current.filter((item) => item !== value)
-              : [...current, value].slice(0, 4));
+            const nextScope = label === 'מתאים לכולם' ? 'all' : 'selected';
+            setAudienceScope(nextScope);
+            if (nextScope === 'all') setAudiences([]);
           }}
-          multiSelect
-          testIDPrefix="add-rec-audience"
+          testIDPrefix="add-rec-audience-scope"
         />
 
-        <ChipSelector
-          label="אווירה"
-          items={VIBES.map((option) => option.label)}
-          selectedValue={VIBES.filter((option) => recommendationVibes.includes(option.value)).map((option) => option.label)}
-          onSelect={(label) => {
-            const value = VIBES.find((option) => option.label === label)?.value;
-            if (!value) return;
-            setRecommendationVibes((current) => current.includes(value)
-              ? current.filter((item) => item !== value)
-              : [...current, value].slice(0, 3));
-          }}
-          multiSelect
-          testIDPrefix="add-rec-vibe"
-        />
+        {audienceScope === 'selected' ? (
+          <ChipSelector
+            label="מתאים במיוחד למי? (חובה)"
+            items={TRAVEL_PARTIES.map((option) => option.label)}
+            selectedValue={TRAVEL_PARTIES.filter((option) => audiences.includes(option.value)).map((option) => option.label)}
+            onSelect={(label) => {
+              const value = TRAVEL_PARTIES.find((option) => option.label === label)?.value;
+              if (!value) return;
+              setAudiences((current) => current.includes(value)
+                ? current.filter((item) => item !== value)
+                : [...current, value].slice(0, 4));
+            }}
+            multiSelect
+            testIDPrefix="add-rec-audience"
+          />
+        ) : null}
 
-        <ChipSelector
-          label="סגנון טיול"
-          items={TRAVELER_STYLES.map((option) => option.label)}
-          selectedValue={TRAVELER_STYLES.filter((option) => recommendationTravelerStyles.includes(option.value)).map((option) => option.label)}
-          onSelect={(label) => {
-            const value = TRAVELER_STYLES.find((option) => option.label === label)?.value;
-            if (!value) return;
-            setRecommendationTravelerStyles((current) => current.includes(value)
-              ? current.filter((item) => item !== value)
-              : [...current, value].slice(0, 4));
-          }}
-          multiSelect
-          testIDPrefix="add-rec-traveler-style"
-        />
+        {attributeRequirements.vibes ? (
+          <ChipSelector
+            label="אווירה (חובה)"
+            items={VIBES.map((option) => option.label)}
+            selectedValue={VIBES.filter((option) => recommendationVibes.includes(option.value)).map((option) => option.label)}
+            onSelect={(label) => {
+              const value = VIBES.find((option) => option.label === label)?.value;
+              if (!value) return;
+              setRecommendationVibes((current) => current.includes(value)
+                ? current.filter((item) => item !== value)
+                : [...current, value].slice(0, 3));
+            }}
+            multiSelect
+            testIDPrefix="add-rec-vibe"
+          />
+        ) : null}
 
-        <ChipSelector
-          label="עונה מתאימה"
-          items={SEASONS.map((option) => option.label)}
-          selectedValue={SEASONS.filter((option) => recommendationSeasons.includes(option.value)).map((option) => option.label)}
-          onSelect={(label) => {
-            const value = SEASONS.find((option) => option.label === label)?.value;
-            if (!value) return;
-            setRecommendationSeasons((current) => current.includes(value)
-              ? current.filter((item) => item !== value)
-              : [...current, value]);
-          }}
-          multiSelect
-          testIDPrefix="add-rec-season"
-        />
+        {attributeRequirements.environment ? (
+          <SegmentedControl
+            label="סביבה (חובה)"
+            items={ENVIRONMENTS.map((option) => option.label)}
+            selectedValue={ENVIRONMENTS.find((option) => option.value === recommendationEnvironment)?.label || ''}
+            onSelect={(label) => setRecommendationEnvironment(
+              ENVIRONMENTS.find((option) => option.label === label)?.value || ''
+            )}
+            testIDPrefix="add-rec-environment"
+          />
+        ) : null}
 
-        <ChipSelector
-          label="סביבה"
-          items={ENVIRONMENTS.map((option) => option.label)}
-          selectedValue={ENVIRONMENTS.filter((option) => recommendationEnvironments.includes(option.value)).map((option) => option.label)}
-          onSelect={(label) => {
-            const value = ENVIRONMENTS.find((option) => option.label === label)?.value;
-            if (!value) return;
-            setRecommendationEnvironments((current) => current.includes(value)
-              ? current.filter((item) => item !== value)
-              : [...current, value]);
-          }}
-          multiSelect
-          testIDPrefix="add-rec-environment"
-        />
-
-        <ChipSelector
-          label="מידע מעשי ונגישות"
-          items={NEEDS.map((option) => option.label)}
-          selectedValue={NEEDS.filter((option) => recommendationNeeds.includes(option.value)).map((option) => option.label)}
-          onSelect={(label) => {
-            const value = NEEDS.find((option) => option.label === label)?.value;
-            if (!value) return;
-            setRecommendationNeeds((current) => current.includes(value)
-              ? current.filter((item) => item !== value)
-              : [...current, value]);
-          }}
-          multiSelect
-          testIDPrefix="add-rec-need"
-        />
+        {attributeRequirements.needs.length ? (
+          <View style={styles.taxonomySection}>
+            <ChipSelector
+              label="מידע מעשי ונגישות"
+              items={attributeRequirements.needs.map((option) => option.label)}
+              selectedValue={attributeRequirements.needs
+                .filter((option) => recommendationNeeds.includes(option.value))
+                .map((option) => option.label)}
+              onSelect={(label) => {
+                const value = attributeRequirements.needs.find((option) => option.label === label)?.value;
+                if (!value) return;
+                setRecommendationNeeds((current) => current.includes(value)
+                  ? current.filter((item) => item !== value)
+                  : [...current, value]);
+              }}
+              multiSelect
+              testIDPrefix="add-rec-need"
+            />
+            {recommendationNeeds.length ? (
+              <TouchableOpacity
+                style={styles.taxonomyToggle}
+                onPress={() => setNeedsConfirmed((current) => !current)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: needsConfirmed }}
+                testID="add-rec-needs-confirmed"
+              >
+                <Text style={styles.taxonomyToggleText}>
+                  {needsConfirmed ? '✓ ' : '○ '}אישרתי שהמידע הזה צוין או נבדק במפורש
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* 8. Submit Button */}
         <TouchableOpacity

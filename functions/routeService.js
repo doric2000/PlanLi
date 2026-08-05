@@ -15,6 +15,7 @@ const {
   normalizeCategoryIds,
   normalizeRecommendationTags,
   PACE_IDS,
+	POST_BUDGET_IDS,
   ROUTE_DIFFICULTY_IDS,
   ROUTE_EXPERIENCE_IDS,
   SEASON_IDS,
@@ -128,37 +129,70 @@ function legacyRouteMetadata(input) {
 }
 
 function sanitizeRouteMetadata(input) {
-  const strict = Number(input.taxonomyVersion || 0) >= 3;
-  if (!strict) return legacyRouteMetadata(input);
+  const canonical = Number(input.taxonomyVersion || 0) >= 3;
+  const strict = Number(input.taxonomyVersion || 0) >= 4;
+  if (!canonical) return legacyRouteMetadata(input);
   const categoryIds = normalizeCategoryIds(input.categoryIds || []);
   assert(categoryIds.length === (input.categoryIds || []).length, 'invalid-argument', 'categoryIds are invalid.');
+  assert(!strict || categoryIds.length >= 1, 'invalid-argument', 'Choose at least one route category.');
   const subcategoryIds = normalizeRecommendationTags(input.subcategoryIds || []);
   assert(subcategoryIds.length === (input.subcategoryIds || []).length, 'invalid-argument', 'subcategoryIds are invalid.');
   assert(subcategoryIds.every((tagId) => categoryIds.some((categoryId) => tagsMatchCategory([tagId], categoryId))),
     'invalid-argument', 'subcategoryIds do not match categoryIds.');
-  const submitted = input.facets && typeof input.facets === 'object' ? input.facets : {};
-  const allowedFacetFields = [
-    'interests', 'audiences', 'vibes', 'travelerStyles', 'needs', 'budgetLevel', 'seasons', 'environments',
-  ];
+  assert(!strict || categoryIds.every((categoryId) =>
+    subcategoryIds.some((tagId) => tagsMatchCategory([tagId], categoryId))),
+  'invalid-argument', 'Choose at least one subcategory for every route category.');
+  const submitted = strict
+    ? (input.attributes && typeof input.attributes === 'object' ? input.attributes : {})
+    : (input.facets && typeof input.facets === 'object' ? input.facets : {});
+  const allowedFacetFields = strict
+    ? ['audienceScope', 'audiences', 'vibes', 'travelerStyles', 'needs', 'needsCoverageConfirmed',
+      'budgetLevel', 'seasons', 'environment']
+    : ['interests', 'audiences', 'vibes', 'travelerStyles', 'needs', 'budgetLevel', 'seasons', 'environments'];
   assert(Object.keys(submitted).every((key) => allowedFacetFields.includes(key)),
-    'invalid-argument', 'Route facets contain unsupported fields.');
+    'invalid-argument', 'Route attributes contain unsupported fields.');
+  const audiences = cleanEnumArray(
+    submitted.audiences || [], 'attributes.audiences', TRAVEL_PARTY_IDS, 6,
+    { minimum: strict ? (submitted.audienceScope === 'all' ? 0 : 1) : 1 }
+  );
+  const audienceScope = strict && submitted.audienceScope === 'all' ? 'all' : 'selected';
+  assert(!strict || ['all', 'selected'].includes(submitted.audienceScope),
+    'invalid-argument', 'attributes.audienceScope is invalid.');
+  assert(audienceScope !== 'all' || audiences.length === 0,
+    'invalid-argument', 'Universal routes cannot select audiences.');
+  const needs = cleanEnumArray(submitted.needs || [], 'attributes.needs', NEED_IDS, NEED_IDS.length);
+  assert(!strict || !needs.length || submitted.needsCoverageConfirmed === true,
+    'invalid-argument', 'Route needs must be confirmed for the entire route.');
+  const seasons = cleanEnumArray(
+    submitted.seasons || [], 'attributes.seasons', SEASON_IDS, SEASON_IDS.length,
+    { minimum: strict ? 1 : 0 }
+  );
+  const environment = strict
+    ? cleanOptionalString(submitted.environment, 'attributes.environment', 40)
+    : '';
+  assert(!strict || ENVIRONMENT_IDS.includes(environment),
+    'invalid-argument', 'attributes.environment is required.');
   const facets = buildTravelContentFacets({
     categoryIds,
     subcategoryIds,
     budget: normalizeBudget(submitted.budgetLevel),
   }, {
-    interests: cleanEnumArray(submitted.interests || [], 'facets.interests', INTEREST_IDS, 12, { minimum: 1 }),
-    audiences: cleanEnumArray(submitted.audiences || [], 'facets.audiences', TRAVEL_PARTY_IDS, 6, { minimum: 1 }),
-    vibes: cleanEnumArray(submitted.vibes || [], 'facets.vibes', VIBE_IDS, 4),
-    travelerStyles: cleanEnumArray(submitted.travelerStyles || [], 'facets.travelerStyles', TRAVELER_STYLE_IDS, 4),
-    needs: cleanEnumArray(submitted.needs || [], 'facets.needs', NEED_IDS, NEED_IDS.length),
-    seasons: cleanEnumArray(submitted.seasons || [], 'facets.seasons', SEASON_IDS, SEASON_IDS.length),
-    environments: cleanEnumArray(
-      submitted.environments || [], 'facets.environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length
+    audienceScope,
+    audiences,
+    vibes: cleanEnumArray(submitted.vibes || [], 'attributes.vibes', VIBE_IDS, 4),
+    travelerStyles: cleanEnumArray(
+      submitted.travelerStyles || [], 'attributes.travelerStyles', TRAVELER_STYLE_IDS, 4
     ),
-  });
+    needs,
+    seasons,
+    environments: strict
+      ? [environment]
+      : cleanEnumArray(submitted.environments || [], 'facets.environments', ENVIRONMENT_IDS, ENVIRONMENT_IDS.length),
+  }, { surface: 'route' });
   const budgetLevel = normalizeBudget(submitted.budgetLevel);
   assert(budgetLevel, 'invalid-argument', 'facets.budgetLevel is required.');
+	assert(!strict || POST_BUDGET_IDS.includes(budgetLevel),
+	  'invalid-argument', 'attributes.budgetLevel is invalid.');
   facets.budgetLevel = budgetLevel;
   const difficulty = normalizeAliasedId(input.difficulty, ROUTE_DIFFICULTY_IDS, taxonomy.legacy?.routeDifficultyAliases);
   assert(difficulty, 'invalid-argument', 'difficulty is required.');
@@ -174,6 +208,7 @@ function sanitizeRouteMetadata(input) {
   assert(cleanTransportModes.length >= 1, 'invalid-argument', 'Choose at least one transport mode.');
   const pace = input.pace ? normalizeAliasedId(input.pace, PACE_IDS) : '';
   assert(!input.pace || pace, 'invalid-argument', 'pace is invalid.');
+  assert(!strict || pace, 'invalid-argument', 'pace is required.');
   return {
     categoryIds,
     subcategoryIds,

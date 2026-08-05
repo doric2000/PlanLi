@@ -22,7 +22,10 @@ function recommendation(overrides = {}) {
     category: 'אוכל ובילויים',
     tags: ['restaurant'],
     budget: 'balanced',
-    facets: { interests: ['food'], audiences: [], vibes: [], needs: [], budgetLevel: 'balanced' },
+	facets: {
+	  interests: ['food'], audienceScope: 'all', audiences: [], vibes: ['relaxed'], travelerStyles: [],
+	  needs: [], needsScope: '', budgetLevel: 'balanced', seasons: [], environments: ['indoor'],
+	},
     status: 'active',
     destination: { countryId: 'country', cityId: 'city' },
     ...overrides,
@@ -57,7 +60,10 @@ test('curation is dry-run by default and apply requires explicit flags', () => {
 test('canonicalization trims copy and rebuilds taxonomy facets', () => {
   const after = canonicalizeRecommendation(recommendation(), {
     id: 'r1',
-    patch: { tags: ['restaurant'], facets: { interests: ['food'], audiences: ['couple'] } },
+	patch: { tags: ['restaurant'], facets: {
+		interests: ['food'], audienceScope: 'selected', audiences: ['couple'], vibes: ['relaxed'],
+		needs: [], environments: ['indoor'],
+	} },
     confidence: 'high',
     reason: 'review',
     sources: [],
@@ -84,7 +90,7 @@ test('manifest preserves the Firestore updateTime precondition and audit metadat
   });
   assert.equal(result.entry.expectedUpdateTime, '2026-08-04T08:00:00.000Z');
   assert.equal(result.entry.reason, 'Editorial clarity.');
-  assert.deepEqual(result.entry.changes, ['title', 'description', 'category', 'facets']);
+	assert.deepEqual(result.entry.changes, ['title', 'description', 'category', 'taxonomyVersion', 'search']);
   assert.deepEqual(result.errors, []);
 });
 
@@ -121,7 +127,10 @@ test('prices and hours require a dated official source', () => {
 test('practical needs derived from an existing canonical tag do not require a second source', () => {
   const entry = buildManifestEntry(snapshot(recommendation({
     tags: ['restaurant', 'כשר'],
-    facets: { interests: ['food'], audiences: [], vibes: [], needs: [], budgetLevel: 'balanced' },
+	 facets: {
+		interests: ['food'], audienceScope: 'all', audiences: [], vibes: ['relaxed'], needs: [],
+		budgetLevel: 'balanced', environments: ['indoor'],
+	 },
   })), {
     id: 'r1',
     patch: {},
