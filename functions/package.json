@@ -22,6 +22,7 @@
     "audit-live": "node scripts/auditLiveState.js",
     "configure-function-iam": "node scripts/configureFunctionServiceAccounts.js",
     "cleanup-orphan-favorites": "node scripts/cleanupOrphanFavorites.js",
+    "remove-rating": "node scripts/removeRating.js",
     "backfill-public-profiles": "node scripts/backfillPublicProfiles.js",
     "sync-country-metadata": "node scripts/syncCountryMetadata.js",
     "build-country-geo": "node scripts/buildCountryGeoData.js"

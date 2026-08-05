@@ -12,7 +12,7 @@ import { colors, common } from '../styles';
  * @param {string} props.id - ID of the item to favorite
  * @param {string} [props.variant='light'] - Button variant: 'light' (white background) or 'dark' (colored background)
  * @param {Object} [props.style] - Additional styles to apply
- * @param {Object} [props.snapshotData] - Snapshot data to store (name, thumbnail_url, sub_text, rating)
+ * @param {Object} [props.snapshotData] - Snapshot data used by legacy callers; the server builds the canonical preview
  */
 const FavoriteButton = ({ type, id, variant = 'light', style, snapshotData = {} }) => {
   const { isFavorite, toggleFavorite, loading: saving } = useFavorite(type, id, snapshotData);

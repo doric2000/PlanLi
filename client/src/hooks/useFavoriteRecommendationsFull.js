@@ -19,7 +19,6 @@ const asRecommendationPreview = (favorite) => {
           placeholder: { color: preview.placeholderColor || '#E5E7EB' },
         }]
       : [],
-    rating: preview.metrics?.rating ?? null,
     favoriteTarget: favorite.target,
     isFavoritePreview: true,
   };

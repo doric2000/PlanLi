@@ -9,8 +9,10 @@ function createMockComponent(name) {
 const MapView = createMockComponent('MapView');
 const Marker = createMockComponent('Marker');
 const Callout = createMockComponent('Callout');
+const UrlTile = createMockComponent('UrlTile');
 
 module.exports = MapView;
 module.exports.default = MapView;
 module.exports.Marker = Marker;
 module.exports.Callout = Callout;
+module.exports.UrlTile = UrlTile;

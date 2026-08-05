@@ -8,7 +8,6 @@ export function useFavoriteCityIds({ enabled = true } = {}) {
     name: favorite.preview?.title || '',
     imageUrl: favorite.preview?.thumbUrl || null,
     placeholderColor: favorite.preview?.placeholderColor,
-    rating: favorite.preview?.metrics?.rating ?? null,
     travelers: favorite.preview?.metrics?.travelers ?? 0,
     favoriteKey: favorite.favoriteKey,
   }));

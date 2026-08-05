@@ -55,8 +55,7 @@ const mockResolveDestinationForPlacePreview = jest.fn(() => Promise.resolve({
           lng: 34.7818
         }
       },
-      types: ['restaurant', 'food', 'establishment'],
-      rating: 4.5
+      types: ['restaurant', 'food', 'establishment']
     }
   }));
 jest.mock('../src/services/LocationService', () => ({

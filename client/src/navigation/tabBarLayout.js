@@ -7,6 +7,7 @@ export const TAB_BAR_HEIGHT = 70;
 
 const TAB_BAR_BOTTOM_MIN = 10;
 const FAB_GAP_ABOVE_TAB_BAR = 12;
+const TAB_OVERLAY_GAP = 12;
 
 /** buttons.fab height (width) */
 export const FAB_SIZE = 60;
@@ -19,8 +20,17 @@ export const FAB_LIST_TAIL_PADDING = 16;
  * @param {{ bottom?: number }} insets - useSafeAreaInsets()
  */
 export function getFabBottomInset(insets) {
+  return getTabOverlayBottomInset(insets, FAB_GAP_ABOVE_TAB_BAR);
+}
+
+/**
+ * Distance from the screen bottom to content that must clear the floating tab bar.
+ * @param {{ bottom?: number }} insets - useSafeAreaInsets()
+ * @param {number} gap - visual gap above the tab bar
+ */
+export function getTabOverlayBottomInset(insets, gap = TAB_OVERLAY_GAP) {
   const bottom = Math.max(insets?.bottom ?? 0, TAB_BAR_BOTTOM_MIN);
-  return bottom + TAB_BAR_HEIGHT + FAB_GAP_ABOVE_TAB_BAR;
+  return bottom + TAB_BAR_HEIGHT + gap;
 }
 
 /**

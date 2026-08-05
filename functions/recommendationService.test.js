@@ -56,6 +56,7 @@ test('recommendation content ignores client-controlled ownership and location fi
     userId: 'spoofed',
     countryId: 'spoofed',
     likes: 900,
+    rating: 5,
   });
 
   assert.deepEqual(result, {
@@ -523,6 +524,7 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
       };
     }
     const requestedPlaceId = url.searchParams.get('place_id');
+    assert.equal(url.searchParams.get('fields').includes('rating'), false);
     return {
       ok: true,
       json: async () => ({
@@ -565,6 +567,10 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
     assert.deepEqual(
       admin.documents.get(`countries/${countryId}/cities/${cityId}`).providerIds.googlePlaceIds,
       ['city-google-id']
+    );
+    assert.equal(
+      Object.hasOwn(admin.documents.get(`countries/${countryId}/cities/${cityId}`), 'rating'),
+      false
     );
     assert.equal(
       Object.prototype.hasOwnProperty.call(

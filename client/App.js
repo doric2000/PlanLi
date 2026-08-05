@@ -9,7 +9,6 @@ import ChangeNameScreen from "./src/features/profile/screens/ChangeNameScreen";
 import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordScreen";
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
 import RecommendationDetailScreen from "./src/features/community/screens/RecommendationDetailScreen";
-import CommunityMapScreen from "./src/features/community/screens/CommunityMapScreen";
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import UserProfileScreen from "./src/features/profile/screens/UserProfileScreen";
 import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
@@ -83,10 +82,6 @@ export default function App() {
 						name='RecommendationDetail'
 						component={RecommendationDetailScreen}
 
-					/>
-					<Stack.Screen
-						name='CommunityMap'
-						component={CommunityMapScreen}
 					/>
 					<Stack.Screen
 						name='LandingPage'

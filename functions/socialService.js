@@ -117,7 +117,6 @@ function buildFavoritePreview({ target, data, publicProfile }) {
         }
       : null,
     metrics: {
-      rating: Number.isFinite(Number(data?.rating)) ? Number(data.rating) : null,
       days: Number.isFinite(Number(data?.dayCount)) ? Number(data.dayCount) : null,
       distanceKm: Number.isFinite(Number(data?.distanceKm)) ? Number(data.distanceKm) : null,
       travelers: Number.isFinite(Number(data?.travelers)) ? Number(data.travelers) : null,

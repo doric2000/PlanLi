@@ -570,23 +570,6 @@ export const common = {
 		maxHeight: 60,
 	},
 
-	// Rating display
-	ratingContainer: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-
-	ratingStar: {
-		color: "#FBBF24",
-	},
-
-	ratingText: {
-		fontSize: 14,
-		fontWeight: "600",
-		color: "#374151",
-	},
-
 	// Likes modal styles
 	likesModalContainer: {
 		backgroundColor: "#fff",

@@ -79,8 +79,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   const snapshotData = {
     name: item.title,
     thumbnail_url: thumbnailUrl,
-    sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : '',
-    rating: item.rating
+    sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : ''
   };
 
   const handleCardPress = () => {

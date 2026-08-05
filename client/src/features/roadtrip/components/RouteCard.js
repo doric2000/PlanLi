@@ -145,7 +145,6 @@ export const RouteCard = ({
 		name: item?.title || undefined,
 		thumbnail_url: thumbnailUrl,
 		sub_text: descriptionPreview,
-		rating: item?.rating,
 		days: item?.dayCount,
 		distance: item?.distanceKm,
 	};

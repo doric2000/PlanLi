@@ -42,7 +42,6 @@ export default function FavoriteRecommendationsList({ favorites, loading, flatLi
                 title: item.name || 'Untitled',
                 description: item.sub_text || '',
                 images: item.thumbnail_url ? [item.thumbnail_url] : [],
-                rating: item.rating,
                 ...item
               }}
               showActionBar={false}

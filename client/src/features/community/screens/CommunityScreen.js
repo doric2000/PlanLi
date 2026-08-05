@@ -31,7 +31,11 @@ import {
 import { auth } from '../../../config/firebase';
 import { getUserTier } from '../../../utils/userTier';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
-import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
+import {
+  getFabBottomInset,
+  getTabOverlayBottomInset,
+  getTabSceneListPaddingBottom,
+} from '../../../navigation/tabBarLayout';
 import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
@@ -129,30 +133,16 @@ export default function CommunityScreen({ navigation }) {
         .map((x) => (x.distanceKm === null ? x.item : { ...x.item, distanceKm: x.distanceKm }));
   }, [filteredData, sortBy, userLocation]);
 
-  const mapPins = useMemo(() => {
-    return displayData
-      .map((item) => {
-        const coords = getPlaceCoordinates(item?.place);
-        if (!coords) return null;
-        return {
-          id: item.id,
-          title: item.title || item.destination?.cityName || 'המלצה',
-          coordinates: coords,
-        };
-      })
-      .filter(Boolean);
-  }, [displayData]);
-
-  const [debouncedMapPins, setDebouncedMapPins] = useState(mapPins);
+  const [debouncedMapRecommendations, setDebouncedMapRecommendations] = useState(displayData);
 
   useEffect(() => {
     if (!mapOpen) {
-      setDebouncedMapPins(mapPins);
+      setDebouncedMapRecommendations(displayData);
       return;
     }
-    const t = setTimeout(() => setDebouncedMapPins(mapPins), 500);
+    const t = setTimeout(() => setDebouncedMapRecommendations(displayData), 500);
     return () => clearTimeout(t);
-  }, [mapPins, mapOpen]);
+  }, [displayData, mapOpen]);
 
   const focusMapOnPins = filters.destinations.length > 0 || Boolean(filters.query.trim());
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
@@ -243,9 +233,10 @@ export default function CommunityScreen({ navigation }) {
       {mapOpen && (
         <View style={community.inlineMapSection}>
           <CommunityInlineMap
-            pins={debouncedMapPins}
+            recommendations={debouncedMapRecommendations}
             focusOnPins={focusMapOnPins}
-            onOpenPost={(postId) => navigation.navigate('RecommendationDetail', { postId })}
+            overlayBottomInset={getTabOverlayBottomInset(insets)}
+            onOpenRecommendation={(item) => navigation.navigate('RecommendationDetail', { item })}
           />
         </View>
       )}
@@ -300,23 +291,25 @@ export default function CommunityScreen({ navigation }) {
         )
       )}
 
-      <FabButton
-        style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
-        onPress={() => {
-          const tier = getUserTier(auth.currentUser);
-          if (tier === 'guest') {
-            Alert.alert('יש להתחבר', 'כדי ליצור המלצה צריך להתחבר.');
-            navigation.navigate('Login');
-            return;
-          }
-          if (tier === 'unverified') {
-            Alert.alert('נדרש אימות', 'כדי ליצור המלצה צריך לאמת את האימייל.');
-            navigation.navigate('VerifyEmail');
-            return;
-          }
-          navigation.navigate('AddRecommendation');
-        }}
-      />
+      {!mapOpen && (
+        <FabButton
+          style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
+          onPress={() => {
+            const tier = getUserTier(auth.currentUser);
+            if (tier === 'guest') {
+              Alert.alert('יש להתחבר', 'כדי ליצור המלצה צריך להתחבר.');
+              navigation.navigate('Login');
+              return;
+            }
+            if (tier === 'unverified') {
+              Alert.alert('נדרש אימות', 'כדי ליצור המלצה צריך לאמת את האימייל.');
+              navigation.navigate('VerifyEmail');
+              return;
+            }
+            navigation.navigate('AddRecommendation');
+          }}
+        />
+      )}
 
       {/* --- FILTER MODAL --- */}
       <RecommendationsFilterModal

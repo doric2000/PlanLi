@@ -270,7 +270,7 @@ async function fetchGooglePlace(placeId, mapsKey) {
   assert(mapsKey, 'failed-precondition', 'GOOGLE_MAPS_KEY is not configured.');
 
   const fields =
-    'name,formatted_address,address_components,geometry,place_id,url,rating';
+    'name,formatted_address,address_components,geometry,place_id,url';
   const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
   url.searchParams.set('place_id', normalizedPlaceId);
   url.searchParams.set('fields', fields);
@@ -727,7 +727,6 @@ async function resolveGoogleDestination({
       name: parsedCity.cityName || parsed.cityName,
       description: parsedCity.address || parsed.address || '',
       providerIds: { googlePlaceIds: [parsedCity.placeId] },
-      rating: Number(cityPlaceResult?.rating) || 0,
       travelers: 0,
       imageUrl: DESTINATION_FALLBACK_IMAGE,
       status: 'active',

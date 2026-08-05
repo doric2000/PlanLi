@@ -65,7 +65,7 @@ export const fetchPlaceDetails = async (placeId, { fields } = {}) => {
   }
 
   const resolvedFields =
-    fields || 'name,formatted_address,address_components,geometry,photos,rating,place_id,url';
+    fields || 'name,formatted_address,address_components,geometry,photos,place_id,url';
   const params = new URLSearchParams({
     place_id: placeId,
     fields: resolvedFields,

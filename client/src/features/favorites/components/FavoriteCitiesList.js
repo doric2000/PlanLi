@@ -48,7 +48,6 @@ export default function FavoriteCitiesList({ flatListRef, onScroll }) {
             countryId: item.countryId,
             imageUrl: item.imageUrl,
             placeholderColor: item.placeholderColor,
-            rating: item.rating,
             travelers: item.travelers || 0,
           }}
           showTravelers={false}
