@@ -6,6 +6,7 @@ import ProfileHeader from '../src/features/profile/components/ProfileHeader';
 import ProfilePreferencesSignature from '../src/features/profile/components/ProfilePreferencesSignature';
 import ProfileStatsCard from '../src/features/profile/components/ProfileStatsCard';
 import { createProfileStyles } from '../src/features/profile/components/profileStyles';
+import { getPreferencePresentation } from '../src/constants/travelPresentation';
 
 jest.mock('@expo/vector-icons', () => ({
   MaterialIcons: ({ name }) => {
@@ -18,6 +19,14 @@ jest.mock('@expo/vector-icons', () => ({
 const styles = createProfileStyles({}, 390);
 
 describe('profile presentation', () => {
+  it('keeps typography across the shared profile below bold weights', () => {
+    Object.entries(styles)
+      .filter(([, style]) => style.fontWeight != null)
+      .forEach(([, textStyle]) => {
+        expect(Number(textStyle.fontWeight)).toBeLessThanOrEqual(600);
+      });
+  });
+
   it('always renders the three activity metrics without legacy rating fields', () => {
     const screen = render(
       <ProfileStatsCard
@@ -34,18 +43,71 @@ describe('profile presentation', () => {
     expect(screen.queryByText(/rating|דירוג|כוכב/i)).toBeNull();
   });
 
-  it('shows the preference signature and owner empty-state CTA', () => {
-    const withPreferences = render(
+  it('uses the same travel-taste presentation for owner and public profiles', () => {
+    const smartProfile = {
+      interests: ['food', 'hiking', 'culture_history'],
+      vibe: ['relaxed'],
+    };
+    const publicProfile = render(
       <ProfilePreferencesSignature
-        smartProfile={{ interests: ['food', 'hiking', 'culture_history'], vibe: ['relaxed'] }}
+        smartProfile={smartProfile}
         isOwner={false}
         styles={styles}
       />
     );
-    expect(withPreferences.getByText('אוכל וקולינריה')).toBeTruthy();
-    expect(withPreferences.getByText('מסלולי הליכה')).toBeTruthy();
-    expect(withPreferences.getByText('תרבות והיסטוריה')).toBeTruthy();
-    expect(withPreferences.getByText('רגועה')).toBeTruthy();
+    const ownerProfile = render(
+      <ProfilePreferencesSignature
+        smartProfile={smartProfile}
+        isOwner
+        onEdit={jest.fn()}
+        styles={styles}
+      />
+    );
+
+    ['אוכל וקולינריה', 'מסלולי הליכה', 'תרבות והיסטוריה', 'רגוע'].forEach((label) => {
+      expect(publicProfile.getByText(label)).toBeTruthy();
+      expect(ownerProfile.getByText(label)).toBeTruthy();
+    });
+    expect(publicProfile.getByText('תחומי עניין')).toBeTruthy();
+    expect(publicProfile.getByText('סגנון')).toBeTruthy();
+    expect(ownerProfile.getByText('תחומי עניין')).toBeTruthy();
+    expect(ownerProfile.getByText('סגנון')).toBeTruthy();
+    expect(publicProfile.queryByText('הדברים שהופכים טיול למדויק בשבילי')).toBeNull();
+    expect(ownerProfile.queryByText('הדברים שהופכים טיול למדויק בשבילי')).toBeNull();
+    expect(publicProfile.queryByLabelText('עריכת העדפות הטיול')).toBeNull();
+    expect(ownerProfile.getByLabelText('עריכת העדפות הטיול')).toBeTruthy();
+
+    const publicChipStyle = publicProfile.getByTestId('profile-preference-interest-food').props.style;
+    const ownerChipStyle = ownerProfile.getByTestId('profile-preference-interest-food').props.style;
+    expect(ownerChipStyle).toEqual(publicChipStyle);
+    expect(publicChipStyle).toMatchObject({
+      backgroundColor: '#F7F8FA',
+      borderColor: '#E3E8EF',
+    });
+  });
+
+  it.each([
+    ['relaxed', 'רגוע'],
+    ['romantic', 'רומנטי'],
+    ['adventurous', 'הרפתקני'],
+    ['cultural', 'תרבותי'],
+    ['social', 'חברתי'],
+    ['local', 'מקומי ואותנטי'],
+    ['lively', 'תוסס'],
+    ['quiet_secluded', 'שקט ומבודד'],
+  ])('uses a stable masculine-singular profile label for the %s vibe', (vibe, label) => {
+    expect(getPreferencePresentation('vibe', vibe).label).toBe(label);
+  });
+
+  it('shows an owner-only empty-state CTA for missing preferences', () => {
+    const publicEmpty = render(
+      <ProfilePreferencesSignature
+        smartProfile={{ interests: [], vibe: [] }}
+        isOwner={false}
+        styles={styles}
+      />
+    );
+    expect(publicEmpty.queryByTestId('profile-preferences-signature')).toBeNull();
 
     const empty = render(
       <ProfilePreferencesSignature

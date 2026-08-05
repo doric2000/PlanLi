@@ -95,6 +95,20 @@ const VIBE_ICONS = Object.freeze({
   quiet_secluded: 'nature-people',
 });
 
+// Profile preferences are presented as a travel style, so their Hebrew labels
+// intentionally use the stable masculine-singular form instead of agreeing
+// with the feminine taxonomy noun "אווירה".
+const PROFILE_VIBE_LABELS = Object.freeze({
+  relaxed: 'רגוע',
+  romantic: 'רומנטי',
+  adventurous: 'הרפתקני',
+  cultural: 'תרבותי',
+  social: 'חברתי',
+  local: 'מקומי ואותנטי',
+  lively: 'תוסס',
+  quiet_secluded: 'שקט ומבודד',
+});
+
 const INTEREST_BY_ID = Object.fromEntries(INTERESTS.map((option) => [option.value, option]));
 const VIBE_BY_ID = Object.fromEntries(VIBES.map((option) => [option.value, option]));
 
@@ -130,7 +144,10 @@ export function getPreferencePresentation(kind, value) {
   return {
     id: normalizedValue,
     kind: isVibe ? 'vibe' : 'interest',
-    label: option?.label || normalizedValue || 'העדפה',
+    label: (isVibe ? PROFILE_VIBE_LABELS[normalizedValue] : option?.label)
+      || option?.label
+      || normalizedValue
+      || 'העדפה',
     icon: (isVibe ? VIBE_ICONS : INTEREST_ICONS)[normalizedValue] || category.icon,
     color: category.color,
     categoryId,

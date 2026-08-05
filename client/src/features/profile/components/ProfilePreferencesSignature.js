@@ -5,38 +5,38 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../../styles';
 import { getPreferencePresentation } from '../../../constants/travelPresentation';
 
-function PreferenceStamp({ preference, featured, styles }) {
-  if (featured) {
-    return (
-      <View
-        style={[
-          styles.featuredStamp,
-          {
-            backgroundColor: `${preference.color}12`,
-            borderColor: `${preference.color}55`,
-          },
-        ]}
-      >
-        <View style={[styles.featuredIcon, { backgroundColor: `${preference.color}25` }]}>
-          <MaterialIcons name={preference.icon} size={22} color={preference.color} />
-        </View>
-        <Text style={styles.featuredLabel} numberOfLines={2}>{preference.label}</Text>
-      </View>
-    );
-  }
-
+function PreferenceChip({ preference, styles }) {
   return (
     <View
-      style={[
-        styles.compactStamp,
-        {
-          backgroundColor: `${preference.color}0D`,
-          borderColor: `${preference.color}40`,
-        },
-      ]}
+      style={styles.preferenceChip}
+      testID={`profile-preference-${preference.kind}-${preference.id}`}
     >
-      <MaterialIcons name={preference.icon} size={15} color={preference.color} />
-      <Text style={styles.compactLabel} numberOfLines={1}>{preference.label}</Text>
+      <MaterialIcons name={preference.icon} size={17} color={colors.primary} />
+      <Text style={styles.preferenceChipLabel} numberOfLines={1}>
+        {preference.label}
+      </Text>
+    </View>
+  );
+}
+
+function PreferenceGroup({ title, icon, preferences, styles, testID }) {
+  if (!preferences.length) return null;
+
+  return (
+    <View style={styles.preferenceGroup} testID={testID}>
+      <View style={styles.preferenceGroupTitleRow}>
+        <MaterialIcons name={icon} size={17} color={colors.textLight} />
+        <Text style={styles.preferenceGroupTitle}>{title}</Text>
+      </View>
+      <View style={styles.preferenceChipsWrap}>
+        {preferences.map((preference) => (
+          <PreferenceChip
+            key={`${preference.kind}-${preference.id}`}
+            preference={preference}
+            styles={styles}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -57,72 +57,69 @@ export default function ProfilePreferencesSignature({
     return { interests, vibes };
   }, [smartProfile?.interests, smartProfile?.vibe]);
 
-  const allPreferences = [...preferences.interests, ...preferences.vibes];
-  const featuredPreferences = (preferences.interests.length
-    ? preferences.interests
-    : preferences.vibes).slice(0, 3);
+  const hasPreferences = preferences.interests.length > 0 || preferences.vibes.length > 0;
+  const canEdit = isOwner && typeof onEdit === 'function';
 
-  if (!allPreferences.length && !isOwner) return null;
+  if (!hasPreferences && !isOwner) return null;
 
   return (
-    <View style={styles.preferencesSection}>
-      <View style={styles.preferencesTitleRow}>
-        <Text style={styles.preferencesTitle}>הטעם שלי בטיולים</Text>
-        {isOwner && typeof onEdit === 'function' ? (
+    <View style={styles.preferencesSection} testID="profile-preferences-signature">
+      <View style={styles.preferencesHeader}>
+        <View style={styles.preferencesHeadingWrap}>
+          <View style={styles.preferencesHeaderIcon}>
+            <MaterialIcons name="explore" size={21} color={colors.primary} />
+          </View>
+          <View style={styles.preferencesHeadingText}>
+            <Text style={styles.preferencesTitle}>הטעם שלי בטיולים</Text>
+          </View>
+        </View>
+
+        {canEdit ? (
           <Pressable
             onPress={onEdit}
-            style={styles.preferencesEdit}
+            style={({ pressed }) => [styles.preferencesEdit, pressed && styles.preferencesEditPressed]}
             accessibilityRole="button"
             accessibilityLabel="עריכת העדפות הטיול"
           >
-            <MaterialIcons name="edit" size={18} color={colors.primary} />
+            <MaterialIcons name="edit" size={16} color={colors.primary} />
+            <Text style={styles.preferencesEditText}>עריכה</Text>
           </Pressable>
         ) : null}
       </View>
 
-      {allPreferences.length ? (
-        <>
-          <View style={styles.featuredRow}>
-            {featuredPreferences.map((preference) => (
-              <PreferenceStamp
-                key={`featured-${preference.kind}-${preference.id}`}
-                preference={preference}
-                featured
-                styles={styles}
-              />
-            ))}
-          </View>
-          {allPreferences.length > featuredPreferences.length ? (
-            <View style={styles.compactWrap}>
-              {allPreferences.filter((preference) => (
-                !featuredPreferences.some((featured) => (
-                  featured.kind === preference.kind && featured.id === preference.id
-                ))
-              )).map((preference) => (
-                <PreferenceStamp
-                  key={`compact-${preference.kind}-${preference.id}`}
-                  preference={preference}
-                  styles={styles}
-                />
-              ))}
-            </View>
-          ) : null}
-        </>
+      {hasPreferences ? (
+        <View style={styles.preferenceGroups}>
+          <PreferenceGroup
+            title="תחומי עניין"
+            icon="interests"
+            preferences={preferences.interests}
+            styles={styles}
+            testID="profile-preference-interests"
+          />
+          <PreferenceGroup
+            title="סגנון"
+            icon="favorite-border"
+            preferences={preferences.vibes}
+            styles={styles}
+            testID="profile-preference-vibes"
+          />
+        </View>
       ) : (
         <View style={styles.preferenceEmpty}>
-          <MaterialIcons name="auto-awesome" size={24} color={colors.secondary} />
-          <Text style={styles.preferenceEmptyTitle}>הפרופיל שלך עדיין מחכה לחותמת האישית שלך</Text>
-          <Text style={styles.preferenceEmptyText}>
-            בחרו כמה תחומי עניין ואווירה, ונעזור להציג את הסגנון שלכם בצורה שמרגישה כמו טיול.
-          </Text>
+          <View style={styles.preferenceEmptyTextWrap}>
+            <Text style={styles.preferenceEmptyTitle}>עוד לא הגדרת את הטעם שלך בטיולים</Text>
+          </View>
           <Pressable
             onPress={onEdit}
-            style={styles.preferenceEmptyButton}
+            style={({ pressed }) => [
+              styles.preferenceEmptyButton,
+              pressed && styles.preferenceEmptyButtonPressed,
+            ]}
             accessibilityRole="button"
             accessibilityLabel="הגדרת העדפות הטיול"
           >
-            <MaterialIcons name="tune" size={17} color={colors.white} />
             <Text style={styles.preferenceEmptyButtonText}>להגדרת העדפות</Text>
+            <MaterialIcons name="arrow-back" size={17} color={colors.white} />
           </Pressable>
         </View>
       )}
