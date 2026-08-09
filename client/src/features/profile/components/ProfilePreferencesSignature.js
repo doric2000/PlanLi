@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { colors } from '../../../styles';
@@ -12,9 +13,9 @@ function PreferenceChip({ preference, styles }) {
       testID={`profile-preference-${preference.kind}-${preference.id}`}
     >
       <MaterialIcons name={preference.icon} size={17} color={colors.primary} />
-      <Text style={styles.preferenceChipLabel} numberOfLines={1}>
+      <AppText style={styles.preferenceChipLabel} numberOfLines={1}>
         {preference.label}
-      </Text>
+      </AppText>
     </View>
   );
 }
@@ -26,7 +27,7 @@ function PreferenceGroup({ title, icon, preferences, styles, testID }) {
     <View style={styles.preferenceGroup} testID={testID}>
       <View style={styles.preferenceGroupTitleRow}>
         <MaterialIcons name={icon} size={17} color={colors.textLight} />
-        <Text style={styles.preferenceGroupTitle}>{title}</Text>
+        <AppText style={styles.preferenceGroupTitle}>{title}</AppText>
       </View>
       <View style={styles.preferenceChipsWrap}>
         {preferences.map((preference) => (
@@ -70,7 +71,7 @@ export default function ProfilePreferencesSignature({
             <MaterialIcons name="explore" size={21} color={colors.primary} />
           </View>
           <View style={styles.preferencesHeadingText}>
-            <Text style={styles.preferencesTitle}>הטעם שלי בטיולים</Text>
+            <AppText style={styles.preferencesTitle}>הטעם שלי בטיולים</AppText>
           </View>
         </View>
 
@@ -82,7 +83,7 @@ export default function ProfilePreferencesSignature({
             accessibilityLabel="עריכת העדפות הטיול"
           >
             <MaterialIcons name="edit" size={16} color={colors.primary} />
-            <Text style={styles.preferencesEditText}>עריכה</Text>
+            <AppText style={styles.preferencesEditText}>עריכה</AppText>
           </Pressable>
         ) : null}
       </View>
@@ -107,7 +108,7 @@ export default function ProfilePreferencesSignature({
       ) : (
         <View style={styles.preferenceEmpty}>
           <View style={styles.preferenceEmptyTextWrap}>
-            <Text style={styles.preferenceEmptyTitle}>עוד לא הגדרת את הטעם שלך בטיולים</Text>
+            <AppText style={styles.preferenceEmptyTitle}>עוד לא הגדרת את הטעם שלך בטיולים</AppText>
           </View>
           <Pressable
             onPress={onEdit}
@@ -118,7 +119,7 @@ export default function ProfilePreferencesSignature({
             accessibilityRole="button"
             accessibilityLabel="הגדרת העדפות הטיול"
           >
-            <Text style={styles.preferenceEmptyButtonText}>להגדרת העדפות</Text>
+            <AppText style={styles.preferenceEmptyButtonText}>להגדרת העדפות</AppText>
             <MaterialIcons name="arrow-back" size={17} color={colors.white} />
           </Pressable>
         </View>

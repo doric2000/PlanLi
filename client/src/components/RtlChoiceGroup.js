@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Platform, ScrollView, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { Platform, ScrollView, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import AppText from "./AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../styles';
 import { guidedFormStyles as styles } from './guidedFormStyles';
@@ -66,15 +67,15 @@ export default function RtlChoiceGroup({
         {variant === 'tile' && option?.icon ? (
           <MaterialIcons name={option.icon} size={22} color={active && !theme ? colors.white : colors.primary} />
         ) : null}
-        <Text style={[styles.choiceText, active && styles.choiceTextSelected, activeTextTheme]}>{optionLabel(option)}</Text>
+        <AppText style={[styles.choiceText, active && styles.choiceTextSelected, activeTextTheme]}>{optionLabel(option)}</AppText>
       </TouchableOpacity>
     );
   });
 
   return (
     <View style={styles.fieldGroup}>
-      {!!label && <Text style={styles.fieldLabel}>{label}</Text>}
-      {!!helper && <Text style={styles.fieldHelper}>{helper}</Text>}
+      {!!label && <AppText style={styles.fieldLabel}>{label}</AppText>}
+      {!!helper && <AppText style={styles.fieldHelper}>{helper}</AppText>}
       {useRail ? (
         <ScrollView
           ref={scrollRef}
@@ -92,7 +93,7 @@ export default function RtlChoiceGroup({
       ) : (
         <View style={styles.choiceWrap} testID={testIDPrefix ? `${testIDPrefix}-wrap` : undefined}>{content}</View>
       )}
-      {!!error && <Text style={styles.fieldError} accessibilityLiveRegion="polite">{error}</Text>}
+      {!!error && <AppText style={styles.fieldError} accessibilityLiveRegion="polite">{error}</AppText>}
     </View>
   );
 }

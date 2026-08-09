@@ -1,5 +1,6 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { colors, discoveryFilterStyles as styles } from '../styles';
 
@@ -27,8 +28,8 @@ export default function DiscoveryDisclosureSection({
           color={colors.textSecondary}
         />
         <View style={styles.disclosureTitleWrap}>
-          <Text style={styles.disclosureTitle}>{title}</Text>
-          <Text style={styles.disclosureSummary} numberOfLines={1}>{summary}</Text>
+          <AppText style={styles.disclosureTitle}>{title}</AppText>
+          <AppText style={styles.disclosureSummary} numberOfLines={1}>{summary}</AppText>
         </View>
       </TouchableOpacity>
       {expanded ? <View style={styles.disclosureBody}>{children}</View> : null}

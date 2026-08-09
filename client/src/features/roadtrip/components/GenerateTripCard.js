@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity } from 'react-native';
+import { TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { generateTripCardStyles as styles } from '../../../styles';
@@ -28,10 +29,10 @@ export const GenerateTripCard = ({ onPress }) => (
 				color='#ffffffff'
 				style={styles.icon}
 			/>
-			<Text style={styles.title}>מחולל הטיולים</Text>
-			<Text style={styles.subtitle}>
+			<AppText style={styles.title}>מחולל הטיולים</AppText>
+			<AppText style={styles.subtitle}>
 				לחץ כאן ליצירת המסלול העתידי שלך
-			</Text>
+			</AppText>
 		</LinearGradient>
 	</TouchableOpacity>
 );

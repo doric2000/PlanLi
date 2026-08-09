@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+	ActivityIndicator,
+	TouchableOpacity,
+	View,
 } from 'react-native';
+import AppText from "./AppText";
+import AppTextInput from "./AppTextInput";
 import { Ionicons } from '@expo/vector-icons';
 import { useDestinationFilterOptions } from '../hooks/useDestinationFilterOptions';
 import { useFavoriteCityIds } from '../hooks/useFavoriteCityIds';
@@ -40,9 +40,9 @@ function SuggestionRow({ option, onPress }) {
     >
       <Ionicons name={option.cityId ? 'location-outline' : 'earth-outline'} size={19} color={colors.primary} />
       <View style={styles.destinationSuggestionTextWrap}>
-        <Text style={styles.destinationSuggestionTitle} numberOfLines={1}>{option.name || option.label}</Text>
+        <AppText style={styles.destinationSuggestionTitle} numberOfLines={1}>{option.name || option.label}</AppText>
         {!!option.cityId && (
-          <Text style={styles.destinationSuggestionSubtitle} numberOfLines={1}>{option.countryName}</Text>
+          <AppText style={styles.destinationSuggestionSubtitle} numberOfLines={1}>{option.countryName}</AppText>
         )}
       </View>
     </TouchableOpacity>
@@ -111,13 +111,13 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
 
   return (
     <View style={styles.destinationSection}>
-      <Text style={styles.primarySectionTitle}>לאן?</Text>
-      <Text style={styles.primarySectionHelper}>אפשר לבחור עד חמישה יעדים</Text>
+      <AppText style={styles.primarySectionTitle}>לאן?</AppText>
+      <AppText style={styles.primarySectionHelper}>אפשר לבחור עד חמישה יעדים</AppText>
       <View style={styles.destinationInputWrap}>
         {loading ? <ActivityIndicator size="small" color={colors.primary} /> : (
           <Ionicons name="search" size={19} color={colors.textMuted} />
         )}
-        <TextInput
+        <AppTextInput
           style={styles.destinationInput}
           value={query}
           onChangeText={(value) => {
@@ -149,32 +149,32 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
                 >
                   <Ionicons name="close-circle" size={18} color={colors.primary} />
                 </TouchableOpacity>
-                <Text style={styles.selectedDestinationText}>{destination.label}</Text>
+                <AppText style={styles.selectedDestinationText}>{destination.label}</AppText>
               </View>
             );
           })}
         </View>
       )}
 
-      {!!notice && <Text style={styles.inlineNotice}>{notice}</Text>}
+      {!!notice && <AppText style={styles.inlineNotice}>{notice}</AppText>}
       {showSuggestions && (
         <View style={styles.destinationSuggestionsPanel}>
           {trimmedQuery.length >= 2 ? (
             !searchSettled ? (
               <View style={styles.destinationLoadingRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.destinationEmptyText}>מחפש...</Text>
+                <AppText style={styles.destinationEmptyText}>מחפש...</AppText>
               </View>
             ) : searchResults.length ? searchResults.map((option) => (
               <SuggestionRow key={option.key} option={option} onPress={selectOption} />
             )) : (
-              <Text style={styles.destinationEmptyText}>לא נמצא יעד פעיל ב־PlanLi</Text>
+              <AppText style={styles.destinationEmptyText}>לא נמצא יעד פעיל ב־PlanLi</AppText>
             )
           ) : trimmedQuery.length === 1 ? (
-            <Text style={styles.destinationEmptyText}>הקלידו לפחות שני תווים</Text>
+            <AppText style={styles.destinationEmptyText}>הקלידו לפחות שני תווים</AppText>
           ) : suggestionGroups.length ? suggestionGroups.map((group) => (
             <View key={group.title} style={styles.destinationSuggestionGroup}>
-              <Text style={styles.destinationSuggestionGroupTitle}>{group.title}</Text>
+              <AppText style={styles.destinationSuggestionGroupTitle}>{group.title}</AppText>
               {group.items.map((option) => (
                 <SuggestionRow key={option.key || destinationKey(option)} option={option} onPress={selectOption} />
               ))}
@@ -182,10 +182,10 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
           )) : loading ? (
             <View style={styles.destinationLoadingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.destinationEmptyText}>טוען יעדים...</Text>
+              <AppText style={styles.destinationEmptyText}>טוען יעדים...</AppText>
             </View>
           ) : (
-            <Text style={styles.destinationEmptyText}>התחילו להקליד כדי למצוא יעד</Text>
+            <AppText style={styles.destinationEmptyText}>התחילו להקליד כדי למצוא יעד</AppText>
           )}
         </View>
       )}

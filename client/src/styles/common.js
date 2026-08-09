@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { colors } from './colors';
 
 export const common = {
@@ -24,14 +25,14 @@ export const common = {
 
 	headerTitle: {
 		fontSize: 22,
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		color: "#FFFFFF",
 		textAlign: "center",
 	},
 
 	headerSubTitle: {
 		fontSize: 16,
-		fontWeight: "400",
+		fontFamily: fontFamilies.regular,
 		color: "#FFFFFF",
 		textAlign: "center",
 		marginBottom: 20,
@@ -70,7 +71,7 @@ export const common = {
 		color: "#FFFFFF",
 		fontSize: 16,
 		marginLeft: 5,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 	},
 
 	iconButton: {
@@ -222,7 +223,7 @@ export const common = {
 
 	emptySubText: {
 		color: "#2EC4B6",
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		marginTop: 4,
 	},
 
@@ -234,7 +235,7 @@ export const common = {
 
 	feedTitle: {
 		fontSize: 20,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		textAlign: "right",
 		marginBottom: 4,
@@ -291,13 +292,13 @@ export const common = {
 
 	modalTitle: {
 		fontSize: 18,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 	},
 
 	modalLabel: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		marginBottom: 6,
 		textAlign: "right",
@@ -331,13 +332,13 @@ export const common = {
 
 	screenHeaderTitle: {
 		fontSize: 20,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#1E3A5F",
 	},
 
 	screenHeaderSubtitle: {
 		fontSize: 14,
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		color: "#4B5563",
 		marginTop: 4,
 	},
@@ -392,7 +393,7 @@ export const common = {
 
 	emptyText: {
 		fontSize: 16,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		color: "#6B7280",
 		marginTop: 16,
 	},
@@ -420,14 +421,14 @@ export const common = {
 
 	commentHeaderTitle: {
 		fontSize: 18,
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		color: "#333",
 	},
 
 	commentSortText: {
 		fontSize: 14,
 		color: "#1E3A5F",
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 	},
 
 	commentList: {
@@ -456,7 +457,7 @@ export const common = {
 	},
 
 	commentUserName: {
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		fontSize: 13,
 		color: "#333",
 		textAlign: "right",
@@ -598,7 +599,7 @@ export const common = {
 
 	likesTitle: {
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#1F2937",
 	},
 
@@ -637,14 +638,14 @@ export const common = {
 
 	avatarInitial: {
 		color: "#4F46E5",
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		fontSize: 16,
 	},
 
 	userNameText: {
 		flex: 1,
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		color: "#1F2937",
 	},
 
@@ -691,7 +692,7 @@ export const common = {
 		position: "absolute",
 		top: 6,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#FFFFFF",
 		backgroundColor: "#3B82F6",
 		borderRadius: 10,
@@ -712,7 +713,7 @@ export const common = {
 
 	timelineTitle: {
 		fontSize: 16,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -730,7 +731,7 @@ export const common = {
 	timelineMeta: {
 		marginTop: 6,
 		fontSize: 12,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: "#1E3A8A",
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -750,7 +751,7 @@ export const common = {
 	},
 	homeHeaderTitle: {
 		fontSize: 20,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#1E3A5F",
 		textAlign: "center",
 		marginBottom: 16,
@@ -789,7 +790,7 @@ export const common = {
 
 	homeSectionTitle: {
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		marginBottom: 0,
 		textAlign: "right",
@@ -800,7 +801,7 @@ export const common = {
 
 	homeSeeAllText: {
 		color: "#2EC4B6",
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 	},
 
 	homeHorizontalScroll: {
@@ -857,7 +858,7 @@ export const common = {
 
 	profileAvatarText: {
 		fontSize: 36,
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		color: "#4F46E5",
 	},
 

@@ -36,7 +36,7 @@ export function getRecommendationDetailSections(item = {}) {
   }
 
   const vibes = labelsFor(facets.vibes, VIBES);
-  if (vibes.length) facts.push({ id: 'vibes', icon: 'auto-awesome', label: vibes.join(' · ') });
+  if (vibes.length) facts.push({ id: 'vibes', icon: 'sentiment-satisfied-alt', label: vibes.join(' · ') });
 
   const environments = labelsFor(facets.environments, ENVIRONMENTS);
   if (environments.length) {

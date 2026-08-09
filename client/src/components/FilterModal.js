@@ -1,13 +1,13 @@
 import React from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  View,
-  Text,
-  TouchableOpacity,
+	KeyboardAvoidingView,
+	Modal,
+	Platform,
+	Pressable,
+	View,
+	TouchableOpacity,
 } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { common, colors, buttons } from '../styles';
@@ -44,7 +44,7 @@ export default function FilterModal({
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
 
-            <Text style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>{title}</Text>
+            <AppText style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>{title}</AppText>
           </View>
 
           {children}
@@ -54,14 +54,14 @@ export default function FilterModal({
               {!!onClear && (
                 <TouchableOpacity style={buttons.clear} onPress={onClear} accessibilityRole="button"
                   testID="filter-modal-clear">
-                  <Text style={buttons.clearText}>{clearText}</Text>
+                  <AppText style={buttons.clearText}>{clearText}</AppText>
                 </TouchableOpacity>
               )}
 
               {!!onApply && (
                 <TouchableOpacity style={buttons.apply} onPress={onApply} accessibilityRole="button"
                   testID="filter-modal-apply">
-                  <Text style={buttons.applyText}>{applyText}</Text>
+                  <AppText style={buttons.applyText}>{applyText}</AppText>
                 </TouchableOpacity>
               )}
             </View>

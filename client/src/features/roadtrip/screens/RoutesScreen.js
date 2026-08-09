@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  RefreshControl,
-  StatusBar,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+	ActivityIndicator,
+	Alert,
+	FlatList,
+	RefreshControl,
+	StatusBar,
+	TouchableOpacity,
+	View,
 } from 'react-native';
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../../components/PageHeader';
@@ -46,7 +46,6 @@ import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilter
 
 const text = {
   title: 'מסלולים',
-  subtitle: 'מסלולי טיול מהקהילה',
   searchPlaceholder: 'חפשו מסלול, מקום או תחום עניין...',
   noFiltered: 'אין מסלולים שמתאימים לחיפוש ולמסננים שבחרתם.',
   noRoutes: 'עדיין אין מסלולים.',
@@ -173,23 +172,22 @@ export default function RoutesScreen({ navigation }) {
           <Ionicons name="filter" size={20} color="#FFFFFF" />
           {activeFilterCount > 0 && (
             <View style={filterUiStyles.badge}>
-              <Text style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</Text>
+              <AppText style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</AppText>
             </View>
           )}
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>{text.title}</Text>
-          <Text style={styles.headerSubtitle}>{text.subtitle}</Text>
+          <AppText style={styles.headerTitle}>{text.title}</AppText>
         </View>
         <TouchableOpacity style={styles.sortGlassButton} onPress={() => setSortVisible(true)} accessibilityLabel="מיון מסלולים">
           <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
-          <Text style={styles.sortGlassText}>{sortLabel}</Text>
+          <AppText style={styles.sortGlassText}>{sortLabel}</AppText>
         </TouchableOpacity>
       </View>
       <View style={styles.searchRow}>
         <View style={styles.searchPill}>
           <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
-          <TextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))}
+          <AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))}
             placeholder={text.searchPlaceholder} placeholderTextColor="rgba(255,255,255,0.48)"
             style={styles.searchInput} textAlign="right" autoCorrect={false} autoCapitalize="none"
             testID="routes-search-input" />
@@ -225,19 +223,19 @@ export default function RoutesScreen({ navigation }) {
           ListHeaderComponent={<View style={styles.generateCardWrap}><GenerateTripCard onPress={() => Alert.alert('יצירת מסלול אוטומטי בקרוב!')} /></View>}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={<View style={common.emptyState}><Ionicons name="trail-sign-outline" size={50} color={colors.textMuted} />
-            <Text style={common.emptyText}>{error
+            <AppText style={common.emptyText}>{error
               ? 'לא הצלחנו לטעון מסלולים. משכו מטה כדי לנסות שוב.'
-              : isFiltered ? text.noFiltered : text.noRoutes}</Text>
-            {!isFiltered && <Text style={common.emptySubText}>{text.firstRoute}</Text>}
+              : isFiltered ? text.noFiltered : text.noRoutes}</AppText>
+            {!isFiltered && <AppText style={common.emptySubText}>{text.firstRoute}</AppText>}
             {isFiltered && (
               <View style={filterUiStyles.emptyActions}>
                 <TouchableOpacity style={[filterUiStyles.emptyAction, filterUiStyles.emptyActionPrimary]}
                   onPress={() => setFilterVisible(true)} accessibilityRole="button">
-                  <Text style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</Text>
+                  <AppText style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</AppText>
                 </TouchableOpacity>
                 <TouchableOpacity style={filterUiStyles.emptyAction}
                   onPress={() => setFilters(createEmptyDiscoveryFilters())} accessibilityRole="button">
-                  <Text style={filterUiStyles.emptyActionText}>נקה הכול</Text>
+                  <AppText style={filterUiStyles.emptyActionText}>נקה הכול</AppText>
                 </TouchableOpacity>
               </View>
             )}

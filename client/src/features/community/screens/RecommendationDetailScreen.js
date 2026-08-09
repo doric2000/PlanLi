@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,9 +39,9 @@ export default function RecommendationDetailScreen({ route, navigation }) {
         <StatusBar barStyle="dark-content" />
         <View style={styles.loading}>
           {loading ? <ActivityIndicator size="large" color={colors.primary} /> : null}
-          <Text style={styles.loadingText}>
+          <AppText style={styles.loadingText}>
             {loading ? 'טוענים את ההמלצה…' : 'לא הצלחנו לטעון את ההמלצה.'}
-          </Text>
+          </AppText>
         </View>
       </SafeAreaView>
     );

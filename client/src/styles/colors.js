@@ -41,7 +41,7 @@ export const colors = {
 
 	// Header
 	headerBg: "#1E3A5F",
-	heroBlueGradient: ["#4C72FF", "#3157E7", "#2446C7"],
+	heroBlueGradient: ["#31557E", "#28486D"],
 	navActive: "#1B2D7A",
 	navInactive: "#4B5563",
 	appSurface: "#F4F5F9",

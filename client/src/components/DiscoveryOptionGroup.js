@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { discoveryFilterStyles as styles } from '../styles';
 import { orderProgressiveOptions } from '../utils/progressiveDiscoveryFilters';
 
@@ -25,8 +26,8 @@ export default function DiscoveryOptionGroup({
 
   return (
     <View style={styles.optionGroup}>
-      {!!label && <Text style={styles.optionGroupLabel}>{label}</Text>}
-      {!!helper && <Text style={styles.optionGroupHelper}>{helper}</Text>}
+      {!!label && <AppText style={styles.optionGroupLabel}>{label}</AppText>}
+      {!!helper && <AppText style={styles.optionGroupHelper}>{helper}</AppText>}
       <View style={styles.optionGrid}>
         {result.options.map((option) => {
           const id = optionId(option);
@@ -41,9 +42,9 @@ export default function DiscoveryOptionGroup({
               accessibilityState={{ checked: active }}
               testID={testIDPrefix ? `${testIDPrefix}-${sourceIndex}` : undefined}
             >
-              <Text style={[styles.optionChipText, active && styles.optionChipTextSelected]}>
+              <AppText style={[styles.optionChipText, active && styles.optionChipTextSelected]}>
                 {option.postLabel || option.label}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           );
         })}
@@ -55,11 +56,11 @@ export default function DiscoveryOptionGroup({
           accessibilityRole="button"
           testID={`${testIDPrefix || 'discovery-options'}-show-all`}
         >
-          <Text style={styles.showAllText}>הצג הכול ({result.hiddenCount} נוספים)</Text>
+          <AppText style={styles.showAllText}>הצג הכול ({result.hiddenCount} נוספים)</AppText>
         </TouchableOpacity>
       ) : expanded && !alwaysShowAll && (options || []).length > collapsedLimit ? (
         <TouchableOpacity style={styles.showAllButton} onPress={() => setExpanded(false)} accessibilityRole="button">
-          <Text style={styles.showAllText}>הצג פחות</Text>
+          <AppText style={styles.showAllText}>הצג פחות</AppText>
         </TouchableOpacity>
       ) : null}
     </View>

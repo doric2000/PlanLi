@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Alert
+	View,
+	TouchableOpacity,
+	FlatList,
+	ActivityIndicator,
+	Alert,
 } from 'react-native';
+import AppText from "./AppText";
+import AppTextInput from "./AppTextInput";
 import { Ionicons } from '@expo/vector-icons';
 import { 
   collection,
@@ -42,10 +42,10 @@ const CommentItem = ({ item }) => {
       <Avatar photoURL={userData.photo} displayName={userData.name} size={40} />
       <View style={common.commentContent}>
         <View style={{ alignItems: 'flex-end', marginBottom: 2 }}>
-          <Text style={common.commentUserName}>{userData.name}</Text>
-          <Text style={[common.commentText, { color: '#9CA3AF', fontSize: 11 }]}>{formatTimestamp(item.createdAt)}</Text>
+          <AppText style={common.commentUserName}>{userData.name}</AppText>
+          <AppText style={[common.commentText, { color: '#9CA3AF', fontSize: 11 }]}>{formatTimestamp(item.createdAt)}</AppText>
         </View>
-        <Text style={common.commentText}>{item.text}</Text>
+        <AppText style={common.commentText}>{item.text}</AppText>
       </View>
     </View>
   );
@@ -140,7 +140,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
   return (
     <View style={common.commentSection}>
       <View style={common.commentHeaderContainer}>
-          <Text style={common.commentHeaderTitle}>תגובות ({comments.length})</Text>
+          <AppText style={common.commentHeaderTitle}>תגובות ({comments.length})</AppText>
           <TouchableOpacity onPress={() => setIsNewestFirst(!isNewestFirst)}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
               <Ionicons
@@ -149,9 +149,9 @@ export const CommentsSection = ({ collectionName, postId }) => {
                 color="#1E3A5F"
                 style={{ marginLeft: 6 }}
               />
-              <Text style={common.commentSortText}>
+              <AppText style={common.commentSortText}>
                 {isNewestFirst ? 'מיין: חדש קודם' : 'מיין: ישן קודם'}
-              </Text>
+              </AppText>
             </View>
           </TouchableOpacity>
       </View>
@@ -172,7 +172,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
           displayName={auth.currentUser?.displayName} 
           size={32} 
         />
-        <TextInput
+        <AppTextInput
           style={common.commentInput}
           placeholder={
             tier === 'guest'

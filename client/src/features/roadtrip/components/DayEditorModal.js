@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Alert, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, SafeAreaView, ScrollView, TouchableOpacity, View } from "react-native";
+import AppText from "../../../components/AppText";
 
 import CachedImage from "../../../components/CachedImage";
 import { FormInput } from "../../../components/FormInput";
@@ -167,13 +168,13 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 				/>
 				<View style={styles.header}>
 					<TouchableOpacity onPress={tryClose} disabled={uploading}>
-						<Text style={styles.headerBtn}>ביטול</Text>
+						<AppText style={styles.headerBtn}>ביטול</AppText>
 					</TouchableOpacity>
-					<Text style={styles.headerTitle}>יום {dayIndex + 1}</Text>
+					<AppText style={styles.headerTitle}>יום {dayIndex + 1}</AppText>
 					<TouchableOpacity onPress={handleSave} disabled={uploading}>
-						<Text style={[styles.headerBtn, styles.headerBtnStrong, uploading && styles.headerBtnDisabled]}>
+						<AppText style={[styles.headerBtn, styles.headerBtnStrong, uploading && styles.headerBtnDisabled]}>
 							שמור
-						</Text>
+						</AppText>
 					</TouchableOpacity>
 				</View>
 
@@ -202,15 +203,15 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 								}}
 								style={styles.addStopButton}
 							>
-								<Text style={styles.addStopText}>+ הוסף תחנה</Text>
+								<AppText style={styles.addStopText}>+ הוסף תחנה</AppText>
 							</TouchableOpacity>
-							<Text style={styles.stopsTitle}>תחנות ביום הזה</Text>
+							<AppText style={styles.stopsTitle}>תחנות ביום הזה</AppText>
 						</View>
 
 						{stops.length === 0 ? (
-							<Text style={styles.emptyStopsText}>
+							<AppText style={styles.emptyStopsText}>
 								עדיין אין תחנות. הוסף נקודות עצירה עם מיקום מדויק.
-							</Text>
+							</AppText>
 						) : (
 							stops.map((stop, index) => (
 								<TouchableOpacity
@@ -237,16 +238,16 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 										/>
 									) : (
 										<View style={styles.stopNumberBadge}>
-											<Text style={styles.stopNumberText}>{index + 1}</Text>
+											<AppText style={styles.stopNumberText}>{index + 1}</AppText>
 										</View>
 									)}
 									<View style={styles.stopTextWrap}>
-										<Text style={styles.stopTitle} numberOfLines={1}>
+										<AppText style={styles.stopTitle} numberOfLines={1}>
 											{stop.title}
-										</Text>
-										<Text style={styles.stopMeta} numberOfLines={1}>
+										</AppText>
+										<AppText style={styles.stopMeta} numberOfLines={1}>
 											{stop.location || stop.place?.name || stop.place?.address}
-										</Text>
+										</AppText>
 									</View>
 									<TouchableOpacity
 										onPress={(event) => {
@@ -255,14 +256,14 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 										}}
 										style={styles.deleteStopButton}
 									>
-										<Text style={styles.deleteStopText}>מחק</Text>
+										<AppText style={styles.deleteStopText}>מחק</AppText>
 									</TouchableOpacity>
 								</TouchableOpacity>
 							))
 						)}
 					</View>
 
-					<Text style={styles.photoLabel}>תיעוד מהיום</Text>
+					<AppText style={styles.photoLabel}>תיעוד מהיום</AppText>
 					<ImagePickerBox
 						imageUri={image}
 						onPress={() => pickImage((uri) => setImage(uri))}

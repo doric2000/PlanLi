@@ -1,6 +1,6 @@
 export { colors } from "./colors";
 export { layout, motion, radii } from "./designTokens";
-export { typography } from "./typography";
+export { fontFamilies, typography } from "./typography";
 export { spacing } from "./spacing";
 export { shadows } from "./shadows";
 export { buttons } from "./buttons";

@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ScrollView,
+	ActivityIndicator,
+	TouchableOpacity,
+	View,
+	ScrollView,
 } from 'react-native';
+import AppText from "./AppText";
+import AppTextInput from "./AppTextInput";
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { buttons, colors, common, googlePlacesInput, spacing } from '../styles';
@@ -292,7 +292,7 @@ export default function GooglePlacesInput({
           color={searchIconColor || colors.textSecondary}
           style={[googlePlacesInput.searchIcon, searchIconStyle]}
         />
-        <TextInput
+        <AppTextInput
           style={[common.homeSearchInput, googlePlacesInput.input, inputStyle]}
           placeholder={placeholder}
           value={query}
@@ -318,9 +318,9 @@ export default function GooglePlacesInput({
             style={[buttons.primarySmall, googlePlacesInput.fallbackButton]}
             onPress={() => onRequestGoogleSearch(settledQuery)}
           >
-            <Text style={[buttons.primarySmallText, googlePlacesInput.fallbackButtonText]}>
+            <AppText style={[buttons.primarySmallText, googlePlacesInput.fallbackButtonText]}>
               חפש ב-Google
-            </Text>
+            </AppText>
           </TouchableOpacity>
         </View>
       )}
@@ -343,13 +343,13 @@ export default function GooglePlacesInput({
                     style={googlePlacesInput.locationIcon}
                   />
                   <View style={{ flex: 1 }}>
-                    <Text style={googlePlacesInput.mainText} numberOfLines={1}>
+                    <AppText style={googlePlacesInput.mainText} numberOfLines={1}>
                       {city.name}
-                    </Text>
+                    </AppText>
                     {!!city.description && (
-                      <Text style={googlePlacesInput.subText} numberOfLines={1}>
+                      <AppText style={googlePlacesInput.subText} numberOfLines={1}>
                         {city.description}
-                      </Text>
+                      </AppText>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -358,12 +358,12 @@ export default function GooglePlacesInput({
           ) : localResultsLoading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
+              <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
             </View>
           ) : loading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
+              <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
             </View>
           ) : predictions.length > 0 ? (
             <ScrollView keyboardShouldPersistTaps="handled">
@@ -379,14 +379,14 @@ export default function GooglePlacesInput({
                     color={colors.textSecondary}
                     style={googlePlacesInput.locationIcon}
                   />
-                  <Text style={googlePlacesInput.listText}>{item.description}</Text>
+                  <AppText style={googlePlacesInput.listText}>{item.description}</AppText>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           ) : (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <Ionicons name="search" size={16} color={colors.textSecondary} />
-              <Text style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</Text>
+              <AppText style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</AppText>
             </View>
           )}
         </View>
@@ -423,13 +423,13 @@ export default function GooglePlacesInput({
                       style={googlePlacesInput.locationIcon}
                     />
                     <View style={{ flex: 1 }}>
-                      <Text style={googlePlacesInput.mainText} numberOfLines={1}>
+                      <AppText style={googlePlacesInput.mainText} numberOfLines={1}>
                         {city.name}
-                      </Text>
+                      </AppText>
                       {!!city.description && (
-                        <Text style={googlePlacesInput.subText} numberOfLines={1}>
+                        <AppText style={googlePlacesInput.subText} numberOfLines={1}>
                           {city.description}
-                        </Text>
+                        </AppText>
                       )}
                     </View>
                   </TouchableOpacity>
@@ -438,12 +438,12 @@ export default function GooglePlacesInput({
             ) : localResultsLoading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
+                <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
               </View>
             ) : loading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={googlePlacesInput.dropdownStatusText}>טוען...</Text>
+                <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
               </View>
             ) : predictions.length > 0 ? (
               <ScrollView keyboardShouldPersistTaps="handled">
@@ -459,14 +459,14 @@ export default function GooglePlacesInput({
                       color={colors.textSecondary}
                       style={googlePlacesInput.locationIcon}
                     />
-                    <Text style={googlePlacesInput.listText}>{item.description}</Text>
+                    <AppText style={googlePlacesInput.listText}>{item.description}</AppText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <Ionicons name="search" size={16} color={colors.textSecondary} />
-                <Text style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</Text>
+                <AppText style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</AppText>
               </View>
             )}
           </View>

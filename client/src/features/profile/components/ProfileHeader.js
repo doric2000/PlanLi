@@ -1,5 +1,6 @@
 import React from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -80,7 +81,7 @@ function StatusPill({ icon, label, color, styles, accessibilityLabel }) {
       accessibilityLabel={accessibilityLabel || label}
     >
       <MaterialIcons name={icon} size={16} color={color} />
-      <Text style={[styles.statusPillText, { color }]} numberOfLines={1}>{label}</Text>
+      <AppText style={[styles.statusPillText, { color }]} numberOfLines={1}>{label}</AppText>
     </View>
   );
 }
@@ -134,7 +135,7 @@ export default function ProfileHeader({
               />
             ) : (
               <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarInitial}>{initial}</Text>
+                <AppText style={styles.avatarInitial}>{initial}</AppText>
               </View>
             )}
             {isOwner && typeof onPickImage === 'function' ? (
@@ -150,16 +151,16 @@ export default function ProfileHeader({
             ) : null}
           </View>
 
-          <Text style={styles.name} numberOfLines={1}>{userData?.displayName || 'Traveler'}</Text>
+          <AppText style={styles.name} numberOfLines={1}>{userData?.displayName || 'Traveler'}</AppText>
 
           {bio || isOwner ? (
             <View style={styles.bioRow}>
               {bio ? (
-                <Text style={styles.bio} numberOfLines={2}>{bio}</Text>
+                <AppText style={styles.bio} numberOfLines={2}>{bio}</AppText>
               ) : (
-                <Text style={styles.bioPlaceholder} numberOfLines={2}>
+                <AppText style={styles.bioPlaceholder} numberOfLines={2}>
                   הוסיפו משפט קטן שיספר לקהילה מי אתם בדרך
-                </Text>
+                </AppText>
               )}
               {isOwner && typeof onEditBio === 'function' ? (
                 <Pressable

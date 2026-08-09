@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { colors } from "./colors";
 import { shadows } from "./shadows";
 import { spacing } from "./spacing";
@@ -18,7 +19,7 @@ export const community = {
 	},
 	sortButtonText: {
 		...typography.caption,
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 	},
 
@@ -124,7 +125,7 @@ export const community = {
 	headerIconButtonText: {
 		...typography.caption,
 		color: colors.textPrimary,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 	},
 
 	// Map screen
@@ -205,7 +206,7 @@ export const community = {
 	mapSearchAreaText: {
 		color: colors.white,
 		fontSize: 14,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	mapLocationNotice: {
@@ -229,7 +230,7 @@ export const community = {
 		flexShrink: 1,
 		color: colors.textPrimary,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -250,7 +251,7 @@ export const community = {
 	mapLoadingText: {
 		color: colors.textPrimary,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	mapErrorPill: {
@@ -271,7 +272,7 @@ export const community = {
 	mapErrorText: {
 		color: "#991B1B",
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	mapEmptyPill: {
@@ -288,7 +289,7 @@ export const community = {
 	mapEmptyPillText: {
 		color: colors.textSecondary,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	mapZoomNotice: {
@@ -309,7 +310,7 @@ export const community = {
 	mapZoomNoticeText: {
 		color: "#9A4E08",
 		fontSize: 12,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "center",
 		writingDirection: "rtl",
 	},
@@ -373,7 +374,7 @@ export const community = {
 	},
 	mapPreviewCategoryText: {
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textSecondary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -423,7 +424,7 @@ export const community = {
 	},
 	mapPreviewMetaText: {
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textSecondary,
 	},
 	mapPreviewPrimaryButton: {
@@ -440,6 +441,6 @@ export const community = {
 	mapPreviewPrimaryButtonText: {
 		color: colors.white,
 		fontSize: 14,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 	},
 };

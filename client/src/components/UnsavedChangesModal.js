@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import AppText from "./AppText";
 import { addRecommendationScreenStyles as styles } from '../styles';
 
 /**
@@ -20,8 +21,8 @@ export default function UnsavedChangesModal({
       <View style={styles.unsavedDialogOverlay}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onCancel} />
         <View style={styles.unsavedDialogCard} testID={testID}>
-          <Text style={styles.unsavedDialogTitle}>{title}</Text>
-          <Text style={styles.unsavedDialogMessage}>{message}</Text>
+          <AppText style={styles.unsavedDialogTitle}>{title}</AppText>
+          <AppText style={styles.unsavedDialogMessage}>{message}</AppText>
           <View style={styles.unsavedDialogActions}>
             <TouchableOpacity
               style={[styles.unsavedDialogButton, styles.unsavedDialogButtonNeutral]}
@@ -29,7 +30,7 @@ export default function UnsavedChangesModal({
               testID={cancelTestID}
               activeOpacity={0.85}
             >
-              <Text style={styles.unsavedDialogButtonNeutralText}>לא</Text>
+              <AppText style={styles.unsavedDialogButtonNeutralText}>לא</AppText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.unsavedDialogButton, styles.unsavedDialogButtonNeutral]}
@@ -37,7 +38,7 @@ export default function UnsavedChangesModal({
               testID={confirmTestID}
               activeOpacity={0.85}
             >
-              <Text style={styles.unsavedDialogButtonDestructiveText}>כן</Text>
+              <AppText style={styles.unsavedDialogButtonDestructiveText}>כן</AppText>
             </TouchableOpacity>
           </View>
         </View>

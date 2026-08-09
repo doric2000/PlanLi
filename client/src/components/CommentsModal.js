@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, TouchableOpacity, Modal } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { CommentsSection } from './CommentSection';
 import { colors, common } from '../styles';
@@ -45,7 +46,7 @@ export const CommentsModal = ({
       <View style={common.modalOverlay}>
         <View style={common.modalContentTall}>
           <View style={common.modalHeader}>
-            <Text style={common.modalTitle}>תגובות</Text>
+            <AppText style={common.modalTitle}>תגובות</AppText>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>

@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import AppText from "../components/AppText";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
@@ -72,9 +73,9 @@ export default function TabNavigator() {
                   {iconContent}
                   {unreadCount > 0 && (
                     <View style={notifications.badge}>
-                      <Text style={notifications.badgeText}>
+                      <AppText style={notifications.badgeText}>
                         {unreadCount > 99 ? '99+' : unreadCount}
-                      </Text>
+                      </AppText>
                     </View>
                   )}
                 </View>

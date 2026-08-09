@@ -1,5 +1,7 @@
+import { fontFamilies } from "../styles/typography";
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '../styles';
@@ -36,7 +38,7 @@ export const RecommendationActionBar = ({
         accessibilityRole="button"
         accessibilityLabel={`${likeCount} לייקים, הצגת הרשימה`}
       >
-        <Text style={[styles.text, isLiked && styles.activeText]}>{likeCount}</Text>
+        <AppText style={[styles.text, isLiked && styles.activeText]}>{likeCount}</AppText>
       </TouchableOpacity>
     </View>
 
@@ -47,7 +49,7 @@ export const RecommendationActionBar = ({
       accessibilityLabel={`${commentsCount} תגובות`}
     >
       <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
-      <Text style={styles.text}>{commentsCount}</Text>
+      <AppText style={styles.text}>{commentsCount}</AppText>
     </TouchableOpacity>
 
     <TouchableOpacity
@@ -57,7 +59,7 @@ export const RecommendationActionBar = ({
       accessibilityLabel="שיתוף ההמלצה"
     >
       <Ionicons name="share-social-outline" size={24} color={colors.textSecondary} />
-      <Text style={styles.text}>שיתוף</Text>
+      <AppText style={styles.text}>שיתוף</AppText>
     </TouchableOpacity>
   </View>
 );
@@ -100,7 +102,7 @@ const styles = StyleSheet.create({
   text: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
   activeText: {

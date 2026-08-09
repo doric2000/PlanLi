@@ -1,5 +1,7 @@
+import { fontFamilies } from "../styles/typography";
 import React, { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import AppText from "./AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 
 import CachedImage from './CachedImage';
@@ -38,8 +40,8 @@ export default function ContentTile({ image, title, subtitle, icon = 'photo-libr
       </View>
       {showOverlay ? (
         <View pointerEvents="none" style={styles.overlay}>
-          <Text style={styles.overlayTitle} numberOfLines={1}>{title}</Text>
-          {subtitle ? <Text style={styles.overlaySubtitle} numberOfLines={1}>{subtitle}</Text> : null}
+          <AppText style={styles.overlayTitle} numberOfLines={1}>{title}</AppText>
+          {subtitle ? <AppText style={styles.overlaySubtitle} numberOfLines={1}>{subtitle}</AppText> : null}
         </View>
       ) : null}
     </Pressable>
@@ -57,6 +59,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)',
   },
   overlay: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 9, paddingVertical: 8, backgroundColor: 'rgba(15,23,42,0.76)' },
-  overlayTitle: { color: colors.white, fontSize: 13, fontWeight: '800', textAlign: 'right', writingDirection: 'rtl' },
+  overlayTitle: { color: colors.white, fontSize: 13, fontFamily: fontFamilies.semiBold, textAlign: 'right', writingDirection: 'rtl' },
   overlaySubtitle: { marginTop: 2, color: 'rgba(255,255,255,0.78)', fontSize: 11, textAlign: 'right', writingDirection: 'rtl' },
 });

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -111,27 +112,27 @@ export default function RouteMapScreen({ route, navigation }) {
           <Ionicons name="close" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <AppText style={styles.headerTitle} numberOfLines={1}>
             {routeData?.Title || 'מפת מסלול'}
-          </Text>
-          <Text style={styles.headerSubtitle}>{stops.length} תחנות עם מיקום</Text>
+          </AppText>
+          <AppText style={styles.headerSubtitle}>{stops.length} תחנות עם מיקום</AppText>
         </View>
         <TouchableOpacity
           onPress={() => openUrl(routeUrl)}
           disabled={stops.length < 2}
           style={[styles.headerActionButton, stops.length < 2 && styles.headerActionButtonDisabled]}
         >
-          <Text style={[styles.headerActionText, stops.length < 2 && styles.headerActionTextDisabled]}>
+          <AppText style={[styles.headerActionText, stops.length < 2 && styles.headerActionTextDisabled]}>
             פתח הכל
-          </Text>
+          </AppText>
         </TouchableOpacity>
       </View>
 
       {stops.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="map-outline" size={54} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>אין תחנות להצגה במפה</Text>
-          <Text style={styles.emptyText}>הוסיפו תחנות עם מיקום מדויק בתוך ימי המסלול.</Text>
+          <AppText style={styles.emptyTitle}>אין תחנות להצגה במפה</AppText>
+          <AppText style={styles.emptyText}>הוסיפו תחנות עם מיקום מדויק בתוך ימי המסלול.</AppText>
         </View>
       ) : (
         <View style={styles.mapWrap}>
@@ -187,11 +188,11 @@ export default function RouteMapScreen({ route, navigation }) {
                           priority="low"
                         />
                         <View style={styles.markerNumberBadge}>
-                          <Text style={styles.markerNumberText}>{stop.globalIndex + 1}</Text>
+                          <AppText style={styles.markerNumberText}>{stop.globalIndex + 1}</AppText>
                         </View>
                       </>
                     ) : (
-                      <Text style={styles.markerText}>{stop.globalIndex + 1}</Text>
+                      <AppText style={styles.markerText}>{stop.globalIndex + 1}</AppText>
                     )}
                   </View>
                 </View>
@@ -222,7 +223,7 @@ export default function RouteMapScreen({ route, navigation }) {
 
           {LOCATION_RETRY_STATUSES.has(status) && (
             <TouchableOpacity style={styles.locationNotice} onPress={startTracking}>
-              <Text style={styles.locationNoticeText}>הפעילו מיקום כדי לראות היכן אתם ביחס למסלול</Text>
+              <AppText style={styles.locationNoticeText}>הפעילו מיקום כדי לראות היכן אתם ביחס למסלול</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -235,10 +236,10 @@ export default function RouteMapScreen({ route, navigation }) {
               <Ionicons name="close" size={18} color={colors.textPrimary} />
             </TouchableOpacity>
             <View style={styles.sheetTitleWrap}>
-              <Text style={styles.sheetKicker}>
+              <AppText style={styles.sheetKicker}>
                 יום {selectedStop.dayIndex + 1} · תחנה {selectedStop.stopIndex + 1}
-              </Text>
-              <Text style={styles.sheetTitle} numberOfLines={2}>{selectedStop.title}</Text>
+              </AppText>
+              <AppText style={styles.sheetTitle} numberOfLines={2}>{selectedStop.title}</AppText>
             </View>
             {selectedStop.image || selectedStop.media ? (
               <CachedImage
@@ -249,22 +250,22 @@ export default function RouteMapScreen({ route, navigation }) {
               />
             ) : (
               <View style={styles.sheetImageFallback}>
-                <Text style={styles.sheetImageFallbackText}>{selectedStop.globalIndex + 1}</Text>
+                <AppText style={styles.sheetImageFallbackText}>{selectedStop.globalIndex + 1}</AppText>
               </View>
             )}
           </View>
-          <Text style={styles.sheetAddress} numberOfLines={2}>
+          <AppText style={styles.sheetAddress} numberOfLines={2}>
             {selectedStop.place?.address || selectedStop.location || selectedStop.place?.name}
-          </Text>
+          </AppText>
           {!!selectedStop.description && (
-            <Text style={styles.sheetDescription} numberOfLines={3}>{selectedStop.description}</Text>
+            <AppText style={styles.sheetDescription} numberOfLines={3}>{selectedStop.description}</AppText>
           )}
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => openUrl(buildGoogleMapsPlaceUrl(selectedStop))}
           >
             <Ionicons name="map-outline" size={18} color={colors.white} />
-            <Text style={styles.primaryButtonText}>פתח בגוגל מפות</Text>
+            <AppText style={styles.primaryButtonText}>פתח בגוגל מפות</AppText>
           </TouchableOpacity>
         </View>
       )}

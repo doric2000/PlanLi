@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
@@ -78,7 +79,7 @@ export default function SettingsScreen({ navigation }) {
         >
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>הגדרות</Text>
+        <AppText style={styles.headerTitle}>הגדרות</AppText>
         <View style={styles.rightSpacer} />
       </View>
 
@@ -89,7 +90,7 @@ export default function SettingsScreen({ navigation }) {
           onPress={() => navigation.navigate('ChangeName')}
           testID="settings-change-name-button"
         >
-          <Text style={styles.primaryBtnText}>שינוי שם</Text>
+          <AppText style={styles.primaryBtnText}>שינוי שם</AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -101,14 +102,14 @@ export default function SettingsScreen({ navigation }) {
         >
           {resettingPersonalization
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.primaryBtnText}>איפוס התאמה אישית</Text>}
+            : <AppText style={styles.primaryBtnText}>איפוס התאמה אישית</AppText>}
         </TouchableOpacity>
 
         <View style={preferenceStyles.promptCard}>
-          <Text style={preferenceStyles.promptTitle}>התאמה אישית פעילה</Text>
-          <Text style={preferenceStyles.promptText}>
+          <AppText style={preferenceStyles.promptTitle}>התאמה אישית פעילה</AppText>
+          <AppText style={preferenceStyles.promptText}>
             לייקים, שמירות ופתיחת המלצות משפרים את סדר התוצאות. נשמרים ציונים מצומצמים בלבד, ואפשר לאפס אותם בכל עת.
-          </Text>
+          </AppText>
         </View>
 
         <TouchableOpacity
@@ -116,7 +117,7 @@ export default function SettingsScreen({ navigation }) {
           activeOpacity={0.9}
           onPress={() => navigation.navigate('ChangePassword')}
         >
-          <Text style={styles.primaryBtnText}>שינוי סיסמה</Text>
+          <AppText style={styles.primaryBtnText}>שינוי סיסמה</AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -128,7 +129,7 @@ export default function SettingsScreen({ navigation }) {
         >
           {deleting
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.primaryBtnText}>מחיקת חשבון</Text>}
+            : <AppText style={styles.primaryBtnText}>מחיקת חשבון</AppText>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

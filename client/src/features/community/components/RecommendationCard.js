@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, Alert ,TouchableOpacity , Platform} from 'react-native';
+import { View, Pressable, Alert, TouchableOpacity, Platform } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../../../hooks/useUserData';
@@ -110,9 +111,9 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             displayName={author.displayName}
           />
           <View>
-            <Text style={cards.recUsername}>{author.displayName}</Text>
+            <AppText style={cards.recUsername}>{author.displayName}</AppText>
             {item.createdAt && (
-              <Text style={cards.recDate}>{formatDate(item.createdAt)}</Text>
+              <AppText style={cards.recDate}>{formatDate(item.createdAt)}</AppText>
             )}
           </View>
         </View>
@@ -144,10 +145,10 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
       {/* Content */}
       <View style={cards.recContent}>
         <View style={cards.recTitleRow}>
-          <Text style={cards.recTitle} numberOfLines={1}>{item.title}</Text>
+          <AppText style={cards.recTitle} numberOfLines={1}>{item.title}</AppText>
           {item.category && (
             <View style={cards.recCategoryChip}>
-              <Text style={cards.recCategoryText}>{item.category}</Text>
+              <AppText style={cards.recCategoryText}>{item.category}</AppText>
             </View>
           )}
         </View>
@@ -167,16 +168,16 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
               style={{ flexDirection: 'row', alignItems: 'center' }}
             >
               <Ionicons name="location-outline" size={14} color="#2EC4B6" />
-              <Text style={cards.recLocationText}>
+              <AppText style={cards.recLocationText}>
                 {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
         )}
 
-        <Text style={cards.recDescription} numberOfLines={3}>
+        <AppText style={cards.recDescription} numberOfLines={3}>
           {item.description}
-        </Text>
+        </AppText>
       </View>
 
       {/* Footer / Action Bar */}

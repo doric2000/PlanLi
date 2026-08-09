@@ -1,6 +1,7 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import AppFontProvider from "./src/components/AppFontProvider";
 
 import LoginScreen from "./src/features/auth/screens/LoginScreen";
 import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
@@ -54,8 +55,9 @@ const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen);
  */
 export default function App() {
 	return (
-		<SafeAreaProvider>
-			<NavigationContainer>
+		<AppFontProvider>
+			<SafeAreaProvider>
+				<NavigationContainer>
 				<Stack.Navigator
 					initialRouteName='Main'
 					screenOptions={{ headerShown: false }}
@@ -104,7 +106,8 @@ export default function App() {
 						options={modalPresentation}
 					/>
 				</Stack.Navigator>
-			</NavigationContainer>
-		</SafeAreaProvider>
+				</NavigationContainer>
+			</SafeAreaProvider>
+		</AppFontProvider>
 	);
 }

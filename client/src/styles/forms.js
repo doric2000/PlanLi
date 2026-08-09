@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -11,7 +12,7 @@ export const forms = {
 		fontSize: 14,
 		color: "#111827",
 		marginBottom: 4,
-		fontWeight: "600",
+		fontFamily: fontFamilies.medium,
 	},
 
 	input: {
@@ -110,14 +111,14 @@ export const forms = {
 	},
 	authTitle: {
 		fontSize: 28,
-		fontWeight: '700',
+		fontFamily: fontFamilies.medium,
 		color: '#1E3A8A',
 		marginBottom: 8,
 		letterSpacing: 0.5,
 	},
 	authSubtitle: {
 		fontSize: 14,
-		fontWeight: '500',
+		fontFamily: fontFamilies.medium,
 		color: '#6B7280',
 		letterSpacing: 0.2,
 	},
@@ -129,7 +130,7 @@ export const forms = {
 	},
 	authInputLabel: {
 		fontSize: 14,
-		fontWeight: '600',
+		fontFamily: fontFamilies.medium,
 		color: '#4B5563',
 		marginBottom: 8,
 		marginLeft: 4,
@@ -162,7 +163,7 @@ export const forms = {
 	authForgotPasswordText: {
 		color: '#2563EB',
 		fontSize: 13,
-		fontWeight: '600',
+		fontFamily: fontFamilies.medium,
 	},
 	authErrorText: {
 		color: '#EF4444',
@@ -184,7 +185,7 @@ export const forms = {
 	authButtonText: {
 		color: '#FFFFFF',
 		fontSize: 16,
-		fontWeight: '700',
+		fontFamily: fontFamilies.medium,
 		letterSpacing: 0.5,
 	},
 	authDividerContainer: {
@@ -233,7 +234,7 @@ export const forms = {
 	},
 	authFooterText: {
 		fontSize: 12,
-		fontWeight: '500',
+		fontFamily: fontFamilies.medium,
 		color: '#6B7280',
 		textAlign: 'center',
 	},
@@ -249,7 +250,7 @@ export const forms = {
 	authLink: {
 		fontSize: 14,
 		color: '#1E3A8A',
-		fontWeight: '700',
+		fontFamily: fontFamilies.medium,
 	},
 	authTermsContainer: {
 		marginVertical: 16,
@@ -257,13 +258,13 @@ export const forms = {
 	},
 	authTermsText: {
 		fontSize: 12,
-		fontWeight: '500',
+		fontFamily: fontFamilies.medium,
 		color: '#6B7280',
 		textAlign: 'center',
 		lineHeight: 18,
 	},
 	authTermsLink: {
 		color: '#3B82F6',
-		fontWeight: '600',
+		fontFamily: fontFamilies.medium,
 	},
 };

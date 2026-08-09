@@ -1,5 +1,7 @@
+import { fontFamilies } from "../styles/typography";
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import AppText from "./AppText";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,19 +41,13 @@ export default function PageHeader({
         style,
       ]}
     >
-      {hero ? (
-        <>
-          <View pointerEvents="none" style={styles.circleLarge} />
-          <View pointerEvents="none" style={styles.circleSmall} />
-        </>
-      ) : null}
       <View style={[styles.content, contentStyle]}>
         {hasTop ? <View style={[styles.topRow, detail && styles.topRowDetail]}>
           <View style={styles.side}>{renderStart?.() || null}</View>
           <View style={styles.titleWrap}>
-            <Text style={[styles.title, hero && styles.titleHero]} numberOfLines={1}>{title}</Text>
+            <AppText style={[styles.title, hero && styles.titleHero]} numberOfLines={1}>{title}</AppText>
             {subtitle ? (
-              <Text style={[styles.subtitle, hero && styles.subtitleHero]} numberOfLines={2}>{subtitle}</Text>
+              <AppText style={[styles.subtitle, hero && styles.subtitleHero]} numberOfLines={2}>{subtitle}</AppText>
             ) : null}
           </View>
           <View style={[styles.side, styles.sideEnd]}>{renderEnd?.() || null}</View>
@@ -112,7 +108,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 24,
     lineHeight: 30,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -122,18 +118,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '600',
+    fontFamily: fontFamilies.medium,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
   subtitleHero: { color: 'rgba(255,255,255,0.72)' },
   body: { paddingTop: 8, position: 'relative', zIndex: 2 },
-  circleLarge: {
-    position: 'absolute', width: 210, height: 210, borderRadius: 105,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)', top: -58, right: -44,
-  },
-  circleSmall: {
-    position: 'absolute', width: 134, height: 134, borderRadius: 67,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)', top: 30, right: 24,
-  },
 });

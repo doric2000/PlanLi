@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth } from '../../../config/firebase';
@@ -90,8 +91,8 @@ export default function RegisterScreen({ navigation }) {
                 <View style={forms.authLogoContainer}>
                    <Image source={require('../../../../assets/logo.png')} style={forms.authLogo} resizeMode="contain" />
                 </View>
-                <Text style={forms.authTitle}>צרו חשבון</Text>
-                <Text style={forms.authSubtitle}>התחילו את המסע שלכם</Text>
+                <AppText style={forms.authTitle}>צרו חשבון</AppText>
+                <AppText style={forms.authSubtitle}>התחילו את המסע שלכם</AppText>
               </View>
 
               <View style={forms.authForm}>
@@ -135,26 +136,26 @@ export default function RegisterScreen({ navigation }) {
 
                 {/* Terms Text */}
                 <View style={forms.authTermsContainer}>
-                  <Text style={forms.authTermsText}>
+                  <AppText style={forms.authTermsText}>
                     בהרשמה למערכת, הנך מאשר/ת את{' '}
-                    <Text style={forms.authTermsLink}>תנאי השימוש</Text> &{' '}
-                    <Text style={forms.authTermsLink}>מדיניות הפרטיות</Text>
-                  </Text>
+                    <AppText style={forms.authTermsLink}>תנאי השימוש</AppText> &{' '}
+                    <AppText style={forms.authTermsLink}>מדיניות הפרטיות</AppText>
+                  </AppText>
                 </View>
 
-                {error ? <Text style={forms.authErrorText}>{error}</Text> : null}
+                {error ? <AppText style={forms.authErrorText}>{error}</AppText> : null}
 
                 {/* Register Button */}
                 <TouchableOpacity onPress={handleRegister} activeOpacity={0.8}>
                   <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={forms.authButton}>
-                    <Text style={forms.authButtonText}>צור חשבון</Text>
+                    <AppText style={forms.authButtonText}>צור חשבון</AppText>
                   </LinearGradient>
                 </TouchableOpacity>
 
                 {/* Divider */}
                 <View style={forms.authDividerContainer}>
                   <View style={forms.authDivider} />
-                  <Text style={forms.authDividerText}>או המשך/י באמצעות</Text>
+                  <AppText style={forms.authDividerText}>או המשך/י באמצעות</AppText>
                   <View style={forms.authDivider} />
                 </View>
 
@@ -163,13 +164,13 @@ export default function RegisterScreen({ navigation }) {
 
                 {/* Footer */}
                 <View style={forms.authFooter}>
-                  <Text style={forms.authFooterText}>הצטרף לאלפי מטיילים</Text>
-                  <Text style={forms.authFooterText}>מגלים את העולם ביחד</Text>
+                  <AppText style={forms.authFooterText}>הצטרף לאלפי מטיילים</AppText>
+                  <AppText style={forms.authFooterText}>מגלים את העולם ביחד</AppText>
 
                   <View style={forms.authLinkContainer}>
-                    <Text style={forms.authLinkText}>כבר יש לך חשבון? </Text>
+                    <AppText style={forms.authLinkText}>כבר יש לך חשבון? </AppText>
                     <TouchableOpacity onPress={() => navigation.replace('Login')}>
-                      <Text style={forms.authLink}>התחבר/י</Text>
+                      <AppText style={forms.authLink}>התחבר/י</AppText>
                     </TouchableOpacity>
                   </View>
                 </View>

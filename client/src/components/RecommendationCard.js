@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
+import { View, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +13,7 @@ import { cards, colors, recommendationCardStyles as styles } from '../styles';
 import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import FavoriteButton from './FavoriteButton';
+import PreferenceContextLine from './PreferenceContextLine';
 import { getUserTier } from '../utils/userTier';
 import { canManageRecommendation } from '../utils/contentPermissions';
 import { useAdminClaim } from '../hooks/useAdminClaim';
@@ -22,7 +24,6 @@ import {
   getRecommendationImageUrls,
 } from '../utils/mediaAssets';
 import { deleteContent } from '../services/SocialService';
-import { getPersonalizationReasonLabel } from '../features/profile/constants/smartProfileOptions';
 
 
 /**
@@ -131,9 +132,7 @@ const RecommendationCard = ({
       />
     );
   };
-  const personalizationReason = getPersonalizationReasonLabel(
-    item?.personalization?.reasonCodes?.[0]
-  );
+  const personalizationReasonCode = item?.personalization?.reasonCodes?.[0];
 
   const scrollToImageIndex = (nextIndex) => {
     if (!images.length) return;
@@ -211,18 +210,18 @@ const RecommendationCard = ({
           />
         </View>
         <View style={overlay ? styles.feedAuthorTextWrap : null}>
-          <Text style={[cards.recUsername, overlay && styles.feedUsername]} numberOfLines={1}>
+          <AppText style={[cards.recUsername, overlay && styles.feedUsername]} numberOfLines={1}>
             {author.displayName}
-          </Text>
+          </AppText>
           {item.createdAt && (
-            <Text style={[cards.recDate, overlay && styles.feedMetaText]} numberOfLines={1}>
+            <AppText style={[cards.recDate, overlay && styles.feedMetaText]} numberOfLines={1}>
               {formatDate(item.createdAt)}
-            </Text>
+            </AppText>
           )}
           {overlay && (destination.cityName || destination.countryName) ? (
-            <Text style={styles.feedMetaText} numberOfLines={1}>
+            <AppText style={styles.feedMetaText} numberOfLines={1}>
               {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
-            </Text>
+            </AppText>
           ) : null}
         </View>
       </TouchableOpacity>
@@ -266,9 +265,9 @@ const RecommendationCard = ({
             displayName={author.displayName}
           />
           <View>
-            <Text style={cards.recUsername}>{author.displayName}</Text>
+            <AppText style={cards.recUsername}>{author.displayName}</AppText>
             {item.createdAt && (
-              <Text style={cards.recDate}>{formatDate(item.createdAt)}</Text>
+              <AppText style={cards.recDate}>{formatDate(item.createdAt)}</AppText>
             )}
           </View>
         </TouchableOpacity>
@@ -433,17 +432,16 @@ const RecommendationCard = ({
       {/* Content */}
       <Pressable onPress={handleCardPress}>
         <View style={[cards.recContent, isFeed && styles.feedContent]}>
-        {!!personalizationReason && (
-          <View style={cards.recLocationRow}>
-            <Ionicons name="sparkles-outline" size={14} color={colors.primary} />
-            <Text style={cards.recLocationText}>{personalizationReason}</Text>
-          </View>
-        )}
+        <PreferenceContextLine
+          reasonCode={personalizationReasonCode}
+          style={cards.recLocationRow}
+          textStyle={cards.recLocationText}
+        />
         <View style={cards.recTitleRow}>
-          <Text style={[cards.recTitle, isFeed && styles.feedTitle]} numberOfLines={1}>{item.title}</Text>
+          <AppText style={[cards.recTitle, isFeed && styles.feedTitle]} numberOfLines={1}>{item.title}</AppText>
           {item.category && (
             <View style={cards.recCategoryChip}>
-              <Text style={cards.recCategoryText}>{item.category}</Text>
+              <AppText style={cards.recCategoryText}>{item.category}</AppText>
             </View>
           )}
         </View>
@@ -463,9 +461,9 @@ const RecommendationCard = ({
               }}
             >
               <Ionicons name="location-outline" size={14} color="#2EC4B6" />
-              <Text style={cards.recLocationText}>
+              <AppText style={cards.recLocationText}>
                 {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
         )}
@@ -474,16 +472,16 @@ const RecommendationCard = ({
           <View style={cards.recLocationRow}>
             <View style={cards.recLocationPressableRow}>
               <Ionicons name="navigate-outline" size={14} color="#2EC4B6" />
-              <Text style={cards.recLocationText}>
+              <AppText style={cards.recLocationText}>
                 {`${Number(item.distanceKm).toFixed(1).replace(/\.0$/, '')} ק\"מ ממך`}
-              </Text>
+              </AppText>
             </View>
           </View>
         )}
 
-        <Text style={[cards.recDescription, isFeed && styles.feedDescription]} numberOfLines={isFeed ? 2 : 3}>
+        <AppText style={[cards.recDescription, isFeed && styles.feedDescription]} numberOfLines={isFeed ? 2 : 3}>
           {item.description}
-        </Text>
+        </AppText>
         </View>
       </Pressable>
 

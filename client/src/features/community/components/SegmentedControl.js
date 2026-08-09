@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 // Importing global colors to maintain consistency
 import { colors, segmentedControlStyles as styles } from '../../../styles';
 
@@ -22,7 +23,7 @@ const SegmentedControl = ({
 }) => {
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <AppText style={styles.label}>{label}</AppText>}
 
       <View style={styles.row}>
         {items.map((item, index) => {
@@ -56,13 +57,13 @@ const SegmentedControl = ({
               onPress={() => onSelect(item)}
               testID={resolvedTestId}
             >
-              <Text style={[
+              <AppText style={[
                 styles.text,
                 isSelected && styles.textSelected,
                 selectedTextStyle,
               ]}>
                 {item}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           );
         })}

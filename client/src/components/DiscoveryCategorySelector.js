@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 import DiscoveryOptionGroup from './DiscoveryOptionGroup';
 import {
@@ -71,8 +72,8 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
 
   return (
     <View style={styles.categorySection}>
-      <Text style={styles.primarySectionTitle}>מה מחפשים?</Text>
-      <Text style={styles.primarySectionHelper}>בחרו עד שלוש קטגוריות</Text>
+      <AppText style={styles.primarySectionTitle}>מה מחפשים?</AppText>
+      <AppText style={styles.primarySectionHelper}>בחרו עד שלוש קטגוריות</AppText>
       <View style={styles.categoryGrid}>
         {CATEGORIES.map((category, index) => {
           const selected = selectedCategoryIds.includes(category.id);
@@ -96,14 +97,14 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
                 size={22}
                 color={selected ? colors.white : colors.primary}
               />
-              <Text style={[styles.categoryTileText, selected && styles.categoryTileTextSelected]}>
+              <AppText style={[styles.categoryTileText, selected && styles.categoryTileTextSelected]}>
                 {category.label}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           );
         })}
       </View>
-      {!!notice && <Text style={styles.inlineNotice}>{notice}</Text>}
+      {!!notice && <AppText style={styles.inlineNotice}>{notice}</AppText>}
 
       {!!selectedCategoryIds.length && (
         <View style={styles.subcategoryPanel}>
@@ -121,9 +122,9 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
                     accessibilityState={{ selected: active }}
                     testID={`discovery-category-tab-${categoryId}`}
                   >
-                    <Text style={[styles.categoryTabText, active && styles.categoryTabTextActive]}>
+                    <AppText style={[styles.categoryTabText, active && styles.categoryTabTextActive]}>
                       {category?.label || categoryId}
-                    </Text>
+                    </AppText>
                   </TouchableOpacity>
                 );
               })}
@@ -132,7 +133,7 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
 
           {!!activeCategory && (
             <>
-              <Text style={styles.subcategoryTitle}>תתי־קטגוריות · {activeCategory.label}</Text>
+              <AppText style={styles.subcategoryTitle}>תתי־קטגוריות · {activeCategory.label}</AppText>
               {activeCategoryId === 'services' && (
                 <View style={styles.serviceGroupTabs}>
                   {SERVICE_GROUPS.map((group) => {
@@ -148,9 +149,9 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
                         accessibilityState={{ selected: active }}
                         testID={`discovery-service-group-${group.value}`}
                       >
-                        <Text style={[styles.serviceGroupTabText, active && styles.serviceGroupTabTextActive]}>
+                        <AppText style={[styles.serviceGroupTabText, active && styles.serviceGroupTabTextActive]}>
                           {group.label}{selectedCount ? ` (${selectedCount})` : ''}
-                        </Text>
+                        </AppText>
                       </TouchableOpacity>
                     );
                   })}

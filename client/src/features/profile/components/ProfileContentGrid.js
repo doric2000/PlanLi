@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 
 import ContentTile from '../../../components/ContentTile';
@@ -36,9 +37,9 @@ export function ProfileContentHeader({
           size={18}
           color={isActive ? colors.white : colors.textSecondary}
         />
-        <Text style={[styles.contentTabText, isActive && styles.contentTabTextActive]}>
+        <AppText style={[styles.contentTabText, isActive && styles.contentTabTextActive]}>
           {label} {count}
-        </Text>
+        </AppText>
       </Pressable>
     );
   };
@@ -46,8 +47,8 @@ export function ProfileContentHeader({
   return (
     <View style={styles.contentSection}>
       <View style={styles.contentIntroRow}>
-        <Text style={styles.contentTitle}>{title}</Text>
-        <Text style={styles.contentCount}>רגעים ששווה לשמור</Text>
+        <AppText style={styles.contentTitle}>{title}</AppText>
+        <AppText style={styles.contentCount}>רגעים ששווה לשמור</AppText>
       </View>
       <View style={styles.contentTabs} accessibilityRole="tablist">
         {renderTab('recommendations', 'המלצות', recommendationsCount, 'thumb-up')}
@@ -115,14 +116,14 @@ export function ProfileContentEmpty({ contentTab, styles, ownerLabel = 'הפרו
         size={36}
         color={colors.textMuted}
       />
-      <Text style={styles.emptyTitle}>
+      <AppText style={styles.emptyTitle}>
         {recommendations ? 'עוד אין כאן המלצות' : 'עוד אין כאן מסלולים'}
-      </Text>
-      <Text style={styles.emptyText}>
+      </AppText>
+      <AppText style={styles.emptyText}>
         {recommendations
           ? `כשהמלצות של ${ownerLabel} יעלו, הן יופיעו כאן.`
           : `כשהמסלולים של ${ownerLabel} יעלו, הם יופיעו כאן.`}
-      </Text>
+      </AppText>
     </View>
   );
 }

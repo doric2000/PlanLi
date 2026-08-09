@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { View, TouchableOpacity, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { colors, imagePickerBoxStyles as styles } from '../styles';
 import CachedImage from './CachedImage';
@@ -73,7 +74,7 @@ export const ImagePickerBox = ({
       {loading ? (
         <View style={styles.placeholder}>
           <Ionicons name="cloud-upload-outline" size={iconSize} color={iconColor} />
-          <Text style={styles.placeholderText}>{placeholderText || 'מעלה תמונה...'}</Text>
+          <AppText style={styles.placeholderText}>{placeholderText || 'מעלה תמונה...'}</AppText>
         </View>
       ) : count === 0 ? (
         <TouchableOpacity
@@ -84,7 +85,7 @@ export const ImagePickerBox = ({
           testID={testID}
         >
           <Ionicons name={iconName} size={iconSize} color={iconColor} />
-          <Text style={styles.placeholderText}>{placeholderText}</Text>
+          <AppText style={styles.placeholderText}>{placeholderText}</AppText>
         </TouchableOpacity>
       ) : (
         <View
@@ -207,7 +208,7 @@ export const ImagePickerBox = ({
 
           {count > 1 || maxImages > 1 ? (
             <View style={styles.countBadge} pointerEvents="none">
-              <Text style={styles.countText}>{count}/{maxImages}</Text>
+              <AppText style={styles.countText}>{count}/{maxImages}</AppText>
             </View>
           ) : null}
         </View>

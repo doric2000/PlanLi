@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -96,14 +98,14 @@ export default function ChangeNameScreen({ navigation }) {
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>שינוי שם</Text>
+        <AppText style={styles.headerTitle}>שינוי שם</AppText>
 
         <View style={styles.rightSpacer} />
       </View>
 
       <View style={styles.container}>
-        <Text style={styles.label}>שם חדש</Text>
-        <TextInput
+        <AppText style={styles.label}>שם חדש</AppText>
+        <AppTextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
@@ -122,7 +124,7 @@ export default function ChangeNameScreen({ navigation }) {
           disabled={saving}
           testID="change-name-submit"
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>עדכן</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <AppText style={styles.primaryBtnText}>עדכן</AppText>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

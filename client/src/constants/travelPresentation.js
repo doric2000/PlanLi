@@ -1,8 +1,11 @@
 import {
   CATEGORIES,
   INTERESTS,
+  TRAVEL_PARTIES,
+  TRAVELER_STYLES,
   VIBES,
   getCategoryLabel,
+  getOptionLabel,
   normalizeCategoryId,
 } from './travelTaxonomy';
 
@@ -152,6 +155,38 @@ export function getPreferencePresentation(kind, value) {
     color: category.color,
     categoryId,
   };
+}
+
+export function getPersonalizationReasonPresentation(reasonCode) {
+  if (typeof reasonCode !== 'string' || !reasonCode.trim()) return null;
+  if (reasonCode === 'budget') {
+    return { label: 'תקציב מועדף', icon: 'account-balance-wallet' };
+  }
+
+  const [kind, value] = reasonCode.split(':');
+  if (!value) return null;
+
+  if (kind === 'interest') {
+    if (!INTERESTS.some((option) => option.value === value)) return null;
+    const presentation = getPreferencePresentation('interest', value);
+    return presentation?.label
+      ? { label: presentation.label, icon: presentation.icon || 'landscape' }
+      : null;
+  }
+
+  if (kind === 'party' || kind === 'audience') {
+    if (!TRAVEL_PARTIES.some((option) => option.value === value)) return null;
+    const label = getOptionLabel(TRAVEL_PARTIES, value);
+    return label ? { label, icon: 'groups' } : null;
+  }
+
+  if (kind === 'style') {
+    if (!TRAVELER_STYLES.some((option) => option.value === value)) return null;
+    const label = getOptionLabel(TRAVELER_STYLES, value);
+    return label ? { label, icon: 'explore' } : null;
+  }
+
+  return null;
 }
 
 export function getCategoryOrder(categoryId) {

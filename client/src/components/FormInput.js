@@ -1,5 +1,7 @@
 import React from "react";
-import { View, Text, TextInput } from "react-native";
+import { View } from "react-native";
+import AppText from "./AppText";
+import AppTextInput from "./AppTextInput";
 import { forms } from "../styles";
 
 /**
@@ -56,16 +58,16 @@ export const FormInput = ({
 }) => (
 	<View style={[forms.inputWrapper, containerStyle]}>
 		{label && (
-			<Text style={[forms.label, rtl && { textAlign: "right", writingDirection: "rtl" }]}>
+			<AppText style={[forms.label, rtl && { textAlign: "right", writingDirection: "rtl" }]}>
 				{label}{required ? " (חובה)" : ""}
-			</Text>
+			</AppText>
 		)}
 		{helperText && (
-			<Text style={{ color: "#6B7280", fontSize: 12, marginBottom: 6, textAlign: rtl ? "right" : undefined, writingDirection: rtl ? "rtl" : undefined }}>
+			<AppText style={{ color: "#6B7280", fontSize: 12, marginBottom: 6, textAlign: rtl ? "right" : undefined, writingDirection: rtl ? "rtl" : undefined }}>
 				{helperText}
-			</Text>
+			</AppText>
 		)}
-		<TextInput
+		<AppTextInput
 			ref={inputRef}
 			style={[
 				forms.input,
@@ -83,12 +85,12 @@ export const FormInput = ({
 			{...props}
 		/>
 		{error && (
-			<Text
+			<AppText
 				style={[forms.errorText, rtl && { textAlign: "right", writingDirection: "rtl" }]}
 				accessibilityLiveRegion="polite"
 			>
 				{error}
-			</Text>
+			</AppText>
 		)}
 	</View>
 );

@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, TouchableOpacity, Modal } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { colors, community } from '../../../styles';
 
 export const SortMenuModal = ({ visible, onClose, sortBy, onSelect, personalizationAvailable = false, includeNearby = true }) => {
   const options = [
     ...(personalizationAvailable
-      ? [{ key: 'personalized', label: 'בשבילך', icon: 'sparkles-outline' }]
+      ? [{ key: 'personalized', label: 'בשבילך', icon: 'person-outline' }]
       : []),
     { key: 'popularity', label: 'הכי פופולרי', icon: 'trending-up-outline' },
     { key: 'newest', label: 'הכי חדש', icon: 'time-outline' },
@@ -17,7 +18,7 @@ export const SortMenuModal = ({ visible, onClose, sortBy, onSelect, personalizat
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={community.modalOverlay} activeOpacity={1} onPress={onClose}>
         <View style={community.sortMenu}>
-          <Text style={community.sortTitle}>מיין לפי</Text>
+          <AppText style={community.sortTitle}>מיין לפי</AppText>
           {options.map((option) => (
             <TouchableOpacity 
               key={option.key}
@@ -31,14 +32,14 @@ export const SortMenuModal = ({ visible, onClose, sortBy, onSelect, personalizat
                   color={sortBy === option.key ? colors.primary : colors.textSecondary}
                   style={community.sortOptionIcon}
                 />
-                <Text
+                <AppText
                   style={[
                     community.sortOptionText,
                     sortBy === option.key && community.sortOptionTextSelected,
                   ]}
                 >
                   {option.label}
-                </Text>
+                </AppText>
               </View>
               {sortBy === option.key && <Ionicons name="checkmark" size={18} color={colors.primary} />}
             </TouchableOpacity>

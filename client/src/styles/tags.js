@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 export const tags = {
 	// Container styles
 	wrapper: {
@@ -29,14 +30,14 @@ export const tags = {
 	text: {
 		fontSize: 11,
 		color: "#6B7280",
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
 
 	textSelected: {
 		color: "#0284C7",
-		fontWeight: "600",
+		fontFamily: fontFamilies.medium,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -56,7 +57,7 @@ export const tags = {
 	moreText: {
 		fontSize: 11,
 		color: "#0284C7",
-		fontWeight: "600",
+		fontFamily: fontFamilies.medium,
 	},
 
 	// Selection Chips (Larger)
@@ -79,17 +80,17 @@ export const tags = {
 	chipText: {
 		color: "#111827",
 		fontSize: 14,
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 	},
 
 	chipTextSelected: {
 		color: "#0284C7",
-		fontWeight: "700",
+		fontFamily: fontFamilies.medium,
 	},
 
 	sectionLabel: {
 		fontSize: 14,
-		fontWeight: "700",
+		fontFamily: fontFamilies.medium,
 		color: "#111827",
 		marginBottom: 8,
 	},
@@ -111,7 +112,7 @@ export const tags = {
 	budgetChipText: {
 		fontSize: 13,
 		color: "#111827",
-		fontWeight: "600",
+		fontFamily: fontFamilies.medium,
 	},
 
 	budgetChipTextSelected: {
@@ -137,12 +138,12 @@ export const tags = {
 	filterChipText: {
 		fontSize: 13,
 		color: "#4B5563",
-		fontWeight: "700",
+		fontFamily: fontFamilies.medium,
 	},
 
 	filterChipTextSelected: {
 		color: "#2EC4B6",
-		fontWeight: "700",
+		fontFamily: fontFamilies.medium,
 		fontSize: 13,
 	},
 

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ActivityIndicator, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ActivityIndicator, TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { httpsCallable } from 'firebase/functions';
 
@@ -18,7 +20,7 @@ export default function AdminPanelScreen({ navigation }) {
   useEffect(() => {
     navigation.setOptions({
       headerTitle: () => null,
-      headerRight: () => <Text style={styles.headerTitleText}>פאנל אדמין</Text>,
+      headerRight: () => <AppText style={styles.headerTitleText}>פאנל אדמין</AppText>,
       headerRightContainerStyle: { paddingRight: 12 },
     });
   }, [navigation]);
@@ -119,8 +121,8 @@ export default function AdminPanelScreen({ navigation }) {
     return (
       <SafeAreaView style={common.container}>
         <View style={[common.containerCentered, { padding: 16 }]}>
-          <Text style={[typography.sectionTitle, { textAlign: 'right' }]}>אין הרשאה</Text>
-          <Text style={[typography.meta, { textAlign: 'right', marginTop: 8 }]}>רק אדמין יכול לגשת לפאנל הזה.</Text>
+          <AppText style={[typography.sectionTitle, { textAlign: 'right' }]}>אין הרשאה</AppText>
+          <AppText style={[typography.meta, { textAlign: 'right', marginTop: 8 }]}>רק אדמין יכול לגשת לפאנל הזה.</AppText>
         </View>
       </SafeAreaView>
     );
@@ -129,9 +131,9 @@ export default function AdminPanelScreen({ navigation }) {
   return (
     <SafeAreaView style={common.container}>
       <View style={styles.container}>
-        <Text style={[typography.meta, { textAlign: 'right', marginTop: 6 }]}>הכנס אימייל או UID של משתמש ובחר פעולה</Text>
+        <AppText style={[typography.meta, { textAlign: 'right', marginTop: 6 }]}>הכנס אימייל או UID של משתמש ובחר פעולה</AppText>
 
-        <TextInput
+        <AppTextInput
           value={identifier}
           onChangeText={setIdentifier}
           placeholder="אימייל או UID"
@@ -144,7 +146,7 @@ export default function AdminPanelScreen({ navigation }) {
         {status?.message ? (
           <View style={styles.statusWrap}>
             {busy ? <ActivityIndicator size="small" color={colors.accent} /> : null}
-            <Text
+            <AppText
               style={[
                 styles.statusText,
                 status.type === 'error' ? styles.statusError : null,
@@ -152,7 +154,7 @@ export default function AdminPanelScreen({ navigation }) {
               ]}
             >
               {status.message}
-            </Text>
+            </AppText>
           </View>
         ) : null}
 
@@ -163,7 +165,7 @@ export default function AdminPanelScreen({ navigation }) {
             disabled={busy}
             activeOpacity={0.85}
           >
-            <Text style={buttons.submitText}>הפוך לאדמין</Text>
+            <AppText style={buttons.submitText}>הפוך לאדמין</AppText>
           </TouchableOpacity>
 
           <View style={{ width: 10 }} />
@@ -174,7 +176,7 @@ export default function AdminPanelScreen({ navigation }) {
             disabled={busy}
             activeOpacity={0.85}
           >
-            <Text style={buttons.secondaryText}>הסר אדמין</Text>
+            <AppText style={buttons.secondaryText}>הסר אדמין</AppText>
           </TouchableOpacity>
         </View>
 
@@ -187,7 +189,7 @@ export default function AdminPanelScreen({ navigation }) {
             disabled={busy}
             activeOpacity={0.85}
           >
-            <Text style={buttons.submitText}>סמן כמאומת</Text>
+            <AppText style={buttons.submitText}>סמן כמאומת</AppText>
           </TouchableOpacity>
 
           <View style={{ width: 10 }} />
@@ -198,14 +200,14 @@ export default function AdminPanelScreen({ navigation }) {
             disabled={busy}
             activeOpacity={0.85}
           >
-            <Text style={buttons.secondaryText}>בטל אימות</Text>
+            <AppText style={buttons.secondaryText}>בטל אימות</AppText>
           </TouchableOpacity>
         </View>
 
-        <Text style={[typography.meta, { textAlign: 'right', marginTop: 16, color: colors.textLight, lineHeight: 20 }]}
+        <AppText style={[typography.meta, { textAlign: 'right', marginTop: 16, color: colors.textLight, lineHeight: 20 }]}
         >
           הערה: אחרי שינוי הרשאות/אימות, המשתמש חייב להתנתק ולהתחבר מחדש כדי שהטוקן יתעדכן.
-        </Text>
+        </AppText>
       </View>
     </SafeAreaView>
   );

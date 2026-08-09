@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,8 +30,8 @@ export default function AuthEntryScreen({ navigation }) {
       <SafeAreaView style={forms.authSafeArea}>
         <View style={[forms.authCard, { paddingVertical: 28 }]}>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={[forms.authTitle, { textAlign: 'right' }]}>ברוכים הבאים</Text>
-            <Text style={[forms.authSubtitle, { textAlign: 'right' }]}>התחבר/י או הירשם/י כדי להיכנס לפרופיל</Text>
+            <AppText style={[forms.authTitle, { textAlign: 'right' }]}>ברוכים הבאים</AppText>
+            <AppText style={[forms.authSubtitle, { textAlign: 'right' }]}>התחבר/י או הירשם/י כדי להיכנס לפרופיל</AppText>
           </View>
 
           <View style={{ height: 18 }} />
@@ -43,7 +44,7 @@ export default function AuthEntryScreen({ navigation }) {
               style={[forms.authButton, { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10 }]}
             >
               <Ionicons name="log-in-outline" size={20} color="#fff" />
-              <Text style={forms.authButtonText}>התחברות</Text>
+              <AppText style={forms.authButtonText}>התחברות</AppText>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -52,16 +53,16 @@ export default function AuthEntryScreen({ navigation }) {
           <TouchableOpacity onPress={() => goTo('Register')} activeOpacity={0.85} style={forms.authSecondaryButton}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
               <Ionicons name="person-add-outline" size={20} color="#fff" />
-              <Text style={forms.authSecondaryButtonText}>הרשמה</Text>
+              <AppText style={forms.authSecondaryButtonText}>הרשמה</AppText>
             </View>
           </TouchableOpacity>
 
           <View style={{ height: 12 }} />
 
-          <Text style={[typography.meta, { textAlign: 'right', color: 'rgba(255,255,255,0.85)' }]}
+          <AppText style={[typography.meta, { textAlign: 'right', color: 'rgba(255,255,255,0.85)' }]}
           >
             כאורח/ת אפשר לצפות בתוכן, אבל פרופיל דורש התחברות.
-          </Text>
+          </AppText>
         </View>
       </SafeAreaView>
     </LinearGradient>

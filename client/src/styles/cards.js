@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { Dimensions } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -158,7 +159,7 @@ export const cards = {
 
 	sectionTitle: {
 		fontSize: 18,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		marginRight: 12,
 	},
@@ -190,14 +191,14 @@ export const cards = {
 
 	infoTitle: {
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		marginBottom: 2,
 	},
 
 	infoSubtitle: {
 		fontSize: 12,
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		color: "#6B7280",
 		textAlign: "right",
 	},
@@ -233,7 +234,7 @@ export const cards = {
 	// Card title
 	title: {
 		fontSize: 20,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		marginBottom: 4,
 	},
@@ -263,7 +264,7 @@ export const cards = {
 	metaText: {
 		fontSize: 14,
 		color: "#9CA3AF",
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 	},
 
 	// User container
@@ -295,7 +296,7 @@ export const cards = {
 
 	recUsername: {
 		fontSize: 14,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#1F2937",
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -329,7 +330,7 @@ export const cards = {
 
 	recTitle: {
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 		flex: 1,
 		textAlign: "right",
@@ -346,7 +347,7 @@ export const cards = {
 	recCategoryText: {
 		color: "#2563EB",
 		fontSize: 10,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -360,7 +361,7 @@ export const cards = {
 	recLocationText: {
 		fontSize: 13,
 		color: "#2EC4B6",
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -398,7 +399,7 @@ export const cards = {
 	recActionText: {
 		fontSize: 14,
 		color: "#4B5563",
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -406,14 +407,14 @@ export const cards = {
 	recLikeCount: {
 		fontSize: 14,
 		color: "#4B5563",
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
 
 	recLikeCountClickable: {
 		color: "#1F2937",
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 	},
 
 	// Popular destination cards (HomeScreen)
@@ -456,7 +457,7 @@ export const cards = {
 
 	popularCity: {
 		fontSize: 16,
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 		color: "#111827",
 	},
 
@@ -488,7 +489,7 @@ export const cards = {
 
 	trendingText: {
 		color: "#FFFFFF",
-		fontWeight: "bold",
+		fontFamily: fontFamilies.semiBold,
 	},
 
 	// ===== Profile Cards =====

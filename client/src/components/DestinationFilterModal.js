@@ -1,5 +1,7 @@
+import { fontFamilies } from "../styles/typography";
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, layout, radii, spacing } from '../styles';
@@ -19,36 +21,52 @@ export default function DestinationFilterModal({ visible, onClose, sortBy, onSor
             <TouchableOpacity style={styles.close} onPress={onClose} accessibilityLabel="סגירת סינון">
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.title}>סינון יעדים</Text>
+            <AppText style={styles.title}>סינון יעדים</AppText>
             <View style={styles.close} />
           </View>
-          <Text style={styles.sectionTitle}>מיון</Text>
+          <AppText style={styles.sectionTitle}>מיון</AppText>
           <View style={styles.options}>
             {SORTS.map((option) => {
               const selected = sortBy === option.key;
               return (
                 <TouchableOpacity key={option.key} style={[styles.option, selected && styles.optionSelected]} onPress={() => onSortChange(option.key)}>
                   <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? colors.brand : colors.textMuted} />
-                  <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{option.label}</Text>
+                  <AppText style={[styles.optionText, selected && styles.optionTextSelected]}>{option.label}</AppText>
                 </TouchableOpacity>
               );
             })}
           </View>
-          <View style={[styles.switchRow, !favoritesAvailable && styles.disabled]}>
-            <Switch
-              value={savedOnly}
-              onValueChange={onSavedOnlyChange}
-              disabled={!favoritesAvailable}
-              trackColor={{ false: colors.border, true: colors.brand }}
-              thumbColor={colors.white}
+          <TouchableOpacity
+            testID="destination-saved-only-filter"
+            style={[
+              styles.option,
+              styles.savedOption,
+              savedOnly && styles.optionSelected,
+              !favoritesAvailable && styles.disabled,
+            ]}
+            onPress={() => onSavedOnlyChange(!savedOnly)}
+            disabled={!favoritesAvailable}
+            accessibilityRole="checkbox"
+            accessibilityLabel="מועדפים בלבד"
+            accessibilityState={{ checked: savedOnly, disabled: !favoritesAvailable }}
+          >
+            <Ionicons
+              name={savedOnly ? 'bookmark' : 'bookmark-outline'}
+              size={20}
+              color={savedOnly ? colors.brand : colors.textMuted}
             />
-            <View style={styles.switchText}>
-              <Text style={styles.optionText}>מועדפים בלבד</Text>
-              {!favoritesAvailable ? <Text style={styles.hint}>יש להתחבר כדי לסנן לפי מועדפים</Text> : null}
+            <View style={styles.savedCopy}>
+              <AppText style={[styles.optionText, styles.savedTitle, savedOnly && styles.optionTextSelected]}>מועדפים בלבד</AppText>
+              {!favoritesAvailable ? <AppText style={styles.hint}>יש להתחבר כדי לסנן לפי מועדפים</AppText> : null}
             </View>
-          </View>
+            <Ionicons
+              name={savedOnly ? 'checkmark-circle' : 'ellipse-outline'}
+              size={20}
+              color={savedOnly ? colors.brand : colors.textMuted}
+            />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.done} onPress={onClose} accessibilityRole="button">
-            <Text style={styles.doneText}>הצגת יעדים</Text>
+            <AppText style={styles.doneText}>הצגת יעדים</AppText>
           </TouchableOpacity>
         </Pressable>
       </Pressable>
@@ -66,17 +84,18 @@ const styles = StyleSheet.create({
   handle: { width: 42, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 10 },
   header: { minHeight: layout.touchTarget, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   close: { width: layout.touchTarget, height: layout.touchTarget, alignItems: 'center', justifyContent: 'center' },
-  title: { color: colors.textPrimary, fontSize: 20, fontWeight: '800', writingDirection: 'rtl' },
-  sectionTitle: { marginTop: spacing.lg, marginBottom: spacing.sm, color: colors.textSecondary, fontSize: 13, fontWeight: '800', textAlign: 'right', writingDirection: 'rtl' },
+  title: { color: colors.textPrimary, fontSize: 20, fontFamily: fontFamilies.semiBold, writingDirection: 'rtl' },
+  sectionTitle: { marginTop: spacing.lg, marginBottom: spacing.sm, color: colors.textSecondary, fontSize: 13, fontFamily: fontFamilies.medium, textAlign: 'right', writingDirection: 'rtl' },
   options: { gap: 8 },
   option: { minHeight: 50, paddingHorizontal: 14, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   optionSelected: { borderColor: colors.brand, backgroundColor: colors.surfaceSubtle },
-  optionText: { flex: 1, color: colors.textPrimary, fontSize: 15, fontWeight: '700', textAlign: 'right', writingDirection: 'rtl' },
+  optionText: { flex: 1, color: colors.textPrimary, fontSize: 15, fontFamily: fontFamilies.medium, textAlign: 'right', writingDirection: 'rtl' },
   optionTextSelected: { color: colors.brand },
-  switchRow: { minHeight: 62, marginTop: spacing.md, paddingHorizontal: 14, borderRadius: radii.md, backgroundColor: colors.surfaceSubtle, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  switchText: { flex: 1, alignItems: 'flex-end' },
+  savedOption: { minHeight: 62, marginTop: spacing.md },
+  savedCopy: { flex: 1, alignItems: 'flex-end' },
+  savedTitle: { flex: 0 },
   hint: { marginTop: 2, color: colors.textMuted, fontSize: 11, textAlign: 'right', writingDirection: 'rtl' },
   disabled: { opacity: 0.56 },
   done: { minHeight: 50, marginTop: spacing.lg, borderRadius: radii.md, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
-  doneText: { color: colors.white, fontSize: 15, fontWeight: '800', writingDirection: 'rtl' },
+  doneText: { color: colors.white, fontSize: 15, fontFamily: fontFamilies.medium, writingDirection: 'rtl' },
 });

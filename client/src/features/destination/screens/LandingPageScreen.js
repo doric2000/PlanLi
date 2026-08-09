@@ -1,20 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  Text,
-  useWindowDimensions,
-  View,
+	ActivityIndicator,
+	Linking,
+	Platform,
+	Pressable,
+	ScrollView,
+	StatusBar,
+	useWindowDimensions,
+	View,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AppText from "../../../components/AppText";
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CachedImage from '../../../components/CachedImage';
 import FavoriteButton from '../../../components/FavoriteButton';
+import PreferenceContextLine from '../../../components/PreferenceContextLine';
+import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { createDestinationStyles } from '../components/destinationStyles';
@@ -82,11 +84,11 @@ function FactCard({ fact, styles }) {
           color={fact.id === 'weather' ? '#D58A18' : colors.primary}
         />
       </View>
-      <Text style={styles.factTitle}>{fact.title}</Text>
-      <Text style={styles.factValue} numberOfLines={fact.id === 'airport' ? 2 : 1}>
+      <AppText style={styles.factTitle}>{fact.title}</AppText>
+      <AppText style={styles.factValue} numberOfLines={fact.id === 'airport' ? 2 : 1}>
         {fact.value}
-      </Text>
-      {!!fact.detail && <Text style={styles.factDetail}>{fact.detail}</Text>}
+      </AppText>
+      {!!fact.detail && <AppText style={styles.factDetail}>{fact.detail}</AppText>}
     </View>
   );
 }
@@ -95,7 +97,7 @@ function EssentialCard({ rows, styles }) {
   return (
     <View style={styles.neutralCard}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>מידע שימושי</Text>
+        <AppText style={styles.sectionTitle}>מידע שימושי</AppText>
       </View>
       {rows.map((row, index) => (
         <View
@@ -108,8 +110,8 @@ function EssentialCard({ rows, styles }) {
           <View style={styles.rowIcon}>
             <MaterialCommunityIcons name={row.icon} size={20} color={colors.primary} />
           </View>
-          <Text style={styles.essentialLabel}>{row.label}</Text>
-          <Text style={styles.essentialValue}>{row.value}</Text>
+          <AppText style={styles.essentialLabel}>{row.label}</AppText>
+          <AppText style={styles.essentialValue}>{row.value}</AppText>
         </View>
       ))}
     </View>
@@ -127,7 +129,7 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
         onPress={onToggle}
         style={({ pressed }) => [styles.sourcesButton, pressed && { opacity: 0.72 }]}
       >
-        <Text style={styles.sourcesButtonText}>מקורות ועדכון</Text>
+        <AppText style={styles.sourcesButtonText}>מקורות ועדכון</AppText>
         <Ionicons
           name={open ? 'chevron-up' : 'chevron-down'}
           size={18}
@@ -150,10 +152,10 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
                   pressed && { opacity: 0.7 },
                 ]}
               >
-                <Text style={styles.sourceLabel}>{row.label}</Text>
-                <Text style={styles.sourceValue} numberOfLines={1}>
+                <AppText style={styles.sourceLabel}>{row.label}</AppText>
+                <AppText style={styles.sourceValue} numberOfLines={1}>
                   {[row.value, updatedAt].filter(Boolean).join(' · ')}
-                </Text>
+                </AppText>
                 {!!row.url && (
                   <Ionicons name="open-outline" size={13} color={colors.textLight} />
                 )}
@@ -168,14 +170,17 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
 
 function RecommendationPreview({ item, navigation, styles }) {
   const imageUrl = getRecommendationImageUrls(item, 'thumb')[0] || null;
-  const category = item.category ||
-    (item.categoryId === 'transportation' ? 'תחבורה' :
-      item.tags?.includes?.('sim_esim') ? 'SIM וגלישה' : 'המלצה');
+  const legacyCategory = item.category || (item.tags?.includes?.('sim_esim') ? 'SIM וגלישה' : '');
+  const category = getTravelCategoryPresentation(item.categoryId, legacyCategory);
+  const reasonCode = item?.personalization?.reasonCodes?.[0];
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`פתיחת ההמלצה ${item.title || ''}`.trim()}
-      onPress={() => navigation.navigate('RecommendationDetail', { item })}
+      onPress={() => navigation.navigate('RecommendationDetail', {
+        postId: item.postId || item.id,
+        item,
+      })}
       style={({ pressed }) => [
         styles.recommendationPreview,
         pressed && { opacity: 0.78 },
@@ -189,20 +194,21 @@ function RecommendationPreview({ item, navigation, styles }) {
         />
       ) : (
         <View style={styles.recommendationImageFallback}>
-          <Ionicons name="sparkles-outline" size={24} color={colors.primary} />
+          <MaterialIcons name={category.icon} size={24} color={colors.primary} />
         </View>
       )}
       <View style={styles.recommendationBody}>
         <View style={styles.recommendationCategory}>
-          <Text style={styles.recommendationCategoryText}>{category}</Text>
+          <AppText style={styles.recommendationCategoryText}>{category.label}</AppText>
         </View>
-        <Text style={styles.recommendationTitle} numberOfLines={1}>
+        <PreferenceContextLine reasonCode={reasonCode} />
+        <AppText style={styles.recommendationTitle} numberOfLines={1}>
           {item.title}
-        </Text>
+        </AppText>
         {!!item.description && (
-          <Text style={styles.recommendationDescription} numberOfLines={2}>
+          <AppText style={styles.recommendationDescription} numberOfLines={2}>
             {item.description}
-          </Text>
+          </AppText>
         )}
       </View>
       <View style={styles.recommendationChevron}>
@@ -265,7 +271,7 @@ export default function LandingPageScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.loading} edges={['left', 'right', 'bottom']}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.errorText}>טוענים את היעד…</Text>
+        <AppText style={styles.errorText}>טוענים את היעד…</AppText>
       </SafeAreaView>
     );
   }
@@ -275,7 +281,7 @@ export default function LandingPageScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.loading} edges={['left', 'right', 'bottom']}>
         <Ionicons name="location-outline" size={38} color={colors.textLight} />
-        <Text style={styles.errorText}>{error || 'היעד לא נמצא.'}</Text>
+        <AppText style={styles.errorText}>{error || 'היעד לא נמצא.'}</AppText>
       </SafeAreaView>
     );
   }
@@ -343,24 +349,24 @@ export default function LandingPageScreen({ navigation, route }) {
           <View style={styles.summaryCard}>
             <View style={styles.summaryTop}>
               <View style={styles.summaryText}>
-                <Text style={styles.cityName}>{destination.name}</Text>
+                <AppText style={styles.cityName}>{destination.name}</AppText>
                 {!!destination.countryName && (
-                  <Text style={styles.countryName}>{destination.countryName}</Text>
+                  <AppText style={styles.countryName}>{destination.countryName}</AppText>
                 )}
               </View>
               {destination.travelers > 0 && (
                 <View style={styles.travelerPill}>
                   <Ionicons name="people-outline" size={16} color={colors.primary} />
-                  <Text style={styles.travelerText}>
+                  <AppText style={styles.travelerText}>
                     {destination.travelers} מטיילים
-                  </Text>
+                  </AppText>
                 </View>
               )}
             </View>
             {!!description && (
-              <Text style={styles.description} numberOfLines={3}>
+              <AppText style={styles.description} numberOfLines={3}>
                 {description}
-              </Text>
+              </AppText>
             )}
           </View>
         </View>
@@ -371,7 +377,7 @@ export default function LandingPageScreen({ navigation, route }) {
               {quickFacts.length > 0 && (
                 <View style={styles.quickSection}>
                   <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>במבט מהיר</Text>
+                    <AppText style={styles.sectionTitle}>במבט מהיר</AppText>
                   </View>
                   <View style={styles.quickGrid}>
                     {quickFacts.map((fact) => (
@@ -394,10 +400,10 @@ export default function LandingPageScreen({ navigation, route }) {
 
           <View style={styles.communityColumn}>
             <View style={styles.communityHeader}>
-              <Text style={styles.sectionTitle}>טיפים מהקהילה</Text>
-              <Text style={styles.sectionSubtitle}>
+              <AppText style={styles.sectionTitle}>טיפים מהקהילה</AppText>
+              <AppText style={styles.sectionSubtitle}>
                 המלצות של מטיילים על {destination.name}
-              </Text>
+              </AppText>
             </View>
 
             {filters.length > 1 && (
@@ -420,12 +426,12 @@ export default function LandingPageScreen({ navigation, route }) {
                         pressed && { opacity: 0.78 },
                       ]}
                     >
-                      <Text style={[
+                      <AppText style={[
                         styles.filterText,
                         active && styles.filterTextActive,
                       ]}>
                         {filter.label}
-                      </Text>
+                      </AppText>
                     </Pressable>
                   );
                 })}
@@ -450,12 +456,12 @@ export default function LandingPageScreen({ navigation, route }) {
                   size={38}
                   color={colors.textLight}
                 />
-                <Text style={styles.emptyTitle}>
+                <AppText style={styles.emptyTitle}>
                   עדיין אין טיפים בקטגוריה הזאת
-                </Text>
-                <Text style={styles.emptyText}>
+                </AppText>
+                <AppText style={styles.emptyText}>
                   המלצות חדשות שיוסיפו מטיילים יופיעו כאן.
-                </Text>
+                </AppText>
               </View>
             )}
 
@@ -468,7 +474,7 @@ export default function LandingPageScreen({ navigation, route }) {
                   pressed && { opacity: 0.76 },
                 ]}
               >
-                <Text style={styles.showMoreText}>הצג עוד המלצות</Text>
+                <AppText style={styles.showMoreText}>הצג עוד המלצות</AppText>
                 <Ionicons name="chevron-down" size={18} color={colors.primary} />
               </Pressable>
             )}

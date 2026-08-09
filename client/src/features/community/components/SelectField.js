@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 // Import global styles to ensure consistency across the app
 import { colors, forms, selectFieldStyles as styles } from '../../../styles';
@@ -17,7 +18,7 @@ const SelectField = ({
       {/* Label: We use the global 'forms.label' for font/color consistency,
         but override alignment to right since it's specific here.
       */}
-      <Text style={[forms.label, styles.labelOverride]}>{label}</Text>
+      <AppText style={[forms.label, styles.labelOverride]}>{label}</AppText>
 
       <TouchableOpacity
         style={[
@@ -35,9 +36,9 @@ const SelectField = ({
         />
 
         {/* Text on the right (Value or Placeholder) */}
-        <Text style={value ? styles.valueText : styles.placeholderText}>
+        <AppText style={value ? styles.valueText : styles.placeholderText}>
           {value || placeholder}
-        </Text>
+        </AppText>
       </TouchableOpacity>
     </View>
   );

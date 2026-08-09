@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useState } from "react";
-import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Modal, ScrollView, TouchableOpacity, View } from "react-native";
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import PlacesRoute from "../components/PlacesRoute";
@@ -65,29 +66,29 @@ export default function RouteDetailScreen({ route, navigation }) {
 				>
 					<Ionicons name="chevron-forward" size={28} color={colors.primary} />
 				</TouchableOpacity>
-				<Text style={styles.headerTitle}>{text.detailsTitle}</Text>
+				<AppText style={styles.headerTitle}>{text.detailsTitle}</AppText>
 				<View style={styles.headerSideSpacer} />
 			</View>
 
 			<ScrollView contentContainerStyle={styles.scrollContent}>
 				<View style={styles.headerSection}>
-					<Text style={styles.routeTitle}>{routeData.title}</Text>
+					<AppText style={styles.routeTitle}>{routeData.title}</AppText>
 
 					<View style={styles.authorRow}>
 						<Avatar photoURL={userPhoto} displayName={displayUser} size={24} />
-						<Text style={styles.authorText}>{text.authorPrefix} {displayUser}</Text>
+						<AppText style={styles.authorText}>{text.authorPrefix} {displayUser}</AppText>
 					</View>
 
-					<Text style={styles.descriptionText}>{routeData.description}</Text>
+					<AppText style={styles.descriptionText}>{routeData.description}</AppText>
 
 					<View style={styles.metaRow}>
 						<View style={styles.metaItem}>
 							<Ionicons name="calendar-outline" size={16} color={colors.textSecondary} style={styles.metaIcon} />
-							<Text style={styles.metaText}>{routeData.dayCount} {text.days}</Text>
+							<AppText style={styles.metaText}>{routeData.dayCount} {text.days}</AppText>
 						</View>
 						<View style={styles.metaItem}>
 							<Ionicons name="map-outline" size={16} color={colors.textSecondary} style={styles.metaIcon} />
-							<Text style={styles.metaText}>{routeData.distanceKm} {text.km}</Text>
+							<AppText style={styles.metaText}>{routeData.distanceKm} {text.km}</AppText>
 						</View>
 					</View>
 
@@ -98,25 +99,25 @@ export default function RouteDetailScreen({ route, navigation }) {
 						onPress={() => setMapVisible(true)}
 					>
 						<Ionicons name="map" size={18} color={validStops.length ? colors.white : colors.textMuted} />
-						<Text style={[styles.mapButtonText, validStops.length === 0 && styles.mapButtonTextDisabled]}>
+						<AppText style={[styles.mapButtonText, validStops.length === 0 && styles.mapButtonTextDisabled]}>
 							{validStops.length ? text.openMap : text.noMapPoints}
-						</Text>
+						</AppText>
 					</TouchableOpacity>
 
 					{places.length > 0 && (
 						<View style={styles.placesSection}>
-							<Text style={styles.subsectionTitle}>{text.places}</Text>
+							<AppText style={styles.subsectionTitle}>{text.places}</AppText>
 							<PlacesRoute places={places} style={styles.placesRouteSpacing} />
 						</View>
 					)}
 
 					{allTags.length > 0 && (
 						<View style={styles.tagsSection}>
-							<Text style={styles.subsectionTitle}>{text.tags}</Text>
+							<AppText style={styles.subsectionTitle}>{text.tags}</AppText>
 							<View style={styles.tagsContainer}>
 								{allTags.map((tag) => (
 									<View key={tag} style={tagsStyle.itemSelected}>
-										<Text style={tagsStyle.textSelected}>#{tag}</Text>
+										<AppText style={tagsStyle.textSelected}>#{tag}</AppText>
 									</View>
 								))}
 							</View>
@@ -126,7 +127,7 @@ export default function RouteDetailScreen({ route, navigation }) {
 
 				{tripDays.length > 0 ? (
 					<View style={styles.timelineSection}>
-						<Text style={styles.timelineTitle}>{text.itinerary}</Text>
+						<AppText style={styles.timelineTitle}>{text.itinerary}</AppText>
 						<View style={styles.timeline}>
 							{tripDays.map((day, index) => (
 								<TimelineItem
@@ -141,7 +142,7 @@ export default function RouteDetailScreen({ route, navigation }) {
 					</View>
 				) : (
 					<View style={styles.emptyState}>
-						<Text style={styles.emptyText}>{text.emptyItinerary}</Text>
+						<AppText style={styles.emptyText}>{text.emptyItinerary}</AppText>
 					</View>
 				)}
 			</ScrollView>

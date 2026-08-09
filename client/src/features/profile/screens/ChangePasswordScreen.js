@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useCallback, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -13,10 +15,10 @@ import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/u
 
 const PasswordField = ({ label, value, onChangeText, show, onToggle, placeholder }) => (
   <View style={{ gap: 6 }}>
-    <Text style={styles.label}>{label}</Text>
+    <AppText style={styles.label}>{label}</AppText>
 
     <View style={styles.passwordRow}>
-      <TextInput
+      <AppTextInput
         style={styles.passwordInput}
         value={value}
         onChangeText={onChangeText}
@@ -139,14 +141,14 @@ export default function ChangePasswordScreen({ navigation }) {
           <Ionicons name="arrow-back" size={22} color="#111" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>שינוי סיסמה</Text>
+        <AppText style={styles.headerTitle}>שינוי סיסמה</AppText>
 
         <View style={styles.rightSpacer} />
       </View>
 
       <View style={styles.container}>
         {!canChangePassword ? (
-          <Text style={styles.note}>לא ניתן לשנות סיסמה עבור סוג ההתחברות הזה.</Text>
+          <AppText style={styles.note}>לא ניתן לשנות סיסמה עבור סוג ההתחברות הזה.</AppText>
         ) : (
           <>
             <PasswordField
@@ -182,7 +184,7 @@ export default function ChangePasswordScreen({ navigation }) {
               onPress={onChangePassword}
               disabled={saving}
             >
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>שנה סיסמה</Text>}
+              {saving ? <ActivityIndicator color="#fff" /> : <AppText style={styles.primaryBtnText}>שנה סיסמה</AppText>}
             </TouchableOpacity>
           </>
         )}

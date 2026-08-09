@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking } from 'react-native';
+import { View, TouchableOpacity, Linking } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { typography, colors, recommendationMetaStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
@@ -54,9 +55,9 @@ export const RecommendationMeta = ({ item, navigation }) => {
           }}
         >
           <Ionicons name="location" size={16} color={colors.primary} style={styles.icon} />
-          <Text style={[typography.body, styles.rowText]}>
+          <AppText style={[typography.body, styles.rowText]}>
             {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
-          </Text>
+          </AppText>
           <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       )}
@@ -64,7 +65,7 @@ export const RecommendationMeta = ({ item, navigation }) => {
       {!!(item?.place?.placeId || item?.place?.coordinates) && (
         <TouchableOpacity style={styles.mapsButton} activeOpacity={0.85} onPress={openInGoogleMaps}>
           <Ionicons name="map-outline" size={18} color={colors.primary} style={styles.icon} />
-          <Text style={[typography.body, styles.mapsText]}>פתח בגוגל מפות</Text>
+          <AppText style={[typography.body, styles.mapsText]}>פתח בגוגל מפות</AppText>
           <View style={{ flex: 1 }} />
           <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>

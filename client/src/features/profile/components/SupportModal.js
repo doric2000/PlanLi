@@ -1,5 +1,7 @@
+import { fontFamilies } from "../../../styles/typography";
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity } from 'react-native';
+import { Modal, View, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, typography, buttons, common } from '../../../styles';
@@ -17,7 +19,7 @@ export default function SupportModal({ visible, onClose }) {
       <View style={common.supportModalOverlay}>
         <View style={common.supportModalCard}>
           <View style={common.supportHeader}>
-            <Text style={[typography.sectionTitle, { fontWeight: '700', fontSize: 25 }]}>Help & Support</Text>
+            <AppText style={[typography.sectionTitle, { fontFamily: fontFamilies.semiBold, fontSize: 25 }]}>Help & Support</AppText>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -29,13 +31,13 @@ export default function SupportModal({ visible, onClose }) {
                 <View style={common.supportIconWrap}>
                   <Ionicons name={item.icon} size={18} color={colors.textSecondary} />
                 </View>
-                <Text style={common.supportBodyText}>{item.text}</Text>
+                <AppText style={common.supportBodyText}>{item.text}</AppText>
               </View>
             ))}
           </View>
 
           <TouchableOpacity style={[buttons.primary, { marginTop: 14 }]} onPress={onClose} activeOpacity={0.85}>
-            <Text style={buttons.primaryText}>Close</Text>
+            <AppText style={buttons.primaryText}>Close</AppText>
           </TouchableOpacity>
         </View>
       </View>

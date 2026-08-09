@@ -51,7 +51,7 @@ describe('RecommendationDetailContent', () => {
 
     expect(screen.getByText(item.title)).toBeTruthy();
     expect(screen.getByText('על המקום')).toBeTruthy();
-    expect(screen.getByText('מתאים לטיול')).toBeTruthy();
+    expect(screen.getByText('פרטים שימושיים')).toBeTruthy();
     expect(screen.getByText('מתאים לכולם')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByText(item.title).props.style).writingDirection).toBe('rtl');
 

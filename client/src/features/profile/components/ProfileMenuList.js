@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 
 import { cards, typography, colors, profileMenuListStyles as styles } from '../../../styles';
@@ -23,13 +24,13 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
                 <Ionicons name={item.icon} size={22} color={colors.textSecondary} />
                 {showBadge && (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
+                    <AppText style={styles.badgeText}>
                       {notificationBadge > 99 ? '99+' : notificationBadge}
-                    </Text>
+                    </AppText>
                   </View>
                 )}
               </View>
-              <Text style={typography.profileMenuItemText}>{item.label}</Text>
+              <AppText style={typography.profileMenuItemText}>{item.label}</AppText>
             </View>
 
             <Ionicons name="chevron-back" size={20} color={colors.textMuted} />

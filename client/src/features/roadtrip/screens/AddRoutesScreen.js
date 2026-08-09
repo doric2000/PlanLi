@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, TouchableOpacity, View } from "react-native";
+import AppText from "../../../components/AppText";
 import { common, spacing } from "../../../styles";
 import {
 	CATEGORIES,
@@ -556,7 +557,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 				<GuidedFormHeader
 					currentStep={currentStep}
 					totalSteps={ROUTE_SECTION_ORDER.length}
-					title={routeToEdit ? "עריכת המסלול" : "בואו נבנה מסלול מעולה"}
+					title={routeToEdit ? "עריכת מסלול" : "מסלול חדש"}
 					intro="מתחילים מהתמונה הגדולה, מסדרים את הימים ורק אז מדייקים למי המסלול מתאים."
 					testID="route-guided-header"
 				/>
@@ -595,9 +596,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 						continueLabel="המשך לקטגוריות"
 						testIDPrefix="route-section"
 					>
-						<Text style={guidedStyles.fieldHelper}>פתחו כל יום והוסיפו את התחנות לפי סדר הביקור. אפשר לחזור ולערוך בכל רגע.</Text>
+						<AppText style={guidedStyles.fieldHelper}>פתחו כל יום והוסיפו את התחנות לפי סדר הביקור. אפשר לחזור ולערוך בכל רגע.</AppText>
 						<DayList days={tripDays} onEdit={openDayEditor} />
-						{!!validation.fields.stops && <Text style={guidedStyles.fieldError}>{validation.fields.stops}</Text>}
+						{!!validation.fields.stops && <AppText style={guidedStyles.fieldError}>{validation.fields.stops}</AppText>}
 					</GuidedFormSection>
 				</View>
 
@@ -634,7 +635,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 						/>
 						{categoryIds.map((categoryId) => (
 							<View style={guidedStyles.nestedPanel} key={categoryId}>
-								<Text style={guidedStyles.nestedTitle}>תתי־קטגוריות · {CATEGORIES.find((item) => item.id === categoryId)?.label || ""}</Text>
+								<AppText style={guidedStyles.nestedTitle}>תתי־קטגוריות · {CATEGORIES.find((item) => item.id === categoryId)?.label || ""}</AppText>
 								<RtlChoiceGroup
 									options={TAG_OPTIONS_BY_CATEGORY[categoryId] || []}
 									selectedIds={subcategoryIds}
@@ -644,7 +645,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 								/>
 							</View>
 						))}
-						{!!validation.fields.subcategoryIds && <Text style={guidedStyles.fieldError}>{validation.fields.subcategoryIds}</Text>}
+						{!!validation.fields.subcategoryIds && <AppText style={guidedStyles.fieldError}>{validation.fields.subcategoryIds}</AppText>}
 					</GuidedFormSection>
 				</View>
 
@@ -652,7 +653,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 					<GuidedFormSection
 						id="fit"
 						index={4}
-						title="למי ואיך זה מתאים"
+						title="קהל ומאפיינים"
 						summary={fitSummary}
 						expanded={expandedSection === "fit"}
 						completed={sectionIsComplete("fit")}
@@ -661,7 +662,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 						testIDPrefix="route-section"
 					>
 						<RtlChoiceGroup label="היקף התאמה לקהל (חובה)" options={[{ id: "all", label: "מתאים לכולם" }, { id: "selected", label: "בחירת קהלים" }]} selectedIds={[audienceScope]} selectionMode="single" variant="segment" onToggle={(id) => { setAudienceScope(id); if (id === "all") setAudiences([]); }} testIDPrefix="route-audience-scope" />
-						{audienceScope === "selected" ? <RtlChoiceGroup label="מתאים למי (חובה)" options={TRAVEL_PARTIES} selectedIds={audiences} onToggle={(id) => toggle(setAudiences, id, 6)} maxSelected={6} error={validation.fields.audiences} testIDPrefix="route-audience" /> : null}
+						{audienceScope === "selected" ? <RtlChoiceGroup label="קהל יעד (חובה)" options={TRAVEL_PARTIES} selectedIds={audiences} onToggle={(id) => toggle(setAudiences, id, 6)} maxSelected={6} error={validation.fields.audiences} testIDPrefix="route-audience" /> : null}
 						<RtlChoiceGroup label="רמת מחיר (חובה)" options={POST_BUDGETS} selectedIds={[budgetLevel]} selectionMode="single" variant="segment" onToggle={setBudgetLevel} error={validation.fields.budgetLevel} testIDPrefix="route-budget" />
 						<RtlChoiceGroup label="רמת קושי (חובה)" options={ROUTE_DIFFICULTIES} selectedIds={[difficulty]} selectionMode="single" onToggle={setDifficulty} error={validation.fields.difficulty} testIDPrefix="route-difficulty" />
 						<RtlChoiceGroup label="אמצעי התניידות (חובה)" options={TRANSPORT_MODES} selectedIds={transportModes} onToggle={(id) => toggle(setTransportModes, id, 4)} maxSelected={4} error={validation.fields.transportModes} testIDPrefix="route-transport" />
@@ -670,8 +671,8 @@ export default function AddRoutesScreen({ navigation, route }) {
 						<RtlChoiceGroup label="סביבה עיקרית (חובה)" options={ENVIRONMENTS} selectedIds={[environment]} selectionMode="single" onToggle={setEnvironment} error={validation.fields.environment} testIDPrefix="route-environment" />
 
 						<TouchableOpacity style={guidedStyles.optionalToggle} onPress={() => setOptionalFitOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: optionalFitOpen }} testID="route-optional-toggle">
-							<Text style={guidedStyles.optionalToggleText}>עוד פרטים שיעזרו למטיילים (רשות)</Text>
-							<Text style={guidedStyles.optionalToggleText}>{optionalFitOpen ? "−" : "+"}</Text>
+							<AppText style={guidedStyles.optionalToggleText}>עוד פרטים שיעזרו למטיילים (רשות)</AppText>
+							<AppText style={guidedStyles.optionalToggleText}>{optionalFitOpen ? "−" : "+"}</AppText>
 						</TouchableOpacity>
 						{optionalFitOpen ? (
 							<View>
@@ -681,11 +682,11 @@ export default function AddRoutesScreen({ navigation, route }) {
 								<RtlChoiceGroup label="מידע מעשי ונגישות" options={NEEDS} selectedIds={needs} onToggle={(id) => toggle(setNeeds, id, NEEDS.length)} maxSelected={NEEDS.length} testIDPrefix="route-need" />
 								{needs.length > 0 ? (
 									<TouchableOpacity style={guidedStyles.checkboxRow} onPress={() => setNeedsCoverageConfirmed((current) => !current)} accessibilityRole="checkbox" accessibilityState={{ checked: needsCoverageConfirmed }} testID="route-needs-coverage-confirmation">
-										<View style={[guidedStyles.checkboxBox, needsCoverageConfirmed && guidedStyles.checkboxBoxChecked]}>{needsCoverageConfirmed ? <Text style={guidedStyles.checkboxCheck}>✓</Text> : null}</View>
-										<Text style={guidedStyles.checkboxText}>בדקתי שהמידע שסומן נכון לכל המסלול, ולא רק לחלק מהתחנות.</Text>
+										<View style={[guidedStyles.checkboxBox, needsCoverageConfirmed && guidedStyles.checkboxBoxChecked]}>{needsCoverageConfirmed ? <AppText style={guidedStyles.checkboxCheck}>✓</AppText> : null}</View>
+										<AppText style={guidedStyles.checkboxText}>בדקתי שהמידע שסומן נכון לכל המסלול, ולא רק לחלק מהתחנות.</AppText>
 									</TouchableOpacity>
 								) : null}
-								{!!validation.fields.needsCoverageConfirmed && <Text style={guidedStyles.fieldError}>{validation.fields.needsCoverageConfirmed}</Text>}
+								{!!validation.fields.needsCoverageConfirmed && <AppText style={guidedStyles.fieldError}>{validation.fields.needsCoverageConfirmed}</AppText>}
 							</View>
 						) : null}
 					</GuidedFormSection>

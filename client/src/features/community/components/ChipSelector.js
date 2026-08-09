@@ -1,5 +1,7 @@
+import { fontFamilies } from "../../../styles/typography";
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, ScrollView, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { tags, colors, chipSelectorStyles as styles } from '../../../styles';
 
 const ChipSelector = ({
@@ -25,7 +27,7 @@ const ChipSelector = ({
 
   return (
     <View style={styles.inputWrapper}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <AppText style={styles.label}>{label}</AppText>}
 
       <ScrollView
         horizontal
@@ -55,15 +57,15 @@ const ChipSelector = ({
               onPress={() => onSelect(item)}
               testID={resolvedTestId}
             >
-              <Text
+              <AppText
                 style={[
                   tags.chipText,
                   active && tags.chipTextSelected,
-                  active && theme ? { color: theme.textColor, fontWeight: '700' } : null,
+                  active && theme ? { color: theme.textColor, fontFamily: fontFamilies.semiBold } : null,
                 ]}
               >
                 {item}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           );
         })}

@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, Platform } from "react-native";
+import { View, Platform } from "react-native";
+import AppText from "./AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { common } from "../styles";
 import CachedImage from "./CachedImage";
@@ -63,9 +64,9 @@ export const Avatar = ({ photoURL, photoMedia, displayName, size = 36 }) => {
 			]}
 		>
 			{displayName ? (
-				<Text style={common.avatarInitial}>
+				<AppText style={common.avatarInitial}>
 					{displayName.charAt(0).toUpperCase()}
-				</Text>
+				</AppText>
 			) : (
 				<Ionicons name='person' size={size / 2} color='#94A3B8' />
 			)}

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import DiscoveryCategorySelector from './DiscoveryCategorySelector';
 import DiscoveryDestinationAutocomplete from './DiscoveryDestinationAutocomplete';
@@ -93,10 +94,10 @@ export default function DiscoveryFilterContent({
           accessibilityRole="button"
           testID="discovery-use-profile"
         >
-          <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+          <Ionicons name="options-outline" size={18} color={colors.primary} />
           <View style={styles.profilePresetCopy}>
-            <Text style={styles.profilePresetTitle}>מלאו מההעדפות שלי</Text>
-            <Text style={styles.profilePresetText}>הבחירות יופיעו כאן לפני ההחלה</Text>
+            <AppText style={styles.profilePresetTitle}>מלאו מההעדפות שלי</AppText>
+            <AppText style={styles.profilePresetText}>הבחירות יופיעו כאן לפני ההחלה</AppText>
           </View>
         </TouchableOpacity>
       )}
@@ -171,13 +172,13 @@ export default function DiscoveryFilterContent({
 
       <DiscoveryDisclosureSection
         id="audience-budget"
-	title={isRoute ? "מתאים למי ותקציב" : "מתאים למי ורמת מחיר"}
+	title={isRoute ? "קהל ותקציב" : "קהל ורמת מחיר"}
         summary={audienceBudgetSummary}
         expanded={expandedSections.audienceBudget}
         onToggle={() => toggleSection('audienceBudget')}
       >
         <DiscoveryOptionGroup
-          label="מתאים למי"
+          label="קהל יעד"
           options={TRAVEL_PARTIES}
           selectedIds={current.audienceIds || []}
           onToggle={(id) => toggleField('audienceIds', id, 6)}

@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { colors } from '../styles';
@@ -9,9 +10,9 @@ export function GuidedFormHeader({ currentStep, totalSteps, title, intro, testID
   const progress = Math.max(0, Math.min(1, currentStep / Math.max(1, totalSteps)));
   return (
     <View style={styles.introCard} testID={testID}>
-      <Text style={styles.eyebrow}>חלק {currentStep} מתוך {totalSteps}</Text>
-      <Text style={styles.title}>{title}</Text>
-      {!!intro && <Text style={styles.intro}>{intro}</Text>}
+      <AppText style={styles.eyebrow}>חלק {currentStep} מתוך {totalSteps}</AppText>
+      <AppText style={styles.title}>{title}</AppText>
+      {!!intro && <AppText style={styles.intro}>{intro}</AppText>}
       <View style={styles.progressTrack} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: totalSteps, now: currentStep }}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
@@ -61,16 +62,16 @@ export function GuidedFormSection({
               completed && styles.sectionIndexComplete,
               hasErrors && styles.sectionIndexError,
             ]}>
-              <Text style={styles.sectionIndexText}>{completed && !hasErrors ? '✓' : index}</Text>
+              <AppText style={styles.sectionIndexText}>{completed && !hasErrors ? '✓' : index}</AppText>
             </View>
-            <Text style={styles.sectionTitle}>{title}</Text>
+            <AppText style={styles.sectionTitle}>{title}</AppText>
           </View>
-          <Text
+          <AppText
             style={[styles.sectionSummary, hasErrors && styles.sectionSummaryError]}
             numberOfLines={expanded ? 2 : 1}
           >
             {statusSummary || 'טרם הושלם'}
-          </Text>
+          </AppText>
         </View>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -88,7 +89,7 @@ export function GuidedFormSection({
               accessibilityRole="button"
               testID={`${testIDPrefix}-${id}-continue`}
             >
-              <Text style={styles.continueText}>{continueLabel}</Text>
+              <AppText style={styles.continueText}>{continueLabel}</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -110,7 +111,7 @@ export function GuidedFormFooter({ label, onPress, loading, disabled, testID }) 
               accessibilityRole="button"
               testID={testID}
             >
-              {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.submitText}>{label}</Text>}
+              {loading ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.submitText}>{label}</AppText>}
             </TouchableOpacity>
           </View>
         </View>

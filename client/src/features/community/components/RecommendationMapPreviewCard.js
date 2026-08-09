@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import CachedImage from '../../../components/CachedImage';
@@ -63,9 +64,9 @@ export default function RecommendationMapPreviewCard({
           <View style={community.mapPreviewHeaderRow}>
             <View style={community.mapPreviewCategory} testID="recommendation-map-preview-category">
               <MaterialIcons name={visual.icon} size={15} color={colors.textSecondary} />
-              <Text style={community.mapPreviewCategoryText}>
+              <AppText style={community.mapPreviewCategoryText}>
                 {visual.label}
-              </Text>
+              </AppText>
             </View>
 
             <TouchableOpacity
@@ -79,16 +80,16 @@ export default function RecommendationMapPreviewCard({
             </TouchableOpacity>
           </View>
 
-          <Text style={community.mapPreviewTitle} numberOfLines={2}>
+          <AppText style={community.mapPreviewTitle} numberOfLines={2}>
             {item.title || 'המלצה'}
-          </Text>
+          </AppText>
 
           {!!locationLabel && (
             <View style={community.mapPreviewLocationRow}>
               <Ionicons name="location-outline" size={15} color={colors.textMuted} />
-              <Text style={community.mapPreviewLocationText} numberOfLines={1}>
+              <AppText style={community.mapPreviewLocationText} numberOfLines={1}>
                 {locationLabel}
-              </Text>
+              </AppText>
             </View>
           )}
 
@@ -97,13 +98,13 @@ export default function RecommendationMapPreviewCard({
               {!!budgetLabel && (
                 <View style={community.mapPreviewMetaItem}>
                   <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
-                  <Text style={community.mapPreviewMetaText}>{budgetLabel}</Text>
+                  <AppText style={community.mapPreviewMetaText}>{budgetLabel}</AppText>
                 </View>
               )}
               {hasLikes && (
                 <View style={community.mapPreviewMetaItem}>
                   <Ionicons name="heart-outline" size={14} color={colors.textSecondary} />
-                  <Text style={community.mapPreviewMetaText}>{likeCount}</Text>
+                  <AppText style={community.mapPreviewMetaText}>{likeCount}</AppText>
                 </View>
               )}
             </View>
@@ -116,7 +117,7 @@ export default function RecommendationMapPreviewCard({
             accessibilityLabel={`לפרטי ההמלצה ${item.title || ''}`.trim()}
             testID="recommendation-map-preview-open"
           >
-            <Text style={community.mapPreviewPrimaryButtonText}>לפרטי ההמלצה</Text>
+            <AppText style={community.mapPreviewPrimaryButtonText}>לפרטי ההמלצה</AppText>
             <Ionicons name="chevron-back" size={17} color={colors.white} />
           </TouchableOpacity>
         </View>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 
 const STATS = [
@@ -20,9 +21,9 @@ export default function ProfileStatsCard({ stats, loading, styles }) {
             {loading ? (
               <View style={styles.statSkeleton} />
             ) : (
-              <Text style={styles.statNumber}>{Number(stats?.[item.key] || 0)}</Text>
+              <AppText style={styles.statNumber}>{Number(stats?.[item.key] || 0)}</AppText>
             )}
-            <Text style={styles.statLabel}>{item.label}</Text>
+            <AppText style={styles.statLabel}>{item.label}</AppText>
           </View>
           {index < STATS.length - 1 ? <View style={styles.statDivider} /> : null}
         </React.Fragment>
