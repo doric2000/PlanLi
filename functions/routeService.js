@@ -360,21 +360,28 @@ async function saveRoute({ admin, auth, data, mediaBucket, mapsKey, restCountrie
     ? cleanDocumentId(data.routeId, 'routeId', '')
     : null;
   const routeRef = routeId ? db.doc(`routes/${routeId}`) : db.collection('routes').doc();
-  const route = sanitizeRouteInput(data?.route);
-  const requestedMedia = collectMedia(route.days);
-  assert(requestedMedia.length <= MAX_ROUTE_MEDIA, 'invalid-argument', 'Route contains too many images.');
-  if (requestedMedia.length) assert(mediaBucket, 'failed-precondition', 'MEDIA_STORAGE_BUCKET is not configured.');
-  const validatedMedia = await validateMediaAssets({ admin, uid, media: requestedMedia, mediaBucket, maxAssets: MAX_ROUTE_MEDIA });
-  const mediaDays = replaceValidatedMedia(route.days, validatedMedia);
-  const resolved = await resolveRoutePlaces({ admin, days: mediaDays, mapsKey, restCountriesKey });
-  const days = resolved.days;
-
   const existingSnapshot = await routeRef.get();
   if (routeId) {
     assert(existingSnapshot.exists, 'not-found', 'Route does not exist.');
     assert(existingSnapshot.data()?.ownerId === uid || auth.token?.admin === true,
       'permission-denied', 'You do not own this route.');
   }
+  const route = sanitizeRouteInput(data?.route);
+  const requestedMedia = collectMedia(route.days);
+  assert(requestedMedia.length <= MAX_ROUTE_MEDIA, 'invalid-argument', 'Route contains too many images.');
+  if (requestedMedia.length) assert(mediaBucket, 'failed-precondition', 'MEDIA_STORAGE_BUCKET is not configured.');
+  const validatedMedia = await validateMediaAssets({
+    admin,
+    uid,
+    media: requestedMedia,
+    mediaBucket,
+    maxAssets: MAX_ROUTE_MEDIA,
+    existingMedia: existingSnapshot.data()?.media,
+  });
+  const mediaDays = replaceValidatedMedia(route.days, validatedMedia);
+  const resolved = await resolveRoutePlaces({ admin, days: mediaDays, mapsKey, restCountriesKey });
+  const days = resolved.days;
+
   const existingChildren = existingSnapshot.exists ? await listExistingRouteChildren(routeRef) : { days: [], stops: [] };
   const writeCount = existingChildren.days.length + existingChildren.stops.length + days.length +
     days.reduce((sum, day) => sum + day.stops.length, 0) + resolved.catalogDestinations.length * 2 + 1;

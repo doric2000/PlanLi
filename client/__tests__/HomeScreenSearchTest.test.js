@@ -8,6 +8,7 @@
  * - Types a non-matching query and checks the empty-state message.
  */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
@@ -164,5 +165,28 @@ describe('HomeScreenSearchTest', () => {
     expect(screen.getByText('לפי שם א–ת')).toBeTruthy();
     expect(screen.getByText('מועדפים בלבד')).toBeTruthy();
     await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(2));
+  });
+
+  it('lets the hero own the top safe area without an automatic iOS inset', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getAllByTestId('city-card')).toHaveLength(2));
+    const scroll = screen.getByTestId('home-scroll');
+    expect(scroll.props.contentInsetAdjustmentBehavior).toBe('never');
+    expect(scroll.props.automaticallyAdjustContentInsets).toBe(false);
+    expect(scroll.props.automaticallyAdjustsScrollIndicatorInsets).toBe(false);
+    expect(scroll.props.contentInset).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(scroll.props.scrollIndicatorInsets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    expect(scroll.props.contentOffset).toEqual({ x: 0, y: 0 });
+    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#28486D');
   });
 });

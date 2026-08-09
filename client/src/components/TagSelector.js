@@ -1,6 +1,7 @@
 import React from "react";
-import { View, ScrollView, TouchableOpacity } from "react-native";
+import { View, ScrollView } from "react-native";
 import AppText from "./AppText";
+import CompactChip from './CompactChip';
 import { tags as tagsStyle, spacing } from "../styles";
 
 /**
@@ -76,23 +77,12 @@ export const TagSelector = ({
                 }}
             >
                 {tags.map((tag) => (
-                    <TouchableOpacity
+                    <CompactChip
                         key={tag}
-                        style={[
-                            tagsStyle.chip,
-                            isSelected(tag) && tagsStyle.chipSelected,
-                        ]}
+                        label={tag}
+                        selected={isSelected(tag)}
                         onPress={() => handlePress(tag)}
-                    >
-                        <AppText
-                            style={[
-                                tagsStyle.chipText,
-                                isSelected(tag) && tagsStyle.chipTextSelected,
-                            ]}
-                        >
-                            {tag}
-                        </AppText>
-                    </TouchableOpacity>
+                    />
                 ))}
             </ScrollView>
         </View>

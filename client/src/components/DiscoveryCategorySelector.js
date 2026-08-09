@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import AppText from "./AppText";
-import { MaterialIcons } from '@expo/vector-icons';
+import CompactChip from './CompactChip';
 import DiscoveryOptionGroup from './DiscoveryOptionGroup';
 import {
   CATEGORIES,
@@ -9,7 +9,7 @@ import {
   SERVICE_TAG_OPTIONS_BY_GROUP,
   TAG_OPTIONS_BY_CATEGORY,
 } from '../constants/travelTaxonomy';
-import { colors, discoveryFilterStyles as styles } from '../styles';
+import { discoveryFilterStyles as styles } from '../styles';
 import { toggleDiscoveryCategory } from '../utils/progressiveDiscoveryFilters';
 
 export default function DiscoveryCategorySelector({ filters, onChange }) {
@@ -79,28 +79,17 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
           const selected = selectedCategoryIds.includes(category.id);
           const disabled = !selected && selectedCategoryIds.length >= 3;
           return (
-            <TouchableOpacity
+            <CompactChip
               key={category.id}
               disabled={disabled}
-              style={[
-                styles.categoryTile,
-                selected && styles.categoryTileSelected,
-                disabled && styles.categoryTileDisabled,
-              ]}
+              style={styles.categoryChip}
+              label={category.label}
+              icon={category.icon || 'place'}
+              iconSize={20}
+              selected={selected}
               onPress={() => toggleCategory(category.id)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: selected, disabled }}
               testID={`discovery-category-${index}`}
-            >
-              <MaterialIcons
-                name={category.icon || 'place'}
-                size={22}
-                color={selected ? colors.white : colors.primary}
-              />
-              <AppText style={[styles.categoryTileText, selected && styles.categoryTileTextSelected]}>
-                {category.label}
-              </AppText>
-            </TouchableOpacity>
+            />
           );
         })}
       </View>

@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import { View } from 'react-native';
 import AppText from "./AppText";
+import CompactChip from './CompactChip';
 import { tags as tagsStyle } from '../styles';
-import { getBudgetTheme } from '../utils/getBudgetTheme';
 
 export default function MultiSelectChips({
   label,
@@ -12,11 +12,6 @@ export default function MultiSelectChips({
   styleVariant = 'filter', // 'filter' | 'budget'
 }) {
   const sel = Array.isArray(selected) ? selected : [];
-
-  const chipStyle = styleVariant === 'budget' ? tagsStyle.budgetChip : tagsStyle.filterChip;
-  const chipSelectedStyle = styleVariant === 'budget' ? tagsStyle.budgetChipSelected : tagsStyle.filterChipSelected;
-  const chipTextStyle = styleVariant === 'budget' ? tagsStyle.budgetChipText : tagsStyle.filterChipText;
-  const chipTextSelectedStyle = styleVariant === 'budget' ? tagsStyle.budgetChipTextSelected : tagsStyle.filterChipTextSelected;
 
   const toggle = (value) => {
     const next = sel.includes(value) ? sel.filter((x) => x !== value) : [...sel, value];
@@ -30,36 +25,13 @@ export default function MultiSelectChips({
       <View style={tagsStyle.chipRow}>
         {options.map((opt) => {
           const isSelected = sel.includes(opt);
-          const budgetTheme = styleVariant === 'budget' ? getBudgetTheme(opt) : null;
           return (
-            <TouchableOpacity
+            <CompactChip
               key={opt}
-              style={[
-                chipStyle,
-                isSelected && chipSelectedStyle,
-                styleVariant === 'budget' && isSelected
-                  ? {
-                      backgroundColor: budgetTheme.backgroundColor,
-                      borderColor: budgetTheme.borderColor,
-                      borderWidth: 1,
-                    }
-                  : null,
-              ]}
+              label={opt}
+              selected={isSelected}
               onPress={() => toggle(opt)}
-              activeOpacity={0.85}
-            >
-              <AppText
-                style={[
-                  chipTextStyle,
-                  isSelected && chipTextSelectedStyle,
-                  styleVariant === 'budget' && isSelected
-                    ? { color: budgetTheme.textColor }
-                    : null,
-                ]}
-              >
-                {opt}
-              </AppText>
-            </TouchableOpacity>
+            />
           );
         })}
       </View>

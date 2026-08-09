@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import AppText from "./AppText";
+import CompactChip from './CompactChip';
 import { discoveryFilterStyles as styles } from '../styles';
 import { orderProgressiveOptions } from '../utils/progressiveDiscoveryFilters';
 
@@ -34,18 +35,14 @@ export default function DiscoveryOptionGroup({
           const active = selected.has(id);
           const sourceIndex = Math.max(0, (options || []).findIndex((item) => optionId(item) === id));
           return (
-            <TouchableOpacity
+            <CompactChip
               key={id}
-              style={[styles.optionChip, active && styles.optionChipSelected]}
+              label={option.postLabel || option.label}
+              icon={option.icon}
+              selected={active}
               onPress={() => onToggle?.(id)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: active }}
               testID={testIDPrefix ? `${testIDPrefix}-${sourceIndex}` : undefined}
-            >
-              <AppText style={[styles.optionChipText, active && styles.optionChipTextSelected]}>
-                {option.postLabel || option.label}
-              </AppText>
-            </TouchableOpacity>
+            />
           );
         })}
       </View>

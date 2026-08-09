@@ -11,7 +11,6 @@ import {
 import AppText from "../../../components/AppText";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { collectionGroup, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 
@@ -20,6 +19,7 @@ import CachedImage from "../../../components/CachedImage";
 import DestinationFilterModal from "../../../components/DestinationFilterModal";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import PageHeader from "../../../components/PageHeader";
+import SearchFilterRow from "../../../components/SearchFilterRow";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
 import { useFavoriteCityIds } from "../../../hooks/useFavoriteCityIds";
@@ -34,6 +34,9 @@ const DESTINATION_GRADIENTS = [
 	["#90A4AE", "#607D8B"],
 	["#8295A3", "#526878"],
 ];
+
+const ZERO_SCROLL_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+const ZERO_SCROLL_OFFSET = { x: 0, y: 0 };
 
 export default function HomeScreen({ navigation }) {
 	const insets = useSafeAreaInsets();
@@ -300,7 +303,13 @@ export default function HomeScreen({ navigation }) {
 				<AppText style={styles.headline}>לאן נוסעים?</AppText>
 			</View>
 
-			<View style={styles.searchWrap}>
+			<SearchFilterRow
+				style={styles.searchWrap}
+				onFilterPress={openDestinationFilters}
+				activeFilterCount={(savedOnly ? 1 : 0) + (destinationSort !== "popular" ? 1 : 0)}
+				accessibilityLabel="סינון יעדים"
+				filterTestID="home-filter-button"
+			>
 				<GooglePlacesInput
 					mode="google"
 					value={searchQuery}
@@ -320,20 +329,8 @@ export default function HomeScreen({ navigation }) {
 					inputWrapperStyle={styles.searchInputWrapper}
 					inputStyle={styles.searchInput}
 					listContainerStyle={styles.searchDropdown}
-					rightAccessory={
-						<TouchableOpacity
-							style={[styles.filterButton, (savedOnly || destinationSort !== "popular") && styles.filterButtonActive]}
-							activeOpacity={0.85}
-							onPress={openDestinationFilters}
-							accessibilityRole="button"
-							accessibilityLabel="סינון יעדים"
-						>
-							<Ionicons name="options-outline" size={18} color="#FFFFFF" />
-							{savedOnly || destinationSort !== "popular" ? <View style={styles.filterBadge} /> : null}
-						</TouchableOpacity>
-					}
 				/>
-			</View>
+			</SearchFilterRow>
 		</PageHeader>
 	);
 
@@ -470,7 +467,14 @@ export default function HomeScreen({ navigation }) {
 			) : null}
 			<ScrollView
 				ref={mainScrollRef}
-				style={styles.scroll}
+				testID="home-scroll"
+				style={[styles.scroll, { backgroundColor: colors.heroBlueGradient[1] }]}
+				contentInsetAdjustmentBehavior="never"
+				automaticallyAdjustContentInsets={false}
+				automaticallyAdjustsScrollIndicatorInsets={false}
+				contentInset={ZERO_SCROLL_INSETS}
+				scrollIndicatorInsets={ZERO_SCROLL_INSETS}
+				contentOffset={ZERO_SCROLL_OFFSET}
 				contentContainerStyle={[
 					styles.scrollContent,
 					{ paddingBottom: 116 + insets.bottom },

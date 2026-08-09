@@ -52,8 +52,18 @@ describe('RecommendationDetailContent', () => {
     expect(screen.getByText(item.title)).toBeTruthy();
     expect(screen.getByText('על המקום')).toBeTruthy();
     expect(screen.getByText('פרטים שימושיים')).toBeTruthy();
+    expect(screen.getByText('קהל')).toBeTruthy();
     expect(screen.getByText('מתאים לכולם')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByText(item.title).props.style).writingDirection).toBe('rtl');
+    const audienceFactStyle = StyleSheet.flatten(screen.getByTestId('recommendation-fact-audiences').props.style);
+    expect(audienceFactStyle.backgroundColor).toBeUndefined();
+    expect(audienceFactStyle.borderBottomWidth).toBeUndefined();
+    expect(audienceFactStyle.width).toBe('100%');
+    const tagsMetadata = screen.getByTestId('recommendation-tags-metadata');
+    expect(tagsMetadata.props.accessibilityRole).toBeUndefined();
+    const tagsMetadataStyle = StyleSheet.flatten(tagsMetadata.props.style);
+    expect(tagsMetadataStyle.backgroundColor).toBeUndefined();
+    expect(tagsMetadataStyle.borderWidth).toBeUndefined();
 
     fireEvent.press(screen.getByTestId('recommendation-detail-edit'));
     expect(onEdit).toHaveBeenCalledTimes(1);

@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 import AppText from "../../../components/AppText";
+import MetadataLine from '../../../components/MetadataLine';
+import UsefulFactItem from '../../../components/UsefulFactItem';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import { Avatar } from '../../../components/Avatar';
@@ -35,17 +37,11 @@ function buildMapsUrl(item) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}${placeId}`;
 }
 
-function Chips({ values }) {
-  return (
-    <View style={styles.chips}>
-      {values.map((value) => (
-        <View key={value} style={styles.chip}>
-          <AppText style={styles.chipText}>{value}</AppText>
-        </View>
-      ))}
-    </View>
-  );
-}
+const EXTRA_METADATA_ICONS = {
+  interests: 'interests',
+  travelerStyles: 'explore',
+  seasons: 'calendar-today',
+};
 
 export default function RecommendationDetailContent({
   item,
@@ -165,12 +161,17 @@ export default function RecommendationDetailContent({
           <AppText style={styles.sectionTitle}>פרטים שימושיים</AppText>
           <View style={styles.factsGrid}>
             {sections.facts.map((fact) => (
-              <View key={fact.id} style={styles.factCard} testID={`recommendation-fact-${fact.id}`}>
-                <View style={styles.factIcon}>
-                  <MaterialIcons name={fact.icon} size={21} color={colors.textSecondary} />
-                </View>
-                <AppText style={styles.factText}>{fact.label}</AppText>
-              </View>
+              <UsefulFactItem
+                key={fact.id}
+                icon={fact.icon}
+                title={fact.title}
+                value={fact.value}
+                style={[
+                  styles.factItem,
+                  fact.id === 'audiences' && styles.factItemFull,
+                ]}
+                testID={`recommendation-fact-${fact.id}`}
+              />
             ))}
           </View>
         </View>
@@ -179,7 +180,12 @@ export default function RecommendationDetailContent({
       {!!sections.tags.length && (
         <View style={styles.section}>
           <AppText style={styles.sectionTitle}>מה תמצאו כאן</AppText>
-          <Chips values={sections.tags} />
+          <MetadataLine
+            icon="local-offer"
+            values={sections.tags}
+            style={styles.metadataLine}
+            testID="recommendation-tags-metadata"
+          />
         </View>
       )}
 
@@ -189,7 +195,12 @@ export default function RecommendationDetailContent({
           {sections.extras.map((group) => (
             <View key={group.id} style={styles.extraGroup}>
               <AppText style={styles.extraTitle}>{group.title}</AppText>
-              <Chips values={group.values} />
+              <MetadataLine
+                icon={EXTRA_METADATA_ICONS[group.id] || 'label-outline'}
+                values={group.values}
+                style={styles.extraMetadataLine}
+                testID={`recommendation-extra-${group.id}`}
+              />
             </View>
           ))}
         </View>

@@ -53,9 +53,9 @@ describe('PreferenceSetupScreen', () => {
       { timeout: 5_000 }
     );
 
-    expect(selectable.props.accessibilityState.selected).toBe(false);
+    expect(selectable.props.accessibilityState.checked).toBe(false);
     fireEvent.press(selectable);
-    expect(screen.getByTestId('preference-interest-photography_viewpoints').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('preference-interest-photography_viewpoints').props.accessibilityState.checked).toBe(true);
   });
 
   it('advances after saving a valid in-progress draft without strict read-back verification', async () => {

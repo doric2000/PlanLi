@@ -13,6 +13,7 @@ import AppTextInput from "../../../components/AppTextInput";
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../../components/PageHeader';
+import SearchFilterRow from '../../../components/SearchFilterRow';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RoutesFilterModal from '../../../components/RoutesFilterModal';
 import { auth } from '../../../config/firebase';
@@ -167,15 +168,7 @@ export default function RoutesScreen({ navigation }) {
   const renderTopArea = () => (
     <PageHeader variant="hero" overlapNext>
       <View style={styles.topActionsRow}>
-        <TouchableOpacity style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
-          onPress={() => setFilterVisible(true)} accessibilityRole="button" accessibilityLabel="מסננים">
-          <Ionicons name="filter" size={20} color="#FFFFFF" />
-          {activeFilterCount > 0 && (
-            <View style={filterUiStyles.badge}>
-              <AppText style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</AppText>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerSideSpacer} />
         <View style={styles.headerTitleWrap}>
           <AppText style={styles.headerTitle}>{text.title}</AppText>
         </View>
@@ -184,7 +177,13 @@ export default function RoutesScreen({ navigation }) {
           <AppText style={styles.sortGlassText}>{sortLabel}</AppText>
         </TouchableOpacity>
       </View>
-      <View style={styles.searchRow}>
+      <SearchFilterRow
+        style={styles.searchRow}
+        onFilterPress={() => setFilterVisible(true)}
+        activeFilterCount={activeFilterCount}
+        accessibilityLabel="סינון מסלולים"
+        filterTestID="routes-filter-button"
+      >
         <View style={styles.searchPill}>
           <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
           <AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))}
@@ -198,7 +197,7 @@ export default function RoutesScreen({ navigation }) {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </SearchFilterRow>
     </PageHeader>
   );
 

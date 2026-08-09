@@ -1,8 +1,8 @@
-import { fontFamilies } from "../../../styles/typography";
 import React from 'react';
-import { View, ScrollView, TouchableOpacity } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import AppText from "../../../components/AppText";
-import { tags, colors, chipSelectorStyles as styles } from '../../../styles';
+import CompactChip from '../../../components/CompactChip';
+import { chipSelectorStyles as styles } from '../../../styles';
 
 const ChipSelector = ({
   label,
@@ -36,37 +36,17 @@ const ChipSelector = ({
       >
         {safeItems.map((item, index) => {
           const active = isSelected(item);
-          const theme = typeof getItemTheme === 'function' ? getItemTheme(item) : null;
           const resolvedTestId = typeof getItemTestId === 'function'
             ? getItemTestId(item, index)
             : (testIDPrefix ? `${testIDPrefix}-${index}` : undefined);
           return (
-            <TouchableOpacity
+            <CompactChip
               key={String(item)}
-              style={[
-                tags.chip,
-                active && tags.chipSelected,
-                active && theme
-                  ? {
-                      backgroundColor: theme.backgroundColor,
-                      borderColor: theme.borderColor,
-                      borderWidth: 1,
-                    }
-                  : null,
-              ]}
+              label={item}
+              selected={active}
               onPress={() => onSelect(item)}
               testID={resolvedTestId}
-            >
-              <AppText
-                style={[
-                  tags.chipText,
-                  active && tags.chipTextSelected,
-                  active && theme ? { color: theme.textColor, fontFamily: fontFamilies.semiBold } : null,
-                ]}
-              >
-                {item}
-              </AppText>
-            </TouchableOpacity>
+            />
           );
         })}
       </ScrollView>

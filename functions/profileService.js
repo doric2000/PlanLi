@@ -114,6 +114,9 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   const bio = cleanOptionalBio(data?.bio);
   const completeSmartProfile = data?.completeSmartProfile === true;
   const smartProfile = sanitizeSmartProfile(data?.smartProfile, { complete: completeSmartProfile });
+  const db = admin.firestore();
+  const userRef = db.doc(`users/${uid}`);
+  const existing = await userRef.get();
   let photoMedia;
   if (data && Object.prototype.hasOwnProperty.call(data, 'photoMedia')) {
     if (data.photoMedia == null) {
@@ -126,6 +129,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
         media: [data.photoMedia],
         mediaBucket,
         maxAssets: 1,
+        existingMedia: existing.data()?.photoMedia ? [existing.data().photoMedia] : [],
       });
       photoMedia = validated[0];
     }
@@ -135,10 +139,6 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     'invalid-argument',
     'No profile fields were provided.'
   );
-
-  const db = admin.firestore();
-  const userRef = db.doc(`users/${uid}`);
-  const existing = await userRef.get();
   const existingSmartProfile = existing.data()?.smartProfile || {};
   const nextSmartProfile = smartProfile === undefined
     ? undefined

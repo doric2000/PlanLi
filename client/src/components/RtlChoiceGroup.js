@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Platform, ScrollView, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import AppText from "./AppText";
+import CompactChip from './CompactChip';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../styles';
 import { guidedFormStyles as styles } from './guidedFormStyles';
@@ -52,6 +53,20 @@ export default function RtlChoiceGroup({
       borderColor: theme.borderColor,
     } : null;
     const activeTextTheme = active && theme ? { color: theme.textColor } : null;
+    if (variant === 'chip') {
+      return (
+        <CompactChip
+          key={String(id)}
+          label={optionLabel(option)}
+          icon={option?.icon}
+          selected={active}
+          disabled={disabled}
+          selectionRole={selectionMode === 'single' ? 'radio' : 'checkbox'}
+          onPress={() => onToggle?.(id)}
+          testID={testIDPrefix ? `${testIDPrefix}-${index}` : undefined}
+        />
+      );
+    }
     return (
       <TouchableOpacity
         key={String(id)}

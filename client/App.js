@@ -1,6 +1,6 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import AppFontProvider from "./src/components/AppFontProvider";
 
 import LoginScreen from "./src/features/auth/screens/LoginScreen";
@@ -22,12 +22,14 @@ import PreferenceSetupScreen from "./src/features/profile/screens/PreferenceSetu
 import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
 import AdminPanelScreen from "./src/features/admin/screens/AdminPanelScreen";
 import PreferenceSetupGate from "./src/navigation/PreferenceSetupGate";
+import {
+	rtlModalScreenOptions,
+	rtlStackScreenOptions,
+} from "./src/navigation/rtlStackOptions";
 import withRequireAuth from "./src/navigation/withRequireAuth";
 
 
 const Stack = createStackNavigator();
-
-const modalPresentation = { presentation: "modal" };
 
 const EditProfileAuthed = withRequireAuth(EditProfileScreen);
 const NotificationsAuthed = withRequireAuth(NotificationScreen);
@@ -56,11 +58,11 @@ const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen);
 export default function App() {
 	return (
 		<AppFontProvider>
-			<SafeAreaProvider>
+			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<NavigationContainer>
 				<Stack.Navigator
 					initialRouteName='Main'
-					screenOptions={{ headerShown: false }}
+					screenOptions={rtlStackScreenOptions}
 				>
 					<Stack.Screen name='Login' component={LoginScreen} />
 					<Stack.Screen name='Register' component={RegisterScreen} />
@@ -78,7 +80,7 @@ export default function App() {
 					<Stack.Screen
 						name='AddRecommendation'
 						component={AddRecommendationScreen}
-						options={modalPresentation}
+						options={rtlModalScreenOptions}
 					/>
 					<Stack.Screen
 						name='RecommendationDetail'
@@ -93,17 +95,17 @@ export default function App() {
 					<Stack.Screen
 						name='AddRoutesScreen'
 						component={AddRoutesScreen}
-						options={modalPresentation}
+						options={rtlModalScreenOptions}
 					/>
 					<Stack.Screen
 						name='RouteDetail'
 						component={RouteDetailScreen}
-						options={modalPresentation}
+						options={rtlModalScreenOptions}
 					/>
 					<Stack.Screen
 						name='RouteMap'
 						component={RouteMapScreen}
-						options={modalPresentation}
+						options={rtlModalScreenOptions}
 					/>
 				</Stack.Navigator>
 				</NavigationContainer>

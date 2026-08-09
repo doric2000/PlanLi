@@ -325,6 +325,42 @@ test('new recommendations cannot smuggle external media', async () => {
   );
 });
 
+test('authorized edits can retain media already attached to the document', async () => {
+  const assetId = '223e4567-e89b-42d3-a456-426614174000';
+  const existingAsset = {
+    assetId,
+    aspectRatio: 1.5,
+    placeholder: { thumbhash: 'trusted-hash', color: '#445566' },
+    large: { path: `media/original-owner/${assetId}/large.webp`, url: 'https://trusted/large' },
+    feed: { path: `media/original-owner/${assetId}/feed.webp`, url: 'https://trusted/feed' },
+    thumb: { path: `media/original-owner/${assetId}/thumb.webp`, url: 'https://trusted/thumb' },
+  };
+  const requestedAsset = {
+    ...existingAsset,
+    feed: { ...existingAsset.feed, url: 'https://untrusted/client-value' },
+  };
+
+  const [retained] = await validateMediaAssets({
+    admin: fakeAdminForMetadata({}),
+    uid: 'admin-editor',
+    mediaBucket: 'test.appspot.com',
+    media: [requestedAsset],
+    existingMedia: [existingAsset],
+  });
+
+  assert.deepEqual(retained, existingAsset);
+  await assert.rejects(
+    validateMediaAssets({
+      admin: fakeAdminForMetadata({}),
+      uid: 'admin-editor',
+      mediaBucket: 'test.appspot.com',
+      media: [requestedAsset],
+      existingMedia: [],
+    }),
+    /outside the caller media folder/
+  );
+});
+
 function createFakeAdmin(seed = {}) {
   const documents = new Map(Object.entries(seed));
   let autoId = 0;
@@ -449,6 +485,53 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.ok(Array.isArray(saved.search.tokens));
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
+});
+
+test('admin edits retain the original owner media without trusting client media fields', async () => {
+  const assetId = '323e4567-e89b-42d3-a456-426614174000';
+  const existingAsset = {
+    assetId,
+    aspectRatio: 1.5,
+    placeholder: { thumbhash: 'server-hash', color: '#334455' },
+    large: { path: `media/original-owner/${assetId}/large.webp`, url: 'https://trusted/large' },
+    feed: { path: `media/original-owner/${assetId}/feed.webp`, url: 'https://trusted/feed' },
+    thumb: { path: `media/original-owner/${assetId}/thumb.webp`, url: 'https://trusted/thumb' },
+  };
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
+    'countries/IL/cities/TLV': {
+      name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 1 },
+    },
+    'recommendations/admin-edit': {
+      ownerId: 'original-owner',
+      createdAt: 'ORIGINAL',
+      destination: { countryId: 'IL', cityId: 'TLV' },
+      media: [existingAsset],
+      stats: { likeCount: 2, commentCount: 1 },
+    },
+  });
+
+  await saveRecommendation({
+    admin,
+    auth: { uid: 'admin-editor', token: { admin: true } },
+    mediaBucket: 'test.appspot.com',
+    mapsKey: 'unused',
+    data: {
+      recommendationId: 'admin-edit',
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      recommendation: {
+        ...validContent,
+        media: [{
+          ...existingAsset,
+          feed: { ...existingAsset.feed, url: 'https://untrusted/client-value' },
+        }],
+      },
+    },
+  });
+
+  const saved = admin.documents.get('recommendations/admin-edit');
+  assert.equal(saved.ownerId, 'original-owner');
+  assert.deepEqual(saved.media, [existingAsset]);
 });
 
 test('saveRecommendation rejects unverified and foreign edits', async () => {
