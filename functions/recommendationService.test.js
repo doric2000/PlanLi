@@ -583,6 +583,12 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
       admin.documents.get(`recommendations/${result.recommendationId}`).place.placeId,
       'venue-google-id'
     );
+    const mapLocation = admin.documents.get(`recommendations/${result.recommendationId}`).mapLocation;
+    assert.deepEqual(
+      { lat: mapLocation.lat, lng: mapLocation.lng },
+      { lat: 32.08, lng: 34.78 }
+    );
+    assert.ok(mapLocation.geohash);
   } finally {
     global.fetch = originalFetch;
   }

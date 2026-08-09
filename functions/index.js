@@ -21,6 +21,7 @@ const {
   recordDiscoverySignal,
   resetPersonalizationActivity,
 } = require('./personalizationService');
+const { getMapRecommendations } = require('./mapRecommendationsService');
 const {
   cleanupOrphanFavorites,
   clearNotifications,
@@ -172,6 +173,15 @@ exports.updateProfile = callable(
 exports.getPersonalizedRecommendations = callable(
   { timeoutSeconds: 30 },
   (request) => getPersonalizedRecommendations({
+    admin,
+    auth: request.auth,
+    data: request.data,
+  })
+);
+
+exports.getMapRecommendations = callable(
+  { timeoutSeconds: 30, memory: '512MiB' },
+  (request) => getMapRecommendations({
     admin,
     auth: request.auth,
     data: request.data,

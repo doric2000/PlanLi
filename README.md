@@ -22,6 +22,32 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
 EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
 ```
 
+### MapLibre and MapTiler
+
+Both recommendation discovery and route maps use MapLibre with MapTiler's
+`Dataviz Light` style. Add two different public MapTiler keys to the ignored
+`client/.env` file:
+
+```text
+EXPO_PUBLIC_MAPTILER_WEB_KEY=...
+EXPO_PUBLIC_MAPTILER_MOBILE_KEY=...
+```
+
+Restrict the web key to the production and development origins. Restrict the
+mobile key to PlanLi's `PlanLi/1.0 (com.planli.planlitravels)` User-Agent.
+Missing keys show a friendly map placeholder instead of crashing the app.
+
+MapLibre contains native code and therefore does not run in Expo Go. After
+installing dependencies or changing the MapLibre plugin, create a fresh
+development build:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npx eas build --profile development --platform android
+# Run the iOS command from an Apple-capable build environment/account:
+npx eas build --profile development --platform ios
+```
+
 ### Web Places proxy
 
 Browser CORS prevents the web client from calling Google Places directly.

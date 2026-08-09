@@ -1,223 +1,349 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map,
+  TransformRequestManager,
+} from '@maplibre/maplibre-react-native';
 
+import {
+  DEFAULT_MAP_CENTER,
+  DEFAULT_MAP_ZOOM,
+  getMapTilerKey,
+  getMapTilerStyleUrl,
+  USER_MAP_ZOOM,
+} from '../../../config/mapConfig';
+import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
+import { featureCollection, userLocationGeoJson, viewportFromBounds } from '../../../utils/mapGeoJson';
 import { community } from '../../../styles';
-import { useUserLocation } from '../../../hooks/useUserLocation';
 import RecommendationMapPreviewCard from './RecommendationMapPreviewCard';
-import { normalizeRecommendationMapItems } from '../utils/recommendationMap';
+import { normalizeRecommendationMapItems, recommendationsToGeoJson } from '../utils/recommendationMap';
 
-const MAX_MARKERS_RENDER = 200;
+const MOBILE_KEY = getMapTilerKey('native');
+const MAP_STYLE = getMapTilerStyleUrl(MOBILE_KEY);
 
-const RecommendationMarker = memo(function RecommendationMarker({
-  mapItem,
-  selected,
-  iconFontReady,
-  onPress,
-}) {
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+if (MOBILE_KEY) {
+  TransformRequestManager.addHeader({
+    id: 'planli-maptiler-user-agent',
+    match: '^https://api\\.maptiler\\.com/',
+    name: 'User-Agent',
+    value: 'PlanLi/1.0 (com.planli.planlitravels)',
+  });
+}
 
-  useEffect(() => {
-    if (!iconFontReady) {
-      setTracksViewChanges(true);
-      return undefined;
-    }
-
-    setTracksViewChanges(true);
-    const timer = setTimeout(() => setTracksViewChanges(false), 180);
-    return () => clearTimeout(timer);
-  }, [iconFontReady, mapItem.visual.color, mapItem.visual.icon, selected]);
-
-  return (
-    <Marker
-      coordinate={{
-        latitude: mapItem.coordinates.lat,
-        longitude: mapItem.coordinates.lng,
-      }}
-      onPress={onPress}
-      stopPropagation
-      tracksViewChanges={tracksViewChanges}
-      zIndex={selected ? 1000 : 1}
-      title={mapItem.title}
-      description={mapItem.visual.label}
-      accessibilityLabel={`${mapItem.title}, ${mapItem.visual.label}`}
-      testID={`recommendation-map-marker-${mapItem.id}`}
-    >
-      <View style={community.mapMarkerTouchTarget}>
-        <View
-          style={[
-            community.mapMarkerBubble,
-            { backgroundColor: mapItem.visual.color },
-            selected && community.mapMarkerBubbleSelected,
-          ]}
-        >
-          {iconFontReady && (
-            <MaterialIcons
-              name={mapItem.visual.icon}
-              size={selected ? 23 : 19}
-              color="#FFFFFF"
-            />
-          )}
-        </View>
-        <View
-          style={[
-            community.mapMarkerTail,
-            { borderTopColor: mapItem.visual.color },
-            selected && community.mapMarkerTailSelected,
-          ]}
-        />
-      </View>
-    </Marker>
-  );
-});
+function viewStateFromEvent(event) {
+  return event?.nativeEvent || event || null;
+}
 
 export default function CommunityInlineMap({
   recommendations,
-  focusOnPins = false,
+  loading = false,
+  error = null,
+  truncated = false,
+  zoomInRequired = false,
+  onSearchViewport,
   onOpenRecommendation,
   overlayBottomInset = 16,
 }) {
+  const mapRef = useRef(null);
+  const cameraRef = useRef(null);
+  const sourceRef = useRef(null);
+  const lastViewportRef = useRef(null);
+  const searchedRef = useRef(false);
+  const autoSearchRef = useRef(false);
+  const centeredOnUserRef = useRef(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [selectedRecommendationId, setSelectedRecommendationId] = useState(null);
+  const [searchAreaVisible, setSearchAreaVisible] = useState(false);
+  const { location, status, startTracking, stopTracking } = useLiveUserLocation();
+
   const mapItems = useMemo(
-    () => normalizeRecommendationMapItems(recommendations).slice(0, MAX_MARKERS_RENDER),
+    () => normalizeRecommendationMapItems(recommendations),
     [recommendations]
   );
-  const mapRef = useRef(null);
-  const [selectedRecommendationId, setSelectedRecommendationId] = useState(null);
-  const [iconFontReady, setIconFontReady] = useState(false);
-  const { location: userLocation, requestLocation } = useUserLocation();
-
+  const recommendationsGeoJson = useMemo(
+    () => recommendationsToGeoJson(recommendations),
+    [recommendations]
+  );
+  const userGeoJson = useMemo(() => userLocationGeoJson(location), [location]);
   const selectedMapItem = useMemo(
     () => mapItems.find((entry) => entry.id === selectedRecommendationId) || null,
     [mapItems, selectedRecommendationId]
   );
 
-  useEffect(() => {
-    let active = true;
-    MaterialIcons.loadFont()
-      .catch(() => {})
-      .finally(() => {
-        if (active) setIconFontReady(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const searchViewport = useCallback((viewport) => {
+    if (!viewport) return;
+    lastViewportRef.current = viewport;
+    searchedRef.current = true;
+    setSearchAreaVisible(false);
+    setSelectedRecommendationId(null);
+    onSearchViewport?.(viewport);
+  }, [onSearchViewport]);
+
+  const searchCurrentViewport = useCallback(async () => {
+    try {
+      const state = await mapRef.current?.getViewState?.();
+      const viewport = viewportFromBounds(state?.bounds, state?.zoom);
+      searchViewport(viewport || lastViewportRef.current);
+    } catch {
+      searchViewport(lastViewportRef.current);
+    }
+  }, [searchViewport]);
+
+  const centerOnUser = useCallback(() => {
+    if (!location) {
+      startTracking();
+      return;
+    }
+    autoSearchRef.current = true;
+    setSearchAreaVisible(false);
+    cameraRef.current?.flyTo?.({
+      center: [location.lng, location.lat],
+      zoom: USER_MAP_ZOOM,
+      duration: 700,
+    });
+  }, [location, startTracking]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-    requestLocation?.();
-  }, [requestLocation]);
+    if (!MAP_STYLE) return undefined;
+    startTracking();
+    return stopTracking;
+  }, [startTracking, stopTracking]);
 
   useEffect(() => {
-    if (!selectedRecommendationId) return;
-    if (selectedMapItem) return;
+    if (!mapReady || !location || centeredOnUserRef.current) return;
+    centeredOnUserRef.current = true;
+    centerOnUser();
+  }, [centerOnUser, location, mapReady]);
+
+  useEffect(() => {
+    if (!mapReady || searchedRef.current || !['denied', 'error'].includes(status)) return;
+    searchCurrentViewport();
+  }, [mapReady, searchCurrentViewport, status]);
+
+  useEffect(() => {
+    if (!selectedRecommendationId || selectedMapItem) return;
     setSelectedRecommendationId(null);
   }, [selectedMapItem, selectedRecommendationId]);
 
-  const coordinates = useMemo(
-    () => mapItems.map((entry) => ({
-      latitude: entry.coordinates.lat,
-      longitude: entry.coordinates.lng,
-    })),
-    [mapItems]
-  );
-
-  const boundsRegion = useMemo(() => {
-    if (!coordinates.length) return null;
-    let minLat = coordinates[0].latitude;
-    let maxLat = coordinates[0].latitude;
-    let minLng = coordinates[0].longitude;
-    let maxLng = coordinates[0].longitude;
-    for (let i = 1; i < coordinates.length; i += 1) {
-      const { latitude, longitude } = coordinates[i];
-      if (latitude < minLat) minLat = latitude;
-      if (latitude > maxLat) maxLat = latitude;
-      if (longitude < minLng) minLng = longitude;
-      if (longitude > maxLng) maxLng = longitude;
+  const handleRegionDidChange = useCallback((event) => {
+    const state = viewStateFromEvent(event);
+    const viewport = viewportFromBounds(state?.bounds, state?.zoom);
+    if (!viewport) return;
+    lastViewportRef.current = viewport;
+    if (autoSearchRef.current) {
+      autoSearchRef.current = false;
+      searchViewport(viewport);
+      return;
     }
-    return {
-      latitude: (minLat + maxLat) / 2,
-      longitude: (minLng + maxLng) / 2,
-      latitudeDelta: Math.max(0.02, (maxLat - minLat) * 1.4),
-      longitudeDelta: Math.max(0.02, (maxLng - minLng) * 1.4),
-    };
-  }, [coordinates]);
-
-  // Imperative region changes have caused react-native-maps crashes on some devices,
-  // so region changes remain remount-driven.
-  const mapKey = useMemo(() => {
-    if (focusOnPins) {
-      return `pins:${mapItems.length}:${mapItems[0]?.id || ''}:${mapItems[mapItems.length - 1]?.id || ''}`;
+    if (!searchedRef.current && !['idle', 'requesting'].includes(status)) {
+      searchViewport(viewport);
+      return;
     }
-    if (userLocation) {
-      return `user:${userLocation.lat.toFixed(3)},${userLocation.lng.toFixed(3)}`;
-    }
-    return 'default';
-  }, [focusOnPins, mapItems, userLocation]);
+    if (state?.userInteraction && searchedRef.current) setSearchAreaVisible(true);
+  }, [searchViewport, status]);
 
-  const initialRegion = useMemo(() => {
-    if (focusOnPins && boundsRegion) return boundsRegion;
-    if (userLocation) {
-      return {
-        latitude: userLocation.lat,
-        longitude: userLocation.lng,
-        ...community.cityWideMapDelta,
-      };
+  const handleSourcePress = useCallback(async (event) => {
+    event?.stopPropagation?.();
+    const feature = event?.nativeEvent?.features?.[0] || event?.features?.[0];
+    if (!feature) return;
+    const properties = feature.properties || {};
+    const clusterId = Number(properties.cluster_id);
+    if (properties.cluster && Number.isFinite(clusterId)) {
+      try {
+        const zoom = await sourceRef.current?.getClusterExpansionZoom?.(clusterId);
+        const center = feature.geometry?.coordinates;
+        if (Array.isArray(center) && Number.isFinite(zoom)) {
+          cameraRef.current?.easeTo?.({ center, zoom: Math.min(20, zoom), duration: 350 });
+        }
+      } catch {
+        // Keep the current viewport if a cluster disappears during the gesture.
+      }
+      return;
     }
-    if (boundsRegion) return boundsRegion;
-    return community.defaultMapRegion;
-  }, [boundsRegion, focusOnPins, userLocation]);
+    const id = properties.id || properties.postId;
+    if (id) setSelectedRecommendationId(String(id));
+  }, []);
 
-  if (Platform.OS === 'web') return null;
+  if (!MAP_STYLE) {
+    return (
+      <View style={community.inlineMapEmpty} testID="map-missing-key">
+        <Ionicons name="map-outline" size={40} color="#6B7280" />
+        <Text style={community.inlineMapEmptyTitle}>המפה עדיין לא הוגדרה</Text>
+        <Text style={community.inlineMapEmptyText}>
+          יש להוסיף מפתח MapTiler מוגן לבניית המובייל. שאר האפליקציה זמינה כרגיל.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={community.inlineMapWrap}>
-      {mapItems.length === 0 ? (
-        <View style={community.inlineMapEmpty}>
-          <MaterialIcons name="location-off" size={36} color="#9CA3AF" />
-          <Text style={community.inlineMapEmptyText}>
-            אין כרגע המלצות עם מיקום במסננים שבחרת.
-          </Text>
-        </View>
-      ) : (
-        <View style={community.inlineMapContainer}>
-          <MapView
-            key={mapKey}
-            ref={mapRef}
-            testID="community-inline-map"
-            style={community.inlineMapView}
-            initialRegion={initialRegion}
-            mapType={Platform.OS === 'android' ? 'none' : 'standard'}
-            onPress={() => setSelectedRecommendationId(null)}
-            mapPadding={{
-              top: 8,
-              right: 8,
-              bottom: selectedMapItem ? overlayBottomInset + 180 : overlayBottomInset,
-              left: 8,
+      <Map
+        ref={mapRef}
+        testID="community-inline-map"
+        style={community.inlineMapView}
+        mapStyle={MAP_STYLE}
+        attribution
+        attributionPosition={{ top: 8, left: 8 }}
+        logo={false}
+        compass
+        compassPosition={{ top: 8, right: 8 }}
+        touchPitch={false}
+        onDidFinishLoadingMap={() => setMapReady(true)}
+        onRegionDidChange={handleRegionDidChange}
+        onPress={() => setSelectedRecommendationId(null)}
+      >
+        <Camera
+          ref={cameraRef}
+          minZoom={2}
+          maxZoom={20}
+          initialViewState={{ center: DEFAULT_MAP_CENTER, zoom: DEFAULT_MAP_ZOOM }}
+        />
+
+        <GeoJSONSource
+          id="planli-user-location"
+          data={userGeoJson}
+        >
+          <Layer
+            id="planli-user-accuracy"
+            type="fill"
+            filter={['==', ['geometry-type'], 'Polygon']}
+            paint={{ 'fill-color': '#2F80ED', 'fill-opacity': 0.12 }}
+          />
+          <Layer
+            id="planli-user-ring"
+            type="circle"
+            filter={['==', ['get', 'kind'], 'user']}
+            paint={{ 'circle-radius': 10, 'circle-color': '#FFFFFF', 'circle-opacity': 0.98 }}
+          />
+          <Layer
+            id="planli-user-dot"
+            type="circle"
+            filter={['==', ['get', 'kind'], 'user']}
+            paint={{ 'circle-radius': 6.5, 'circle-color': '#2F80ED' }}
+          />
+        </GeoJSONSource>
+
+        <GeoJSONSource
+          ref={sourceRef}
+          id="planli-recommendations"
+          data={recommendationsGeoJson || featureCollection([])}
+          cluster
+          clusterRadius={52}
+          clusterMaxZoom={15}
+          onPress={handleSourcePress}
+          hitbox={{ top: 18, right: 18, bottom: 18, left: 18 }}
+        >
+          <Layer
+            id="planli-recommendation-clusters"
+            type="circle"
+            filter={['has', 'point_count']}
+            paint={{
+              'circle-color': '#1E3A5F',
+              'circle-radius': ['step', ['get', 'point_count'], 19, 20, 23, 80, 28],
+              'circle-stroke-color': '#FFFFFF',
+              'circle-stroke-width': 3,
             }}
-          >
-            <UrlTile
-              urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-              tileSize={256}
-              maximumZ={19}
-              zIndex={0}
-            />
+          />
+          <Layer
+            id="planli-recommendation-cluster-count"
+            type="symbol"
+            filter={['has', 'point_count']}
+            layout={{
+              'text-field': ['get', 'point_count_abbreviated'],
+              'text-size': 12,
+              'text-allow-overlap': true,
+            }}
+            paint={{ 'text-color': '#FFFFFF' }}
+          />
+          <Layer
+            id="planli-recommendation-pins"
+            type="circle"
+            filter={['!', ['has', 'point_count']]}
+            paint={{
+              'circle-color': ['coalesce', ['get', 'color'], '#1E3A5F'],
+              'circle-radius': 9,
+              'circle-stroke-color': '#FFFFFF',
+              'circle-stroke-width': 3,
+            }}
+          />
+          <Layer
+            id="planli-recommendation-selected"
+            type="circle"
+            filter={selectedRecommendationId
+              ? ['==', ['get', 'id'], selectedRecommendationId]
+              : ['==', ['get', 'id'], '__none__']}
+            paint={{
+              'circle-color': 'rgba(0,0,0,0)',
+              'circle-radius': 15,
+              'circle-stroke-color': '#1E3A5F',
+              'circle-stroke-width': 3,
+            }}
+          />
+        </GeoJSONSource>
+      </Map>
 
-            {mapItems.map((mapItem) => (
-              <RecommendationMarker
-                key={mapItem.id}
-                mapItem={mapItem}
-                selected={mapItem.id === selectedRecommendationId}
-                iconFontReady={iconFontReady}
-                onPress={() => setSelectedRecommendationId(mapItem.id)}
-              />
-            ))}
-          </MapView>
+      <View style={[
+        community.mapControls,
+        { bottom: overlayBottomInset + (selectedMapItem ? 174 : 12) },
+      ]} pointerEvents="box-none">
+        <TouchableOpacity
+          style={community.mapControlButton}
+          onPress={centerOnUser}
+          accessibilityRole="button"
+          accessibilityLabel="המיקום שלי"
+          testID="map-my-location"
+        >
+          <Ionicons name="locate" size={22} color="#1E3A5F" />
+        </TouchableOpacity>
+      </View>
 
-          <View style={community.mapAttributionTopWrap} pointerEvents="none">
-            <Text style={community.mapAttributionText}>© OpenStreetMap contributors</Text>
-          </View>
+      {searchAreaVisible && (
+        <TouchableOpacity
+          style={community.mapSearchAreaButton}
+          onPress={() => searchViewport(lastViewportRef.current)}
+          accessibilityRole="button"
+          testID="map-search-this-area"
+        >
+          <Ionicons name="search" size={17} color="#FFFFFF" />
+          <Text style={community.mapSearchAreaText}>חיפוש באזור זה</Text>
+        </TouchableOpacity>
+      )}
+
+      {status === 'denied' && (
+        <TouchableOpacity style={community.mapLocationNotice} onPress={startTracking}>
+          <Ionicons name="location-outline" size={17} color="#1E3A5F" />
+          <Text style={community.mapLocationNoticeText}>אפשר להפעיל מיקום כדי למצוא המלצות קרובות</Text>
+        </TouchableOpacity>
+      )}
+
+      {(truncated || zoomInRequired) && (
+        <View style={community.mapZoomNotice} pointerEvents="none">
+          <Text style={community.mapZoomNoticeText}>יש כאן הרבה המלצות — התקרבו כדי לראות את כולן</Text>
+        </View>
+      )}
+
+      {loading && (
+        <View style={community.mapLoadingPill} pointerEvents="none">
+          <ActivityIndicator size="small" color="#1E3A5F" />
+          <Text style={community.mapLoadingText}>טוען המלצות באזור…</Text>
+        </View>
+      )}
+
+      {!!error && !loading && (
+        <TouchableOpacity style={community.mapErrorPill} onPress={searchCurrentViewport}>
+          <Ionicons name="refresh" size={17} color="#991B1B" />
+          <Text style={community.mapErrorText}>לא הצלחנו לטעון. לחצו לניסיון נוסף</Text>
+        </TouchableOpacity>
+      )}
+
+      {!loading && !error && searchedRef.current && mapItems.length === 0 && !zoomInRequired && (
+        <View style={community.mapEmptyPill} pointerEvents="none">
+          <Text style={community.mapEmptyPillText}>אין המלצות באזור המוצג</Text>
         </View>
       )}
 

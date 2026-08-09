@@ -45,6 +45,9 @@ test('personalized recommendation candidate queries have global and destination 
     'status:ASCENDING|search.prefixes:CONTAINS'
   ));
   assert.ok(recommendationIndexes.includes(
+    'status:ASCENDING|mapLocation.geohash:ASCENDING'
+  ));
+  assert.ok(recommendationIndexes.includes(
     'destination.countryId:ASCENDING|destination.cityId:ASCENDING|status:ASCENDING|search.prefixes:CONTAINS'
   ));
 });

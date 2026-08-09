@@ -27,6 +27,7 @@ const {
   VIBE_IDS,
 } = require('./travelTaxonomy');
 const { buildSearchIndex } = require('./discoverySearch');
+const { buildMapLocation } = require('./mapLocation');
 
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -887,6 +888,7 @@ async function saveRecommendation({
     },
     media,
     place: destination.place,
+    mapLocation: buildMapLocation(destination.place?.coordinates),
   };
   payload.search = buildSearchIndex({
     title: content.title,

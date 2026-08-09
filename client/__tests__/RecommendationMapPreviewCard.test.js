@@ -54,7 +54,7 @@ describe('RecommendationMapPreviewCard', () => {
     fireEvent.press(screen.getByTestId('recommendation-map-preview-close'));
     fireEvent.press(screen.getByTestId('recommendation-map-preview-open'));
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onOpenRecommendation).toHaveBeenCalledWith(item);
+    expect(onOpenRecommendation).toHaveBeenCalledWith('rec-1');
   });
 
   it('uses a category placeholder and omits unavailable metadata', () => {
