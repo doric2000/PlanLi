@@ -4,7 +4,6 @@ import {
 	Platform,
 	Pressable,
 	TouchableOpacity,
-	useWindowDimensions,
 	View,
 } from "react-native";
 import AppText from "../../../components/AppText";
@@ -13,6 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useUserData } from "../../../hooks/useUserData";
 import { useBoundedImageWindow } from "../../../hooks/useBoundedImageWindow";
+import { useStableCarouselLayout } from "../../../hooks/useStableCarouselLayout";
 import { Avatar } from "../../../components/Avatar";
 import CachedImage, { prefetchImage } from "../../../components/CachedImage";
 import PlacesRoute from "./PlacesRoute";
@@ -104,8 +104,12 @@ export const RouteCard = ({
 	variant = "default",
 }) => {
 	const navigation = useNavigation();
-	const { width: windowWidth } = useWindowDimensions();
 	const isFeed = variant === "feed";
+	const {
+		pageWidth,
+		frameHeight,
+		onLayout: onCarouselLayout,
+	} = useStableCarouselLayout({ aspectRatio: 1.25 });
 	const routeImages = useMemo(
 		() => getRouteImageUrls(item, "feed"),
 		[item]
@@ -115,7 +119,6 @@ export const RouteCard = ({
 		[item]
 	);
 	const allTags = useMemo(() => getAllTags(item), [item]);
-	const [carouselWidth, setCarouselWidth] = useState(null);
 	const [activeImageIndex, setActiveImageIndex] = useState(0);
 	const carouselRef = useRef(null);
 	const imageWindow = useBoundedImageWindow(activeImageIndex, routeImages.length);
@@ -132,6 +135,12 @@ export const RouteCard = ({
 		const first = viewableItems?.[0]?.index;
 		if (typeof first === "number") setActiveImageIndex(first);
 	}).current;
+	const imageIdentity = `${item?.id || ""}:${routeImages.join("|")}`;
+
+	useEffect(() => {
+		setActiveImageIndex(0);
+		carouselRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+	}, [imageIdentity]);
 
 	const author = useUserData(item.ownerId);
 	const displayUser = author.displayName || text.defaultUser;
@@ -159,14 +168,12 @@ export const RouteCard = ({
 	};
 
 	const renderCarouselImage = (uri, index) => {
-		const pageWidth = carouselWidth || windowWidth || 0;
-
 		if (index !== imageWindow.currentIndex) {
 			return (
 				<View
 					style={[
 						cards.recCarouselImage,
-						{ width: pageWidth || "100%" },
+						{ width: pageWidth, height: frameHeight },
 					]}
 				/>
 			);
@@ -177,7 +184,7 @@ export const RouteCard = ({
 				source={{ uri }}
 				style={[
 					Platform.OS === "web" ? cards.recWebImage : cards.recCarouselImage,
-					{ width: pageWidth || "100%" },
+					{ width: pageWidth, height: frameHeight },
 				]}
 				contentFit="cover"
 				priority={index === imageWindow.currentIndex ? "normal" : "low"}
@@ -249,14 +256,19 @@ export const RouteCard = ({
 
 	const renderFeedMedia = () => (
 		<View
-			style={[cards.recCarouselContainer, styles.feedCarouselContainer]}
-			onLayout={(event) => setCarouselWidth(event.nativeEvent.layout.width)}
+			style={[
+				cards.recCarouselContainer,
+				styles.feedCarouselContainer,
+				{ aspectRatio: undefined, height: frameHeight },
+			]}
+			onLayout={onCarouselLayout}
 		>
 			{routeImages.length > 0 ? (
 				<FlatList
 					ref={carouselRef}
 					data={routeImages}
 					extraData={imageWindow.currentIndex}
+					style={[cards.recCarouselList, { width: pageWidth, height: frameHeight }]}
 					keyExtractor={(uri, index) => `${item.id || "route"}:${index}:${uri}`}
 					horizontal
 					pagingEnabled
@@ -267,14 +279,13 @@ export const RouteCard = ({
 					maxToRenderPerBatch={1}
 					windowSize={3}
 					renderItem={({ item: uri, index }) => (
-						<View style={[cards.recCarouselItem, { width: carouselWidth || windowWidth || "100%" }]}>
+						<View style={[cards.recCarouselItem, { width: pageWidth, height: frameHeight }]}>
 							{renderCarouselImage(uri, index)}
 						</View>
 					)}
 					onViewableItemsChanged={onViewableItemsChanged}
 					viewabilityConfig={viewabilityConfig}
 					getItemLayout={(_, index) => {
-						const pageWidth = carouselWidth || windowWidth || 0;
 						return { length: pageWidth, offset: pageWidth * index, index };
 					}}
 				/>
