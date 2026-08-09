@@ -34,15 +34,22 @@ jest.mock('../src/config/firebase', () => ({
 jest.mock('../src/components/GooglePlacesInput', () => {
   const React = require('react');
   const { View, TextInput } = require('react-native');
-  return ({ value, onChangeValue }) => (
+  return ({ value, onChangeValue, rightAccessory }) => (
     <View>
       <TextInput
         testID="home-search-input"
         value={value}
         onChangeText={onChangeValue}
       />
+      {rightAccessory}
     </View>
   );
+});
+
+jest.mock('../src/components/PageHeader', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return ({ children }) => ReactModule.createElement(View, null, children);
 });
 
 jest.mock('../src/components/CityCard', () => {
@@ -131,5 +138,26 @@ describe('HomeScreenSearchTest', () => {
       expect(getByTestId('home-empty-state')).toBeTruthy();
       expect(getByText('לא נמצאו יעדים')).toBeTruthy();
     });
+  });
+
+  it('opens a destination-only filter with real sort controls', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getAllByTestId('city-card')).toHaveLength(2));
+    fireEvent.press(screen.getByLabelText('סינון יעדים'));
+    expect(screen.getByText('סינון יעדים')).toBeTruthy();
+    expect(screen.getByText('הכי פופולריים')).toBeTruthy();
+    expect(screen.getByText('לפי שם א–ת')).toBeTruthy();
+    expect(screen.getByText('מועדפים בלבד')).toBeTruthy();
+    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(2));
   });
 });

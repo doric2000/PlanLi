@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import PageHeader from '../../../components/PageHeader';
 
 // --- Components ---
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
@@ -25,6 +25,7 @@ import {
   colors,
   common,
   community,
+  radii,
   communityScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
 } from '../../../styles';
@@ -148,15 +149,7 @@ export default function CommunityScreen({ navigation }) {
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
 
   const renderTopArea = () => (
-    <LinearGradient
-      colors={colors.heroBlueGradient}
-      start={{ x: 0.15, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={[styles.header, { paddingTop: insets.top + 6 }]}
-    >
-      <View style={styles.headerCircleLarge} />
-      <View style={styles.headerCircleSmall} />
-
+    <PageHeader variant="hero" overlapNext>
       <View style={styles.topActionsRow}>
         <TouchableOpacity
           style={styles.glassIconButton}
@@ -220,7 +213,7 @@ export default function CommunityScreen({ navigation }) {
           )}
         </View>
       </View>
-    </LinearGradient>
+    </PageHeader>
   );
 
   return (
@@ -228,7 +221,9 @@ export default function CommunityScreen({ navigation }) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
       {/* --- ACTIVE FILTERS BAR --- */}
-      <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
+      <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
+        <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
+      </View>
 
       {mapOpen && (
         <View style={community.inlineMapSection}>
@@ -257,12 +252,13 @@ export default function CommunityScreen({ navigation }) {
             windowSize={5}
             onScroll={onScroll}
             scrollEventThrottle={16}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <RecommendationCard
                   item={item}
                   onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
                   variant="feed"
+                  topContentInset={!isFiltered && index === 0 ? radii.xl : 0}
               />
             )}
             contentContainerStyle={[styles.feedContent, { paddingBottom: getTabSceneListPaddingBottom(insets) }]}

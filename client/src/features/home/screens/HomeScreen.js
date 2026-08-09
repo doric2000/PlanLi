@@ -9,22 +9,17 @@ import { collectionGroup, getDocs, limit, orderBy, query, where } from "firebase
 
 import CityCard from "../../../components/CityCard";
 import CachedImage from "../../../components/CachedImage";
+import DestinationFilterModal from "../../../components/DestinationFilterModal";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
+import PageHeader from "../../../components/PageHeader";
 import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
+import { useFavoriteCityIds } from "../../../hooks/useFavoriteCityIds";
 import { useSmartProfile } from "../../../hooks/useSmartProfile";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { resolveDestinationForPlacePreview } from "../../../services/LocationService";
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
-
-const CATEGORY_CHIPS = [
-	{ id: "all", label: "הכל", icon: "compass-outline" },
-	{ id: "beach", label: "ים", icon: "beach" },
-	{ id: "city", label: "עיר", icon: "city-variant-outline" },
-	{ id: "adventure", label: "הרפתקה", icon: "hiking" },
-	{ id: "food", label: "אוכל", icon: "silverware-fork-knife" },
-	{ id: "culture", label: "תרבות", icon: "bank-outline" },
-];
+import { filterAndSortDestinations, mergeDestinations } from "../../../utils/destinationSearch";
 
 const FEATURED_BADGES = ["חם עכשיו", "בחירת הקהילה", "חדש"];
 const DESTINATION_GRADIENTS = [
@@ -50,11 +45,13 @@ export default function HomeScreen({ navigation }) {
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [activeCategory, setActiveCategory] = useState("all");
-	const [savedCityIds, setSavedCityIds] = useState({});
+	const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
+	const [destinationSort, setDestinationSort] = useState("popular");
+	const [savedOnly, setSavedOnly] = useState(false);
 	const isFetchingAllDestinationsForSearchRef = useRef(false);
 	const allDestinationsFetchDebounceRef = useRef(null);
 	const mainScrollRef = useRef(null);
+	const favoriteCities = useFavoriteCityIds({ enabled: Boolean(user) && !isGuest });
 
 	const fetchDestinations = async () => {
 		try {
@@ -160,30 +157,28 @@ export default function HomeScreen({ navigation }) {
 		onRefresh,
 	});
 
-	const searchableDestinations = searchQuery.trim()
+	const searchableDestinations = searchQuery.trim() || destinationSort !== "popular" || savedOnly
 		? hasLoadedAllDestinationsForSearch
 			? allDestinationsForSearch
 			: destinations
 		: destinations;
+	const favoriteKeys = useMemo(
+		() => new Set(favoriteCities.favorites.map((city) => `${city.countryId}:${city.id}`)),
+		[favoriteCities.favorites]
+	);
+	const destinationPool = useMemo(
+		() => mergeDestinations(searchableDestinations, favoriteCities.favorites),
+		[searchableDestinations, favoriteCities.favorites]
+	);
 
 	const filteredDestinations = useMemo(() => {
-		const q = searchQuery.trim().toLowerCase();
-		return searchableDestinations.filter((city) => {
-			if (!q) return true;
-
-			const name = (city.name || "").toLowerCase();
-			const description = (city.description || "").toLowerCase();
-			const countryId = (city.countryId || "").toLowerCase();
-			const country = (city.country || city.countryName || "").toLowerCase();
-
-			return (
-				name.includes(q) ||
-				description.includes(q) ||
-				countryId.includes(q) ||
-				country.includes(q)
-			);
+		return filterAndSortDestinations(destinationPool, {
+			query: searchQuery,
+			sortBy: destinationSort,
+			savedOnly,
+			favoriteKeys,
 		});
-	}, [searchableDestinations, searchQuery]);
+	}, [destinationPool, searchQuery, destinationSort, savedOnly, favoriteKeys]);
 
 	const localAutocompleteResults = searchQuery.trim()
 		? filteredDestinations.slice(0, 20)
@@ -253,11 +248,22 @@ export default function HomeScreen({ navigation }) {
 		});
 	};
 
-	const toggleSavedVisual = (cityId) => {
-		setSavedCityIds((prev) => ({
-			...prev,
-			[cityId]: !prev[cityId],
-		}));
+	const openDestinationFilters = () => {
+		setDestinationFilterVisible(true);
+		if (!hasLoadedAllDestinationsForSearch) fetchAllDestinationsForSearch();
+	};
+
+	const toggleCityFavorite = async (city) => {
+		if (!user || isGuest) {
+			Alert.alert("נדרשת התחברות", "כדי לשמור יעד במועדפים צריך להתחבר.");
+			return;
+		}
+		try {
+			await favoriteCities.toggleFavorite(city);
+		} catch (error) {
+			console.error("Failed to toggle destination favorite:", error);
+			Alert.alert("שגיאה", "לא הצלחנו לעדכן את המועדפים. נסו שוב.");
+		}
 	};
 
 	const renderProfileAvatar = () => (
@@ -281,14 +287,7 @@ export default function HomeScreen({ navigation }) {
 	);
 
 	const renderHeader = () => (
-		<LinearGradient
-			colors={colors.heroBlueGradient}
-			start={{ x: 0.15, y: 0 }}
-			end={{ x: 0.9, y: 1 }}
-			style={[styles.header, { paddingTop: insets.top + 4 }]}
-		>
-			<View style={styles.headerCircleLarge} />
-			<View style={styles.headerCircleSmall} />
+		<PageHeader variant="hero">
 
 			<View style={styles.headerTop}>
 				{renderProfileAvatar()}
@@ -319,50 +318,20 @@ export default function HomeScreen({ navigation }) {
 					inputStyle={styles.searchInput}
 					listContainerStyle={styles.searchDropdown}
 					rightAccessory={
-						<TouchableOpacity style={styles.filterButton} activeOpacity={0.85}>
+						<TouchableOpacity
+							style={[styles.filterButton, (savedOnly || destinationSort !== "popular") && styles.filterButtonActive]}
+							activeOpacity={0.85}
+							onPress={openDestinationFilters}
+							accessibilityRole="button"
+							accessibilityLabel="סינון יעדים"
+						>
 							<Ionicons name="options-outline" size={18} color="#FFFFFF" />
+							{savedOnly || destinationSort !== "popular" ? <View style={styles.filterBadge} /> : null}
 						</TouchableOpacity>
 					}
 				/>
 			</View>
-		</LinearGradient>
-	);
-
-	const renderCategories = () => (
-		<View style={styles.sectionFirst}>
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				style={styles.categoryScroll}
-				contentContainerStyle={styles.categoryContent}
-			>
-				{CATEGORY_CHIPS.map((category) => {
-					const isActive = activeCategory === category.id;
-					return (
-						<TouchableOpacity
-							key={category.id}
-							style={[styles.categoryChip, isActive && styles.categoryChipActive]}
-							activeOpacity={0.85}
-							onPress={() => setActiveCategory(category.id)}
-						>
-							<MaterialCommunityIcons
-								name={category.icon}
-								size={16}
-								color={isActive ? "#FFFFFF" : "#5E6575"}
-							/>
-							<Text
-								style={[
-									styles.categoryText,
-									isActive && styles.categoryTextActive,
-								]}
-							>
-								{category.label}
-							</Text>
-						</TouchableOpacity>
-					);
-				})}
-			</ScrollView>
-		</View>
+		</PageHeader>
 	);
 
 	const openPreferenceSetup = () => {
@@ -489,8 +458,8 @@ export default function HomeScreen({ navigation }) {
 							variant="home"
 							showTravelers={false}
 							showSaveButton
-							saved={!!savedCityIds[city.id]}
-							onSavePress={() => toggleSavedVisual(city.id)}
+							saved={favoriteKeys.has(`${city.countryId}:${city.id}`)}
+							onSavePress={() => toggleCityFavorite(city)}
 							onPress={() => goToDestination(city)}
 						/>
 					))
@@ -525,11 +494,19 @@ export default function HomeScreen({ navigation }) {
 				{renderHeader()}
 				{renderPreferencePrompt()}
 				<View style={styles.body}>
-					{renderCategories()}
 					{renderFeatured()}
 					{renderDestinations()}
 				</View>
 			</ScrollView>
+			<DestinationFilterModal
+				visible={destinationFilterVisible}
+				onClose={() => setDestinationFilterVisible(false)}
+				sortBy={destinationSort}
+				onSortChange={setDestinationSort}
+				savedOnly={savedOnly}
+				onSavedOnlyChange={setSavedOnly}
+				favoritesAvailable={Boolean(user) && !isGuest}
+			/>
 		</SafeAreaView>
 	);
 }

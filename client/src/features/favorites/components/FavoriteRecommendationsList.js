@@ -1,55 +1,52 @@
-
 import React from 'react';
-import { View, Text, FlatList, ActivityIndicator } from 'react-native';
-import { common } from '../../../styles/common';
-import { typography } from '../../../styles/typography';
-import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
-import RecommendationCard from '../../../components/RecommendationCard';
+import { ActivityIndicator, FlatList, View, useWindowDimensions } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+
+import ContentTile, { getContentGridColumns } from '../../../components/ContentTile';
+import EmptyState from '../../../components/EmptyState';
+import { colors } from '../../../styles';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import { getRecommendationMapVisual } from '../../community/utils/recommendationMap';
+import { favoritesStyles as styles, getGridTileWidth } from './favoritesStyles';
 
 export default function FavoriteRecommendationsList({ favorites, loading, flatListRef, onScroll }) {
-  if (loading) {
-    return (
-      <View style={common.containerCentered}>
-        <ActivityIndicator size="large" color="#49bc8e" />
-      </View>
-    );
-  }
-  if (!favorites.length) {
-    return (
-      <View style={common.containerCentered}>
-        <Text style={typography.h2}>ההמלצות המועדפות שלך</Text>
-        <Text style={typography.body}>לא שמרת המלצות עדיין</Text>
-      </View>
-    );
-  }
+  const navigation = useNavigation();
+  const { width } = useWindowDimensions();
+  const columns = getContentGridColumns(width);
+  const tileWidth = getGridTileWidth(width, columns);
+
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={colors.brand} /></View>;
 
   return (
     <FlatList
+      key={`favorite-recommendations-${columns}`}
       ref={flatListRef}
       data={favorites}
-      keyExtractor={item => item.id}
+      numColumns={columns}
+      keyExtractor={(item) => item.id}
       onScroll={onScroll}
       scrollEventThrottle={16}
-      initialNumToRender={3}
-      maxToRenderPerBatch={3}
-      windowSize={5}
-      renderItem={({ item }) => (
-        <View style={{ alignItems: 'center', width: '100%' }}>
-          <View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>
-            <RecommendationCard
-              item={{
-                id: item.id,
-                title: item.name || 'Untitled',
-                description: item.sub_text || '',
-                images: item.thumbnail_url ? [item.thumbnail_url] : [],
-                ...item
-              }}
-              showActionBar={false}
+      initialNumToRender={columns * 2}
+      maxToRenderPerBatch={columns * 2}
+      windowSize={7}
+      columnWrapperStyle={styles.gridRow}
+      contentContainerStyle={styles.listContent}
+      renderItem={({ item }) => {
+        const visual = getRecommendationMapVisual(item?.categoryId, item?.category);
+        return (
+          <View style={[styles.tileWrap, { width: tileWidth }]}>
+            <ContentTile
+              image={getRecommendationImageUrls(item, 'thumb')[0] || item.thumbnail_url || null}
+              title={item.title || item.name || 'המלצה'}
+              subtitle={item?.destination?.cityName || item?.destination?.countryName || ''}
+              icon={visual.icon}
+              fallbackColor={visual.color}
+              onPress={() => navigation.navigate('RecommendationDetail', { postId: item.id })}
             />
           </View>
-        </View>
-      )}
-      contentContainerStyle={{ padding: 16, alignItems: 'center' }}
+        );
+      }}
+      ListEmptyComponent={<EmptyState icon="bookmark-border" title="עוד אין המלצות שמורות" message="המלצות שתשמרו יופיעו כאן." />}
     />
   );
 }

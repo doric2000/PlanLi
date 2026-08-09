@@ -1348,6 +1348,11 @@ export const communityScreenStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.appSurface,
   },
+  filtersAfterOverlappingHeader: {
+    paddingTop: 28,
+    position: 'relative',
+    zIndex: 2,
+  },
   header: {
     paddingHorizontal: 18,
     paddingBottom: 18,
@@ -1721,6 +1726,20 @@ export const homeScreenStyles = StyleSheet.create({
 		backgroundColor: colors.brandOrange,
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	filterButtonActive: {
+		backgroundColor: colors.brandOrange,
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.48)",
+	},
+	filterBadge: {
+		position: "absolute",
+		top: 3,
+		right: 3,
+		width: 7,
+		height: 7,
+		borderRadius: 4,
+		backgroundColor: colors.white,
 	},
 	searchDropdown: {
 		top: 58,
@@ -3930,6 +3949,11 @@ export const routesScreenStyles = StyleSheet.create({
 	screen: {
 		flex: 1,
 		backgroundColor: colors.appSurface,
+	},
+	filtersAfterOverlappingHeader: {
+		paddingTop: 28,
+		position: 'relative',
+		zIndex: 2,
 	},
 	header: {
 		paddingHorizontal: 18,

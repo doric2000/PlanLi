@@ -45,6 +45,12 @@ export const colors = {
 	navActive: "#1B2D7A",
 	navInactive: "#4B5563",
 	appSurface: "#F4F5F9",
+	surface: "#F4F5F9",
+	surfaceElevated: "#FFFFFF",
+	surfaceSubtle: "#EEF1F6",
+	brand: "#1E3A5F",
+	accentAction: "#F5961D",
+	divider: "rgba(30,58,95,0.08)",
 
 	// Shadows
 	shadow: "#000000",

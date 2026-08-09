@@ -109,6 +109,12 @@ function buildFavoritePreview({ target, data, publicProfile }) {
     subtitle,
     thumbUrl: mediaThumb(data),
     placeholderColor: mediaPlaceholder(data),
+    ...(target.type === 'recommendation'
+      ? {
+          categoryId: data?.categoryId || null,
+          category: data?.category || null,
+        }
+      : {}),
     owner: data?.ownerId
       ? {
           id: data.ownerId,

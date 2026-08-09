@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import PageHeader from '../../../components/PageHeader';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RoutesFilterModal from '../../../components/RoutesFilterModal';
 import { auth } from '../../../config/firebase';
@@ -53,8 +53,6 @@ const text = {
   firstRoute: 'היו הראשונים לשתף מסלול!',
 };
 
-const gradientStart = { x: 0.15, y: 0 };
-const gradientEnd = { x: 0.9, y: 1 };
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
@@ -168,10 +166,7 @@ export default function RoutesScreen({ navigation }) {
   };
 
   const renderTopArea = () => (
-    <LinearGradient colors={colors.heroBlueGradient} start={gradientStart} end={gradientEnd}
-      style={[styles.header, { paddingTop: insets.top + 6 }]}>
-      <View style={styles.headerCircleLarge} />
-      <View style={styles.headerCircleSmall} />
+    <PageHeader variant="hero" overlapNext>
       <View style={styles.topActionsRow}>
         <TouchableOpacity style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
           onPress={() => setFilterVisible(true)} accessibilityRole="button" accessibilityLabel="מסננים">
@@ -206,16 +201,18 @@ export default function RoutesScreen({ navigation }) {
           )}
         </View>
       </View>
-    </LinearGradient>
+    </PageHeader>
   );
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
-      <ActiveRouteFiltersList filters={filters}
-        onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
-        onClear={() => setFilters(createEmptyDiscoveryFilters())} />
+      <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
+        <ActiveRouteFiltersList filters={filters}
+          onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
+          onClear={() => setFilters(createEmptyDiscoveryFilters())} />
+      </View>
       {loading ? <View style={common.center}><ActivityIndicator size="large" color={colors.primary} /></View> : (
         <FlatList ref={routesListRef} data={routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.feedContent, { paddingBottom: getTabSceneListPaddingBottom(insets) }]}

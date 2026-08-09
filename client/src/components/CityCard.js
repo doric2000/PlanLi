@@ -23,7 +23,7 @@ export default function CityCard({
   variant = 'default',
   showTravelers = true,
   showSaveButton = false,
-  saved = false,
+  saved,
   onSavePress,
 }) {
   const rawImageUrl = city?.imageUrl;
@@ -40,6 +40,7 @@ export default function CityCard({
   const cityName = city?.name || city?.id || '';
   const countryName = city?.country || city?.countryName || city?.countryId || '';
   const travelers = city?.travelers ?? 0;
+  const effectiveSaved = Boolean(saved);
 
   return (
     <TouchableOpacity
@@ -67,12 +68,15 @@ export default function CityCard({
         {isHomeVariant && <View style={styles.homeImageOverlay} />}
         {showSaveButton && (
           <TouchableOpacity
-            style={[styles.saveButton, saved && styles.saveButtonActive]}
+            style={[styles.saveButton, effectiveSaved && styles.saveButtonActive]}
             onPress={onSavePress}
             activeOpacity={0.85}
+            disabled={!onSavePress}
+            accessibilityRole="button"
+            accessibilityLabel={effectiveSaved ? 'הסרה מהמועדפים' : 'שמירה במועדפים'}
           >
             <Ionicons
-              name={saved ? 'bookmark' : 'bookmark-outline'}
+              name={effectiveSaved ? 'bookmark' : 'bookmark-outline'}
               size={15}
               color="#FFFFFF"
             />

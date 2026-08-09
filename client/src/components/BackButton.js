@@ -18,6 +18,7 @@ import { colors, backButtonStyles as styles } from '../styles';
  * @param {number} [props.size=24] - Icon size
  * @param {Function} [props.onPress] - Custom onPress handler (defaults to navigation.goBack)
  * @param {Object} [props.style] - Additional styles for the button container
+ * @param {'back'|'rtl'} [props.iconDirection='back'] - Explicit chevron direction
  * 
  * @example
  * // Basic usage (white icon with overlay background)
@@ -36,7 +37,9 @@ export const BackButton = ({
   variant = 'overlay', 
   size = 24, 
   onPress, 
-  style 
+  style,
+  iconDirection = 'back',
+  accessibilityLabel = 'חזרה',
 }) => {
   const navigation = useNavigation();
 
@@ -72,8 +75,14 @@ export const BackButton = ({
       onPress={handlePress}
       style={[styles.button, getBackgroundStyle(), style]}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
     >
-      <Ionicons name="chevron-back" size={size} color={getIconColor()} />
+      <Ionicons
+        name={iconDirection === 'rtl' ? 'chevron-forward' : 'chevron-back'}
+        size={size}
+        color={getIconColor()}
+      />
     </TouchableOpacity>
   );
 };

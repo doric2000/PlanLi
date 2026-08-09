@@ -1,3 +1,5 @@
+import { colors } from './colors';
+
 export const common = {
 	// Screen container
 	container: {
@@ -85,6 +87,11 @@ export const common = {
 
 	iconButtonDark: {
 		backgroundColor: "#F9FAFB",
+	},
+
+	iconButtonFavoriteActive: {
+		backgroundColor: colors.accentAction,
+		borderColor: colors.accentAction,
 	},
 
 	// Hero section (detail screens)

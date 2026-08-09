@@ -1,64 +1,45 @@
-
 import React from 'react';
-import { View, Text, FlatList, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, FlatList, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { common } from '../../../styles/common';
-import { typography } from '../../../styles/typography';
-import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
+
 import CityCard from '../../../components/CityCard';
+import EmptyState from '../../../components/EmptyState';
 import { useFavoriteCityIds } from '../../../hooks/useFavoriteCityIds';
+import { colors } from '../../../styles';
+import { favoritesStyles as styles, getGridTileWidth } from './favoritesStyles';
 
 export default function FavoriteCitiesList({ flatListRef, onScroll }) {
   const navigation = useNavigation();
+  const { width } = useWindowDimensions();
   const { favorites, loading } = useFavoriteCityIds();
+  const columns = width >= 760 ? 3 : 2;
+  const tileWidth = getGridTileWidth(width, columns);
 
-  if (loading) {
-    return (
-      <View style={common.containerCentered}>
-        <ActivityIndicator size="large" color="#49bc8e" />
-      </View>
-    );
-  }
-
-  if (!favorites.length) {
-    return (
-      <View style={common.containerCentered}>
-        <Text style={typography.h2}>היעדים המועדפים שלך</Text>
-        <Text style={typography.body}>לא שמרת יעדים עדיין</Text>
-      </View>
-    );
-  }
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={colors.brand} /></View>;
 
   return (
     <FlatList
+      key={`favorite-destinations-${columns}`}
       ref={flatListRef}
       data={favorites}
+      numColumns={columns}
       keyExtractor={(item) => `${item.countryId}:${item.id}`}
       onScroll={onScroll}
       scrollEventThrottle={16}
-      initialNumToRender={3}
-      maxToRenderPerBatch={3}
-      windowSize={5}
+      columnWrapperStyle={styles.gridRow}
+      contentContainerStyle={styles.listContent}
       renderItem={({ item }) => (
-        <CityCard
-          key={item.id}
-          city={{
-            id: item.id,
-            name: item.name || item.title || 'Unknown',
-            countryId: item.countryId,
-            imageUrl: item.imageUrl,
-            placeholderColor: item.placeholderColor,
-            travelers: item.travelers || 0,
-          }}
-          showTravelers={false}
-          onPress={() => navigation.navigate('LandingPage', {
-            cityId: item.id,
-            countryId: item.countryId
-          })}
-          style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}
-        />
+        <View style={[styles.destinationWrap, { width: tileWidth }]}>
+          <CityCard
+            city={{ ...item, name: item.name || item.title || 'יעד' }}
+            variant="home"
+            showTravelers={false}
+            onPress={() => navigation.navigate('LandingPage', { cityId: item.id, countryId: item.countryId })}
+            style={{ width: '100%' }}
+          />
+        </View>
       )}
-      contentContainerStyle={{ padding: 16, alignItems: 'center' }}
+      ListEmptyComponent={<EmptyState icon="place" title="עוד אין יעדים שמורים" message="יעדים שתשמרו יופיעו כאן." />}
     />
   );
 }

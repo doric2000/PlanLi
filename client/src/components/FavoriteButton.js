@@ -20,24 +20,23 @@ const FavoriteButton = ({
   variant = 'light',
   style,
   snapshotData = {},
-  accessibilityLabel = 'שמירה במועדפים',
+  accessibilityLabel,
 }) => {
   const { isFavorite, toggleFavorite, loading: saving } = useFavorite(type, id, snapshotData);
 
   const getButtonStyle = () => {
     const baseStyle = common.iconButton;
     if (variant === 'overlay') {
-      return [baseStyle, common.iconButtonOverlay, style];
+      return [baseStyle, common.iconButtonOverlay, style, isFavorite && common.iconButtonFavoriteActive];
     }
     if (variant === 'dark') {
-      return [baseStyle, common.iconButtonDark, style];
+      return [baseStyle, common.iconButtonDark, style, isFavorite && common.iconButtonFavoriteActive];
     }
-    return [baseStyle, style];
+    return [baseStyle, style, isFavorite && common.iconButtonFavoriteActive];
   };
 
   const getIconColor = () => {
-    if (variant === 'overlay') return colors.white;
-    if (isFavorite) return colors.primary;
+    if (isFavorite || variant === 'overlay') return colors.white;
     return colors.textSecondary;
   };
 
@@ -47,7 +46,7 @@ const FavoriteButton = ({
       onPress={toggleFavorite}
       disabled={saving}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={accessibilityLabel || (isFavorite ? 'הסרה מהמועדפים' : 'שמירה במועדפים')}
       accessibilityState={{ selected: isFavorite, disabled: saving }}
     >
       <Ionicons

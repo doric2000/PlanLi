@@ -8,6 +8,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
+import { getContentGridColumns } from '../../../components/ContentTile';
 import { colors } from '../../../styles';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import ProfileBioModal from './ProfileBioModal';
@@ -39,7 +40,8 @@ export default function ProfileView({
 }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const styles = useMemo(() => createProfileStyles(insets, width), [insets, width]);
+  const gridColumns = getContentGridColumns(width);
+  const styles = useMemo(() => createProfileStyles(insets, width, gridColumns), [insets, width, gridColumns]);
   const [contentTab, setContentTab] = useState('recommendations');
   const [bioModalVisible, setBioModalVisible] = useState(false);
   const profileListRef = useRef(null);
@@ -89,11 +91,12 @@ export default function ProfileView({
       ) : null}
 
       <FlatList
+        key={`profile-${contentTab}-${gridColumns}`}
         ref={profileListRef}
         data={activeData}
         keyExtractor={(item, index) => String(item?.id || `${contentTab}-${index}`)}
         extraData={contentTab}
-        numColumns={3}
+        numColumns={gridColumns}
         initialNumToRender={6}
         maxToRenderPerBatch={9}
         windowSize={7}

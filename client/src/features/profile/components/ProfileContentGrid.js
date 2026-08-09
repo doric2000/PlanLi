@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
+import React from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
-import CachedImage from '../../../components/CachedImage';
+import ContentTile from '../../../components/ContentTile';
 import { colors } from '../../../styles';
 import { getRecommendationMapVisual } from '../../community/utils/recommendationMap';
 import {
@@ -62,7 +62,6 @@ export function ProfileContentHeader({
   );
 }
 export function ProfileGridTile({ item, contentTab, contentLoading, navigation, styles }) {
-  const [revealed, setRevealed] = useState(false);
   if (contentLoading) return null;
 
   const isRecommendation = contentTab === 'recommendations';
@@ -80,7 +79,6 @@ export function ProfileGridTile({ item, contentTab, contentLoading, navigation, 
   const visual = isRecommendation
     ? getRecommendationMapVisual(item?.categoryId, item?.category)
     : { icon: 'map', color: colors.primary };
-  const showOverlay = Platform.OS === 'web' && revealed;
 
   const handlePress = async () => {
     if (isRecommendation) {
@@ -96,39 +94,15 @@ export function ProfileGridTile({ item, contentTab, contentLoading, navigation, 
   };
 
   return (
-    <Pressable
-      style={styles.gridTile}
+    <ContentTile
+      image={image}
+      title={title}
+      subtitle={subtitle}
+      icon={visual.icon}
+      fallbackColor={visual.color}
       onPress={handlePress}
-      onHoverIn={() => setRevealed(true)}
-      onHoverOut={() => setRevealed(false)}
-      onFocus={() => setRevealed(true)}
-      onBlur={() => setRevealed(false)}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}${subtitle ? `, ${subtitle}` : ''}`}
-    >
-      {image ? (
-        <CachedImage
-          source={{ uri: image }}
-          style={Platform.OS === 'web' ? styles.gridImageWeb : styles.gridImage}
-          contentFit="cover"
-          priority="low"
-        />
-      ) : (
-        <View style={[styles.gridFallback, { backgroundColor: visual.color }]}>
-          <MaterialIcons name={visual.icon} size={34} color={colors.white} />
-        </View>
-      )}
-      <View style={styles.gridShade} pointerEvents="none" />
-      <View style={styles.gridTypeBadge} pointerEvents="none">
-        <MaterialIcons name={visual.icon} size={16} color={colors.white} />
-      </View>
-      {showOverlay ? (
-        <View style={styles.gridOverlay} pointerEvents="none">
-          <Text style={styles.gridOverlayTitle} numberOfLines={1}>{title}</Text>
-          {subtitle ? <Text style={styles.gridOverlaySubtitle} numberOfLines={1}>{subtitle}</Text> : null}
-        </View>
-      ) : null}
-    </Pressable>
+      style={styles.gridTile}
+    />
   );
 }
 
