@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../../components/PageHeader';
@@ -163,13 +165,13 @@ export default function CommunityScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>קהילה</Text>
+          <AppText style={styles.headerTitle}>קהילה</AppText>
         </View>
 
         {mapOpen ? (
           <View style={[styles.sortGlassButton, styles.mapModeSummary]} testID="map-all-recommendations-label">
             <Ionicons name="location" size={16} color="#FFFFFF" />
-            <Text style={styles.sortGlassText}>כל ההמלצות באזור</Text>
+            <AppText style={styles.sortGlassText}>כל ההמלצות באזור</AppText>
           </View>
         ) : (
           <TouchableOpacity
@@ -178,7 +180,7 @@ export default function CommunityScreen({ navigation }) {
             testID="community-sort-button"
           >
             <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
-            <Text style={styles.sortGlassText}>{sortLabel}</Text>
+            <AppText style={styles.sortGlassText}>{sortLabel}</AppText>
           </TouchableOpacity>
         )}
       </View>
@@ -193,14 +195,14 @@ export default function CommunityScreen({ navigation }) {
           <Ionicons name="filter" size={19} color="#FFFFFF" />
           {activeFilterCount > 0 && (
             <View style={filterUiStyles.badge}>
-              <Text style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</Text>
+              <AppText style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</AppText>
             </View>
           )}
         </TouchableOpacity>
 
         <View style={styles.searchPill}>
           <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
-          <TextInput
+          <AppTextInput
             value={filters.query}
             onChangeText={(text) => updateFilters({ query: text })}
             placeholder="חפש המלצה"
@@ -281,17 +283,17 @@ export default function CommunityScreen({ navigation }) {
             ListEmptyComponent={
               <View style={common.emptyState}>
                 <Ionicons name="images-outline" size={50} color={colors.textMuted} />
-                <Text style={common.emptyText}>{error
+                <AppText style={common.emptyText}>{error
                   ? 'לא הצלחנו לטעון תוצאות. משכו מטה כדי לנסות שוב.'
-                  : isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</Text>
+                  : isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</AppText>
                 {isFiltered && (
                   <View style={filterUiStyles.emptyActions}>
                     <TouchableOpacity style={[filterUiStyles.emptyAction, filterUiStyles.emptyActionPrimary]}
                       onPress={() => setFilterModalVisible(true)} accessibilityRole="button">
-                      <Text style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</Text>
+                      <AppText style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</AppText>
                     </TouchableOpacity>
                     <TouchableOpacity style={filterUiStyles.emptyAction} onPress={clearFilters} accessibilityRole="button">
-                      <Text style={filterUiStyles.emptyActionText}>נקה הכול</Text>
+                      <AppText style={filterUiStyles.emptyActionText}>נקה הכול</AppText>
                     </TouchableOpacity>
                   </View>
                 )}

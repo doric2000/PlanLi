@@ -1,3 +1,4 @@
+import { fontFamilies } from "../styles/typography";
 import { StyleSheet } from 'react-native';
 import { colors, shadows, spacing } from '../styles';
 
@@ -28,7 +29,7 @@ export const guidedFormStyles = StyleSheet.create({
   eyebrow: {
     color: '#DCE8F6',
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.medium,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -36,7 +37,7 @@ export const guidedFormStyles = StyleSheet.create({
     color: colors.white,
     fontSize: 24,
     lineHeight: 32,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     marginTop: spacing.xs,
     textAlign: 'right',
     writingDirection: 'rtl',
@@ -109,13 +110,13 @@ export const guidedFormStyles = StyleSheet.create({
   },
   sectionIndexText: {
     color: colors.primary,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 13,
   },
   sectionTitle: {
     color: colors.textPrimary,
     fontSize: 17,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -129,7 +130,7 @@ export const guidedFormStyles = StyleSheet.create({
   },
   sectionSummaryError: {
     color: colors.error,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
   sectionBody: {
     borderTopWidth: 1,
@@ -148,7 +149,7 @@ export const guidedFormStyles = StyleSheet.create({
   continueText: {
     color: colors.white,
     fontSize: 15,
-    fontWeight: '800',
+    fontFamily: fontFamilies.medium,
     writingDirection: 'rtl',
   },
   footer: {
@@ -180,7 +181,7 @@ export const guidedFormStyles = StyleSheet.create({
   submitText: {
     color: colors.white,
     fontSize: 17,
-    fontWeight: '800',
+    fontFamily: fontFamilies.medium,
     writingDirection: 'rtl',
   },
   fieldGroup: {
@@ -189,7 +190,7 @@ export const guidedFormStyles = StyleSheet.create({
   fieldLabel: {
     color: colors.textPrimary,
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: fontFamilies.medium,
     marginBottom: spacing.sm,
     textAlign: 'right',
     writingDirection: 'rtl',
@@ -206,7 +207,7 @@ export const guidedFormStyles = StyleSheet.create({
   fieldError: {
     color: colors.error,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fontFamilies.medium,
     marginTop: spacing.xs,
     textAlign: 'right',
     writingDirection: 'rtl',
@@ -272,7 +273,7 @@ export const guidedFormStyles = StyleSheet.create({
   choiceText: {
     color: colors.textPrimary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: fontFamilies.medium,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -295,7 +296,7 @@ export const guidedFormStyles = StyleSheet.create({
   nestedTitle: {
     color: colors.textPrimary,
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: fontFamilies.medium,
     marginBottom: spacing.sm,
     textAlign: 'right',
     writingDirection: 'rtl',
@@ -313,7 +314,7 @@ export const guidedFormStyles = StyleSheet.create({
   optionalToggleText: {
     color: colors.primary,
     fontSize: 14,
-    fontWeight: '800',
+    fontFamily: fontFamilies.medium,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -345,7 +346,7 @@ export const guidedFormStyles = StyleSheet.create({
   },
   checkboxCheck: {
     color: colors.white,
-    fontWeight: '900',
+    fontFamily: fontFamilies.semiBold,
   },
   checkboxText: {
     flex: 1,

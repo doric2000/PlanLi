@@ -1,5 +1,7 @@
+import { fontFamilies } from "../../../styles/typography";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import AppText from "../../../components/AppText";
 // Firestore imports
 import { collection, getDocs, limit, query, collectionGroup, where } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
@@ -978,7 +980,7 @@ const handleSubmit = async () => {
         <GuidedFormHeader
           currentStep={currentStep}
           totalSteps={RECOMMENDATION_SECTION_ORDER.length}
-          title={isEdit ? 'עריכת ההמלצה' : 'בואו נבנה המלצה מעולה'}
+          title={isEdit ? 'עריכת המלצה' : 'המלצה חדשה'}
           intro="רק המידע הנחוץ מוצג בכל שלב. תמיד אפשר לחזור ולשנות."
           testID="add-rec-guided-header"
         />
@@ -1008,8 +1010,8 @@ const handleSubmit = async () => {
         />
 
         <View style={guidedStyles.fieldGroup}>
-          <Text style={guidedStyles.fieldLabel}>מיקום מדויק (חובה)</Text>
-          <Text style={guidedStyles.fieldHelper}>חפשו ובחרו תוצאה כדי שנוכל לשייך את ההמלצה לעיר הנכונה</Text>
+          <AppText style={guidedStyles.fieldLabel}>מיקום מדויק (חובה)</AppText>
+          <AppText style={guidedStyles.fieldHelper}>חפשו ובחרו תוצאה כדי שנוכל לשייך את ההמלצה לעיר הנכונה</AppText>
           <GooglePlacesInput
             mode="google"
             value={locationQuery}
@@ -1031,9 +1033,9 @@ const handleSubmit = async () => {
             inputTestID="add-rec-location-input"
           />
           {!!validation.fields.location && (
-            <Text style={guidedStyles.fieldError} accessibilityLiveRegion="polite">
+            <AppText style={guidedStyles.fieldError} accessibilityLiveRegion="polite">
               {validation.fields.location}
-            </Text>
+            </AppText>
           )}
 
           {false && !!(locationResolveError && (pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id) && (
@@ -1042,9 +1044,9 @@ const handleSubmit = async () => {
               activeOpacity={0.85}
               style={{ alignSelf: 'flex-end', marginTop: 8 }}
             >
-              <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
+              <AppText style={{ color: colors.primary, fontFamily: fontFamilies.semiBold }}>
                 בחר מדינה ידנית
-              </Text>
+              </AppText>
             </TouchableOpacity>
           )}
 
@@ -1057,9 +1059,9 @@ const handleSubmit = async () => {
               activeOpacity={0.85}
               style={{ alignSelf: 'flex-end', marginTop: 8 }}
             >
-              <Text style={{ color: colors.textSecondary, fontWeight: 'bold' }}>
+              <AppText style={{ color: colors.textSecondary, fontFamily: fontFamilies.semiBold }}>
                 שנה מדינה
-              </Text>
+              </AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -1070,7 +1072,7 @@ const handleSubmit = async () => {
           <GuidedFormSection
             id="story"
             index={2}
-            title="הסיפור והתמונות"
+            title="פרטים ותמונות"
             summary={storySummary}
             expanded={expandedSection === 'story'}
             completed={sectionIsComplete('story')}
@@ -1092,8 +1094,8 @@ const handleSubmit = async () => {
           testID="add-rec-description-input"
         />
 
-        <Text style={guidedStyles.fieldLabel}>תמונות (רשות)</Text>
-        <Text style={guidedStyles.fieldHelper}>אפשר להוסיף עד חמש תמונות ולמחוק את התמונה המוצגת</Text>
+        <AppText style={guidedStyles.fieldLabel}>תמונות (רשות)</AppText>
+        <AppText style={guidedStyles.fieldHelper}>אפשר להוסיף עד חמש תמונות ולמחוק את התמונה המוצגת</AppText>
         <ImagePickerBox
           imageUris={editablePreviewUris}
           onPress={handleAddImages}
@@ -1121,7 +1123,7 @@ const handleSubmit = async () => {
             testIDPrefix="add-rec-section"
           >
             <RtlChoiceGroup
-              label="מה הכי מתאים להמלצה?"
+              label="קטגוריה ראשית"
               helper="בחרו קטגוריה אחת. הרשימה מתחילה מימין."
               options={PARENT_CATEGORIES}
               selectedIds={category ? [category] : []}
@@ -1134,7 +1136,7 @@ const handleSubmit = async () => {
             />
             {category ? (
               <View style={guidedStyles.nestedPanel}>
-                <Text style={guidedStyles.nestedTitle}>תתי־קטגוריות · {categoryLabel}</Text>
+                <AppText style={guidedStyles.nestedTitle}>תתי־קטגוריות · {categoryLabel}</AppText>
                 <RtlChoiceGroup
                   helper="אפשר לבחור יותר מאחת"
                   options={TAG_OPTIONS_BY_CATEGORY[category] || []}
@@ -1147,7 +1149,7 @@ const handleSubmit = async () => {
                 />
               </View>
             ) : (
-              <Text style={guidedStyles.fieldHelper}>אחרי בחירת קטגוריה יוצגו כאן האפשרויות המתאימות בלבד.</Text>
+              <AppText style={guidedStyles.fieldHelper}>אחרי בחירת קטגוריה יוצגו כאן האפשרויות המתאימות בלבד.</AppText>
             )}
           </GuidedFormSection>
         </View>
@@ -1156,7 +1158,7 @@ const handleSubmit = async () => {
           <GuidedFormSection
             id="fit"
             index={4}
-            title="למי זה מתאים"
+            title="קהל ומאפיינים"
             summary={fitSummary || 'מחיר, קהל ומאפיינים'}
             expanded={expandedSection === 'fit'}
             completed={sectionIsComplete('fit')}
@@ -1177,7 +1179,7 @@ const handleSubmit = async () => {
         />
 
         <RtlChoiceGroup
-          label="למי זה מתאים?"
+          label="קהל יעד"
           options={[
             { id: 'all', label: 'מתאים לכולם' },
             { id: 'selected', label: 'בחירת קהלים' },
@@ -1246,8 +1248,8 @@ const handleSubmit = async () => {
               accessibilityState={{ expanded: optionalFitOpen }}
               testID="add-rec-optional-toggle"
             >
-              <Text style={guidedStyles.optionalToggleText}>מידע מעשי ונגישות (רשות)</Text>
-              <Text style={guidedStyles.optionalToggleText}>{optionalFitOpen ? '−' : '+'}</Text>
+              <AppText style={guidedStyles.optionalToggleText}>מידע מעשי ונגישות (רשות)</AppText>
+              <AppText style={guidedStyles.optionalToggleText}>{optionalFitOpen ? '−' : '+'}</AppText>
             </TouchableOpacity>
             {optionalFitOpen ? (
               <View style={guidedStyles.nestedPanel}>
@@ -1272,12 +1274,12 @@ const handleSubmit = async () => {
                     testID="add-rec-needs-confirmed"
                   >
                     <View style={[guidedStyles.checkboxBox, needsConfirmed && guidedStyles.checkboxBoxChecked]}>
-                      {needsConfirmed ? <Text style={guidedStyles.checkboxCheck}>✓</Text> : null}
+                      {needsConfirmed ? <AppText style={guidedStyles.checkboxCheck}>✓</AppText> : null}
                     </View>
-                    <Text style={guidedStyles.checkboxText}>אישרתי שהמידע הזה צוין או נבדק במפורש</Text>
+                    <AppText style={guidedStyles.checkboxText}>אישרתי שהמידע הזה צוין או נבדק במפורש</AppText>
                   </TouchableOpacity>
                 ) : null}
-                {!!validation.fields.needsConfirmed && <Text style={guidedStyles.fieldError}>{validation.fields.needsConfirmed}</Text>}
+                {!!validation.fields.needsConfirmed && <AppText style={guidedStyles.fieldError}>{validation.fields.needsConfirmed}</AppText>}
               </View>
             ) : null}
           </>

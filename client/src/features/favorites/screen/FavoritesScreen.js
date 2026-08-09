@@ -47,7 +47,7 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
-      <PageHeader variant="hero" title="המועדפים שלי" subtitle="כל מה ששמרת למסע הבא" />
+      <PageHeader variant="hero" title="מועדפים" />
       <SegmentedTabs tabs={TABS} value={activeTab} onChange={setActiveTab} style={styles.headerTabs} />
       <View style={{ flex: 1 }}>
         {activeTab === 'destinations' ? <FavoriteCitiesList flatListRef={citiesListRef} onScroll={onScroll} /> : null}
@@ -63,7 +63,7 @@ export default function FavoritesScreen() {
             data={[]}
             onScroll={onScroll}
             contentContainerStyle={styles.listContent}
-            ListEmptyComponent={<EmptyState icon="auto-awesome" title="טיולים חכמים — בקרוב" message="מתכנן הטיולים החכם יופיע כאן כשיהיה מוכן." />}
+            ListEmptyComponent={<EmptyState icon="map" title="טיולים חכמים — בקרוב" message="מתכנן הטיולים החכם יופיע כאן כשיהיה מוכן." />}
           />
         ) : null}
       </View>

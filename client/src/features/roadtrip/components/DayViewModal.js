@@ -1,5 +1,6 @@
 import React from "react";
-import { Linking, Modal, SafeAreaView, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Linking, Modal, SafeAreaView, ScrollView, TouchableOpacity, View } from "react-native";
+import AppText from "../../../components/AppText";
 import { Ionicons } from "@expo/vector-icons";
 
 import CachedImage from "../../../components/CachedImage";
@@ -37,7 +38,7 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 					<TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.8}>
 						<Ionicons name="close" size={22} color={colors.textSecondary} />
 					</TouchableOpacity>
-					<Text style={styles.headerTitle}>{text.day} {dayIndex + 1}</Text>
+					<AppText style={styles.headerTitle}>{text.day} {dayIndex + 1}</AppText>
 					<View style={styles.headerSpacer} />
 				</View>
 
@@ -58,14 +59,14 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 					)}
 
 					<View style={styles.descriptionContainer}>
-						<Text style={styles.label}>{text.dayStory}</Text>
-						<Text style={styles.description}>
+						<AppText style={styles.label}>{text.dayStory}</AppText>
+						<AppText style={styles.description}>
 							{dayData.description || text.noDayDescription}
-						</Text>
+						</AppText>
 					</View>
 
 					<View style={styles.stopsContainer}>
-						<Text style={styles.label}>{text.stops}</Text>
+						<AppText style={styles.label}>{text.stops}</AppText>
 						{stops.length > 0 ? (
 							stops.map((stop, index) => (
 								<TouchableOpacity
@@ -89,32 +90,32 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 										/>
 									) : (
 										<View style={styles.stopNumberBadge}>
-											<Text style={styles.stopNumberText}>{index + 1}</Text>
+											<AppText style={styles.stopNumberText}>{index + 1}</AppText>
 										</View>
 									)}
 
 									<View style={styles.stopTextWrap}>
-										<Text style={styles.stopTitle} numberOfLines={1}>
+										<AppText style={styles.stopTitle} numberOfLines={1}>
 											{stop.title}
-										</Text>
+										</AppText>
 										{!!stop.description && (
-											<Text style={styles.stopDescription} numberOfLines={3}>
+											<AppText style={styles.stopDescription} numberOfLines={3}>
 												{stop.description}
-											</Text>
+											</AppText>
 										)}
-										<Text style={styles.stopAddress} numberOfLines={2}>
+										<AppText style={styles.stopAddress} numberOfLines={2}>
 											{stop.place?.address || stop.location || stop.place?.name}
-										</Text>
+										</AppText>
 									</View>
 
 									<View style={styles.mapIconWrap}>
 										<Ionicons name="map-outline" size={18} color={colors.primary} />
-										<Text style={styles.mapIconText}>{text.maps}</Text>
+										<AppText style={styles.mapIconText}>{text.maps}</AppText>
 									</View>
 								</TouchableOpacity>
 							))
 						) : (
-							<Text style={styles.emptyStopsText}>{text.noStops}</Text>
+							<AppText style={styles.emptyStopsText}>{text.noStops}</AppText>
 						)}
 					</View>
 				</ScrollView>

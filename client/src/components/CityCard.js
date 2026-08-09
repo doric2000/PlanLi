@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, TouchableOpacity, Platform } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { cards, cityCardStyles as styles } from '../styles';
 import CachedImage from './CachedImage';
+import PreferenceContextLine from './PreferenceContextLine';
 
 const DEFAULT_CITY_IMAGE_URL = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
 
@@ -41,6 +43,7 @@ export default function CityCard({
   const countryName = city?.country || city?.countryName || city?.countryId || '';
   const travelers = city?.travelers ?? 0;
   const effectiveSaved = Boolean(saved);
+  const personalizationReasonCode = city?.personalization?.reasonCodes?.[0];
 
   return (
     <TouchableOpacity
@@ -84,26 +87,27 @@ export default function CityCard({
         )}
       </View>
       <View style={infoStyle}>
-        <Text
+        <AppText
           style={isHomeVariant ? styles.homeCity : cards.popularCity}
           numberOfLines={1}
           testID="city-card"
         >
           {cityName}
-        </Text>
-        <Text
+        </AppText>
+        <AppText
           style={isHomeVariant ? styles.homeCountry : cards.popularCountry}
           numberOfLines={1}
         >
           {countryName}
-        </Text>
+        </AppText>
+        <PreferenceContextLine reasonCode={personalizationReasonCode} />
         {showTravelers && (
           <View style={isHomeVariant ? styles.homeMetaRow : cards.popularTravelerRow}>
             <View style={isHomeVariant ? styles.homeMetaItem : cards.popularTravelerRow}>
               <Ionicons name="location-outline" size={13} color={isHomeVariant ? '#1B2D7A' : '#666'} />
-              <Text style={isHomeVariant ? styles.homeTravelerText : cards.popularTravelerText}>
+              <AppText style={isHomeVariant ? styles.homeTravelerText : cards.popularTravelerText}>
                 {travelers} מטיילים
-              </Text>
+              </AppText>
             </View>
           </View>
         )}

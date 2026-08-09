@@ -3,11 +3,11 @@ import {
 	FlatList,
 	Platform,
 	Pressable,
-	Text,
 	TouchableOpacity,
 	useWindowDimensions,
 	View,
 } from "react-native";
+import AppText from "../../../components/AppText";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +19,7 @@ import PlacesRoute from "./PlacesRoute";
 import { ActionMenu } from "../../../components/ActionMenu";
 import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
+import PreferenceContextLine from "../../../components/PreferenceContextLine";
 import { cards, tags as tagsStyle, routeCardStyles as styles } from "../../../styles";
 import { auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
@@ -32,7 +33,6 @@ import {
 	ROUTE_DIFFICULTIES,
 	TRANSPORT_MODES,
 } from "../../../constants/travelTaxonomy";
-import { getPersonalizationReasonLabel } from "../../profile/constants/smartProfileOptions";
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
@@ -67,12 +67,12 @@ const RenderTags = ({ tags }) => {
 			<ScrollViewLike>
 				{visibleTags.map((tag, idx) => (
 					<View key={`${tag}:${idx}`} style={tagsStyle.item}>
-						<Text style={tagsStyle.text}>#{tag}</Text>
+						<AppText style={tagsStyle.text}>#{tag}</AppText>
 					</View>
 				))}
 				{!showAll && hasMore && (
 					<TouchableOpacity onPress={() => setShowAll(true)} activeOpacity={0.8}>
-						<Text style={styles.moreTagsText}>+{tags.length - MAX_VISIBLE}</Text>
+						<AppText style={styles.moreTagsText}>+{tags.length - MAX_VISIBLE}</AppText>
 					</TouchableOpacity>
 				)}
 			</ScrollViewLike>
@@ -212,18 +212,18 @@ export const RouteCard = ({
 					/>
 				</View>
 				<View style={styles.feedAuthorTextWrap}>
-					<Text style={[cards.recUsername, styles.feedUsername]} numberOfLines={1}>
+					<AppText style={[cards.recUsername, styles.feedUsername]} numberOfLines={1}>
 						{displayUser}
-					</Text>
+					</AppText>
 					{!!item.createdAt && (
-						<Text style={[cards.recDate, styles.feedMetaText]} numberOfLines={1}>
+						<AppText style={[cards.recDate, styles.feedMetaText]} numberOfLines={1}>
 							{formatTimestamp(item.createdAt)}
-						</Text>
+						</AppText>
 					)}
 					{places.length > 0 && (
-						<Text style={styles.feedMetaText} numberOfLines={1}>
+						<AppText style={styles.feedMetaText} numberOfLines={1}>
 							{places.join(" • ")}
-						</Text>
+						</AppText>
 					)}
 				</View>
 			</TouchableOpacity>
@@ -281,7 +281,7 @@ export const RouteCard = ({
 			) : (
 				<View style={styles.feedImagePlaceholder}>
 					<Ionicons name="map-outline" size={54} color="rgba(255,255,255,0.62)" />
-					<Text style={styles.feedPlaceholderText}>{text.noImage}</Text>
+					<AppText style={styles.feedPlaceholderText}>{text.noImage}</AppText>
 				</View>
 			)}
 
@@ -352,16 +352,16 @@ export const RouteCard = ({
 	const renderContent = (feed = false) => {
 		const difficultyLabel = getOptionLabel(ROUTE_DIFFICULTIES, item.difficulty);
 		const transportLabel = getOptionLabel(TRANSPORT_MODES, item.transportModes?.[0]);
-		const personalizationReason = getPersonalizationReasonLabel(item?.personalization?.reasonCodes?.[0]);
+		const personalizationReasonCode = item?.personalization?.reasonCodes?.[0];
 		const content = (
 			<View style={[cards.recContent, feed && styles.feedContent]}>
 				<View style={cards.recTitleRow}>
-					<Text style={[cards.recTitle, feed && styles.feedTitle]} numberOfLines={1}>
+					<AppText style={[cards.recTitle, feed && styles.feedTitle]} numberOfLines={1}>
 						{item.title}
-					</Text>
+					</AppText>
 					{difficultyLabel ? (
 						<View style={cards.recCategoryChip}>
-							<Text style={cards.recCategoryText}>{difficultyLabel}</Text>
+							<AppText style={cards.recCategoryText}>{difficultyLabel}</AppText>
 						</View>
 					) : null}
 				</View>
@@ -370,19 +370,19 @@ export const RouteCard = ({
 					{item.dayCount ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="calendar-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{item.dayCount} {text.days}</Text>
+							<AppText style={styles.metaText}>{item.dayCount} {text.days}</AppText>
 						</View>
 					) : null}
 					{item.distanceKm ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="navigate-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{item.distanceKm} {text.km}</Text>
+							<AppText style={styles.metaText}>{item.distanceKm} {text.km}</AppText>
 						</View>
 					) : null}
 					{transportLabel ? (
 						<View style={styles.metaPill}>
 							<Ionicons name="trail-sign-outline" size={14} color="#1F2937" />
-							<Text style={styles.metaText}>{transportLabel}</Text>
+							<AppText style={styles.metaText}>{transportLabel}</AppText>
 						</View>
 					) : null}
 				</View>
@@ -393,25 +393,24 @@ export const RouteCard = ({
 					</View>
 				) : null}
 
-				{!!personalizationReason && (
-					<View style={styles.locationRow}>
-						<Ionicons name="sparkles-outline" size={14} color="#2EC4B6" />
-						<Text style={cards.recLocationText}>{personalizationReason}</Text>
-					</View>
-				)}
+				<PreferenceContextLine
+					reasonCode={personalizationReasonCode}
+					style={styles.locationRow}
+					textStyle={cards.recLocationText}
+				/>
 
 				{places.length > 0 ? (
 					<View style={styles.locationRow}>
 						<Ionicons name="location-outline" size={14} color="#2EC4B6" />
-						<Text style={cards.recLocationText}>
+						<AppText style={cards.recLocationText}>
 							{places.join(" • ")}
-						</Text>
+						</AppText>
 					</View>
 				) : null}
 
-				<Text style={[cards.recDescription, feed && styles.feedDescription]} numberOfLines={feed ? 2 : 3}>
+				<AppText style={[cards.recDescription, feed && styles.feedDescription]} numberOfLines={feed ? 2 : 3}>
 					{item.description}
-				</Text>
+				</AppText>
 
 				<RenderTags tags={allTags} />
 			</View>
@@ -443,9 +442,9 @@ export const RouteCard = ({
 						displayName={displayUser}
 					/>
 					<View>
-						<Text style={cards.recUsername}>{displayUser}</Text>
+						<AppText style={cards.recUsername}>{displayUser}</AppText>
 						{item.createdAt && (
-							<Text style={cards.recDate}>{formatTimestamp(item.createdAt)}</Text>
+							<AppText style={cards.recDate}>{formatTimestamp(item.createdAt)}</AppText>
 						)}
 					</View>
 				</View>

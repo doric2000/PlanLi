@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, TouchableOpacity, View } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { activeFiltersListStyles as styles, colors } from '../styles';
 import {
@@ -43,7 +44,7 @@ function Chip({ text, onRemove }) {
       <TouchableOpacity onPress={onRemove} accessibilityRole="button" accessibilityLabel={`הסר ${text}`}>
         <Ionicons name="close-circle" size={18} color={colors.white} />
       </TouchableOpacity>
-      <Text style={styles.chipText}>{text}</Text>
+      <AppText style={styles.chipText}>{text}</AppText>
     </View>
   );
 }
@@ -69,10 +70,10 @@ export default function DiscoveryActiveFiltersList({
       <View style={styles.summaryRow}>
         {!!onClear && (
           <TouchableOpacity onPress={onClear} accessibilityRole="button" testID="active-filters-clear">
-            <Text style={styles.clearText}>נקה הכול</Text>
+            <AppText style={styles.clearText}>נקה הכול</AppText>
           </TouchableOpacity>
         )}
-        <Text style={styles.summaryText}>{activeCount} מסננים פעילים</Text>
+        <AppText style={styles.summaryText}>{activeCount} מסננים פעילים</AppText>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {!!filters.query && <Chip text={filters.query} onRemove={() => onRemove?.('query')} />}

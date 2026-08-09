@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, TouchableOpacity } from "react-native";
+import AppText from "./AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { useLikes } from "../features/community/hooks/useLikes";
 import { useCommentsCount } from "../features/community/hooks/useCommentsCount";
@@ -68,7 +69,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 				<TouchableOpacity
 					onPress={() => likeCount > 0 && setShowLikesModal(true)}
 				>
-					<Text
+					<AppText
 						style={[
 							cards.recLikeCount,
 							likeCount > 0 && cards.recLikeCountClickable,
@@ -76,7 +77,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 						]}
 					>
 						{likeCount > 0 ? `${likeCount} לייקים` : ""}
-					</Text>
+					</AppText>
 				</TouchableOpacity>
 
 				<TouchableOpacity
@@ -88,9 +89,9 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 						size={isOverlay ? 25 : 22}
 						color={isOverlay ? "#FFFFFF" : "#4B5563"}
 					/>
-					<Text style={[cards.recActionText, isOverlay && styles.overlayText]}>
+					<AppText style={[cards.recActionText, isOverlay && styles.overlayText]}>
 						תגובות {commentsCount > 0 && `(${commentsCount})`}
-					</Text>
+					</AppText>
 				</TouchableOpacity>
 			</View>
 

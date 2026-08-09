@@ -153,6 +153,11 @@ describe('HomeScreenSearchTest', () => {
     );
 
     await waitFor(() => expect(screen.getAllByTestId('city-card')).toHaveLength(2));
+    expect(screen.getByText('לאן נוסעים?')).toBeTruthy();
+    expect(screen.getByText('מומלצים עכשיו')).toBeTruthy();
+    expect(screen.queryByText('חם עכשיו')).toBeNull();
+    expect(screen.queryByText('בחירת הקהילה')).toBeNull();
+    expect(screen.queryByText('חדש')).toBeNull();
     fireEvent.press(screen.getByLabelText('סינון יעדים'));
     expect(screen.getByText('סינון יעדים')).toBeTruthy();
     expect(screen.getByText('הכי פופולריים')).toBeTruthy();

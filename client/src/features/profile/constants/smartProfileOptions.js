@@ -18,6 +18,7 @@ import {
   TRAVELER_STYLES,
   VIBES,
 } from '../../../constants/travelTaxonomy';
+import { getPersonalizationReasonPresentation } from '../../../constants/travelPresentation';
 
 export const TRAVEL_STYLES = BUDGETS;
 export const TRIP_TYPES = TRAVEL_PARTIES;
@@ -36,11 +37,5 @@ export const PACE_LABELS = labelMapFromOptions(PACES);
 export const NEED_LABELS = labelMapFromOptions(NEEDS);
 
 export function getPersonalizationReasonLabel(reasonCode) {
-  if (typeof reasonCode !== 'string') return '';
-  if (reasonCode === 'budget') return 'מתאים לתקציב שלך';
-  const [kind, value] = reasonCode.split(':');
-  if (kind === 'interest' && INTEREST_LABELS[value]) return `מתאים ל${INTEREST_LABELS[value]}`;
-  if (kind === 'party' && PARTY_LABELS[value]) return `מתאים ל${PARTY_LABELS[value]}`;
-  if (kind === 'style' && TRAVELER_STYLE_LABELS[value]) return `מתאים ל${TRAVELER_STYLE_LABELS[value]}`;
-  return '';
+  return getPersonalizationReasonPresentation(reasonCode)?.label || '';
 }

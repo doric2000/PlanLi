@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, TextInput } from 'react-native';
+import { View } from 'react-native';
+import AppText from "./AppText";
+import AppTextInput from "./AppTextInput";
 import { common, spacing } from '../styles';
 
 export default function MinMaxInputs({
@@ -15,20 +17,20 @@ export default function MinMaxInputs({
   return (
     <View style={{ marginTop: spacing.md }}>
       {!!label && (
-        <Text style={common.modalLabel}>
+        <AppText style={common.modalLabel}>
           {label}{unitSuffix ? ` (${unitSuffix})` : ''}
-        </Text>
+        </AppText>
       )}
 
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <TextInput
+        <AppTextInput
           style={[common.modalInput, { flex: 1, textAlign: 'center' }]}
           placeholder={minPlaceholder}
           keyboardType="numeric"
           value={String(minValue ?? '')}
           onChangeText={onChangeMin}
         />
-        <TextInput
+        <AppTextInput
           style={[common.modalInput, { flex: 1, textAlign: 'center' }]}
           placeholder={maxPlaceholder}
           keyboardType="numeric"

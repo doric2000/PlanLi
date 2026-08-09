@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -27,9 +28,9 @@ function Chip({ option, selected, onPress, testID }) {
   return (
     <TouchableOpacity testID={testID} onPress={onPress}
       style={[tags.filterChip, selected && tags.filterChipSelected]} activeOpacity={0.8}>
-      <Text style={[tags.filterChipText, selected && tags.filterChipTextSelected]}>
+      <AppText style={[tags.filterChipText, selected && tags.filterChipTextSelected]}>
         {option.label}{option.helper ? ` · ${option.helper}` : ''}
-      </Text>
+      </AppText>
     </TouchableOpacity>
   );
 }
@@ -126,8 +127,8 @@ export default function EditProfileScreen({ navigation }) {
 
   const section = (title, options, values, onPress, prefix, help) => (
     <View style={[cards.card, preferenceStyles.editSectionCard]}>
-      <Text style={styles.sectionLabel}>{title}</Text>
-      {!!help && <Text style={preferenceStyles.editSectionHelp}>{help}</Text>}
+      <AppText style={styles.sectionLabel}>{title}</AppText>
+      {!!help && <AppText style={preferenceStyles.editSectionHelp}>{help}</AppText>}
       <View style={[tags.chipRow, preferenceStyles.editChipRow]}>
         {options.map((option) => <Chip key={option.value} option={option} selected={values.includes(option.value)}
           onPress={() => onPress(option.value)} testID={`${prefix}-${option.value}`} />)}
@@ -148,7 +149,7 @@ export default function EditProfileScreen({ navigation }) {
           {section('קצב מועדף', PACES, profile.pace ? [profile.pace] : [], (value) => setProfile((p) => ({ ...p, pace: p.pace === value ? '' : value })), 'edit-pace')}
           {section('צרכים והעדפות', NEEDS, profile.needs, (value) => toggle('needs', value, NEEDS.length), 'edit-need')}
           <TouchableOpacity testID="edit-preferences-save" style={[buttons.submit, saving && buttons.disabled]} onPress={save} disabled={saving}>
-            {saving ? <ActivityIndicator color={colors.white} /> : <Text style={buttons.submitText}>שמור העדפות</Text>}
+            {saving ? <ActivityIndicator color={colors.white} /> : <AppText style={buttons.submitText}>שמור העדפות</AppText>}
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>

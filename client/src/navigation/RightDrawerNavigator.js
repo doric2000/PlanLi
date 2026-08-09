@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { Alert, View, Text, TouchableOpacity } from 'react-native';
+import { Alert, View, TouchableOpacity } from 'react-native';
+import AppText from "../components/AppText";
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import { MaterialIcons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
@@ -135,7 +136,7 @@ const handleSignOut = useCallback(() => {
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={{ flexGrow: 1 }}>
       <View style={{ padding: 16 }}>
-        <Text style={[typography.sectionTitle, { marginBottom: 12, textAlign: 'right' }]}>תפריט</Text>
+        <AppText style={[typography.sectionTitle, { marginBottom: 12, textAlign: 'right' }]}>תפריט</AppText>
 
         <ProfileMenuList 
           items={isGuest ? GUEST_MENU_ITEMS : (isAdmin ? [...MENU_ITEMS, ADMIN_MENU_ITEM] : MENU_ITEMS)} 
@@ -148,11 +149,11 @@ const handleSignOut = useCallback(() => {
         {!isGuest && (
           <TouchableOpacity style={buttons.signOut} onPress={handleSignOut} activeOpacity={0.85}>
             <MaterialIcons name="logout" size={20} color={colors.error} />
-            <Text style={buttons.signOutText}>התנתקות</Text>
+            <AppText style={buttons.signOutText}>התנתקות</AppText>
           </TouchableOpacity>
         )}
 
-        <Text style={typography.profileVersion}>גרסה {appConfig.expo.version}</Text>
+        <AppText style={typography.profileVersion}>גרסה {appConfig.expo.version}</AppText>
       </View>
     </DrawerContentScrollView>
   );

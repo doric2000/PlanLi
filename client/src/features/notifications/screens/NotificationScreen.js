@@ -13,7 +13,8 @@
  */
 
 import React from 'react';
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -109,10 +110,10 @@ export default function NotificationScreen() {
   const renderEmptyState = () => (
     <View style={notificationStyles.emptyContainer}>
       <Ionicons name="notifications-off-outline" size={80} color="#6C757D" />
-      <Text style={notificationStyles.emptyTitle}>אין התראות</Text>
-      <Text style={notificationStyles.emptySubtitle}>
+      <AppText style={notificationStyles.emptyTitle}>אין התראות</AppText>
+      <AppText style={notificationStyles.emptySubtitle}>
         כשמישהו עושה לייק או מגיב לפוסטים שלך, זה יופיע כאן
-      </Text>
+      </AppText>
     </View>
   );
 
@@ -131,7 +132,7 @@ export default function NotificationScreen() {
         ) : (
           <>
             <Ionicons name="trash-outline" size={18} color="#1E3A5F" />
-            <Text style={notificationStyles.clearButtonText}>נקה הכל</Text>
+            <AppText style={notificationStyles.clearButtonText}>נקה הכל</AppText>
           </>
         )}
       </TouchableOpacity>
@@ -159,8 +160,8 @@ export default function NotificationScreen() {
     return (
       <View style={styles.header}>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>התראות</Text>
-          {subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}
+          <AppText style={styles.headerTitle}>התראות</AppText>
+          {subtitle ? <AppText style={styles.headerSubtitle}>{subtitle}</AppText> : null}
         </View>
 
         <View style={styles.headerSideLeft}>{renderHeaderLeft()}</View>

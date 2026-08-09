@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
-  Modal,
-  Text,
-  TouchableOpacity,
-  View,
+	ActivityIndicator,
+	FlatList,
+	Modal,
+	TouchableOpacity,
+	View,
 } from 'react-native';
+import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import {
   collection,
@@ -53,7 +53,7 @@ const LikesModal = ({ visible, onClose, collectionName, itemId, likeCount = 0 })
   const renderUser = ({ item }) => (
     <View style={common.userItem}>
       <Avatar photoURL={item.photoURL} displayName={item.displayName} size={44} />
-      <Text style={common.userNameText}>{item.displayName}</Text>
+      <AppText style={common.userNameText}>{item.displayName}</AppText>
       <Ionicons name="heart" size={16} color={colors.heart} />
     </View>
   );
@@ -65,7 +65,7 @@ const LikesModal = ({ visible, onClose, collectionName, itemId, likeCount = 0 })
         <View style={common.likesModalContainer}>
           <View style={common.handleBar} />
           <View style={common.likesHeader}>
-            <Text style={common.likesTitle}>{likeCount} לייקים</Text>
+            <AppText style={common.likesTitle}>{likeCount} לייקים</AppText>
             <TouchableOpacity onPress={onClose} style={common.likesCloseButton}>
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
@@ -80,7 +80,7 @@ const LikesModal = ({ visible, onClose, collectionName, itemId, likeCount = 0 })
                 data={users}
                 renderItem={renderUser}
                 keyExtractor={(item) => item.id}
-                ListEmptyComponent={<Text style={common.emptyText}>אין עדיין לייקים</Text>}
+                ListEmptyComponent={<AppText style={common.emptyText}>אין עדיין לייקים</AppText>}
                 showsVerticalScrollIndicator={false}
               />
             )}

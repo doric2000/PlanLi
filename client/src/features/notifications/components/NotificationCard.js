@@ -7,7 +7,8 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../../../components/Avatar';
 import { formatNotificationMessage } from '../models/NotificationModel';
@@ -67,13 +68,13 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
           <View style={notifications.cardTypeIconContainer}>{getTypeIcon()}</View>
         </View>
         <View style={notifications.cardBody}>
-          <Text style={notifications.cardMessage} numberOfLines={2}>{message}</Text>
-          <Text style={notifications.cardPostTitle} numberOfLines={1}>"{postTitle}"</Text>
+          <AppText style={notifications.cardMessage} numberOfLines={2}>{message}</AppText>
+          <AppText style={notifications.cardPostTitle} numberOfLines={1}>"{postTitle}"</AppText>
           <View style={notifications.cardFooter}>
             <View style={notifications.cardPostTypeBadge}>
-              <Text style={notifications.cardPostTypeText}>{getPostTypeLabel()}</Text>
+              <AppText style={notifications.cardPostTypeText}>{getPostTypeLabel()}</AppText>
             </View>
-            <Text style={notifications.cardTimestamp}>{timeString}</Text>
+            <AppText style={notifications.cardTimestamp}>{timeString}</AppText>
           </View>
         </View>
       </View>

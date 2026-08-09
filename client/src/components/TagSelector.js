@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, ScrollView, TouchableOpacity } from "react-native";
+import AppText from "./AppText";
 import { tags as tagsStyle, spacing } from "../styles";
 
 /**
@@ -65,7 +66,7 @@ export const TagSelector = ({
 
     return (
         <View style={tagsStyle.container}>
-            {label && <Text style={tagsStyle.sectionLabel}>{label}</Text>}
+            {label && <AppText style={tagsStyle.sectionLabel}>{label}</AppText>}
             <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -83,14 +84,14 @@ export const TagSelector = ({
                         ]}
                         onPress={() => handlePress(tag)}
                     >
-                        <Text
+                        <AppText
                             style={[
                                 tagsStyle.chipText,
                                 isSelected(tag) && tagsStyle.chipTextSelected,
                             ]}
                         >
                             {tag}
-                        </Text>
+                        </AppText>
                     </TouchableOpacity>
                 ))}
             </ScrollView>

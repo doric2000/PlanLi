@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -281,10 +282,10 @@ export default function CommunityInlineMap({
     return (
       <View style={community.inlineMapEmpty} testID="map-missing-key">
         <Ionicons name="map-outline" size={40} color="#6B7280" />
-        <Text style={community.inlineMapEmptyTitle}>המפה עדיין לא הוגדרה</Text>
-        <Text style={community.inlineMapEmptyText}>
+        <AppText style={community.inlineMapEmptyTitle}>המפה עדיין לא הוגדרה</AppText>
+        <AppText style={community.inlineMapEmptyText}>
           מפת הרקע אינה מוגדרת בסביבה הזו. שאר האפליקציה זמינה כרגיל.
-        </Text>
+        </AppText>
       </View>
     );
   }
@@ -316,40 +317,40 @@ export default function CommunityInlineMap({
           testID="map-search-this-area"
         >
           <Ionicons name="search" size={17} color="#FFFFFF" />
-          <Text style={community.mapSearchAreaText}>חיפוש באזור זה</Text>
+          <AppText style={community.mapSearchAreaText}>חיפוש באזור זה</AppText>
         </TouchableOpacity>
       )}
 
       {status === 'denied' && (
         <TouchableOpacity style={community.mapLocationNotice} onPress={startTracking}>
           <Ionicons name="location-outline" size={17} color="#1E3A5F" />
-          <Text style={community.mapLocationNoticeText}>אפשר להפעיל מיקום כדי למצוא המלצות קרובות</Text>
+          <AppText style={community.mapLocationNoticeText}>אפשר להפעיל מיקום כדי למצוא המלצות קרובות</AppText>
         </TouchableOpacity>
       )}
 
       {(truncated || zoomInRequired) && (
         <View style={community.mapZoomNotice} pointerEvents="none">
-          <Text style={community.mapZoomNoticeText}>יש כאן הרבה המלצות — התקרבו כדי לראות את כולן</Text>
+          <AppText style={community.mapZoomNoticeText}>יש כאן הרבה המלצות — התקרבו כדי לראות את כולן</AppText>
         </View>
       )}
 
       {loading && (
         <View style={community.mapLoadingPill} pointerEvents="none">
           <ActivityIndicator size="small" color="#1E3A5F" />
-          <Text style={community.mapLoadingText}>טוען המלצות באזור…</Text>
+          <AppText style={community.mapLoadingText}>טוען המלצות באזור…</AppText>
         </View>
       )}
 
       {!!error && !loading && (
         <TouchableOpacity style={community.mapErrorPill} onPress={searchCurrentViewport}>
           <Ionicons name="refresh" size={17} color="#991B1B" />
-          <Text style={community.mapErrorText}>לא הצלחנו לטעון. לחצו לניסיון נוסף</Text>
+          <AppText style={community.mapErrorText}>לא הצלחנו לטעון. לחצו לניסיון נוסף</AppText>
         </TouchableOpacity>
       )}
 
       {!loading && !error && searchedRef.current && mapItems.length === 0 && !zoomInRequired && (
         <View style={community.mapEmptyPill} pointerEvents="none">
-          <Text style={community.mapEmptyPillText}>אין המלצות באזור המוצג</Text>
+          <AppText style={community.mapEmptyPillText}>אין המלצות באזור המוצג</AppText>
         </View>
       )}
 

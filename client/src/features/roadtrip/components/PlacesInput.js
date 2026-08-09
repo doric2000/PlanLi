@@ -1,6 +1,12 @@
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
-	View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+	View,
+	TouchableOpacity,
+	FlatList,
+	ActivityIndicator,
+} from "react-native";
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, typography, shadows, placesInputStyles as styles } from "../../../styles";
 
@@ -169,7 +175,7 @@ export default function PlacesInput({ places, setPlaces }) {
 						isValid && styles.rowValid,
 					]}
 				>
-					<TextInput
+					<AppTextInput
 						style={styles.input}
 						placeholder={`עיר או מדינה ${idx}`}
 						placeholderTextColor={PlaceholderColor}
@@ -186,19 +192,19 @@ export default function PlacesInput({ places, setPlaces }) {
 							style={{ marginLeft: spacing.sm }}
 						/>
 					) : null}
-					{isValid ? <Text style={styles.checkmark}>✓</Text> : null}
+					{isValid ? <AppText style={styles.checkmark}>✓</AppText> : null}
 					<TouchableOpacity
 						onPress={() => removePlace(index)}
 						style={styles.removeBtn}
 					>
-						<Text style={styles.removeText}>×</Text>
+						<AppText style={styles.removeText}>×</AppText>
 					</TouchableOpacity>
 				</View>
 
 				{showError ? (
-					<Text style={styles.errorText}>
+					<AppText style={styles.errorText}>
 						אנא בחר עיר או מדינה תקפים מהרשימה
-					</Text>
+					</AppText>
 				) : null}
 
 				{hasSuggestions ? (
@@ -215,9 +221,9 @@ export default function PlacesInput({ places, setPlaces }) {
 								onPress={() => selectPlace(place, index)}
 							>
 								<View style={styles.suggestionContent}>
-									<Text style={styles.suggestionText}>
+									<AppText style={styles.suggestionText}>
 										{place.name}
-									</Text>
+									</AppText>
 									<View style={styles.suggestionTypeRow}>
 										<Ionicons
 											name={place.type === "country" ? "globe-outline" : "business-outline"}
@@ -225,9 +231,9 @@ export default function PlacesInput({ places, setPlaces }) {
 											color={colors.textSecondary}
 											style={{ marginLeft: 6 }}
 										/>
-										<Text style={styles.suggestionType}>
+										<AppText style={styles.suggestionType}>
 											{place.type === "country" ? "מדינה" : "עיר"}
-										</Text>
+										</AppText>
 									</View>
 								</View>
 							</TouchableOpacity>
@@ -249,9 +255,9 @@ export default function PlacesInput({ places, setPlaces }) {
 	return (
 		<View style={{ marginTop: 10 }}>
 			<View style={styles.headerRow}>
-				<Text style={styles.label}>יעדים (ערים או מדינות)</Text>
+				<AppText style={styles.label}>יעדים (ערים או מדינות)</AppText>
 				<TouchableOpacity onPress={addPlace} style={styles.addBtn}>
-					<Text style={styles.addText}>＋</Text>
+					<AppText style={styles.addText}>＋</AppText>
 				</TouchableOpacity>
 			</View>
 			<FlatList

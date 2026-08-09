@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { StyleSheet } from 'react-native';
 
 /**
@@ -23,7 +24,7 @@ export const notifications = StyleSheet.create({
   badgeText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
 
   // Screen styles
@@ -45,7 +46,7 @@ export const notifications = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     color: '#1E3A5F',
     marginTop: 12,
     marginBottom: 4,
@@ -65,7 +66,7 @@ export const notifications = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     color: '#1E3A5F',
   },
   loadingCenter: {
@@ -128,7 +129,7 @@ export const notifications = StyleSheet.create({
   },
   cardMessage: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     color: '#1F2937',
     marginBottom: 4,
     lineHeight: 18,
@@ -157,14 +158,14 @@ export const notifications = StyleSheet.create({
   cardPostTypeText: {
     fontSize: 12,
     color: '#1E3A5F',
-    fontWeight: '500',
+    fontFamily: fontFamilies.medium,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
   cardTimestamp: {
     fontSize: 12,
     color: '#6B7280',
-    fontWeight: '400',
+    fontFamily: fontFamilies.regular,
     textAlign: 'left',
   },
   cardArrowIcon: {

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import { Avatar } from '../../../components/Avatar';
@@ -39,7 +40,7 @@ function Chips({ values }) {
     <View style={styles.chips}>
       {values.map((value) => (
         <View key={value} style={styles.chip}>
-          <Text style={styles.chipText}>{value}</Text>
+          <AppText style={styles.chipText}>{value}</AppText>
         </View>
       ))}
     </View>
@@ -76,10 +77,10 @@ export default function RecommendationDetailContent({
     <View style={styles.contentSurface} testID="recommendation-detail-content">
       <View style={styles.categoryRow}>
         <MaterialIcons name={presentation.icon} size={19} color={colors.textSecondary} />
-        <Text style={styles.categoryText}>{presentation.label}</Text>
+        <AppText style={styles.categoryText}>{presentation.label}</AppText>
       </View>
 
-      <Text style={styles.title}>{item.title}</Text>
+      <AppText style={styles.title}>{item.title}</AppText>
 
       {(destinationLabel || placeLabel) ? (
         <View style={styles.locationStack}>
@@ -92,7 +93,7 @@ export default function RecommendationDetailContent({
               accessibilityLabel={`פתיחת היעד ${destinationLabel}`}
             >
               <Ionicons name="location-outline" size={19} color={colors.textMuted} />
-              <Text style={styles.locationText}>{destinationLabel}</Text>
+              <AppText style={styles.locationText}>{destinationLabel}</AppText>
               {!!(item?.destination?.cityId && item?.destination?.countryId) && (
                 <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
               )}
@@ -107,9 +108,9 @@ export default function RecommendationDetailContent({
               accessibilityLabel={`פתיחת ${placeLabel} במפה`}
             >
               <Ionicons name="map-outline" size={19} color={colors.textMuted} />
-              <Text style={[styles.locationText, styles.placeText]} numberOfLines={2}>
+              <AppText style={[styles.locationText, styles.placeText]} numberOfLines={2}>
                 {[placeLabel, item?.place?.address].filter((value, index, all) => value && all.indexOf(value) === index).join(' · ')}
-              </Text>
+              </AppText>
               {!!mapsUrl && <Ionicons name="chevron-back" size={18} color={colors.textMuted} />}
             </Pressable>
           )}
@@ -131,10 +132,10 @@ export default function RecommendationDetailContent({
             size={48}
           />
           <View style={styles.authorCopy}>
-            <Text style={styles.authorName} numberOfLines={1}>
+            <AppText style={styles.authorName} numberOfLines={1}>
               {author?.displayName || 'מטייל/ת PlanLi'}
-            </Text>
-            {!!dateLabel && <Text style={styles.authorDate}>{dateLabel}</Text>}
+            </AppText>
+            {!!dateLabel && <AppText style={styles.authorDate}>{dateLabel}</AppText>}
           </View>
         </Pressable>
 
@@ -147,28 +148,28 @@ export default function RecommendationDetailContent({
             testID="recommendation-detail-edit"
           >
             <MaterialIcons name="edit" size={17} color={colors.primary} />
-            <Text style={styles.editText}>עריכה</Text>
+            <AppText style={styles.editText}>עריכה</AppText>
           </Pressable>
         ) : null}
       </View>
 
       {!!item.description && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>על המקום</Text>
-          <Text style={styles.body}>{item.description}</Text>
+          <AppText style={styles.sectionTitle}>על המקום</AppText>
+          <AppText style={styles.body}>{item.description}</AppText>
         </View>
       )}
 
       {!!sections.facts.length && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>מתאים לטיול</Text>
+          <AppText style={styles.sectionTitle}>פרטים שימושיים</AppText>
           <View style={styles.factsGrid}>
             {sections.facts.map((fact) => (
               <View key={fact.id} style={styles.factCard} testID={`recommendation-fact-${fact.id}`}>
                 <View style={styles.factIcon}>
                   <MaterialIcons name={fact.icon} size={21} color={colors.textSecondary} />
                 </View>
-                <Text style={styles.factText}>{fact.label}</Text>
+                <AppText style={styles.factText}>{fact.label}</AppText>
               </View>
             ))}
           </View>
@@ -177,17 +178,17 @@ export default function RecommendationDetailContent({
 
       {!!sections.tags.length && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>מה תמצאו כאן</Text>
+          <AppText style={styles.sectionTitle}>מה תמצאו כאן</AppText>
           <Chips values={sections.tags} />
         </View>
       )}
 
       {!!sections.extras.length && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>מידע נוסף</Text>
+          <AppText style={styles.sectionTitle}>מידע נוסף</AppText>
           {sections.extras.map((group) => (
             <View key={group.id} style={styles.extraGroup}>
-              <Text style={styles.extraTitle}>{group.title}</Text>
+              <AppText style={styles.extraTitle}>{group.title}</AppText>
               <Chips values={group.values} />
             </View>
           ))}
@@ -196,14 +197,14 @@ export default function RecommendationDetailContent({
 
       {!!sections.needs.length && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>חשוב לדעת</Text>
+          <AppText style={styles.sectionTitle}>חשוב לדעת</AppText>
           <View style={styles.needsList}>
             {sections.needs.map((need) => (
               <View key={need} style={styles.needRow}>
                 <View style={styles.needIcon}>
                   <MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />
                 </View>
-                <Text style={styles.needText}>{need}</Text>
+                <AppText style={styles.needText}>{need}</AppText>
                 <Ionicons name="chevron-back" size={17} color={colors.textMuted} />
               </View>
             ))}

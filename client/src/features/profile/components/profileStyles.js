@@ -1,3 +1,4 @@
+import { fontFamilies } from "../../../styles/typography";
 import { Platform, StyleSheet } from 'react-native';
 
 import { colors } from '../../../styles';
@@ -198,7 +199,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     avatarInitial: {
       color: colors.primary,
       fontSize: 42,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
     },
     cameraButton: {
       position: 'absolute',
@@ -223,7 +224,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       color: colors.textPrimary,
       fontSize: tablet ? 29 : 26,
       lineHeight: tablet ? 35 : 31,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -240,7 +241,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       color: colors.textSecondary,
       fontSize: 15,
       lineHeight: 21,
-      fontWeight: '400',
+      fontFamily: fontFamilies.regular,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -248,7 +249,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       color: colors.textLight,
       fontSize: 14,
       lineHeight: 20,
-      fontWeight: '400',
+      fontFamily: fontFamilies.regular,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -279,7 +280,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     },
     statusPillText: {
       fontSize: 12,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
       writingDirection: 'rtl',
     },
     statsCard: {
@@ -309,12 +310,12 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     statNumber: {
       color: colors.textPrimary,
       fontSize: 20,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
     },
     statLabel: {
       color: colors.textLight,
       fontSize: 11,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -373,7 +374,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     preferencesTitle: {
       color: colors.textPrimary,
       fontSize: 17,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -396,7 +397,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     preferencesEditText: {
       color: colors.primary,
       fontSize: 12,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       writingDirection: 'rtl',
     },
     preferenceGroups: {
@@ -414,7 +415,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     preferenceGroupTitle: {
       color: colors.textSecondary,
       fontSize: 12,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -440,7 +441,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       maxWidth: 180,
       color: colors.textPrimary,
       fontSize: 12,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
       writingDirection: 'rtl',
     },
     preferenceEmpty: {
@@ -460,7 +461,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     preferenceEmptyTitle: {
       color: colors.textPrimary,
       fontSize: 14,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -480,7 +481,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     preferenceEmptyButtonText: {
       color: colors.white,
       fontSize: 12,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       writingDirection: 'rtl',
     },
     contentSection: {
@@ -498,14 +499,14 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     contentTitle: {
       color: colors.textPrimary,
       fontSize: 23,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
     contentCount: {
       color: colors.textLight,
       fontSize: 12,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
       writingDirection: 'rtl',
     },
     contentTabs: {
@@ -538,7 +539,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     contentTabText: {
       color: colors.textSecondary,
       fontSize: 13,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
       writingDirection: 'rtl',
     },
     contentTabTextActive: {
@@ -614,7 +615,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     gridOverlayTitle: {
       color: colors.white,
       fontSize: 12,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -622,7 +623,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       marginTop: 2,
       color: 'rgba(255,255,255,0.82)',
       fontSize: 10,
-      fontWeight: '400',
+      fontFamily: fontFamilies.regular,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -641,7 +642,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       marginTop: 10,
       color: colors.textPrimary,
       fontSize: 18,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -650,7 +651,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       color: colors.textLight,
       fontSize: 13,
       lineHeight: 19,
-      fontWeight: '400',
+      fontFamily: fontFamilies.regular,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -681,7 +682,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     modalTitle: {
       color: colors.textPrimary,
       fontSize: 20,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       writingDirection: 'rtl',
     },
     modalClose: {
@@ -697,7 +698,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       color: colors.textSecondary,
       fontSize: 13,
       lineHeight: 19,
-      fontWeight: '400',
+      fontFamily: fontFamilies.regular,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -721,7 +722,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       marginTop: 6,
       color: colors.textLight,
       fontSize: 11,
-      fontWeight: '400',
+      fontFamily: fontFamilies.regular,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -729,7 +730,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
       marginTop: 8,
       color: colors.error,
       fontSize: 12,
-      fontWeight: '500',
+      fontFamily: fontFamilies.medium,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -753,7 +754,7 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
     },
     modalButtonText: {
       fontSize: 14,
-      fontWeight: '600',
+      fontFamily: fontFamilies.semiBold,
       writingDirection: 'rtl',
     },
     modalButtonTextSecondary: {

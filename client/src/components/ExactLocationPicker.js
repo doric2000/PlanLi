@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, TouchableOpacity, View } from "react-native";
+import AppText from "./AppText";
 import { collection, collectionGroup, getDocs, limit, query, where } from "firebase/firestore";
 
 import GooglePlacesInput from "./GooglePlacesInput";
@@ -300,7 +301,7 @@ export default function ExactLocationPicker({
 
 	return (
 		<View style={styles.wrap}>
-			{!!label && <Text style={styles.label}>{label}</Text>}
+			{!!label && <AppText style={styles.label}>{label}</AppText>}
 			<GooglePlacesInput
 				mode="google"
 				value={locationQuery}
@@ -318,22 +319,22 @@ export default function ExactLocationPicker({
 			{resolvingLocation && (
 				<View style={styles.statusRow}>
 					<ActivityIndicator size="small" color={colors.primary} />
-					<Text style={styles.statusText}>טוען פרטי מיקום...</Text>
+					<AppText style={styles.statusText}>טוען פרטי מיקום...</AppText>
 				</View>
 			)}
 
 			{!!selectedLabel && !locationResolveError && (
-				<Text style={styles.selectedText} numberOfLines={2}>
+				<AppText style={styles.selectedText} numberOfLines={2}>
 					{selectedLabel}
-				</Text>
+				</AppText>
 			)}
 
 			{!!locationResolveError && (
 				<View style={styles.errorWrap}>
-					<Text style={styles.errorText}>{locationResolveError}</Text>
+					<AppText style={styles.errorText}>{locationResolveError}</AppText>
 					{false && !!(pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id && (
 						<TouchableOpacity onPress={() => setCountryPickerVisible(true)} activeOpacity={0.85}>
-							<Text style={styles.manualCountryText}>בחר מדינה ידנית</Text>
+							<AppText style={styles.manualCountryText}>בחר מדינה ידנית</AppText>
 						</TouchableOpacity>
 					)}
 				</View>
@@ -348,7 +349,7 @@ export default function ExactLocationPicker({
 					activeOpacity={0.85}
 					style={styles.changeCountryButton}
 				>
-					<Text style={styles.changeCountryText}>שנה מדינה</Text>
+					<AppText style={styles.changeCountryText}>שנה מדינה</AppText>
 				</TouchableOpacity>
 			)}
 

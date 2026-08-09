@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TouchableOpacity, Image, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth } from '../../../config/firebase';
@@ -95,8 +96,8 @@ export default function LoginScreen({ navigation }) {
                 <View style={forms.authLogoContainer}>
                   <Image source={require('../../../../assets/logo.png')} style={forms.authLogo} resizeMode="contain"/>
                 </View>
-                <Text style={forms.authTitle}>ברוכים השבים</Text>
-                <Text style={forms.authSubtitle}>כדי להמשיך לתכנן, עליך להתחבר</Text>
+                <AppText style={forms.authTitle}>ברוכים השבים</AppText>
+                <AppText style={forms.authSubtitle}>כדי להמשיך לתכנן, עליך להתחבר</AppText>
               </View>
 
               <View style={forms.authForm}>
@@ -117,19 +118,19 @@ export default function LoginScreen({ navigation }) {
                     isPassword={true}
                 />
                 <TouchableOpacity style={forms.authForgotPassword}>
-                  <Text style={forms.authForgotPasswordText}>שכחת סיסמה?</Text>
+                  <AppText style={forms.authForgotPasswordText}>שכחת סיסמה?</AppText>
                 </TouchableOpacity>
-                {error ? <Text style={forms.authErrorText}>{error}</Text> : null}
+                {error ? <AppText style={forms.authErrorText}>{error}</AppText> : null}
                 
                 <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
                   <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={forms.authButton}>
-                    <Text style={forms.authButtonText}>התחבר</Text>
+                    <AppText style={forms.authButtonText}>התחבר</AppText>
                   </LinearGradient>
                 </TouchableOpacity>
 
                 <View style={forms.authDividerContainer}>
                   <View style={forms.authDivider} />
-                  <Text style={forms.authDividerText}>או המשך/י באמצעות</Text>
+                  <AppText style={forms.authDividerText}>או המשך/י באמצעות</AppText>
                   <View style={forms.authDivider} />
                 </View>
 
@@ -137,9 +138,9 @@ export default function LoginScreen({ navigation }) {
 
                 <View style={forms.authFooter}>
                   <View style={forms.authLinkContainer}>
-                    <Text style={forms.authLinkText}> אין לך חשבון? </Text>
+                    <AppText style={forms.authLinkText}> אין לך חשבון? </AppText>
                     <TouchableOpacity onPress={() => navigation.replace('Register')}>
-                      <Text style={forms.authLink}>הירשם/י</Text>
+                      <AppText style={forms.authLink}>הירשם/י</AppText>
                     </TouchableOpacity>
                   </View>
                 </View>

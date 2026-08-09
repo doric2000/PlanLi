@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
+import AppText from "../../../components/AppText";
 import CachedImage from "../../../components/CachedImage";
 import { dayListStyles as styles } from "../../../styles";
 import { getMediaVariantUrl } from "../../../utils/mediaAssets";
@@ -7,8 +8,8 @@ export default function DayList({ days, onEdit }) {
 	return (
 		<View style={styles.container}>
 			<View style={styles.headerRow}>
-				<Text style={styles.sectionTitle}>לו״ז המסלול</Text>
-				<Text style={styles.autoHint}>נבנה לפי מספר הימים</Text>
+				<AppText style={styles.sectionTitle}>לו״ז המסלול</AppText>
+				<AppText style={styles.autoHint}>נבנה לפי מספר הימים</AppText>
 			</View>
 
 			{days.map((day, index) => (
@@ -19,15 +20,15 @@ export default function DayList({ days, onEdit }) {
 					onPress={() => onEdit(index)}
 				>
 					<View style={styles.dayHeader}>
-						<Text style={styles.dayTitle}>יום {index + 1}</Text>
-						<Text style={styles.editHint}>ערוך ›</Text>
+						<AppText style={styles.dayTitle}>יום {index + 1}</AppText>
+						<AppText style={styles.editHint}>ערוך ›</AppText>
 					</View>
 
 					<View style={styles.contentRow}>
 						<View style={styles.textContainer}>
-							<Text numberOfLines={2} style={styles.description}>
+							<AppText numberOfLines={2} style={styles.description}>
 								{day.description || "עדיין אין תיאור ליום הזה."}
-							</Text>
+							</AppText>
 						</View>
 						{(day.image || day.media) && (
 							<CachedImage
@@ -45,18 +46,18 @@ export default function DayList({ days, onEdit }) {
 						)}
 					</View>
 
-					<Text style={styles.stopsCount}>
+					<AppText style={styles.stopsCount}>
 						{Array.isArray(day.stops) && day.stops.length > 0
 							? `${day.stops.length} תחנות ביום הזה`
 							: "אין תחנות עדיין"}
-					</Text>
+					</AppText>
 				</TouchableOpacity>
 			))}
 
 			{days.length === 0 && (
-				<Text style={styles.emptyText}>
+				<AppText style={styles.emptyText}>
 					הזן מספר ימים כדי לבנות את לו״ז המסלול.
-				</Text>
+				</AppText>
 			)}
 		</View>
 	);

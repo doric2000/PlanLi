@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { StyleSheet, Dimensions, Platform } from 'react-native';
 import { colors } from './colors';
 import { common } from './common';
@@ -30,7 +31,7 @@ export const actionBarStyles = StyleSheet.create({
 	},
 	overlayText: {
 		color: '#FFFFFF',
-		fontWeight: '800',
+		fontFamily: fontFamilies.semiBold,
 		textShadowColor: 'rgba(0,0,0,0.35)',
 		textShadowOffset: { width: 0, height: 1 },
 		textShadowRadius: 3,
@@ -65,7 +66,7 @@ export const actionMenuStyles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
-    fontWeight: "800",
+    fontFamily: fontFamilies.semiBold,
     color: "#111827",
     textAlign: "right",
     flex: 1,
@@ -87,7 +88,7 @@ export const actionMenuStyles = StyleSheet.create({
   },
   actionText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: fontFamilies.semiBold,
     color: "#111827",
     textAlign: "right",
   },
@@ -98,7 +99,7 @@ export const actionMenuStyles = StyleSheet.create({
   cancelBtn: { backgroundColor: "#E5E7EB", marginBottom: 0 },
   cancelText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: fontFamilies.semiBold,
     color: "#374151",
     textAlign: "center",
   },
@@ -119,13 +120,13 @@ export const activeFiltersListStyles = StyleSheet.create({
   summaryText: {
     color: colors.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   clearText: {
     color: colors.info,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg, 
@@ -150,7 +151,7 @@ export const activeFiltersListStyles = StyleSheet.create({
   chipText: {
     color: colors.white,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
   },
 });
 
@@ -173,7 +174,7 @@ export const discoveryFilterTriggerStyles = StyleSheet.create({
   badgeText: {
     color: colors.white,
     fontSize: 9,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
   },
   emptyActions: {
     flexDirection: 'row-reverse',
@@ -195,7 +196,7 @@ export const discoveryFilterTriggerStyles = StyleSheet.create({
   emptyActionText: {
     color: colors.primary,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
   emptyActionTextPrimary: {
     color: colors.white,
@@ -269,7 +270,7 @@ export const cityCardStyles = StyleSheet.create({
   },
   homeCity: {
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     color: '#0F1729',
     textAlign: 'right',
     writingDirection: 'rtl',
@@ -297,7 +298,7 @@ export const cityCardStyles = StyleSheet.create({
   homeTravelerText: {
     fontSize: 11,
     color: colors.navActive,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
 });
@@ -384,7 +385,7 @@ export const imagePickerBoxStyles = StyleSheet.create({
   countText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
   navOverlay: {
     position: 'absolute',
@@ -491,7 +492,7 @@ export const recommendationCardStyles = StyleSheet.create({
   feedMetaText: {
     color: 'rgba(255,255,255,0.86)',
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
     textShadowColor: 'rgba(0,0,0,0.5)',
@@ -566,7 +567,7 @@ export const recommendationMetaStyles = StyleSheet.create({
   },
   mapsText: {
     color: colors.textPrimary,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
 });
@@ -619,7 +620,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   profilePresetTitle: {
     color: colors.primary,
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   profilePresetText: {
@@ -634,7 +635,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   primarySectionTitle: {
     color: colors.textPrimary,
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   primarySectionHelper: {
@@ -682,7 +683,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   selectedDestinationText: {
     color: colors.primary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
   destinationSuggestionsPanel: {
@@ -700,7 +701,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   destinationSuggestionGroupTitle: {
     color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     textAlign: 'right',
@@ -722,7 +723,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   destinationSuggestionTitle: {
     color: colors.textPrimary,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   destinationSuggestionSubtitle: {
@@ -777,7 +778,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   categoryTileText: {
     color: colors.textPrimary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -817,7 +818,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   categoryTabText: {
     color: colors.textSecondary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
   },
   categoryTabTextActive: {
     color: colors.primary,
@@ -825,7 +826,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   subcategoryTitle: {
     color: colors.textPrimary,
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     marginBottom: spacing.sm,
     textAlign: 'right',
   },
@@ -850,7 +851,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   serviceGroupTabText: {
     color: colors.textSecondary,
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
   },
   serviceGroupTabTextActive: {
     color: colors.white,
@@ -877,7 +878,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   disclosureTitle: {
     color: colors.textPrimary,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   disclosureSummary: {
@@ -900,7 +901,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   optionGroupLabel: {
     color: colors.textPrimary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     marginBottom: spacing.sm,
     textAlign: 'right',
   },
@@ -931,7 +932,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   optionChipText: {
     color: colors.textPrimary,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
   optionChipTextSelected: {
@@ -945,7 +946,7 @@ export const discoveryFilterStyles = StyleSheet.create({
   showAllText: {
     color: colors.info,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   rangeGrid: {
@@ -1009,7 +1010,7 @@ export const adminPanelScreenStyles = StyleSheet.create({
   },
   headerTitleText: {
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     color: colors.primary,
     textAlign: 'right',
   },
@@ -1060,7 +1061,7 @@ export const chipSelectorStyles = StyleSheet.create({
   label: {
     textAlign: "right",
     marginBottom: 8,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 14,
     color: colors.textPrimary || '#333',
   },
@@ -1077,7 +1078,7 @@ export const segmentedControlStyles = StyleSheet.create({
   label: {
     textAlign: "right",
     marginBottom: 8,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 14,
     color: '#333', 
   },
@@ -1099,12 +1100,12 @@ export const segmentedControlStyles = StyleSheet.create({
   },
   text: {
     color: colors.textSecondary || '#666',
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 14,
   },
   textSelected: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.semiBold,
   }
 });
 
@@ -1183,7 +1184,7 @@ export const selectionModalStyles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.semiBold,
     color: colors.text,
   },
   item: {
@@ -1200,7 +1201,7 @@ export const selectionModalStyles = StyleSheet.create({
   },
   selectedText: {
     color: colors.primary,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
   },
   emptyText: {
     textAlign: 'center',
@@ -1246,7 +1247,7 @@ export const addRecommendationScreenStyles = StyleSheet.create({
   thumbRemoveText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     lineHeight: 18,
   },
   addMoreBtn: {
@@ -1255,7 +1256,7 @@ export const addRecommendationScreenStyles = StyleSheet.create({
   },
   addMoreText: {
     color: colors.primary,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
   taxonomySection: {
     marginBottom: spacing.md,
@@ -1276,7 +1277,7 @@ export const addRecommendationScreenStyles = StyleSheet.create({
   taxonomyToggleText: {
     color: colors.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
   },
   unsavedDialogOverlay: {
@@ -1297,7 +1298,7 @@ export const addRecommendationScreenStyles = StyleSheet.create({
   },
   unsavedDialogTitle: {
     fontSize: 17,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     color: colors.textPrimary,
     textAlign: 'center',
     writingDirection: 'rtl',
@@ -1306,7 +1307,7 @@ export const addRecommendationScreenStyles = StyleSheet.create({
   unsavedDialogMessage: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '400',
+    fontFamily: fontFamilies.regular,
     color: colors.textSecondary,
     textAlign: 'center',
     writingDirection: 'rtl',
@@ -1330,13 +1331,13 @@ export const addRecommendationScreenStyles = StyleSheet.create({
   },
   unsavedDialogButtonNeutralText: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     color: colors.textPrimary,
     writingDirection: 'rtl',
   },
   unsavedDialogButtonDestructiveText: {
     fontSize: 17,
-    fontWeight: '400',
+    fontFamily: fontFamilies.regular,
     color: colors.error,
     writingDirection: 'rtl',
   },
@@ -1352,33 +1353,6 @@ export const communityScreenStyles = StyleSheet.create({
     paddingTop: 28,
     position: 'relative',
     zIndex: 2,
-  },
-  header: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: 'hidden',
-  },
-  headerCircleLarge: {
-    position: 'absolute',
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    top: -58,
-    right: -44,
-  },
-  headerCircleSmall: {
-    position: 'absolute',
-    width: 134,
-    height: 134,
-    borderRadius: 67,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    top: 30,
-    right: 24,
   },
   topActionsRow: {
     position: 'relative',
@@ -1397,7 +1371,7 @@ export const communityScreenStyles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 26,
     lineHeight: 31,
-    fontWeight: '900',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -1405,7 +1379,7 @@ export const communityScreenStyles = StyleSheet.create({
     marginTop: 2,
     color: 'rgba(255,255,255,0.66)',
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -1439,7 +1413,7 @@ export const communityScreenStyles = StyleSheet.create({
   sortGlassText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
   mapModeSummary: {
@@ -1471,7 +1445,7 @@ export const communityScreenStyles = StyleSheet.create({
     height: '100%',
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     paddingVertical: 0,
     writingDirection: 'rtl',
   },
@@ -1501,7 +1475,7 @@ export const recommendationDetailScreenStyles = StyleSheet.create({
   },
   categoryPillText: {
     color: '#2563EB',
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 12,
   },
 
@@ -1512,7 +1486,7 @@ export const recommendationDetailScreenStyles = StyleSheet.create({
     borderRadius: 999,
   },
   pricePillText: {
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 12,
     textAlign: 'right',
   },
@@ -1539,7 +1513,7 @@ export const recommendationDetailScreenStyles = StyleSheet.create({
   sectionHeaderText: {
     color: colors.textMuted,
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     marginRight: 8,
     textAlign: 'right',
   },
@@ -1565,7 +1539,7 @@ export const recommendationDetailScreenStyles = StyleSheet.create({
   },
   tagPillText: {
     color: '#2563EB',
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 12,
     textAlign: 'right',
   },
@@ -1606,26 +1580,6 @@ export const homeScreenStyles = StyleSheet.create({
 		borderBottomRightRadius: 30,
 		overflow: "hidden",
 	},
-	headerCircleLarge: {
-		position: "absolute",
-		width: 210,
-		height: 210,
-		borderRadius: 105,
-		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.06)",
-		top: -58,
-		right: -44,
-	},
-	headerCircleSmall: {
-		position: "absolute",
-		width: 134,
-		height: 134,
-		borderRadius: 67,
-		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.08)",
-		top: 30,
-		right: 24,
-	},
 	headerTop: {
 		position: "relative",
 		zIndex: 2,
@@ -1644,7 +1598,7 @@ export const homeScreenStyles = StyleSheet.create({
 		borderRadius: 21,
 		alignItems: "center",
 		justifyContent: "center",
-		backgroundColor: colors.brandOrange,
+		backgroundColor: "rgba(255,255,255,0.14)",
 		borderWidth: 2,
 		borderColor: "rgba(255,255,255,0.22)",
 	},
@@ -1656,18 +1610,7 @@ export const homeScreenStyles = StyleSheet.create({
 	avatarInitial: {
 		color: "#FFFFFF",
 		fontSize: 16,
-		fontWeight: "800",
-	},
-	avatarBadge: {
-		position: "absolute",
-		bottom: 0,
-		right: 0,
-		width: 12,
-		height: 12,
-		borderRadius: 6,
-		backgroundColor: "#00D4AA",
-		borderWidth: 2,
-		borderColor: colors.navActive,
+		fontFamily: fontFamilies.semiBold,
 	},
 	headlineWrap: {
 		position: "relative",
@@ -1680,7 +1623,7 @@ export const homeScreenStyles = StyleSheet.create({
 		color: "#FFFFFF",
 		fontSize: 34,
 		lineHeight: 34,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -1688,7 +1631,7 @@ export const homeScreenStyles = StyleSheet.create({
 		marginTop: 8,
 		color: "rgba(255,255,255,0.62)",
 		fontSize: 14,
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -1707,7 +1650,7 @@ export const homeScreenStyles = StyleSheet.create({
 	searchInput: {
 		color: "#FFFFFF",
 		fontSize: 15,
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		paddingLeft: 58,
 		paddingRight: 48,
 		textAlign: "right",
@@ -1727,7 +1670,9 @@ export const homeScreenStyles = StyleSheet.create({
 		width: 34,
 		height: 34,
 		borderRadius: 10,
-		backgroundColor: colors.brandOrange,
+		backgroundColor: "rgba(255,255,255,0.14)",
+		borderWidth: 1,
+		borderColor: "rgba(255,255,255,0.22)",
 		alignItems: "center",
 		justifyContent: "center",
 	},
@@ -1784,7 +1729,7 @@ export const homeScreenStyles = StyleSheet.create({
 	},
 	categoryText: {
 		fontSize: 13,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#555A66",
 		writingDirection: "rtl",
 	},
@@ -1801,14 +1746,9 @@ export const homeScreenStyles = StyleSheet.create({
 		justifyContent: "space-between",
 		marginBottom: 14,
 	},
-	sectionTitleGroup: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 6,
-	},
 	sectionTitle: {
 		fontSize: 18,
-		fontWeight: "800",
+		fontFamily: fontFamilies.medium,
 		color: "#0F1729",
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -1816,7 +1756,7 @@ export const homeScreenStyles = StyleSheet.create({
 	sectionLink: {
 		fontSize: 13,
 		color: colors.navActive,
-		fontWeight: "700",
+		fontFamily: fontFamilies.medium,
 		textAlign: "left",
 		writingDirection: "rtl",
 	},
@@ -1860,7 +1800,7 @@ export const homeScreenStyles = StyleSheet.create({
 	featuredTravelersText: {
 		color: "#FFFFFF",
 		fontSize: 11,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	featuredContent: {
@@ -1872,23 +1812,10 @@ export const homeScreenStyles = StyleSheet.create({
 		paddingBottom: 14,
 		alignItems: "flex-end",
 	},
-	featuredBadge: {
-		backgroundColor: colors.brandOrange,
-		paddingHorizontal: 9,
-		paddingVertical: 4,
-		borderRadius: 20,
-		marginBottom: 7,
-	},
-	featuredBadgeText: {
-		color: "#FFFFFF",
-		fontSize: 10,
-		fontWeight: "800",
-		writingDirection: "rtl",
-	},
 	featuredCity: {
 		color: "#FFFFFF",
 		fontSize: 21,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -1896,7 +1823,7 @@ export const homeScreenStyles = StyleSheet.create({
 		marginTop: 3,
 		color: "rgba(255,255,255,0.74)",
 		fontSize: 12,
-		fontWeight: "600",
+		fontFamily: fontFamilies.regular,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -1922,7 +1849,7 @@ export const homeScreenStyles = StyleSheet.create({
 	statusText: {
 		color: "#6B7280",
 		fontSize: 14,
-		fontWeight: "600",
+		fontFamily: fontFamilies.regular,
 		textAlign: "center",
 		writingDirection: "rtl",
 	},
@@ -1930,7 +1857,7 @@ export const homeScreenStyles = StyleSheet.create({
 		width: "100%",
 		color: "#6B7280",
 		fontSize: 16,
-		fontWeight: "700",
+		fontFamily: fontFamilies.regular,
 		textAlign: "center",
 		paddingVertical: 36,
 		writingDirection: "rtl",
@@ -1980,7 +1907,7 @@ export const notificationScreenStyles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     color: '#1E3A5F',
     textAlign: 'center',
   },
@@ -2004,7 +1931,7 @@ export const profileBadgeStyles = StyleSheet.create({
   },
   text: {
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -2075,7 +2002,7 @@ export const profileHeaderStyles = StyleSheet.create({
   avatarInitial: {
     color: colors.primary,
     fontSize: 42,
-    fontWeight: '900',
+    fontFamily: fontFamilies.semiBold,
   },
   cameraButton: {
     position: 'absolute',
@@ -2099,7 +2026,7 @@ export const profileHeaderStyles = StyleSheet.create({
     maxWidth: '86%',
     color: colors.textPrimary,
     fontSize: 26,
-    fontWeight: '900',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -2108,7 +2035,7 @@ export const profileHeaderStyles = StyleSheet.create({
     marginTop: 2,
     color: colors.textLight,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
   },
   badgeRow: {
@@ -2133,7 +2060,7 @@ export const profileHeaderStyles = StyleSheet.create({
   },
   smartProfileCtaText: {
     color: colors.primary,
-    fontWeight: '900',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
 });
@@ -2160,7 +2087,7 @@ export const profileMenuListStyles = StyleSheet.create({
   badgeText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
 });
 
@@ -2185,13 +2112,13 @@ export const changeNameScreenStyles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
   },
   rightSpacer: { width: 44, height: 44 },
 
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
 
-  label: { fontSize: 14, fontWeight: '700', textAlign: 'right', color: '#111827' },
+  label: { fontSize: 14, fontFamily: fontFamilies.semiBold, textAlign: 'right', color: '#111827' },
   input: {
     height: 54,
     borderRadius: 12,
@@ -2210,7 +2137,7 @@ export const changeNameScreenStyles = StyleSheet.create({
     backgroundColor: '#22375B',
     marginTop: 6,
   },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  primaryBtnText: { color: '#fff', fontFamily: fontFamilies.semiBold, fontSize: 16 },
   btnDisabled: { opacity: 0.7 },
 });
 
@@ -2235,13 +2162,13 @@ export const changePasswordScreenStyles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
   },
   rightSpacer: { width: 44, height: 44 },
 
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
 
-  label: { fontSize: 14, fontWeight: '700', textAlign: 'right', color: '#111827' },
+  label: { fontSize: 14, fontFamily: fontFamilies.semiBold, textAlign: 'right', color: '#111827' },
   note: { color: '#6B7280', textAlign: 'right', lineHeight: 18 },
 
   passwordRow: {
@@ -2264,7 +2191,7 @@ export const changePasswordScreenStyles = StyleSheet.create({
     backgroundColor: '#22375B',
     marginTop: 6,
   },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  primaryBtnText: { color: '#fff', fontFamily: fontFamilies.semiBold, fontSize: 16 },
   btnDisabled: { opacity: 0.7 },
 });
 
@@ -2277,7 +2204,7 @@ export const editProfileScreenStyles = StyleSheet.create({
   sectionLabel: {
     textAlign: "right",
     fontSize: 14,
-    fontWeight: "bold",
+    fontFamily: fontFamilies.semiBold,
     marginBottom: 8,
     color: colors.textPrimary,
   },
@@ -2341,7 +2268,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
     contentTitle: {
       color: colors.textPrimary,
       fontSize: 24,
-      fontWeight: '900',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -2349,7 +2276,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
       marginTop: 2,
       color: colors.textLight,
       fontSize: 13,
-      fontWeight: '700',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
     },
@@ -2385,7 +2312,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
     },
     tabText: {
       fontSize: 14,
-      fontWeight: '900',
+      fontFamily: fontFamilies.semiBold,
       writingDirection: 'rtl',
     },
     tabTextActive: {
@@ -2458,7 +2385,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
     gridTitle: {
       color: colors.white,
       fontSize: 12,
-      fontWeight: '900',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
       textShadowColor: 'rgba(0,0,0,0.45)',
@@ -2469,7 +2396,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
       marginTop: 1,
       color: 'rgba(255,255,255,0.82)',
       fontSize: 10,
-      fontWeight: '700',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'right',
       writingDirection: 'rtl',
       textShadowColor: 'rgba(0,0,0,0.45)',
@@ -2491,7 +2418,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
       marginTop: 10,
       color: colors.textPrimary,
       fontSize: 18,
-      fontWeight: '900',
+      fontFamily: fontFamilies.semiBold,
       textAlign: 'center',
       writingDirection: 'rtl',
     },
@@ -2499,7 +2426,7 @@ export const createProfileScreenStyles = (insets) => StyleSheet.create({
       marginTop: 5,
       color: colors.textLight,
       fontSize: 13,
-      fontWeight: '700',
+      fontFamily: fontFamilies.semiBold,
       lineHeight: 19,
       textAlign: 'center',
       writingDirection: 'rtl',
@@ -2527,7 +2454,7 @@ export const settingsScreenStyles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 18,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
   },
   rightSpacer: {
     width: 44, // אותו רוחב כמו backBtn כדי לשמור סימטריה
@@ -2543,7 +2470,7 @@ export const settingsScreenStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#22375B',
   },
-  primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  primaryBtnText: { color: '#fff', fontFamily: fontFamilies.semiBold, fontSize: 16 },
 });
 
 // features/profile/screens/UserProfileScreen.js
@@ -2558,7 +2485,7 @@ export const userProfileScreenStyles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
     fontSize: 16,
-    fontWeight: "900",
+    fontFamily: fontFamilies.semiBold,
     color: "#111827",
   },
   tabRow: {
@@ -2573,7 +2500,7 @@ export const userProfileScreenStyles = StyleSheet.create({
     borderBottomWidth: 2,
   },
   tabText: {
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
   },
   emptyHint: {
     opacity: 0.6,
@@ -2614,7 +2541,7 @@ export const userProfileScreenStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 12,
-    fontWeight: '800',
+    fontFamily: fontFamilies.semiBold,
     color: '#111827',
     writingDirection: 'rtl',
     textAlign: 'right',
@@ -2644,7 +2571,7 @@ export const activeRouteFiltersListStyles = StyleSheet.create({
   chipText: {
     color: colors.white,
     fontSize: 13,
-    fontWeight: "600",
+    fontFamily: fontFamilies.semiBold,
   },
 });
 
@@ -2655,7 +2582,7 @@ export const exactLocationPickerStyles = StyleSheet.create({
 	},
 	label: {
 		fontSize: 14,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -2676,7 +2603,7 @@ export const exactLocationPickerStyles = StyleSheet.create({
 	selectedText: {
 		marginTop: 8,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.success,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -2694,7 +2621,7 @@ export const exactLocationPickerStyles = StyleSheet.create({
 	manualCountryText: {
 		marginTop: 6,
 		fontSize: 13,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.primary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -2705,7 +2632,7 @@ export const exactLocationPickerStyles = StyleSheet.create({
 	},
 	changeCountryText: {
 		color: colors.textSecondary,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -2722,9 +2649,9 @@ export const dayEditorModalStyles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#E2E8F0',
     },
-    headerTitle: { fontSize: 18, fontWeight: '700', textAlign: 'right' },
+    headerTitle: { fontSize: 18, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
     headerBtn: { fontSize: 16, color: '#007AFF' },
-    headerBtnStrong: { fontWeight: '800' },
+    headerBtnStrong: { fontFamily: fontFamilies.semiBold },
     headerBtnDisabled: { opacity: 0.5 },
     content: { flex: 1, padding: 20 },
     scrollContent: { paddingBottom: 36 },
@@ -2744,7 +2671,7 @@ export const dayEditorModalStyles = StyleSheet.create({
     },
     stopsTitle: {
         fontSize: 16,
-        fontWeight: "800",
+        fontFamily: fontFamilies.semiBold,
         color: colors.textPrimary,
         textAlign: "right",
         writingDirection: "rtl",
@@ -2758,7 +2685,7 @@ export const dayEditorModalStyles = StyleSheet.create({
     addStopText: {
         color: colors.info,
         fontSize: 12,
-        fontWeight: "800",
+        fontFamily: fontFamilies.semiBold,
         writingDirection: "rtl",
     },
     emptyStopsText: {
@@ -2795,7 +2722,7 @@ export const dayEditorModalStyles = StyleSheet.create({
     },
     stopNumberText: {
         color: colors.white,
-        fontWeight: "900",
+        fontFamily: fontFamilies.semiBold,
     },
     stopTextWrap: {
         flex: 1,
@@ -2804,7 +2731,7 @@ export const dayEditorModalStyles = StyleSheet.create({
     },
     stopTitle: {
         fontSize: 14,
-        fontWeight: "800",
+        fontFamily: fontFamilies.semiBold,
         color: colors.textPrimary,
         textAlign: "right",
         writingDirection: "rtl",
@@ -2825,13 +2752,13 @@ export const dayEditorModalStyles = StyleSheet.create({
     deleteStopText: {
         color: colors.error,
         fontSize: 12,
-        fontWeight: "800",
+        fontFamily: fontFamilies.semiBold,
         writingDirection: "rtl",
     },
     imagePickerSpacing: {
         marginBottom: spacing.xl,
     },
-    photoLabel: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#334155', textAlign: 'right' },
+    photoLabel: { fontSize: 16, fontFamily: fontFamilies.semiBold, marginBottom: 8, color: '#334155', textAlign: 'right' },
     removeBtn: { marginTop: 10, alignItems: 'center' },
     removeText: { color: '#EF4444' }
 });
@@ -2853,7 +2780,7 @@ export const stopEditorModalStyles = StyleSheet.create({
 	headerTitle: {
 		flex: 1,
 		fontSize: 16,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "center",
 		writingDirection: "rtl",
@@ -2861,12 +2788,12 @@ export const stopEditorModalStyles = StyleSheet.create({
 	headerButton: {
 		fontSize: 15,
 		color: colors.primary,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		minWidth: 52,
 		textAlign: "center",
 	},
 	headerButtonStrong: {
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 	},
 	content: {
 		flex: 1,
@@ -2885,7 +2812,7 @@ export const stopEditorModalStyles = StyleSheet.create({
 	},
 	photoLabel: {
 		fontSize: 14,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -2904,7 +2831,7 @@ export const stopEditorModalStyles = StyleSheet.create({
 	},
 	removeText: {
 		color: colors.error,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 });
@@ -2920,14 +2847,14 @@ export const dayListStyles = StyleSheet.create({
 	},
 	sectionTitle: {
 		fontSize: 16,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
 	autoHint: {
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textMuted,
 		textAlign: "left",
 		writingDirection: "rtl",
@@ -2952,7 +2879,7 @@ export const dayListStyles = StyleSheet.create({
 		marginBottom: 8,
 	},
 	dayTitle: {
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: "#0F172A",
 		fontSize: 16,
 		textAlign: "right",
@@ -2961,7 +2888,7 @@ export const dayListStyles = StyleSheet.create({
 	editHint: {
 		color: colors.primary,
 		fontSize: 13,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "left",
 		writingDirection: "rtl",
 	},
@@ -2983,7 +2910,7 @@ export const dayListStyles = StyleSheet.create({
 		marginTop: 8,
 		color: colors.primary,
 		fontSize: 12,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -3021,11 +2948,11 @@ export const dayViewModalStyles = StyleSheet.create({
 	closeBtn: {
 		fontSize: 24,
 		color: "#64748B",
-		fontWeight: "300",
+		fontFamily: fontFamilies.regular,
 	},
 	headerTitle: {
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#0F172A",
 		textAlign: "center",
 		writingDirection: "rtl",
@@ -3049,7 +2976,7 @@ export const dayViewModalStyles = StyleSheet.create({
 	},
 	label: {
 		fontSize: 14,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		marginBottom: 8,
 		textAlign: "right",
@@ -3093,7 +3020,7 @@ export const dayViewModalStyles = StyleSheet.create({
 	},
 	stopNumberText: {
 		color: colors.white,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 	},
 	stopTextWrap: {
 		flex: 1,
@@ -3102,7 +3029,7 @@ export const dayViewModalStyles = StyleSheet.create({
 	},
 	stopTitle: {
 		fontSize: 14,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -3130,7 +3057,7 @@ export const dayViewModalStyles = StyleSheet.create({
 	mapIconText: {
 		marginTop: 2,
 		fontSize: 10,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.primary,
 		textAlign: "center",
 		writingDirection: "rtl",
@@ -3165,7 +3092,7 @@ export const generateTripCardStyles = StyleSheet.create({
 	},
 	title: {
 		fontSize: 20,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: "#ffffffff",
 		textAlign: "center",
 		marginBottom: 8,
@@ -3174,7 +3101,7 @@ export const generateTripCardStyles = StyleSheet.create({
 		fontSize: 15,
 		color: "#f0f0f0ff",
 		textAlign: "center",
-		fontWeight: "400",
+		fontFamily: fontFamilies.regular,
 	},
 });
 
@@ -3193,7 +3120,7 @@ export const placesInputStyles = StyleSheet.create({
 		borderRadius: 12,
 		backgroundColor: colors.infoLight,
 	},
-	addText: { color: colors.info, fontSize: 16, fontWeight: "700" },
+	addText: { color: colors.info, fontSize: 16, fontFamily: fontFamilies.semiBold },
 	row: {
 		flexDirection: "row-reverse",
 		alignItems: "center",
@@ -3222,11 +3149,11 @@ export const placesInputStyles = StyleSheet.create({
 		justifyContent: "center",
 		marginLeft: spacing.sm,
 	},
-	removeText: { color: colors.error, fontSize: 18, fontWeight: "700" },
+	removeText: { color: colors.error, fontSize: 18, fontFamily: fontFamilies.semiBold },
 	checkmark: {
 		color: colors.success,
 		fontSize: 18,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		marginLeft: spacing.sm,
 	},
 	errorText: {
@@ -3297,7 +3224,7 @@ export const placesRouteStyles = StyleSheet.create({
 	placeText: {
 		fontSize: 13,
 		color: "#4d4d4dff",
-		fontWeight: "500",
+		fontFamily: fontFamilies.medium,
 		maxWidth: 100,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -3330,7 +3257,7 @@ export const routeCardStyles = StyleSheet.create({
 		marginTop: 8,
 		color: "rgba(255,255,255,0.76)",
 		fontSize: 14,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "center",
 		writingDirection: "rtl",
 	},
@@ -3390,7 +3317,7 @@ export const routeCardStyles = StyleSheet.create({
 	feedMetaText: {
 		color: "rgba(255,255,255,0.86)",
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 		textShadowColor: "rgba(0,0,0,0.5)",
@@ -3482,7 +3409,7 @@ export const addRoutesScreenStyles = StyleSheet.create({
     },
     screenTitle: {
         fontSize: 20,
-        fontWeight: '800',
+        fontFamily: fontFamilies.semiBold,
         textAlign: 'right',
         writingDirection: 'rtl',
         marginBottom: spacing.lg,
@@ -3491,7 +3418,7 @@ export const addRoutesScreenStyles = StyleSheet.create({
     fieldLabel: {
         textAlign: 'right',
         fontSize: 14,
-        fontWeight: 'bold',
+        fontFamily: fontFamilies.semiBold,
         marginBottom: 8,
         color: colors.textPrimary || '#111827',
         writingDirection: 'rtl',
@@ -3527,7 +3454,7 @@ export const addRoutesScreenStyles = StyleSheet.create({
 	confirmationCheck: {
 		color: colors.white,
 		fontSize: 14,
-		fontWeight: '900',
+		fontFamily: fontFamilies.semiBold,
 	},
 	confirmationText: {
 		flex: 1,
@@ -3565,7 +3492,7 @@ export const routeDetailScreenStyles = StyleSheet.create({
     headerTitle: {
         flex: 1,
         fontSize: 18,
-        fontWeight: '900',
+        fontFamily: fontFamilies.semiBold,
         color: colors.textPrimary,
         textAlign: 'center',
         writingDirection: 'rtl',
@@ -3634,7 +3561,7 @@ export const routeDetailScreenStyles = StyleSheet.create({
     },
     subsectionTitle: {
         fontSize: 15,
-        fontWeight: '800',
+        fontFamily: fontFamilies.semiBold,
         color: colors.textPrimary,
         marginBottom: spacing.sm,
         textAlign: 'right',
@@ -3693,7 +3620,7 @@ export const routeDetailScreenStyles = StyleSheet.create({
     mapButtonText: {
         color: colors.white,
         fontSize: 14,
-        fontWeight: "800",
+        fontFamily: fontFamilies.semiBold,
         textAlign: "right",
         writingDirection: "rtl",
     },
@@ -3734,7 +3661,7 @@ export const routeMapStyles = StyleSheet.create({
 	},
 	headerTitle: {
 		fontSize: 16,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -3742,7 +3669,7 @@ export const routeMapStyles = StyleSheet.create({
 	headerSubtitle: {
 		marginTop: 2,
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textSecondary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -3759,7 +3686,7 @@ export const routeMapStyles = StyleSheet.create({
 	headerActionText: {
 		color: colors.white,
 		fontSize: 12,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	headerActionTextDisabled: {
@@ -3807,7 +3734,7 @@ export const routeMapStyles = StyleSheet.create({
 	},
 	locationNoticeText: {
 		fontSize: 12,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "center",
 		writingDirection: "rtl",
@@ -3825,7 +3752,7 @@ export const routeMapStyles = StyleSheet.create({
 	emptyTitle: {
 		marginTop: 14,
 		fontSize: 18,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "center",
 		writingDirection: "rtl",
@@ -3870,14 +3797,14 @@ export const routeMapStyles = StyleSheet.create({
 	sheetKicker: {
 		fontSize: 11,
 		color: colors.textMuted,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
 	sheetTitle: {
 		marginTop: 2,
 		fontSize: 17,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: "right",
 		writingDirection: "rtl",
@@ -3898,7 +3825,7 @@ export const routeMapStyles = StyleSheet.create({
 	},
 	sheetImageFallbackText: {
 		color: colors.white,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		fontSize: 18,
 	},
 	sheetAddress: {
@@ -3929,7 +3856,7 @@ export const routeMapStyles = StyleSheet.create({
 	primaryButtonText: {
 		color: colors.white,
 		fontSize: 14,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 });
@@ -3944,33 +3871,6 @@ export const routesScreenStyles = StyleSheet.create({
 		paddingTop: 28,
 		position: 'relative',
 		zIndex: 2,
-	},
-	header: {
-		paddingHorizontal: 18,
-		paddingBottom: 18,
-		borderBottomLeftRadius: 30,
-		borderBottomRightRadius: 30,
-		overflow: "hidden",
-	},
-	headerCircleLarge: {
-		position: "absolute",
-		width: 210,
-		height: 210,
-		borderRadius: 105,
-		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.07)",
-		top: -58,
-		right: -44,
-	},
-	headerCircleSmall: {
-		position: "absolute",
-		width: 134,
-		height: 134,
-		borderRadius: 67,
-		borderWidth: 1,
-		borderColor: "rgba(255,255,255,0.09)",
-		top: 30,
-		right: 24,
 	},
 	topActionsRow: {
 		position: "relative",
@@ -3989,7 +3889,7 @@ export const routesScreenStyles = StyleSheet.create({
 		color: "#FFFFFF",
 		fontSize: 26,
 		lineHeight: 31,
-		fontWeight: "900",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "center",
 		writingDirection: "rtl",
 	},
@@ -3997,7 +3897,7 @@ export const routesScreenStyles = StyleSheet.create({
 		marginTop: 2,
 		color: "rgba(255,255,255,0.66)",
 		fontSize: 13,
-		fontWeight: "700",
+		fontFamily: fontFamilies.semiBold,
 		textAlign: "center",
 		writingDirection: "rtl",
 	},
@@ -4021,7 +3921,7 @@ export const routesScreenStyles = StyleSheet.create({
 	sortGlassText: {
 		color: "#FFFFFF",
 		fontSize: 12,
-		fontWeight: "800",
+		fontFamily: fontFamilies.semiBold,
 	},
 	glassIconButton: {
 		width: 42,
@@ -4062,7 +3962,7 @@ export const routesScreenStyles = StyleSheet.create({
 		height: "100%",
 		color: "#FFFFFF",
 		fontSize: 15,
-		fontWeight: "600",
+		fontFamily: fontFamilies.semiBold,
 		paddingVertical: 0,
 		writingDirection: "rtl",
 	},
@@ -4131,7 +4031,7 @@ export const tabNavigatorStyles = StyleSheet.create({
   },
   label: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     marginTop: 3,
     writingDirection: 'rtl',
   },

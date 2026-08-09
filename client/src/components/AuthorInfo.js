@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
+import AppText from "./AppText";
 import { Avatar } from './Avatar';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { common, typography, buttons, cards } from '../styles';
@@ -24,11 +25,11 @@ export const AuthorInfo = ({ author, item, isOwner }) => {
         />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <View style={common.rowBetween}>
-            <Text style={typography.label}>{author.displayName}</Text>
+            <AppText style={typography.label}>{author.displayName}</AppText>
             {item.createdAt && (
-              <Text style={[typography.caption, { color: '#9CA3AF', fontSize: 11 }]}>
+              <AppText style={[typography.caption, { color: '#9CA3AF', fontSize: 11 }]}>
                 {formatTimestamp(item.createdAt)}
-              </Text>
+              </AppText>
             )}
           </View>
         </View>
@@ -36,7 +37,7 @@ export const AuthorInfo = ({ author, item, isOwner }) => {
 
       {!isOwner && (
         <TouchableOpacity style={buttons.primarySmall}>
-          <Text style={buttons.primarySmallText}>מעקב</Text>
+          <AppText style={buttons.primarySmallText}>מעקב</AppText>
         </TouchableOpacity>
       )}
     </View>

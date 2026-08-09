@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import AppText from "./AppText";
 import { colors, common, spacing, typography, screenHeaderStyles as styles } from '../styles';
 
 /**
@@ -17,13 +18,13 @@ const ScreenHeader = ({ title, subtitle, renderRight, renderLeft, compact = fals
 
       {/* Center (Title) */}
       <View style={styles.centerContainer}>
-        <Text style={styles.title} numberOfLines={1}>
+        <AppText style={styles.title} numberOfLines={1}>
           {title}
-        </Text>
+        </AppText>
         {subtitle && (
-          <Text style={styles.subtitle} numberOfLines={1}>
+          <AppText style={styles.subtitle} numberOfLines={1}>
             {subtitle}
-          </Text>
+          </AppText>
         )}
       </View>
 

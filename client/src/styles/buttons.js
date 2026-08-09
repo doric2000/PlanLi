@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 export const buttons = {
     primary: {
         backgroundColor: "#2EC4B6",
@@ -10,7 +11,7 @@ export const buttons = {
     primaryText: {
         color: "#FFFFFF",
         fontSize: 16,
-        fontWeight: "600",
+        fontFamily: fontFamilies.medium,
     },
 
     primarySmall: {
@@ -22,7 +23,7 @@ export const buttons = {
 
     primarySmallText: {
         color: "#FFFFFF",
-        fontWeight: "600",
+        fontFamily: fontFamilies.medium,
         fontSize: 14,
     },
 
@@ -39,7 +40,7 @@ export const buttons = {
     secondaryText: {
         color: "#111827",
         fontSize: 16,
-        fontWeight: "600",
+        fontFamily: fontFamilies.medium,
     },
 
     submit: {
@@ -53,7 +54,7 @@ export const buttons = {
     submitText: {
         color: "#FFFFFF",
         fontSize: 18,
-        fontWeight: "bold",
+        fontFamily: fontFamilies.medium,
     },
 
     fab: {
@@ -91,7 +92,7 @@ export const buttons = {
     floatingPlanText: {
         color: '#FFFFFF',
         fontSize: 16,
-        fontWeight: 'bold',
+        fontFamily: fontFamilies.medium,
     },
 
     disabled: {
@@ -110,7 +111,7 @@ export const buttons = {
     clearText: {
         fontSize: 14,
         color: "#111827",
-        fontWeight: "500",
+        fontFamily: fontFamilies.medium,
     },
 
     apply: {
@@ -123,7 +124,7 @@ export const buttons = {
     applyText: {
         fontSize: 14,
         color: "#FFFFFF",
-        fontWeight: "600",
+        fontFamily: fontFamilies.medium,
     },
 
     // --- REFACTORED FILTER ICON STYLES ---
@@ -184,7 +185,7 @@ export const buttons = {
     signOutText: {
         marginLeft: 8,
         fontSize: 16,
-        fontWeight: "600",
+        fontFamily: fontFamilies.medium,
         color: "#EF4444",
     },
 

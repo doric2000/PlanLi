@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Modal, View, Text, Pressable, Platform } from "react-native";
+import { Modal, View, Pressable, Platform } from "react-native";
+import AppText from "./AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, actionMenuStyles as styles } from "../styles";
 
@@ -47,7 +48,7 @@ export const ActionMenu = ({
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
+              <AppText style={styles.title}>{title}</AppText>
               <Pressable onPress={close} hitSlop={10} style={styles.closeBtn}>
                 <Ionicons name="close" size={20} color="#111827" />
               </Pressable>
@@ -56,19 +57,19 @@ export const ActionMenu = ({
             <Pressable style={styles.actionBtn} onPress={() => run(onEdit)}>
               <View style={styles.row}>
                 <Ionicons name="create-outline" size={18} color="#111827" />
-                <Text style={styles.actionText}>עריכה</Text>
+                <AppText style={styles.actionText}>עריכה</AppText>
               </View>
             </Pressable>
 
             <Pressable style={[styles.actionBtn, styles.destructiveBtn]} onPress={() => run(onDelete)}>
               <View style={styles.row}>
                 <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                <Text style={[styles.actionText, styles.destructiveText]}>מחיקה</Text>
+                <AppText style={[styles.actionText, styles.destructiveText]}>מחיקה</AppText>
               </View>
             </Pressable>
 
             <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={close}>
-              <Text style={styles.cancelText}>ביטול</Text>
+              <AppText style={styles.cancelText}>ביטול</AppText>
             </Pressable>
 
             {Platform.OS === "ios" ? <View style={{ height: 6 }} /> : null}

@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-	ActivityIndicator, Alert, RefreshControl, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
+	ActivityIndicator,
+	Alert,
+	RefreshControl,
+	ScrollView,
+	StatusBar,
+	TouchableOpacity,
+	View,
+} from "react-native";
+import AppText from "../../../components/AppText";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { collectionGroup, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 
@@ -21,14 +29,10 @@ import { resolveDestinationForPlacePreview } from "../../../services/LocationSer
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
 import { filterAndSortDestinations, mergeDestinations } from "../../../utils/destinationSearch";
 
-const FEATURED_BADGES = ["חם עכשיו", "בחירת הקהילה", "חדש"];
 const DESTINATION_GRADIENTS = [
-	["#1A6B8A", "#2D9CDB"],
-	["#B8860B", "#DAA520"],
-	["#2D4A7A", "#4A7AB5"],
-	["#1A3A5C", "#2E6699"],
-	["#8B1A4A", "#C94B7B"],
-	["#7A3A1A", "#C05C1A"],
+	["#78909C", "#546E7A"],
+	["#90A4AE", "#607D8B"],
+	["#8295A3", "#526878"],
 ];
 
 export default function HomeScreen({ navigation }) {
@@ -280,9 +284,8 @@ export default function HomeScreen({ navigation }) {
 					priority="high"
 				/>
 			) : (
-				<Text style={styles.avatarInitial}>{profileInitial}</Text>
+				<AppText style={styles.avatarInitial}>{profileInitial}</AppText>
 			)}
-			<View style={styles.avatarBadge} />
 		</TouchableOpacity>
 	);
 
@@ -294,7 +297,7 @@ export default function HomeScreen({ navigation }) {
 			</View>
 
 			<View style={styles.headlineWrap}>
-				<Text style={styles.headline}>יאללה,{"\n"}לאן טסים?</Text>
+				<AppText style={styles.headline}>לאן נוסעים?</AppText>
 			</View>
 
 			<View style={styles.searchWrap}>
@@ -348,10 +351,10 @@ export default function HomeScreen({ navigation }) {
 		if (isGuest || preferencesLoading || preferencesCompleted) return null;
 		return (
 			<View style={preferenceStyles.promptCard} testID="home-preferences-prompt">
-				<Text style={preferenceStyles.promptTitle}>בואו נתאים את PlanLi אליכם</Text>
-				<Text style={preferenceStyles.promptText}>כמה בחירות קצרות יעזרו לנו להציג קודם המלצות שמתאימות לסגנון שלכם.</Text>
+				<AppText style={preferenceStyles.promptTitle}>העדפות טיול</AppText>
+				<AppText style={preferenceStyles.promptText}>בחירה קצרה תעזור לסדר את התוכן לפי מה שמעניין אותך.</AppText>
 				<TouchableOpacity style={preferenceStyles.promptButton} onPress={openPreferenceSetup}>
-					<Text style={preferenceStyles.promptButtonText}>הגדרת העדפות</Text>
+					<AppText style={preferenceStyles.promptButtonText}>בחירת העדפות</AppText>
 				</TouchableOpacity>
 			</View>
 		);
@@ -385,17 +388,12 @@ export default function HomeScreen({ navigation }) {
 					style={styles.featuredOverlay}
 				/>
 				<View style={styles.featuredContent}>
-					<View style={styles.featuredBadge}>
-						<Text style={styles.featuredBadgeText}>
-							{FEATURED_BADGES[index] || FEATURED_BADGES[0]}
-						</Text>
-					</View>
-					<Text style={styles.featuredCity} numberOfLines={1}>
+					<AppText style={styles.featuredCity} numberOfLines={1}>
 						{city.name || city.id}
-					</Text>
-					<Text style={styles.featuredCountry} numberOfLines={1}>
+					</AppText>
+					<AppText style={styles.featuredCountry} numberOfLines={1}>
 						{city.country || city.countryName || city.countryId}
-					</Text>
+					</AppText>
 				</View>
 			</TouchableOpacity>
 		);
@@ -405,19 +403,16 @@ export default function HomeScreen({ navigation }) {
 		<View style={styles.section}>
 			<View style={styles.sectionHeader}>
 				<TouchableOpacity activeOpacity={0.7}>
-					<Text style={styles.sectionLink}>הצג הכל</Text>
+					<AppText style={styles.sectionLink}>הצג הכל</AppText>
 				</TouchableOpacity>
-				<View style={styles.sectionTitleGroup}>
-					<MaterialCommunityIcons name="fire" size={22} color={colors.brandOrange} />
-					<Text style={styles.sectionTitle}>חם עכשיו</Text>
-				</View>
+				<AppText style={styles.sectionTitle}>מומלצים עכשיו</AppText>
 			</View>
 			{featuredDestinations.length === 0 ? (
 				<View style={styles.loadingRow}>
 					{loading ? <ActivityIndicator color={colors.navActive} /> : null}
-					<Text style={styles.statusText}>
+					<AppText style={styles.statusText}>
 						{loading ? "טוען יעדים..." : "אין יעדים להצגה"}
-					</Text>
+					</AppText>
 				</View>
 			) : (
 				<ScrollView
@@ -435,21 +430,21 @@ export default function HomeScreen({ navigation }) {
 		<View style={styles.section}>
 			<View style={styles.sectionHeader}>
 				<TouchableOpacity activeOpacity={0.7}>
-					<Text style={styles.sectionLink}>הצג הכל</Text>
+					<AppText style={styles.sectionLink}>הצג הכל</AppText>
 				</TouchableOpacity>
-				<Text style={styles.sectionTitle}>יעדים פופולריים</Text>
+				<AppText style={styles.sectionTitle}>יעדים פופולריים</AppText>
 			</View>
 
 			<View style={styles.destinationGrid}>
 				{loading && destinations.length === 0 ? (
 					<View style={styles.fullWidthStatus}>
 						<ActivityIndicator color={colors.navActive} />
-						<Text style={styles.statusText}>טוען יעדים...</Text>
+						<AppText style={styles.statusText}>טוען יעדים...</AppText>
 					</View>
 				) : filteredDestinations.length === 0 ? (
-					<Text style={styles.emptyText} testID="home-empty-state">
+					<AppText style={styles.emptyText} testID="home-empty-state">
 						לא נמצאו יעדים
-					</Text>
+					</AppText>
 				) : (
 					filteredDestinations.map((city) => (
 						<CityCard

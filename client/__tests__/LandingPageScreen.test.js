@@ -20,7 +20,7 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
   const Icon = ({ name }) => <Text>{name}</Text>;
-  return { Ionicons: Icon, MaterialCommunityIcons: Icon };
+  return { Ionicons: Icon, MaterialCommunityIcons: Icon, MaterialIcons: Icon };
 });
 
 jest.mock('../src/components/CachedImage', () => {

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { sendEmailVerification } from 'firebase/auth';
@@ -57,10 +58,10 @@ export default function VerifyEmailScreen({ navigation }) {
     <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={forms.authContainer}>
       <SafeAreaView style={forms.authSafeArea}>
         <View style={[forms.authCard, { paddingVertical: 28 }]}>
-          <Text style={forms.authTitle}>אימות אימייל</Text>
-          <Text style={forms.authSubtitle}>
+          <AppText style={forms.authTitle}>אימות אימייל</AppText>
+          <AppText style={forms.authSubtitle}>
             כדי לפתוח את כל הפיצ׳רים (תגובות, שמירה, יצירה/עריכה), צריך לאמת את האימייל.
-          </Text>
+          </AppText>
 
           <View style={{ height: 16 }} />
 
@@ -75,7 +76,7 @@ export default function VerifyEmailScreen({ navigation }) {
                 {submitting ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={forms.authButtonText}>שלח אימייל אימות שוב</Text>
+                  <AppText style={forms.authButtonText}>שלח אימייל אימות שוב</AppText>
                 )}
               </LinearGradient>
             </TouchableOpacity>
@@ -86,7 +87,7 @@ export default function VerifyEmailScreen({ navigation }) {
               style={[forms.authSecondaryButton, { borderColor: 'rgba(255,255,255,0.35)' }]}
               disabled={submitting}
             >
-              <Text style={forms.authSecondaryButtonText}>רענן סטטוס</Text>
+              <AppText style={forms.authSecondaryButtonText}>רענן סטטוס</AppText>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -94,9 +95,9 @@ export default function VerifyEmailScreen({ navigation }) {
               activeOpacity={0.8}
               style={[forms.authSecondaryButton, { borderColor: 'rgba(255,255,255,0.35)' }]}
             >
-              <Text style={forms.authSecondaryButtonText}>
+              <AppText style={forms.authSecondaryButtonText}>
                 {tier === 'unverified' ? 'המשך לאפליקציה (מוגבל)' : 'המשך לאפליקציה'}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
         </View>

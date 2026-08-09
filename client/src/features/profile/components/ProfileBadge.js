@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import AppText from "../../../components/AppText";
 
 import { colors, profileBadgeStyles as styles } from '../../../styles';
 
@@ -15,7 +16,7 @@ export default function ProfileBadge({ text, variant = 'default' }) {
 
   return (
     <View style={[styles.container, { backgroundColor, borderColor }]}>
-      <Text style={[styles.text, { color: textColor }]}>{text}</Text>
+      <AppText style={[styles.text, { color: textColor }]}>{text}</AppText>
     </View>
   );
 }

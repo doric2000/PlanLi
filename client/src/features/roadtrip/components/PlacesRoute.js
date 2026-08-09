@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import AppText from "../../../components/AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { placesRouteStyles as styles } from '../../../styles';
 
@@ -26,9 +27,9 @@ export default function PlacesRoute({ places, style }) {
 				return (
 					<View key={index} style={styles.routeItem}>
 						<View style={styles.placeBox}>
-							<Text style={styles.placeText} numberOfLines={1}>
+							<AppText style={styles.placeText} numberOfLines={1}>
 								{placeName}
-							</Text>
+							</AppText>
 						</View>
 						{index < placesArray.length - 1 && (
 							<Ionicons

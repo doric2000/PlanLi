@@ -1,5 +1,6 @@
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
+import AppText from "./AppText";
 import Svg, { Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, common } from "../styles";
@@ -35,7 +36,7 @@ export const TimelineItem = ({ day, index, isLast, onPress }) => {
 				activeOpacity={0.85}
 			>
 				<Ionicons name="location" size={32} color={colors.info} />
-				<Text style={common.timelineDayNumber}>{index + 1}</Text>
+				<AppText style={common.timelineDayNumber}>{index + 1}</AppText>
 			</TouchableOpacity>
 
 			<TouchableOpacity
@@ -43,13 +44,13 @@ export const TimelineItem = ({ day, index, isLast, onPress }) => {
 				onPress={onPress}
 				activeOpacity={0.85}
 			>
-				<Text style={common.timelineTitle}>{text.day} {index + 1}</Text>
-				<Text numberOfLines={2} style={common.timelineDescription}>
+				<AppText style={common.timelineTitle}>{text.day} {index + 1}</AppText>
+				<AppText numberOfLines={2} style={common.timelineDescription}>
 					{day?.description || text.openDetails}
-				</Text>
-				<Text style={common.timelineMeta}>
+				</AppText>
+				<AppText style={common.timelineMeta}>
 					{stopsCount > 0 ? `${stopsCount} ${text.stops}` : text.noStops}
-				</Text>
+				</AppText>
 			</TouchableOpacity>
 		</View>
 	);

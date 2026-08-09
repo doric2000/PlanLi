@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
+	ActivityIndicator,
+	Alert,
+	Keyboard,
+	KeyboardAvoidingView,
+	Modal,
+	Platform,
+	Pressable,
+	View,
 } from 'react-native';
+import AppText from "../../../components/AppText";
+import AppTextInput from "../../../components/AppTextInput";
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { colors } from '../../../styles';
@@ -113,7 +113,7 @@ export default function ProfileBioModal({
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>המשפט שלי</Text>
+            <AppText style={styles.modalTitle}>המשפט שלי</AppText>
             <Pressable
               onPress={requestClose}
               style={styles.modalClose}
@@ -123,8 +123,8 @@ export default function ProfileBioModal({
               <MaterialIcons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <Text style={styles.modalHelper}>המשפט יופיע בפרופיל שלך ויהיה גלוי לקהילת PlanLi.</Text>
-          <TextInput
+          <AppText style={styles.modalHelper}>המשפט יופיע בפרופיל שלך ויהיה גלוי לקהילת PlanLi.</AppText>
+          <AppTextInput
             ref={inputRef}
             value={draft}
             onChangeText={updateDraft}
@@ -138,10 +138,10 @@ export default function ProfileBioModal({
             style={styles.bioInput}
             accessibilityLabel="משפט פרופיל"
           />
-          <Text style={styles.bioCount}>
+          <AppText style={styles.bioCount}>
             {profileBioLength(draft)}/{PROFILE_BIO_MAX_LENGTH}
-          </Text>
-          {error ? <Text style={styles.modalError}>{error}</Text> : null}
+          </AppText>
+          {error ? <AppText style={styles.modalError}>{error}</AppText> : null}
             <View style={styles.modalActions}>
             <Pressable
               onPress={requestClose}
@@ -149,7 +149,7 @@ export default function ProfileBioModal({
               disabled={saving}
               accessibilityRole="button"
             >
-              <Text style={[styles.modalButtonText, styles.modalButtonTextSecondary]}>ביטול</Text>
+              <AppText style={[styles.modalButtonText, styles.modalButtonTextSecondary]}>ביטול</AppText>
             </Pressable>
             <Pressable
               onPress={save}
@@ -160,7 +160,7 @@ export default function ProfileBioModal({
               {saving ? (
                 <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={[styles.modalButtonText, styles.modalButtonTextPrimary]}>שמירה</Text>
+                <AppText style={[styles.modalButtonText, styles.modalButtonTextPrimary]}>שמירה</AppText>
               )}
             </Pressable>
             </View>

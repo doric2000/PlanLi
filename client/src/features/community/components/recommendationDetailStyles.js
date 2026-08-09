@@ -1,3 +1,4 @@
+import { fontFamilies } from "../../../styles/typography";
 import { Platform, StyleSheet } from 'react-native';
 
 import { colors } from '../../../styles';
@@ -31,7 +32,7 @@ export const recommendationDetailStyles = StyleSheet.create({
   categoryText: {
     color: colors.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -40,7 +41,7 @@ export const recommendationDetailStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 29,
     lineHeight: 36,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -64,7 +65,7 @@ export const recommendationDetailStyles = StyleSheet.create({
   },
   placeText: {
     color: colors.textPrimary,
-    fontWeight: '500',
+    fontFamily: fontFamilies.medium,
   },
   authorRow: {
     marginTop: 14,
@@ -92,7 +93,7 @@ export const recommendationDetailStyles = StyleSheet.create({
   authorName: {
     color: colors.textPrimary,
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -119,7 +120,7 @@ export const recommendationDetailStyles = StyleSheet.create({
   editText: {
     color: colors.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
   },
   section: {
@@ -129,7 +130,7 @@ export const recommendationDetailStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 19,
     lineHeight: 25,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -173,7 +174,7 @@ export const recommendationDetailStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 13,
     lineHeight: 19,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -196,7 +197,7 @@ export const recommendationDetailStyles = StyleSheet.create({
   chipText: {
     color: colors.textSecondary,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: fontFamilies.medium,
     writingDirection: 'rtl',
   },
   extraGroup: {
@@ -205,7 +206,7 @@ export const recommendationDetailStyles = StyleSheet.create({
   extraTitle: {
     color: colors.textSecondary,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },

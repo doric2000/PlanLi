@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
+import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
@@ -32,9 +33,9 @@ function ChoiceChip({ option, selected, onPress, testID }) {
       accessibilityRole="button"
       accessibilityState={{ selected }}
     >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+      <AppText style={[styles.chipText, selected && styles.chipTextSelected]}>
         {option.label}{option.helper ? ` · ${option.helper}` : ''}
-      </Text>
+      </AppText>
     </TouchableOpacity>
   );
 }
@@ -42,8 +43,8 @@ function ChoiceChip({ option, selected, onPress, testID }) {
 function OptionGroup({ title, help, options, values, onToggle, prefix }) {
   return (
     <View style={styles.optionGroup}>
-      <Text style={styles.optionTitle}>{title}</Text>
-      {!!help && <Text style={styles.optionHelp}>{help}</Text>}
+      <AppText style={styles.optionTitle}>{title}</AppText>
+      {!!help && <AppText style={styles.optionHelp}>{help}</AppText>}
       <View style={styles.chipWrap}>
         {options.map((option) => (
           <ChoiceChip
@@ -131,9 +132,9 @@ export default function PreferenceSetupScreen({ navigation }) {
   const renderStep = () => {
     if (step === 0) return (
       <>
-        <Text style={styles.sectionTitle}>מה מעניין אותך?</Text>
-        <Text style={styles.sectionHelp}>בחרו בין 3 ל־8 תחומים. נשתמש בהם כדי לסדר המלצות, לא כדי להסתיר תוכן.</Text>
-        <Text style={styles.counter}>{profile.interests.length}/8 נבחרו</Text>
+        <AppText style={styles.sectionTitle}>מה מעניין אותך?</AppText>
+        <AppText style={styles.sectionHelp}>בחרו בין 3 ל־8 תחומים. נשתמש בהם כדי לסדר המלצות, לא כדי להסתיר תוכן.</AppText>
+        <AppText style={styles.counter}>{profile.interests.length}/8 נבחרו</AppText>
         <View style={styles.chipWrap}>
           {INTERESTS.map((option) => <ChoiceChip key={option.value} option={option}
             selected={profile.interests.includes(option.value)}
@@ -144,8 +145,8 @@ export default function PreferenceSetupScreen({ navigation }) {
     );
     if (step === 1) return (
       <>
-        <Text style={styles.sectionTitle}>איך אתם מטיילים?</Text>
-        <Text style={styles.sectionHelp}>התקציב הוא העדפה רכה, ואפשר לבחור עד שני הרכבים נפוצים.</Text>
+        <AppText style={styles.sectionTitle}>איך אתם מטיילים?</AppText>
+        <AppText style={styles.sectionHelp}>התקציב הוא העדפה רכה, ואפשר לבחור עד שני הרכבים נפוצים.</AppText>
         <OptionGroup title="תקציב מועדף" options={BUDGETS}
           values={profile.budget ? [profile.budget] : []}
           onToggle={(value) => setProfile((previous) => ({ ...previous, budget: value }))}
@@ -157,8 +158,8 @@ export default function PreferenceSetupScreen({ navigation }) {
     );
     return (
       <>
-        <Text style={styles.sectionTitle}>סגנון וצרכים</Text>
-        <Text style={styles.sectionHelp}>הבחירות בשלב הזה אופציונליות ותמיד ניתנות לשינוי בפרופיל.</Text>
+        <AppText style={styles.sectionTitle}>סגנון וצרכים</AppText>
+        <AppText style={styles.sectionHelp}>הבחירות בשלב הזה אופציונליות ותמיד ניתנות לשינוי בפרופיל.</AppText>
         <OptionGroup title="אווירה" help="עד שלוש אפשרויות" options={VIBES} values={profile.vibe}
           onToggle={(value) => toggleArray('vibe', value, 3)} prefix="preference-vibe" />
         <OptionGroup title="סגנון טיול" help="עד שלוש אפשרויות" options={TRAVELER_STYLES} values={profile.travelerStyles}
@@ -169,32 +170,32 @@ export default function PreferenceSetupScreen({ navigation }) {
         <OptionGroup title="צרכים והעדפות" options={NEEDS} values={profile.needs}
           onToggle={(value) => toggleArray('needs', value, NEEDS.length)} prefix="preference-need" />
         <View style={styles.privacyCard} testID="preference-review">
-          <Text style={styles.privacyTitle}>סיכום ההעדפות</Text>
-          <Text style={styles.privacyText}>
+          <AppText style={styles.privacyTitle}>סיכום ההעדפות</AppText>
+          <AppText style={styles.privacyText}>
             {`תחומי עניין: ${INTERESTS.filter((option) => profile.interests.includes(option.value)).map((option) => option.label).join(', ')}`}
-          </Text>
-          <Text style={styles.privacyText}>
+          </AppText>
+          <AppText style={styles.privacyText}>
             {`תקציב: ${BUDGETS.find((option) => option.value === profile.budget)?.label || 'לא נבחר'}`}
-          </Text>
-          <Text style={styles.privacyText}>
+          </AppText>
+          <AppText style={styles.privacyText}>
             {`הרכב: ${TRAVEL_PARTIES.filter((option) => profile.travelParties.includes(option.value)).map((option) => option.label).join(', ')}`}
-          </Text>
-          <Text style={styles.privacyText}>
+          </AppText>
+          <AppText style={styles.privacyText}>
             {`אווירה: ${VIBES.filter((option) => profile.vibe.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
-          </Text>
-          <Text style={styles.privacyText}>
+          </AppText>
+          <AppText style={styles.privacyText}>
             {`סגנון טיול: ${TRAVELER_STYLES.filter((option) => profile.travelerStyles.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
-          </Text>
-          <Text style={styles.privacyText}>
+          </AppText>
+          <AppText style={styles.privacyText}>
             {`קצב: ${PACES.find((option) => option.value === profile.pace)?.label || 'לא נבחר'}`}
-          </Text>
-          <Text style={styles.privacyText}>
+          </AppText>
+          <AppText style={styles.privacyText}>
             {`צרכים והעדפות: ${NEEDS.filter((option) => profile.needs.includes(option.value)).map((option) => option.label).join(', ') || 'לא נבחר'}`}
-          </Text>
+          </AppText>
         </View>
         <View style={styles.privacyCard}>
-          <Text style={styles.privacyTitle}>איך ההתאמה משתפרת?</Text>
-          <Text style={styles.privacyText}>לייקים, שמירות ופתיחת המלצות מעדכנים ציוני התאמה מצומצמים. לא נשמר יומן גלישה מלא, ואפשר לאפס את הלמידה בהגדרות.</Text>
+          <AppText style={styles.privacyTitle}>איך ההתאמה משתפרת?</AppText>
+          <AppText style={styles.privacyText}>לייקים, שמירות ופתיחת המלצות מעדכנים ציוני התאמה מצומצמים. לא נשמר יומן גלישה מלא, ואפשר לאפס את הלמידה בהגדרות.</AppText>
         </View>
       </>
     );
@@ -207,14 +208,14 @@ export default function PreferenceSetupScreen({ navigation }) {
       <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Text style={styles.headerTitle}>העדפות הטיול שלי</Text>
+            <AppText style={styles.headerTitle}>העדפות הטיול שלי</AppText>
             {!setupRequired ? (
               <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()} testID="preference-close">
                 <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             ) : <View style={styles.closePlaceholder} />}
           </View>
-          <Text style={styles.headerSubtitle}>שלב {step + 1} מתוך 3</Text>
+          <AppText style={styles.headerSubtitle}>שלב {step + 1} מתוך 3</AppText>
           <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${((step + 1) / 3) * 100}%` }]} /></View>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -223,10 +224,10 @@ export default function PreferenceSetupScreen({ navigation }) {
         <View style={styles.footer}>
           <TouchableOpacity testID="preference-next" style={[styles.primaryButton, (!canContinue || saving) && styles.primaryButtonDisabled]}
             onPress={next} disabled={!canContinue || saving}>
-            {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{step === 2 ? 'סיום ושמירה' : 'המשך'}</Text>}
+            {saving ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={styles.primaryButtonText}>{step === 2 ? 'סיום ושמירה' : 'המשך'}</AppText>}
           </TouchableOpacity>
           {step > 0 ? <TouchableOpacity testID="preference-back" style={styles.secondaryButton} onPress={() => setStep((current) => current - 1)} disabled={saving}>
-            <Text style={styles.secondaryButtonText}>חזרה</Text>
+            <AppText style={styles.secondaryButtonText}>חזרה</AppText>
           </TouchableOpacity> : null}
         </View>
       </View>

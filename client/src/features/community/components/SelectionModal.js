@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { Modal, View, TouchableOpacity, FlatList } from 'react-native';
+import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { colors, selectionModalStyles as styles } from '../../../styles';
 
@@ -29,7 +30,7 @@ const SelectionModal = ({
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#333" />
             </TouchableOpacity>
-            <Text style={styles.title}>{title}</Text>
+            <AppText style={styles.title}>{title}</AppText>
           </View>
 
           {/* List */}
@@ -43,9 +44,9 @@ const SelectionModal = ({
                   style={styles.item}
                   onPress={() => onSelect(item)}
                 >
-                  <Text style={[styles.itemText, isSelected && styles.selectedText]}>
+                  <AppText style={[styles.itemText, isSelected && styles.selectedText]}>
                     {item.name || item.id}
-                  </Text>
+                  </AppText>
                   
                   {/* show checkmark if selected */}
                   {isSelected && (
@@ -55,7 +56,7 @@ const SelectionModal = ({
               );
             }}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>{emptyText}</Text>
+              <AppText style={styles.emptyText}>{emptyText}</AppText>
             }
           />
         </View>

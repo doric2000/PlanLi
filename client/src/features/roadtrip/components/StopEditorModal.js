@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, ScrollView, TouchableOpacity, View } from "react-native";
+import AppText from "../../../components/AppText";
 
 import ExactLocationPicker from "../../../components/ExactLocationPicker";
 import { FormInput } from "../../../components/FormInput";
@@ -158,15 +159,15 @@ export default function StopEditorModal({
 				/>
 				<View style={styles.header}>
 					<TouchableOpacity onPress={tryClose} disabled={uploading}>
-						<Text style={styles.headerButton}>ביטול</Text>
+						<AppText style={styles.headerButton}>ביטול</AppText>
 					</TouchableOpacity>
-					<Text style={styles.headerTitle}>
+					<AppText style={styles.headerTitle}>
 						יום {dayIndex + 1} · תחנה {stopIndex + 1}
-					</Text>
+					</AppText>
 					<TouchableOpacity onPress={handleSave} disabled={uploading}>
-						<Text style={[styles.headerButton, styles.headerButtonStrong]}>
+						<AppText style={[styles.headerButton, styles.headerButtonStrong]}>
 							שמור
-						</Text>
+						</AppText>
 					</TouchableOpacity>
 				</View>
 
@@ -202,7 +203,7 @@ export default function StopEditorModal({
 						rtl
 					/>
 
-					<Text style={styles.photoLabel}>תמונה לתחנה</Text>
+					<AppText style={styles.photoLabel}>תמונה לתחנה</AppText>
 					<ImagePickerBox
 						imageUri={image}
 						onPress={() => pickImage((uri) => setImage(uri))}

@@ -1,3 +1,4 @@
+import { fontFamilies } from "./typography";
 import { StyleSheet } from 'react-native';
 import { colors } from './colors';
 import { shadows } from './shadows';
@@ -82,7 +83,7 @@ export const googlePlacesInput = StyleSheet.create({
 	},
 	mainText: {
 		fontSize: 14,
-		fontWeight: '700',
+		fontFamily: fontFamilies.semiBold,
 		color: colors.textPrimary,
 		textAlign: 'right',
 		writingDirection: 'rtl',
