@@ -53,7 +53,14 @@ export const cards = {
 		aspectRatio: 1,
 		backgroundColor: '#000000',
 	},
+	recCarouselList: {
+		width: '100%',
+		height: '100%',
+		flexGrow: 0,
+		flexShrink: 0,
+	},
 	recCarouselImage: {
+		width: '100%',
 		height: '100%',
 	},
 	recDotsContainer: {
@@ -223,9 +230,12 @@ export const cards = {
 		gap: 4,
 	},
 	recCarouselItem: {
+		width: "100%",
 		height: "100%",
+		flexShrink: 0,
 	},
 	recWebImage: {
+		width: "100%",
 		height: "100%",
 		objectFit: "cover",
 		display: "block",

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable, Alert, TouchableOpacity, Platform, FlatList, useWindowDimensions } from 'react-native';
+import { View, Pressable, Alert, TouchableOpacity, Platform, FlatList } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUserData } from '../hooks/useUserData';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
+import { useStableCarouselLayout } from '../hooks/useStableCarouselLayout';
 import { Avatar } from './Avatar';
 import { ActionMenu } from './ActionMenu';
 import CachedImage, { prefetchImage } from './CachedImage';
@@ -46,9 +47,17 @@ const RecommendationCard = ({
 }) => {
   const navigation = useNavigation();
 
-  const { width: windowWidth } = useWindowDimensions();
   const isFeed = variant === 'feed';
   const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
+  const carouselAspectRatio = isFeed ? 1.1 : 1;
+  const {
+    pageWidth,
+    frameHeight,
+    onLayout: onCarouselLayout,
+  } = useStableCarouselLayout({
+    aspectRatio: carouselAspectRatio,
+    extraHeight: feedTopInset,
+  });
 
   const images = useMemo(
     () => getRecommendationImageUrls(item, 'feed'),
@@ -58,7 +67,6 @@ const RecommendationCard = ({
     () => getRecommendationImageUrls(item, 'thumb')[0] || null,
     [item]
   );
-  const [carouselWidth, setCarouselWidth] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const carouselRef = useRef(null);
   const imageWindow = useBoundedImageWindow(activeImageIndex, images.length);
@@ -67,6 +75,12 @@ const RecommendationCard = ({
     const first = viewableItems?.[0]?.index;
     if (typeof first === 'number') setActiveImageIndex(first);
   }).current;
+  const imageIdentity = `${item?.id || ''}:${images.join('|')}`;
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+    carouselRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+  }, [imageIdentity]);
 
   useEffect(() => {
     const neighbors = imageWindow.indices
@@ -104,14 +118,12 @@ const RecommendationCard = ({
   };
 
   const renderCarouselImage = (uri, index) => {
-    const pageWidth = carouselWidth || windowWidth || 0;
-
     if (index !== imageWindow.currentIndex) {
       return (
         <View
           style={[
             cards.recCarouselImage,
-            { width: pageWidth || '100%' },
+            { width: pageWidth, height: frameHeight },
           ]}
         />
       );
@@ -125,7 +137,7 @@ const RecommendationCard = ({
         sizes="100vw"
         style={[
           Platform.OS === 'web' ? cards.recWebImage : cards.recCarouselImage,
-          { width: pageWidth || '100%' },
+          { width: pageWidth, height: frameHeight },
         ]}
         contentFit="cover"
         priority={index === imageWindow.currentIndex ? 'normal' : 'low'}
@@ -300,12 +312,9 @@ const RecommendationCard = ({
           style={[
             cards.recCarouselContainer,
             isFeed && styles.feedCarouselContainer,
-            feedTopInset > 0 && {
-              aspectRatio: undefined,
-              height: ((carouselWidth || windowWidth || 1) / 1.1) + feedTopInset,
-            },
+            { aspectRatio: undefined, height: frameHeight },
           ]}
-          onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
+          onLayout={onCarouselLayout}
         >
           {isFeed && (
             <LinearGradient
@@ -319,6 +328,7 @@ const RecommendationCard = ({
             ref={carouselRef}
             data={images}
             extraData={imageWindow.currentIndex}
+            style={[cards.recCarouselList, { width: pageWidth, height: frameHeight }]}
             keyExtractor={(uri, index) => `${item.id || 'rec'}:${index}:${uri}`}
             horizontal
             pagingEnabled
@@ -329,14 +339,13 @@ const RecommendationCard = ({
             maxToRenderPerBatch={1}
             windowSize={3}
             renderItem={({ item: uri, index }) => (
-              <View style={[cards.recCarouselItem, { width: carouselWidth || windowWidth || '100%' }]}>
+              <View style={[cards.recCarouselItem, { width: pageWidth, height: frameHeight }]}>
                 {renderCarouselImage(uri, index)}
               </View>
             )}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
             getItemLayout={(_, index) => {
-              const pageWidth = carouselWidth || windowWidth || 0;
               return { length: pageWidth, offset: pageWidth * index, index };
             }}
           />
@@ -400,12 +409,9 @@ const RecommendationCard = ({
           style={[
             cards.recCarouselContainer,
             styles.feedCarouselContainer,
-            feedTopInset > 0 && {
-              aspectRatio: undefined,
-              height: ((carouselWidth || windowWidth || 1) / 1.1) + feedTopInset,
-            },
+            { aspectRatio: undefined, height: frameHeight },
           ]}
-          onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
+          onLayout={onCarouselLayout}
         >
           <View style={styles.feedImagePlaceholder}>
             <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.62)" />
