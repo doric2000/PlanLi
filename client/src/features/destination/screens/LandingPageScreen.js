@@ -65,7 +65,7 @@ function meaningfulDescription(destination) {
   return normalized(description) === titleOnly ? '' : description;
 }
 
-function FactCard({ fact, styles }) {
+function FactCard({ fact, styles, divided }) {
   const Icon = fact.iconLibrary === 'MaterialCommunityIcons'
     ? MaterialCommunityIcons
     : Ionicons;
@@ -74,18 +74,19 @@ function FactCard({ fact, styles }) {
     : fact.icon;
   return (
     <View
-      style={styles.quickCard}
+      style={[styles.quickCard, divided && styles.quickCardDivider]}
       accessibilityLabel={[fact.title, fact.value, fact.detail].filter(Boolean).join(', ')}
+      testID={`quick-fact-${fact.id}`}
     >
-      <View style={[styles.factIcon, fact.id === 'weather' && styles.weatherIcon]}>
+      <View style={styles.factIcon}>
         <Icon
           name={iconName}
-          size={20}
-          color={fact.id === 'weather' ? '#D58A18' : colors.primary}
+          size={21}
+          color={colors.textSecondary}
         />
       </View>
       <AppText style={styles.factTitle}>{fact.title}</AppText>
-      <AppText style={styles.factValue} numberOfLines={fact.id === 'airport' ? 2 : 1}>
+      <AppText style={styles.factValue} numberOfLines={2}>
         {fact.value}
       </AppText>
       {!!fact.detail && <AppText style={styles.factDetail}>{fact.detail}</AppText>}
@@ -380,8 +381,13 @@ export default function LandingPageScreen({ navigation, route }) {
                     <AppText style={styles.sectionTitle}>במבט מהיר</AppText>
                   </View>
                   <View style={styles.quickGrid}>
-                    {quickFacts.map((fact) => (
-                      <FactCard key={fact.id} fact={fact} styles={styles} />
+                    {quickFacts.map((fact, index) => (
+                      <FactCard
+                        key={fact.id}
+                        fact={fact}
+                        styles={styles}
+                        divided={index < quickFacts.length - 1}
+                      />
                     ))}
                   </View>
                 </View>

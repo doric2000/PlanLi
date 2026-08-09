@@ -48,14 +48,6 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
   const tripId = data?.tripId ? cleanId(data.tripId, 'tripId') : null;
   const tripRef = tripId ? db.doc(`trips/${tripId}`) : db.collection('trips').doc();
   const input = data?.trip || {};
-  const media = await validateMediaAssets({
-    admin,
-    uid: auth.uid,
-    media: Array.isArray(input.media) ? input.media : [],
-    mediaBucket,
-    maxAssets: 20,
-  });
-  const destination = await resolveDestination(db, input.destination);
   const existing = await tripRef.get();
   if (tripId) {
     assert(existing.exists, 'not-found', 'Trip does not exist.');
@@ -65,6 +57,15 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
       'You do not own this trip.'
     );
   }
+  const media = await validateMediaAssets({
+    admin,
+    uid: auth.uid,
+    media: Array.isArray(input.media) ? input.media : [],
+    mediaBucket,
+    maxAssets: 20,
+    existingMedia: existing.data()?.media,
+  });
+  const destination = await resolveDestination(db, input.destination);
   const now = admin.firestore.FieldValue.serverTimestamp();
   await tripRef.set({
     ownerId: existing.exists ? existing.data().ownerId : auth.uid,

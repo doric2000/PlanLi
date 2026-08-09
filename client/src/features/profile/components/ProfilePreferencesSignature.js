@@ -2,21 +2,21 @@ import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 import AppText from "../../../components/AppText";
 import { MaterialIcons } from '@expo/vector-icons';
+import CompactChip from '../../../components/CompactChip';
 
 import { colors } from '../../../styles';
 import { getPreferencePresentation } from '../../../constants/travelPresentation';
 
 function PreferenceChip({ preference, styles }) {
   return (
-    <View
+    <CompactChip
+      label={preference.label}
+      icon={preference.icon}
+      interactive={false}
       style={styles.preferenceChip}
+      textStyle={styles.preferenceChipLabel}
       testID={`profile-preference-${preference.kind}-${preference.id}`}
-    >
-      <MaterialIcons name={preference.icon} size={17} color={colors.primary} />
-      <AppText style={styles.preferenceChipLabel} numberOfLines={1}>
-        {preference.label}
-      </AppText>
-    </View>
+    />
   );
 }
 

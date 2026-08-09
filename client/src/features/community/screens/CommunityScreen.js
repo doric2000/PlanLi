@@ -5,6 +5,7 @@ import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../../components/PageHeader';
+import SearchFilterRow from '../../../components/SearchFilterRow';
 
 // --- Components ---
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
@@ -185,21 +186,13 @@ export default function CommunityScreen({ navigation }) {
         )}
       </View>
 
-      <View style={styles.searchRow}>
-        <TouchableOpacity
-          onPress={() => setFilterModalVisible(true)}
-          style={[styles.glassIconButton, isFiltered && styles.glassIconButtonActive]}
-          accessibilityRole="button"
-          accessibilityLabel="סינון"
-        >
-          <Ionicons name="filter" size={19} color="#FFFFFF" />
-          {activeFilterCount > 0 && (
-            <View style={filterUiStyles.badge}>
-              <AppText style={filterUiStyles.badgeText}>{activeFilterCount > 9 ? '9+' : activeFilterCount}</AppText>
-            </View>
-          )}
-        </TouchableOpacity>
-
+      <SearchFilterRow
+        style={styles.searchRow}
+        onFilterPress={() => setFilterModalVisible(true)}
+        activeFilterCount={activeFilterCount}
+        accessibilityLabel="סינון המלצות"
+        filterTestID="community-filter-button"
+      >
         <View style={styles.searchPill}>
           <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
           <AppTextInput
@@ -224,7 +217,7 @@ export default function CommunityScreen({ navigation }) {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </SearchFilterRow>
     </PageHeader>
   );
 

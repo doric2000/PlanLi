@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
+import CompactChip from '../../../components/CompactChip';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
@@ -25,18 +26,13 @@ const EMPTY_PROFILE = {
 
 function ChoiceChip({ option, selected, onPress, testID }) {
   return (
-    <TouchableOpacity
+    <CompactChip
       testID={testID}
-      style={[styles.chip, selected && styles.chipSelected]}
+      label={`${option.label}${option.helper ? ` · ${option.helper}` : ''}`}
+      icon={option.icon}
+      selected={selected}
       onPress={onPress}
-      activeOpacity={0.82}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-    >
-      <AppText style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {option.label}{option.helper ? ` · ${option.helper}` : ''}
-      </AppText>
-    </TouchableOpacity>
+    />
   );
 }
 

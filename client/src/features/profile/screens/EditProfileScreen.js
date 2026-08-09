@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
+import CompactChip from '../../../components/CompactChip';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -13,7 +14,6 @@ import {
   common,
   editProfileScreenStyles as styles,
   preferenceSetupStyles as preferenceStyles,
-  tags,
 } from '../../../styles';
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
@@ -26,12 +26,13 @@ const EMPTY = { interests: [], budget: '', travelParties: [], vibe: [], traveler
 
 function Chip({ option, selected, onPress, testID }) {
   return (
-    <TouchableOpacity testID={testID} onPress={onPress}
-      style={[tags.filterChip, selected && tags.filterChipSelected]} activeOpacity={0.8}>
-      <AppText style={[tags.filterChipText, selected && tags.filterChipTextSelected]}>
-        {option.label}{option.helper ? ` · ${option.helper}` : ''}
-      </AppText>
-    </TouchableOpacity>
+    <CompactChip
+      testID={testID}
+      label={`${option.label}${option.helper ? ` · ${option.helper}` : ''}`}
+      icon={option.icon}
+      selected={selected}
+      onPress={onPress}
+    />
   );
 }
 
@@ -129,7 +130,7 @@ export default function EditProfileScreen({ navigation }) {
     <View style={[cards.card, preferenceStyles.editSectionCard]}>
       <AppText style={styles.sectionLabel}>{title}</AppText>
       {!!help && <AppText style={preferenceStyles.editSectionHelp}>{help}</AppText>}
-      <View style={[tags.chipRow, preferenceStyles.editChipRow]}>
+      <View style={preferenceStyles.editChipRow}>
         {options.map((option) => <Chip key={option.value} option={option} selected={values.includes(option.value)}
           onPress={() => onPress(option.value)} testID={`${prefix}-${option.value}`} />)}
       </View>

@@ -508,8 +508,10 @@ async function validateMediaAssets({
   media,
   mediaBucket,
   maxAssets = MAX_RECOMMENDATION_IMAGES,
+  existingMedia = [],
 }) {
   const assets = Array.isArray(media) ? media : [];
+  const trustedExistingAssets = Array.isArray(existingMedia) ? existingMedia : [];
   assert(
     assets.length <= maxAssets,
     'invalid-argument',
@@ -518,6 +520,23 @@ async function validateMediaAssets({
 
   return Promise.all(
     assets.map(async (asset) => {
+      const trustedExistingAsset = trustedExistingAssets.find((existingAsset) => {
+        if (!existingAsset || existingAsset.assetId !== asset?.assetId) return false;
+        return ['large', 'feed', 'thumb'].every((variantName) => {
+          const existingVariant = existingAsset?.[variantName];
+          const requestedVariant = asset?.[variantName];
+          if (typeof existingVariant?.path === 'string' && existingVariant.path) {
+            return requestedVariant?.path === existingVariant.path;
+          }
+          return (
+            typeof existingVariant?.url === 'string' &&
+            existingVariant.url &&
+            requestedVariant?.url === existingVariant.url
+          );
+        });
+      });
+      if (trustedExistingAsset) return trustedExistingAsset;
+
       assert(
         typeof asset?.assetId === 'string' &&
           /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -864,6 +883,7 @@ async function saveRecommendation({
     uid,
     media: data?.recommendation?.media,
     mediaBucket,
+    existingMedia: previousData?.media,
   });
   const destination = data?.destinationRef
     ? await resolveExistingDestination(db, data.destinationRef)

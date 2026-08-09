@@ -6,7 +6,6 @@ import { colors } from '../../../styles';
 export function createDestinationStyles(width = 390, insets = {}) {
   const viewportWidth = Math.max(Number(width) || 0, 320);
   const wide = viewportWidth >= 820;
-  const compact = viewportWidth < 360;
   const horizontal = wide ? 24 : 14;
 
   return StyleSheet.create({
@@ -196,54 +195,49 @@ export function createDestinationStyles(width = 390, insets = {}) {
     quickGrid: {
       width: '100%',
       flexDirection: 'row-reverse',
-      flexWrap: 'wrap',
-      gap: 9,
-    },
-    quickCard: {
-      width: compact ? '47%' : '30%',
-      flexGrow: 1,
-      minWidth: compact ? 130 : 100,
-      minHeight: 132,
-      paddingHorizontal: 12,
+      paddingHorizontal: 5,
       paddingVertical: 13,
       borderRadius: 20,
       backgroundColor: colors.white,
       borderWidth: 1,
       borderColor: '#E2E7EE',
-      alignItems: 'center',
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.035,
-      shadowRadius: 10,
-      elevation: 1,
+    },
+    quickCard: {
+      flex: 1,
+      minWidth: 0,
+      minHeight: 104,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      alignItems: 'flex-end',
+    },
+    quickCardDivider: {
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: '#E5E9EF',
     },
     factIcon: {
-      width: 34,
-      height: 34,
-      borderRadius: 12,
+      height: 25,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#F1F4F8',
-    },
-    weatherIcon: {
-      backgroundColor: '#FFF8E8',
+      alignSelf: 'flex-end',
     },
     factTitle: {
-      marginTop: 10,
-      color: colors.textSecondary,
-      fontSize: 11,
-      fontFamily: fontFamilies.medium,
-      textAlign: 'center',
+      width: '100%',
+      marginTop: 6,
+      color: colors.textLight,
+      fontSize: 12,
+      lineHeight: 17,
+      fontFamily: fontFamilies.regular,
+      textAlign: 'right',
       writingDirection: 'rtl',
     },
     factValue: {
       width: '100%',
       marginTop: 4,
       color: colors.textPrimary,
-      fontSize: 16,
-      lineHeight: 21,
-      fontFamily: fontFamilies.semiBold,
-      textAlign: 'center',
+      fontSize: 15,
+      lineHeight: 20,
+      fontFamily: fontFamilies.medium,
+      textAlign: 'right',
       writingDirection: 'rtl',
     },
     factDetail: {
@@ -253,7 +247,7 @@ export function createDestinationStyles(width = 390, insets = {}) {
       fontSize: 11,
       lineHeight: 16,
       fontFamily: fontFamilies.regular,
-      textAlign: 'center',
+      textAlign: 'right',
       writingDirection: 'rtl',
     },
     neutralCard: {

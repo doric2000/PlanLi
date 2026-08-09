@@ -30,7 +30,14 @@ describe('getRecommendationDetailSections', () => {
     expect(result.facts.map((fact) => fact.id)).toEqual([
       'budget', 'audiences', 'vibes', 'environments',
     ]);
-    expect(result.facts[0].label).toBe(getBudgetLabel('balanced'));
+    expect(result.facts[0]).toMatchObject({
+      title: 'רמת מחיר',
+      value: getBudgetLabel('balanced'),
+    });
+    expect(result.facts.find((fact) => fact.id === 'audiences')).toMatchObject({
+      title: 'קהל',
+      value: TRAVEL_PARTIES[0].label,
+    });
     expect(result.needs).toEqual([NEEDS[0].label]);
     expect(result.extras.map((group) => group.id)).toEqual([
       'interests', 'travelerStyles', 'seasons',
@@ -44,7 +51,12 @@ describe('getRecommendationDetailSections', () => {
     });
 
     expect(result.facts).toEqual([
-      { id: 'audiences', icon: 'groups', label: 'מתאים לכולם' },
+      {
+        id: 'audiences',
+        icon: 'groups',
+        title: 'קהל',
+        value: 'מתאים לכולם',
+      },
     ]);
     expect(result.tags).toEqual([]);
     expect(result.needs).toEqual([]);

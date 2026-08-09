@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import LandingPageScreen from '../src/features/destination/screens/LandingPageScreen';
@@ -100,6 +101,13 @@ test('renders the approved neutral destination hierarchy without unsupported pla
   expect(screen.queryByText('מלון מומלץ')).toBeNull();
   expect(screen.queryByText('נהג מומלץ')).toBeNull();
   expect(screen.queryByText('תכנון טיול')).toBeNull();
+  const weatherFact = StyleSheet.flatten(screen.getByTestId('quick-fact-weather').props.style);
+  const airportFact = StyleSheet.flatten(screen.getByTestId('quick-fact-airport').props.style);
+  expect(weatherFact.backgroundColor).toBeUndefined();
+  expect(weatherFact.borderRadius).toBeUndefined();
+  expect(weatherFact.shadowOpacity).toBeUndefined();
+  expect(weatherFact.borderLeftWidth).toBeGreaterThan(0);
+  expect(airportFact.borderLeftWidth).toBeGreaterThan(0);
 });
 
 test('community filters work in place and source details are progressively disclosed', () => {

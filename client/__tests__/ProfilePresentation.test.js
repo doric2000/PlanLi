@@ -1,5 +1,6 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { StyleSheet } from 'react-native';
 
 import ProfileBioModal from '../src/features/profile/components/ProfileBioModal';
 import ProfileHeader from '../src/features/profile/components/ProfileHeader';
@@ -77,12 +78,13 @@ describe('profile presentation', () => {
     expect(publicProfile.queryByLabelText('עריכת העדפות הטיול')).toBeNull();
     expect(ownerProfile.getByLabelText('עריכת העדפות הטיול')).toBeTruthy();
 
-    const publicChipStyle = publicProfile.getByTestId('profile-preference-interest-food').props.style;
-    const ownerChipStyle = ownerProfile.getByTestId('profile-preference-interest-food').props.style;
+    const publicChipStyle = StyleSheet.flatten(publicProfile.getByTestId('profile-preference-interest-food').props.style);
+    const ownerChipStyle = StyleSheet.flatten(ownerProfile.getByTestId('profile-preference-interest-food').props.style);
     expect(ownerChipStyle).toEqual(publicChipStyle);
     expect(publicChipStyle).toMatchObject({
-      backgroundColor: '#F7F8FA',
-      borderColor: '#E3E8EF',
+      minHeight: 36,
+      backgroundColor: '#FFFFFF',
+      borderColor: '#DCE2EA',
     });
   });
 
