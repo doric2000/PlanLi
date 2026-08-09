@@ -52,18 +52,18 @@ export default function RecommendationMapPreviewCard({
           />
         ) : (
           <View
-            style={[community.mapPreviewImagePlaceholder, { backgroundColor: visual.color }]}
+            style={community.mapPreviewImagePlaceholder}
             testID="recommendation-map-preview-placeholder"
           >
-            <MaterialIcons name={visual.icon} size={36} color={colors.white} />
+            <MaterialIcons name={visual.icon} size={36} color={colors.textSecondary} />
           </View>
         )}
 
         <View style={community.mapPreviewContent}>
           <View style={community.mapPreviewHeaderRow}>
-            <View style={[community.mapPreviewCategory, { backgroundColor: `${visual.color}18` }]}>
-              <MaterialIcons name={visual.icon} size={15} color={visual.color} />
-              <Text style={[community.mapPreviewCategoryText, { color: visual.color }]}>
+            <View style={community.mapPreviewCategory} testID="recommendation-map-preview-category">
+              <MaterialIcons name={visual.icon} size={15} color={colors.textSecondary} />
+              <Text style={community.mapPreviewCategoryText}>
                 {visual.label}
               </Text>
             </View>
@@ -110,7 +110,7 @@ export default function RecommendationMapPreviewCard({
           )}
 
           <TouchableOpacity
-            style={[community.mapPreviewPrimaryButton, { backgroundColor: visual.color }]}
+            style={community.mapPreviewPrimaryButton}
             onPress={() => onOpenRecommendation?.(item?.postId || item?.id)}
             accessibilityRole="button"
             accessibilityLabel={`לפרטי ההמלצה ${item.title || ''}`.trim()}

@@ -347,6 +347,7 @@ export const community = {
 		borderRadius: 16,
 		alignItems: "center",
 		justifyContent: "center",
+		backgroundColor: colors.surfaceSubtle,
 	},
 	mapPreviewContent: {
 		flex: 1,
@@ -368,10 +369,12 @@ export const community = {
 		borderRadius: 14,
 		paddingHorizontal: 9,
 		paddingVertical: 4,
+		backgroundColor: "transparent",
 	},
 	mapPreviewCategoryText: {
 		fontSize: 12,
-		fontWeight: "800",
+		fontWeight: "700",
+		color: colors.textSecondary,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
@@ -432,6 +435,7 @@ export const community = {
 		justifyContent: "center",
 		gap: 5,
 		paddingHorizontal: spacing.md,
+		backgroundColor: colors.primary,
 	},
 	mapPreviewPrimaryButtonText: {
 		color: colors.white,

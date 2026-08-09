@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, FlatList, Platform, useWindowDimensions, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { BackButton } from './BackButton';
 import CachedImage, { prefetchImage } from './CachedImage';
 import FavoriteButton from './FavoriteButton';
 import { common, cards } from '../styles';
+import { getTravelCategoryPresentation } from '../constants/travelPresentation';
 import {
   getMediaPlaceholder,
   getMediaSrcSet,
@@ -20,6 +21,10 @@ export const RecommendationHero = ({ item, snapshotData }) => {
     [item]
   );
   const hasImage = images.length > 0;
+  const categoryPresentation = useMemo(
+    () => getTravelCategoryPresentation(item?.categoryId, item?.category),
+    [item?.category, item?.categoryId]
+  );
   const [heroWidth, setHeroWidth] = useState(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const heroRef = useRef(null);
@@ -52,7 +57,12 @@ export const RecommendationHero = ({ item, snapshotData }) => {
 
   if (!hasImage) {
     return (
-      <View style={common.noImageHeader}>
+      <View style={styles.noImageHeader}>
+        <View style={styles.noImagePresentation} pointerEvents="none">
+          <View style={styles.noImageIcon}>
+            <MaterialIcons name={categoryPresentation.icon} size={36} color="#64748B" />
+          </View>
+        </View>
         <View style={styles.rtlActionsRow} testID="recommendation-hero-actions">
           <BackButton color="dark" variant="solid" iconDirection="rtl" />
           <FavoriteButton type="recommendations" id={item.id} variant="dark" snapshotData={snapshotData} />
@@ -62,7 +72,7 @@ export const RecommendationHero = ({ item, snapshotData }) => {
   }
 
   return (
-    <View style={common.heroContainer} onLayout={(e) => setHeroWidth(e.nativeEvent.layout.width)}>
+    <View style={[common.heroContainer, styles.heroFrame]} onLayout={(e) => setHeroWidth(e.nativeEvent.layout.width)}>
       <FlatList
         ref={heroRef}
         data={images}
@@ -164,6 +174,36 @@ export const RecommendationHero = ({ item, snapshotData }) => {
 };
 
 const styles = StyleSheet.create({
+  heroFrame: {
+    overflow: 'hidden',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    backgroundColor: '#EEF1F6',
+  },
+  noImageHeader: {
+    height: 188,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    paddingTop: 50,
+    paddingHorizontal: 16,
+    backgroundColor: '#EEF1F6',
+  },
+  noImagePresentation: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noImageIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(30,58,95,0.08)',
+  },
   rtlActionsRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',

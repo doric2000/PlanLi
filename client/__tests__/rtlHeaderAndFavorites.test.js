@@ -22,12 +22,13 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: jest.fn() }),
 }));
 
-jest.mock('@expo/vector-icons', () => ({
-  Ionicons: ({ name, color }) => {
+jest.mock('@expo/vector-icons', () => {
+  const MockIcon = ({ name, color }) => {
     const { Text: MockText } = require('react-native');
     return <MockText testID={`icon-${name}`} style={{ color }}>{name}</MockText>;
-  },
-}));
+  };
+  return { Ionicons: MockIcon, MaterialIcons: MockIcon };
+});
 
 jest.mock('../src/components/CachedImage', () => {
   const { View: MockView } = require('react-native');

@@ -1,198 +1,137 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View, Text, TouchableOpacity, StatusBar, FlatList } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Share, StatusBar, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
-import { auth } from '../../../config/firebase';
-import { useUserData } from '../../../hooks/useUserData';
-import { useLikes } from '../../community/hooks/useLikes';
-import { useCommentsCount } from '../../community/hooks/useCommentsCount';
-
-// New Modular Components
-import { RecommendationHero } from '../../../components/RecommendationHero';
-import { AuthorInfo } from '../../../components/AuthorInfo';
-import { RecommendationMeta } from '../../../components/RecommendationMeta';
-import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
-
-// Existing Components
-import LikesModal from '../../../components/LikesModal';
 import { CommentsModal } from '../../../components/CommentsModal';
-import { colors, typography, common, tags as tagsStyle, recommendationDetailScreenStyles as styles } from '../../../styles';
-import { getBudgetTheme } from '../../../utils/getBudgetTheme';
-import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import LikesModal from '../../../components/LikesModal';
+import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
+import { RecommendationHero } from '../../../components/RecommendationHero';
+import { auth } from '../../../config/firebase';
+import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
+import { useUserData } from '../../../hooks/useUserData';
 import { recordRecommendationOpen } from '../../../services/PersonalizationService';
-import { getBudgetLabel, getTagLabel } from '../../../constants/travelTaxonomy';
+import { colors } from '../../../styles';
+import { canManageRecommendation } from '../../../utils/contentPermissions';
+import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import RecommendationDetailContent from '../components/RecommendationDetailContent';
+import { recommendationDetailStyles as styles } from '../components/recommendationDetailStyles';
+import { useCommentsCount } from '../hooks/useCommentsCount';
+import { useLikes } from '../hooks/useLikes';
 
-/**
- * RecommendationDetailScreen - Full view of a recommendation
- *
- * Shows all details of a recommendation by composing modular components.
- * It's responsible for fetching data and passing it down to the child components.
- *
- * @param {Object} route - Route object containing recommendation data
- * @param {Object} navigation - Navigation object
- */
 export default function RecommendationDetailScreen({ route, navigation }) {
-  const initialItem = route?.params?.item;
-  const postId = route?.params?.postId;
-  const effectivePostId = initialItem ? null : postId;
-  const { data: fetchedItem, loading: loadingItem } = useRecommendationById(effectivePostId);
+  const initialItem = route?.params?.item || route?.params?.recommendation || null;
+  const postId = route?.params?.postId || initialItem?.postId || initialItem?.id || '';
+  const { data: canonicalItem, loading, refresh } = useRecommendationById(postId);
+  const item = useMemo(() => canonicalItem || initialItem, [canonicalItem, initialItem]);
+  const hasFocusedOnce = useRef(false);
 
-  const item = useMemo(() => initialItem || fetchedItem, [initialItem, fetchedItem]);
+  useFocusEffect(useCallback(() => {
+    if (hasFocusedOnce.current) refresh();
+    else hasFocusedOnce.current = true;
+  }, [refresh]));
 
   if (!item) {
     return (
-      <SafeAreaView style={common.container} edges={['left', 'right']}>
+      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right', 'bottom']}>
         <StatusBar barStyle="dark-content" />
-        <View style={common.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          {!loadingItem && (
-            <Text style={typography.caption}>לא הצלחנו לטעון את ההמלצה.</Text>
-          )}
+        <View style={styles.loading}>
+          {loading ? <ActivityIndicator size="large" color={colors.primary} /> : null}
+          <Text style={styles.loadingText}>
+            {loading ? 'טוענים את ההמלצה…' : 'לא הצלחנו לטעון את ההמלצה.'}
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  return <RecommendationDetailLoaded item={item} navigation={navigation} />;
+  return (
+    <RecommendationDetailLoaded
+      item={item}
+      postId={postId || item.id}
+      navigation={navigation}
+    />
+  );
 }
 
-function RecommendationDetailLoaded({ item, navigation }) {
-
-  const budgetTheme = getBudgetTheme(item?.budget);
-
+function RecommendationDetailLoaded({ item, postId, navigation }) {
   const insets = useSafeAreaInsets();
-
-  // --- Hooks ---
   const author = useUserData(item.ownerId);
+  const { isAdmin } = useAdminClaim();
   const { isLiked, likeCount, toggleLike } = useLikes(
     'recommendations',
-    item.id,
+    postId,
     item.stats?.likeCount || 0
   );
-  const commentsCount = useCommentsCount('recommendations', item.id);
-  const user = auth.currentUser;
-
-  // --- State ---
+  const commentsCount = useCommentsCount('recommendations', postId);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const canEdit = canManageRecommendation({
+    user: auth.currentUser,
+    ownerId: item.ownerId,
+    isAdmin,
+  });
+  const hasImage = getRecommendationImageUrls(item, 'large').length > 0;
 
   useEffect(() => {
-    if (!auth.currentUser?.uid || !item?.id) return;
-    recordRecommendationOpen(item.id).catch(() => {
-      // Discovery signals are best-effort and must never block the detail screen.
-    });
-  }, [item?.id]);
+    if (!auth.currentUser?.uid || !postId) return;
+    recordRecommendationOpen(postId).catch(() => {});
+  }, [postId]);
 
-  // --- Computed Values ---
-  const isOwner = user?.uid === item.ownerId;
-  const snapshotData = {
+  const snapshotData = useMemo(() => ({
     name: item.title,
     thumbnail_url: getRecommendationImageUrls(item, 'thumb')[0] || null,
-    sub_text: item.description ? item.description.substring(0, 100) + (item.description.length > 100 ? '...' : '') : ''
+    sub_text: item.description
+      ? `${item.description.slice(0, 100)}${item.description.length > 100 ? '…' : ''}`
+      : '',
+  }), [item]);
+
+  const handleEdit = () => {
+    navigation.navigate('AddRecommendation', {
+      mode: 'edit',
+      item,
+      recommendation: item,
+      postId,
+    });
   };
 
-  // --- Render ---
+  const handleShare = async () => {
+    const placeLink = item?.place?.url || '';
+    const message = [item.title, item.description, placeLink].filter(Boolean).join('\n\n');
+    try {
+      await Share.share({ title: item.title, message });
+    } catch {
+      Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
+    }
+  };
+
   return (
-    <SafeAreaView style={common.container} edges={['left', 'right']}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <SafeAreaView style={styles.screen} edges={['left', 'right']}>
+      <StatusBar
+        barStyle={hasImage ? 'light-content' : 'dark-content'}
+        translucent
+        backgroundColor="transparent"
+      />
       <View style={{ flex: 1 }}>
-        <FlatList
-          data={[]}
-          keyExtractor={() => 'empty'}
-          contentContainerStyle={{ paddingBottom: 110 + (insets.bottom || 0) }}
-          ListHeaderComponent={
-            <>
-              <RecommendationHero item={item} snapshotData={snapshotData} />
-
-              {/* Content Section */}
-              <View style={common.detailContent}>
-              {(item.category || item.budget) && (
-                <View style={styles.topPillsRow}>
-                  {!!item.budget && (
-                    <View
-                      style={[
-                        styles.pricePill,
-                        {
-                          backgroundColor: budgetTheme.backgroundColor,
-                          borderColor: budgetTheme.borderColor,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.pricePillText, { color: budgetTheme.textColor }]}>
-                        {getBudgetLabel(item.budget)}
-                      </Text>
-                    </View>
-                  )}
-
-                  {!!item.category && (
-                    <View style={styles.categoryPill}>
-                      <Text style={styles.categoryPillText}>{item.category}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              <Text style={[typography.h2, styles.titleRtl]}>{item.title}</Text>
-
-              <View style={styles.sectionCard}>
-                <AuthorInfo author={author} item={item} isOwner={isOwner} />
-              </View>
-
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <Ionicons name="location-outline" size={16} color={colors.textMuted} />
-                  <Text style={styles.sectionHeaderText}>מיקום</Text>
-                </View>
-                <RecommendationMeta item={item} navigation={navigation} />
-              </View>
-
-              {!!item.description && (
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Ionicons name="reader-outline" size={16} color={colors.textMuted} />
-                    <Text style={styles.sectionHeaderText}>תיאור</Text>
-                  </View>
-                  <Text style={[typography.body, styles.bodyText]}>{item.description}</Text>
-                </View>
-              )}
-
-              {/* Tags */}
-              {item.tags && item.tags.length > 0 && (
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-                    <Text style={styles.sectionHeaderText}>תגיות</Text>
-                  </View>
-
-                  <View style={styles.tagsWrap}>
-                    {item.tags.map((tag, index) => (
-                      <View key={`${tag}:${index}`} style={styles.tagPill}>
-                        <Text style={styles.tagPillText}>{getTagLabel(tag)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-            </View>
-          </>
-        }
-        ListFooterComponent={
-          <View style={{ height: 1 }} />
-        }
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-        />
-
-        {/* Sticky action bar */}
-        <View
-          style={[
-            styles.stickyActionBar,
-            { paddingBottom: (insets.bottom || 0) || 12 },
+        <ScrollView
+          contentContainerStyle={[
+            styles.contentContainer,
+            { paddingBottom: 116 + (insets.bottom || 0) },
           ]}
+          showsVerticalScrollIndicator={false}
         >
+          <RecommendationHero item={{ ...item, id: postId }} snapshotData={snapshotData} />
+          <RecommendationDetailContent
+            item={{ ...item, id: postId }}
+            author={author}
+            canEdit={canEdit}
+            navigation={navigation}
+            onEdit={handleEdit}
+          />
+        </ScrollView>
+
+        <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom || 0, 10) }]}>
           <RecommendationActionBar
             isLiked={isLiked}
             likeCount={likeCount}
@@ -200,23 +139,22 @@ function RecommendationDetailLoaded({ item, navigation }) {
             onCommentPress={() => setCommentsModalVisible(true)}
             onLikePress={toggleLike}
             onLikesListPress={() => setLikesModalVisible(true)}
-            onSharePress={() => alert('שיתוף עדיין לא זמין')}
-            style={styles.stickyActionBarInner}
+            onSharePress={handleShare}
           />
         </View>
       </View>
+
       <LikesModal
         visible={likesModalVisible}
         onClose={() => setLikesModalVisible(false)}
         collectionName="recommendations"
-        itemId={item.id}
+        itemId={postId}
         likeCount={likeCount}
       />
-
       <CommentsModal
         visible={commentsModalVisible}
         onClose={() => setCommentsModalVisible(false)}
-        postId={item.id}
+        postId={postId}
         collectionName="recommendations"
       />
     </SafeAreaView>
