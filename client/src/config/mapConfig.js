@@ -7,9 +7,10 @@ export const USER_MAP_ZOOM = 15;
 export const MAP_MIN_DISCOVERY_ZOOM = 4;
 
 export function getMapTilerKey(platform = Platform.OS) {
+  const localKey = process.env.EXPO_PUBLIC_MAPTILER_KEY || '';
   return platform === 'web'
-    ? process.env.EXPO_PUBLIC_MAPTILER_WEB_KEY || ''
-    : process.env.EXPO_PUBLIC_MAPTILER_MOBILE_KEY || '';
+    ? process.env.EXPO_PUBLIC_MAPTILER_WEB_KEY || localKey
+    : process.env.EXPO_PUBLIC_MAPTILER_MOBILE_KEY || localKey;
 }
 
 export function getMapTilerStyleUrl(key = getMapTilerKey()) {

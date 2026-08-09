@@ -74,4 +74,20 @@ describe('useMapRecommendations', () => {
     expect(result.current.items).toEqual([]);
     expect(result.current.loading).toBe(false);
   });
+
+  it('keeps the last successful viewport visible when a refresh fails', async () => {
+    getMapRecommendations
+      .mockResolvedValueOnce({ items: [{ id: 'stable' }], truncated: true })
+      .mockRejectedValueOnce(new Error('network unavailable'));
+    const { result } = renderHook(() => useMapRecommendations({ enabled: true, request: {} }));
+
+    await act(async () => result.current.searchViewport(viewport));
+    expect(result.current.items).toEqual([{ id: 'stable' }]);
+    expect(result.current.truncated).toBe(true);
+
+    await act(async () => result.current.searchViewport({ ...viewport, east: 35.2 }));
+    expect(result.current.items).toEqual([{ id: 'stable' }]);
+    expect(result.current.truncated).toBe(true);
+    expect(result.current.error).toEqual(expect.any(Error));
+  });
 });
