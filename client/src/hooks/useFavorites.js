@@ -11,7 +11,7 @@ import { auth, db } from '../config/firebase';
 import { primeUserDataCache } from './useUserData';
 
 export function useFavorites(type, { enabled = true, pageSize = 50 } = {}) {
-  const user = auth.currentUser;
+  const user = auth?.currentUser;
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(enabled);
 

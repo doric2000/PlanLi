@@ -9,6 +9,8 @@ const asRecommendationPreview = (favorite) => {
     ownerId: preview.owner?.id || null,
     title: preview.title || '',
     description: preview.subtitle || '',
+    categoryId: preview.categoryId || '',
+    category: preview.category || '',
     status: 'active',
     media: thumbUrl
       ? [{

@@ -1,14 +1,19 @@
 import React from 'react';
-import { View, Text, FlatList, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, FlatList, View, useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { common } from '../../../styles/common';
-import { typography } from '../../../styles/typography';
-import { FAVORITE_CARD_WIDTH } from '../../../styles/cards';
-import { RouteCard } from '../../roadtrip/components/RouteCard';
+
+import ContentTile, { getContentGridColumns } from '../../../components/ContentTile';
+import EmptyState from '../../../components/EmptyState';
+import { colors } from '../../../styles';
 import { loadRouteDetails } from '../../../services/RouteService';
+import { getRouteImageUrls } from '../../../utils/mediaAssets';
+import { favoritesStyles as styles, getGridTileWidth } from './favoritesStyles';
 
 export default function FavoriteRoadTripsList({ favorites, loading, flatListRef, onScroll }) {
   const navigation = useNavigation();
+  const { width } = useWindowDimensions();
+  const columns = getContentGridColumns(width);
+  const tileWidth = getGridTileWidth(width, columns);
 
   const openRoute = async (item) => {
     try {
@@ -19,47 +24,35 @@ export default function FavoriteRoadTripsList({ favorites, loading, flatListRef,
     }
   };
 
-  if (loading) {
-    return (
-      <View style={common.containerCentered}>
-        <ActivityIndicator size="large" color="#49bc8e" />
-      </View>
-    );
-  }
-
-  if (!favorites.length) {
-    return (
-      <View style={common.containerCentered}>
-        <Text style={typography.h2}>מסלולים שמורים</Text>
-        <Text style={typography.body}>כאן תוכל לראות את כל המסלולים ששמרת</Text>
-      </View>
-    );
-  }
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={colors.brand} /></View>;
 
   return (
     <FlatList
+      key={`favorite-routes-${columns}`}
       ref={flatListRef}
       data={favorites}
+      numColumns={columns}
       keyExtractor={(item) => item.id}
       onScroll={onScroll}
       scrollEventThrottle={16}
-      initialNumToRender={3}
-      maxToRenderPerBatch={3}
-      windowSize={5}
+      initialNumToRender={columns * 2}
+      maxToRenderPerBatch={columns * 2}
+      windowSize={7}
+      columnWrapperStyle={styles.gridRow}
+      contentContainerStyle={styles.listContent}
       renderItem={({ item }) => (
-        <View style={{ alignItems: 'center', width: '100%' }}>
-          <View style={{ width: FAVORITE_CARD_WIDTH, maxWidth: '95%' }}>
-            <RouteCard
-              item={item}
-              onPress={() => openRoute(item)}
-              isOwner={false}
-              showActionBar={false}
-              showActionMenu={false}
-            />
-          </View>
+        <View style={[styles.tileWrap, { width: tileWidth }]}>
+          <ContentTile
+            image={getRouteImageUrls(item, 'thumb')[0] || item.thumbnail_url || null}
+            title={item.Title || item.title || item.name || 'מסלול'}
+            subtitle={Array.isArray(item.summaryPlaces) ? item.summaryPlaces.filter(Boolean).slice(0, 2).join(' · ') : ''}
+            icon="map"
+            fallbackColor={colors.brand}
+            onPress={() => openRoute(item)}
+          />
         </View>
       )}
-      contentContainerStyle={{ padding: 16, alignItems: 'center' }}
+      ListEmptyComponent={<EmptyState icon="map" title="עוד אין מסלולים שמורים" message="מסלולים שתשמרו יופיעו כאן." />}
     />
   );
 }

@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react';
 import { useFavorites } from './useFavorites';
 
 export function useFavoriteCityIds({ enabled = true } = {}) {
@@ -11,9 +12,20 @@ export function useFavoriteCityIds({ enabled = true } = {}) {
     travelers: favorite.preview?.metrics?.travelers ?? 0,
     favoriteKey: favorite.favoriteKey,
   }));
+  const favoriteKeys = useMemo(
+    () => new Set(favorites.map((favorite) => `${favorite.countryId}:${favorite.id}`)),
+    [favorites]
+  );
+  const toggleFavorite = useCallback(async (city) => {
+    if (!city?.id || !city?.countryId) return;
+    const { setFavorite } = await import('../services/SocialService');
+    const target = { type: 'city', id: city.id, countryId: city.countryId };
+    await setFavorite(target, !favoriteKeys.has(`${city.countryId}:${city.id}`));
+  }, [favoriteKeys]);
   return {
     favorites,
     ids: favorites.map((favorite) => favorite.id),
     loading: result.loading,
+    toggleFavorite,
   };
 }

@@ -5,13 +5,15 @@ import ProfileScreen from "../features/profile/screens/ProfileScreen";
 import FavoritesScreen from "../features/favorites/screen/FavoritesScreen";
 import AuthEntryScreen from "../features/auth/screens/AuthEntryScreen";
 
+const ACTIVE_COLOR = "#1E3A5F";
+
 export const tabConfigs = {
-	Home: { icon: "home", activeColor: "#1A73E8", label: "בית" }, // Orange (brand)
-	Community: { icon: "people", activeColor: "#1E8E3E", label: "קהילה" }, // Blue (social)
-	Routes: { icon: "map", activeColor: "#673AB7", label: "מסלולים" }, // Green (travel)
-	Favorites: { icon: "bookmark", activeColor: "#F9A825", label: "מועדפים" }, // i think bookmark icon looks more modern, dor thinks like a old head and wants a star, if star is chosen as the favorite among our friends, chagne it to 'star'
-	Profile: { icon: "person", activeColor: "#E67C00", label: "פרופיל" }, // Purple (personal)
-	Auth: { icon: "log-in", activeColor: "#1E3A8A", label: "התחברות" },
+	Home: { icon: "home", activeColor: ACTIVE_COLOR, label: "בית" },
+	Community: { icon: "people", activeColor: ACTIVE_COLOR, label: "קהילה" },
+	Routes: { icon: "map", activeColor: ACTIVE_COLOR, label: "מסלולים" },
+	Favorites: { icon: "bookmark", activeColor: ACTIVE_COLOR, label: "מועדפים" },
+	Profile: { icon: "person", activeColor: ACTIVE_COLOR, label: "פרופיל" },
+	Auth: { icon: "log-in", activeColor: ACTIVE_COLOR, label: "התחברות" },
 };
 
 export const tabScreens = [

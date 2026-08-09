@@ -2,13 +2,14 @@ import { Platform, StyleSheet } from 'react-native';
 
 import { colors } from '../../../styles';
 
-export function createProfileStyles(insets = {}, width = 390) {
+export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
   const viewportWidth = Math.max(Number(width) || 0, 320);
   const wide = viewportWidth >= 900;
   const tablet = viewportWidth >= 600;
   const horizontal = wide ? 24 : tablet ? 20 : 14;
   const gridWidth = Math.min(viewportWidth, 960);
-  const gridTileSize = Math.max(1, (gridWidth - 18) / 3);
+  const gridGap = 4;
+  const gridTileSize = Math.max(1, (gridWidth - (gridColumns * gridGap)) / gridColumns);
 
   return StyleSheet.create({
     screen: {

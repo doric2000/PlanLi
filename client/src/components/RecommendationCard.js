@@ -33,11 +33,20 @@ import { getPersonalizationReasonLabel } from '../features/profile/constants/sma
  * @param {Function} props.onCommentPress - Callback when comment button is pressed.
  * @param {boolean} [props.showActionBar] - Whether to show the ActionBar (default: true)
  */
-const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true, style, variant = 'default' }) => {
+const RecommendationCard = ({
+  item,
+  onCommentPress,
+  onDeleted,
+  showActionBar = true,
+  style,
+  variant = 'default',
+  topContentInset = 0,
+}) => {
   const navigation = useNavigation();
 
   const { width: windowWidth } = useWindowDimensions();
   const isFeed = variant === 'feed';
+  const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
 
   const images = useMemo(
     () => getRecommendationImageUrls(item, 'feed'),
@@ -179,7 +188,12 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
     }
   };
   const renderHeader = (overlay = false) => (
-    <View style={overlay ? styles.feedHeaderOverlay : cards.recHeader}>
+    <View
+      style={[
+        overlay ? styles.feedHeaderOverlay : cards.recHeader,
+        overlay && feedTopInset > 0 && { top: 12 + feedTopInset },
+      ]}
+    >
       <TouchableOpacity
         style={[cards.recAuthorInfo, overlay && styles.feedAuthorInfo]}
         activeOpacity={0.75}
@@ -284,6 +298,10 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           style={[
             cards.recCarouselContainer,
             isFeed && styles.feedCarouselContainer,
+            feedTopInset > 0 && {
+              aspectRatio: undefined,
+              height: ((carouselWidth || windowWidth || 1) / 1.1) + feedTopInset,
+            },
           ]}
           onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
         >
@@ -291,7 +309,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             <LinearGradient
               pointerEvents="none"
               colors={["rgba(0,0,0,0.72)", "rgba(0,0,0,0.18)", "transparent"]}
-              style={styles.feedTopGradient}
+              style={[styles.feedTopGradient, feedTopInset > 0 && { height: 118 + feedTopInset }]}
             />
           )}
           {isFeed && renderHeader(true)}
@@ -376,14 +394,24 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         </View>
       )}
       {isFeed && images.length === 0 && (
-        <View style={[cards.recCarouselContainer, styles.feedCarouselContainer]}>
+        <View
+          style={[
+            cards.recCarouselContainer,
+            styles.feedCarouselContainer,
+            feedTopInset > 0 && {
+              aspectRatio: undefined,
+              height: ((carouselWidth || windowWidth || 1) / 1.1) + feedTopInset,
+            },
+          ]}
+          onLayout={(e) => setCarouselWidth(e.nativeEvent.layout.width)}
+        >
           <View style={styles.feedImagePlaceholder}>
             <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.62)" />
           </View>
           <LinearGradient
             pointerEvents="none"
             colors={["rgba(0,0,0,0.72)", "rgba(0,0,0,0.18)", "transparent"]}
-            style={styles.feedTopGradient}
+            style={[styles.feedTopGradient, feedTopInset > 0 && { height: 118 + feedTopInset }]}
           />
           {renderHeader(true)}
           <LinearGradient

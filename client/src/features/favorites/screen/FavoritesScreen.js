@@ -1,141 +1,72 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useRef, useState } from 'react';
-import { common } from "../../../styles/common";
-import { typography } from "../../../styles/typography";
-import { tags } from "../../../styles/tags";
+
+import EmptyState from '../../../components/EmptyState';
+import PageHeader from '../../../components/PageHeader';
+import SegmentedTabs from '../../../components/SegmentedTabs';
 import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
 import { useFavoriteRoadTripsFull } from '../../../hooks/useFavoriteRoadTripsFull';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
-
 import FavoriteCitiesList from '../components/FavoriteCitiesList';
 import FavoriteRecommendationsList from '../components/FavoriteRecommendationsList';
 import FavoriteRoadTripsList from '../components/FavoriteRoadTripsList';
+import { favoritesStyles as styles } from '../components/favoritesStyles';
 
 const TABS = [
-    { key: 'destinations', label: 'יעדים' },
-    { key: 'recommendations', label: 'המלצות' },
-    { key: 'trips', label: 'טיולים' },
-    { key: 'roadtrips', label: 'מסלולים' },
+  { key: 'destinations', label: 'יעדים', icon: 'place' },
+  { key: 'recommendations', label: 'המלצות', icon: 'thumb-up' },
+  { key: 'trips', label: 'טיולים', icon: 'luggage' },
+  { key: 'roadtrips', label: 'מסלולים', icon: 'map' },
 ];
 
 export default function FavoritesScreen() {
-    const [activeTab, setActiveTab] = useState('destinations');
+  const [activeTab, setActiveTab] = useState('destinations');
+  const citiesListRef = useRef(null);
+  const recommendationsListRef = useRef(null);
+  const roadTripsListRef = useRef(null);
+  const tripsListRef = useRef(null);
+  const recsFull = useFavoriteRecommendationsFull({ enabled: activeTab === 'recommendations' });
+  const roadFull = useFavoriteRoadTripsFull({ enabled: activeTab === 'roadtrips' });
 
-    const citiesListRef = useRef(null);
-    const recommendationsListRef = useRef(null);
-    const roadTripsListRef = useRef(null);
+  const getScrollRef = useCallback(() => ({
+    destinations: citiesListRef.current,
+    recommendations: recommendationsListRef.current,
+    roadtrips: roadTripsListRef.current,
+    trips: tripsListRef.current,
+  })[activeTab], [activeTab]);
 
-    const recsFull = useFavoriteRecommendationsFull({
-        enabled: activeTab === 'recommendations',
-    });
-    const roadFull = useFavoriteRoadTripsFull({
-        enabled: activeTab === 'roadtrips',
-    });
+  const refresh = useCallback(() => {
+    if (activeTab === 'recommendations') recsFull.reload();
+    if (activeTab === 'roadtrips') roadFull.reload();
+  }, [activeTab, recsFull.reload, roadFull.reload]);
 
-    const getScrollRef = useCallback(() => {
-        switch (activeTab) {
-            case 'destinations':
-                return citiesListRef.current;
-            case 'recommendations':
-                return recommendationsListRef.current;
-            case 'roadtrips':
-                return roadTripsListRef.current;
-            default:
-                return null;
-        }
-    }, [activeTab]);
+  const { onScroll } = useTabPressScrollOrRefresh({
+    variant: 'flatlist', getScrollRef, onRefresh: refresh, scrollYResetKey: activeTab,
+  });
 
-    const favoritesTabRefresh = useCallback(() => {
-        switch (activeTab) {
-            case 'destinations':
-                // Firestore onSnapshot on cities favorites — live updates; no refetch API.
-                break;
-            case 'recommendations':
-                recsFull.reload();
-                break;
-            case 'roadtrips':
-                roadFull.reload();
-                break;
-            default:
-                break;
-        }
-    }, [activeTab, recsFull.reload, roadFull.reload]);
-
-    const { onScroll: favoritesTabOnScroll } = useTabPressScrollOrRefresh({
-        variant: 'flatlist',
-        getScrollRef,
-        onRefresh: favoritesTabRefresh,
-        scrollYResetKey: activeTab,
-    });
-
-    return (
-        <SafeAreaView style={common.container}>
-            <View style={[common.staticHeaderContainer, { paddingTop: 16 }]}> 
-                <Text style={[typography.h2, { textAlign: 'center', marginBottom: 4 }]}>המועדפים שלי</Text>
-                <Text style={[typography.body, { textAlign: 'center', color: '#6B7280' }]}>כל מה ששמרת למסע הבא</Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 12 }}>
-                {TABS.map(tab => {
-                    const selected = activeTab === tab.key;
-                    return (
-                        <TouchableOpacity
-                            key={tab.key}
-                            style={[
-                                tags.chip,
-                                { marginHorizontal: 4 },
-                                selected && tags.chipSelected
-                            ]}
-                            onPress={() => setActiveTab(tab.key)}
-                        >
-                            <Text style={[tags.chipText, selected && tags.chipTextSelected]}>{tab.label}</Text>
-                        </TouchableOpacity>
-                    );
-                })}
-            </View>
-
-            <View style={{ flex: 1 }}>
-                {activeTab === 'destinations' && (
-                <View style={{ flex: 1 }}>
-                    <FavoriteCitiesList
-                        flatListRef={citiesListRef}
-                        onScroll={favoritesTabOnScroll}
-                    />
-                </View>
-                )}
-                
-                {activeTab === 'recommendations' && (
-                <View style={{ flex: 1 }}>
-                    <FavoriteRecommendationsList
-                        favorites={recsFull.favorites}
-                        loading={recsFull.loading}
-                        flatListRef={recommendationsListRef}
-                        onScroll={favoritesTabOnScroll}
-                    />
-                </View>
-                )}
-                
-                {activeTab === 'roadtrips' && (
-                <View style={{ flex: 1 }}>
-                    <FavoriteRoadTripsList
-                        favorites={roadFull.favorites}
-                        loading={roadFull.loading}
-                        flatListRef={roadTripsListRef}
-                        onScroll={favoritesTabOnScroll}
-                    />
-                </View>
-                )}
-                
-                {activeTab === 'trips' && (
-                <View style={{ flex: 1 }}>
-                    <View style={common.containerCentered}>
-                        <Text style={typography.h2}>טיולים חכמים (בקרוב)</Text>
-                        <Text style={typography.body}>הפיצ'ר של מתכנן חכם יגיע בקרוב</Text>
-                    </View>
-                </View>
-                )}
-            </View>
-        </SafeAreaView>
-    );
+  return (
+    <SafeAreaView style={styles.screen} edges={['left', 'right']}>
+      <PageHeader variant="hero" title="המועדפים שלי" subtitle="כל מה ששמרת למסע הבא" />
+      <SegmentedTabs tabs={TABS} value={activeTab} onChange={setActiveTab} style={styles.headerTabs} />
+      <View style={{ flex: 1 }}>
+        {activeTab === 'destinations' ? <FavoriteCitiesList flatListRef={citiesListRef} onScroll={onScroll} /> : null}
+        {activeTab === 'recommendations' ? (
+          <FavoriteRecommendationsList favorites={recsFull.favorites} loading={recsFull.loading} flatListRef={recommendationsListRef} onScroll={onScroll} />
+        ) : null}
+        {activeTab === 'roadtrips' ? (
+          <FavoriteRoadTripsList favorites={roadFull.favorites} loading={roadFull.loading} flatListRef={roadTripsListRef} onScroll={onScroll} />
+        ) : null}
+        {activeTab === 'trips' ? (
+          <FlatList
+            ref={tripsListRef}
+            data={[]}
+            onScroll={onScroll}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={<EmptyState icon="auto-awesome" title="טיולים חכמים — בקרוב" message="מתכנן הטיולים החכם יופיע כאן כשיהיה מוכן." />}
+          />
+        ) : null}
+      </View>
+    </SafeAreaView>
+  );
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { View, FlatList, Platform, useWindowDimensions, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
@@ -53,8 +53,8 @@ export const RecommendationHero = ({ item, snapshotData }) => {
   if (!hasImage) {
     return (
       <View style={common.noImageHeader}>
-        <View style={common.rowBetween}>
-          <BackButton color="dark" variant="solid" />
+        <View style={styles.rtlActionsRow} testID="recommendation-hero-actions">
+          <BackButton color="dark" variant="solid" iconDirection="rtl" />
           <FavoriteButton type="recommendations" id={item.id} variant="dark" snapshotData={snapshotData} />
         </View>
       </View>
@@ -154,11 +154,19 @@ export const RecommendationHero = ({ item, snapshotData }) => {
         colors={['rgba(0,0,0,0.3)', 'transparent', 'transparent']}
         style={common.heroGradient}
       >
-        <View style={common.rowBetween} pointerEvents="box-none">
-          <BackButton />
+        <View style={styles.rtlActionsRow} pointerEvents="box-none" testID="recommendation-hero-actions">
+          <BackButton iconDirection="rtl" />
           <FavoriteButton type="recommendations" id={item.id} variant="light" snapshotData={snapshotData} />
         </View>
       </LinearGradient>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  rtlActionsRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+});
