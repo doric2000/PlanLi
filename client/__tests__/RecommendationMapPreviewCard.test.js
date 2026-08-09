@@ -1,7 +1,9 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import RecommendationMapPreviewCard from '../src/features/community/components/RecommendationMapPreviewCard';
+import { colors } from '../src/styles';
 
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
@@ -50,6 +52,10 @@ describe('RecommendationMapPreviewCard', () => {
     expect(screen.getByText('₪₪')).toBeTruthy();
     expect(screen.getByText('17')).toBeTruthy();
     expect(screen.getByTestId('map-preview-image').props.children).toBe('https://example.com/thumb.webp');
+    expect(StyleSheet.flatten(screen.getByTestId('recommendation-map-preview-category').props.style).backgroundColor)
+      .toBe('transparent');
+    expect(StyleSheet.flatten(screen.getByTestId('recommendation-map-preview-open').props.style).backgroundColor)
+      .toBe(colors.primary);
 
     fireEvent.press(screen.getByTestId('recommendation-map-preview-close'));
     fireEvent.press(screen.getByTestId('recommendation-map-preview-open'));
@@ -65,7 +71,8 @@ describe('RecommendationMapPreviewCard', () => {
       />
     );
 
-    expect(screen.getByTestId('recommendation-map-preview-placeholder')).toBeTruthy();
+    const placeholder = screen.getByTestId('recommendation-map-preview-placeholder');
+    expect(StyleSheet.flatten(placeholder.props.style).backgroundColor).toBe(colors.surfaceSubtle);
     expect(screen.queryByText('0')).toBeNull();
   });
 });

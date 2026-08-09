@@ -13,6 +13,7 @@ import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import FavoriteButton from './FavoriteButton';
 import { getUserTier } from '../utils/userTier';
+import { canManageRecommendation } from '../utils/contentPermissions';
 import { useAdminClaim } from '../hooks/useAdminClaim';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import {
@@ -79,10 +80,12 @@ const RecommendationCard = ({
   const destination = item.destination || {};
   const author = useUserData(ownerId);
   // Check if current user is the owner
-  const isOwner = auth.currentUser?.uid === ownerId;
-  const tier = getUserTier(auth.currentUser);
   const { isAdmin } = useAdminClaim();
-  const canManage = tier === 'verified' && (isOwner || isAdmin);
+  const canManage = canManageRecommendation({
+    user: auth.currentUser,
+    ownerId,
+    isAdmin,
+  });
 
   // Create snapshot data for favorites
   const snapshotData = {

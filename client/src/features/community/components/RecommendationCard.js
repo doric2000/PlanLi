@@ -11,6 +11,7 @@ import { auth } from '../../../config/firebase';
 import ActionBar from '../../../components/ActionBar';
 import CachedImage from '../../../components/CachedImage';
 import { getUserTier } from '../../../utils/userTier';
+import { canManageRecommendation } from '../../../utils/contentPermissions';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { formatTimestamp } from '../../../utils/formatTimestamp';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
@@ -41,10 +42,12 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   );
 
   // Check if current user is the owner
-  const isOwner = auth.currentUser?.uid === ownerId;
-  const tier = getUserTier(auth.currentUser);
   const { isAdmin } = useAdminClaim();
-  const canManage = tier === 'verified' && (isOwner || isAdmin);
+  const canManage = canManageRecommendation({
+    user: auth.currentUser,
+    ownerId,
+    isAdmin,
+  });
 
   const handleCardPress = () => {
     navigation.navigate('RecommendationDetail', { item });
