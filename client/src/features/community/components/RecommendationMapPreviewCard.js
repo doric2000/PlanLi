@@ -111,7 +111,7 @@ export default function RecommendationMapPreviewCard({
 
           <TouchableOpacity
             style={[community.mapPreviewPrimaryButton, { backgroundColor: visual.color }]}
-            onPress={() => onOpenRecommendation?.(item)}
+            onPress={() => onOpenRecommendation?.(item?.postId || item?.id)}
             accessibilityRole="button"
             accessibilityLabel={`לפרטי ההמלצה ${item.title || ''}`.trim()}
             testID="recommendation-map-preview-open"

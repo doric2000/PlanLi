@@ -1,5 +1,6 @@
 /* eslint-disable no-await-in-loop, no-console */
 const admin = require('firebase-admin');
+const { isDeepStrictEqual } = require('node:util');
 const { buildFavoritePreview } = require('../socialService');
 const { initializeAdmin } = require('./localCredentials');
 
@@ -108,15 +109,19 @@ async function inspectRecommendationFavorites({
     snapshot.exists ? snapshot.data() : null,
   ]));
 
-  const updates = available.map(({ ref, target, sourceData }) => ({
-    ref,
-    preview: buildFavoritePreview({
+  const updates = available.flatMap(({ ref, data, target, sourceData }) => {
+    const preview = buildFavoritePreview({
       target,
       data: sourceData,
       publicProfile: profiles.get(sourceData.ownerId) || null,
-    }),
-    sourceUpdatedAt: sourceData.updatedAt || sourceData.createdAt || serverTimestamp(),
-  }));
+    });
+    if (isDeepStrictEqual(data?.preview, preview)) return [];
+    return [{
+      ref,
+      preview,
+      sourceUpdatedAt: sourceData.updatedAt || sourceData.createdAt || serverTimestamp(),
+    }];
+  });
   const updated = apply ? await updateFavoriteRefs(firestore, updates) : 0;
 
   return {

@@ -15,6 +15,7 @@ import CommunityInlineMap from '../components/CommunityInlineMap';
 
 // --- Hooks ---
 import { useRecommendations } from '../../../hooks/useRecommendations';
+import { useMapRecommendations } from '../../../hooks/useMapRecommendations';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 import { useUserLocation } from '../../../hooks/useUserLocation';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
@@ -63,6 +64,15 @@ export default function CommunityScreen({ navigation }) {
     setDiscoveryRequest,
   } = useRecommendations(sortBy);
   const { filteredData, filters, isFiltered, updateFilters, replaceFilters, clearFilters } = useRecommendationFilter(recommendations);
+  const discoveryRequest = useMemo(() => discoveryRequestFromFilters(filters), [filters]);
+  const {
+    items: mapRecommendations,
+    loading: mapLoading,
+    error: mapError,
+    truncated: mapTruncated,
+    zoomInRequired,
+    searchViewport,
+  } = useMapRecommendations({ enabled: mapOpen, request: discoveryRequest });
   const { location: userLocation, requestLocation } = useUserLocation();
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
@@ -75,8 +85,8 @@ export default function CommunityScreen({ navigation }) {
   }, [personalizationAvailable, profileLoading]);
 
   useEffect(() => {
-    setDiscoveryRequest(discoveryRequestFromFilters(filters));
-  }, [filters, setDiscoveryRequest]);
+    setDiscoveryRequest(discoveryRequest);
+  }, [discoveryRequest, setDiscoveryRequest]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',
@@ -134,18 +144,6 @@ export default function CommunityScreen({ navigation }) {
         .map((x) => (x.distanceKm === null ? x.item : { ...x.item, distanceKm: x.distanceKm }));
   }, [filteredData, sortBy, userLocation]);
 
-  const [debouncedMapRecommendations, setDebouncedMapRecommendations] = useState(displayData);
-
-  useEffect(() => {
-    if (!mapOpen) {
-      setDebouncedMapRecommendations(displayData);
-      return;
-    }
-    const t = setTimeout(() => setDebouncedMapRecommendations(displayData), 500);
-    return () => clearTimeout(t);
-  }, [displayData, mapOpen]);
-
-  const focusMapOnPins = filters.destinations.length > 0 || Boolean(filters.query.trim());
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
 
   const renderTopArea = () => (
@@ -153,9 +151,13 @@ export default function CommunityScreen({ navigation }) {
       <View style={styles.topActionsRow}>
         <TouchableOpacity
           style={styles.glassIconButton}
-          onPress={() => setMapOpen((prev) => !prev)}
+          onPress={() => setMapOpen((previous) => {
+            if (!previous) setSortMenuVisible(false);
+            return !previous;
+          })}
           accessibilityRole="button"
-          accessibilityLabel="×ž×¤×”"
+          accessibilityLabel="מפה"
+          testID="community-map-toggle"
         >
           <Ionicons name={mapOpen ? "map" : "map-outline"} size={20} color="#FFFFFF" />
         </TouchableOpacity>
@@ -164,13 +166,21 @@ export default function CommunityScreen({ navigation }) {
           <Text style={styles.headerTitle}>קהילה</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.sortGlassButton}
-          onPress={() => setSortMenuVisible(true)}
-        >
-          <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
-          <Text style={styles.sortGlassText}>{sortLabel}</Text>
-        </TouchableOpacity>
+        {mapOpen ? (
+          <View style={[styles.sortGlassButton, styles.mapModeSummary]} testID="map-all-recommendations-label">
+            <Ionicons name="location" size={16} color="#FFFFFF" />
+            <Text style={styles.sortGlassText}>כל ההמלצות באזור</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.sortGlassButton}
+            onPress={() => setSortMenuVisible(true)}
+            testID="community-sort-button"
+          >
+            <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
+            <Text style={styles.sortGlassText}>{sortLabel}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.searchRow}>
@@ -228,10 +238,14 @@ export default function CommunityScreen({ navigation }) {
       {mapOpen && (
         <View style={community.inlineMapSection}>
           <CommunityInlineMap
-            recommendations={debouncedMapRecommendations}
-            focusOnPins={focusMapOnPins}
+            recommendations={mapRecommendations}
+            loading={mapLoading}
+            error={mapError}
+            truncated={mapTruncated}
+            zoomInRequired={zoomInRequired}
+            onSearchViewport={searchViewport}
             overlayBottomInset={getTabOverlayBottomInset(insets)}
-            onOpenRecommendation={(item) => navigation.navigate('RecommendationDetail', { item })}
+            onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}
           />
         </View>
       )}

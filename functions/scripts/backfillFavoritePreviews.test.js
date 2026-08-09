@@ -78,3 +78,50 @@ test('backfill reports missing sources and only writes in apply mode', async () 
   assert.equal(writes[0].data.preview.categoryId, 'food');
   assert.equal(writes[0].data.preview.category, 'אוכל');
 });
+
+test('backfill ignores recommendation previews that are already current', async () => {
+  const sourceData = {
+    title: 'Food market',
+    categoryId: 'food',
+    category: 'אוכל',
+    updatedAt: 'updated',
+  };
+  const firestore = {
+    doc: (path) => ({ path }),
+    getAll: async (...refs) => refs.map((ref) => ({
+      ref,
+      exists: true,
+      data: () => sourceData,
+    })),
+    batch: () => {
+      throw new Error('No write batch should be created for a current preview.');
+    },
+  };
+  const records = [{
+    ref: { path: 'users/u1/favorites/live' },
+    data: {
+      type: 'recommendation',
+      target: { type: 'recommendation', id: 'live' },
+      preview: {
+        title: 'Food market',
+        subtitle: '',
+        thumbUrl: null,
+        placeholderColor: '#E5E7EB',
+        categoryId: 'food',
+        category: 'אוכל',
+        owner: null,
+        metrics: { days: null, distanceKm: null, travelers: null },
+      },
+    },
+  }];
+
+  const result = await inspectRecommendationFavorites({
+    firestore,
+    records,
+    apply: true,
+    log: { warn: () => {} },
+  });
+
+  assert.equal(result.ready, 0);
+  assert.equal(result.updated, 0);
+});
