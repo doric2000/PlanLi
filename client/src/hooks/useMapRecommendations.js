@@ -33,9 +33,9 @@ export function useMapRecommendations({ enabled, request = {} }) {
     } catch (caught) {
       if (serialRef.current !== serial) return null;
       setError(caught);
-      setItems([]);
-      setTruncated(false);
-      setZoomInRequired(false);
+      // Keep the last successful viewport visible. Clearing it here mutates the
+      // entire map during a transient network failure and leaves the user with
+      // no spatial context for retrying.
       return null;
     } finally {
       if (serialRef.current === serial) setLoading(false);

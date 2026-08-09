@@ -283,7 +283,7 @@ export default function CommunityInlineMap({
         <Ionicons name="map-outline" size={40} color="#6B7280" />
         <Text style={community.inlineMapEmptyTitle}>המפה עדיין לא הוגדרה</Text>
         <Text style={community.inlineMapEmptyText}>
-          יש להוסיף מפתח MapTiler מוגן ל־Web. שאר האפליקציה זמינה כרגיל.
+          מפת הרקע אינה מוגדרת בסביבה הזו. שאר האפליקציה זמינה כרגיל.
         </Text>
       </View>
     );

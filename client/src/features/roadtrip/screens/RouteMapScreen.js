@@ -1,105 +1,108 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Text, TouchableOpacity, View } from 'react-native';
+import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  Camera,
-  GeoJSONSource,
-  Layer,
-  Map as MapLibreMap,
-  TransformRequestManager,
-} from '@maplibre/maplibre-react-native';
 
 import CachedImage from '../../../components/CachedImage';
-import {
-  DEFAULT_MAP_CENTER,
-  DEFAULT_MAP_ZOOM,
-  getMapTilerKey,
-  getMapTilerStyleUrl,
-  USER_MAP_ZOOM,
-} from '../../../config/mapConfig';
+import { USER_MAP_ZOOM } from '../../../config/mapConfig';
 import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
-import { userLocationGeoJson } from '../../../utils/mapGeoJson';
 import {
   buildGoogleMapsDirectionsUrl,
   buildGoogleMapsPlaceUrl,
   flattenValidRouteStops,
 } from '../utils/routeStops';
-import { routeBounds, routeLineGeoJson, routeStopsToGeoJson } from '../utils/routeMap';
 import { colors, routeMapStyles as styles } from '../../../styles';
 
-const MOBILE_KEY = getMapTilerKey('native');
-const MAP_STYLE = getMapTilerStyleUrl(MOBILE_KEY);
+const LOCATION_RETRY_STATUSES = new Set(['denied', 'timeout', 'error']);
 
-if (MOBILE_KEY) {
-  TransformRequestManager.addHeader({
-    id: 'planli-maptiler-user-agent',
-    match: '^https://api\\.maptiler\\.com/',
-    name: 'User-Agent',
-    value: 'PlanLi/1.0 (com.planli.planlitravels)',
+function deltaForZoom(zoom) {
+  return Math.max(0.002, 360 / (2 ** Number(zoom || USER_MAP_ZOOM)));
+}
+
+export function getInitialRegion(stops) {
+  if (!stops.length) {
+    return {
+      latitude: 31.0461,
+      longitude: 34.8516,
+      latitudeDelta: 6,
+      longitudeDelta: 6,
+    };
+  }
+
+  let minLat = stops[0].coordinates.lat;
+  let maxLat = stops[0].coordinates.lat;
+  let minLng = stops[0].coordinates.lng;
+  let maxLng = stops[0].coordinates.lng;
+
+  stops.forEach((stop) => {
+    minLat = Math.min(minLat, stop.coordinates.lat);
+    maxLat = Math.max(maxLat, stop.coordinates.lat);
+    minLng = Math.min(minLng, stop.coordinates.lng);
+    maxLng = Math.max(maxLng, stop.coordinates.lng);
   });
+
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: Math.max(0.04, (maxLat - minLat) * 1.5),
+    longitudeDelta: Math.max(0.04, (maxLng - minLng) * 1.5),
+  };
 }
 
 export default function RouteMapScreen({ route, navigation }) {
   const { routeData } = route.params || {};
   const stops = useMemo(() => flattenValidRouteStops(routeData), [routeData]);
-  const stopsById = useMemo(() => new Map(stops.map((stop) => [
-    String(stop.id || `${stop.dayIndex}:${stop.stopIndex}`),
-    stop,
-  ])), [stops]);
-  const stopsGeoJson = useMemo(() => routeStopsToGeoJson(stops), [stops]);
-  const lineGeoJson = useMemo(() => routeLineGeoJson(stops), [stops]);
-  const bounds = useMemo(() => routeBounds(stops), [stops]);
+  const routeRegion = useMemo(() => getInitialRegion(stops), [stops]);
+  const coordinates = useMemo(
+    () => stops.map((stop) => ({ latitude: stop.coordinates.lat, longitude: stop.coordinates.lng })),
+    [stops]
+  );
   const [selectedStop, setSelectedStop] = useState(null);
-  const [mapReady, setMapReady] = useState(false);
-  const mapRef = useRef(null);
-  const cameraRef = useRef(null);
+  const [mapInstance, setMapInstance] = useState(0);
+  const initialRegionRef = useRef(routeRegion);
   const { location, status, startTracking, stopTracking } = useLiveUserLocation();
-  const userGeoJson = useMemo(() => userLocationGeoJson(location), [location]);
   const routeUrl = buildGoogleMapsDirectionsUrl(stops);
 
-  const openUrl = (url) => {
+  useEffect(() => {
+    startTracking();
+    return stopTracking;
+  }, [startTracking, stopTracking]);
+
+  useEffect(() => {
+    initialRegionRef.current = routeRegion;
+    setMapInstance((value) => value + 1);
+  }, [routeRegion]);
+
+  const openUrl = useCallback((url) => {
     if (!url) return;
     Linking.openURL(url).catch(() => {});
-  };
+  }, []);
 
-  const fitRoute = useCallback(() => {
-    if (!bounds) return;
-    cameraRef.current?.fitBounds?.(bounds, {
-      padding: { top: 54, right: 34, bottom: 82, left: 34 },
-      duration: 650,
-    });
-  }, [bounds]);
+  const remountAtRegion = useCallback((region) => {
+    initialRegionRef.current = region;
+    setSelectedStop(null);
+    setMapInstance((value) => value + 1);
+  }, []);
 
   const centerOnUser = useCallback(() => {
     if (!location) {
       startTracking();
       return;
     }
-    cameraRef.current?.flyTo?.({
-      center: [location.lng, location.lat],
-      zoom: USER_MAP_ZOOM,
-      duration: 650,
+    const delta = deltaForZoom(USER_MAP_ZOOM);
+    remountAtRegion({
+      latitude: location.lat,
+      longitude: location.lng,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
     });
-  }, [location, startTracking]);
+  }, [location, remountAtRegion, startTracking]);
 
-  useEffect(() => {
-    if (!MAP_STYLE) return undefined;
-    startTracking();
-    return stopTracking;
-  }, [startTracking, stopTracking]);
-
-  useEffect(() => {
-    if (mapReady && bounds) fitRoute();
-  }, [bounds, fitRoute, mapReady]);
-
-  const handleStopPress = useCallback((event) => {
-    event?.stopPropagation?.();
-    const feature = event?.nativeEvent?.features?.[0] || event?.features?.[0];
-    const id = String(feature?.properties?.id || '');
-    setSelectedStop(stopsById.get(id) || null);
-  }, [stopsById]);
+  const fitRoute = useCallback(() => {
+    remountAtRegion(routeRegion);
+  }, [remountAtRegion, routeRegion]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -130,93 +133,71 @@ export default function RouteMapScreen({ route, navigation }) {
           <Text style={styles.emptyTitle}>אין תחנות להצגה במפה</Text>
           <Text style={styles.emptyText}>הוסיפו תחנות עם מיקום מדויק בתוך ימי המסלול.</Text>
         </View>
-      ) : !MAP_STYLE ? (
-        <View style={styles.emptyState} testID="route-map-missing-key">
-          <Ionicons name="map-outline" size={54} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>המפה עדיין לא הוגדרה</Text>
-          <Text style={styles.emptyText}>יש להוסיף מפתח MapTiler מוגן לבניית המובייל.</Text>
-        </View>
       ) : (
         <View style={styles.mapWrap}>
-          <MapLibreMap
-            ref={mapRef}
+          <MapView
+            key={`route-map-${mapInstance}`}
             style={styles.map}
-            mapStyle={MAP_STYLE}
-            logo={false}
-            attribution
-            attributionPosition={{ top: 8, left: 8 }}
-            compass
-            compassPosition={{ top: 8, right: 8 }}
-            touchPitch={false}
-            onDidFinishLoadingMap={() => setMapReady(true)}
+            initialRegion={initialRegionRef.current}
+            mapType="none"
+            showsUserLocation
+            showsMyLocationButton={false}
             onPress={() => setSelectedStop(null)}
             testID="route-map"
           >
-            <Camera
-              ref={cameraRef}
-              minZoom={2}
-              maxZoom={20}
-              initialViewState={{ center: DEFAULT_MAP_CENTER, zoom: DEFAULT_MAP_ZOOM }}
+            <UrlTile
+              urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              tileSize={256}
+              maximumZ={19}
+              zIndex={0}
             />
-            <GeoJSONSource id="route-user-location" data={userGeoJson}>
-              <Layer
-                id="route-user-accuracy"
-                type="fill"
-                filter={['==', ['geometry-type'], 'Polygon']}
-                paint={{ 'fill-color': '#2F80ED', 'fill-opacity': 0.12 }}
+
+            {!!location?.accuracy && (
+              <Circle
+                center={{ latitude: location.lat, longitude: location.lng }}
+                radius={Math.max(1, Number(location.accuracy))}
+                fillColor="rgba(47,128,237,0.12)"
+                strokeColor="rgba(47,128,237,0.32)"
+                strokeWidth={1}
               />
-              <Layer
-                id="route-user-ring"
-                type="circle"
-                filter={['==', ['get', 'kind'], 'user']}
-                paint={{ 'circle-radius': 10, 'circle-color': '#FFFFFF' }}
-              />
-              <Layer
-                id="route-user-dot"
-                type="circle"
-                filter={['==', ['get', 'kind'], 'user']}
-                paint={{ 'circle-radius': 6.5, 'circle-color': '#2F80ED' }}
-              />
-            </GeoJSONSource>
-            <GeoJSONSource id="route-line" data={lineGeoJson}>
-              <Layer
-                id="route-line-layer"
-                type="line"
-                paint={{
-                  'line-color': colors.primary,
-                  'line-width': 4,
-                  'line-opacity': 0.88,
+            )}
+
+            {coordinates.length > 1 && (
+              <Polyline coordinates={coordinates} strokeColor={colors.primary} strokeWidth={4} />
+            )}
+
+            {stops.map((stop) => (
+              <Marker
+                key={stop.id || `${stop.dayIndex}:${stop.stopIndex}`}
+                coordinate={{
+                  latitude: stop.coordinates.lat,
+                  longitude: stop.coordinates.lng,
                 }}
-              />
-            </GeoJSONSource>
-            <GeoJSONSource
-              id="route-stops"
-              data={stopsGeoJson}
-              onPress={handleStopPress}
-              hitbox={{ top: 18, right: 18, bottom: 18, left: 18 }}
-            >
-              <Layer
-                id="route-stop-circles"
-                type="circle"
-                paint={{
-                  'circle-radius': 16,
-                  'circle-color': colors.primary,
-                  'circle-stroke-color': '#FFFFFF',
-                  'circle-stroke-width': 3,
-                }}
-              />
-              <Layer
-                id="route-stop-numbers"
-                type="symbol"
-                layout={{
-                  'text-field': ['get', 'stopNumber'],
-                  'text-size': 13,
-                  'text-allow-overlap': true,
-                }}
-                paint={{ 'text-color': '#FFFFFF' }}
-              />
-            </GeoJSONSource>
-          </MapLibreMap>
+                onPress={() => setSelectedStop(stop)}
+                stopPropagation
+              >
+                <View style={styles.markerWrap}>
+                  <View style={styles.marker}>
+                    {stop.image || stop.media ? (
+                      <>
+                        <CachedImage
+                          source={{ uri: getMediaVariantUrl(stop.media, 'thumb', stop.image) }}
+                          style={styles.markerImage}
+                          contentFit="cover"
+                          priority="low"
+                        />
+                        <View style={styles.markerNumberBadge}>
+                          <Text style={styles.markerNumberText}>{stop.globalIndex + 1}</Text>
+                        </View>
+                      </>
+                    ) : (
+                      <Text style={styles.markerText}>{stop.globalIndex + 1}</Text>
+                    )}
+                  </View>
+                </View>
+              </Marker>
+            ))}
+          </MapView>
 
           <View style={styles.mapControls} pointerEvents="box-none">
             <TouchableOpacity
@@ -233,11 +214,13 @@ export default function RouteMapScreen({ route, navigation }) {
               onPress={fitRoute}
               accessibilityRole="button"
               accessibilityLabel="הצג את כל המסלול"
+              testID="route-map-fit-route"
             >
               <Ionicons name="expand-outline" size={21} color={colors.primary} />
             </TouchableOpacity>
           </View>
-          {status === 'denied' && (
+
+          {LOCATION_RETRY_STATUSES.has(status) && (
             <TouchableOpacity style={styles.locationNotice} onPress={startTracking}>
               <Text style={styles.locationNoticeText}>הפעילו מיקום כדי לראות היכן אתם ביחס למסלול</Text>
             </TouchableOpacity>
@@ -252,7 +235,9 @@ export default function RouteMapScreen({ route, navigation }) {
               <Ionicons name="close" size={18} color={colors.textPrimary} />
             </TouchableOpacity>
             <View style={styles.sheetTitleWrap}>
-              <Text style={styles.sheetKicker}>יום {selectedStop.dayIndex + 1} · תחנה {selectedStop.stopIndex + 1}</Text>
+              <Text style={styles.sheetKicker}>
+                יום {selectedStop.dayIndex + 1} · תחנה {selectedStop.stopIndex + 1}
+              </Text>
               <Text style={styles.sheetTitle} numberOfLines={2}>{selectedStop.title}</Text>
             </View>
             {selectedStop.image || selectedStop.media ? (

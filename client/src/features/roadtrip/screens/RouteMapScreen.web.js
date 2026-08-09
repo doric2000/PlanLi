@@ -194,7 +194,7 @@ export default function RouteMapScreen({ route, navigation }) {
         <View style={styles.emptyState} testID="route-map-missing-key">
           <Ionicons name="map-outline" size={54} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>המפה עדיין לא הוגדרה</Text>
-          <Text style={styles.emptyText}>יש להוסיף מפתח MapTiler מוגן ל־Web.</Text>
+          <Text style={styles.emptyText}>מפת הרקע אינה מוגדרת בסביבה הזו.</Text>
         </View>
       ) : (
         <View style={styles.mapWrap}>

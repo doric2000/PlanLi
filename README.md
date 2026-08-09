@@ -2,6 +2,15 @@
 
 PlanLi is a photo-first travel application built with Expo and Firebase.
 
+## Current environment status
+
+The PlanLi client has **not** been publicly released to the App Store, Google
+Play, TestFlight, or a public web domain. During the current stabilization phase
+the iPhone client runs in Expo Go. A signed Development Build and a small
+private preview are deferred until the application is ready for final native
+validation. The deployed Firebase backend is not evidence of a public client
+release.
+
 ## Run the client
 
 Run these commands from the `client` directory:
@@ -12,8 +21,7 @@ npm install
 npx expo start -c
 ```
 
-Press `w` for Web or `a` for Android. You can also run `npm run web` or
-`npm run android` directly.
+Scan the QR code with Expo Go. For Web, run `npm run web` in a separate terminal.
 
 The local client must contain these bucket values in `client/.env`:
 
@@ -22,31 +30,34 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
 EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
 ```
 
-### MapLibre and MapTiler
+### Maps during Expo Go development
 
-Both recommendation discovery and route maps use MapLibre with MapTiler's
-`Dataviz Light` style. Add two different public MapTiler keys to the ignored
-`client/.env` file:
+The iOS/Android maps use `react-native-maps` with OpenStreetMap tiles so they can
+run inside Expo Go. The Web maps continue to use MapLibre GL 5.24 with
+MapTiler's `Dataviz Light` style. A local Web session uses the testing key from
+the ignored `client/.env` file:
 
 ```text
-EXPO_PUBLIC_MAPTILER_WEB_KEY=...
-EXPO_PUBLIC_MAPTILER_MOBILE_KEY=...
+EXPO_PUBLIC_MAPTILER_KEY=...
 ```
 
-Restrict the web key to the production and development origins. Restrict the
-mobile key to PlanLi's `PlanLi/1.0 (com.planli.planlitravels)` User-Agent.
-Missing keys show a friendly map placeholder instead of crashing the app.
+The mobile maps do not require a MapTiler key. A future public Web deployment
+can use a separate origin-restricted key:
 
-MapLibre contains native code and therefore does not run in Expo Go. After
-installing dependencies or changing the MapLibre plugin, create a fresh
-development build:
+```text
+EXPO_PUBLIC_MAPTILER_WEB_KEY=...  # public web domain/origin restriction
+```
+
+Ordinary JavaScript changes only require Fast Refresh or restarting Metro:
 
 ```powershell
-cd C:\Users\doric\Documents\PlanLi\PlanLi\client
-npx eas build --profile development --platform android
-# Run the iOS command from an Apple-capable build environment/account:
-npx eas build --profile development --platform ios
+# Local Web on this Windows computer.
+npx expo start --web
 ```
+
+Before release, repeat the native map and permission smoke tests in a signed
+Development Build. The `development` and `preview` EAS profiles remain prepared
+for that later step; neither represents a production release.
 
 ### Web Places proxy
 
@@ -271,7 +282,11 @@ npm run audit-live
 
 It writes nothing to Firestore and creates no support collection.
 
-## Deployment
+## Firebase backend deployment (not client distribution)
+
+These commands update the shared Firebase backend used by the local client.
+They do not publish the PlanLi client to users, an app store, TestFlight, or a
+website.
 
 Run Firebase deployments from the repository root:
 
@@ -342,9 +357,10 @@ document does not delete its subcollections.
 
 ## App Check before public launch
 
-App Check enforcement is intentionally disabled while development uses Expo
-Go. Before a public release, configure platform providers and private debug
-tokens for local/CI builds, then deploy Functions with:
+App Check enforcement remains intentionally disabled during private
+Development Build and preview testing. Before a public release, configure
+platform providers and private debug tokens for local/CI builds, then deploy
+Functions with:
 
 ```powershell
 $env:PLANLI_ENFORCE_APP_CHECK="true"
