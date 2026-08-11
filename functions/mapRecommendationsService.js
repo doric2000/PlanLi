@@ -6,7 +6,7 @@ const { cleanDestinations, cleanFilters, matchesFilters } = require('./personali
 const { normalizeMapCoordinates } = require('./mapLocation');
 
 const MIN_MAP_ZOOM = 4;
-const MAX_MAP_RESULTS = 500;
+const MAX_MAP_RESULTS = 200;
 const MAX_QUERY_RESULTS_PER_BOUND = MAX_MAP_RESULTS + 1;
 
 function assert(condition, code, message) {

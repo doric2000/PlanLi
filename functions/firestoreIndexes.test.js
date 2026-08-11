@@ -26,6 +26,16 @@ test('cities.status has a collection-group ascending index', () => {
   );
 });
 
+test('destination image jobs have a state index', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const override = config.fieldOverrides.find((entry) => (
+    entry.collectionGroup === 'destinationJobs' && entry.fieldPath === 'imageSync.state'
+  ));
+  assert.ok(override?.indexes.some((index) => (
+    index.order === 'ASCENDING' && index.queryScope === 'COLLECTION'
+  )));
+});
+
 test('personalized recommendation candidate queries have global and destination indexes', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const recommendationIndexes = config.indexes

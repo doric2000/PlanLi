@@ -16,6 +16,7 @@ import { collectionGroup, getDocs, limit, orderBy, query, where } from "firebase
 
 import CityCard from "../../../components/CityCard";
 import CachedImage from "../../../components/CachedImage";
+import PhotoAttribution from "../../../components/PhotoAttribution";
 import DestinationFilterModal from "../../../components/DestinationFilterModal";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import PageHeader from "../../../components/PageHeader";
@@ -28,6 +29,7 @@ import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRe
 import { resolveDestinationForPlacePreview } from "../../../services/LocationService";
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
 import { filterAndSortDestinations, mergeDestinations } from "../../../utils/destinationSearch";
+import { getDestinationImageUrl } from "../../../utils/destinationImages";
 
 const DESTINATION_GRADIENTS = [
 	["#78909C", "#546E7A"],
@@ -359,7 +361,7 @@ export default function HomeScreen({ navigation }) {
 
 	const renderFeaturedCard = (city, index) => {
 		const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
-		const imageUrl = city?.externalImageUrl || city?.imageUrl;
+		const imageUrl = getDestinationImageUrl(city, "feed");
 
 		return (
 			<TouchableOpacity
@@ -384,6 +386,7 @@ export default function HomeScreen({ navigation }) {
 					end={{ x: 0.5, y: 0 }}
 					style={styles.featuredOverlay}
 				/>
+				<PhotoAttribution destination={city} />
 				<View style={styles.featuredContent}>
 					<AppText style={styles.featuredCity} numberOfLines={1}>
 						{city.name || city.id}

@@ -15,10 +15,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import CachedImage from '../../../components/CachedImage';
 import FavoriteButton from '../../../components/FavoriteButton';
+import PhotoAttribution from '../../../components/PhotoAttribution';
 import PreferenceContextLine from '../../../components/PreferenceContextLine';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import { getDestinationImageUrl } from '../../../utils/destinationImages';
 import { createDestinationStyles } from '../components/destinationStyles';
 import { useDestinationData } from '../hooks/useDestinationData';
 import {
@@ -289,7 +291,8 @@ export default function LandingPageScreen({ navigation, route }) {
 
   const snapshotData = {
     name: destination.name,
-    thumbnail_url: destination.thumbnailUrl,
+    thumbnail_url: getDestinationImageUrl(destination, 'thumb'),
+    destinationImage: destination.destinationImage || null,
     sub_text: `${destination.travelers || 0} מטיילים`,
     countryId,
     travelers: destination.travelers || 0,
@@ -308,9 +311,9 @@ export default function LandingPageScreen({ navigation, route }) {
       >
         <View style={styles.header}>
           <View style={styles.hero}>
-            {destination.heroImageUrl ? (
+            {getDestinationImageUrl(destination, 'large') ? (
               <CachedImage
-                source={{ uri: destination.heroImageUrl }}
+                source={{ uri: getDestinationImageUrl(destination, 'large') }}
                 style={styles.heroImage}
                 contentFit="cover"
                 priority="high"
@@ -326,6 +329,7 @@ export default function LandingPageScreen({ navigation, route }) {
               </View>
             )}
             <View style={styles.heroShade} pointerEvents="none" />
+            <PhotoAttribution destination={destination} />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="חזרה"

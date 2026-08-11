@@ -8,6 +8,7 @@ export function useFavoriteCityIds({ enabled = true } = {}) {
     countryId: favorite.target.countryId,
     name: favorite.preview?.title || '',
     imageUrl: favorite.preview?.thumbUrl || null,
+    destinationImage: favorite.preview?.destinationImage || null,
     placeholderColor: favorite.preview?.placeholderColor,
     travelers: favorite.preview?.metrics?.travelers ?? 0,
     favoriteKey: favorite.favoriteKey,

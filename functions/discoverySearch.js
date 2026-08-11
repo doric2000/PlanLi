@@ -91,7 +91,6 @@ function buildSearchIndex({
     taxonomyTokens: uniqueLimited(taxonomyTokens, 100),
     destinationTokens: uniqueLimited(destinationTokens, 80),
     descriptionTokens: uniqueLimited(descriptionTokens, 160),
-    tokens: expandedTokens,
     prefixes: prefixesForTokens(expandedTokens),
   };
 }

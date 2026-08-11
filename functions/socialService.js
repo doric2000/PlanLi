@@ -82,6 +82,7 @@ function favoriteKeyForPath(path) {
 function compactObject(value) {
   if (Array.isArray(value)) return value.map(compactObject);
   if (!value || typeof value !== 'object') return value;
+  if (typeof value.toDate === 'function' || typeof value.toMillis === 'function') return value;
   return Object.fromEntries(
     Object.entries(value)
       .filter(([, entry]) => entry !== undefined)
@@ -90,11 +91,15 @@ function compactObject(value) {
 }
 
 function mediaThumb(data) {
+  if (data?.destinationImage?.urls?.thumb) return data.destinationImage.urls.thumb;
   const first = Array.isArray(data?.media) ? data.media[0] : data?.media;
-  return first?.thumb?.url || data?.imageUrl || null;
+  return first?.thumb?.url || data?.externalImageUrl || data?.imageUrl || null;
 }
 
 function mediaPlaceholder(data) {
+  if (data?.destinationImage) {
+    return data.destinationImage.color || data.placeholderColor || '#E5E7EB';
+  }
   const first = Array.isArray(data?.media) ? data.media[0] : data?.media;
   return first?.placeholder?.color || data?.placeholderColor || '#E5E7EB';
 }
@@ -109,6 +114,9 @@ function buildFavoritePreview({ target, data, publicProfile }) {
     subtitle,
     thumbUrl: mediaThumb(data),
     placeholderColor: mediaPlaceholder(data),
+    ...(target.type === 'city'
+      ? { destinationImage: data?.destinationImage || null }
+      : {}),
     ...(target.type === 'recommendation'
       ? {
           categoryId: data?.categoryId || null,

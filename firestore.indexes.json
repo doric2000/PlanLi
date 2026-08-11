@@ -1,6 +1,59 @@
 {
   "indexes": [
     {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "search.prefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "search.prefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "names.he", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "names.he", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "recommendations",
       "queryScope": "COLLECTION",
       "fields": [
@@ -68,6 +121,18 @@
         { "fieldPath": "destination.cityId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "stats.likeCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recommendations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "destination.countryId", "order": "ASCENDING" },
+        { "fieldPath": "destination.cityId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "stats.likeCount", "order": "DESCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
@@ -239,10 +304,42 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "recommendations",
+      "fieldPath": "media",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "recommendations",
+      "fieldPath": "search.titleTokens",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "recommendations",
+      "fieldPath": "search.taxonomyTokens",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "recommendations",
+      "fieldPath": "search.destinationTokens",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "recommendations",
+      "fieldPath": "search.descriptionTokens",
+      "indexes": []
+    },
+    {
       "collectionGroup": "cities",
       "fieldPath": "status",
       "indexes": [
         { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationJobs",
+      "fieldPath": "imageSync.state",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" }
       ]
     },
     {
@@ -289,6 +386,18 @@
     },
     {
       "collectionGroup": "jobs",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "destinationOverviewCacheItems",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicRateLimits",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []

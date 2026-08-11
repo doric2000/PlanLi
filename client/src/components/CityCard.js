@@ -1,16 +1,12 @@
 import React from 'react';
-import { View, TouchableOpacity, Platform } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { cards, cityCardStyles as styles } from '../styles';
 import CachedImage from './CachedImage';
 import PreferenceContextLine from './PreferenceContextLine';
-
-const DEFAULT_CITY_IMAGE_URL = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
-
-const isGooglePlacesPhotoUrl = (uri) =>
-  typeof uri === 'string' &&
-  (uri.includes('/maps/api/place/photo') || uri.includes('maps.googleapis.com/maps/api/place/photo'));
+import PhotoAttribution from './PhotoAttribution';
+import { getDestinationImageUrl, getDestinationPlaceholderColor } from '../utils/destinationImages';
 
 /**
  * CityCard - displays a city with image, name, country, and travelers count
@@ -28,19 +24,14 @@ export default function CityCard({
   saved,
   onSavePress,
 }) {
-  const rawImageUrl = city?.imageUrl;
-  const legacyImageUrl =
-    Platform.OS === 'web' && isGooglePlacesPhotoUrl(rawImageUrl)
-      ? DEFAULT_CITY_IMAGE_URL
-      : rawImageUrl;
-  const imageUrl = city?.externalImageUrl || legacyImageUrl;
+  const imageUrl = getDestinationImageUrl(city, variant === 'home' ? 'feed' : 'thumb');
   const isHomeVariant = variant === 'home';
   const cardStyle = isHomeVariant ? styles.homeCard : cards.popular;
   const imageContainerStyle = isHomeVariant ? styles.homeImageContainer : cards.popularImageContainer;
   const imageStyle = isHomeVariant ? styles.homeImage : cards.popularImage;
   const infoStyle = isHomeVariant ? styles.homeInfo : cards.popularInfo;
-  const cityName = city?.name || city?.id || '';
-  const countryName = city?.country || city?.countryName || city?.countryId || '';
+  const cityName = city?.identity?.names?.he || city?.names?.he || city?.name || city?.id || '';
+  const countryName = city?.country || city?.countryNames?.he || city?.countryName || city?.countryId || '';
   const travelers = city?.travelers ?? 0;
   const effectiveSaved = Boolean(saved);
   const personalizationReasonCode = city?.personalization?.reasonCodes?.[0];
@@ -64,11 +55,12 @@ export default function CityCard({
           <View
             style={[
               isHomeVariant ? styles.homeImagePlaceholder : cards.popularImagePlaceholder,
-              { backgroundColor: city?.placeholderColor || '#2D9CDB' },
+              { backgroundColor: getDestinationPlaceholderColor(city) },
             ]}
           />
         )}
         {isHomeVariant && <View style={styles.homeImageOverlay} />}
+        <PhotoAttribution destination={city} />
         {showSaveButton && (
           <TouchableOpacity
             style={[styles.saveButton, effectiveSaved && styles.saveButtonActive]}

@@ -92,6 +92,15 @@ test.beforeEach(async () => {
     await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'comment-1'), {
       ownerId: 'owner', text: 'Hello',
     });
+    await setDoc(doc(db, 'recommendations', 'rec-deleting', 'comments', 'comment-1'), {
+      ownerId: 'owner', text: 'Hidden',
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-active', 'likes', 'owner'), {
+      userId: 'owner',
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-deleting', 'likes', 'owner'), {
+      userId: 'owner',
+    });
 
     const storage = context.storage();
     await uploadBytes(ref(storage, 'media/owner/asset/large.webp'), new Uint8Array([1, 2, 3]), {
@@ -109,6 +118,16 @@ test('public active documents are readable while private and deleting documents 
   await assertSucceeds(getDoc(doc(db, 'publicProfiles', 'owner')));
   await assertFails(getDoc(doc(db, 'users', 'owner')));
   await assertFails(getDoc(doc(db, 'system', 'accountDeletion', 'jobs', 'private')));
+});
+
+test('social children inherit their parent publication state', {
+  skip: !hasEmulators,
+}, async () => {
+  const db = env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'comment-1')));
+  await assertSucceeds(getDoc(doc(db, 'recommendations', 'rec-active', 'likes', 'owner')));
+  await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting', 'comments', 'comment-1')));
+  await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting', 'likes', 'owner')));
 });
 
 test('public collection queries require an active filter and bounded limit', {
