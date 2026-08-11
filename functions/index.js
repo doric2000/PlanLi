@@ -12,7 +12,7 @@ const {
   resolveRecommendationDestination,
   saveRecommendation,
 } = require('./recommendationService');
-const { loadRouteDetails, saveRoute } = require('./routeService');
+const { cleanupRouteRevisions, loadRouteDetails, saveRoute } = require('./routeService');
 const { saveTrip } = require('./tripService');
 const { registerUser, updateProfile } = require('./profileService');
 const {
@@ -23,6 +23,11 @@ const {
 } = require('./personalizationService');
 const { getMapRecommendations } = require('./mapRecommendationsService');
 const { consumePublicReadBudget } = require('./publicRateLimitService');
+const {
+  PROVIDER_CALLABLE_LIMITS,
+  PROVIDER_ROUTE_CALLABLE_LIMITS,
+} = require('./providerRateLimitService');
+const { cleanupExpiredRuntimeDocuments } = require('./runtimeCleanupService');
 const {
   cleanupOrphanFavorites,
   clearNotifications,
@@ -40,7 +45,11 @@ const { deleteContent, requestAccountDeletion } = require('./deletionService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
-const { searchDestinations, syncDestinationCatalog } = require('./destinationCatalogService');
+const {
+  searchDestinations,
+  syncCountryDestinationCatalog,
+  syncDestinationCatalog,
+} = require('./destinationCatalogService');
 const {
   repairPendingDestinationImages,
   resolveAndPersistDestinationImage,
@@ -102,7 +111,11 @@ function firestoreCreated(document, handler, options = {}) {
 }
 
 exports.saveRecommendation = callable(
-  { secrets: [googleMapsKey, restCountriesKey], timeoutSeconds: 120 },
+  {
+    secrets: [googleMapsKey, restCountriesKey, publicRateLimitKey],
+    timeoutSeconds: 120,
+    ...PROVIDER_CALLABLE_LIMITS,
+  },
   (request) => saveRecommendation({
     admin,
     auth: request.auth,
@@ -110,22 +123,33 @@ exports.saveRecommendation = callable(
     mapsKey: googleMapsKey.value(),
     restCountriesKey: restCountriesKey.value(),
     mediaBucket: mediaStorageBucket.value(),
+    providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
 
 exports.resolveRecommendationDestination = callable(
-  { secrets: [googleMapsKey, restCountriesKey], timeoutSeconds: 30 },
+  {
+    secrets: [googleMapsKey, restCountriesKey, publicRateLimitKey],
+    timeoutSeconds: 30,
+    ...PROVIDER_CALLABLE_LIMITS,
+  },
   (request) => resolveRecommendationDestination({
     admin,
     auth: request.auth,
     data: request.data,
     mapsKey: googleMapsKey.value(),
     restCountriesKey: restCountriesKey.value(),
+    providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
 
 exports.saveRoute = callable(
-  { timeoutSeconds: 300, memory: '1GiB', secrets: [googleMapsKey, restCountriesKey] },
+  {
+    timeoutSeconds: 300,
+    memory: '1GiB',
+    secrets: [googleMapsKey, restCountriesKey, publicRateLimitKey],
+    ...PROVIDER_ROUTE_CALLABLE_LIMITS,
+  },
   (request) => saveRoute({
     admin,
     auth: request.auth,
@@ -133,12 +157,22 @@ exports.saveRoute = callable(
     mediaBucket: mediaStorageBucket.value(),
     mapsKey: googleMapsKey.value(),
     restCountriesKey: restCountriesKey.value(),
+    providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
 
 exports.loadRouteDetails = callable(
-  { timeoutSeconds: 30 },
-  (request) => loadRouteDetails({ admin, data: request.data })
+  { timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  async (request) => {
+    await consumePublicReadBudget({
+      admin,
+      auth: request.auth,
+      request,
+      action: 'routeDetails',
+      key: publicRateLimitKey.value(),
+    });
+    return loadRouteDetails({ admin, data: request.data });
+  }
 );
 
 exports.saveTrip = callable(
@@ -355,6 +389,23 @@ exports.cleanupOrphanFavoritesScheduled = onSchedule(
   }
 );
 
+exports.cleanupExpiredRuntimeScheduled = onSchedule(
+  {
+    schedule: 'every day 05:30',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const [runtime, revisions] = await Promise.all([
+      cleanupExpiredRuntimeDocuments({ admin, limit: 200 }),
+      cleanupRouteRevisions({ admin, limit: 100 }),
+    ]);
+    console.log('Expired runtime cleanup complete.', { runtime, revisions });
+  }
+);
+
 async function handleMediaCleanup(event, collectionName) {
   const change = event.data;
   if (!change) return;
@@ -499,4 +550,14 @@ exports.onDestinationCatalogSync = firestoreWritten(
     cityId: event.params.cityId,
     city: event.data?.after.exists ? event.data.after.data() : null,
   })
+);
+
+exports.onCountryDestinationCatalogSync = firestoreWritten(
+  'countries/{countryId}',
+  (event) => syncCountryDestinationCatalog({
+    admin,
+    countryId: event.params.countryId,
+    country: event.data?.after.exists ? event.data.after.data() : null,
+  }),
+  { timeoutSeconds: 300 }
 );

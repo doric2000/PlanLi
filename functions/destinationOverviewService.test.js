@@ -23,6 +23,7 @@ function createAdmin(seed = {}) {
       const previous = options?.merge ? documents.get(path) || {} : {};
       documents.set(path, { ...previous, ...value });
     },
+    collection: (name) => ({ doc: (id) => makeRef(`${path}/${name}/${id}`) }),
   });
   const db = {
     doc: makeRef,
@@ -90,11 +91,11 @@ test('weather and currency providers are converted to public facts', async () =>
 test('cache uses fresh values and falls back to stale values on provider failure', async () => {
   const nowMs = 10_000;
   const admin = createAdmin({
-    '_destinationDataCache/fresh': {
+    'system/runtime/destinationOverviewCache/destinationOverviewCacheItems/fresh': {
       value: { answer: 'fresh' },
       expiresAt: { toMillis: () => nowMs + 1_000 },
     },
-    '_destinationDataCache/stale': {
+    'system/runtime/destinationOverviewCache/destinationOverviewCacheItems/stale': {
       value: { answer: 'stale' },
       expiresAt: { toMillis: () => nowMs - 1 },
     },

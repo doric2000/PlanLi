@@ -28,6 +28,7 @@ const {
 } = require('./travelTaxonomy');
 const { buildSearchIndex } = require('./discoverySearch');
 const { buildMapLocation } = require('./mapLocation');
+const { consumeProviderBudget } = require('./providerRateLimitService');
 
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -671,6 +672,11 @@ async function resolveGoogleDestination({
     assert(overrideSnap.exists, 'invalid-argument', 'Country override does not exist.');
     const overrideData = overrideSnap.data();
     assert(
+      overrideData?.status === 'active',
+      'failed-precondition',
+      'Country override is not active.'
+    );
+    assert(
       String(overrideData?.code || '').toUpperCase() ===
         resolvedCountry.countryCode,
       'invalid-argument',
@@ -684,11 +690,17 @@ async function resolveGoogleDestination({
     const existing = await db
       .collection('countries')
       .where('code', '==', resolvedCountry.countryCode)
-      .limit(1)
+      .limit(5)
       .get();
     if (!existing.empty) {
-      countryId = existing.docs[0].id;
-      countryData = existing.docs[0].data();
+      const activeCountry = existing.docs.find((document) => document.data()?.status === 'active');
+      assert(
+        activeCountry,
+        'failed-precondition',
+        'The matching country is not active.'
+      );
+      countryId = activeCountry.id;
+      countryData = activeCountry.data();
     }
   }
 
@@ -736,6 +748,11 @@ async function resolveGoogleDestination({
   if (!existingCity.empty) {
     cityId = existingCity.docs[0].id;
     cityData = existingCity.docs[0].data();
+    assert(
+      cityData?.status === 'active',
+      'failed-precondition',
+      'The matching destination is not active.'
+    );
   }
 
   if (!cityId) {
@@ -745,12 +762,18 @@ async function resolveGoogleDestination({
       .get();
     if (namedCitySnapshot.exists) {
       cityData = namedCitySnapshot.data();
+      assert(
+        cityData?.status === 'active',
+        'failed-precondition',
+        'The matching destination is not active.'
+      );
     }
   }
 
   if (!cityData) {
     cityData = {
       schemaVersion: 2,
+      countryId,
       name: parsedCity.cityName || parsed.cityName,
       providerRefs: { googlePlaceId: parsedCity.placeId },
       status: 'active',
@@ -793,6 +816,7 @@ async function resolveRecommendationDestination({
   data,
   mapsKey,
   restCountriesKey,
+  providerRateLimitKey,
 }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(
@@ -800,6 +824,12 @@ async function resolveRecommendationDestination({
     'permission-denied',
     'Email verification is required.'
   );
+  await consumeProviderBudget({
+    admin,
+    auth,
+    action: 'bilingualResolution',
+    key: providerRateLimitKey,
+  });
   const destination = await resolveGoogleDestination({
     admin,
     placeId: data?.placeId,
@@ -835,6 +865,7 @@ async function saveRecommendation({
   mapsKey,
   restCountriesKey,
   mediaBucket,
+  providerRateLimitKey,
 }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
@@ -887,21 +918,29 @@ async function saveRecommendation({
     mediaBucket,
     existingMedia: previousData?.media,
   });
-  const destination = data?.destinationRef
-    ? await resolveExistingDestination(db, data.destinationRef)
-    : await resolveGoogleDestination({
-        admin,
-        placeId: data?.placeId,
-        countryOverrideId: data?.countryOverrideId,
-        mapsKey,
-        restCountriesKey,
-      });
+  let destination;
+  if (data?.destinationRef) {
+    destination = await resolveExistingDestination(db, data.destinationRef);
+  } else {
+    await consumeProviderBudget({
+      admin,
+      auth,
+      action: 'bilingualResolution',
+      key: providerRateLimitKey,
+    });
+    destination = await resolveGoogleDestination({
+      admin,
+      placeId: data?.placeId,
+      countryOverrideId: data?.countryOverrideId,
+      mapsKey,
+      restCountriesKey,
+    });
+  }
 
   const payload = {
     ...content,
     taxonomyVersion: taxonomy.version,
     facets,
-    status: 'active',
     destination: {
       countryId: destination.countryId,
       cityId: destination.cityId,
@@ -932,6 +971,7 @@ async function saveRecommendation({
       : null;
     const destinationChanged =
       !currentData || previousCityRef?.path !== destination.cityRef.path;
+    const contributesToDestinationStats = !currentData || (currentData.status || 'active') === 'active';
     const [countrySnapshot, citySnapshot, previousCitySnapshot] = await Promise.all([
       transaction.get(destination.countryRef),
       transaction.get(destination.cityRef),
@@ -961,6 +1001,12 @@ async function saveRecommendation({
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+    } else {
+      assert(
+        countrySnapshot.data()?.status === 'active',
+        'failed-precondition',
+        'The selected country is no longer active.'
+      );
     }
     if (!citySnapshot.exists) {
       assert(
@@ -972,21 +1018,28 @@ async function saveRecommendation({
         ...destination.cityData,
         stats: {
           ...(destination.cityData.stats || {}),
-          recommendationCount: destinationChanged ? 1 : 0,
+          recommendationCount: destinationChanged && contributesToDestinationStats ? 1 : 0,
         },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    } else if (destinationChanged) {
-      transaction.update(destination.cityRef, {
-        'stats.recommendationCount': Math.max(
-          0,
-          Number(citySnapshot.data()?.stats?.recommendationCount || 0) + 1
-        ),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    } else {
+      assert(
+        citySnapshot.data()?.status === 'active',
+        'failed-precondition',
+        'The selected destination is no longer active.'
+      );
+      if (destinationChanged && contributesToDestinationStats) {
+        transaction.update(destination.cityRef, {
+          'stats.recommendationCount': Math.max(
+            0,
+            Number(citySnapshot.data()?.stats?.recommendationCount || 0) + 1
+          ),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     }
-    if (previousCitySnapshot?.exists) {
+    if (previousCitySnapshot?.exists && contributesToDestinationStats) {
       transaction.update(previousCityRef, {
         'stats.recommendationCount': Math.max(
           0,
@@ -999,11 +1052,13 @@ async function saveRecommendation({
     if (recommendationId) {
       transaction.update(recommendationRef, {
         ...payload,
+        status: currentData.status || 'active',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
       transaction.create(recommendationRef, {
         ...payload,
+        status: 'active',
         ownerId: uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),

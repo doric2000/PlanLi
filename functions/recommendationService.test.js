@@ -416,6 +416,9 @@ function createFakeAdmin(seed = {}) {
           if (!documents.has(ref.path)) throw new Error('missing');
           documents.set(ref.path, { ...documents.get(ref.path), ...data });
         },
+        set: (ref, data) => {
+          documents.set(ref.path, { ...(documents.get(ref.path) || {}), ...data });
+        },
       }),
   };
   return {
@@ -533,6 +536,60 @@ test('admin edits retain the original owner media without trusting client media 
   const saved = admin.documents.get('recommendations/admin-edit');
   assert.equal(saved.ownerId, 'original-owner');
   assert.deepEqual(saved.media, [existingAsset]);
+});
+
+test('recommendation edits preserve hidden state instead of reactivating content', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
+    'countries/IL/cities/TLV': {
+      name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 1 },
+    },
+    'countries/IL/cities/JLM': {
+      name: 'Jerusalem', status: 'active', stats: { recommendationCount: 0 },
+    },
+    'recommendations/hidden-edit': {
+      ownerId: 'owner',
+      createdAt: 'ORIGINAL',
+      destination: { countryId: 'IL', cityId: 'TLV' },
+      media: [],
+      status: 'inactive',
+      stats: { likeCount: 2, commentCount: 1 },
+    },
+  });
+
+  await saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      recommendationId: 'hidden-edit',
+      destinationRef: { countryId: 'IL', cityId: 'JLM' },
+      recommendation: validContent,
+    },
+  });
+
+  assert.equal(admin.documents.get('recommendations/hidden-edit').status, 'inactive');
+  assert.equal(admin.documents.get('countries/IL/cities/TLV').stats.recommendationCount, 1);
+  assert.equal(admin.documents.get('countries/IL/cities/JLM').stats.recommendationCount, 0);
+});
+
+test('existing destinations under inactive countries cannot be reused', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'Israel', code: 'IL', status: 'inactive' },
+    'countries/IL/cities/TLV': { name: 'Tel Aviv', status: 'active' },
+  });
+  await assert.rejects(
+    saveRecommendation({
+      admin,
+      auth: verifiedAuth,
+      mapsKey: 'unused',
+      data: {
+        destinationRef: { countryId: 'IL', cityId: 'TLV' },
+        recommendation: validContent,
+      },
+    }),
+    /Destination is not active/
+  );
 });
 
 test('saveRecommendation rejects unverified and foreign edits', async () => {

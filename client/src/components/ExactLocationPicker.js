@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, TouchableOpacity, View } from "react-native";
 import AppText from "./AppText";
-import { collection, collectionGroup, getDocs, limit, query, where } from "firebase/firestore";
+import { collection, getDocs, limit, query, where } from "firebase/firestore";
 
 import GooglePlacesInput from "./GooglePlacesInput";
 import SelectionModal from "../features/community/components/SelectionModal";
 import { db } from "../config/firebase";
 import { resolveDestinationForPlacePreview, searchPlaces } from "../services/LocationService";
+import {
+	destinationCatalogItemToCity,
+	searchDestinations,
+} from "../services/DestinationService";
 import { colors, exactLocationPickerStyles as styles } from "../styles";
 
 const getInitialQuery = (value) =>
@@ -39,7 +43,7 @@ export default function ExactLocationPicker({
 
 	const [allCitiesForSearch, setAllCitiesForSearch] = useState([]);
 	const [hasLoadedAllCitiesForSearch, setHasLoadedAllCitiesForSearch] = useState(false);
-	const isFetchingAllCitiesForSearchRef = useRef(false);
+	const citiesSearchRequestRef = useRef(0);
 	const allCitiesFetchDebounceRef = useRef(null);
 
 	const [countryPickerVisible, setCountryPickerVisible] = useState(false);
@@ -60,38 +64,34 @@ export default function ExactLocationPicker({
 
 	useEffect(() => {
 		const q = locationQuery.trim();
-		if (q.length < 2) return;
-		if (hasLoadedAllCitiesForSearch) return;
-		if (isFetchingAllCitiesForSearchRef.current) return;
+		const requestId = citiesSearchRequestRef.current + 1;
+		citiesSearchRequestRef.current = requestId;
+		if (q.length < 2) {
+			setAllCitiesForSearch([]);
+			setHasLoadedAllCitiesForSearch(false);
+			return undefined;
+		}
+		setHasLoadedAllCitiesForSearch(false);
 
 		if (allCitiesFetchDebounceRef.current) {
 			clearTimeout(allCitiesFetchDebounceRef.current);
 		}
 
 		allCitiesFetchDebounceRef.current = setTimeout(async () => {
-			isFetchingAllCitiesForSearchRef.current = true;
 			try {
-				const citiesQuery = query(
-					collectionGroup(db, "cities"),
-					where("status", "==", "active"),
-					limit(100)
+				const catalog = await searchDestinations({ query: q, sort: "popular", limit: 20 });
+				if (citiesSearchRequestRef.current !== requestId) return;
+				const citiesList = (catalog?.items || []).map((item) =>
+					destinationCatalogItemToCity(item)
 				);
-				const querySnapshot = await getDocs(citiesQuery);
-				const citiesList = querySnapshot.docs.map((cityDoc) => {
-					const parentCountry = cityDoc.ref.parent.parent;
-					const countryId = parentCountry ? parentCountry.id : "Unknown";
-					return {
-						id: cityDoc.id,
-						countryId,
-						...cityDoc.data(),
-					};
-				});
 				setAllCitiesForSearch(citiesList);
-				setHasLoadedAllCitiesForSearch(true);
 			} catch (error) {
+				if (citiesSearchRequestRef.current !== requestId) return;
 				console.error("Error fetching all cities for search:", error);
 			} finally {
-				isFetchingAllCitiesForSearchRef.current = false;
+				if (citiesSearchRequestRef.current === requestId) {
+					setHasLoadedAllCitiesForSearch(true);
+				}
 			}
 		}, 400);
 
@@ -101,17 +101,22 @@ export default function ExactLocationPicker({
 				allCitiesFetchDebounceRef.current = null;
 			}
 		};
-	}, [locationQuery, hasLoadedAllCitiesForSearch]);
+	}, [locationQuery]);
 
 	const localAutocompleteResults = useMemo(() => {
 		const q = locationQuery.trim().toLowerCase();
 		if (!q) return [];
 		return (hasLoadedAllCitiesForSearch ? allCitiesForSearch : [])
 			.filter((city) => {
-				const name = (city.name || "").toLowerCase();
-				const description = (city.description || "").toLowerCase();
-				const countryId = (city.countryId || "").toLowerCase();
-				return name.includes(q) || description.includes(q) || countryId.includes(q);
+				const fields = [
+					city.name,
+					city.names?.en,
+					city.description,
+					city.countryNames?.he,
+					city.countryNames?.en,
+					city.countryId,
+				].map((field) => String(field || "").toLowerCase());
+				return fields.some((field) => field.includes(q));
 			})
 			.slice(0, 20);
 	}, [allCitiesForSearch, hasLoadedAllCitiesForSearch, locationQuery]);
