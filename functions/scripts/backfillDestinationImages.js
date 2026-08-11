@@ -31,6 +31,14 @@ function writeManifest(filePath, manifest) {
   fs.writeFileSync(filePath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
+function hasArgument(name) {
+  return process.argv.includes(name);
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 function sameDestinationImage(current, expected) {
   if (!current && !expected) return true;
   if (!current || !expected || current.source?.type !== expected.source?.type) return false;
@@ -76,6 +84,10 @@ async function createDryRunManifest(db, filePath) {
   const existing = fs.existsSync(filePath)
     ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
     : { version: 1, mode: 'dry-run', createdAt: new Date().toISOString(), entries: [] };
+  // A previous rate-limit pause is historical once this invocation starts.
+  delete existing.pausedAt;
+  delete existing.pauseReason;
+  delete existing.retryAfterMs;
   const completed = new Set(existing.entries.map((entry) => entry.path));
   const snapshot = await db.collectionGroup('cities').where('status', '==', 'active').get();
 
@@ -208,11 +220,44 @@ async function applyManifest(db, filePath) {
   return { applied, reconciled, conflicts };
 }
 
+async function activeCityCount(db) {
+  return (await db.collectionGroup('cities').where('status', '==', 'active').get()).size;
+}
+
+async function runContinuously(db, filePath, { applyWhenReady }) {
+  let previousPrepared = -1;
+  while (true) {
+    const manifest = await createDryRunManifest(db, filePath);
+    const total = await activeCityCount(db);
+    const prepared = manifest.entries?.length || 0;
+    console.log('Destination image migration progress.', { prepared, total, paused: manifest.pauseReason || null });
+    if (prepared >= total) {
+      if (applyWhenReady) {
+        const result = await applyManifest(db, filePath);
+        console.log('Destination image migration apply complete.', { filePath, ...result });
+      }
+      return { prepared, total, applied: Boolean(applyWhenReady) };
+    }
+    if (!manifest.pauseReason && prepared <= previousPrepared) {
+      throw new Error('Migration made no progress; inspect the manifest errors before retrying.');
+    }
+    previousPrepared = prepared;
+    // Wait at least one minute after a provider pause. This keeps the process
+    // automatic without hammering Wikidata when it asks us to slow down.
+    const delayMs = Math.max(60 * 1000, Number(manifest.retryAfterMs || 0));
+    console.log(`Migration will resume automatically in ${Math.ceil(delayMs / 1000)} seconds.`);
+    await sleep(delayMs);
+  }
+}
+
 async function main() {
   initializeAdmin(admin);
   const db = admin.firestore();
   const filePath = manifestPath();
-  if (process.argv.includes('--apply')) {
+  if (hasArgument('--continuous')) {
+    const result = await runContinuously(db, filePath, { applyWhenReady: hasArgument('--apply-when-ready') });
+    console.log('Continuous destination image migration complete.', { filePath, ...result });
+  } else if (hasArgument('--apply')) {
     const result = await applyManifest(db, filePath);
     console.log('Destination image migration apply complete.', { filePath, ...result });
   } else {
@@ -234,6 +279,8 @@ if (require.main === module) {
 
 module.exports = {
   applyManifest,
+  activeCityCount,
   createDryRunManifest,
   manifestPath,
+  runContinuously,
 };
