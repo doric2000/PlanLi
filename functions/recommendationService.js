@@ -29,6 +29,7 @@ const {
 const { buildSearchIndex } = require('./discoverySearch');
 const { buildMapLocation } = require('./mapLocation');
 const { consumeProviderBudget } = require('./providerRateLimitService');
+const { readResolvedPlaceToken } = require('./placesGatewayService');
 
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -258,6 +259,20 @@ function parsePlaceDetails(result) {
       typeof lat === 'number' && typeof lng === 'number'
         ? { lat, lng }
         : null,
+  };
+}
+
+function parseResolvedBilingualPlace(bilingual) {
+  const place = bilingual?.he || {};
+  return {
+    placeId: place.placeId,
+    name: place.displayName || place.localityName || null,
+    address: place.address || null,
+    url: place.url || null,
+    countryName: place.countryName || null,
+    countryCode: place.countryCode || null,
+    cityName: place.localityName || place.displayName || null,
+    coordinates: place.coordinates || bilingual?.en?.coordinates || null,
   };
 }
 
@@ -641,14 +656,15 @@ async function resolveExistingDestination(db, destinationRef) {
 async function resolveGoogleDestination({
   admin,
   placeId,
+  resolvedPlace,
   countryOverrideId,
   mapsKey,
   restCountriesKey,
 }) {
   const resolutionStartedAt = Date.now();
   const db = admin.firestore();
-  const placeResult = await fetchGooglePlace(placeId, mapsKey);
-  const parsed = parsePlaceDetails(placeResult);
+  const placeResult = resolvedPlace ? null : await fetchGooglePlace(placeId, mapsKey);
+  const parsed = resolvedPlace ? parseResolvedBilingualPlace(resolvedPlace) : parsePlaceDetails(placeResult);
   assert(parsed.cityName, 'failed-precondition', 'Could not derive a city from this place.');
   const cityPlaceResult = await fetchGoogleCityPlace(parsed, mapsKey);
   const parsedCity = cityPlaceResult
@@ -824,15 +840,20 @@ async function resolveRecommendationDestination({
     'permission-denied',
     'Email verification is required.'
   );
-  await consumeProviderBudget({
-    admin,
-    auth,
-    action: 'bilingualResolution',
-    key: providerRateLimitKey,
-  });
+  if (!data?.resolvedPlaceToken) {
+    await consumeProviderBudget({
+      admin,
+      auth,
+      action: 'bilingualResolution',
+      key: providerRateLimitKey,
+    });
+  }
   const destination = await resolveGoogleDestination({
     admin,
     placeId: data?.placeId,
+    resolvedPlace: data?.resolvedPlaceToken
+      ? await readResolvedPlaceToken({ admin, auth, resolvedPlaceToken: data.resolvedPlaceToken })
+      : null,
     mapsKey,
     restCountriesKey,
   });
@@ -922,15 +943,20 @@ async function saveRecommendation({
   if (data?.destinationRef) {
     destination = await resolveExistingDestination(db, data.destinationRef);
   } else {
-    await consumeProviderBudget({
-      admin,
-      auth,
-      action: 'bilingualResolution',
-      key: providerRateLimitKey,
-    });
+    if (!data?.resolvedPlaceToken) {
+      await consumeProviderBudget({
+        admin,
+        auth,
+        action: 'bilingualResolution',
+        key: providerRateLimitKey,
+      });
+    }
     destination = await resolveGoogleDestination({
       admin,
       placeId: data?.placeId,
+      resolvedPlace: data?.resolvedPlaceToken
+        ? await readResolvedPlaceToken({ admin, auth, resolvedPlaceToken: data.resolvedPlaceToken })
+        : null,
       countryOverrideId: data?.countryOverrideId,
       mapsKey,
       restCountriesKey,
@@ -1088,6 +1114,7 @@ module.exports = {
   MAX_RECOMMENDATION_IMAGE_BYTES,
   isVerifiedCaller,
   parsePlaceDetails,
+  parseResolvedBilingualPlace,
   fetchGoogleReverseCountry,
   resolvePlaceCountry,
   resolveGoogleDestination,

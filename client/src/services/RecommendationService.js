@@ -29,9 +29,8 @@ const getResolveRecommendationDestinationCallable = () => {
   return resolveRecommendationDestinationCallable;
 };
 
-export const resolveRecommendationDestination = async (placeId) => {
-  const response = await getResolveRecommendationDestinationCallable()({
-    placeId,
-  });
+export const resolveRecommendationDestination = async (selection) => {
+  const payload = typeof selection === 'string' ? { placeId: selection } : selection;
+  const response = await getResolveRecommendationDestinationCallable()(payload);
   return response?.data || null;
 };
