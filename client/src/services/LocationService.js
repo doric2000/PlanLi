@@ -53,8 +53,7 @@ export const searchCities = async (searchText, { signal } = {}) => {
     return await gatewaySearch(searchText, 'destinations');
   } catch (error) {
     if (signal?.aborted || error?.name === 'AbortError') return [];
-    console.error('Destination search failed:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -64,8 +63,7 @@ export const searchPlaces = async (searchText, { signal } = {}) => {
     return await gatewaySearch(searchText, 'places');
   } catch (error) {
     if (signal?.aborted || error?.name === 'AbortError') return [];
-    console.error('Place search failed:', error);
-    return [];
+    throw error;
   }
 };
 
