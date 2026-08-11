@@ -140,11 +140,16 @@ function addressComponent(result, ...types) {
 }
 
 function destinationQuery(city, country) {
+  const googleNames = city?.googleCache?.names || {};
   const names = city?.identity?.names || {};
   const identityCountryNames = city?.identity?.countryNames || {};
   const countryNames = country?.names || {};
-  const cityLabel = String(names.en || names.he || cityName(city)).trim();
-  const countryLabel = String(identityCountryNames.en || countryNames.en || country?.name || '').trim();
+  const cityLabel = String(googleNames.en || names.en || names.he || cityName(city)).trim();
+  const countryCode = String(city?.googleCache?.countryCode || city?.identity?.countryCode || country?.code || '').trim().toUpperCase();
+  const localEnglishCountryName = /^[A-Z]{2}$/.test(countryCode)
+    ? new Intl.DisplayNames(['en'], { type: 'region' }).of(countryCode)
+    : '';
+  const countryLabel = String(countryNames.en || identityCountryNames.en || localEnglishCountryName || '').trim();
   return [cityLabel, countryLabel]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
@@ -357,18 +362,28 @@ async function resolveAndPersistDestinationImage({
   }
   const jobRef = destinationJobRef(db, countryId, cityId);
   let job = (await jobRef.get()).data() || {};
-  if (!city.identity?.names?.en) {
-    const identityResult = await resolveAndPersistDestinationIdentity({ admin, countryId, cityId, fetchImpl });
-    if (identityResult.state !== 'ready') {
-      return refreshRecommendationFallbackForDestination({ admin, countryId, cityId, force: true });
-    }
-    const refreshed = await cityRef.get();
-    city = refreshed.data();
-    job = (await jobRef.get()).data() || {};
-  }
   const attempts = Number(job?.imageSync?.attempts || 0) + 1;
   const canonicalQuery = destinationQuery(city, countrySnapshot.data());
   const query = String(canonicalQuery || job?.imageSync?.query || '').trim();
+  if (!query) {
+    const fallback = await selectRecommendationFallback(db, countryId, cityId).catch(() => null);
+    if (fallback && !sameDestinationImage(city.destinationImage, fallback)) {
+      await cityRef.update(destinationImageWritePatch(admin, fallback));
+    }
+    await jobRef.set({
+      countryId,
+      cityId,
+      imageSync: {
+        state: fallback ? 'ready' : 'retry',
+        attempts,
+        lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(fallback ? {} : { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) }),
+        lastErrorCode: fallback ? null : 'missing_google_cache',
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { state: fallback ? 'ready' : 'retry', image: fallback || null };
+  }
   try {
     const candidate = await resolveDestinationImageCandidate({
       db,

@@ -57,6 +57,8 @@ describe('RouteMapScreen', () => {
 
     expect(screen.getByText('Northern route')).toBeTruthy();
     expect(screen.getByTestId('route-map')).toBeTruthy();
+    expect(screen.getByTestId('route-map').props.provider).toBe('google');
+    expect(screen.queryByTestId('map-url-tile')).toBeNull();
     expect(screen.getByTestId('map-route-line')).toBeTruthy();
     expect(screen.getByTestId('map-user-accuracy')).toBeTruthy();
 

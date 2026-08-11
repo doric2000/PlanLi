@@ -1,5 +1,6 @@
 import {
 	buildGoogleMapsDirectionsUrl,
+	buildGoogleMapsDirectionsUrls,
 	buildGoogleMapsPlaceUrl,
 	derivePlacesFromStops,
 	flattenRouteStops,
@@ -85,6 +86,19 @@ describe("roadtrip route stop helpers", () => {
 		expect(url).toContain("origin=48.8584%2C2.2945");
 		expect(url).toContain("destination=45.764%2C4.8357");
 		expect(url).not.toContain("No%20coords");
+	});
+
+	it("uses permanent Place IDs and splits long routes into portable Google Maps segments", () => {
+		const stops = Array.from({ length: 6 }, (_, index) => ({
+			id: String(index),
+			place: { placeId: `place-${index}`, coordinates: { lat: 32 + index / 10, lng: 34 + index / 10 } },
+		}));
+		const urls = buildGoogleMapsDirectionsUrls(stops);
+		expect(urls).toHaveLength(2);
+		expect(urls[0]).toContain("origin_place_id=place-0");
+		expect(urls[0]).toContain("destination_place_id=place-4");
+		expect(urls[1]).toContain("origin_place_id=place-4");
+		expect(urls[1]).toContain("destination_place_id=place-5");
 	});
 });
 
