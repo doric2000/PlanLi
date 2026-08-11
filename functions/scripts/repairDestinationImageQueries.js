@@ -16,14 +16,22 @@ async function candidates(db) {
     const countryRef = citySnapshot.ref.parent.parent;
     if (!countryRef) continue;
     const country = (await countryRef.get()).data() || {};
+    const query = destinationQuery(city, country);
+    const job = (await destinationJobRef(db, countryRef.id, citySnapshot.id).get()).data() || {};
+    const imageSync = job.imageSync || {};
+    if (imageSync.query === query && imageSync.unsplashOutcome === 'no_match') continue;
     output.push({
       countryId: countryRef.id,
       cityId: citySnapshot.id,
-      query: destinationQuery(city, country),
+      query,
       currentSource: city.destinationImage?.source?.type || 'none',
     });
   }
   return output;
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function run({ apply = false } = {}) {
@@ -68,11 +76,24 @@ async function run({ apply = false } = {}) {
   return result;
 }
 
+async function runContinuously() {
+  while (true) {
+    const result = await run({ apply: true });
+    if (!result.paused) return result;
+    const delayMs = 60 * 60 * 1000;
+    console.log('Unsplash rate limit reached; repair will resume automatically in 60 minutes.');
+    await sleep(delayMs);
+  }
+}
+
 if (require.main === module) {
-  run({ apply: process.argv.includes('--apply') }).catch((error) => {
+  const task = process.argv.includes('--continuous')
+    ? runContinuously()
+    : run({ apply: process.argv.includes('--apply') });
+  task.catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
 }
 
-module.exports = { candidates, run };
+module.exports = { candidates, run, runContinuously };
