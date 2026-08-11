@@ -90,6 +90,8 @@ describe('CommunityInlineMap', () => {
       north: expect.any(Number),
       south: expect.any(Number),
     }));
+    expect(screen.getByTestId('community-inline-map').props.provider).toBe('google');
+    expect(screen.queryByTestId('map-url-tile')).toBeNull();
   });
 
   it('waits for the first location before mounting the native map', async () => {

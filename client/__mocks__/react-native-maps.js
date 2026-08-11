@@ -33,11 +33,10 @@ const Marker = ({ children, onPress, testID, ...props }) => React.createElement(
 
 const Circle = (props) => React.createElement(View, { ...props, testID: 'map-user-accuracy' });
 const Polyline = (props) => React.createElement(View, { ...props, testID: 'map-route-line' });
-const UrlTile = (props) => React.createElement(View, { ...props, testID: 'map-url-tile' });
 
 module.exports = MockMapView;
 module.exports.default = MockMapView;
 module.exports.Marker = Marker;
 module.exports.Circle = Circle;
 module.exports.Polyline = Polyline;
-module.exports.UrlTile = UrlTile;
+module.exports.PROVIDER_GOOGLE = 'google';

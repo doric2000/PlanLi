@@ -1,270 +1,48 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, TouchableOpacity, View } from 'react-native';
-import AppText from "../../../components/AppText";
+import React, { useMemo } from 'react';
+import { Linking, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
 
-import CachedImage from '../../../components/CachedImage';
-import {
-  DEFAULT_MAP_CENTER,
-  DEFAULT_MAP_ZOOM,
-  getMapTilerKey,
-  getMapTilerStyleUrl,
-  USER_MAP_ZOOM,
-} from '../../../config/mapConfig';
-import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
-import { getMediaVariantUrl } from '../../../utils/mediaAssets';
-import { userLocationGeoJson } from '../../../utils/mapGeoJson';
-import {
-  buildGoogleMapsDirectionsUrl,
-  buildGoogleMapsPlaceUrl,
-  flattenValidRouteStops,
-} from '../utils/routeStops';
-import { routeBounds, routeLineGeoJson, routeStopsToGeoJson } from '../utils/routeMap';
+import AppText from '../../../components/AppText';
+import { buildGoogleMapsDirectionsUrls, buildGoogleMapsPlaceUrl, flattenValidRouteStops } from '../utils/routeStops';
 import { colors, routeMapStyles as styles } from '../../../styles';
 
-const WEB_KEY = getMapTilerKey('web');
-const MAP_STYLE = getMapTilerStyleUrl(WEB_KEY);
+function openUrl(url) {
+  if (url) Linking.openURL(url).catch(() => {});
+}
 
 export default function RouteMapScreen({ route, navigation }) {
   const { routeData } = route.params || {};
   const stops = useMemo(() => flattenValidRouteStops(routeData), [routeData]);
-  const stopsById = useMemo(() => new Map(stops.map((stop) => [
-    String(stop.id || `${stop.dayIndex}:${stop.stopIndex}`),
-    stop,
-  ])), [stops]);
-  const stopsGeoJson = useMemo(() => routeStopsToGeoJson(stops), [stops]);
-  const lineGeoJson = useMemo(() => routeLineGeoJson(stops), [stops]);
-  const bounds = useMemo(() => routeBounds(stops), [stops]);
-  const [selectedStop, setSelectedStop] = useState(null);
-  const [mapReady, setMapReady] = useState(false);
-  const containerRef = useRef(null);
-  const mapRef = useRef(null);
-  const stopsByIdRef = useRef(stopsById);
-  const stopsDataRef = useRef(stopsGeoJson);
-  const lineDataRef = useRef(lineGeoJson);
-  const { location, status, startTracking, stopTracking } = useLiveUserLocation();
-  const userGeoJson = useMemo(() => userLocationGeoJson(location), [location]);
-  const userDataRef = useRef(userGeoJson);
-  const routeUrl = buildGoogleMapsDirectionsUrl(stops);
-  stopsByIdRef.current = stopsById;
-  stopsDataRef.current = stopsGeoJson;
-  lineDataRef.current = lineGeoJson;
-  userDataRef.current = userGeoJson;
-
-  const openUrl = (url) => {
-    if (!url) return;
-    Linking.openURL(url).catch(() => {});
-  };
-
-  const fitRoute = useCallback(() => {
-    if (!bounds || !mapRef.current) return;
-    mapRef.current.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], {
-      padding: { top: 54, right: 34, bottom: 82, left: 34 },
-      duration: 650,
-      maxZoom: 16,
-    });
-  }, [bounds]);
-
-  const centerOnUser = useCallback(() => {
-    if (!location) {
-      startTracking();
-      return;
-    }
-    mapRef.current?.flyTo({ center: [location.lng, location.lat], zoom: USER_MAP_ZOOM, duration: 650 });
-  }, [location, startTracking]);
-
-  useEffect(() => {
-    if (!MAP_STYLE) return undefined;
-    startTracking();
-    return stopTracking;
-  }, [startTracking, stopTracking]);
-
-  useEffect(() => {
-    if (!MAP_STYLE || !containerRef.current || mapRef.current) return undefined;
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: MAP_STYLE,
-      center: DEFAULT_MAP_CENTER,
-      zoom: DEFAULT_MAP_ZOOM,
-      minZoom: 2,
-      maxZoom: 20,
-      pitchWithRotate: false,
-      dragRotate: false,
-      attributionControl: true,
-    });
-    mapRef.current = map;
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: false }), 'top-right');
-    const onLoad = () => {
-      map.addSource('route-user-location', { type: 'geojson', data: userDataRef.current });
-      map.addLayer({
-        id: 'route-user-accuracy', type: 'fill', source: 'route-user-location',
-        filter: ['==', ['geometry-type'], 'Polygon'],
-        paint: { 'fill-color': '#2F80ED', 'fill-opacity': 0.12 },
-      });
-      map.addLayer({
-        id: 'route-user-ring', type: 'circle', source: 'route-user-location',
-        filter: ['==', ['get', 'kind'], 'user'],
-        paint: { 'circle-radius': 10, 'circle-color': '#FFFFFF' },
-      });
-      map.addLayer({
-        id: 'route-user-dot', type: 'circle', source: 'route-user-location',
-        filter: ['==', ['get', 'kind'], 'user'],
-        paint: { 'circle-radius': 6.5, 'circle-color': '#2F80ED' },
-      });
-      map.addSource('route-line', { type: 'geojson', data: lineDataRef.current });
-      map.addLayer({
-        id: 'route-line-layer', type: 'line', source: 'route-line',
-        paint: { 'line-color': colors.primary, 'line-width': 4, 'line-opacity': 0.88 },
-      });
-      map.addSource('route-stops', { type: 'geojson', data: stopsDataRef.current });
-      map.addLayer({
-        id: 'route-stop-circles', type: 'circle', source: 'route-stops',
-        paint: {
-          'circle-radius': 16,
-          'circle-color': colors.primary,
-          'circle-stroke-color': '#FFFFFF',
-          'circle-stroke-width': 3,
-        },
-      });
-      map.addLayer({
-        id: 'route-stop-numbers', type: 'symbol', source: 'route-stops',
-        layout: { 'text-field': ['get', 'stopNumber'], 'text-size': 13, 'text-allow-overlap': true },
-        paint: { 'text-color': '#FFFFFF' },
-      });
-      map.on('click', 'route-stop-circles', (event) => {
-        const id = String(event.features?.[0]?.properties?.id || '');
-        setSelectedStop(stopsByIdRef.current.get(id) || null);
-      });
-      map.on('click', (event) => {
-        const hit = map.queryRenderedFeatures(event.point, { layers: ['route-stop-circles'] });
-        if (!hit.length) setSelectedStop(null);
-      });
-      setMapReady(true);
-    };
-    map.on('load', onLoad);
-    return () => {
-      map.off('load', onLoad);
-      map.remove();
-      mapRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    mapRef.current?.getSource?.('route-stops')?.setData?.(stopsGeoJson);
-    mapRef.current?.getSource?.('route-line')?.setData?.(lineGeoJson);
-  }, [lineGeoJson, stopsGeoJson]);
-
-  useEffect(() => {
-    mapRef.current?.getSource?.('route-user-location')?.setData?.(userGeoJson);
-  }, [userGeoJson]);
-
-  useEffect(() => {
-    if (mapReady && bounds) fitRoute();
-  }, [bounds, fitRoute, mapReady]);
+  const segments = useMemo(() => buildGoogleMapsDirectionsUrls(stops), [stops]);
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} testID="route-map-web-list">
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton}>
           <Ionicons name="close" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
-          <AppText style={styles.headerTitle} numberOfLines={1}>{routeData?.Title || 'מפת מסלול'}</AppText>
-          <AppText style={styles.headerSubtitle}>{stops.length} תחנות עם מיקום</AppText>
+          <AppText style={styles.headerTitle} numberOfLines={1}>{routeData?.Title || 'Route stops'}</AppText>
+          <AppText style={styles.headerSubtitle}>{stops.length} stops</AppText>
         </View>
-        <TouchableOpacity
-          onPress={() => openUrl(routeUrl)}
-          disabled={stops.length < 2}
-          style={[styles.headerActionButton, stops.length < 2 && styles.headerActionButtonDisabled]}
-        >
-          <AppText style={[styles.headerActionText, stops.length < 2 && styles.headerActionTextDisabled]}>
-            פתח הכל
-          </AppText>
-        </TouchableOpacity>
       </View>
 
-      {stops.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="map-outline" size={54} color={colors.textMuted} />
-          <AppText style={styles.emptyTitle}>אין תחנות להצגה במפה</AppText>
-          <AppText style={styles.emptyText}>הוסיפו תחנות עם מיקום מדויק בתוך ימי המסלול.</AppText>
-        </View>
-      ) : !MAP_STYLE ? (
-        <View style={styles.emptyState} testID="route-map-missing-key">
-          <Ionicons name="map-outline" size={54} color={colors.textMuted} />
-          <AppText style={styles.emptyTitle}>המפה עדיין לא הוגדרה</AppText>
-          <AppText style={styles.emptyText}>מפת הרקע אינה מוגדרת בסביבה הזו.</AppText>
-        </View>
-      ) : (
-        <View style={styles.mapWrap}>
-          <View ref={containerRef} style={styles.webMap} testID="route-map" />
-          <View style={styles.mapControls} pointerEvents="box-none">
-            <TouchableOpacity
-              style={styles.mapControlButton}
-              onPress={centerOnUser}
-              accessibilityRole="button"
-              accessibilityLabel="המיקום שלי"
-              testID="route-map-my-location"
-            >
-              <Ionicons name="locate" size={21} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.mapControlButton}
-              onPress={fitRoute}
-              accessibilityRole="button"
-              accessibilityLabel="הצג את כל המסלול"
-            >
-              <Ionicons name="expand-outline" size={21} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-          {status === 'denied' && (
-            <TouchableOpacity style={styles.locationNotice} onPress={startTracking}>
-              <AppText style={styles.locationNoticeText}>הפעילו מיקום כדי לראות היכן אתם ביחס למסלול</AppText>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {!!selectedStop && (
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <TouchableOpacity onPress={() => setSelectedStop(null)} style={styles.sheetCloseButton}>
-              <Ionicons name="close" size={18} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <View style={styles.sheetTitleWrap}>
-              <AppText style={styles.sheetKicker}>יום {selectedStop.dayIndex + 1} · תחנה {selectedStop.stopIndex + 1}</AppText>
-              <AppText style={styles.sheetTitle} numberOfLines={2}>{selectedStop.title}</AppText>
-            </View>
-            {selectedStop.image || selectedStop.media ? (
-              <CachedImage
-                source={{ uri: getMediaVariantUrl(selectedStop.media, 'thumb', selectedStop.image) }}
-                style={styles.sheetImage}
-                contentFit="cover"
-                priority="high"
-              />
-            ) : (
-              <View style={styles.sheetImageFallback}>
-                <AppText style={styles.sheetImageFallbackText}>{selectedStop.globalIndex + 1}</AppText>
-              </View>
-            )}
-          </View>
-          <AppText style={styles.sheetAddress} numberOfLines={2}>
-            {selectedStop.place?.address || selectedStop.location || selectedStop.place?.name}
-          </AppText>
-          {!!selectedStop.description && (
-            <AppText style={styles.sheetDescription} numberOfLines={3}>{selectedStop.description}</AppText>
-          )}
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => openUrl(buildGoogleMapsPlaceUrl(selectedStop))}
-          >
-            <Ionicons name="map-outline" size={18} color={colors.white} />
-            <AppText style={styles.primaryButtonText}>פתח בגוגל מפות</AppText>
+      <ScrollView contentContainerStyle={styles.emptyState}>
+        <Ionicons name="map-outline" size={48} color={colors.textMuted} />
+        <AppText style={styles.emptyTitle}>Open this route in Google Maps</AppText>
+        <AppText style={styles.emptyText}>The web app lists route stops while the native apps show the interactive Google map.</AppText>
+        {segments.map((url, index) => (
+          <TouchableOpacity key={url} style={styles.primaryButton} onPress={() => openUrl(url)} testID={`route-map-segment-${index + 1}`}>
+            <Ionicons name="navigate-outline" size={18} color={colors.white} />
+            <AppText style={styles.primaryButtonText}>Open segment {index + 1}{segments.length > 1 ? ` of ${segments.length}` : ''}</AppText>
           </TouchableOpacity>
-        </View>
-      )}
+        ))}
+        {stops.map((stop) => (
+          <TouchableOpacity key={stop.id || stop.globalIndex} style={styles.locationNotice} onPress={() => openUrl(buildGoogleMapsPlaceUrl(stop))}>
+            <AppText style={styles.locationNoticeText}>{stop.globalIndex + 1}. {stop.title || stop.place?.name || 'Stop'}</AppText>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }
