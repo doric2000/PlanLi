@@ -7,13 +7,28 @@ export function normalizeDestinationText(value) {
 }
 
 export function destinationSearchText(city) {
-  return [city?.name, city?.country, city?.countryName, city?.countryId, city?.description]
+  return [
+    city?.identity?.names?.he,
+    city?.identity?.names?.en,
+    city?.names?.he,
+    city?.names?.en,
+    city?.name,
+    city?.countryNames?.he,
+    city?.countryNames?.en,
+    city?.country,
+    city?.countryName,
+    city?.countryId,
+  ]
     .map(normalizeDestinationText)
     .filter(Boolean);
 }
 
 export function destinationPopularity(city) {
   return Number(city?.stats?.recommendationCount ?? city?.recommendationsCount ?? 0) || 0;
+}
+
+function destinationName(city) {
+  return city?.identity?.names?.he || city?.names?.he || city?.name || city?.id || '';
 }
 
 export function filterAndSortDestinations(destinations, {
@@ -36,10 +51,10 @@ export function filterAndSortDestinations(destinations, {
   return list.sort((a, b) => {
     if (normalizedQuery && a.starts !== b.starts) return a.starts ? -1 : 1;
     if (sortBy === 'name') {
-      return String(a.city?.name || '').localeCompare(String(b.city?.name || ''), 'he');
+      return destinationName(a.city).localeCompare(destinationName(b.city), 'he');
     }
     return destinationPopularity(b.city) - destinationPopularity(a.city)
-      || String(a.city?.name || '').localeCompare(String(b.city?.name || ''), 'he');
+      || destinationName(a.city).localeCompare(destinationName(b.city), 'he');
   }).map((entry) => entry.city);
 }
 
