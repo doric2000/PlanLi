@@ -2,6 +2,7 @@ const { FieldPath } = require('firebase-admin/firestore');
 const { cityName, resolveWikidataIdentity } = require('./destinationIdentityService');
 
 const MAX_IMAGE_SYNC_ATTEMPTS = 6;
+const IDENTITY_STRATEGY_VERSION = 2;
 const RECOMMENDATION_PAGE_SIZE = 100;
 const UTM_SOURCE = 'planli';
 const UTM_MEDIUM = 'referral';
@@ -304,7 +305,7 @@ async function resolveAndPersistDestinationIdentity({ admin, countryId, cityId, 
     if (!identity) {
       await jobRef.set({
         countryId, cityId,
-        identitySync: { state: 'needs_review', attempts, lastAttemptAt: timestamp },
+        identitySync: { state: 'needs_review', strategyVersion: IDENTITY_STRATEGY_VERSION, attempts, lastAttemptAt: timestamp },
         updatedAt: timestamp,
       }, { merge: true });
       return { state: 'needs_review' };
@@ -320,7 +321,7 @@ async function resolveAndPersistDestinationIdentity({ admin, countryId, cityId, 
     }, { merge: true });
     await jobRef.set({
       countryId, cityId,
-      identitySync: { state: 'ready', attempts, lastAttemptAt: timestamp },
+      identitySync: { state: 'ready', strategyVersion: IDENTITY_STRATEGY_VERSION, attempts, lastAttemptAt: timestamp },
       imageSync: { state: 'pending', attempts: 0, query: `${identity.names.en} ${identity.countryNames.en || countrySnapshot.data()?.names?.en || countrySnapshot.data()?.name || ''}`.trim() },
       updatedAt: timestamp,
     }, { merge: true });
@@ -330,7 +331,7 @@ async function resolveAndPersistDestinationIdentity({ admin, countryId, cityId, 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
     await jobRef.set({
       countryId, cityId,
-      identitySync: { state, attempts, lastAttemptAt: timestamp, ...(state === 'retry' ? { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) } : {}), lastErrorCode: String(error?.status || error?.code || 'wikidata_error') },
+      identitySync: { state, strategyVersion: IDENTITY_STRATEGY_VERSION, attempts, lastAttemptAt: timestamp, ...(state === 'retry' ? { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) } : {}), lastErrorCode: String(error?.status || error?.code || 'wikidata_error') },
       updatedAt: timestamp,
     }, { merge: true });
     return { state, error };
@@ -494,6 +495,7 @@ async function repairPendingDestinationImages({
 
 module.exports = {
   MAX_IMAGE_SYNC_ATTEMPTS,
+  IDENTITY_STRATEGY_VERSION,
   buildUnsplashDestinationImage,
   destinationImageWritePatch,
   recommendationMediaImage,

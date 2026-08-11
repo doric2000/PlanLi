@@ -19,6 +19,9 @@ function entity({ he, en, countryId, coordinates, countryCode }) {
 test('Wikidata identity uses an exact nearby name and country match', async () => {
   const fetchImpl = async (url) => {
     const params = new URL(url).searchParams;
+    if (new URL(url).hostname === 'query.wikidata.org') {
+      return { ok: true, json: async () => ({ results: { bindings: [{ item: { value: 'http://www.wikidata.org/entity/Q90' } }] } }) };
+    }
     if (params.get('action') === 'wbsearchentities') {
       return { ok: true, json: async () => ({ search: [{ id: 'Q90' }, { id: 'Q999' }] }) };
     }
@@ -47,6 +50,13 @@ test('Wikidata identity uses an exact nearby name and country match', async () =
 test('Wikidata identity leaves an ambiguous nearby match for review', async () => {
   const fetchImpl = async (url) => {
     const params = new URL(url).searchParams;
+    if (new URL(url).hostname === 'query.wikidata.org') return {
+      ok: true,
+      json: async () => ({ results: { bindings: [
+        { item: { value: 'http://www.wikidata.org/entity/Q1' } },
+        { item: { value: 'http://www.wikidata.org/entity/Q2' } },
+      ] } }),
+    };
     if (params.get('action') === 'wbsearchentities') return { ok: true, json: async () => ({ search: [{ id: 'Q1' }, { id: 'Q2' }] }) };
     if (params.get('ids') === 'Q1|Q2') return {
       ok: true,

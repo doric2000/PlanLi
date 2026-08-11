@@ -1,4 +1,5 @@
 const EARTH_RADIUS_KM = 6371;
+const HUMAN_SETTLEMENT_ID = 'Q486972';
 // Keep automated reconciliation courteous to Wikidata. A single resolver
 // process issues at most one request per interval; the migration is resumable
 // and intentionally favours reliability over speed.
@@ -8,6 +9,7 @@ const WIKIDATA_MIN_REQUEST_INTERVAL_MS = Math.max(
 );
 let lastWikidataRequestAt = 0;
 const wikidataEntityCache = new Map();
+const settlementTypeCache = new Map();
 
 function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -120,6 +122,23 @@ async function searchWikidata(query, fetchImpl = global.fetch) {
   return (await response.json())?.search || [];
 }
 
+async function settlementCandidateIds(ids, fetchImpl = global.fetch) {
+  const uniqueIds = [...new Set(ids)].filter(Boolean);
+  const missingIds = uniqueIds.filter((id) => !settlementTypeCache.has(id));
+  if (missingIds.length) {
+    const values = missingIds.map((id) => `wd:${id}`).join(' ');
+    const sparql = `SELECT DISTINCT ?item WHERE { VALUES ?item { ${values} } ?item wdt:P31/wdt:P279* wd:${HUMAN_SETTLEMENT_ID}. }`;
+    const url = new URL('https://query.wikidata.org/sparql');
+    url.searchParams.set('query', sparql);
+    url.searchParams.set('format', 'json');
+    const response = await wikidataRequest(url, fetchImpl);
+    const bindings = (await response.json())?.results?.bindings || [];
+    const settlements = new Set(bindings.map((binding) => String(binding?.item?.value || '').split('/').pop()));
+    missingIds.forEach((id) => settlementTypeCache.set(id, settlements.has(id)));
+  }
+  return new Set(uniqueIds.filter((id) => settlementTypeCache.get(id)));
+}
+
 async function resolveWikidataIdentity({ city, country, fetchImpl = global.fetch }) {
   const query = cityName(city);
   const sourceCoordinates = cityCoordinates(city);
@@ -134,7 +153,7 @@ async function resolveWikidataIdentity({ city, country, fetchImpl = global.fetch
     .filter(Boolean))];
   const countries = await wikidataEntities(countryIds, fetchImpl);
   const wantedName = normalize(query);
-  const matches = Object.entries(candidates).map(([id, entity]) => {
+  const geographicallyValid = Object.entries(candidates).map(([id, entity]) => {
     const point = entityCoordinates(entity);
     const countryId = claimValue(entity, 'P17')?.id;
     const candidateCountryCode = String(claimValue(countries[countryId], 'P297') || '').toUpperCase();
@@ -143,6 +162,12 @@ async function resolveWikidataIdentity({ city, country, fetchImpl = global.fetch
     return { id, entity, point, countryId, candidateCountryCode, exactName, km };
   }).filter((candidate) => candidate.exactName && candidate.candidateCountryCode === countryCode && candidate.km <= 25)
     .sort((a, b) => a.km - b.km || a.id.localeCompare(b.id));
+
+  const settlementIds = await settlementCandidateIds(
+    geographicallyValid.map((candidate) => candidate.id),
+    fetchImpl
+  );
+  const matches = geographicallyValid.filter((candidate) => settlementIds.has(candidate.id));
 
   if (!matches.length) return null;
   if (matches.length > 1 && matches[1].km - matches[0].km < 5) return null;
@@ -170,4 +195,5 @@ module.exports = {
   distanceKm,
   normalize,
   resolveWikidataIdentity,
+  settlementCandidateIds,
 };
