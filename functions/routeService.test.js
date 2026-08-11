@@ -1,7 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { sanitizeRouteInput, sanitizeRouteMetadata } = require('./routeService');
+const {
+  MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
+  assertEditableRoute,
+  assertRouteRevisionVersion,
+  cleanupRouteRevisions,
+  loadRouteDetails,
+  preservedRouteStatus,
+  revisionVersion,
+  sanitizeRouteInput,
+  sanitizeRouteMetadata,
+} = require('./routeService');
 
 function canonicalRoute(overrides = {}) {
   return {
@@ -100,4 +110,84 @@ test('taxonomy v4 route attributes are factual, scoped and derive interests from
 			seasons: ['spring'], environment: 'outdoor',
 		},
 	})), /budgetLevel/);
+});
+
+test('route edits reject deletion races and changed revisions', () => {
+  const owned = {
+    exists: true,
+    data: () => ({ ownerId: 'owner', status: 'active', revisionVersion: 4 }),
+  };
+  assert.equal(assertEditableRoute(owned, 'owner', false).ownerId, 'owner');
+  assert.equal(revisionVersion(owned.data()), 4);
+  assert.doesNotThrow(() => assertRouteRevisionVersion(owned.data(), 4));
+  assert.throws(() => assertRouteRevisionVersion(owned.data(), 3), /changed while it was being saved/);
+  assert.throws(() => assertEditableRoute({
+    exists: true,
+    data: () => ({ ownerId: 'owner', status: 'deleting' }),
+  }, 'owner', false), /deletion is already in progress/);
+  assert.equal(preservedRouteStatus({ status: 'inactive' }), 'inactive');
+  assert.equal(preservedRouteStatus(null), 'active');
+});
+
+test('legacy provider fan-out is capped until resolved place tokens replace it', () => {
+  assert.equal(MAX_PROVIDER_RESOLUTIONS_PER_SAVE, 5);
+});
+
+test('revision cleanup deletes only expired non-active route revisions', async () => {
+  const deleted = [];
+  const documents = [
+    { ref: { path: 'routes/route-1/revisions/prepared' }, data: () => ({ state: 'prepared' }) },
+    { ref: { path: 'routes/route-1/revisions/active' }, data: () => ({ state: 'active' }) },
+    { ref: { path: 'other/item/revisions/foreign' }, data: () => ({ state: 'prepared' }) },
+  ];
+  const query = {
+    where: () => query,
+    limit: () => query,
+    get: async () => ({ docs: documents, size: documents.length }),
+  };
+  const database = {
+    collectionGroup: () => query,
+    recursiveDelete: async (ref) => deleted.push(ref.path),
+  };
+  const firestore = () => database;
+  const result = await cleanupRouteRevisions({ admin: { firestore } });
+  assert.deepEqual(deleted, ['routes/route-1/revisions/prepared']);
+  assert.deepEqual(result, { scanned: 3, deleted: 1 });
+});
+
+test('public route loading rejects more than 60 days before loading stops', async () => {
+  const days = Array.from({ length: 61 }, (_, index) => ({
+    id: `day-${index}`,
+    data: () => ({ position: index }),
+    ref: { collection: () => { throw new Error('stops must not be read'); } },
+  }));
+  const daysQuery = {
+    orderBy: () => daysQuery,
+    limit: (value) => {
+      assert.equal(value, 61);
+      return daysQuery;
+    },
+    get: async () => ({ docs: days, size: days.length }),
+  };
+  const revisionRef = { collection: (name) => {
+    assert.equal(name, 'days');
+    return daysQuery;
+  } };
+  const routeRef = {
+    get: async () => ({
+      id: 'route-1', exists: true, data: () => ({ status: 'active', activeRevisionId: 'revision-1' }),
+    }),
+    collection: (name) => {
+      assert.equal(name, 'revisions');
+      return { doc: (id) => {
+        assert.equal(id, 'revision-1');
+        return revisionRef;
+      } };
+    },
+  };
+  const admin = { firestore: () => ({ doc: () => routeRef }) };
+  await assert.rejects(
+    loadRouteDetails({ admin, data: { routeId: 'route-1' } }),
+    /too many days/
+  );
 });

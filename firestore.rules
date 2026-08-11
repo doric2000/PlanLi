@@ -26,6 +26,24 @@ service cloud.firestore {
       ).data.status == 'active';
     }
 
+    function activeCountry(countryId) {
+      return get(
+        /databases/$(database)/documents/countries/$(countryId)
+      ).data.status == 'active';
+    }
+
+    function activeRouteRevision(contentId, revisionId) {
+      let route = get(
+        /databases/$(database)/documents/routes/$(contentId)
+      );
+      let revision = get(
+        /databases/$(database)/documents/routes/$(contentId)/revisions/$(revisionId)
+      );
+      return route.data.status == 'active'
+        && route.data.activeRevisionId == revisionId
+        && revision.data.state == 'active';
+    }
+
     // Business documents are written exclusively through callable Functions.
     match /recommendations/{contentId} {
       allow get: if admin() || activeResource();
@@ -59,6 +77,27 @@ service cloud.firestore {
           allow get: if activeParent('routes', contentId);
           allow list: if bounded(150) && activeParent('routes', contentId);
           allow write: if false;
+        }
+      }
+
+      match /revisions/{revisionId} {
+        allow get: if admin() || activeRouteRevision(contentId, revisionId);
+        allow list, write: if false;
+
+        match /days/{dayId} {
+          allow get: if admin() || activeRouteRevision(contentId, revisionId);
+          allow list: if admin() || (
+            bounded(60) && activeRouteRevision(contentId, revisionId)
+          );
+          allow write: if false;
+
+          match /stops/{stopId} {
+            allow get: if admin() || activeRouteRevision(contentId, revisionId);
+            allow list: if admin() || (
+              bounded(150) && activeRouteRevision(contentId, revisionId)
+            );
+            allow write: if false;
+          }
         }
       }
 
@@ -99,16 +138,25 @@ service cloud.firestore {
       allow write: if false;
 
       match /cities/{cityId} {
-        allow get: if admin() || activeResource();
-        allow list: if admin() || (bounded(100) && activeResource());
+        allow get: if admin() || (
+          resource.data.countryId == countryId
+          && activeCountry(countryId)
+          && activeResource()
+        );
+        allow list: if admin() || (
+          bounded(100)
+          && activeCountry(countryId)
+          && activeResource()
+        );
         allow write: if false;
       }
     }
 
     // Required for collectionGroup('cities').
     match /{parentPath=**}/cities/{cityId} {
-      allow get: if admin() || activeResource();
-      allow list: if admin() || (bounded(100) && activeResource());
+      // A collection-group query cannot prove the dynamic parent country's
+      // publication state. Public cross-country search uses destinationCatalog.
+      allow get, list: if admin();
       allow write: if false;
     }
 

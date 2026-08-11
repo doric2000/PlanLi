@@ -29,12 +29,16 @@ const {
   VIBE_IDS,
 } = require('./travelTaxonomy');
 const { buildSearchIndex, destinationKey } = require('./discoverySearch');
+const { consumeProviderBudget } = require('./providerRateLimitService');
 
 const MAX_ROUTE_DAYS = 60;
 const MAX_ROUTE_STOPS = 150;
 const MAX_ROUTE_MEDIA = 40;
 const MAX_ROUTE_PLACES = 50;
 const MAX_ROUTE_DESTINATIONS = 20;
+const MAX_PROVIDER_RESOLUTIONS_PER_SAVE = 5;
+const PREPARED_REVISION_TTL_MS = 2 * 60 * 60 * 1000;
+const SUPERSEDED_REVISION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -297,10 +301,29 @@ async function mapWithConcurrency(values, concurrency, task) {
   return output;
 }
 
-async function resolveRoutePlaces({ admin, days, mapsKey, restCountriesKey }) {
+async function resolveRoutePlaces({
+  admin,
+  auth,
+  days,
+  mapsKey,
+  restCountriesKey,
+  providerRateLimitKey,
+}) {
   const placeIds = Array.from(new Set(days.flatMap((day) => day.stops.map((stop) => stop.place.placeId).filter(Boolean))));
   assert(placeIds.length >= 1 && placeIds.length <= MAX_ROUTE_PLACES,
     'invalid-argument', 'Route contains too many distinct places.');
+  assert(
+    placeIds.length <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
+    'resource-exhausted',
+    'This route contains too many new places to verify at once. Save a section with at most five places.'
+  );
+  await consumeProviderBudget({
+    admin,
+    auth,
+    action: 'bilingualResolution',
+    units: placeIds.length,
+    key: providerRateLimitKey,
+  });
   const resolved = await mapWithConcurrency(placeIds, 5, (placeId) => resolveGoogleDestination({
     admin,
     placeId,
@@ -344,13 +367,44 @@ async function resolveRoutePlaces({ admin, days, mapsKey, restCountriesKey }) {
   };
 }
 
-async function listExistingRouteChildren(routeRef) {
-  const daysSnapshot = await routeRef.collection('days').get();
-  const stopsSnapshots = await Promise.all(daysSnapshot.docs.map((day) => day.ref.collection('stops').get()));
-  return { days: daysSnapshot.docs, stops: stopsSnapshots.flatMap((snapshot) => snapshot.docs) };
+function revisionVersion(routeData) {
+  const version = Number(routeData?.revisionVersion || 0);
+  return Number.isSafeInteger(version) && version >= 0 ? version : 0;
 }
 
-async function saveRoute({ admin, auth, data, mediaBucket, mapsKey, restCountriesKey }) {
+function routeRevisionId(routeRef) {
+  return routeRef.collection('revisions').doc().id;
+}
+
+function assertEditableRoute(snapshot, uid, isAdmin) {
+  assert(snapshot.exists, 'not-found', 'Route does not exist.');
+  const route = snapshot.data();
+  assert(route?.ownerId === uid || isAdmin, 'permission-denied', 'You do not own this route.');
+  assert(route?.status !== 'deleting', 'failed-precondition', 'Route deletion is already in progress.');
+  return route;
+}
+
+function assertRouteRevisionVersion(routeData, expectedVersion) {
+  assert(
+    revisionVersion(routeData) === expectedVersion,
+    'aborted',
+    'This route changed while it was being saved. Reload it and try again.'
+  );
+}
+
+function preservedRouteStatus(routeData) {
+  return routeData?.status || 'active';
+}
+
+async function saveRoute({
+  admin,
+  auth,
+  data,
+  mediaBucket,
+  mapsKey,
+  restCountriesKey,
+  providerRateLimitKey,
+}) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
   assert(mapsKey, 'failed-precondition', 'GOOGLE_MAPS_KEY is not configured.');
@@ -361,11 +415,16 @@ async function saveRoute({ admin, auth, data, mediaBucket, mapsKey, restCountrie
     : null;
   const routeRef = routeId ? db.doc(`routes/${routeId}`) : db.collection('routes').doc();
   const existingSnapshot = await routeRef.get();
+  const isAdmin = auth.token?.admin === true;
+  const existingRoute = routeId
+    ? assertEditableRoute(existingSnapshot, uid, isAdmin)
+    : null;
   if (routeId) {
-    assert(existingSnapshot.exists, 'not-found', 'Route does not exist.');
-    assert(existingSnapshot.data()?.ownerId === uid || auth.token?.admin === true,
-      'permission-denied', 'You do not own this route.');
+    assert(existingRoute, 'not-found', 'Route does not exist.');
+  } else {
+    assert(!existingSnapshot.exists, 'already-exists', 'Route already exists.');
   }
+  const baseVersion = revisionVersion(existingRoute);
   const route = sanitizeRouteInput(data?.route);
   const requestedMedia = collectMedia(route.days);
   assert(requestedMedia.length <= MAX_ROUTE_MEDIA, 'invalid-argument', 'Route contains too many images.');
@@ -376,15 +435,21 @@ async function saveRoute({ admin, auth, data, mediaBucket, mapsKey, restCountrie
     media: requestedMedia,
     mediaBucket,
     maxAssets: MAX_ROUTE_MEDIA,
-    existingMedia: existingSnapshot.data()?.media,
+    existingMedia: existingRoute?.media,
   });
   const mediaDays = replaceValidatedMedia(route.days, validatedMedia);
-  const resolved = await resolveRoutePlaces({ admin, days: mediaDays, mapsKey, restCountriesKey });
+  const resolved = await resolveRoutePlaces({
+    admin,
+    auth,
+    days: mediaDays,
+    mapsKey,
+    restCountriesKey,
+    providerRateLimitKey,
+  });
   const days = resolved.days;
 
-  const existingChildren = existingSnapshot.exists ? await listExistingRouteChildren(routeRef) : { days: [], stops: [] };
-  const writeCount = existingChildren.days.length + existingChildren.stops.length + days.length +
-    days.reduce((sum, day) => sum + day.stops.length, 0) + resolved.catalogDestinations.length * 2 + 1;
+  const writeCount = days.length + days.reduce((sum, day) => sum + day.stops.length, 0) +
+    resolved.catalogDestinations.length * 2 + 1;
   assert(writeCount <= 500, 'failed-precondition', 'Route is too large to save atomically.');
 
   const summaryPlaces = Array.from(new Set(days.flatMap((day) =>
@@ -403,20 +468,38 @@ async function saveRoute({ admin, auth, data, mediaBucket, mapsKey, restCountrie
     interestIds: route.facets.interests,
   });
   const now = admin.firestore.FieldValue.serverTimestamp();
-  const batch = db.batch();
-  existingChildren.stops.forEach((entry) => batch.delete(entry.ref));
-  existingChildren.days.forEach((entry) => batch.delete(entry.ref));
+  const revisionId = routeRevisionId(routeRef);
+  const revisionRef = routeRef.collection('revisions').doc(revisionId);
+  const destinationDocuments = new Map();
   for (const destination of resolved.catalogDestinations) {
-    if (destination.createCountry) batch.set(destination.countryRef, { ...destination.countryData, createdAt: now, updatedAt: now }, { merge: true });
-    if (destination.createCity) batch.set(destination.cityRef, {
-      ...destination.cityData,
-      stats: { ...(destination.cityData.stats || {}), recommendationCount: 0 },
-      createdAt: now,
-      updatedAt: now,
-    }, { merge: true });
+    destinationDocuments.set(destination.countryRef.path, {
+      ref: destination.countryRef,
+      data: destination.countryData,
+      create: destination.createCountry,
+      kind: 'country',
+    });
+    destinationDocuments.set(destination.cityRef.path, {
+      ref: destination.cityRef,
+      data: {
+        ...destination.cityData,
+        stats: { ...(destination.cityData.stats || {}), recommendationCount: 0 },
+      },
+      create: destination.createCity,
+      kind: 'destination',
+    });
   }
+  const batch = db.batch();
+  batch.create(revisionRef, {
+    state: 'prepared',
+    ownerId: existingRoute?.ownerId || uid,
+    baseVersion,
+    dayCount: route.dayCount,
+    stopCount: days.reduce((sum, day) => sum + day.stops.length, 0),
+    createdAt: now,
+    expireAt: new Date(Date.now() + PREPARED_REVISION_TTL_MS),
+  });
   days.forEach((day) => {
-    const dayRef = routeRef.collection('days').doc(day.id);
+    const dayRef = revisionRef.collection('days').doc(day.id);
     batch.set(dayRef, { position: day.position, description: day.description, media: day.media, stopCount: day.stops.length });
     day.stops.forEach((stop) => {
       batch.set(dayRef.collection('stops').doc(stop.id), {
@@ -431,32 +514,92 @@ async function saveRoute({ admin, auth, data, mediaBucket, mapsKey, restCountrie
       });
     });
   });
-  batch.set(routeRef, {
-    taxonomyVersion: taxonomy.version,
-    ownerId: existingSnapshot.exists ? existingSnapshot.data().ownerId : uid,
-    title: route.title,
-    description: route.description,
-    status: 'active',
-    dayCount: route.dayCount,
-    distanceKm: route.distanceKm,
-    categoryIds: route.categoryIds,
-    subcategoryIds: route.subcategoryIds,
-    facets: route.facets,
-    difficulty: route.difficulty,
-    experienceLevel: route.experienceLevel,
-    transportModes: route.transportModes,
-    pace: route.pace,
-    destinations: resolved.destinations,
-    destinationKeys,
-    summaryPlaces,
-    search,
-    media: validatedMedia,
-    stats: existingSnapshot.exists ? existingSnapshot.data().stats || { likeCount: 0, commentCount: 0 } : { likeCount: 0, commentCount: 0 },
-    createdAt: existingSnapshot.exists ? existingSnapshot.data().createdAt : now,
-    updatedAt: now,
-  });
   await batch.commit();
-  return { routeId: routeRef.id };
+
+  await db.runTransaction(async (transaction) => {
+    const currentSnapshot = await transaction.get(routeRef);
+    const currentRoute = routeId
+      ? assertEditableRoute(currentSnapshot, uid, isAdmin)
+      : null;
+    if (!routeId) {
+      assert(!currentSnapshot.exists, 'already-exists', 'Route already exists.');
+    }
+    assertRouteRevisionVersion(currentRoute, baseVersion);
+    const previousRevisionRef = currentRoute?.activeRevisionId
+      ? routeRef.collection('revisions').doc(currentRoute.activeRevisionId)
+      : null;
+    const previousRevisionSnapshot = previousRevisionRef
+      ? await transaction.get(previousRevisionRef)
+      : null;
+    const destinationEntries = Array.from(destinationDocuments.values());
+    const destinationSnapshots = await Promise.all(
+      destinationEntries.map((entry) => transaction.get(entry.ref))
+    );
+
+    destinationEntries.forEach((entry, index) => {
+      const snapshot = destinationSnapshots[index];
+      if (!snapshot.exists) {
+        assert(
+          entry.create,
+          'not-found',
+          `The selected ${entry.kind} no longer exists.`
+        );
+        transaction.create(entry.ref, {
+          ...entry.data,
+          createdAt: now,
+          updatedAt: now,
+        });
+        return;
+      }
+      assert(
+        snapshot.data()?.status === 'active',
+        'failed-precondition',
+        `The selected ${entry.kind} is no longer active.`
+      );
+    });
+
+    const routeDocument = {
+      taxonomyVersion: taxonomy.version,
+      ownerId: currentRoute?.ownerId || uid,
+      title: route.title,
+      description: route.description,
+      status: preservedRouteStatus(currentRoute),
+      dayCount: route.dayCount,
+      distanceKm: route.distanceKm,
+      categoryIds: route.categoryIds,
+      subcategoryIds: route.subcategoryIds,
+      facets: route.facets,
+      difficulty: route.difficulty,
+      experienceLevel: route.experienceLevel,
+      transportModes: route.transportModes,
+      pace: route.pace,
+      destinations: resolved.destinations,
+      destinationKeys,
+      summaryPlaces,
+      search,
+      media: validatedMedia,
+      stats: currentRoute?.stats || { likeCount: 0, commentCount: 0 },
+      activeRevisionId: revisionId,
+      revisionVersion: baseVersion + 1,
+      createdAt: currentRoute?.createdAt || now,
+      updatedAt: now,
+    };
+    if (currentSnapshot.exists) transaction.set(routeRef, routeDocument);
+    else transaction.create(routeRef, routeDocument);
+    transaction.update(revisionRef, {
+      state: 'active',
+      activatedAt: now,
+      expireAt: null,
+    });
+    if (previousRevisionSnapshot?.exists) {
+      transaction.update(previousRevisionRef, {
+        state: 'superseded',
+        supersededAt: now,
+        expireAt: new Date(Date.now() + SUPERSEDED_REVISION_TTL_MS),
+      });
+    }
+  });
+  return { routeId: routeRef.id, revisionId, revisionVersion: baseVersion + 1 };
 }
 
 async function loadRouteDetails({ admin, data }) {
@@ -464,12 +607,53 @@ async function loadRouteDetails({ admin, data }) {
   const routeRef = admin.firestore().doc(`routes/${routeId}`);
   const routeSnapshot = await routeRef.get();
   assert(routeSnapshot.exists && routeSnapshot.data()?.status === 'active', 'not-found', 'Route does not exist.');
-  const daySnapshots = await routeRef.collection('days').orderBy('position').get();
-  const days = await Promise.all(daySnapshots.docs.map(async (dayDocument) => {
-    const stopsSnapshot = await dayDocument.ref.collection('stops').orderBy('position').get();
-    return { id: dayDocument.id, ...dayDocument.data(), stops: stopsSnapshot.docs.map((stop) => ({ id: stop.id, ...stop.data() })) };
-  }));
+  const routeData = routeSnapshot.data();
+  const revisionId = routeData.activeRevisionId;
+  const daysCollection = revisionId
+    ? routeRef.collection('revisions').doc(revisionId).collection('days')
+    : routeRef.collection('days');
+  const daySnapshots = await daysCollection.orderBy('position').limit(MAX_ROUTE_DAYS + 1).get();
+  assert(daySnapshots.size <= MAX_ROUTE_DAYS, 'failed-precondition', 'Route contains too many days.');
+  const days = [];
+  let totalStops = 0;
+  for (const dayDocument of daySnapshots.docs) {
+    const remainingStops = MAX_ROUTE_STOPS - totalStops;
+    const stopsSnapshot = await dayDocument.ref.collection('stops')
+      .orderBy('position')
+      .limit(remainingStops + 1)
+      .get();
+    assert(stopsSnapshot.size <= remainingStops, 'failed-precondition', 'Route contains too many stops.');
+    totalStops += stopsSnapshot.size;
+    days.push({
+      id: dayDocument.id,
+      ...dayDocument.data(),
+      stops: stopsSnapshot.docs.map((stop) => ({ id: stop.id, ...stop.data() })),
+    });
+  }
   return { route: { id: routeSnapshot.id, ...routeSnapshot.data(), days } };
+}
+
+async function cleanupRouteRevisions({ admin, limit = 100, now = new Date() }) {
+  const snapshot = await admin.firestore()
+    .collectionGroup('revisions')
+    .where('expireAt', '<=', now)
+    .limit(limit)
+    .get();
+  let deleted = 0;
+  for (const revision of snapshot.docs) {
+    const segments = revision.ref.path.split('/');
+    if (
+      segments.length !== 4 ||
+      segments[0] !== 'routes' ||
+      segments[2] !== 'revisions' ||
+      revision.data()?.state === 'active'
+    ) {
+      continue;
+    }
+    await admin.firestore().recursiveDelete(revision.ref);
+    deleted += 1;
+  }
+  return { scanned: snapshot.size, deleted };
 }
 
 module.exports = {
@@ -477,10 +661,16 @@ module.exports = {
   MAX_ROUTE_MEDIA,
   MAX_ROUTE_PLACES,
   MAX_ROUTE_STOPS,
+  MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
+  assertEditableRoute,
+  assertRouteRevisionVersion,
+  cleanupRouteRevisions,
   collectMedia,
   loadRouteDetails,
   mapWithConcurrency,
   resolveRoutePlaces,
+  revisionVersion,
+  preservedRouteStatus,
   sanitizeRouteInput,
   sanitizeRouteMetadata,
   saveRoute,

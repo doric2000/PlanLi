@@ -33,6 +33,7 @@ const MEDIA_SERVICE_ACCOUNT =
   'planli-media-functions@planli-f0b12.iam.gserviceaccount.com';
 const ALLOWED_ROOTS = new Set([
   'countries',
+  'destinationCatalog',
   'publicProfiles',
   'recommendations',
   'routes',
@@ -66,6 +67,18 @@ function canonicalArray(value, allowed, { minimum = 0 } = {}) {
     value.every((entry) => typeof entry === 'string' && allowed.includes(entry));
 }
 
+function canonicalSearchIndex(search) {
+  if (!search || typeof search !== 'object' || Object.hasOwn(search, 'tokens')) return false;
+  return typeof search.normalizedTitle === 'string' && [
+    'titleTokens',
+    'taxonomyTokens',
+    'destinationTokens',
+    'descriptionTokens',
+    'prefixes',
+  ].every((field) => Array.isArray(search[field]) &&
+    search[field].every((entry) => typeof entry === 'string'));
+}
+
 function taxonomyContentErrors(documentPath, data = {}) {
   const errors = [];
   const active = data.status === 'active';
@@ -94,7 +107,7 @@ function taxonomyContentErrors(documentPath, data = {}) {
 	if (!requirements.environment && data.facets?.environments.length) errors.push('inapplicable-environment');
 	if (data.facets?.needs.some((needId) => !requirements.needs.includes(needId))) errors.push('inapplicable-need');
 	if (!POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
-    if (!Array.isArray(data.search?.tokens) || !Array.isArray(data.search?.prefixes)) errors.push('search');
+    if (!canonicalSearchIndex(data.search)) errors.push('search');
   }
   if (/^routes\/[^/]+$/.test(documentPath) && active) {
     if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
@@ -128,7 +141,7 @@ function taxonomyContentErrors(documentPath, data = {}) {
 	if (data.facets?.environments.length !== 1) errors.push('environment-required');
     if (!Array.isArray(data.destinations) || !data.destinations.length ||
       data.destinations.some((entry) => !entry?.countryId || !entry?.cityId)) errors.push('destinations');
-    if (!Array.isArray(data.search?.tokens) || !Array.isArray(data.search?.prefixes)) errors.push('search');
+    if (!canonicalSearchIndex(data.search)) errors.push('search');
   }
   if (/^users\/[^/]+$/.test(documentPath)) {
     const profile = data.smartProfile || {};

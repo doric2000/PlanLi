@@ -12,8 +12,6 @@ import AppText from "../../../components/AppText";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { collectionGroup, getDocs, limit, orderBy, query, where } from "firebase/firestore";
-
 import CityCard from "../../../components/CityCard";
 import CachedImage from "../../../components/CachedImage";
 import PhotoAttribution from "../../../components/PhotoAttribution";
@@ -21,12 +19,15 @@ import DestinationFilterModal from "../../../components/DestinationFilterModal";
 import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import PageHeader from "../../../components/PageHeader";
 import SearchFilterRow from "../../../components/SearchFilterRow";
-import { db } from "../../../config/firebase";
 import { useAuthUser } from "../../../hooks/useAuthUser";
 import { useFavoriteCityIds } from "../../../hooks/useFavoriteCityIds";
 import { useSmartProfile } from "../../../hooks/useSmartProfile";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
 import { resolveDestinationForPlacePreview } from "../../../services/LocationService";
+import {
+	destinationCatalogItemToCity,
+	searchDestinations,
+} from "../../../services/DestinationService";
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
 import { filterAndSortDestinations, mergeDestinations } from "../../../utils/destinationSearch";
 import { getDestinationImageUrl } from "../../../utils/destinationImages";
@@ -57,32 +58,17 @@ export default function HomeScreen({ navigation }) {
 	const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
 	const [destinationSort, setDestinationSort] = useState("popular");
 	const [savedOnly, setSavedOnly] = useState(false);
-	const isFetchingAllDestinationsForSearchRef = useRef(false);
+	const destinationSearchRequestRef = useRef(0);
 	const allDestinationsFetchDebounceRef = useRef(null);
 	const mainScrollRef = useRef(null);
 	const favoriteCities = useFavoriteCityIds({ enabled: Boolean(user) && !isGuest });
 
 	const fetchDestinations = async () => {
 		try {
-			const citiesQuery = query(
-				collectionGroup(db, "cities"),
-				where("status", "==", "active"),
-				orderBy("stats.recommendationCount", "desc"),
-				limit(10)
-			);
-			const querySnapshot = await getDocs(citiesQuery);
-
-			const citiesList = querySnapshot.docs.map((doc, index) => {
-				const parentCountry = doc.ref.parent.parent;
-				const countryId = parentCountry ? parentCountry.id : "Unknown";
+			const catalog = await searchDestinations({ sort: "popular", limit: 10 });
+			const citiesList = (catalog?.items || []).map((item, index) => {
 				const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
-
-				return {
-					id: doc.id,
-					countryId,
-					placeholderColor: gradient[0],
-					...doc.data(),
-				};
+				return destinationCatalogItemToCity(item, gradient[0]);
 			});
 
 			setDestinations(citiesList);
@@ -94,36 +80,31 @@ export default function HomeScreen({ navigation }) {
 		}
 	};
 
-	const fetchAllDestinationsForSearch = async () => {
-		if (isFetchingAllDestinationsForSearchRef.current) return;
-		isFetchingAllDestinationsForSearchRef.current = true;
+	const fetchAllDestinationsForSearch = async (queryText = "") => {
+		const requestId = destinationSearchRequestRef.current + 1;
+		destinationSearchRequestRef.current = requestId;
+		setHasLoadedAllDestinationsForSearch(false);
 		try {
-			const citiesQuery = query(
-				collectionGroup(db, "cities"),
-				where("status", "==", "active"),
-				limit(100)
-			);
-			const querySnapshot = await getDocs(citiesQuery);
-
-			const citiesList = querySnapshot.docs.map((doc, index) => {
-				const parentCountry = doc.ref.parent.parent;
-				const countryId = parentCountry ? parentCountry.id : "Unknown";
+			const catalog = await searchDestinations({
+				...(queryText ? { query: queryText } : {}),
+				sort: destinationSort,
+				limit: 30,
+			});
+			if (destinationSearchRequestRef.current !== requestId) return;
+			const citiesList = (catalog?.items || []).map((item, index) => {
 				const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
-
-				return {
-					id: doc.id,
-					countryId,
-					placeholderColor: gradient[0],
-					...doc.data(),
-				};
+				return destinationCatalogItemToCity(item, gradient[0]);
 			});
 
 			setAllDestinationsForSearch(citiesList);
 			setHasLoadedAllDestinationsForSearch(true);
 		} catch (error) {
+			if (destinationSearchRequestRef.current !== requestId) return;
 			console.error("Error fetching all destinations for search:", error);
 		} finally {
-			isFetchingAllDestinationsForSearchRef.current = false;
+			if (destinationSearchRequestRef.current === requestId) {
+				setHasLoadedAllDestinationsForSearch(true);
+			}
 		}
 	};
 
@@ -133,15 +114,20 @@ export default function HomeScreen({ navigation }) {
 
 	useEffect(() => {
 		const q = searchQuery.trim();
-		if (q.length < 2) return;
-		if (hasLoadedAllDestinationsForSearch) return;
+		if (q.length < 2) {
+			destinationSearchRequestRef.current += 1;
+			setAllDestinationsForSearch([]);
+			setHasLoadedAllDestinationsForSearch(false);
+			return undefined;
+		}
+		setHasLoadedAllDestinationsForSearch(false);
 
 		if (allDestinationsFetchDebounceRef.current) {
 			clearTimeout(allDestinationsFetchDebounceRef.current);
 		}
 
 		allDestinationsFetchDebounceRef.current = setTimeout(() => {
-			fetchAllDestinationsForSearch();
+			fetchAllDestinationsForSearch(q);
 		}, 400);
 
 		return () => {
@@ -150,13 +136,13 @@ export default function HomeScreen({ navigation }) {
 				allDestinationsFetchDebounceRef.current = null;
 			}
 		};
-	}, [searchQuery, hasLoadedAllDestinationsForSearch]);
+	}, [searchQuery]);
 
 	const onRefresh = () => {
 		setRefreshing(true);
 		setHasLoadedAllDestinationsForSearch(false);
 		setAllDestinationsForSearch([]);
-		isFetchingAllDestinationsForSearchRef.current = false;
+		destinationSearchRequestRef.current += 1;
 		fetchDestinations();
 	};
 
@@ -269,7 +255,7 @@ export default function HomeScreen({ navigation }) {
 
 	const openDestinationFilters = () => {
 		setDestinationFilterVisible(true);
-		if (!hasLoadedAllDestinationsForSearch) fetchAllDestinationsForSearch();
+		if (!hasLoadedAllDestinationsForSearch) fetchAllDestinationsForSearch("");
 	};
 
 	const toggleCityFavorite = async (city) => {

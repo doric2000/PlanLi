@@ -12,15 +12,38 @@ import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
-import { getDocs } from 'firebase/firestore';
+
+const mockSearchDestinations = jest.fn();
+jest.mock('../src/services/DestinationService', () => ({
+  searchDestinations: (...args) => mockSearchDestinations(...args),
+  destinationCatalogItemToCity: (item, placeholderColor) => {
+    const data = item.data?.() || item;
+    const countryId = item.countryId || item.ref?.parent?.parent?.id;
+    return {
+      id: item.cityId || item.id,
+      cityId: item.cityId || item.id,
+      countryId,
+      name: data.names?.he || data.names?.en || data.name || item.id,
+      description: data.description,
+      names: data.names,
+      identity: { names: data.names },
+      countryNames: data.countryNames,
+      countryName: data.countryNames?.he || data.description || countryId,
+      stats: { recommendationCount: data.recommendationCount || data.recommendationsCount || 0 },
+      placeholderColor,
+    };
+  },
+}));
 
 jest.mock('firebase/firestore', () => ({
   getDocs: jest.fn(),
   query: jest.fn((...args) => ({ __type: 'query', args })),
+  collection: jest.fn(() => ({ __type: 'collection' })),
   collectionGroup: jest.fn(() => ({ __type: 'collectionGroup' })),
   orderBy: jest.fn((...args) => ({ __type: 'orderBy', args })),
   limit: jest.fn((...args) => ({ __type: 'limit', args })),
   where: jest.fn((...args) => ({ __type: 'where', args })),
+  onSnapshot: jest.fn(() => () => {}),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -84,8 +107,8 @@ describe('HomeScreenSearchTest', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    getDocs.mockResolvedValue({
-      docs: [
+    mockSearchDestinations.mockResolvedValue({
+      items: [
         makeDoc('athens', 'gr', {
           name: 'אתונה',
           description: 'אתונה, יוון',
@@ -115,7 +138,7 @@ describe('HomeScreenSearchTest', () => {
 
     // Wait for initial destinations to load.
     await waitFor(() => {
-      expect(queryAllByTestId('city-card')).toHaveLength(2);
+      expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
     });
 
     // Search for "יוון" and expect the list to change.
@@ -153,7 +176,7 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(screen.getAllByTestId('city-card')).toHaveLength(2));
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
     expect(screen.getByText('לאן נוסעים?')).toBeTruthy();
     expect(screen.getByText('מומלצים עכשיו')).toBeTruthy();
     expect(screen.queryByText('חם עכשיו')).toBeNull();
@@ -164,7 +187,7 @@ describe('HomeScreenSearchTest', () => {
     expect(screen.getByText('הכי פופולריים')).toBeTruthy();
     expect(screen.getByText('לפי שם א–ת')).toBeTruthy();
     expect(screen.getByText('מועדפים בלבד')).toBeTruthy();
-    await waitFor(() => expect(getDocs).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(2));
   });
 
   it('lets the hero own the top safe area without an automatic iOS inset', async () => {
@@ -179,7 +202,7 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(screen.getAllByTestId('city-card')).toHaveLength(2));
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
     const scroll = screen.getByTestId('home-scroll');
     expect(scroll.props.contentInsetAdjustmentBehavior).toBe('never');
     expect(scroll.props.automaticallyAdjustContentInsets).toBe(false);

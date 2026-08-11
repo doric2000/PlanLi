@@ -13,6 +13,7 @@ export function destinationSearchText(city) {
     city?.names?.he,
     city?.names?.en,
     city?.name,
+    city?.description,
     city?.countryNames?.he,
     city?.countryNames?.en,
     city?.country,

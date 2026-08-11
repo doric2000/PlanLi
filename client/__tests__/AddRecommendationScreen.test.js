@@ -64,6 +64,16 @@ jest.mock('../src/services/LocationService', () => ({
   searchPlaces: jest.fn(() => Promise.resolve([]))
 }));
 
+jest.mock('../src/services/DestinationService', () => ({
+  searchDestinations: jest.fn(() => Promise.resolve({ items: [], nextCursor: null })),
+  destinationCatalogItemToCity: jest.fn((item) => ({
+    id: item.cityId,
+    cityId: item.cityId,
+    countryId: item.countryId,
+    name: item.names?.he || item.names?.en || item.cityId,
+  })),
+}));
+
 const mockSaveRecommendation = jest.fn(() =>
   Promise.resolve({ recommendationId: 'new-doc-id' })
 );

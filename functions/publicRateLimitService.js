@@ -1,20 +1,30 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 
-const COSTS = Object.freeze({ discovery: 3, destinationOverview: 4, map: 10, placesAutocomplete: 2, placesDetails: 5 });
+const COSTS = Object.freeze({
+  discovery: 3,
+  destinationOverview: 4,
+  map: 10,
+  routeDetails: 4,
+});
 const WINDOW_MS = 60 * 1000;
 
 function normalizedIp(request) {
-  const ip = String(request?.rawRequest?.ip || request?.rawRequest?.headers?.['x-forwarded-for'] || 'unknown')
-    .split(',')[0].trim();
+  const ip = String(
+    request?.rawRequest?.ip ||
+    request?.rawRequest?.socket?.remoteAddress ||
+    'unknown'
+  ).trim();
   if (ip.includes('.')) return ip.split('.').slice(0, 3).join('.');
   return ip.split(':').slice(0, 4).join(':');
 }
 
 function principal({ auth, request, key }) {
   if (auth?.uid) return `u_${auth.uid}`;
-  const appId = String(request?.app?.appId || request?.rawRequest?.headers?.['x-firebase-appcheck'] || 'unknown');
-  return `a_${crypto.createHmac('sha256', key || 'local-development-key').update(`${appId}|${normalizedIp(request)}`).digest('base64url')}`;
+  const verifiedAppId = request?.app?.appId
+    ? String(request.app.appId)
+    : 'unverified-app';
+  return `a_${crypto.createHmac('sha256', key || 'local-development-key').update(`${verifiedAppId}|${normalizedIp(request)}`).digest('base64url')}`;
 }
 
 async function consumePublicReadBudget({ admin, auth, request, action, key, now = Date.now() }) {
@@ -35,4 +45,4 @@ async function consumePublicReadBudget({ admin, auth, request, action, key, now 
   });
 }
 
-module.exports = { COSTS, consumePublicReadBudget, principal };
+module.exports = { COSTS, consumePublicReadBudget, normalizedIp, principal };

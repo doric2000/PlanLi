@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import AppText from "../../../components/AppText";
 // Firestore imports
-import { collection, getDocs, limit, query, collectionGroup, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../../config/firebase';
 import { colors, spacing, common } from '../../../styles';
 
@@ -22,6 +22,10 @@ import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { resolveDestinationForPlacePreview, searchPlaces } from '../../../services/LocationService';
+import {
+  destinationCatalogItemToCity,
+  searchDestinations,
+} from '../../../services/DestinationService';
 import { saveRecommendation } from '../../../services/RecommendationService';
 
 // --- Constants ---
@@ -259,7 +263,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
   const [allCitiesForSearch, setAllCitiesForSearch] = useState([]);
   const [hasLoadedAllCitiesForSearch, setHasLoadedAllCitiesForSearch] = useState(false);
-  const isFetchingAllCitiesForSearchRef = useRef(false);
+  const citiesSearchRequestRef = useRef(0);
   const allCitiesFetchDebounceRef = useRef(null);
 
   // --- Image Handling ---
@@ -502,38 +506,34 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
   useEffect(() => {
     const q = locationQuery.trim();
-    if (q.length < 2) return;
-    if (hasLoadedAllCitiesForSearch) return;
-    if (isFetchingAllCitiesForSearchRef.current) return;
+    const requestId = citiesSearchRequestRef.current + 1;
+    citiesSearchRequestRef.current = requestId;
+    if (q.length < 2) {
+      setAllCitiesForSearch([]);
+      setHasLoadedAllCitiesForSearch(false);
+      return undefined;
+    }
+    setHasLoadedAllCitiesForSearch(false);
 
     if (allCitiesFetchDebounceRef.current) {
       clearTimeout(allCitiesFetchDebounceRef.current);
     }
 
     allCitiesFetchDebounceRef.current = setTimeout(async () => {
-      isFetchingAllCitiesForSearchRef.current = true;
       try {
-        const citiesQuery = query(
-          collectionGroup(db, 'cities'),
-          where('status', '==', 'active'),
-          limit(100)
+        const catalog = await searchDestinations({ query: q, sort: 'popular', limit: 20 });
+        if (citiesSearchRequestRef.current !== requestId) return;
+        const citiesList = (catalog?.items || []).map((item) =>
+          destinationCatalogItemToCity(item)
         );
-        const querySnapshot = await getDocs(citiesQuery);
-        const citiesList = querySnapshot.docs.map((cityDoc) => {
-          const parentCountry = cityDoc.ref.parent.parent;
-          const countryId = parentCountry ? parentCountry.id : 'Unknown';
-          return {
-            id: cityDoc.id,
-            countryId,
-            ...cityDoc.data(),
-          };
-        });
         setAllCitiesForSearch(citiesList);
-        setHasLoadedAllCitiesForSearch(true);
       } catch (error) {
+        if (citiesSearchRequestRef.current !== requestId) return;
         console.error('Error fetching all cities for search:', error);
       } finally {
-        isFetchingAllCitiesForSearchRef.current = false;
+        if (citiesSearchRequestRef.current === requestId) {
+          setHasLoadedAllCitiesForSearch(true);
+        }
       }
     }, 400);
 
@@ -543,7 +543,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
         allCitiesFetchDebounceRef.current = null;
       }
     };
-  }, [locationQuery, hasLoadedAllCitiesForSearch]);
+  }, [locationQuery]);
 
   // --- Handlers ---
 
@@ -699,10 +699,15 @@ export default function AddRecommendationScreen({ navigation , route }) {
     .filter((city) => {
       const q = locationQuery.trim().toLowerCase();
       if (!q) return false;
-      const name = (city.name || '').toLowerCase();
-      const description = (city.description || '').toLowerCase();
-      const countryId = (city.countryId || '').toLowerCase();
-      return name.includes(q) || description.includes(q) || countryId.includes(q);
+      const fields = [
+        city.name,
+        city.names?.en,
+        city.description,
+        city.countryNames?.he,
+        city.countryNames?.en,
+        city.countryId,
+      ].map((field) => String(field || '').toLowerCase());
+      return fields.some((field) => field.includes(q));
     })
     .slice(0, 20);
 
@@ -711,7 +716,10 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const handleSelectLocalCity = (city) => {
     if (!city?.id || !city?.countryId) return;
     setLocationResolveError(null);
-    setSelectedCountry({ id: city.countryId, name: city.countryId });
+    setSelectedCountry({
+      id: city.countryId,
+      name: city.countryNames?.he || city.countryName || city.countryId,
+    });
     setSelectedCity({ id: city.id, name: city.name || city.id });
     setSelectedPlace(
       city.googlePlaceId

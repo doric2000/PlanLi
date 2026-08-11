@@ -65,7 +65,7 @@ test.beforeEach(async () => {
       name: 'Israel', code: 'IL', status: 'active',
     });
     await setDoc(doc(db, 'countries', 'cty_il', 'cities', 'city_tlv'), {
-      name: 'Tel Aviv', status: 'active',
+      countryId: 'cty_il', name: 'Tel Aviv', status: 'active',
     });
     await setDoc(doc(db, 'recommendations', 'rec-active'), {
       ownerId: 'owner', title: 'Active', status: 'active',
@@ -74,13 +74,31 @@ test.beforeEach(async () => {
       ownerId: 'owner', title: 'Deleting', status: 'deleting',
     });
     await setDoc(doc(db, 'routes', 'route-active'), {
-      ownerId: 'owner', title: 'Route', status: 'active',
+      ownerId: 'owner', title: 'Route', status: 'active', activeRevisionId: 'revision-active',
     });
     await setDoc(doc(db, 'routes', 'route-active', 'days', 'day-1'), {
       position: 0, title: 'Day 1',
     });
     await setDoc(doc(db, 'routes', 'route-active', 'days', 'day-1', 'stops', 'stop-1'), {
       position: 0, title: 'Stop 1',
+    });
+    await setDoc(doc(db, 'routes', 'route-active', 'revisions', 'revision-active'), {
+      state: 'active', position: 0,
+    });
+    await setDoc(doc(db, 'routes', 'route-active', 'revisions', 'revision-active', 'days', 'day-1'), {
+      position: 0, title: 'Revision day',
+    });
+    await setDoc(doc(
+      db,
+      'routes', 'route-active', 'revisions', 'revision-active', 'days', 'day-1', 'stops', 'stop-1'
+    ), {
+      position: 0, title: 'Revision stop',
+    });
+    await setDoc(doc(db, 'routes', 'route-active', 'revisions', 'revision-old'), {
+      state: 'superseded', position: 0,
+    });
+    await setDoc(doc(db, 'routes', 'route-active', 'revisions', 'revision-old', 'days', 'day-1'), {
+      position: 0, title: 'Old day',
     });
     await setDoc(doc(db, 'users', 'owner', 'favorites', 'favorite-hash'), {
       ownerId: 'owner', type: 'recommendation', target: { id: 'rec-active' },
@@ -147,21 +165,36 @@ test('public collection queries require an active filter and bounded limit', {
   )));
 });
 
-test('city collection-group queries require an active filter and bounded limit', {
+test('public city reads are country-scoped and collection-group reads are denied', {
   skip: !hasEmulators,
 }, async () => {
   const db = env.unauthenticatedContext().firestore();
   await assertSucceeds(getDocs(query(
+    collection(db, 'countries', 'cty_il', 'cities'),
+    where('status', '==', 'active'),
+    limit(100)
+  )));
+  await assertFails(getDocs(query(
     collectionGroup(db, 'cities'),
     where('status', '==', 'active'),
     limit(100)
   )));
-  await assertFails(getDocs(query(collectionGroup(db, 'cities'), limit(100))));
-  await assertFails(getDocs(query(
-    collectionGroup(db, 'cities'),
-    where('status', '==', 'active'),
-    limit(101)
-  )));
+});
+
+test('destinations under inactive countries are not public', {
+  skip: !hasEmulators,
+}, async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'countries', 'cty_hidden'), {
+      name: 'Hidden country', code: 'ZZ', status: 'inactive',
+    });
+    await setDoc(doc(db, 'countries', 'cty_hidden', 'cities', 'city_active_child'), {
+      countryId: 'cty_hidden', name: 'Active child', status: 'active',
+    });
+  });
+  const db = env.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(db, 'countries', 'cty_hidden', 'cities', 'city_active_child')));
 });
 
 test('business documents and interactions are server-only', {
@@ -196,6 +229,26 @@ test('route day and stop reads require an active parent and bounded queries', {
   await assertFails(setDoc(doc(db, 'routes', 'route-active', 'days', 'day-2'), {
     title: 'Direct',
   }));
+});
+
+test('only the active immutable route revision is public', {
+  skip: !hasEmulators,
+}, async () => {
+  const db = env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(
+    db, 'routes', 'route-active', 'revisions', 'revision-active', 'days', 'day-1'
+  )));
+  await assertSucceeds(getDocs(query(
+    collection(db, 'routes', 'route-active', 'revisions', 'revision-active', 'days'),
+    limit(60)
+  )));
+  await assertSucceeds(getDoc(doc(
+    db,
+    'routes', 'route-active', 'revisions', 'revision-active', 'days', 'day-1', 'stops', 'stop-1'
+  )));
+  await assertFails(getDoc(doc(
+    db, 'routes', 'route-active', 'revisions', 'revision-old', 'days', 'day-1'
+  )));
 });
 
 test('users can read only their own private data and cannot write projections', {
