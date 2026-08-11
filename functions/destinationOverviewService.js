@@ -3,7 +3,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const WEATHER_CACHE_MS = 30 * 60 * 1000;
 const CURRENCY_CACHE_MS = 24 * 60 * 60 * 1000;
 const PROVIDER_TIMEOUT_MS = 5000;
-const CACHE_COLLECTION = '_destinationDataCache';
+const CACHE_COLLECTION = 'system/runtime/destinationOverviewCache';
 
 function assertDocumentId(value, fieldName) {
   const normalized = String(value || '').trim();
@@ -194,7 +194,7 @@ async function readThroughCache({
   loader,
   nowMs = Date.now(),
 }) {
-  const ref = admin.firestore().collection(CACHE_COLLECTION).doc(cacheId);
+  const ref = admin.firestore().doc(CACHE_COLLECTION).collection('destinationOverviewCacheItems').doc(cacheId);
   let snapshot = null;
   try {
     snapshot = await ref.get();
@@ -261,7 +261,7 @@ async function getDestinationOverview({
   if (city.status && city.status !== 'active') {
     throw new HttpsError('not-found', 'Destination was not found.');
   }
-  const coordinates = normalizeCoordinates(city.coordinates);
+  const coordinates = normalizeCoordinates(city.identity?.coordinates || city.coordinates);
   const currencyCode = String(country.currencyCode || '').trim().toUpperCase();
   const facts = country.travelFacts || {};
 
@@ -298,18 +298,25 @@ async function getDestinationOverview({
   );
   const languages = normalizeLanguages(facts.languages);
   const callingCodes = normalizeCallingCodes(facts.callingCodes);
+  const destinationImage = city.destinationImage || null;
+  const legacyImageUrl = destinationImage
+    ? null
+    : (city.externalImageUrl || city.imageUrl || null);
 
   return {
     destination: {
       cityId,
       countryId,
-      name: String(city.name || '').trim(),
-      countryName: String(country.name || city.countryName || '').trim(),
+      name: String(city.identity?.names?.he || city.name || '').trim(),
+      names: city.identity?.names || null,
+      identity: city.identity || null,
+      countryName: String(country.names?.he || country.name || '').trim(),
       countryCode: String(country.code || '').trim().toUpperCase() || null,
-      description: String(city.description || '').trim() || null,
-      heroImageUrl: city.externalImageUrl || city.imageUrl || null,
-      thumbnailUrl: city.externalImageUrl || city.imageUrl || null,
-      travelers: Math.max(0, Number(city.travelers || 0)),
+      description: null,
+      destinationImage,
+      heroImageUrl: legacyImageUrl,
+      thumbnailUrl: legacyImageUrl,
+      travelers: 0,
     },
     quickFacts: {
       weather: weather || null,

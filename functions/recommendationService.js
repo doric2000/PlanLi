@@ -31,8 +31,6 @@ const { buildMapLocation } = require('./mapLocation');
 
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
-const DESTINATION_FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
 const GOOGLE_REVERSE_GEOCODE_TIMEOUT_MS = 2500;
 
 function assert(condition, code, message) {
@@ -723,10 +721,18 @@ async function resolveGoogleDestination({
   const cities = db.collection(`countries/${countryId}/cities`);
   let cityId = null;
   let cityData = null;
-  const existingCity = await cities
-    .where('providerIds.googlePlaceIds', 'array-contains', parsedCity.placeId)
+  let existingCity = await cities
+    .where('providerRefs.googlePlaceId', '==', parsedCity.placeId)
     .limit(1)
     .get();
+  // Transitional lookup: old documents still use providerIds until the v2
+  // migration has completed. New writes only use providerRefs.
+  if (existingCity.empty) {
+    existingCity = await cities
+      .where('providerIds.googlePlaceIds', 'array-contains', parsedCity.placeId)
+      .limit(1)
+      .get();
+  }
   if (!existingCity.empty) {
     cityId = existingCity.docs[0].id;
     cityData = existingCity.docs[0].data();
@@ -744,11 +750,9 @@ async function resolveGoogleDestination({
 
   if (!cityData) {
     cityData = {
+      schemaVersion: 2,
       name: parsedCity.cityName || parsed.cityName,
-      description: parsedCity.address || parsed.address || '',
-      providerIds: { googlePlaceIds: [parsedCity.placeId] },
-      travelers: 0,
-      imageUrl: DESTINATION_FALLBACK_IMAGE,
+      providerRefs: { googlePlaceId: parsedCity.placeId },
       status: 'active',
       stats: { recommendationCount: 0 },
       ...(parsedCity.coordinates
@@ -812,12 +816,10 @@ async function resolveRecommendationDestination({
       },
       city: {
         id: destination.cityId,
-        name: destination.cityData.name || destination.cityId,
-        googlePlaceId:
-          destination.cityData.providerIds?.googlePlaceIds?.[0] || null,
-        description: destination.cityData.description || '',
-        ...(destination.cityData.coordinates
-          ? { coordinates: destination.cityData.coordinates }
+        name: destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
+        googlePlaceId: destination.cityData.providerRefs?.googlePlaceId || destination.cityData.providerIds?.googlePlaceIds?.[0] || null,
+        ...(destination.cityData.identity?.coordinates || destination.cityData.coordinates
+          ? { coordinates: destination.cityData.identity?.coordinates || destination.cityData.coordinates }
           : {}),
       },
     },
@@ -904,7 +906,7 @@ async function saveRecommendation({
       countryId: destination.countryId,
       cityId: destination.cityId,
       countryName: destination.countryData.name || destination.countryId,
-      cityName: destination.cityData.name || destination.cityId,
+      cityName: destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
     },
     media,
     place: destination.place,
@@ -1018,7 +1020,7 @@ async function saveRecommendation({
     },
     city: {
       id: destination.cityId,
-      name: destination.cityData.name || destination.cityId,
+      name: destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
     },
     ...(destination.resolutionSource
       ? { resolutionSource: destination.resolutionSource }

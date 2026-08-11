@@ -8,6 +8,7 @@ const {
   isVerified,
   normalizeTarget,
 } = require('./socialService');
+const { refreshRecommendationFallbackForDestination } = require('./destinationImageService');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -88,6 +89,15 @@ async function deleteContentInternal({
     deleteQueryInBatches(db, () => db.collectionGroup('favorites').where('target.path', '==', normalized.path)),
     deleteQueryInBatches(db, () => db.collectionGroup('notifications').where('target.path', '==', normalized.path)),
   ]);
+
+  if (normalized.type === 'recommendation') {
+    await refreshRecommendationFallbackForDestination({
+      admin,
+      countryId: before.destination?.countryId,
+      cityId: before.destination?.cityId,
+      force: true,
+    });
+  }
 
   await cleanupRemovedMedia(admin, before, null, {
     allowedPrefixes: buildAllowedMediaPrefixes(

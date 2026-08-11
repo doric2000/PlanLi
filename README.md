@@ -307,11 +307,15 @@ The server secrets are configured from the repository root:
 firebase functions:secrets:set GOOGLE_MAPS_KEY --project planli-f0b12
 firebase functions:secrets:set REST_COUNTRIES_KEY --project planli-f0b12
 firebase functions:secrets:set OPENWEATHER_API_KEY --project planli-f0b12
+firebase functions:secrets:set UNSPLASH_ACCESS_KEY --project planli-f0b12
 ```
 
 `GOOGLE_MAPS_KEY` must be restricted to Places and Geocoding APIs.
 `OPENWEATHER_API_KEY` is used only by the server-side destination overview;
 the client does not call the weather provider directly.
+`UNSPLASH_ACCESS_KEY` is used by the asynchronous destination-image selector.
+Unsplash images remain hotlinked and their photographer attribution is shown
+by the client.
 
 ## Maintenance and recovery
 
@@ -321,6 +325,14 @@ Firestore migration collections.
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+
+# Prepare and review the resumable destination-image manifest. These local
+# environment variables should contain the same provider credentials as the
+# deployed secrets.
+$env:GOOGLE_MAPS_KEY='<google-key>'
+$env:UNSPLASH_ACCESS_KEY='<unsplash-access-key>'
+npm run backfill-destination-images
+npm run backfill-destination-images -- --apply
 
 # Verify or resume US -> EU object copying.
 npm run migrate-storage-eu

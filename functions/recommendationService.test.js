@@ -482,7 +482,8 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(saved.destination.countryId, 'IL');
   assert.equal(saved.destination.cityId, 'TLV');
 	assert.equal(saved.taxonomyVersion, 4);
-  assert.ok(Array.isArray(saved.search.tokens));
+  assert.ok(Array.isArray(saved.search.prefixes));
+  assert.equal(Object.hasOwn(saved.search, 'tokens'), false);
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
 });
@@ -648,8 +649,8 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
       ['code', 'createdAt', 'currencyCode', 'name', 'region', 'status', 'updatedAt']
     );
     assert.deepEqual(
-      admin.documents.get(`countries/${countryId}/cities/${cityId}`).providerIds.googlePlaceIds,
-      ['city-google-id']
+      admin.documents.get(`countries/${countryId}/cities/${cityId}`).providerRefs.googlePlaceId,
+      'city-google-id'
     );
     assert.equal(
       Object.hasOwn(admin.documents.get(`countries/${countryId}/cities/${cityId}`), 'rating'),
@@ -736,8 +737,8 @@ test('Google place reuses a legacy country document by ISO code', async () => {
     assert.equal(result.city.id, cityId);
     assert.equal(admin.documents.has('countries/IL'), false);
     assert.deepEqual(
-      admin.documents.get(`countries/ישראל/cities/${cityId}`).providerIds.googlePlaceIds,
-      ['jerusalem-place-id']
+      admin.documents.get(`countries/ישראל/cities/${cityId}`).providerRefs.googlePlaceId,
+      'jerusalem-place-id'
     );
   } finally {
     global.fetch = originalFetch;

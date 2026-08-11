@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const { onCall } = require('firebase-functions/v2/https');
-const { onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const {
@@ -22,6 +22,7 @@ const {
   resetPersonalizationActivity,
 } = require('./personalizationService');
 const { getMapRecommendations } = require('./mapRecommendationsService');
+const { consumePublicReadBudget } = require('./publicRateLimitService');
 const {
   cleanupOrphanFavorites,
   clearNotifications,
@@ -39,6 +40,12 @@ const { deleteContent, requestAccountDeletion } = require('./deletionService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
+const { searchDestinations, syncDestinationCatalog } = require('./destinationCatalogService');
+const {
+  repairPendingDestinationImages,
+  resolveAndPersistDestinationImage,
+  syncDestinationImagesForRecommendationChange,
+} = require('./destinationImageService');
 const {
   cleanupPreparedMedia,
   markMediaClaimed,
@@ -55,6 +62,8 @@ const MEDIA_SERVICE_ACCOUNT =
 const googleMapsKey = defineSecret('GOOGLE_MAPS_KEY');
 const restCountriesKey = defineSecret('REST_COUNTRIES_KEY');
 const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
+const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
+const publicRateLimitKey = defineSecret('PUBLIC_RATE_LIMIT_KEY');
 const mediaStorageBucket = defineString('MEDIA_STORAGE_BUCKET', {
   description: 'European Cloud Storage bucket used for PlanLi media.',
   default: 'planli-f0b12-media-eu',
@@ -74,6 +83,16 @@ function callable(options, handler) {
 
 function firestoreWritten(document, handler, options = {}) {
   return onDocumentWritten({
+    document,
+    region: REGION,
+    retry: true,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+    ...options,
+  }, handler);
+}
+
+function firestoreCreated(document, handler, options = {}) {
+  return onDocumentCreated({
     document,
     region: REGION,
     retry: true,
@@ -171,39 +190,43 @@ exports.updateProfile = callable(
 );
 
 exports.getPersonalizedRecommendations = callable(
-  { timeoutSeconds: 30 },
-  (request) => getPersonalizedRecommendations({
-    admin,
-    auth: request.auth,
-    data: request.data,
-  })
+  { timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  async (request) => {
+    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
+    return getPersonalizedRecommendations({ admin, auth: request.auth, data: request.data });
+  }
 );
 
 exports.getMapRecommendations = callable(
-  { timeoutSeconds: 30, memory: '512MiB' },
-  (request) => getMapRecommendations({
-    admin,
-    auth: request.auth,
-    data: request.data,
-  })
+  { timeoutSeconds: 30, memory: '512MiB', secrets: [publicRateLimitKey] },
+  async (request) => {
+    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'map', key: publicRateLimitKey.value() });
+    return getMapRecommendations({ admin, auth: request.auth, data: request.data });
+  }
 );
 
 exports.getPersonalizedRoutes = callable(
-  { timeoutSeconds: 30 },
-  (request) => getPersonalizedRoutes({
-    admin,
-    auth: request.auth,
-    data: request.data,
-  })
+  { timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  async (request) => {
+    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
+    return getPersonalizedRoutes({ admin, auth: request.auth, data: request.data });
+  }
 );
 
 exports.getDestinationOverview = callable(
-  { timeoutSeconds: 30, secrets: [openWeatherKey] },
-  (request) => getDestinationOverview({
-    admin,
-    data: request.data,
-    weatherApiKey: openWeatherKey.value(),
-  })
+  { timeoutSeconds: 30, secrets: [openWeatherKey, publicRateLimitKey] },
+  async (request) => {
+    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'destinationOverview', key: publicRateLimitKey.value() });
+    return getDestinationOverview({ admin, data: request.data, weatherApiKey: openWeatherKey.value() });
+  }
+);
+
+exports.searchDestinations = callable(
+  { timeoutSeconds: 20, secrets: [publicRateLimitKey] },
+  async (request) => {
+    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
+    return searchDestinations({ admin, data: request.data });
+  }
 );
 
 exports.recordDiscoverySignal = callable({}, (request) =>
@@ -344,12 +367,58 @@ async function handleMediaCleanup(event, collectionName) {
     documentId,
     before || after
   );
+  if (collectionName === 'recommendations') {
+    // If this recommendation supplied a city image, update the city and its
+    // favorite projections before deleting the old media objects.
+    const refreshed = await syncDestinationImagesForRecommendationChange({ admin, before, after });
+    for (const { destination } of refreshed) {
+      const citySnapshot = await admin.firestore()
+        .doc(`countries/${destination.countryId}/cities/${destination.cityId}`)
+        .get();
+      if (!citySnapshot.exists) continue;
+      await refreshFavoritesForTarget({
+        admin,
+        target: { type: 'city', id: destination.cityId, countryId: destination.countryId },
+        data: citySnapshot.data(),
+      });
+    }
+  }
   await cleanupRemovedMedia(admin, before, after, {
     allowedPrefixes,
     bucketName: mediaStorageBucket.value(),
   });
   if (after) await markMediaClaimed(admin, after, mediaStorageBucket.value());
 }
+
+exports.onDestinationImageCreated = firestoreCreated(
+  'countries/{countryId}/cities/{cityId}',
+  (event) => resolveAndPersistDestinationImage({
+    admin,
+    countryId: event.params.countryId,
+    cityId: event.params.cityId,
+    unsplashKey: unsplashAccessKey.value(),
+  }),
+  { secrets: [unsplashAccessKey], timeoutSeconds: 120 }
+);
+
+exports.repairDestinationImagesScheduled = onSchedule(
+  {
+    schedule: 'every hour',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+    secrets: [unsplashAccessKey],
+  },
+  async () => {
+    const results = await repairPendingDestinationImages({
+      admin,
+      unsplashKey: unsplashAccessKey.value(),
+      limit: 20,
+    });
+    console.log('Destination image repair complete.', { processed: results.length });
+  }
+);
 
 exports.onRecommendationMediaCleanup = firestoreWritten(
   'recommendations/{recommendationId}',
@@ -420,4 +489,14 @@ exports.onTripFavoriteProjection = firestoreWritten(
 exports.onCityFavoriteProjection = firestoreWritten(
   'countries/{countryId}/cities/{cityId}',
   projectionHandler('city', 'cityId', 'countryId')
+);
+
+exports.onDestinationCatalogSync = firestoreWritten(
+  'countries/{countryId}/cities/{cityId}',
+  (event) => syncDestinationCatalog({
+    admin,
+    countryId: event.params.countryId,
+    cityId: event.params.cityId,
+    city: event.data?.after.exists ? event.data.after.data() : null,
+  })
 );
