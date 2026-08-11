@@ -200,6 +200,16 @@ export default function HomeScreen({ navigation }) {
 		() => destinations.slice(0, 3),
 		[destinations]
 	);
+	const visibleDestinations = useMemo(() => {
+		const isDefaultHomeView = !searchQuery.trim() && destinationSort === "popular" && !savedOnly;
+		if (!isDefaultHomeView) return filteredDestinations;
+		const featuredKeys = new Set(
+			featuredDestinations.map((city) => `${city.countryId}:${city.id}`)
+		);
+		return filteredDestinations.filter(
+			(city) => !featuredKeys.has(`${city.countryId}:${city.id}`)
+		);
+	}, [filteredDestinations, featuredDestinations, searchQuery, destinationSort, savedOnly]);
 
 	const profileInitial = useMemo(() => {
 		const source = user?.displayName || user?.email || "א";
@@ -362,6 +372,9 @@ export default function HomeScreen({ navigation }) {
 	const renderFeaturedCard = (city, index) => {
 		const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
 		const imageUrl = getDestinationImageUrl(city, "feed");
+		const cityName = city?.identity?.names?.he || city?.names?.he || city?.name || city?.id;
+		const countryName = city?.countryNames?.he || city?.identity?.countryNames?.he ||
+			city?.country || city?.countryName || city?.countryId;
 
 		return (
 			<TouchableOpacity
@@ -389,10 +402,10 @@ export default function HomeScreen({ navigation }) {
 				<PhotoAttribution destination={city} />
 				<View style={styles.featuredContent}>
 					<AppText style={styles.featuredCity} numberOfLines={1}>
-						{city.name || city.id}
+						{cityName}
 					</AppText>
 					<AppText style={styles.featuredCountry} numberOfLines={1}>
-						{city.country || city.countryName || city.countryId}
+						{countryName}
 					</AppText>
 				</View>
 			</TouchableOpacity>
@@ -441,12 +454,12 @@ export default function HomeScreen({ navigation }) {
 						<ActivityIndicator color={colors.navActive} />
 						<AppText style={styles.statusText}>טוען יעדים...</AppText>
 					</View>
-				) : filteredDestinations.length === 0 ? (
+				) : visibleDestinations.length === 0 ? (
 					<AppText style={styles.emptyText} testID="home-empty-state">
 						לא נמצאו יעדים
 					</AppText>
 				) : (
-					filteredDestinations.map((city) => (
+					visibleDestinations.map((city) => (
 						<CityCard
 							key={city.id}
 							city={city}
