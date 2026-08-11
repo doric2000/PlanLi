@@ -127,6 +127,9 @@ function plan() {
     'roles/datastore.user',
     'roles/eventarc.eventReceiver',
     'roles/logging.logWriter',
+    // Gen2 Firestore/Storage events are delivered to Cloud Run services.
+    // Their Eventarc delivery identities must be allowed to invoke targets.
+    'roles/run.invoker',
   ];
   return {
     projectId: PROJECT_ID,
