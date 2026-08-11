@@ -31,6 +31,45 @@ function writeManifest(filePath, manifest) {
   fs.writeFileSync(filePath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
+function sameDestinationImage(current, expected) {
+  if (!current && !expected) return true;
+  if (!current || !expected || current.source?.type !== expected.source?.type) return false;
+  if (expected.source.type === 'unsplash') {
+    return current.source.providerPhotoId === expected.source.providerPhotoId;
+  }
+  return current.source.recommendationId === expected.source.recommendationId &&
+    current.source.assetId === expected.source.assetId;
+}
+
+function cityAlreadyMatchesEntry(city, entry) {
+  // A newer identity is acceptable when the manifest had no confident match;
+  // it is strictly more complete than the migration result would have been.
+  const identityMatches = !entry.identity ||
+    city?.identity?.sourceId === entry.identity.sourceId;
+  return identityMatches && sameDestinationImage(city?.destinationImage || null, entry.image || null);
+}
+
+async function recordDestinationJob(db, entry) {
+  const [, countryId, , cityId] = entry.path.split('/');
+  await destinationJobRef(db, countryId, cityId).set({
+    countryId,
+    cityId,
+    identitySync: {
+      state: entry.identity ? 'ready' : 'needs_review',
+      attempts: entry.identity ? 1 : 0,
+      lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    imageSync: {
+      state: entry.state,
+      attempts: 1,
+      query: entry.query || null,
+      unsplashOutcome: entry.query ? entry.state : 'not_attempted',
+      lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
 async function createDryRunManifest(db, filePath) {
   const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
   if (!unsplashKey) throw new Error('Set UNSPLASH_ACCESS_KEY before running the migration.');
@@ -110,6 +149,7 @@ async function applyManifest(db, filePath) {
   }
   let applied = 0;
   let conflicts = 0;
+  let reconciled = 0;
   for (const entry of manifest.entries || []) {
     if (entry.appliedAt) continue;
     const ref = db.doc(entry.path);
@@ -133,24 +173,7 @@ async function applyManifest(db, filePath) {
           ),
         }
       );
-      const [, countryId, , cityId] = entry.path.split('/');
-      await destinationJobRef(db, countryId, cityId).set({
-        countryId,
-        cityId,
-        identitySync: {
-          state: entry.identity ? 'ready' : 'needs_review',
-          attempts: entry.identity ? 1 : 0,
-          lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        imageSync: {
-          state: entry.state,
-          attempts: 1,
-          query: entry.query || null,
-          unsplashOutcome: entry.query ? entry.state : 'not_attempted',
-          lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      await recordDestinationJob(db, entry);
       if (entry.image?.source?.type === 'unsplash') {
         try {
           await trackUnsplashDownload({
@@ -165,15 +188,24 @@ async function applyManifest(db, filePath) {
       applied += 1;
     } catch (error) {
       if (error.code === 9 || String(error.message).includes('precondition')) {
-        entry.conflict = error.message;
-        conflicts += 1;
+        const latest = await ref.get();
+        if (latest.exists && cityAlreadyMatchesEntry(latest.data(), entry)) {
+          await recordDestinationJob(db, entry);
+          entry.appliedAt = new Date().toISOString();
+          entry.reconciledAt = entry.appliedAt;
+          delete entry.conflict;
+          reconciled += 1;
+        } else {
+          entry.conflict = error.message;
+          conflicts += 1;
+        }
       } else {
         entry.applyError = error.message;
       }
     }
     writeManifest(filePath, manifest);
   }
-  return { applied, conflicts };
+  return { applied, reconciled, conflicts };
 }
 
 async function main() {
