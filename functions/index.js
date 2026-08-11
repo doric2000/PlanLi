@@ -27,6 +27,10 @@ const {
   PROVIDER_CALLABLE_LIMITS,
   PROVIDER_ROUTE_CALLABLE_LIMITS,
 } = require('./providerRateLimitService');
+const {
+  resolvePlaceSelection,
+  searchPlaces,
+} = require('./placesGatewayService');
 const { cleanupExpiredRuntimeDocuments } = require('./runtimeCleanupService');
 const {
   cleanupOrphanFavorites,
@@ -139,6 +143,36 @@ exports.resolveRecommendationDestination = callable(
     data: request.data,
     mapsKey: googleMapsKey.value(),
     restCountriesKey: restCountriesKey.value(),
+    providerRateLimitKey: publicRateLimitKey.value(),
+  })
+);
+
+exports.searchPlaces = callable(
+  {
+    secrets: [googleMapsKey, publicRateLimitKey],
+    timeoutSeconds: 30,
+    ...PROVIDER_CALLABLE_LIMITS,
+  },
+  (request) => searchPlaces({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    mapsKey: googleMapsKey.value(),
+    providerRateLimitKey: publicRateLimitKey.value(),
+  })
+);
+
+exports.resolvePlaceSelection = callable(
+  {
+    secrets: [googleMapsKey, publicRateLimitKey],
+    timeoutSeconds: 30,
+    ...PROVIDER_CALLABLE_LIMITS,
+  },
+  (request) => resolvePlaceSelection({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    mapsKey: googleMapsKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
