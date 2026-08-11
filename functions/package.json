@@ -26,6 +26,7 @@
     "backfill-map-locations": "node scripts/backfillRecommendationMapLocations.js",
     "backfill-destination-images": "node scripts/backfillDestinationImages.js",
     "backfill-destination-catalog": "node scripts/backfillDestinationCatalog.js",
+    "repair-destination-image-queries": "node scripts/repairDestinationImageQueries.js",
     "remove-rating": "node scripts/removeRating.js",
     "backfill-public-profiles": "node scripts/backfillPublicProfiles.js",
     "sync-country-metadata": "node scripts/syncCountryMetadata.js",

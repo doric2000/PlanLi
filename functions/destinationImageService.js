@@ -140,9 +140,10 @@ function addressComponent(result, ...types) {
 
 function destinationQuery(city, country) {
   const names = city?.identity?.names || {};
+  const identityCountryNames = city?.identity?.countryNames || {};
   const countryNames = country?.names || {};
   const cityLabel = String(names.en || names.he || cityName(city)).trim();
-  const countryLabel = String(countryNames.en || country?.name || '').trim();
+  const countryLabel = String(identityCountryNames.en || countryNames.en || country?.name || '').trim();
   return [cityLabel, countryLabel]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
@@ -365,7 +366,8 @@ async function resolveAndPersistDestinationImage({
     job = (await jobRef.get()).data() || {};
   }
   const attempts = Number(job?.imageSync?.attempts || 0) + 1;
-  const query = String(job?.imageSync?.query || destinationQuery(city, countrySnapshot.data())).trim();
+  const canonicalQuery = destinationQuery(city, countrySnapshot.data());
+  const query = String(canonicalQuery || job?.imageSync?.query || '').trim();
   try {
     const candidate = await resolveDestinationImageCandidate({
       db,
