@@ -1,4 +1,4 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import AppFontProvider from "./src/components/AppFontProvider";
@@ -27,9 +27,12 @@ import {
 	rtlStackScreenOptions,
 } from "./src/navigation/rtlStackOptions";
 import withRequireAuth from "./src/navigation/withRequireAuth";
+import RecommendationPublishBanner from "./src/features/community/publishing/RecommendationPublishBanner";
+import { RecommendationPublishProvider } from "./src/features/community/publishing/RecommendationPublishContext";
 
 
 const Stack = createStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 const EditProfileAuthed = withRequireAuth(EditProfileScreen);
 const NotificationsAuthed = withRequireAuth(NotificationScreen);
@@ -59,7 +62,8 @@ export default function App() {
 	return (
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
-				<NavigationContainer>
+				<RecommendationPublishProvider>
+				<NavigationContainer ref={navigationRef}>
 				<Stack.Navigator
 					initialRouteName='Main'
 					screenOptions={rtlStackScreenOptions}
@@ -109,6 +113,14 @@ export default function App() {
 					/>
 				</Stack.Navigator>
 				</NavigationContainer>
+				<RecommendationPublishBanner
+					onReview={(publishJobId) => {
+						if (navigationRef.isReady()) {
+							navigationRef.navigate('AddRecommendation', { publishJobId });
+						}
+					}}
+				/>
+				</RecommendationPublishProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>
 	);

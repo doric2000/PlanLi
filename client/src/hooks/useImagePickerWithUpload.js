@@ -76,19 +76,32 @@ export const useImagePickerWithUpload = (options = {}) => {
   });
 
   const uploadImageAsset = useCallback(
-    async (uri) => {
+    async (uri, { onProgress } = {}) => {
       if (!uri) return null;
       let staging = null;
       try {
+        onProgress?.(0.02);
+        const stagingStartedAt = Date.now();
         staging = await uploader.uploadImageDetailed(uri, {
           variant: 'staging',
+          onProgress: (ratio) => onProgress?.(ratio * 0.65),
+        });
+        console.info('media_staging_upload_timing', {
+          kind: config.kind,
+          durationMs: Date.now() - stagingStartedAt,
         });
         if (!staging?.path) {
           throw new Error('Staging upload did not return a Storage path.');
         }
+        onProgress?.(0.68);
+        const preparationStartedAt = Date.now();
         const asset = await prepareMedia({
           stagingPath: staging.path,
           kind: config.kind,
+        });
+        console.info('media_prepare_request_timing', {
+          kind: config.kind,
+          durationMs: Date.now() - preparationStartedAt,
         });
         if (
           !asset?.assetId ||
@@ -98,6 +111,7 @@ export const useImagePickerWithUpload = (options = {}) => {
         ) {
           throw new Error('Media processing returned an incomplete asset.');
         }
+        onProgress?.(1);
         return asset;
       } catch (error) {
         if (staging?.path) {

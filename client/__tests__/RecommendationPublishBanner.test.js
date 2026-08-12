@@ -1,0 +1,63 @@
+import React from 'react';
+import { Alert } from 'react-native';
+import { fireEvent, render } from '@testing-library/react-native';
+
+import RecommendationPublishBanner from '../src/features/community/publishing/RecommendationPublishBanner';
+
+const mockRetry = jest.fn();
+const mockDiscard = jest.fn();
+let mockPublishState;
+
+jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
+  useRecommendationPublish: () => mockPublishState,
+}));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 10, left: 0 }),
+}));
+jest.mock('@expo/vector-icons', () => {
+  const ReactModule = require('react');
+  const { Text } = require('react-native');
+  return { Ionicons: ({ name }) => ReactModule.createElement(Text, null, name) };
+});
+
+describe('RecommendationPublishBanner', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPublishState = {
+      activeJob: { id: 'job-1', status: 'uploading', stage: 'uploading', progress: 0.42 },
+      jobs: [{ id: 'job-1' }],
+      retry: mockRetry,
+      discard: mockDiscard,
+    };
+  });
+
+  it('shows app-wide upload progress', () => {
+    const screen = render(<RecommendationPublishBanner />);
+    expect(screen.getByTestId('recommendation-publish-banner')).toBeTruthy();
+    expect(screen.getByTestId('publish-progress').props.accessibilityValue.now).toBe(42);
+  });
+
+  it('shows retry, review, and confirmed discard actions after failure', () => {
+    const onReview = jest.fn();
+    jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, actions) => {
+      actions.find((action) => action.style === 'destructive').onPress();
+    });
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', status: 'failed', stage: 'failed', progress: 0.7,
+        error: { message: 'Network unavailable' },
+      },
+    };
+    const screen = render(<RecommendationPublishBanner onReview={onReview} />);
+
+    fireEvent.press(screen.getByTestId('publish-retry'));
+    fireEvent.press(screen.getByTestId('publish-review'));
+    fireEvent.press(screen.getByTestId('publish-discard'));
+
+    expect(mockRetry).toHaveBeenCalledWith('job-1');
+    expect(onReview).toHaveBeenCalledWith('job-1');
+    expect(mockDiscard).toHaveBeenCalledWith('job-1');
+    Alert.alert.mockRestore();
+  });
+});

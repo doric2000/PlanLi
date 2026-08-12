@@ -148,6 +148,7 @@ export const useImageUploader = (options = {}) => {
       // Convert URI to blob
       blob = await uriToBlob(uri);
       setUploadProgress(30);
+      details.onProgress?.(0.3);
 
       // Generate path using strategy
       const userId = config.strategy.getUserId?.() || 'anonymous';
@@ -155,6 +156,7 @@ export const useImageUploader = (options = {}) => {
         details.path ||
         config.strategy.generatePath(config.storagePath, userId);
       setUploadProgress(50);
+      details.onProgress?.(0.5);
 
       // Upload using strategy
       const downloadUrl = await config.strategy.upload(blob, path, {
@@ -166,11 +168,15 @@ export const useImageUploader = (options = {}) => {
           ...(details.width ? { width: String(details.width) } : {}),
           ...(details.height ? { height: String(details.height) } : {}),
         },
-      }, (ratio) => setUploadProgress(50 + Math.round(ratio * 45)));
+      }, (ratio) => {
+        setUploadProgress(50 + Math.round(ratio * 45));
+        details.onProgress?.(0.5 + ratio * 0.45);
+      });
       if (typeof downloadUrl !== 'string' || !downloadUrl) {
         throw new Error('Image upload did not return a download URL.');
       }
       setUploadProgress(100);
+      details.onProgress?.(1);
 
       return {
         url: downloadUrl,
