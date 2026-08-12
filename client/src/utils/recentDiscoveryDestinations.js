@@ -10,7 +10,29 @@ function cleanDestination(destination) {
     countryId: String(destination.countryId),
     cityId: destination.cityId ? String(destination.cityId) : '',
     label: String(destination.label).slice(0, 160),
+    ...(destination.name ? { name: String(destination.name).slice(0, 100) } : {}),
+    ...(destination.countryName ? { countryName: String(destination.countryName).slice(0, 100) } : {}),
   };
+}
+
+export function mergeRecentDiscoveryDestinations(selected, existing) {
+  const selectedItems = (Array.isArray(selected) ? selected : [])
+    .map(cleanDestination)
+    .filter(Boolean);
+  const existingItems = (Array.isArray(existing) ? existing : [])
+    .map(cleanDestination)
+    .filter(Boolean);
+  const merged = [...selectedItems.reverse(), ...existingItems];
+  const unique = [];
+  const seen = new Set();
+  for (const entry of merged) {
+    const key = destinationKey(entry);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(entry);
+    if (unique.length >= MAXIMUM_RECENT_DESTINATIONS) break;
+  }
+  return unique;
 }
 
 export async function loadRecentDiscoveryDestinations() {
@@ -25,15 +47,16 @@ export async function loadRecentDiscoveryDestinations() {
 }
 
 export async function rememberDiscoveryDestinations(destinations) {
-  const selected = (Array.isArray(destinations) ? destinations : []).map(cleanDestination).filter(Boolean);
-  if (!selected.length) return;
+  const selected = (Array.isArray(destinations) ? destinations : [])
+    .map(cleanDestination)
+    .filter(Boolean);
+  if (!selected.length) return loadRecentDiscoveryDestinations();
   const existing = await loadRecentDiscoveryDestinations();
-  const merged = [...selected.reverse(), ...existing];
-  const unique = Array.from(new Map(merged.map((entry) => [destinationKey(entry), entry])).values())
-    .slice(0, MAXIMUM_RECENT_DESTINATIONS);
+  const unique = mergeRecentDiscoveryDestinations(selected, existing);
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
   } catch {
     // Recent destinations are a convenience only; filtering must still work if local storage is unavailable.
   }
+  return unique;
 }

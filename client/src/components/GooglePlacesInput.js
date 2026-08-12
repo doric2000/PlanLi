@@ -23,6 +23,8 @@ export default function GooglePlacesInput({
   onRequestGoogleSearch,
   seedQuery,
   localResults,
+  idleLocalResults,
+  idleLocalTitle = 'חיפושים אחרונים',
   onSelectLocal,
   localResultsLoading = false,
   googleFallbackDelayMs = 2000,
@@ -44,10 +46,14 @@ export default function GooglePlacesInput({
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
 
   const normalizedLocalResults = Array.isArray(localResults) ? localResults : [];
+  const normalizedIdleLocalResults = Array.isArray(idleLocalResults)
+    ? idleLocalResults.slice(0, 5)
+    : [];
 
   const [query, setQuery] = useState(value ?? '');
   const [predictions, setPredictions] = useState([]);
   const [showList, setShowList] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
 
@@ -70,6 +76,7 @@ export default function GooglePlacesInput({
   const lastRequestAt = useRef(0);
   const cacheRef = useRef(new Map());
   const abortRef = useRef(null);
+  const blurTimerRef = useRef(null);
 
   const inputWrapperRef = useRef(null);
   const [dropdownAnchor, setDropdownAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
@@ -110,6 +117,9 @@ export default function GooglePlacesInput({
       if (abortRef.current) {
         abortRef.current.abort();
       }
+      if (blurTimerRef.current) {
+        clearTimeout(blurTimerRef.current);
+      }
     };
   }, []);
 
@@ -121,6 +131,20 @@ export default function GooglePlacesInput({
       setQuery(text);
     }
     setShowList(true);
+  };
+
+  const handleFocus = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    setInputFocused(true);
+    setShowList(true);
+  };
+
+  const handleBlur = () => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    blurTimerRef.current = setTimeout(() => {
+      setInputFocused(false);
+      setShowList(false);
+    }, 180);
   };
 
   // For developer filter mode: decide when "search ended" (debounced) so we can show the fallback button.
@@ -237,13 +261,20 @@ export default function GooglePlacesInput({
     }, delay);
   }, [isGoogleMode, googleTriggerQuery, showList]);
 
-  const shouldShowAnyDropdown =
+  const showIdleLocalResults =
+    showList &&
+    inputFocused &&
+    query.trim().length === 0 &&
+    normalizedIdleLocalResults.length > 0;
+
+  const shouldShowAnyDropdown = showIdleLocalResults || (
     showList &&
     query.trim().length >= (
       localResultsLoading
         ? LOCAL_MIN_QUERY_LENGTH
         : (normalizedLocalResults.length > 0 ? LOCAL_MIN_QUERY_LENGTH : MIN_QUERY_LENGTH)
-    );
+    )
+  );
 
   const showDropdown = isGoogleMode && shouldShowAnyDropdown;
 
@@ -277,6 +308,7 @@ export default function GooglePlacesInput({
     } else {
       setQuery(place.description);
     }
+    setInputFocused(false);
     setShowList(false);
     onSelect(place.place_id); // Pass the ID back to HomeScreen
   };
@@ -288,6 +320,16 @@ export default function GooglePlacesInput({
     } else {
       setQuery(label);
     }
+    setInputFocused(false);
+    setShowList(false);
+    if (typeof onSelectLocal === 'function') {
+      onSelectLocal(city);
+    }
+  };
+
+  const handleSelectIdleLocal = (city) => {
+    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    setInputFocused(false);
     setShowList(false);
     if (typeof onSelectLocal === 'function') {
       onSelectLocal(city);
@@ -312,6 +354,8 @@ export default function GooglePlacesInput({
           placeholder={placeholder}
           value={query}
           onChangeText={handleTextChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           autoCorrect={false}
           autoCapitalize="none"
           placeholderTextColor={placeholderTextColor || colors.placeholder}
@@ -343,7 +387,36 @@ export default function GooglePlacesInput({
       {/* Suggestions List */}
       {Platform.OS !== 'web' && shouldShowAnyDropdown && (
         <View style={[googlePlacesInput.listContainer, listContainerStyle]}>
-          {normalizedLocalResults.length > 0 ? (
+          {showIdleLocalResults ? (
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <AppText style={googlePlacesInput.groupTitle}>{idleLocalTitle}</AppText>
+              {normalizedIdleLocalResults.map((city) => (
+                <TouchableOpacity
+                  key={`recent:${city.countryId || 'country'}:${city.id || city.cityId}`}
+                  testID={`recent-destination-${city.countryId || 'country'}-${city.id || city.cityId}`}
+                  style={googlePlacesInput.listItem}
+                  onPress={() => handleSelectIdleLocal(city)}
+                >
+                  <Ionicons
+                    name="time-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                    style={googlePlacesInput.locationIcon}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <AppText style={googlePlacesInput.mainText} numberOfLines={1}>
+                      {city.name || city.label}
+                    </AppText>
+                    {!!city.countryName && (
+                      <AppText style={googlePlacesInput.subText} numberOfLines={1}>
+                        {city.countryName}
+                      </AppText>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : normalizedLocalResults.length > 0 ? (
             <ScrollView keyboardShouldPersistTaps="handled">
               {normalizedLocalResults.map((city) => (
                 <TouchableOpacity
@@ -429,7 +502,36 @@ export default function GooglePlacesInput({
               },
             ]}
           >
-            {normalizedLocalResults.length > 0 ? (
+            {showIdleLocalResults ? (
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <AppText style={googlePlacesInput.groupTitle}>{idleLocalTitle}</AppText>
+                {normalizedIdleLocalResults.map((city) => (
+                  <TouchableOpacity
+                    key={`recent:${city.countryId || 'country'}:${city.id || city.cityId}`}
+                    testID={`recent-destination-${city.countryId || 'country'}-${city.id || city.cityId}`}
+                    style={googlePlacesInput.listItem}
+                    onPress={() => handleSelectIdleLocal(city)}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={18}
+                      color={colors.textSecondary}
+                      style={googlePlacesInput.locationIcon}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <AppText style={googlePlacesInput.mainText} numberOfLines={1}>
+                        {city.name || city.label}
+                      </AppText>
+                      {!!city.countryName && (
+                        <AppText style={googlePlacesInput.subText} numberOfLines={1}>
+                          {city.countryName}
+                        </AppText>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : normalizedLocalResults.length > 0 ? (
               <ScrollView keyboardShouldPersistTaps="handled">
                 {normalizedLocalResults.map((city) => (
                   <TouchableOpacity

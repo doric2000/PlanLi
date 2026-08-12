@@ -14,6 +14,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
 
 const mockSearchDestinations = jest.fn();
+const mockLoadRecentDestinations = jest.fn();
+const mockRememberRecentDestinations = jest.fn();
 jest.mock('../src/services/DestinationService', () => ({
   searchDestinations: (...args) => mockSearchDestinations(...args),
   destinationCatalogItemToCity: (item, placeholderColor) => {
@@ -57,18 +59,38 @@ jest.mock('../src/config/firebase', () => ({
 
 jest.mock('../src/components/GooglePlacesInput', () => {
   const React = require('react');
-  const { View, TextInput } = require('react-native');
-  return ({ value, onChangeValue, rightAccessory }) => (
-    <View>
-      <TextInput
-        testID="home-search-input"
-        value={value}
-        onChangeText={onChangeValue}
-      />
-      {rightAccessory}
-    </View>
-  );
+  const { View, TextInput, TouchableOpacity, Text } = require('react-native');
+  return ({
+    value, onChangeValue, rightAccessory, idleLocalResults = [], onSelectLocal,
+  }) => {
+    const [focused, setFocused] = React.useState(false);
+    return (
+      <View>
+        <TextInput
+          testID="home-search-input"
+          value={value}
+          onChangeText={onChangeValue}
+          onFocus={() => setFocused(true)}
+        />
+        {focused && !value && idleLocalResults.map((city) => (
+          <TouchableOpacity
+            key={`${city.countryId}:${city.id}`}
+            testID={`mock-recent-${city.countryId}-${city.id}`}
+            onPress={() => onSelectLocal(city)}
+          >
+            <Text>{city.name}</Text>
+          </TouchableOpacity>
+        ))}
+        {rightAccessory}
+      </View>
+    );
+  };
 });
+
+jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
+  loadRecentDiscoveryDestinations: (...args) => mockLoadRecentDestinations(...args),
+  rememberDiscoveryDestinations: (...args) => mockRememberRecentDestinations(...args),
+}));
 
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
@@ -107,6 +129,8 @@ describe('HomeScreenSearchTest', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLoadRecentDestinations.mockResolvedValue([]);
+    mockRememberRecentDestinations.mockImplementation(async (items) => items);
     mockSearchDestinations.mockResolvedValue({
       items: [
         makeDoc('athens', 'gr', {
@@ -121,6 +145,45 @@ describe('HomeScreenSearchTest', () => {
         }),
       ],
     });
+  });
+
+  it('opens a recent destination without another catalog or Google request', async () => {
+    mockLoadRecentDestinations.mockResolvedValue([{
+      countryId: 'FR',
+      cityId: 'paris',
+      name: 'פריז',
+      countryName: 'צרפת',
+      label: 'פריז · צרפת',
+    }]);
+    const navigationMock = { navigate: jest.fn() };
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={navigationMock} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockLoadRecentDestinations).toHaveBeenCalledTimes(1));
+    fireEvent(screen.getByTestId('home-search-input'), 'focus');
+    fireEvent.press(await screen.findByTestId('mock-recent-FR-paris'));
+
+    await waitFor(() => {
+      expect(navigationMock.navigate).toHaveBeenCalledWith('LandingPage', {
+        cityId: 'paris',
+        countryId: 'FR',
+      });
+      expect(mockRememberRecentDestinations).toHaveBeenCalledWith([expect.objectContaining({
+        countryId: 'FR',
+        cityId: 'paris',
+        name: 'פריז',
+      })]);
+    });
+    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
   });
 
   it('filters destinations when searching by text', async () => {
