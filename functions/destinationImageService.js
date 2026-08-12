@@ -1,5 +1,6 @@
 const { FieldPath } = require('firebase-admin/firestore');
 const { cityName, distanceKm } = require('./destinationIdentityService');
+const { resolveWikimediaDestinationImage } = require('./wikimediaDestinationImageService');
 
 const MAX_IMAGE_SYNC_ATTEMPTS = 6;
 const IDENTITY_STRATEGY_VERSION = 3;
@@ -391,15 +392,37 @@ async function resolveDestinationImageCandidate({
   maxDetailChecks = UNSPLASH_MAX_DETAIL_CHECKS,
   excludedPhotoIds = [],
   onRequest = async () => {},
+  resolveWikimediaImage = resolveWikimediaDestinationImage,
 }) {
+  const fallbackImage = async (unsplashOutcome) => {
+    const recommendation = await selectRecommendationFallback(db, countryId, cityId);
+    if (recommendation) {
+      return {
+        image: recommendation,
+        downloadLocation: null,
+        rateLimit: null,
+        state: 'ready',
+        outcome: 'match_recommendation',
+        unsplashOutcome,
+      };
+    }
+    const wikimedia = await resolveWikimediaImage({ city, country, fetchImpl });
+    return {
+      image: wikimedia,
+      downloadLocation: null,
+      rateLimit: null,
+      state: wikimedia ? 'ready' : 'no_match',
+      outcome: wikimedia ? 'match_wikimedia' : unsplashOutcome,
+      unsplashOutcome,
+    };
+  };
   if (!query) {
-    const image = await selectRecommendationFallback(db, countryId, cityId);
-    return { image, downloadLocation: null, rateLimit: null, state: image ? 'ready' : 'no_match' };
+    return fallbackImage('missing_query');
   }
   const unsplash = await searchUnsplash({ query, accessKey: unsplashKey, fetchImpl, onRequest });
   if (!unsplash.photos.length) {
-    const image = await selectRecommendationFallback(db, countryId, cityId);
-    return { image, downloadLocation: null, rateLimit: unsplash.rateLimit, state: image ? 'ready' : 'no_match', outcome: 'zero_results' };
+    const fallback = await fallbackImage('zero_results');
+    return { ...fallback, rateLimit: unsplash.rateLimit };
   }
   const context = destinationImageContext(city, country);
   const excluded = new Set(excludedPhotoIds);
@@ -437,14 +460,8 @@ async function resolveDestinationImageCandidate({
       outcome: selected.validation.status === 'geo_verified' ? 'match_geo' : 'match_text',
     };
   }
-  const image = await selectRecommendationFallback(db, countryId, cityId);
-  return {
-    image,
-    downloadLocation: null,
-    rateLimit: unsplash.rateLimit,
-    state: image ? 'ready' : 'no_match',
-    outcome: 'no_verified_match',
-  };
+  const fallback = await fallbackImage('no_verified_match');
+  return { ...fallback, rateLimit: unsplash.rateLimit };
 }
 
 function sameDestinationImage(left, right) {
@@ -452,6 +469,7 @@ function sameDestinationImage(left, right) {
     left?.source?.providerPhotoId === right?.source?.providerPhotoId &&
     left?.source?.recommendationId === right?.source?.recommendationId &&
     left?.source?.assetId === right?.source?.assetId &&
+    left?.source?.fileName === right?.source?.fileName &&
     left?.urls?.large === right?.urls?.large &&
     left?.urls?.feed === right?.urls?.feed &&
     left?.urls?.thumb === right?.urls?.thumb;
@@ -545,7 +563,8 @@ async function resolveAndPersistDestinationImage({
   if (!citySnapshot.exists || citySnapshot.data()?.status !== 'active') return { state: 'missing_city' };
   let city = citySnapshot.data();
   const currentValidationVersion = Number(city.destinationImage?.selection?.validation?.version || 0);
-  if (city.destinationImage?.source?.type === 'unsplash' && currentValidationVersion >= IMAGE_VALIDATION_VERSION) {
+  if (['unsplash', 'wikimedia'].includes(city.destinationImage?.source?.type) &&
+      currentValidationVersion >= IMAGE_VALIDATION_VERSION) {
     return { state: 'ready', unchanged: true };
   }
   const jobRef = destinationJobRef(db, countryId, cityId);
@@ -639,7 +658,14 @@ async function resolveAndPersistDestinationImage({
     }
     await jobRef.set({
       countryId, cityId,
-      imageSync: { state: candidate.state, attempts, query, unsplashOutcome: candidate.outcome, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() },
+      imageSync: {
+        state: candidate.state,
+        attempts,
+        query,
+        providerOutcome: candidate.outcome,
+        unsplashOutcome: candidate.unsplashOutcome || candidate.outcome,
+        lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     return candidate;
@@ -666,7 +692,9 @@ async function refreshRecommendationFallbackForDestination({
   const citySnapshot = await cityRef.get();
   if (!citySnapshot.exists) return { state: 'missing_city' };
   const city = citySnapshot.data();
-  if (city.destinationImage?.source?.type === 'unsplash') return { state: 'ready', unchanged: true };
+  if (['unsplash', 'wikimedia'].includes(city.destinationImage?.source?.type)) {
+    return { state: 'ready', unchanged: true };
+  }
   const image = await selectRecommendationFallback(db, countryId, cityId);
   const state = image ? 'ready' : 'no_match';
   if (sameDestinationImage(city.destinationImage, image)) {

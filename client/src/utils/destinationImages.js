@@ -24,5 +24,5 @@ export function getDestinationPlaceholderColor(destination) {
 
 export function getDestinationAttribution(destination) {
   const image = destination?.destinationImage;
-  return image?.source?.type === 'unsplash' ? image.attribution || null : null;
+  return ['unsplash', 'wikimedia'].includes(image?.source?.type) ? image.attribution || null : null;
 }
