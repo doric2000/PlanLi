@@ -38,6 +38,24 @@ export const flattenRouteStops = (routeOrDays) => {
 export const flattenValidRouteStops = (routeOrDays) =>
 	flattenRouteStops(routeOrDays).filter(hasValidStopLocation);
 
+export const getRouteInitialRegion = (stops = []) => {
+	if (!stops.length) {
+		return { latitude: 31.0461, longitude: 34.8516, latitudeDelta: 6, longitudeDelta: 6 };
+	}
+	const latitudes = stops.map((stop) => stop.coordinates.lat);
+	const longitudes = stops.map((stop) => stop.coordinates.lng);
+	const minLat = Math.min(...latitudes);
+	const maxLat = Math.max(...latitudes);
+	const minLng = Math.min(...longitudes);
+	const maxLng = Math.max(...longitudes);
+	return {
+		latitude: (minLat + maxLat) / 2,
+		longitude: (minLng + maxLng) / 2,
+		latitudeDelta: Math.max(0.04, (maxLat - minLat) * 1.5),
+		longitudeDelta: Math.max(0.04, (maxLng - minLng) * 1.5),
+	};
+};
+
 export const derivePlacesFromStops = (routeOrDays) => {
 	const names = flattenRouteStops(routeOrDays)
 		.map((stop) => stop.location || stop.place?.name || stop.place?.address || stop.title)

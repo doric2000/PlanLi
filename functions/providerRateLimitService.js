@@ -3,13 +3,16 @@ const { HttpsError } = require('firebase-functions/v2/https');
 
 const PROVIDER_COSTS = Object.freeze({
   autocomplete: 1,
-  bilingualResolution: 12,
+  // One localized details request in Hebrew and one in English. Destination
+  // hierarchy work is charged separately through localityResolution.
+  bilingualResolution: 2,
   localityResolution: 3,
 });
 const MINUTE_WINDOW_MS = 60 * 1000;
 const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MAXIMUM = 60;
 const DAY_MAXIMUM = 600;
+const PROVIDER_BUDGET_VERSION = 2;
 const PROVIDER_CALLABLE_LIMITS = Object.freeze({ concurrency: 10, maxInstances: 10 });
 const PROVIDER_ROUTE_CALLABLE_LIMITS = Object.freeze({ concurrency: 4, maxInstances: 5 });
 
@@ -51,7 +54,9 @@ async function consumeProviderBudget({
     );
   }
 
-  const id = providerPrincipal(auth.uid, key);
+  // Version the persisted bucket whenever accounting weights change. Otherwise
+  // usage charged under an older, heavier scheme can block users for a day.
+  const id = `${providerPrincipal(auth.uid, key)}_v${PROVIDER_BUDGET_VERSION}`;
   const minuteRef = admin.firestore().doc(`system/runtime/providerRateLimits/${id}_minute`);
   const dayRef = admin.firestore().doc(`system/runtime/providerRateLimits/${id}_day`);
   await admin.firestore().runTransaction(async (transaction) => {
@@ -90,6 +95,7 @@ module.exports = {
   DAY_WINDOW_MS,
   MINUTE_MAXIMUM,
   MINUTE_WINDOW_MS,
+  PROVIDER_BUDGET_VERSION,
   PROVIDER_COSTS,
   PROVIDER_CALLABLE_LIMITS,
   PROVIDER_ROUTE_CALLABLE_LIMITS,

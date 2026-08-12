@@ -34,6 +34,7 @@ import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { useBackButton } from "../../../hooks/useBackButton";
 import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
 import { getUserTier } from "../../../utils/userTier";
+import { locationErrorKind, locationErrorMessage } from "../../../utils/locationErrors";
 import {
 	ensureRouteDraftIds,
 	extractRoutePublishMedia,
@@ -603,9 +604,19 @@ export default function AddRoutesScreen({ navigation, route }) {
 			allowLeaveRef.current = true;
 			navigation.goBack();
 		} catch (error) {
-			console.error("Firestore Error:", error);
+			const locationKind = locationErrorKind(error);
+			if (locationKind !== "unknown") {
+				console.info("route_save_location_failure", { kind: locationKind });
+			} else {
+				console.info("route_save_failure", { code: String(error?.code || "unknown") });
+			}
 			// Unclaimed prepared media is removed by the scheduled server cleanup.
-			Alert.alert("שגיאה", "לא הצלחנו לשמור את המסלול.");
+			Alert.alert(
+				locationKind === "quota" ? "מגבלת חיפוש זמנית" : "שגיאה",
+				locationKind === "unknown"
+					? "לא הצלחנו לשמור את המסלול."
+					: locationErrorMessage(error)
+			);
 		} finally {
 			setSubmitting(false);
 		}

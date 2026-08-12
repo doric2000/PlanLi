@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   DAY_MAXIMUM,
   MINUTE_MAXIMUM,
+  PROVIDER_BUDGET_VERSION,
   PROVIDER_CALLABLE_LIMITS,
   PROVIDER_COSTS,
   PROVIDER_ROUTE_CALLABLE_LIMITS,
@@ -30,10 +31,11 @@ function fakeAdmin() {
 
 test('provider costs and budgets are explicit', () => {
   assert.equal(PROVIDER_COSTS.autocomplete, 1);
-  assert.equal(PROVIDER_COSTS.bilingualResolution, 12);
+  assert.equal(PROVIDER_COSTS.bilingualResolution, 2);
   assert.equal(PROVIDER_COSTS.localityResolution, 3);
   assert.equal(MINUTE_MAXIMUM, 60);
   assert.equal(DAY_MAXIMUM, 600);
+  assert.equal(PROVIDER_BUDGET_VERSION, 2);
   assert.deepEqual(PROVIDER_CALLABLE_LIMITS, { concurrency: 10, maxInstances: 10 });
   assert.deepEqual(PROVIDER_ROUTE_CALLABLE_LIMITS, { concurrency: 4, maxInstances: 5 });
 });
@@ -62,7 +64,7 @@ test('provider budget enforces the minute limit', async () => {
     admin,
     auth,
     action: 'bilingualResolution',
-    units: 5,
+    units: 30,
     key: 'test-key',
     now: 1_000,
   });
@@ -86,7 +88,7 @@ test('provider budget enforces the daily limit across minute windows', async () 
       admin,
       auth,
       action: 'bilingualResolution',
-      units: 5,
+      units: 30,
       key: 'test-key',
       now: 1_000 + minute * 60_000,
     });
@@ -101,4 +103,22 @@ test('provider budget enforces the daily limit across minute windows', async () 
     }),
     /Daily Google request limit reached/
   );
+});
+
+test('provider budget allows a normal place-selection session', async () => {
+  const admin = fakeAdmin();
+  const auth = { uid: 'user-one' };
+  for (let query = 0; query < 10; query += 1) {
+    await consumeProviderBudget({
+      admin, auth, action: 'autocomplete', key: 'test-key', now: 1_000 + query,
+    });
+  }
+  for (let selection = 0; selection < 6; selection += 1) {
+    await consumeProviderBudget({
+      admin, auth, action: 'bilingualResolution', key: 'test-key', now: 2_000 + selection,
+    });
+    await consumeProviderBudget({
+      admin, auth, action: 'localityResolution', key: 'test-key', now: 3_000 + selection,
+    });
+  }
 });

@@ -32,6 +32,7 @@ const {
 } = require('./travelTaxonomy');
 const { buildSearchIndex, destinationKey } = require('./discoverySearch');
 const { consumeProviderBudget } = require('./providerRateLimitService');
+const { attachRouteDestinationPreviews } = require('./routeDestinationPreviewService');
 
 const MAX_ROUTE_DAYS = 60;
 const MAX_ROUTE_STOPS = 150;
@@ -782,7 +783,12 @@ async function loadRouteDetails({ admin, data }) {
       stops: stopsSnapshot.docs.map((stop) => ({ id: stop.id, ...stop.data() })),
     });
   }
-  return { route: { id: routeSnapshot.id, ...routeSnapshot.data(), days } };
+  const [route] = await attachRouteDestinationPreviews(admin.firestore(), [{
+    id: routeSnapshot.id,
+    ...routeSnapshot.data(),
+    days,
+  }]);
+  return { route };
 }
 
 async function cleanupRouteRevisions({ admin, limit = 100, now = new Date() }) {

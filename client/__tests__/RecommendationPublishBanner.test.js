@@ -60,4 +60,22 @@ describe('RecommendationPublishBanner', () => {
     expect(mockDiscard).toHaveBeenCalledWith('job-1');
     Alert.alert.mockRestore();
   });
+
+  it('localizes Google quota failures instead of exposing Firebase text', () => {
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', status: 'failed', stage: 'failed', progress: 0.7,
+        error: {
+          code: 'functions/resource-exhausted',
+          message: 'Google request limit reached. Please try again shortly.',
+        },
+      },
+    };
+
+    const screen = render(<RecommendationPublishBanner />);
+
+    expect(screen.getByText('מגבלת החיפוש הזמנית הושגה. נסו שוב בעוד זמן קצר.')).toBeTruthy();
+    expect(screen.queryByText(/Google request limit reached/)).toBeNull();
+  });
 });

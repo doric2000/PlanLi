@@ -13,6 +13,7 @@ import {
   buildGoogleMapsDirectionsUrl,
   buildGoogleMapsPlaceUrl,
   flattenValidRouteStops,
+  getRouteInitialRegion,
 } from '../utils/routeStops';
 import { colors, routeMapStyles as styles } from '../../../styles';
 
@@ -22,35 +23,7 @@ function deltaForZoom(zoom) {
   return Math.max(0.002, 360 / (2 ** Number(zoom || USER_MAP_ZOOM)));
 }
 
-export function getInitialRegion(stops) {
-  if (!stops.length) {
-    return {
-      latitude: 31.0461,
-      longitude: 34.8516,
-      latitudeDelta: 6,
-      longitudeDelta: 6,
-    };
-  }
-
-  let minLat = stops[0].coordinates.lat;
-  let maxLat = stops[0].coordinates.lat;
-  let minLng = stops[0].coordinates.lng;
-  let maxLng = stops[0].coordinates.lng;
-
-  stops.forEach((stop) => {
-    minLat = Math.min(minLat, stop.coordinates.lat);
-    maxLat = Math.max(maxLat, stop.coordinates.lat);
-    minLng = Math.min(minLng, stop.coordinates.lng);
-    maxLng = Math.max(maxLng, stop.coordinates.lng);
-  });
-
-  return {
-    latitude: (minLat + maxLat) / 2,
-    longitude: (minLng + maxLng) / 2,
-    latitudeDelta: Math.max(0.04, (maxLat - minLat) * 1.5),
-    longitudeDelta: Math.max(0.04, (maxLng - minLng) * 1.5),
-  };
-}
+export const getInitialRegion = getRouteInitialRegion;
 
 export default function RouteMapScreen({ route, navigation }) {
   const { routeData } = route.params || {};
@@ -109,11 +82,11 @@ export default function RouteMapScreen({ route, navigation }) {
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton}>
-          <Ionicons name="close" size={22} color={colors.textPrimary} />
+          <Ionicons name="chevron-forward" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerTextWrap}>
           <AppText style={styles.headerTitle} numberOfLines={1}>
-            {routeData?.Title || 'מפת מסלול'}
+            {routeData?.title || routeData?.Title || 'מפת מסלול'}
           </AppText>
           <AppText style={styles.headerSubtitle}>{stops.length} תחנות עם מיקום</AppText>
         </View>
