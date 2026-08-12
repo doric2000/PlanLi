@@ -4,6 +4,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const PROVIDER_COSTS = Object.freeze({
   autocomplete: 1,
   bilingualResolution: 12,
+  localityResolution: 3,
 });
 const MINUTE_WINDOW_MS = 60 * 1000;
 const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;

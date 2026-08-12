@@ -43,7 +43,7 @@ function legacyAirport(city) {
 
 async function loadStoredOverview(cityId, countryId) {
   const [citySnapshot, countrySnapshot] = await Promise.all([
-    getDoc(doc(db, 'countries', countryId, 'cities', cityId)),
+    getDoc(doc(db, 'countries', countryId, 'destinations', cityId)),
     getDoc(doc(db, 'countries', countryId)),
   ]);
   if (!citySnapshot.exists() || !countrySnapshot.exists()) return null;
@@ -57,8 +57,8 @@ async function loadStoredOverview(cityId, countryId) {
     destination: {
       cityId,
       countryId,
-      name: city.identity?.names?.he || city.name || '',
-      names: city.identity?.names || null,
+      name: city.googleCache?.names?.he || city.identity?.names?.he || city.name || '',
+      names: city.googleCache?.names || city.identity?.names || null,
       identity: city.identity || null,
       countryName: country.names?.he || country.name || '',
       countryCode: country.code || null,

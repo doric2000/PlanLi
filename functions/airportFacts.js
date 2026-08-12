@@ -178,7 +178,7 @@ async function syncAirportFacts({
 
   for (const country of countries) {
     // eslint-disable-next-line no-await-in-loop
-    const citySnapshot = await country.ref.collection('cities').get();
+    const citySnapshot = await country.ref.collection('destinations').get();
     for (const city of citySnapshot.docs) {
       const data = city.data() || {};
       if (data.status && data.status !== 'active') continue;

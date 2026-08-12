@@ -25,7 +25,7 @@ async function resolveDestination(db, destination) {
   const cityId = cleanId(destination.cityId, 'destination.cityId');
   const [country, city] = await Promise.all([
     db.doc(`countries/${countryId}`).get(),
-    db.doc(`countries/${countryId}/cities/${cityId}`).get(),
+    db.doc(`countries/${countryId}/destinations/${cityId}`).get(),
   ]);
   assert(
     country.exists && country.data()?.status === 'active' &&

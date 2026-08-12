@@ -31,6 +31,7 @@ function fakeAdmin() {
 test('provider costs and budgets are explicit', () => {
   assert.equal(PROVIDER_COSTS.autocomplete, 1);
   assert.equal(PROVIDER_COSTS.bilingualResolution, 12);
+  assert.equal(PROVIDER_COSTS.localityResolution, 3);
   assert.equal(MINUTE_MAXIMUM, 60);
   assert.equal(DAY_MAXIMUM, 600);
   assert.deepEqual(PROVIDER_CALLABLE_LIMITS, { concurrency: 10, maxInstances: 10 });

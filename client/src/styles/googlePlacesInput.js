@@ -64,6 +64,12 @@ export const googlePlacesInput = StyleSheet.create({
 		color: colors.textSecondary,
 		textAlign: 'right',
 	},
+	googleAttribution: {
+		fontSize: 14,
+		fontWeight: '400',
+		color: '#5E5E5E',
+		textAlign: 'center',
+	},
 	listItem: {
 		flexDirection: 'row-reverse',
 		alignItems: 'center',

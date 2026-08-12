@@ -12,6 +12,9 @@ export const getStopCoordinates = (stop) => {
 
 export const hasValidStopLocation = (stop) => !!getStopCoordinates(stop);
 
+export const hasRoutableStopLocation = (stop) =>
+	!!stop?.place?.placeId || hasValidStopLocation(stop);
+
 export const flattenRouteStops = (routeOrDays) => {
 	const days = Array.isArray(routeOrDays)
 		? routeOrDays
@@ -54,7 +57,7 @@ export const buildGoogleMapsPlaceUrl = (stop) => {
 		? `${coords.lat},${coords.lng}`
 		: [place.name, place.address, stop?.location, stop?.country, stop?.title]
 			.filter(Boolean)
-			.join(" ");
+			.join(" ") || place.placeId;
 
 	if (!fallbackQuery) return null;
 
@@ -68,29 +71,54 @@ export const buildGoogleMapsPlaceUrl = (stop) => {
 const stopDirectionsToken = (stop) => {
 	const coords = getStopCoordinates(stop);
 	if (coords) return `${coords.lat},${coords.lng}`;
-	return [stop?.place?.name, stop?.place?.address, stop?.location, stop?.country, stop?.title]
+	return [stop?.place?.name, stop?.place?.address, stop?.location, stop?.country, stop?.title, stop?.place?.placeId]
 		.filter(Boolean)
 		.join(" ");
 };
 
 export const buildGoogleMapsDirectionsUrl = (routeOrStops) => {
-	const stops = Array.isArray(routeOrStops)
-		? routeOrStops.filter(hasValidStopLocation)
-		: flattenValidRouteStops(routeOrStops);
+	return buildGoogleMapsDirectionsUrls(routeOrStops)[0] || null;
+};
 
+const GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT = 5;
+
+const buildGoogleMapsDirectionsSegmentUrl = (stops) => {
 	if (stops.length === 0) return null;
 	if (stops.length === 1) return buildGoogleMapsPlaceUrl(stops[0]);
 
-	const origin = stopDirectionsToken(stops[0]);
-	const destination = stopDirectionsToken(stops[stops.length - 1]);
+	const originStop = stops[0];
+	const destinationStop = stops[stops.length - 1];
+	const origin = stopDirectionsToken(originStop);
+	const destination = stopDirectionsToken(destinationStop);
 	const waypoints = stops.slice(1, -1).map(stopDirectionsToken).filter(Boolean);
+	if (!origin || !destination) return null;
 
 	let url = "https://www.google.com/maps/dir/?api=1&travelmode=driving";
 	url += `&origin=${encode(origin)}`;
 	url += `&destination=${encode(destination)}`;
-	if (waypoints.length > 0) {
-		url += `&waypoints=${encode(waypoints.join("|"))}`;
+	if (originStop?.place?.placeId) url += `&origin_place_id=${encode(originStop.place.placeId)}`;
+	if (destinationStop?.place?.placeId) url += `&destination_place_id=${encode(destinationStop.place.placeId)}`;
+	const waypointPlaceIds = stops.slice(1, -1).map((stop) => stop?.place?.placeId).filter(Boolean);
+	if (waypoints.length > 0) url += `&waypoints=${encode(waypoints.join("|"))}`;
+	if (waypointPlaceIds.length === waypoints.length && waypointPlaceIds.length > 0) {
+		url += `&waypoint_place_ids=${encode(waypointPlaceIds.join("|"))}`;
 	}
 	return url;
+};
+
+export const buildGoogleMapsDirectionsUrls = (routeOrStops) => {
+	const stops = Array.isArray(routeOrStops)
+		? routeOrStops.filter(hasRoutableStopLocation)
+		: flattenRouteStops(routeOrStops).filter(hasRoutableStopLocation);
+	if (stops.length <= GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT) {
+		return [buildGoogleMapsDirectionsSegmentUrl(stops)].filter(Boolean);
+	}
+	const urls = [];
+	for (let start = 0; start < stops.length - 1; start += GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT - 1) {
+		const segment = stops.slice(start, start + GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT);
+		const url = buildGoogleMapsDirectionsSegmentUrl(segment);
+		if (url) urls.push(url);
+	}
+	return urls;
 };
 

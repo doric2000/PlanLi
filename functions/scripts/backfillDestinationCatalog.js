@@ -6,7 +6,7 @@ const { syncDestinationCatalog } = require('../destinationCatalogService');
 async function run({ apply = false } = {}) {
   initializeAdmin(admin);
   const snapshot = await admin.firestore()
-    .collectionGroup('cities')
+    .collectionGroup('destinations')
     .where('status', '==', 'active')
     .get();
   if (!apply) {

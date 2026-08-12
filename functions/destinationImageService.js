@@ -1,11 +1,12 @@
 const { FieldPath } = require('firebase-admin/firestore');
-const { cityName, resolveWikidataIdentity } = require('./destinationIdentityService');
+const { cityName } = require('./destinationIdentityService');
 
 const MAX_IMAGE_SYNC_ATTEMPTS = 6;
-const IDENTITY_STRATEGY_VERSION = 2;
+const IDENTITY_STRATEGY_VERSION = 3;
 const RECOMMENDATION_PAGE_SIZE = 100;
 const UTM_SOURCE = 'planli';
 const UTM_MEDIUM = 'referral';
+const UNSPLASH_HOURLY_REQUEST_BUDGET = 45;
 
 function timestampMs(value) {
   if (!value) return 0;
@@ -140,11 +141,16 @@ function addressComponent(result, ...types) {
 }
 
 function destinationQuery(city, country) {
+  const googleNames = city?.googleCache?.names || {};
   const names = city?.identity?.names || {};
   const identityCountryNames = city?.identity?.countryNames || {};
   const countryNames = country?.names || {};
-  const cityLabel = String(names.en || names.he || cityName(city)).trim();
-  const countryLabel = String(identityCountryNames.en || countryNames.en || country?.name || '').trim();
+  const cityLabel = String(googleNames.en || names.en || names.he || cityName(city)).trim();
+  const countryCode = String(city?.googleCache?.countryCode || city?.identity?.countryCode || country?.code || '').trim().toUpperCase();
+  const localEnglishCountryName = /^[A-Z]{2}$/.test(countryCode)
+    ? new Intl.DisplayNames(['en'], { type: 'region' }).of(countryCode)
+    : '';
+  const countryLabel = String(countryNames.en || identityCountryNames.en || localEnglishCountryName || '').trim();
   return [cityLabel, countryLabel]
     .map((value) => String(value || '').trim())
     .filter(Boolean)
@@ -288,54 +294,49 @@ function retryDelayMs(attempts) {
     [Math.max(0, Math.min(5, attempts - 1))];
 }
 
+async function consumeUnsplashBudget(db, { units = 2, now = Date.now() } = {}) {
+  const ref = db.doc('system/runtime/providerGlobalLimits/unsplash_hour');
+  await db.runTransaction(async (transaction) => {
+    const previous = (await transaction.get(ref)).data() || {};
+    const active = now - Number(previous.windowStartedAtMs || 0) < 60 * 60 * 1000;
+    const used = active ? Number(previous.used || 0) : 0;
+    if (used + units > UNSPLASH_HOURLY_REQUEST_BUDGET) {
+      const error = new Error('Unsplash request budget is temporarily exhausted.');
+      error.status = 429;
+      throw error;
+    }
+    transaction.set(ref, {
+      provider: 'unsplash',
+      used: used + units,
+      windowStartedAtMs: active ? previous.windowStartedAtMs : now,
+      expireAt: new Date(now + 2 * 60 * 60 * 1000),
+      updatedAt: new Date(now),
+    });
+  });
+}
+
 async function resolveAndPersistDestinationIdentity({ admin, countryId, cityId, fetchImpl = global.fetch }) {
   const db = admin.firestore();
-  const cityRef = db.doc(`countries/${countryId}/cities/${cityId}`);
+  const cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
   const countryRef = db.doc(`countries/${countryId}`);
   const jobRef = destinationJobRef(db, countryId, cityId);
   const [citySnapshot, countrySnapshot] = await Promise.all([cityRef.get(), countryRef.get()]);
   if (!citySnapshot.exists || !countrySnapshot.exists) return { state: 'missing_city' };
   const city = citySnapshot.data() || {};
-  if (city.identity?.source === 'wikidata' && city.identity?.names?.en) return { state: 'ready', identity: city.identity };
-  const prior = (await jobRef.get()).data()?.identitySync || {};
-  const attempts = Number(prior.attempts || 0) + 1;
-  try {
-    const identity = await resolveWikidataIdentity({ city, country: countrySnapshot.data(), fetchImpl });
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    if (!identity) {
-      await jobRef.set({
-        countryId, cityId,
-        identitySync: { state: 'needs_review', strategyVersion: IDENTITY_STRATEGY_VERSION, attempts, lastAttemptAt: timestamp },
-        updatedAt: timestamp,
-      }, { merge: true });
-      return { state: 'needs_review' };
-    }
-    await cityRef.set({
-      schemaVersion: 2,
-      identity: { ...identity, resolvedAt: timestamp },
-      providerRefs: {
-        googlePlaceId: city?.providerRefs?.googlePlaceId || city?.providerIds?.googlePlaceIds?.[0] || null,
-      },
-      createdAt: city.createdAt || timestamp,
-      updatedAt: timestamp,
-    }, { merge: true });
-    await jobRef.set({
-      countryId, cityId,
-      identitySync: { state: 'ready', strategyVersion: IDENTITY_STRATEGY_VERSION, attempts, lastAttemptAt: timestamp },
-      imageSync: { state: 'pending', attempts: 0, query: `${identity.names.en} ${identity.countryNames.en || countrySnapshot.data()?.names?.en || countrySnapshot.data()?.name || ''}`.trim() },
-      updatedAt: timestamp,
-    }, { merge: true });
-    return { state: 'ready', identity };
-  } catch (error) {
-    const state = attempts >= MAX_IMAGE_SYNC_ATTEMPTS ? 'failed' : 'retry';
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    await jobRef.set({
-      countryId, cityId,
-      identitySync: { state, strategyVersion: IDENTITY_STRATEGY_VERSION, attempts, lastAttemptAt: timestamp, ...(state === 'retry' ? { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) } : {}), lastErrorCode: String(error?.status || error?.code || 'wikidata_error') },
-      updatedAt: timestamp,
-    }, { merge: true });
-    return { state, error };
-  }
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const ready = Boolean(city.googleCache?.names?.en && city.googleCache?.names?.he);
+  await jobRef.set({
+    countryId, cityId,
+    identitySync: {
+      state: ready ? 'ready' : 'needs_review',
+      strategyVersion: IDENTITY_STRATEGY_VERSION,
+      attempts: 0,
+      lastAttemptAt: timestamp,
+      ...(ready ? {} : { lastErrorCode: 'missing_google_cache' }),
+    },
+    updatedAt: timestamp,
+  }, { merge: true });
+  return { state: ready ? 'ready' : 'needs_review', identity: ready ? city.googleCache : null };
 }
 
 async function resolveAndPersistDestinationImage({
@@ -347,7 +348,7 @@ async function resolveAndPersistDestinationImage({
   force = false,
 }) {
   const db = admin.firestore();
-  const cityRef = db.doc(`countries/${countryId}/cities/${cityId}`);
+  const cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
   const countryRef = db.doc(`countries/${countryId}`);
   const [citySnapshot, countrySnapshot] = await Promise.all([cityRef.get(), countryRef.get()]);
   if (!citySnapshot.exists || citySnapshot.data()?.status !== 'active') return { state: 'missing_city' };
@@ -357,19 +358,26 @@ async function resolveAndPersistDestinationImage({
   }
   const jobRef = destinationJobRef(db, countryId, cityId);
   let job = (await jobRef.get()).data() || {};
-  if (!city.identity?.names?.en) {
-    const identityResult = await resolveAndPersistDestinationIdentity({ admin, countryId, cityId, fetchImpl });
-    if (identityResult.state !== 'ready') {
-      return refreshRecommendationFallbackForDestination({ admin, countryId, cityId, force: true });
-    }
-    const refreshed = await cityRef.get();
-    city = refreshed.data();
-    job = (await jobRef.get()).data() || {};
-  }
   const attempts = Number(job?.imageSync?.attempts || 0) + 1;
   const canonicalQuery = destinationQuery(city, countrySnapshot.data());
   const query = String(canonicalQuery || job?.imageSync?.query || '').trim();
+  if (!query) {
+    await jobRef.set({
+      countryId,
+      cityId,
+      imageSync: {
+        state: 'retry',
+        attempts,
+        lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
+        nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)),
+        lastErrorCode: 'missing_google_cache',
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { state: 'retry', image: city.destinationImage || null };
+  }
   try {
+    await consumeUnsplashBudget(db);
     const candidate = await resolveDestinationImageCandidate({
       db,
       city,
@@ -398,14 +406,6 @@ async function resolveAndPersistDestinationImage({
     return candidate;
   } catch (error) {
     const state = attempts >= MAX_IMAGE_SYNC_ATTEMPTS ? 'failed' : 'retry';
-    if (state === 'failed') {
-      const fallback = await selectRecommendationFallback(db, countryId, cityId).catch(() => null);
-      if (fallback) {
-        await cityRef.update(destinationImageWritePatch(admin, fallback));
-        await jobRef.set({ imageSync: { state: 'ready', attempts, query, unsplashOutcome: 'provider_failed', lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
-        return { state: 'ready', image: fallback, providerError: error };
-      }
-    }
     await jobRef.set({
       countryId, cityId,
       imageSync: { state, attempts, query, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(), ...(state === 'retry' ? { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) } : {}), lastErrorCode: String(error?.status || error?.code || 'unsplash_error') },
@@ -423,7 +423,7 @@ async function refreshRecommendationFallbackForDestination({
 }) {
   if (!countryId || !cityId) return { state: 'invalid_destination' };
   const db = admin.firestore();
-  const cityRef = db.doc(`countries/${countryId}/cities/${cityId}`);
+  const cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
   const citySnapshot = await cityRef.get();
   if (!citySnapshot.exists) return { state: 'missing_city' };
   const city = citySnapshot.data();
@@ -474,13 +474,16 @@ async function repairPendingDestinationImages({
 }) {
   const snapshot = await admin.firestore().collection('system').doc('runtime').collection('destinationJobs')
     .where('imageSync.state', 'in', ['pending', 'retry'])
-    .limit(limit)
+    .limit(Math.min(100, limit * 5))
     .get();
   const results = [];
   for (const citySnapshot of snapshot.docs) {
-    const countryId = citySnapshot.data()?.countryId;
-    const cityId = citySnapshot.data()?.cityId;
+    const job = citySnapshot.data() || {};
+    const countryId = job.countryId;
+    const cityId = job.cityId;
     if (!countryId || !cityId) continue;
+    const nextAttemptAt = timestampMs(job.imageSync?.nextAttemptAt);
+    if (job.imageSync?.state === 'retry' && nextAttemptAt > Date.now()) continue;
     results.push(await resolveAndPersistDestinationImage({
       admin,
       countryId,
@@ -489,6 +492,7 @@ async function repairPendingDestinationImages({
       fetchImpl,
       force: true,
     }));
+    if (results.length >= limit) break;
   }
   return results;
 }
@@ -497,6 +501,7 @@ module.exports = {
   MAX_IMAGE_SYNC_ATTEMPTS,
   IDENTITY_STRATEGY_VERSION,
   buildUnsplashDestinationImage,
+  consumeUnsplashBudget,
   destinationImageWritePatch,
   recommendationMediaImage,
   refreshRecommendationFallbackForDestination,

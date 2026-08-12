@@ -1,8 +1,8 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import MapView, { Circle, Marker, UrlTile } from 'react-native-maps';
+import MapView, { Circle, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import {
   DEFAULT_MAP_CENTER,
@@ -229,7 +229,8 @@ export default function CommunityInlineMap({
         testID="community-inline-map"
         style={community.inlineMapView}
         initialRegion={initialRegionRef.current}
-        mapType={Platform.OS === 'android' ? 'none' : 'standard'}
+        provider={PROVIDER_GOOGLE}
+        mapType="standard"
         showsUserLocation
         showsMyLocationButton={false}
         onMapReady={handleMapReady}
@@ -243,13 +244,6 @@ export default function CommunityInlineMap({
           left: 8,
         }}
       >
-        <UrlTile
-          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          tileSize={256}
-          maximumZ={19}
-          zIndex={0}
-        />
-
         {!!location?.accuracy && (
           <Circle
             center={{ latitude: location.lat, longitude: location.lng }}
@@ -270,10 +264,6 @@ export default function CommunityInlineMap({
           />
         ))}
       </MapView>
-
-      <View style={community.mapAttributionTopWrap} pointerEvents="none">
-        <AppText style={community.mapAttributionText}>© OpenStreetMap contributors</AppText>
-      </View>
 
       <View
         style={[community.mapControls, { bottom: overlayBottomInset + (selectedMapItem ? 174 : 12) }]}

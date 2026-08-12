@@ -3,9 +3,16 @@ const assert = require('node:assert/strict');
 
 const {
   buildUnsplashDestinationImage,
+  destinationQuery,
   searchUnsplash,
   selectMostPopularRecommendationImage,
 } = require('./destinationImageService');
+
+test('image query prefers cached English Google data without a further Google request', () => {
+  assert.equal(destinationQuery({
+    googleCache: { names: { he: 'פריז', en: 'Paris' }, countryCode: 'FR' },
+  }, { code: 'FR', name: 'צרפת' }), 'Paris France');
+});
 
 function asset(id) {
   return {

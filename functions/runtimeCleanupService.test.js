@@ -7,8 +7,26 @@ test('runtime cleanup covers public/provider limiters and private place sessions
   assert.deepEqual(RUNTIME_COLLECTIONS, [
     'system/runtime/publicRateLimits',
     'system/runtime/providerRateLimits',
+    'system/runtime/providerGlobalLimits',
     'system/runtime/placeSearchSessions',
+    'system/runtime/resolvedPlaceTokens',
   ]);
+});
+
+test('place sessions and resolved tokens use their actual expiresAt field', async () => {
+  for (const path of [
+    'system/runtime/placeSearchSessions',
+    'system/runtime/resolvedPlaceTokens',
+  ]) {
+    let field;
+    const query = {
+      where: (value) => { field = value; return query; },
+      limit: () => query,
+      get: async () => ({ empty: true, size: 0, docs: [] }),
+    };
+    await cleanupExpiredCollection({ collection: () => query }, path, new Date(0), 1);
+    assert.equal(field, 'expiresAt');
+  }
 });
 
 test('expired runtime cleanup deletes only the bounded query result', async () => {

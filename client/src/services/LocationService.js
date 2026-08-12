@@ -21,7 +21,7 @@ function getResolvePlaceSelectionCallable() {
   return resolvePlaceSelectionCallable;
 }
 
-function mapPrediction(prediction, sessionId) {
+function mapPrediction(prediction, sessionId, expiresAt) {
   return {
     // Existing picker components use place_id. This remains a permanent Google
     // identifier, while the server owns all mutable Place details.
@@ -29,6 +29,7 @@ function mapPrediction(prediction, sessionId) {
     place_id: prediction.placeId,
     selectionId: prediction.selectionId,
     sessionId,
+    expiresAt,
     description: [prediction.text, prediction.secondaryText].filter(Boolean).join(', '),
     structured_formatting: {
       main_text: prediction.text,
@@ -42,7 +43,9 @@ async function gatewaySearch(searchText, mode) {
   if (!searchText || searchText.trim().length < 2) return [];
   const response = await getSearchPlacesCallable()({ query: searchText.trim(), mode });
   const result = response?.data || {};
-  const predictions = (result.predictions || []).map((prediction) => mapPrediction(prediction, result.sessionId));
+  const predictions = (result.predictions || []).map((prediction) =>
+    mapPrediction(prediction, result.sessionId, result.expiresAt)
+  );
   predictions.forEach((prediction) => pendingSelectionsByPlaceId.set(prediction.place_id, prediction));
   return predictions;
 }
@@ -50,22 +53,22 @@ async function gatewaySearch(searchText, mode) {
 export const searchCities = async (searchText, { signal } = {}) => {
   if (signal?.aborted) return [];
   try {
-    return await gatewaySearch(searchText, 'destinations');
+    const results = await gatewaySearch(searchText, 'destinations');
+    return signal?.aborted ? [] : results;
   } catch (error) {
     if (signal?.aborted || error?.name === 'AbortError') return [];
-    console.error('Destination search failed:', error);
-    return [];
+    throw error;
   }
 };
 
 export const searchPlaces = async (searchText, { signal } = {}) => {
   if (signal?.aborted) return [];
   try {
-    return await gatewaySearch(searchText, 'places');
+    const results = await gatewaySearch(searchText, 'places');
+    return signal?.aborted ? [] : results;
   } catch (error) {
     if (signal?.aborted || error?.name === 'AbortError') return [];
-    console.error('Place search failed:', error);
-    return [];
+    throw error;
   }
 };
 
@@ -81,5 +84,11 @@ export const resolveDestinationForPlacePreview = async (placeId) => {
     selectionId: selection.selectionId,
   });
   pendingSelectionsByPlaceId.delete(placeId);
-  return resolveRecommendationDestination({ resolvedPlaceToken: response?.data?.resolvedPlaceToken });
+  const resolvedPlaceToken = response?.data?.resolvedPlaceToken;
+  const result = await resolveRecommendationDestination({ resolvedPlaceToken });
+  return {
+    ...result,
+    resolvedPlaceToken,
+    place: result?.place ? { ...result.place, resolvedPlaceToken } : result?.place,
+  };
 };

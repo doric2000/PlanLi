@@ -1,5 +1,6 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { normalize } = require('./destinationIdentityService');
+const { hasUsableDestinationCache } = require('./destinationCacheService');
 
 function prefixes(...values) {
   const output = new Set();
@@ -14,7 +15,7 @@ function catalogId(countryId, cityId) {
 }
 
 function catalogData({ countryId, cityId, city, country, timestamp }) {
-  const names = city?.identity?.names || { he: city?.name || cityId, en: city?.name || cityId };
+  const names = city?.googleCache?.names || city?.identity?.names || { he: city?.name || cityId, en: city?.name || cityId };
   const countryNames = country?.names || { he: country?.name || countryId, en: country?.name || countryId };
   return {
     countryId,
@@ -25,6 +26,7 @@ function catalogData({ countryId, cityId, city, country, timestamp }) {
     search: { prefixes: prefixes(names.he, names.en, countryNames.he, countryNames.en) },
     recommendationCount: Math.max(0, Number(city?.stats?.recommendationCount || 0)),
     destinationImage: city?.destinationImage || null,
+    cacheExpiresAt: city?.googleCache?.expiresAt || null,
     updatedAt: timestamp,
   };
 }
@@ -34,7 +36,7 @@ async function syncDestinationCatalog({ admin, countryId, cityId, city }) {
   const country = (await db.doc(`countries/${countryId}`).get()).data() || {};
   const ref = db.doc(`destinationCatalog/${catalogId(countryId, cityId)}`);
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  if (!city || city.status !== 'active' || country.status !== 'active') {
+  if (!city || city.status !== 'active' || country.status !== 'active' || !hasUsableDestinationCache(city)) {
     await ref.delete();
     return null;
   }
@@ -48,7 +50,7 @@ async function syncCountryDestinationCatalog({ admin, countryId, country, limit 
   let cursor = null;
   let processed = 0;
   do {
-    let query = db.collection(`countries/${countryId}/cities`)
+    let query = db.collection(`countries/${countryId}/destinations`)
       .orderBy('__name__')
       .limit(limit);
     if (cursor) query = query.startAfter(cursor);
@@ -59,7 +61,7 @@ async function syncCountryDestinationCatalog({ admin, countryId, country, limit 
     snapshot.docs.forEach((cityDocument) => {
       const ref = db.doc(`destinationCatalog/${catalogId(countryId, cityDocument.id)}`);
       const city = cityDocument.data();
-      if (!country || country.status !== 'active' || city.status !== 'active') {
+      if (!country || country.status !== 'active' || city.status !== 'active' || !hasUsableDestinationCache(city)) {
         batch.delete(ref);
       } else {
         batch.set(ref, catalogData({
@@ -79,8 +81,15 @@ async function syncCountryDestinationCatalog({ admin, countryId, country, limit 
   return { processed };
 }
 
-function filterCatalogByActiveCountries(documents, activeCountryIds) {
-  return documents.filter((document) => activeCountryIds.has(document.data()?.countryId));
+function filterCatalogByActiveCountries(documents, activeCountryIds, nowMs = Date.now()) {
+  return documents.filter((document) => {
+    const data = document.data() || {};
+    const expiry = data.cacheExpiresAt;
+    const expiryMs = typeof expiry?.toMillis === 'function'
+      ? expiry.toMillis()
+      : expiry instanceof Date ? expiry.getTime() : Date.parse(expiry) || 0;
+    return activeCountryIds.has(data.countryId) && expiryMs > nowMs;
+  });
 }
 
 function cleanLimit(value) {
@@ -108,19 +117,30 @@ async function searchDestinations({ admin, data }) {
     const cursorSnapshot = await admin.firestore().doc(`destinationCatalog/${cursor}`).get();
     if (cursorSnapshot.exists) query = query.startAfter(cursorSnapshot);
   }
-  const snapshot = await query.limit(limit + 1).get();
-  const countryIds = Array.from(new Set(snapshot.docs.map((entry) => entry.data()?.countryId).filter(Boolean)));
-  const countrySnapshots = countryIds.length
-    ? await admin.firestore().getAll(...countryIds.map((id) => admin.firestore().doc(`countries/${id}`)))
-    : [];
-  const activeCountryIds = new Set(
-    countrySnapshots.filter((entry) => entry.exists && entry.data()?.status === 'active')
-      .map((entry) => entry.id)
-  );
-  const page = filterCatalogByActiveCountries(snapshot.docs, activeCountryIds).slice(0, limit);
+  const page = [];
+  let rawCursor = null;
+  let hasMoreRaw = true;
+  while (page.length < limit + 1 && hasMoreRaw) {
+    let batchQuery = query.limit(limit + 1);
+    if (rawCursor) batchQuery = batchQuery.startAfter(rawCursor);
+    const snapshot = await batchQuery.get();
+    if (snapshot.empty) break;
+    rawCursor = snapshot.docs.at(-1);
+    hasMoreRaw = snapshot.size === limit + 1;
+    const countryIds = Array.from(new Set(snapshot.docs.map((entry) => entry.data()?.countryId).filter(Boolean)));
+    const countrySnapshots = countryIds.length
+      ? await admin.firestore().getAll(...countryIds.map((id) => admin.firestore().doc(`countries/${id}`)))
+      : [];
+    const activeCountryIds = new Set(
+      countrySnapshots.filter((entry) => entry.exists && entry.data()?.status === 'active')
+        .map((entry) => entry.id)
+    );
+    page.push(...filterCatalogByActiveCountries(snapshot.docs, activeCountryIds));
+  }
+  const items = page.slice(0, limit);
   return {
-    items: page.map((entry) => entry.data()),
-    nextCursor: snapshot.size > limit ? snapshot.docs.at(limit - 1)?.id || null : null,
+    items: items.map((entry) => entry.data()),
+    nextCursor: page.length > limit ? items.at(-1)?.id || null : null,
   };
 }
 

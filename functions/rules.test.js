@@ -64,8 +64,11 @@ test.beforeEach(async () => {
     await setDoc(doc(db, 'countries', 'cty_il'), {
       name: 'Israel', code: 'IL', status: 'active',
     });
-    await setDoc(doc(db, 'countries', 'cty_il', 'cities', 'city_tlv'), {
-      countryId: 'cty_il', name: 'Tel Aviv', status: 'active',
+    await setDoc(doc(db, 'countries', 'cty_il', 'destinations', 'city_tlv'), {
+      schemaVersion: 3,
+      countryId: 'cty_il',
+      status: 'active',
+      googleCache: { names: { he: 'Tel Aviv', en: 'Tel Aviv' }, expiresAt: new Date('2099-01-01') },
     });
     await setDoc(doc(db, 'recommendations', 'rec-active'), {
       ownerId: 'owner', title: 'Active', status: 'active',
@@ -165,17 +168,17 @@ test('public collection queries require an active filter and bounded limit', {
   )));
 });
 
-test('public city reads are country-scoped and collection-group reads are denied', {
+test('public destination collection queries use the bounded catalog callable', {
   skip: !hasEmulators,
 }, async () => {
   const db = env.unauthenticatedContext().firestore();
-  await assertSucceeds(getDocs(query(
-    collection(db, 'countries', 'cty_il', 'cities'),
+  await assertFails(getDocs(query(
+    collection(db, 'countries', 'cty_il', 'destinations'),
     where('status', '==', 'active'),
     limit(100)
   )));
   await assertFails(getDocs(query(
-    collectionGroup(db, 'cities'),
+    collectionGroup(db, 'destinations'),
     where('status', '==', 'active'),
     limit(100)
   )));
@@ -189,12 +192,14 @@ test('destinations under inactive countries are not public', {
     await setDoc(doc(db, 'countries', 'cty_hidden'), {
       name: 'Hidden country', code: 'ZZ', status: 'inactive',
     });
-    await setDoc(doc(db, 'countries', 'cty_hidden', 'cities', 'city_active_child'), {
-      countryId: 'cty_hidden', name: 'Active child', status: 'active',
+    await setDoc(doc(db, 'countries', 'cty_hidden', 'destinations', 'city_active_child'), {
+      schemaVersion: 3,
+      countryId: 'cty_hidden', status: 'active',
+      googleCache: { names: { he: 'Hidden', en: 'Hidden' }, expiresAt: new Date('2099-01-01') },
     });
   });
   const db = env.unauthenticatedContext().firestore();
-  await assertFails(getDoc(doc(db, 'countries', 'cty_hidden', 'cities', 'city_active_child')));
+  await assertFails(getDoc(doc(db, 'countries', 'cty_hidden', 'destinations', 'city_active_child')));
 });
 
 test('business documents and interactions are server-only', {
@@ -215,15 +220,15 @@ test('business documents and interactions are server-only', {
   }));
 });
 
-test('route day and stop reads require an active parent and bounded queries', {
+test('legacy mutable route day and stop paths are no longer public', {
   skip: !hasEmulators,
 }, async () => {
   const db = env.unauthenticatedContext().firestore();
-  await assertSucceeds(getDoc(doc(db, 'routes', 'route-active', 'days', 'day-1')));
-  await assertSucceeds(getDocs(query(
+  await assertFails(getDoc(doc(db, 'routes', 'route-active', 'days', 'day-1')));
+  await assertFails(getDocs(query(
     collection(db, 'routes', 'route-active', 'days'), limit(60)
   )));
-  await assertSucceeds(getDoc(doc(
+  await assertFails(getDoc(doc(
     db, 'routes', 'route-active', 'days', 'day-1', 'stops', 'stop-1'
   )));
   await assertFails(setDoc(doc(db, 'routes', 'route-active', 'days', 'day-2'), {

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
-import MapView, { Circle, Marker, Polyline, UrlTile } from 'react-native-maps';
+import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -140,19 +140,13 @@ export default function RouteMapScreen({ route, navigation }) {
             key={`route-map-${mapInstance}`}
             style={styles.map}
             initialRegion={initialRegionRef.current}
-            mapType="none"
+            provider={PROVIDER_GOOGLE}
+            mapType="standard"
             showsUserLocation
             showsMyLocationButton={false}
             onPress={() => setSelectedStop(null)}
             testID="route-map"
           >
-            <UrlTile
-              urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-              tileSize={256}
-              maximumZ={19}
-              zIndex={0}
-            />
-
             {!!location?.accuracy && (
               <Circle
                 center={{ latitude: location.lat, longitude: location.lng }}

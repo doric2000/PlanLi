@@ -1,12 +1,19 @@
 const RUNTIME_COLLECTIONS = Object.freeze([
   'system/runtime/publicRateLimits',
   'system/runtime/providerRateLimits',
+  'system/runtime/providerGlobalLimits',
   'system/runtime/placeSearchSessions',
+  'system/runtime/resolvedPlaceTokens',
 ]);
+
+const EXPIRY_FIELDS = Object.freeze({
+  'system/runtime/placeSearchSessions': 'expiresAt',
+  'system/runtime/resolvedPlaceTokens': 'expiresAt',
+});
 
 async function cleanupExpiredCollection(db, collectionPath, now, limit) {
   const snapshot = await db.collection(collectionPath)
-    .where('expireAt', '<=', now)
+    .where(EXPIRY_FIELDS[collectionPath] || 'expireAt', '<=', now)
     .limit(limit)
     .get();
   if (snapshot.empty) return 0;
@@ -27,6 +34,7 @@ async function cleanupExpiredRuntimeDocuments({ admin, limit = 200, now = new Da
 
 module.exports = {
   RUNTIME_COLLECTIONS,
+  EXPIRY_FIELDS,
   cleanupExpiredCollection,
   cleanupExpiredRuntimeDocuments,
 };

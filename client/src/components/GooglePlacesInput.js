@@ -12,6 +12,7 @@ import { Platform } from 'react-native';
 import { buttons, colors, common, googlePlacesInput, spacing } from '../styles';
 import { searchCities } from '../services/LocationService';
 import WebPortal from './WebPortal';
+import { locationErrorMessage } from '../utils/locationErrors';
 
 export default function GooglePlacesInput({
   onSelect,
@@ -48,6 +49,7 @@ export default function GooglePlacesInput({
   const [predictions, setPredictions] = useState([]);
   const [showList, setShowList] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(null);
 
   const [settledQuery, setSettledQuery] = useState('');
 
@@ -94,6 +96,7 @@ export default function GooglePlacesInput({
     // allow an immediate request when transitioning from filter->google.
     lastRequestedQuery.current = '';
     setShowList(true);
+    setSearchError(null);
     if (next === query) return;
     setQuery(next);
   }, [isGoogleMode, seedQuery]);
@@ -111,6 +114,7 @@ export default function GooglePlacesInput({
   }, []);
 
   const handleTextChange = (text) => {
+    setSearchError(null);
     if (isControlled) {
       onChangeValue(text);
     } else {
@@ -190,12 +194,14 @@ export default function GooglePlacesInput({
 
     // Cache hit -> no network call
     const cached = cacheRef.current.get(text);
-    if (cached) {
-      setPredictions(cached);
+    if (cached && cached.expiresAt > Date.now()) {
+      setSearchError(null);
+      setPredictions(cached.results);
       setLoading(false);
       lastRequestedQuery.current = text;
       return;
     }
+    if (cached) cacheRef.current.delete(text);
 
     setLoading(true);
 
@@ -212,10 +218,19 @@ export default function GooglePlacesInput({
         lastRequestedQuery.current = text;
 
         const results = await resolvedGoogleSearchFn(text, { signal: abortRef.current.signal });
-        cacheRef.current.set(text, results);
+        const providerExpiry = Date.parse(results?.[0]?.expiresAt || '');
+        const expiresAt = Number.isFinite(providerExpiry)
+          ? providerExpiry
+          : Date.now() + (5 * 60 * 1000);
+        cacheRef.current.set(text, { results, expiresAt });
+        setSearchError(null);
         setPredictions(results);
       } catch (e) {
-        // Abort is expected when user keeps typing.
+        if (e?.name !== 'AbortError') {
+          lastRequestedQuery.current = '';
+          setPredictions([]);
+          setSearchError(locationErrorMessage(e));
+        }
       } finally {
         setLoading(false);
       }
@@ -365,6 +380,11 @@ export default function GooglePlacesInput({
               <ActivityIndicator size="small" color={colors.primary} />
               <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
             </View>
+          ) : searchError ? (
+            <View style={googlePlacesInput.dropdownStatusRow}>
+              <Ionicons name="alert-circle-outline" size={16} color={colors.error || '#991B1B'} />
+              <AppText style={googlePlacesInput.dropdownStatusText}>{searchError}</AppText>
+            </View>
           ) : predictions.length > 0 ? (
             <ScrollView keyboardShouldPersistTaps="handled">
               {predictions.map((item) => (
@@ -382,6 +402,7 @@ export default function GooglePlacesInput({
                   <AppText style={googlePlacesInput.listText}>{item.description}</AppText>
                 </TouchableOpacity>
               ))}
+              <AppText style={googlePlacesInput.googleAttribution}>Google Maps</AppText>
             </ScrollView>
           ) : (
             <View style={googlePlacesInput.dropdownStatusRow}>
@@ -445,6 +466,11 @@ export default function GooglePlacesInput({
                 <ActivityIndicator size="small" color={colors.primary} />
                 <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
               </View>
+            ) : searchError ? (
+              <View style={googlePlacesInput.dropdownStatusRow}>
+                <Ionicons name="alert-circle-outline" size={16} color={colors.error || '#991B1B'} />
+                <AppText style={googlePlacesInput.dropdownStatusText}>{searchError}</AppText>
+              </View>
             ) : predictions.length > 0 ? (
               <ScrollView keyboardShouldPersistTaps="handled">
                 {predictions.map((item) => (
@@ -462,6 +488,7 @@ export default function GooglePlacesInput({
                     <AppText style={googlePlacesInput.listText}>{item.description}</AppText>
                   </TouchableOpacity>
                 ))}
+                <AppText style={googlePlacesInput.googleAttribution}>Google Maps</AppText>
               </ScrollView>
             ) : (
               <View style={googlePlacesInput.dropdownStatusRow}>

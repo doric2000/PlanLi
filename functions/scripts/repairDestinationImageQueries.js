@@ -8,7 +8,7 @@ const {
 } = require('../destinationImageService');
 
 async function candidates(db) {
-  const snapshot = await db.collectionGroup('cities').where('status', '==', 'active').get();
+  const snapshot = await db.collectionGroup('destinations').where('status', '==', 'active').get();
   const output = [];
   for (const citySnapshot of snapshot.docs) {
     const city = citySnapshot.data() || {};

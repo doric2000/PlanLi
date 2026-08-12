@@ -91,11 +91,11 @@ test('weather and currency providers are converted to public facts', async () =>
 test('cache uses fresh values and falls back to stale values on provider failure', async () => {
   const nowMs = 10_000;
   const admin = createAdmin({
-    'system/runtime/destinationOverviewCache/destinationOverviewCacheItems/fresh': {
+    'system/runtime/destinationOverviewCache/fresh': {
       value: { answer: 'fresh' },
       expiresAt: { toMillis: () => nowMs + 1_000 },
     },
-    'system/runtime/destinationOverviewCache/destinationOverviewCacheItems/stale': {
+    'system/runtime/destinationOverviewCache/stale': {
       value: { answer: 'stale' },
       expiresAt: { toMillis: () => nowMs - 1 },
     },
@@ -131,6 +131,7 @@ test('destination overview exposes only supported automatic facts', async () => 
     'countries/gr': {
       name: 'יוון',
       code: 'GR',
+      status: 'active',
       currencyCode: 'EUR',
       travelFacts: {
         languages: [{ code: 'el', labelHe: 'יוונית' }],
@@ -138,7 +139,7 @@ test('destination overview exposes only supported automatic facts', async () => 
         source: 'countries-list',
       },
     },
-    'countries/gr/cities/mykonos': {
+    'countries/gr/destinations/mykonos': {
       name: 'מיקונוס',
       status: 'active',
       travelers: 128,

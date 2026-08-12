@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { hasUsableDestinationCache } = require('./destinationCacheService');
 
 const WEATHER_CACHE_MS = 30 * 60 * 1000;
 const CURRENCY_CACHE_MS = 24 * 60 * 60 * 1000;
@@ -194,7 +195,7 @@ async function readThroughCache({
   loader,
   nowMs = Date.now(),
 }) {
-  const ref = admin.firestore().doc(CACHE_COLLECTION).collection('destinationOverviewCacheItems').doc(cacheId);
+  const ref = admin.firestore().collection(CACHE_COLLECTION).doc(cacheId);
   let snapshot = null;
   try {
     snapshot = await ref.get();
@@ -250,7 +251,7 @@ async function getDestinationOverview({
   const db = admin.firestore();
   const [countrySnapshot, citySnapshot] = await Promise.all([
     db.doc(`countries/${countryId}`).get(),
-    db.doc(`countries/${countryId}/cities/${cityId}`).get(),
+    db.doc(`countries/${countryId}/destinations/${cityId}`).get(),
   ]);
   if (!citySnapshot.exists || !countrySnapshot.exists) {
     throw new HttpsError('not-found', 'Destination was not found.');
@@ -258,10 +259,10 @@ async function getDestinationOverview({
 
   const city = citySnapshot.data() || {};
   const country = countrySnapshot.data() || {};
-  if (city.status && city.status !== 'active') {
+  if (city.status !== 'active' || country.status !== 'active' || !hasUsableDestinationCache(city, nowMs)) {
     throw new HttpsError('not-found', 'Destination was not found.');
   }
-  const coordinates = normalizeCoordinates(city.identity?.coordinates || city.coordinates);
+  const coordinates = normalizeCoordinates(city.googleCache?.coordinates || city.identity?.coordinates || city.coordinates);
   const currencyCode = String(country.currencyCode || '').trim().toUpperCase();
   const facts = country.travelFacts || {};
 
@@ -307,8 +308,8 @@ async function getDestinationOverview({
     destination: {
       cityId,
       countryId,
-      name: String(city.identity?.names?.he || city.name || '').trim(),
-      names: city.identity?.names || null,
+      name: String(city.googleCache?.names?.he || city.identity?.names?.he || city.name || '').trim(),
+      names: city.googleCache?.names || city.identity?.names || null,
       identity: city.identity || null,
       countryName: String(country.names?.he || country.name || '').trim(),
       countryCode: String(country.code || '').trim().toUpperCase() || null,

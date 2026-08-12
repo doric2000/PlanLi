@@ -1,9 +1,22 @@
 import { useCallback, useMemo } from 'react';
 import { useFavorites } from './useFavorites';
 
+export function favoriteCityPreviewIsCurrent(favorite, now = Date.now()) {
+  const expiresAt = favorite?.preview?.cacheExpiresAt;
+  const expiresAtMs = typeof expiresAt?.toMillis === 'function'
+    ? expiresAt.toMillis()
+    : expiresAt instanceof Date
+      ? expiresAt.getTime()
+      : Date.parse(expiresAt || '');
+  return Number.isFinite(expiresAtMs) && expiresAtMs > now;
+}
+
 export function useFavoriteCityIds({ enabled = true } = {}) {
   const result = useFavorites('city', { enabled });
-  const favorites = result.favorites.map((favorite) => ({
+  const now = Date.now();
+  const favorites = result.favorites.filter((favorite) =>
+    favoriteCityPreviewIsCurrent(favorite, now)
+  ).map((favorite) => ({
     id: favorite.target.id,
     countryId: favorite.target.countryId,
     name: favorite.preview?.title || '',
