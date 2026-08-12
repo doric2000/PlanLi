@@ -19,3 +19,15 @@ export const rtlModalScreenOptions = {
 		}
 		: null),
 };
+
+export const rtlContentScreenOptions = {
+	headerShown: false,
+	gestureEnabled: true,
+	...(Platform.OS === "ios"
+		? {
+			...iosRtlBackGesture,
+			gestureResponseDistance: 90,
+			cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+		}
+		: null),
+};

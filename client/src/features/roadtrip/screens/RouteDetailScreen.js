@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useState } from "react";
-import { Modal, ScrollView, TouchableOpacity, View } from "react-native";
+import React, { useLayoutEffect, useMemo, useState } from "react";
+import { ScrollView, TouchableOpacity, View } from "react-native";
 import AppText from "../../../components/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
@@ -12,8 +12,9 @@ import UsefulFactItem from "../../../components/UsefulFactItem";
 import { TimelineItem } from "../../../components/TimelineItem";
 import { useUserData } from "../../../hooks/useUserData";
 import { flattenValidRouteStops } from "../utils/routeStops";
-import RouteMapScreen from "./RouteMapScreen";
 import { buildRouteDetailPresentation } from "../utils/routeDetailPresentation";
+import { getRouteDestinationPreviews } from "../utils/routeDestinationPreviews";
+import RouteMapPreview from "../components/RouteMapPreview";
 
 const text = {
 	detailsTitle: "\u05e4\u05e8\u05d8\u05d9 \u05de\u05e1\u05dc\u05d5\u05dc",
@@ -36,14 +37,13 @@ export default function RouteDetailScreen({ route, navigation }) {
 	const { routeData } = route.params;
 	const [selectedDay, setSelectedDay] = useState(null);
 	const [modalVisible, setModalVisible] = useState(false);
-	const [mapVisible, setMapVisible] = useState(false);
 
 	const tripDays = routeData.days || [];
 	const validStops = flattenValidRouteStops(tripDays);
 	const author = useUserData(routeData.ownerId);
 	const displayUser = author.displayName || text.defaultUser;
 	const userPhoto = author.photoURL;
-	const places = Array.isArray(routeData.summaryPlaces) ? routeData.summaryPlaces : [];
+	const destinationPreviews = useMemo(() => getRouteDestinationPreviews(routeData, 4), [routeData]);
 
 	const presentation = buildRouteDetailPresentation(routeData);
 
@@ -53,7 +53,7 @@ export default function RouteDetailScreen({ route, navigation }) {
 	};
 
 	return (
-		<SafeAreaView style={styles.screen}>
+		<SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
 			<View style={styles.headerBar}>
 				<TouchableOpacity
 					style={styles.headerBackButton}
@@ -88,22 +88,20 @@ export default function RouteDetailScreen({ route, navigation }) {
 						</View>
 					</View>
 
-					<TouchableOpacity
-						style={[styles.mapButton, validStops.length === 0 && styles.mapButtonDisabled]}
-						activeOpacity={0.85}
-						disabled={validStops.length === 0}
-						onPress={() => setMapVisible(true)}
-					>
-						<Ionicons name="map" size={18} color={validStops.length ? colors.white : colors.textMuted} />
-						<AppText style={[styles.mapButtonText, validStops.length === 0 && styles.mapButtonTextDisabled]}>
-							{validStops.length ? text.openMap : text.noMapPoints}
-						</AppText>
-					</TouchableOpacity>
-
-					{places.length > 0 && (
-						<View style={styles.placesSection}>
-							<AppText style={styles.subsectionTitle}>{text.places}</AppText>
-							<PlacesRoute places={places} style={styles.placesRouteSpacing} />
+					{validStops.length > 0 ? (
+						<View style={styles.routePreviewSection}>
+							<RouteMapPreview
+								stops={validStops}
+								onPress={() => navigation.navigate("RouteMap", { routeData })}
+							/>
+							{destinationPreviews.length > 0 ? (
+								<PlacesRoute places={destinationPreviews} compact maximum={4} style={styles.placesRouteSpacing} />
+							) : null}
+						</View>
+					) : (
+						<View style={styles.mapUnavailable}>
+							<Ionicons name="map-outline" size={20} color={colors.textMuted} />
+							<AppText style={styles.mapUnavailableText}>{text.noMapPoints}</AppText>
 						</View>
 					)}
 
@@ -174,12 +172,6 @@ export default function RouteDetailScreen({ route, navigation }) {
 				dayIndex={selectedDay}
 			/>
 
-			<Modal visible={mapVisible} animationType="slide" presentationStyle="fullScreen">
-				<RouteMapScreen
-					route={{ params: { routeData } }}
-					navigation={{ goBack: () => setMapVisible(false) }}
-				/>
-			</Modal>
 		</SafeAreaView>
 	);
 }

@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { attachRouteDestinationPreviews } = require('./routeDestinationPreviewService');
 const {
   BUDGET_IDS,
   CATEGORY_IDS,
@@ -545,6 +546,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
   } else {
     output = sortGeneric(candidates, sort, parsedQuery).slice(0, requestedLimit).map(publicDiscoveryItem);
   }
+  if (route) output = await attachRouteDestinationPreviews(db, output);
   const mode = fallbackReason ? 'fallback' : shouldPersonalize ? 'personalized' : 'generic';
   console.info(route ? 'personalized_routes' : 'personalized_recommendations', {
     mode,

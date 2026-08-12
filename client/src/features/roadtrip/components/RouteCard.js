@@ -31,6 +31,7 @@ import {
 	ROUTE_DIFFICULTIES,
 	TRANSPORT_MODES,
 } from "../../../constants/travelTaxonomy";
+import { getRouteDestinationPreviews } from "../utils/routeDestinationPreviews";
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
@@ -108,7 +109,7 @@ export const RouteCard = ({
 	const tier = getUserTier(auth.currentUser);
 	const { isAdmin } = useAdminClaim();
 	const canManage = tier === "verified" && (isOwner || isAdmin);
-	const places = Array.isArray(item?.summaryPlaces) ? item.summaryPlaces : [];
+	const destinationPreviews = useMemo(() => getRouteDestinationPreviews(item, 4), [item]);
 
 	const handleAuthorPress = () => {
 		if (item.ownerId) navigation.navigate("UserProfile", { uid: item.ownerId });
@@ -172,11 +173,6 @@ export const RouteCard = ({
 					{!!item.createdAt && (
 						<AppText style={[cards.recDate, styles.feedMetaText]} numberOfLines={1}>
 							{formatTimestamp(item.createdAt)}
-						</AppText>
-					)}
-					{places.length > 0 && (
-						<AppText style={styles.feedMetaText} numberOfLines={1}>
-							{places.join(" • ")}
 						</AppText>
 					)}
 				</View>
@@ -345,9 +341,9 @@ export const RouteCard = ({
 					) : null}
 				</View>
 
-				{places.length > 0 ? (
+				{destinationPreviews.length > 0 ? (
 					<View style={styles.placesPreview}>
-						<PlacesRoute places={places} />
+						<PlacesRoute places={destinationPreviews} compact maximum={3} />
 					</View>
 				) : null}
 
@@ -356,15 +352,6 @@ export const RouteCard = ({
 					style={styles.locationRow}
 					textStyle={cards.recLocationText}
 				/>
-
-				{places.length > 0 ? (
-					<View style={styles.locationRow}>
-						<Ionicons name="location-outline" size={14} color="#2EC4B6" />
-						<AppText style={cards.recLocationText}>
-							{places.join(" • ")}
-						</AppText>
-					</View>
-				) : null}
 
 				<AppText style={[cards.recDescription, feed && styles.feedDescription]} numberOfLines={feed ? 2 : 3}>
 					{item.description}

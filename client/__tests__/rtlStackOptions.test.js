@@ -15,6 +15,7 @@ describe("RTL stack navigation options", () => {
 		}));
 
 		const {
+			rtlContentScreenOptions,
 			rtlModalScreenOptions,
 			rtlStackScreenOptions,
 		} = require("../src/navigation/rtlStackOptions");
@@ -27,6 +28,12 @@ describe("RTL stack navigation options", () => {
 			presentation: "modal",
 			gestureDirection: "horizontal-inverted",
 			cardStyleInterpolator: "horizontal-interpolator",
+		});
+		expect(rtlContentScreenOptions).toMatchObject({
+			headerShown: false,
+			gestureEnabled: true,
+			gestureDirection: "horizontal-inverted",
+			gestureResponseDistance: 90,
 		});
 	});
 
@@ -41,11 +48,13 @@ describe("RTL stack navigation options", () => {
 		}));
 
 		const {
+			rtlContentScreenOptions,
 			rtlModalScreenOptions,
 			rtlStackScreenOptions,
 		} = require("../src/navigation/rtlStackOptions");
 
 		expect(rtlStackScreenOptions).toEqual({ headerShown: false });
 		expect(rtlModalScreenOptions).toEqual({ presentation: "modal" });
+		expect(rtlContentScreenOptions).toEqual({ headerShown: false, gestureEnabled: true });
 	});
 });

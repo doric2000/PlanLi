@@ -23,6 +23,7 @@ import NotificationScreen from "./src/features/notifications/screens/Notificatio
 import AdminPanelScreen from "./src/features/admin/screens/AdminPanelScreen";
 import PreferenceSetupGate from "./src/navigation/PreferenceSetupGate";
 import {
+	rtlContentScreenOptions,
 	rtlModalScreenOptions,
 	rtlStackScreenOptions,
 } from "./src/navigation/rtlStackOptions";
@@ -104,12 +105,12 @@ export default function App() {
 					<Stack.Screen
 						name='RouteDetail'
 						component={RouteDetailScreen}
-						options={rtlModalScreenOptions}
+						options={rtlContentScreenOptions}
 					/>
 					<Stack.Screen
 						name='RouteMap'
 						component={RouteMapScreen}
-						options={rtlModalScreenOptions}
+						options={rtlContentScreenOptions}
 					/>
 				</Stack.Navigator>
 				</NavigationContainer>

@@ -3251,33 +3251,80 @@ export const placesInputStyles = StyleSheet.create({
 export const placesRouteStyles = StyleSheet.create({
 	container: {
 		flexDirection: "row-reverse",
-		flexWrap: "wrap",
 		alignItems: "center",
-		marginVertical: 8,
+		minWidth: 0,
+	},
+	containerCompact: {
+		alignSelf: "stretch",
 	},
 	routeItem: {
 		flexDirection: "row-reverse",
 		alignItems: "center",
-		marginLeft: 4,
+		minWidth: 0,
+		flexShrink: 1,
 	},
 	placeBox: {
-		backgroundColor: "#E0F2FE", // Light blue background
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 8,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 7,
+		minWidth: 0,
+		backgroundColor: "#F7F9FC",
+		paddingLeft: 9,
+		paddingRight: 4,
+		paddingVertical: 4,
+		borderRadius: 18,
 		borderWidth: 1,
-		borderColor: "#BAE6FD", // Border color
+		borderColor: "rgba(30,58,95,0.10)",
+	},
+	placeBoxCompact: {
+		paddingLeft: 7,
+		gap: 5,
+	},
+	placeImage: {
+		width: 30,
+		height: 30,
+		borderRadius: 15,
+		backgroundColor: colors.borderLight,
+	},
+	placeImageFallback: {
+		width: 30,
+		height: 30,
+		borderRadius: 15,
+		backgroundColor: colors.primary,
+		alignItems: "center",
+		justifyContent: "center",
 	},
 	placeText: {
 		fontSize: 13,
-		color: "#4d4d4dff",
+		color: colors.textPrimary,
 		fontFamily: fontFamilies.medium,
-		maxWidth: 100,
+		maxWidth: 96,
 		textAlign: "right",
 		writingDirection: "rtl",
 	},
-	arrow: {
-		marginHorizontal: 4,
+	placeTextCompact: {
+		fontSize: 12,
+		maxWidth: 72,
+	},
+	connector: {
+		width: 12,
+		height: 1,
+		backgroundColor: "rgba(46,196,182,0.52)",
+		marginHorizontal: 3,
+	},
+	moreBadge: {
+		marginRight: 6,
+		width: 30,
+		height: 30,
+		borderRadius: 15,
+		backgroundColor: colors.primarySoft || "#E7F7F5",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	moreText: {
+		fontSize: 11,
+		fontFamily: fontFamilies.semiBold,
+		color: colors.primary,
 	},
 });
 
@@ -3408,7 +3455,9 @@ export const routeCardStyles = StyleSheet.create({
 		marginRight: 8,
 	},
 	placesPreview: {
-		marginBottom: 6,
+		marginTop: 2,
+		marginBottom: 10,
+		overflow: "hidden",
 	},
 	headerActions: {
 		flexDirection: "row-reverse",
@@ -3600,11 +3649,13 @@ export const routeDetailScreenStyles = StyleSheet.create({
         textAlign: 'right',
         writingDirection: 'rtl',
     },
-    placesSection: {
-        marginBottom: spacing.lg
+    routePreviewSection: {
+        marginTop: spacing.sm,
+        marginBottom: spacing.lg,
     },
     placesRouteSpacing: {
-        marginTop: spacing.sm,
+        marginTop: spacing.md,
+        overflow: 'hidden',
     },
     subsectionTitle: {
         fontSize: 15,
@@ -3706,6 +3757,99 @@ export const routeDetailScreenStyles = StyleSheet.create({
     mapButtonTextDisabled: {
         color: colors.textMuted,
     },
+    mapUnavailable: {
+        minHeight: 58,
+        marginTop: spacing.sm,
+        marginBottom: spacing.lg,
+        paddingHorizontal: spacing.md,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+    mapUnavailableText: {
+        flex: 1,
+        fontSize: 13,
+        color: colors.textMuted,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+    },
+});
+
+// features/roadtrip/components/RouteMapPreview.js
+export const routeMapPreviewStyles = StyleSheet.create({
+	container: {
+		width: "100%",
+		borderRadius: 20,
+		overflow: "hidden",
+		backgroundColor: colors.white,
+		borderWidth: 1,
+		borderColor: "rgba(30,58,95,0.10)",
+		...shadows.small,
+	},
+	mapFrame: {
+		height: 168,
+		position: "relative",
+		overflow: "hidden",
+	},
+	map: {
+		...StyleSheet.absoluteFillObject,
+	},
+	mapShade: {
+		...StyleSheet.absoluteFillObject,
+		backgroundColor: "rgba(15,23,42,0.04)",
+	},
+	webFallback: {
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "#EAF1F3",
+	},
+	cta: {
+		position: "absolute",
+		left: 10,
+		right: 10,
+		bottom: 10,
+		minHeight: 54,
+		borderRadius: 16,
+		backgroundColor: "rgba(255,255,255,0.96)",
+		borderWidth: 1,
+		borderColor: "rgba(30,58,95,0.10)",
+		paddingHorizontal: 12,
+		flexDirection: "row-reverse",
+		alignItems: "center",
+		gap: 10,
+		...shadows.small,
+	},
+	ctaIcon: {
+		width: 34,
+		height: 34,
+		borderRadius: 12,
+		backgroundColor: "#E7F7F5",
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	ctaCopy: {
+		flex: 1,
+		minWidth: 0,
+		alignItems: "flex-end",
+	},
+	ctaTitle: {
+		fontSize: 14,
+		fontFamily: fontFamilies.semiBold,
+		color: colors.textPrimary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
+	ctaSubtitle: {
+		marginTop: 2,
+		fontSize: 11,
+		color: colors.textSecondary,
+		textAlign: "right",
+		writingDirection: "rtl",
+	},
 });
 
 // features/roadtrip/screens/RouteMapScreen.js
