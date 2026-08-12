@@ -239,7 +239,7 @@ async function auditFirestore(db) {
       report.sampleMediaPath = data.media.find((asset) => asset?.thumb?.path)?.thumb?.path || null;
     }
     if (/^countries\/[^/]+$/.test(document.ref.path)) {
-      if (!document.id.startsWith('cty_')) report.invalidCountryIds.push(document.ref.path);
+      if (!/^[A-Z]{2}$/.test(document.id)) report.invalidCountryIds.push(document.ref.path);
       const code = String(data.code || '').toUpperCase();
       if (code) {
         if (countriesByCode.has(code)) report.duplicateCountryCodes.push(code);
@@ -247,8 +247,8 @@ async function auditFirestore(db) {
       }
     }
     if (/^countries\/[^/]+\/destinations\/[^/]+$/.test(document.ref.path)) {
-      if (!document.id.startsWith('city_')) report.invalidCityIds.push(document.ref.path);
-      const providerId = String(data.googlePlaceId || '').trim();
+      if (!/^dst_[A-Za-z0-9_-]{20}$/.test(document.id)) report.invalidCityIds.push(document.ref.path);
+      const providerId = String(data.providerRefs?.googlePlaceId || '').trim();
       if (providerId) {
         if (citiesByProvider.has(providerId)) report.duplicateCityProviders.push(providerId);
         citiesByProvider.set(providerId, document.ref.path);
@@ -448,7 +448,9 @@ function failures(report) {
     ...(storage.eu.stagingLifecycle ? [] : ['staging lifecycle missing']),
     ...report.functions.unexpected,
     ...(report.functions.count > 0 ? [] : ['no deployed functions']),
-    ...(report.publicMediaRead.readable ? [] : ['public media read failed']),
+    ...(report.publicMediaRead.pathFound && !report.publicMediaRead.readable
+      ? ['public media read failed']
+      : []),
   ];
 }
 

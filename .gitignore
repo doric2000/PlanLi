@@ -11,6 +11,8 @@ functions/.recommendation-curation/
 functions/.public-profiles-backfill/
 functions/.rating-removal/
 functions/.destination-images/
+functions/.destination-identities/
+functions/.prelaunch-reset/
 .codex_tmp/
 client/.codex_tmp/
 client/.expo-validation/
