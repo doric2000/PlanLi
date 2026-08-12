@@ -216,6 +216,7 @@ test('explicit zero results and exhausted verification produce distinct outcomes
   const zero = await resolveDestinationImageCandidate({
     db: emptyRecommendationDb(), city: arielCity, country: israel,
     countryId: 'IL', cityId: 'ARIEL', query: "Ari'el Israel", unsplashKey: 'key',
+    resolveWikimediaImage: async () => null,
     fetchImpl: async () => ({ ok: true, headers: { get: () => null }, json: async () => ({ total: 0, results: [] }) }),
   });
   assert.equal(zero.outcome, 'zero_results');
@@ -226,6 +227,7 @@ test('explicit zero results and exhausted verification produce distinct outcomes
   const noVerified = await resolveDestinationImageCandidate({
     db: emptyRecommendationDb(), city: arielCity, country: israel,
     countryId: 'IL', cityId: 'ARIEL', query: "Ari'el Israel", unsplashKey: 'key',
+    resolveWikimediaImage: async () => null,
     fetchImpl: async () => {
       calls += 1;
       return calls === 1
@@ -243,6 +245,7 @@ test('selection checks at most five details and stays within six requests before
   const result = await resolveDestinationImageCandidate({
     db: emptyRecommendationDb(), city: arielCity, country: israel,
     countryId: 'IL', cityId: 'ARIEL', query: "Ari'el Israel", unsplashKey: 'key',
+    resolveWikimediaImage: async () => null,
     onRequest: async () => { requests += 1; },
     fetchImpl: async (url) => String(url).includes('/search/photos')
       ? { ok: true, headers: { get: () => null }, json: async () => ({ total: 8, results: summaries }) }
@@ -250,6 +253,24 @@ test('selection checks at most five details and stays within six requests before
   });
   assert.equal(result.outcome, 'no_verified_match');
   assert.equal(requests, 6);
+});
+
+test('a verified Wikimedia image fills a destination when Unsplash and recommendations have no match', async () => {
+  const wikimedia = {
+    source: { type: 'wikimedia', fileName: 'Ariel.jpg' },
+    urls: { large: 'https://upload.wikimedia.org/large.jpg', feed: 'https://upload.wikimedia.org/feed.jpg', thumb: 'https://upload.wikimedia.org/thumb.jpg' },
+    selection: { validation: { version: 1 } },
+  };
+  const result = await resolveDestinationImageCandidate({
+    db: emptyRecommendationDb(), city: arielCity, country: israel,
+    countryId: 'IL', cityId: 'ARIEL', query: "Ari'el Israel", unsplashKey: 'key',
+    resolveWikimediaImage: async () => wikimedia,
+    fetchImpl: async () => ({ ok: true, headers: { get: () => null }, json: async () => ({ total: 0, results: [] }) }),
+  });
+  assert.equal(result.image, wikimedia);
+  assert.equal(result.state, 'ready');
+  assert.equal(result.outcome, 'match_wikimedia');
+  assert.equal(result.unsplashOutcome, 'zero_results');
 });
 
 test('exact destination plus coordinates outranks an earlier coordinates-only result', async () => {
@@ -377,7 +398,8 @@ test('Ariel migration replaces the rejected Jerusalem image with its recommendat
         : { ok: true, headers: { get: () => null }, json: async () => ({ total: 0, results: [] }) };
     },
   });
-  assert.equal(result.outcome, 'zero_results');
+  assert.equal(result.outcome, 'match_recommendation');
+  assert.equal(result.unsplashOutcome, 'zero_results');
   assert.equal(city.destinationImage.source.type, 'recommendation');
   assert.equal(city.destinationImage.source.recommendationId, 'recommendation-1');
 });

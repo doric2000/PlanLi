@@ -12,15 +12,18 @@ function openLink(event, url) {
 export default function PhotoAttribution({ destination, style }) {
   const attribution = getDestinationAttribution(destination);
   if (!attribution) return null;
+  const providerName = attribution.providerName || 'Unsplash';
+  const providerUrl = attribution.photoUrl || attribution.providerUrl;
+  const creditName = attribution.photographerName || providerName;
   return (
-    <View style={[styles.container, style]} accessibilityLabel={`Photo by ${attribution.photographerName} on Unsplash`}>
+    <View style={[styles.container, style]} accessibilityLabel={`Photo by ${creditName} on ${providerName}`}>
       <AppText style={styles.text}>Photo by </AppText>
       <Pressable onPress={(event) => openLink(event, attribution.photographerProfileUrl)} hitSlop={6}>
-        <AppText style={styles.link}>{attribution.photographerName}</AppText>
+        <AppText style={styles.link}>{creditName}</AppText>
       </Pressable>
       <AppText style={styles.text}> on </AppText>
-      <Pressable onPress={(event) => openLink(event, attribution.photoUrl || attribution.providerUrl)} hitSlop={6}>
-        <AppText style={styles.link}>Unsplash</AppText>
+      <Pressable onPress={(event) => openLink(event, providerUrl)} hitSlop={6}>
+        <AppText style={styles.link}>{providerName}</AppText>
       </Pressable>
     </View>
   );

@@ -319,6 +319,13 @@ $env:UNSPLASH_ACCESS_KEY='<unsplash-access-key>'
 npm run backfill-destination-images
 npm run backfill-destination-images -- --apply
 
+# Preview or repair active destinations that still have no canonical image.
+# The resolver keeps the verified Unsplash/recommendation policy and uses a
+# licensed Wikimedia Commons landscape only after anchoring it to an exact
+# nearby Wikipedia city page. Repeat --city to target specific city IDs.
+npm run repair-missing-destination-images -- --city '<city-id>'
+npm run repair-missing-destination-images -- --apply --city '<city-id>'
+
 # Verify or resume US -> EU object copying.
 npm run migrate-storage-eu
 npm run migrate-storage-eu -- --apply --resume
