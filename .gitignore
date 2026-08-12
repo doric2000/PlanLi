@@ -33,7 +33,6 @@ server/.env.example
 agent.md
 
 # Agent rules
-AGENTS.md
 CLAUDE.md
 OPENAI.md
 /docs/agent-rules/
