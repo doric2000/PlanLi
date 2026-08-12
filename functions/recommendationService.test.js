@@ -153,7 +153,7 @@ test('country resolution uses city details when venue details omit country', asy
   assert.equal(result.resolutionSource, 'city-place');
 });
 
-test('country resolution falls back through Google reverse and local boundaries', async () => {
+test('country resolution prefers local boundaries before Google reverse', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (urlValue) => {
     const url = new URL(String(urlValue));
@@ -174,7 +174,7 @@ test('country resolution falls back through Google reverse and local boundaries'
   };
   try {
     const reverse = await resolvePlaceCountry({
-      parsedPlace: { coordinates: { lat: 48.8566, lng: 2.3522 } },
+      parsedPlace: { coordinates: { lat: 0, lng: -30 } },
       parsedCity: null,
       mapsKey: 'maps-key',
     });

@@ -4,6 +4,7 @@ const { countries: localCountries } = require('countries-list');
 const EARTH_RADIUS_KM = 6371.0088;
 const VALID_RESOLUTION_SOURCES = new Set([
   'israel-policy',
+  'independent-policy-registry',
   'place-details',
   'city-place',
   'google-reverse',
@@ -158,6 +159,7 @@ function pointDistanceKm(point, coordinates) {
 
 function getHebrewCountryName(countryCode) {
   const normalized = String(countryCode || '').toUpperCase();
+  if (normalized === 'PS') return 'פלסטין';
   const feature = geography.countries.find((entry) => entry.code === normalized);
   if (feature?.nameHe) return feature.nameHe;
   const tiny = geography.tinyCountries.find((entry) => entry.code === normalized);

@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
-const { fetchLegacyBilingualPlace } = require('./legacyPlacesAdapter');
+const { autocompletePlaces, fetchBilingualPlace } = require('./placesProviderAdapter');
 const { consumeProviderBudget } = require('./providerRateLimitService');
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
@@ -88,6 +88,8 @@ async function searchPlaces({
   auth,
   data,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   providerRateLimitKey,
   fetchImpl = global.fetch,
   consumeBudget = consumeProviderBudget,
@@ -98,13 +100,26 @@ async function searchPlaces({
   assert(query.length >= 2 && query.length <= MAX_QUERY_LENGTH, 'invalid-argument', 'Query must contain 2–180 characters.');
   assert(mode, 'invalid-argument', 'mode must be places or destinations.');
   await consumeBudget({ admin, auth, action: 'autocomplete', key: providerRateLimitKey });
-  const predictions = await legacyAutocomplete({ query, mapsKey, fetchImpl, mode });
+  const providerSessionToken = randomId('gst');
+  const predictions = (await autocompletePlaces({
+    provider: placesProvider,
+    query,
+    mapsKey,
+    newPlacesKey,
+    fetchImpl,
+    mode,
+    sessionToken: providerSessionToken,
+    randomSelectionId: () => randomId('sel'),
+    legacyAutocomplete,
+  })).slice(0, MAX_PREDICTIONS);
   const sessionId = randomId('ps');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await sessionRef(admin.firestore(), sessionId).create({
     uid: auth.uid,
     mode,
     predictions,
+    provider: placesProvider,
+    providerSessionToken,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     expiresAt,
   });
@@ -121,7 +136,16 @@ async function searchPlaces({
   };
 }
 
-async function resolvePlaceSelection({ admin, auth, data, mapsKey, providerRateLimitKey, fetchImpl = global.fetch }) {
+async function resolvePlaceSelection({
+  admin,
+  auth,
+  data,
+  mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
+  providerRateLimitKey,
+  fetchImpl = global.fetch,
+}) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const sessionId = String(data?.sessionId || '').trim();
   const selectionId = String(data?.selectionId || '').trim();
@@ -134,7 +158,14 @@ async function resolvePlaceSelection({ admin, auth, data, mapsKey, providerRateL
   const prediction = (session.predictions || []).find((entry) => entry.selectionId === selectionId);
   assert(prediction?.placeId, 'not-found', 'The selected place is no longer available. Search again.');
   await consumeProviderBudget({ admin, auth, action: 'bilingualResolution', key: providerRateLimitKey });
-  const bilingual = await fetchLegacyBilingualPlace({ placeId: prediction.placeId, mapsKey, fetchImpl });
+  const bilingual = await fetchBilingualPlace({
+    provider: session.provider || placesProvider,
+    placeId: prediction.placeId,
+    mapsKey,
+    newPlacesKey,
+    sessionToken: session.providerSessionToken,
+    fetchImpl,
+  });
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
   const expiresAt = new Date(Date.now() + RESOLVED_TOKEN_TTL_MS);
   await resolvedTokenRef(admin.firestore(), resolvedPlaceToken).create({

@@ -1,4 +1,5 @@
-const { fetchLegacyBilingualPlace, googleCacheFor } = require('./legacyPlacesAdapter');
+const { googleCacheFor } = require('./legacyPlacesAdapter');
+const { fetchBilingualPlace } = require('./placesProviderAdapter');
 const { buildMapLocation } = require('./mapLocation');
 
 function millis(value) {
@@ -21,6 +22,8 @@ function hasUsableDestinationCache(destination, nowMs = Date.now()) {
 async function refreshDestinationCaches({
   admin,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   fetchImpl = global.fetch,
   limit = 25,
   now = new Date(),
@@ -37,7 +40,9 @@ async function refreshDestinationCaches({
     const destination = document.data() || {};
     const placeId = destination.providerRefs?.googlePlaceId;
     try {
-      const bilingual = await fetchLegacyBilingualPlace({ placeId, mapsKey, fetchImpl });
+      const bilingual = await fetchBilingualPlace({
+        provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
+      });
       if (bilingual.he.placeId !== placeId || bilingual.en.placeId !== placeId) {
         throw new Error('Google returned a different destination Place ID.');
       }
@@ -86,6 +91,8 @@ function exactPlaceFromBilingual(bilingual, fetchedAt) {
 async function refreshExactPlaceCaches({
   admin,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   fetchImpl = global.fetch,
   limit = 50,
   now = new Date(),
@@ -120,7 +127,9 @@ async function refreshExactPlaceCaches({
       }
     }
     try {
-      const bilingual = await fetchLegacyBilingualPlace({ placeId, mapsKey, fetchImpl });
+      const bilingual = await fetchBilingualPlace({
+        provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
+      });
       const place = exactPlaceFromBilingual(bilingual, now);
       await document.ref.update({
         place,
