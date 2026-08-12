@@ -30,7 +30,7 @@ async function main() {
   const cityDocuments = [];
   for (const country of countrySnapshot.docs) {
     // eslint-disable-next-line no-await-in-loop
-    const citySnapshot = await country.ref.collection('cities').get();
+    const citySnapshot = await country.ref.collection('destinations').get();
     cityDocuments.push(...citySnapshot.docs);
   }
   const entries = cityDocuments.map((city) => {
@@ -47,7 +47,7 @@ async function main() {
 
     slice.forEach(([key, count]) => {
       const [countryId, cityId] = key.split('/');
-      const cityRef = admin.firestore().doc(`countries/${countryId}/cities/${cityId}`);
+      const cityRef = admin.firestore().doc(`countries/${countryId}/destinations/${cityId}`);
       batch.set(
         cityRef,
         {

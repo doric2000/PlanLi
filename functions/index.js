@@ -33,6 +33,11 @@ const {
 } = require('./placesGatewayService');
 const { cleanupExpiredRuntimeDocuments } = require('./runtimeCleanupService');
 const {
+  hasUsableDestinationCache,
+  refreshDestinationCaches,
+  refreshExactPlaceCaches,
+} = require('./destinationCacheService');
+const {
   cleanupOrphanFavorites,
   clearNotifications,
   deleteComment,
@@ -458,7 +463,7 @@ async function handleMediaCleanup(event, collectionName) {
     const refreshed = await syncDestinationImagesForRecommendationChange({ admin, before, after });
     for (const { destination } of refreshed) {
       const citySnapshot = await admin.firestore()
-        .doc(`countries/${destination.countryId}/cities/${destination.cityId}`)
+        .doc(`countries/${destination.countryId}/destinations/${destination.cityId}`)
         .get();
       if (!citySnapshot.exists) continue;
       await refreshFavoritesForTarget({
@@ -476,7 +481,7 @@ async function handleMediaCleanup(event, collectionName) {
 }
 
 exports.onDestinationImageCreated = firestoreCreated(
-  'countries/{countryId}/cities/{cityId}',
+  'countries/{countryId}/destinations/{cityId}',
   (event) => resolveAndPersistDestinationImage({
     admin,
     countryId: event.params.countryId,
@@ -502,6 +507,27 @@ exports.repairDestinationImagesScheduled = onSchedule(
       limit: 20,
     });
     console.log('Destination image repair complete.', { processed: results.length });
+  }
+);
+
+exports.refreshDestinationCachesScheduled = onSchedule(
+  {
+    schedule: 'every day 02:30',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+    secrets: [googleMapsKey],
+  },
+  async () => {
+    const [destinations, exactPlaces] = await Promise.all([
+      refreshDestinationCaches({ admin, mapsKey: googleMapsKey.value(), limit: 50 }),
+      refreshExactPlaceCaches({ admin, mapsKey: googleMapsKey.value(), limit: 50 }),
+    ]);
+    console.log('Google cache refresh complete.', {
+      destinations: destinations.length,
+      exactPlaces: exactPlaces.length,
+    });
   }
 );
 
@@ -572,12 +598,19 @@ exports.onTripFavoriteProjection = firestoreWritten(
   projectionHandler('trip', 'tripId')
 );
 exports.onCityFavoriteProjection = firestoreWritten(
-  'countries/{countryId}/cities/{cityId}',
-  projectionHandler('city', 'cityId', 'countryId')
+  'countries/{countryId}/destinations/{cityId}',
+  async (event) => {
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+    await refreshFavoritesForTarget({
+      admin,
+      target: { type: 'city', id: event.params.cityId, countryId: event.params.countryId },
+      data: after && hasUsableDestinationCache(after) ? after : null,
+    });
+  }
 );
 
 exports.onDestinationCatalogSync = firestoreWritten(
-  'countries/{countryId}/cities/{cityId}',
+  'countries/{countryId}/destinations/{cityId}',
   (event) => syncDestinationCatalog({
     admin,
     countryId: event.params.countryId,

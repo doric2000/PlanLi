@@ -37,7 +37,7 @@ export const buildFavoriteTarget = (type, id, countryId) => {
 export const favoriteTargetPath = (target) => {
   if (!target) return null;
   return target.type === 'city'
-    ? `countries/${target.countryId}/cities/${target.id}`
+    ? `countries/${target.countryId}/destinations/${target.id}`
     : `${target.type === 'recommendation' ? 'recommendations' : `${target.type}s`}/${target.id}`;
 };
 

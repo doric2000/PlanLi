@@ -27,22 +27,26 @@ function principal({ auth, request, key }) {
   return `a_${crypto.createHmac('sha256', key || 'local-development-key').update(`${verifiedAppId}|${normalizedIp(request)}`).digest('base64url')}`;
 }
 
+function bucketDocumentId({ auth, request, key }) {
+  return principal({ auth, request, key });
+}
+
 async function consumePublicReadBudget({ admin, auth, request, action, key, now = Date.now() }) {
   const cost = COSTS[action];
   if (!cost) return;
   const maximum = auth?.uid ? 240 : 120;
   const id = principal({ auth, request, key });
-  const ref = admin.firestore().doc(`system/runtime/publicRateLimits/${id}_${action}`);
+  const ref = admin.firestore().doc(`system/runtime/publicRateLimits/${id}`);
   await admin.firestore().runTransaction(async (transaction) => {
     const previous = (await transaction.get(ref)).data() || {};
     const active = now - Number(previous.windowStartedAtMs || 0) < WINDOW_MS;
     const used = active ? Number(previous.used || 0) : 0;
     if (used + cost > maximum) throw new HttpsError('resource-exhausted', 'Too many requests. Please try again shortly.');
     transaction.set(ref, {
-      action, used: used + cost, windowStartedAtMs: active ? previous.windowStartedAtMs : now,
+      lastAction: action, used: used + cost, windowStartedAtMs: active ? previous.windowStartedAtMs : now,
       expireAt: new Date(now + 10 * WINDOW_MS), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
 }
 
-module.exports = { COSTS, consumePublicReadBudget, normalizedIp, principal };
+module.exports = { bucketDocumentId, COSTS, consumePublicReadBudget, normalizedIp, principal };

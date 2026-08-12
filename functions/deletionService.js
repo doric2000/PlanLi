@@ -47,7 +47,7 @@ async function markDeleting({ admin, target, actorUid, isAdmin }) {
       let cityRef = null;
       let citySnapshot = null;
       if (target.type === 'recommendation' && countryId && cityId) {
-        cityRef = db.doc(`countries/${countryId}/cities/${cityId}`);
+        cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
         citySnapshot = await transaction.get(cityRef);
       }
       transaction.update(ref, {

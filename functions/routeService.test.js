@@ -169,10 +169,13 @@ test('public route loading rejects more than 60 days before loading stops', asyn
     },
     get: async () => ({ docs: days, size: days.length }),
   };
-  const revisionRef = { collection: (name) => {
-    assert.equal(name, 'days');
-    return daysQuery;
-  } };
+  const revisionRef = {
+    get: async () => ({ exists: true, data: () => ({ state: 'active' }) }),
+    collection: (name) => {
+      assert.equal(name, 'days');
+      return daysQuery;
+    },
+  };
   const routeRef = {
     get: async () => ({
       id: 'route-1', exists: true, data: () => ({ status: 'active', activeRevisionId: 'revision-1' }),

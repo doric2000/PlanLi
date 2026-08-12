@@ -11,18 +11,18 @@ function fieldSignature(index) {
   )).join('|');
 }
 
-test('cities.status has a collection-group ascending index', () => {
+test('destinations.status has a collection-group ascending index', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const override = config.fieldOverrides.find((entry) => (
-    entry.collectionGroup === 'cities' && entry.fieldPath === 'status'
+    entry.collectionGroup === 'destinations' && entry.fieldPath === 'status'
   ));
 
-  assert.ok(override, 'Missing field override for cities.status');
+  assert.ok(override, 'Missing field override for destinations.status');
   assert.ok(
     override.indexes.some((index) => (
       index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
     )),
-    'cities.status must support ascending collection-group queries'
+    'destinations.status must support ascending collection-group queries'
   );
 });
 

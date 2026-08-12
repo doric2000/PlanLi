@@ -4,6 +4,7 @@ const { fetchLegacyBilingualPlace } = require('./legacyPlacesAdapter');
 const { consumeProviderBudget } = require('./providerRateLimitService');
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
+const RESOLVED_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_QUERY_LENGTH = 180;
 const MAX_PREDICTIONS = 10;
 
@@ -13,6 +14,25 @@ function assert(condition, code, message) {
 
 function randomId(prefix) {
   return `${prefix}_${crypto.randomBytes(18).toString('base64url')}`;
+}
+
+function signResolvedTokenId(tokenId, key) {
+  assert(typeof key === 'string' && key.length >= 16, 'failed-precondition', 'Resolved place tokens are not configured.');
+  return crypto.createHmac('sha256', key).update(tokenId).digest('base64url');
+}
+
+function createResolvedPlaceToken(key) {
+  const tokenId = randomId('rpt');
+  return `${tokenId}.${signResolvedTokenId(tokenId, key)}`;
+}
+
+function verifyResolvedPlaceToken(token, key) {
+  const [tokenId, signature, extra] = String(token || '').split('.');
+  if (!tokenId?.startsWith('rpt_') || !signature || extra) return false;
+  const expected = signResolvedTokenId(tokenId, key);
+  const left = Buffer.from(signature);
+  const right = Buffer.from(expected);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
 function sessionRef(db, sessionId) {
@@ -49,23 +69,35 @@ async function legacyAutocomplete({ query, mapsKey, fetchImpl = global.fetch, mo
   } catch {
     throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
   }
+  if (response?.status === 429) throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
   if (!response?.ok) throw new HttpsError('unavailable', 'Google Places request failed.');
   const payload = await response.json();
   if (payload?.status === 'ZERO_RESULTS') return [];
   if (payload?.status === 'OVER_QUERY_LIMIT') throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
+  if (payload?.status === 'UNKNOWN_ERROR') throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
+  if (payload?.status === 'REQUEST_DENIED') throw new HttpsError('failed-precondition', 'Google Places is not configured correctly.');
+  if (payload?.status === 'INVALID_REQUEST') throw new HttpsError('invalid-argument', 'Google Places rejected the search request.');
   if (payload?.status !== 'OK' || !Array.isArray(payload.predictions)) {
     throw new HttpsError('failed-precondition', 'Google Places returned an invalid search response.');
   }
   return payload.predictions.map(normalizePrediction).filter(Boolean).slice(0, MAX_PREDICTIONS);
 }
 
-async function searchPlaces({ admin, auth, data, mapsKey, providerRateLimitKey, fetchImpl = global.fetch }) {
+async function searchPlaces({
+  admin,
+  auth,
+  data,
+  mapsKey,
+  providerRateLimitKey,
+  fetchImpl = global.fetch,
+  consumeBudget = consumeProviderBudget,
+}) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const query = String(data?.query || '').trim();
   const mode = data?.mode === 'destinations' ? 'destinations' : data?.mode === 'places' ? 'places' : null;
   assert(query.length >= 2 && query.length <= MAX_QUERY_LENGTH, 'invalid-argument', 'Query must contain 2–180 characters.');
   assert(mode, 'invalid-argument', 'mode must be places or destinations.');
-  await consumeProviderBudget({ admin, auth, action: 'autocomplete', key: providerRateLimitKey });
+  await consumeBudget({ admin, auth, action: 'autocomplete', key: providerRateLimitKey });
   const predictions = await legacyAutocomplete({ query, mapsKey, fetchImpl, mode });
   const sessionId = randomId('ps');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -77,7 +109,13 @@ async function searchPlaces({ admin, auth, data, mapsKey, providerRateLimitKey, 
     expiresAt,
   });
   return {
-    predictions: predictions.map(({ selectionId, text, secondaryText, types }) => ({ selectionId, text, secondaryText, types })),
+    predictions: predictions.map(({ selectionId, placeId, text, secondaryText, types }) => ({
+      selectionId,
+      placeId,
+      text,
+      secondaryText,
+      types,
+    })),
     sessionId,
     expiresAt,
   };
@@ -97,8 +135,8 @@ async function resolvePlaceSelection({ admin, auth, data, mapsKey, providerRateL
   assert(prediction?.placeId, 'not-found', 'The selected place is no longer available. Search again.');
   await consumeProviderBudget({ admin, auth, action: 'bilingualResolution', key: providerRateLimitKey });
   const bilingual = await fetchLegacyBilingualPlace({ placeId: prediction.placeId, mapsKey, fetchImpl });
-  const resolvedPlaceToken = randomId('rpt');
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const expiresAt = new Date(Date.now() + RESOLVED_TOKEN_TTL_MS);
   await resolvedTokenRef(admin.firestore(), resolvedPlaceToken).create({
     uid: auth.uid,
     placeId: bilingual.he.placeId,
@@ -120,17 +158,43 @@ async function resolvePlaceSelection({ admin, auth, data, mapsKey, providerRateL
   };
 }
 
-async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken }) {
+async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken, providerRateLimitKey }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const token = String(resolvedPlaceToken || '').trim();
-  assert(token.startsWith('rpt_'), 'invalid-argument', 'The resolved place token is invalid.');
+  assert(verifyResolvedPlaceToken(token, providerRateLimitKey), 'invalid-argument', 'The resolved place token is invalid.');
   const snapshot = await resolvedTokenRef(admin.firestore(), token).get();
   assert(snapshot.exists, 'not-found', 'The resolved place has expired. Search again.');
   const value = snapshot.data() || {};
   assert(value.uid === auth.uid, 'permission-denied', 'This resolved place belongs to another user.');
   assert(value.expiresAt?.toDate?.().getTime() > Date.now(), 'deadline-exceeded', 'The resolved place has expired. Search again.');
   assert(value.he?.placeId && value.he.placeId === value.en?.placeId, 'failed-precondition', 'The resolved place is invalid. Search again.');
-  return { he: value.he, en: value.en };
+  return {
+    he: value.he,
+    en: value.en,
+    destinationResolution: value.destinationResolution || null,
+  };
 }
 
-module.exports = { SESSION_TTL_MS, legacyAutocomplete, readResolvedPlaceToken, resolvePlaceSelection, searchPlaces };
+async function storeResolvedPlaceDestination({
+  admin, auth, resolvedPlaceToken, destinationResolution, providerRateLimitKey,
+}) {
+  const token = String(resolvedPlaceToken || '').trim();
+  await readResolvedPlaceToken({
+    admin, auth, resolvedPlaceToken: token, providerRateLimitKey,
+  });
+  assert(destinationResolution && typeof destinationResolution === 'object', 'invalid-argument', 'Destination resolution is invalid.');
+  await resolvedTokenRef(admin.firestore(), token).set({ destinationResolution }, { merge: true });
+}
+
+module.exports = {
+  RESOLVED_TOKEN_TTL_MS,
+  SESSION_TTL_MS,
+  createResolvedPlaceToken,
+  legacyAutocomplete,
+  readResolvedPlaceToken,
+  resolvePlaceSelection,
+  searchPlaces,
+  signResolvedTokenId,
+  storeResolvedPlaceDestination,
+  verifyResolvedPlaceToken,
+};

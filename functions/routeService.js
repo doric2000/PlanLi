@@ -1,6 +1,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const {
   isVerifiedCaller,
+  resolveDestinationFromToken,
   resolveGoogleDestination,
   validateMediaAssets,
 } = require('./recommendationService');
@@ -77,9 +78,11 @@ function cleanCoordinates(value) {
 function sanitizePlace(value, fallbackCoordinates, { requirePlaceId = false } = {}) {
   const place = value && typeof value === 'object' ? value : {};
   const placeId = cleanOptionalString(place.placeId, 'place.placeId', 300);
+  const resolvedPlaceToken = cleanOptionalString(place.resolvedPlaceToken, 'place.resolvedPlaceToken', 300);
   assert(!requirePlaceId || placeId, 'invalid-argument', 'Every route stop requires a verified Place ID.');
   return {
     placeId,
+    ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
     name: cleanOptionalString(place.name, 'place.name', 200),
     address: cleanOptionalString(place.address, 'place.address', 500),
     url: cleanOptionalString(place.url, 'place.url', 2000),
@@ -309,28 +312,46 @@ async function resolveRoutePlaces({
   restCountriesKey,
   providerRateLimitKey,
 }) {
-  const placeIds = Array.from(new Set(days.flatMap((day) => day.stops.map((stop) => stop.place.placeId).filter(Boolean))));
-  assert(placeIds.length >= 1 && placeIds.length <= MAX_ROUTE_PLACES,
+  const placeEntries = new Map();
+  days.forEach((day) => day.stops.forEach((stop) => {
+    const placeId = stop.place.placeId;
+    if (!placeId) return;
+    const current = placeEntries.get(placeId);
+    if (!current || (!current.resolvedPlaceToken && stop.place.resolvedPlaceToken)) {
+      placeEntries.set(placeId, { placeId, resolvedPlaceToken: stop.place.resolvedPlaceToken || null });
+    }
+  }));
+  const entries = Array.from(placeEntries.values());
+  assert(entries.length >= 1 && entries.length <= MAX_ROUTE_PLACES,
     'invalid-argument', 'Route contains too many distinct places.');
+  const rawEntries = entries.filter((entry) => !entry.resolvedPlaceToken);
   assert(
-    placeIds.length <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
+    rawEntries.length <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
     'resource-exhausted',
     'This route contains too many new places to verify at once. Save a section with at most five places.'
   );
-  await consumeProviderBudget({
-    admin,
-    auth,
-    action: 'bilingualResolution',
-    units: placeIds.length,
-    key: providerRateLimitKey,
+  if (rawEntries.length) {
+    await consumeProviderBudget({
+      admin,
+      auth,
+      action: 'bilingualResolution',
+      units: rawEntries.length,
+      key: providerRateLimitKey,
+    });
+  }
+  const resolved = await mapWithConcurrency(entries, 5, async (entry) => {
+    const destination = entry.resolvedPlaceToken
+      ? await resolveDestinationFromToken({
+          admin, auth, resolvedPlaceToken: entry.resolvedPlaceToken, mapsKey,
+          restCountriesKey, providerRateLimitKey,
+        })
+      : await resolveGoogleDestination({
+          admin, placeId: entry.placeId, mapsKey, restCountriesKey,
+        });
+    assert(destination.place?.placeId === entry.placeId, 'failed-precondition', 'A route place token does not match its stop. Search again.');
+    return destination;
   });
-  const resolved = await mapWithConcurrency(placeIds, 5, (placeId) => resolveGoogleDestination({
-    admin,
-    placeId,
-    mapsKey,
-    restCountriesKey,
-  }));
-  const byPlaceId = new Map(placeIds.map((placeId, index) => [placeId, resolved[index]]));
+  const byPlaceId = new Map(entries.map((entry, index) => [entry.placeId, resolved[index]]));
   const resolvedDays = days.map((day) => ({
     ...day,
     stops: day.stops.map((stop) => {
@@ -345,7 +366,7 @@ async function resolveRoutePlaces({
           countryId: destination.countryId,
           cityId: destination.cityId,
           countryName: destination.countryData.name || destination.countryId,
-          cityName: destination.cityData.name || destination.cityId,
+          cityName: destination.cityData.googleCache?.names?.he || destination.cityData.name || destination.cityId,
         },
       };
     }),
@@ -362,7 +383,7 @@ async function resolveRoutePlaces({
       countryId: destination.countryId,
       cityId: destination.cityId,
       countryName: destination.countryData.name || destination.countryId,
-      cityName: destination.cityData.name || destination.cityId,
+      cityName: destination.cityData.googleCache?.names?.he || destination.cityData.name || destination.cityId,
     })),
   };
 }
@@ -449,7 +470,7 @@ async function saveRoute({
   const days = resolved.days;
 
   const writeCount = days.length + days.reduce((sum, day) => sum + day.stops.length, 0) +
-    resolved.catalogDestinations.length * 2 + 1;
+    resolved.catalogDestinations.length * 3 + 1;
   assert(writeCount <= 500, 'failed-precondition', 'Route is too large to save atomically.');
 
   const summaryPlaces = Array.from(new Set(days.flatMap((day) =>
@@ -471,6 +492,7 @@ async function saveRoute({
   const revisionId = routeRevisionId(routeRef);
   const revisionRef = routeRef.collection('revisions').doc(revisionId);
   const destinationDocuments = new Map();
+  const destinationClaims = new Map();
   for (const destination of resolved.catalogDestinations) {
     destinationDocuments.set(destination.countryRef.path, {
       ref: destination.countryRef,
@@ -487,6 +509,19 @@ async function saveRoute({
       create: destination.createCity,
       kind: 'destination',
     });
+    if (destination.claimRef && destination.claimData) {
+      const previousClaim = destinationClaims.get(destination.claimRef.path);
+      destinationClaims.set(destination.claimRef.path, {
+        ref: destination.claimRef,
+        data: {
+          ...destination.claimData,
+          entries: {
+            ...(previousClaim?.data?.entries || {}),
+            ...(destination.claimData.entries || {}),
+          },
+        },
+      });
+    }
   }
   const batch = db.batch();
   batch.create(revisionRef, {
@@ -532,9 +567,11 @@ async function saveRoute({
       ? await transaction.get(previousRevisionRef)
       : null;
     const destinationEntries = Array.from(destinationDocuments.values());
-    const destinationSnapshots = await Promise.all(
-      destinationEntries.map((entry) => transaction.get(entry.ref))
-    );
+    const claimEntries = Array.from(destinationClaims.values());
+    const [destinationSnapshots, claimSnapshots] = await Promise.all([
+      Promise.all(destinationEntries.map((entry) => transaction.get(entry.ref))),
+      Promise.all(claimEntries.map((entry) => transaction.get(entry.ref))),
+    ]);
 
     destinationEntries.forEach((entry, index) => {
       const snapshot = destinationSnapshots[index];
@@ -556,6 +593,40 @@ async function saveRoute({
         'failed-precondition',
         `The selected ${entry.kind} is no longer active.`
       );
+    });
+
+    claimEntries.forEach((entry, index) => {
+      const snapshot = claimSnapshots[index];
+      const existing = snapshot.exists ? snapshot.data() || {} : {};
+      if (snapshot.exists) {
+        assert(
+          existing.countryId === entry.data.countryId &&
+            existing.destinationType === entry.data.destinationType,
+          'failed-precondition',
+          'A destination identity claim changed while saving. Search again.'
+        );
+        for (const [destinationId, value] of Object.entries(entry.data.entries || {})) {
+          const conflictingDestination = Object.entries(existing.entries || {})
+            .find(([existingId, existingValue]) =>
+              existingId !== destinationId &&
+              existingValue?.providerPlaceId === value?.providerPlaceId
+            );
+          assert(
+            !conflictingDestination,
+            'failed-precondition',
+            'A destination identity changed while saving. Search again.'
+          );
+        }
+      }
+      transaction.set(entry.ref, {
+        ...entry.data,
+        entries: {
+          ...(existing.entries || {}),
+          ...(entry.data.entries || {}),
+        },
+        ...(snapshot.exists ? {} : { createdAt: now }),
+        updatedAt: now,
+      }, { merge: true });
     });
 
     const routeDocument = {
@@ -609,9 +680,11 @@ async function loadRouteDetails({ admin, data }) {
   assert(routeSnapshot.exists && routeSnapshot.data()?.status === 'active', 'not-found', 'Route does not exist.');
   const routeData = routeSnapshot.data();
   const revisionId = routeData.activeRevisionId;
-  const daysCollection = revisionId
-    ? routeRef.collection('revisions').doc(revisionId).collection('days')
-    : routeRef.collection('days');
+  assert(revisionId, 'failed-precondition', 'Route has no active revision.');
+  const revisionRef = routeRef.collection('revisions').doc(revisionId);
+  const revisionSnapshot = await revisionRef.get();
+  assert(revisionSnapshot.exists && revisionSnapshot.data()?.state === 'active', 'not-found', 'Route revision does not exist.');
+  const daysCollection = revisionRef.collection('days');
   const daySnapshots = await daysCollection.orderBy('position').limit(MAX_ROUTE_DAYS + 1).get();
   assert(daySnapshots.size <= MAX_ROUTE_DAYS, 'failed-precondition', 'Route contains too many days.');
   const days = [];

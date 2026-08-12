@@ -74,10 +74,13 @@ async function fetchLegacyPlaceDetails({ placeId, mapsKey, language, fetchImpl =
   } catch {
     throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
   }
+  if (response?.status === 429) throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
   if (!response?.ok) throw new HttpsError('unavailable', 'Google Places request failed.');
   const payload = await response.json();
   if (payload?.status === 'ZERO_RESULTS') throw new HttpsError('not-found', 'The selected place no longer exists.');
   if (payload?.status === 'OVER_QUERY_LIMIT') throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
+  if (payload?.status === 'UNKNOWN_ERROR') throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
+  if (payload?.status === 'REQUEST_DENIED') throw new HttpsError('failed-precondition', 'Google Places is not configured correctly.');
   if (payload?.status !== 'OK' || !payload?.result) {
     throw new HttpsError('failed-precondition', 'Google Places returned an invalid place.');
   }
@@ -92,7 +95,11 @@ async function fetchLegacyBilingualPlace({ placeId, mapsKey, fetchImpl = global.
   const he = parseLocalizedPlace(heDetails);
   const en = parseLocalizedPlace(enDetails);
   assert(he.placeId && he.placeId === en.placeId, 'failed-precondition', 'Google Places returned inconsistent place details.');
-  assert(/^[A-Z]{2}$/.test(he.countryCode || en.countryCode), 'failed-precondition', 'The selected place has no trustworthy country.');
+  assert(
+    !he.countryCode || !en.countryCode || he.countryCode === en.countryCode,
+    'failed-precondition',
+    'Google Places returned inconsistent country details.'
+  );
   return { he, en, fetchedAt: new Date() };
 }
 
@@ -126,10 +133,13 @@ async function fetchLegacyLocalityPlaceId({
   } catch {
     throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
   }
+  if (response?.status === 429) throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
   if (!response?.ok) throw new HttpsError('unavailable', 'Google Places request failed.');
   const payload = await response.json();
   if (payload?.status === 'ZERO_RESULTS') return null;
   if (payload?.status === 'OVER_QUERY_LIMIT') throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
+  if (payload?.status === 'UNKNOWN_ERROR') throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
+  if (payload?.status === 'REQUEST_DENIED') throw new HttpsError('failed-precondition', 'Google Places is not configured correctly.');
   if (payload?.status !== 'OK' || !Array.isArray(payload.predictions)) {
     throw new HttpsError('failed-precondition', 'Google Places returned an invalid locality search.');
   }

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { normalizedIp, principal } = require('./publicRateLimitService');
+const { bucketDocumentId, normalizedIp, principal } = require('./publicRateLimitService');
 
 test('anonymous identity ignores raw App Check headers', () => {
   const request = {
@@ -44,4 +44,10 @@ test('authenticated identity is UID-bound', () => {
   const second = principal({ auth: { uid: 'user-two' }, request: {}, key: 'test-key' });
   assert.equal(first, 'u_user-one');
   assert.notEqual(first, second);
+});
+
+test('all public actions share one bucket per principal', () => {
+  const identity = { auth: { uid: 'user-one' }, request: {}, key: 'test-key' };
+  assert.equal(bucketDocumentId(identity), 'u_user-one');
+  assert.equal(bucketDocumentId(identity), bucketDocumentId(identity));
 });

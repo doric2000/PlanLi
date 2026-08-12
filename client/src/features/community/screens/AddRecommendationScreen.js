@@ -2,16 +2,13 @@ import { fontFamilies } from "../../../styles/typography";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import AppText from "../../../components/AppText";
-// Firestore imports
-import { collection, getDocs } from 'firebase/firestore';
-import { db, auth } from '../../../config/firebase';
+import { auth } from '../../../config/firebase';
 import { colors, spacing, common } from '../../../styles';
 
 // --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
-import SelectionModal from '../components/SelectionModal';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from '../../../components/GuidedForm';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
@@ -22,16 +19,13 @@ import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { resolveDestinationForPlacePreview, searchPlaces } from '../../../services/LocationService';
-import {
-  destinationCatalogItemToCity,
-  searchDestinations,
-} from '../../../services/DestinationService';
 import { saveRecommendation } from '../../../services/RecommendationService';
 
 // --- Constants ---
 import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
+import { locationErrorMessage } from '../../../utils/locationErrors';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -244,27 +238,14 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const scrollRef = useRef(null);
   const sectionLayoutsRef = useRef({});
 
-  // --- Exact Location Handling (local-first) ---
+  // --- Exact Google place handling ---
   const [locationQuery, setLocationQuery] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(null); // {id,name}
   const [selectedCity, setSelectedCity] = useState(null); // {id,name}
   const [selectedPlace, setSelectedPlace] = useState(null); // {placeId,name,address,coordinates,url}
-  const [selectedCountryOverrideId, setSelectedCountryOverrideId] = useState(null);
   const [locationResolveError, setLocationResolveError] = useState(null);
   const [resolvingLocation, setResolvingLocation] = useState(false);
-
-  // Kept for old in-progress forms; the server resolver is authoritative and
-  // the current UI no longer offers a manual country override.
-  const [countryPickerVisible, setCountryPickerVisible] = useState(false);
-  const [countriesForPicker, setCountriesForPicker] = useState([]);
-  const [loadingCountriesForPicker, setLoadingCountriesForPicker] = useState(false);
-  const [pendingCountryOverridePlaceId, setPendingCountryOverridePlaceId] = useState(null);
-  const [suggestedCountryForOverride, setSuggestedCountryForOverride] = useState(null);
-
-  const [allCitiesForSearch, setAllCitiesForSearch] = useState([]);
-  const [hasLoadedAllCitiesForSearch, setHasLoadedAllCitiesForSearch] = useState(false);
-  const citiesSearchRequestRef = useRef(0);
-  const allCitiesFetchDebounceRef = useRef(null);
+  const locationResolutionGenerationRef = useRef(0);
 
   // --- Image Handling ---
   const {
@@ -504,47 +485,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setLocationResolveError(null);
   }, [isEdit, route?.params?.prefillLocation]);
 
-  useEffect(() => {
-    const q = locationQuery.trim();
-    const requestId = citiesSearchRequestRef.current + 1;
-    citiesSearchRequestRef.current = requestId;
-    if (q.length < 2) {
-      setAllCitiesForSearch([]);
-      setHasLoadedAllCitiesForSearch(false);
-      return undefined;
-    }
-    setHasLoadedAllCitiesForSearch(false);
-
-    if (allCitiesFetchDebounceRef.current) {
-      clearTimeout(allCitiesFetchDebounceRef.current);
-    }
-
-    allCitiesFetchDebounceRef.current = setTimeout(async () => {
-      try {
-        const catalog = await searchDestinations({ query: q, sort: 'popular', limit: 20 });
-        if (citiesSearchRequestRef.current !== requestId) return;
-        const citiesList = (catalog?.items || []).map((item) =>
-          destinationCatalogItemToCity(item)
-        );
-        setAllCitiesForSearch(citiesList);
-      } catch (error) {
-        if (citiesSearchRequestRef.current !== requestId) return;
-        console.error('Error fetching all cities for search:', error);
-      } finally {
-        if (citiesSearchRequestRef.current === requestId) {
-          setHasLoadedAllCitiesForSearch(true);
-        }
-      }
-    }, 400);
-
-    return () => {
-      if (allCitiesFetchDebounceRef.current) {
-        clearTimeout(allCitiesFetchDebounceRef.current);
-        allCitiesFetchDebounceRef.current = null;
-      }
-    };
-  }, [locationQuery]);
-
   // --- Handlers ---
 
   // Custom handler for category change to reset sub-tags
@@ -691,188 +631,28 @@ export default function AddRecommendationScreen({ navigation , route }) {
     });
   }, [validationValues]);
 
-  const localCitiesSearchable = locationQuery.trim()
-    ? (hasLoadedAllCitiesForSearch ? allCitiesForSearch : [])
-    : [];
-
-  const localAutocompleteResults = localCitiesSearchable
-    .filter((city) => {
-      const q = locationQuery.trim().toLowerCase();
-      if (!q) return false;
-      const fields = [
-        city.name,
-        city.names?.en,
-        city.description,
-        city.countryNames?.he,
-        city.countryNames?.en,
-        city.countryId,
-      ].map((field) => String(field || '').toLowerCase());
-      return fields.some((field) => field.includes(q));
-    })
-    .slice(0, 20);
-
-  const localResultsLoading = locationQuery.trim().length >= 2 && !hasLoadedAllCitiesForSearch;
-
-  const handleSelectLocalCity = (city) => {
-    if (!city?.id || !city?.countryId) return;
-    setLocationResolveError(null);
-    setSelectedCountry({
-      id: city.countryId,
-      name: city.countryNames?.he || city.countryName || city.countryId,
-    });
-    setSelectedCity({ id: city.id, name: city.name || city.id });
-    setSelectedPlace(
-      city.googlePlaceId
-        ? {
-            placeId: city.googlePlaceId,
-            name: city.name || null,
-            address: city.description || null,
-            ...(city.coordinates ? { coordinates: city.coordinates } : {}),
-          }
-        : null
-    );
-  };
-
   const handleSelectGooglePlace = async (placeId) => {
+    const generation = ++locationResolutionGenerationRef.current;
     setResolvingLocation(true);
     setLocationResolveError(null);
     try {
       const result = await resolveDestinationForPlacePreview(placeId);
+      if (generation !== locationResolutionGenerationRef.current) return;
       setSelectedCountry(result.destination.country);
       setSelectedCity(result.destination.city);
       setSelectedPlace(result.place);
     } catch (error) {
+      if (generation !== locationResolutionGenerationRef.current) return;
       console.error(error);
       setSelectedCountry(null);
       setSelectedCity(null);
       setSelectedPlace(null);
-      setLocationResolveError(
-        error?.message || 'לא הצלחנו לאמת את פרטי המקום. נסה שוב.'
-      );
-      Alert.alert(
-        'שגיאת מיקום',
-        'לא הצלחנו לאמת את המקום כרגע. נסה שוב בעוד רגע או בחר תוצאה אחרת.'
-      );
-      return;
-      // Avoid LogBox/RedBox noise for expected, user-handled flows.
-      if (error?.code !== 'MISSING_COUNTRY' && error?.code !== 'DISPUTED_COUNTRY') {
-        console.error(error);
-      }
-      if ((error?.code === 'MISSING_COUNTRY' || error?.code === 'DISPUTED_COUNTRY') && error?.parsed) {
-        // Keep place + city (when available), and ask user to pick a country manually.
-        const parsed = error.parsed;
-        setPendingCountryOverridePlaceId(placeId);
-        setSuggestedCountryForOverride(error?.suggestedCountry || null);
-        setSelectedCountry(null);
-        setSelectedCity(parsed?.cityName ? { id: parsed.cityName, name: parsed.cityName } : null);
-        setSelectedPlace({
-          placeId: parsed.placeId,
-          name: parsed.name,
-          address: parsed.address,
-          url: parsed.url,
-          ...(parsed.coordinates ? { coordinates: parsed.coordinates } : {}),
-        });
-
-        setLocationResolveError(
-          error?.code === 'DISPUTED_COUNTRY'
-            ? 'המדינה שזוהתה אוטומטית שנויה במחלוקת/לא חד-משמעית.'
-            : 'חסרה מדינה עבור המיקום שנבחר.'
-        );
-        Alert.alert(
-          'צריך לבחור מדינה',
-          error?.code === 'DISPUTED_COUNTRY'
-            ? 'המערכת זיהתה מדינה אוטומטית שעשויה להיות לא מדויקת. בחר מדינה ידנית כדי להמשיך.'
-            : 'למיקום הזה אין מדינה בנתוני המפה. בחר מדינה ידנית כדי להמשיך.',
-          [
-            { text: 'ביטול', style: 'cancel' },
-            {
-              text: 'בחר מדינה',
-              onPress: () => setCountryPickerVisible(true),
-            },
-          ]
-        );
-      } else {
-        // Clear any stale location so the user can't accidentally save with an old city/country.
-        setSelectedCountry(null);
-        setSelectedCity(null);
-        setSelectedPlace(null);
-
-        const message = error?.message || 'לא הצלחנו לטעון את פרטי המיקום.';
-        setLocationResolveError(message);
-        Alert.alert('אוי לא!', 'לא הצלחנו לשמור את המיקום שבחרת. נסה לבחור מיקום אחר (למשל העיר עצמה) ולשמור שוב.');
-      }
+      const message = locationErrorMessage(error);
+      setLocationResolveError(message);
+      Alert.alert('שגיאת מיקום', message);
     }
     finally {
-      setResolvingLocation(false);
-    }
-  };
-
-  const loadCountriesForPicker = async () => {
-    if (loadingCountriesForPicker) return;
-    if (countriesForPicker.length > 0) return;
-
-    setLoadingCountriesForPicker(true);
-    try {
-      const snap = await getDocs(collection(db, 'countries'));
-      const list = snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() || {}) }))
-        .map((c) => ({
-          id: c.id,
-          name: c.name || c.id,
-          code: c.code || null,
-        }))
-        .filter((c) => c.id);
-
-      list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he'));
-      setCountriesForPicker(list);
-    } catch (e) {
-      console.error('Failed to load countries for picker:', e);
-      Alert.alert('שגיאה', 'לא הצלחנו לטעון את רשימת המדינות.');
-    } finally {
-      setLoadingCountriesForPicker(false);
-    }
-  };
-
-  useEffect(() => {
-    if (countryPickerVisible) {
-      loadCountriesForPicker();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countryPickerVisible]);
-
-  const handleSelectManualCountry = async (country) => {
-    const placeId = pendingCountryOverridePlaceId || selectedPlace?.placeId;
-    if (!placeId) {
-      setCountryPickerVisible(false);
-      return;
-    }
-
-    setCountryPickerVisible(false);
-    setResolvingLocation(true);
-    setLocationResolveError(null);
-
-    try {
-      const result = await resolveDestinationForPlacePreview(placeId, {
-        countryOverride: {
-          id: country?.id,
-          name: country?.name || country?.id,
-          code: country?.code || null,
-        },
-      });
-      setSelectedCountry(result.destination.country);
-      setSelectedCity(result.destination.city);
-      setSelectedPlace(result.place);
-      setSelectedCountryOverrideId(country?.id || null);
-      setPendingCountryOverridePlaceId(null);
-      setSuggestedCountryForOverride(null);
-    } catch (e) {
-      // This is still user-visible via Alert; keep console clean unless needed.
-      console.error(e);
-      setSelectedCountry(null);
-      setLocationResolveError(e?.message || 'לא הצלחנו לשמור את המדינה שנבחרה.');
-      Alert.alert('שגיאה', 'לא הצלחנו לשמור את המדינה שנבחרה. נסה לבחור מדינה אחרת.');
-    } finally {
-      setResolvingLocation(false);
+      if (generation === locationResolutionGenerationRef.current) setResolvingLocation(false);
     }
   };
 
@@ -912,7 +692,9 @@ const handleSubmit = async () => {
         if (!isRemote(uri)) return uploadedQueue.shift();
         return findMediaAssetByUrl(editItem?.media, uri);
       }).filter(Boolean);
-      const destinationPayload = selectedPlace?.placeId
+      const destinationPayload = selectedPlace?.resolvedPlaceToken
+        ? { resolvedPlaceToken: selectedPlace.resolvedPlaceToken }
+        : selectedPlace?.placeId
         ? {
             placeId: selectedPlace.placeId,
           }
@@ -1024,18 +806,14 @@ const handleSubmit = async () => {
             mode="google"
             value={locationQuery}
             onChangeValue={(text) => {
+              locationResolutionGenerationRef.current += 1;
               setLocationQuery(text);
+              setSelectedCountry(null);
+              setSelectedCity(null);
               setSelectedPlace(null);
               setLocationResolveError(null);
-              setPendingCountryOverridePlaceId(null);
-              setSuggestedCountryForOverride(null);
-              // Don't clear selected destination immediately; user may be editing text.
             }}
-            localResults={localAutocompleteResults}
-            localResultsLoading={localResultsLoading}
-            onSelectLocal={handleSelectLocalCity}
             onSelect={handleSelectGooglePlace}
-            googleFallbackDelayMs={2000}
             googleSearchFn={(text, opts) => searchPlaces(text, { ...opts, types: 'all' })}
             placeholder="חפש מקום / אטרקציה / מסעדה..."
             inputTestID="add-rec-location-input"
@@ -1044,33 +822,6 @@ const handleSubmit = async () => {
             <AppText style={guidedStyles.fieldError} accessibilityLiveRegion="polite">
               {validation.fields.location}
             </AppText>
-          )}
-
-          {false && !!(locationResolveError && (pendingCountryOverridePlaceId || selectedPlace?.placeId) && !selectedCountry?.id) && (
-            <TouchableOpacity
-              onPress={() => setCountryPickerVisible(true)}
-              activeOpacity={0.85}
-              style={{ alignSelf: 'flex-end', marginTop: 8 }}
-            >
-              <AppText style={{ color: colors.primary, fontFamily: fontFamilies.semiBold }}>
-                בחר מדינה ידנית
-              </AppText>
-            </TouchableOpacity>
-          )}
-
-          {false && !!(selectedPlace?.placeId && selectedCountry?.id) && (
-            <TouchableOpacity
-              onPress={() => {
-                setPendingCountryOverridePlaceId(selectedPlace.placeId);
-                setCountryPickerVisible(true);
-              }}
-              activeOpacity={0.85}
-              style={{ alignSelf: 'flex-end', marginTop: 8 }}
-            >
-              <AppText style={{ color: colors.textSecondary, fontFamily: fontFamilies.semiBold }}>
-                שנה מדינה
-              </AppText>
-            </TouchableOpacity>
           )}
         </View>
           </GuidedFormSection>
@@ -1303,16 +1054,6 @@ const handleSubmit = async () => {
         disabled={submitting}
         testID="add-rec-submit"
       />
-
-      {false && <SelectionModal
-        visible={countryPickerVisible}
-        onClose={() => setCountryPickerVisible(false)}
-        title={loadingCountriesForPicker ? 'טוען מדינות...' : 'בחר מדינה'}
-        data={countriesForPicker}
-        onSelect={handleSelectManualCountry}
-        selectedId={selectedCountry?.id}
-        emptyText={loadingCountriesForPicker ? 'טוען...' : 'אין מדינות להצגה'}
-      />}
 
       <UnsavedChangesModal
         visible={unsavedModalVisible}

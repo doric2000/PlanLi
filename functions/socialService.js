@@ -6,7 +6,7 @@ const TARGETS = Object.freeze({
   recommendation: { collection: 'recommendations' },
   route: { collection: 'routes' },
   trip: { collection: 'trips' },
-  city: { collection: 'cities', nested: true },
+  city: { collection: 'destinations', nested: true },
 });
 
 const TYPE_ALIASES = Object.freeze({
@@ -70,7 +70,7 @@ function normalizeTarget(target) {
     ? cleanId(target.countryId, 'target.countryId')
     : null;
   const path = type === 'city'
-    ? `countries/${countryId}/cities/${id}`
+    ? `countries/${countryId}/destinations/${id}`
     : `${TARGETS[type].collection}/${id}`;
   return { type, id, ...(countryId ? { countryId } : {}), path };
 }
@@ -110,12 +110,15 @@ function buildFavoritePreview({ target, data, publicProfile }) {
     ? (data?.countryName || '')
     : description.slice(0, 140);
   return compactObject({
-    title: data?.title || data?.name || '',
+    title: data?.title || data?.googleCache?.names?.he || data?.name || '',
     subtitle,
     thumbUrl: mediaThumb(data),
     placeholderColor: mediaPlaceholder(data),
     ...(target.type === 'city'
       ? { destinationImage: data?.destinationImage || null }
+      : {}),
+    ...(target.type === 'city'
+      ? { cacheExpiresAt: data?.googleCache?.expiresAt || null }
       : {}),
     ...(target.type === 'recommendation'
       ? {

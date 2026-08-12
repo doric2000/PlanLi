@@ -49,7 +49,7 @@ function resolveFavoriteSourcePath(data) {
     }
     return {
       status: 'known',
-      path: `countries/${countryId}/cities/${id}`,
+      path: `countries/${countryId}/destinations/${id}`,
     };
   }
 

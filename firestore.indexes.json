@@ -58,6 +58,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "place.googleCache.refreshAfter", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recommendations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "mapLocation.geohash", "order": "ASCENDING" }
       ]
     },
@@ -278,11 +286,19 @@
       ]
     },
     {
-      "collectionGroup": "cities",
+      "collectionGroup": "destinations",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "stats.recommendationCount", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinations",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "googleCache.refreshAfter", "order": "ASCENDING" }
       ]
     },
     {
@@ -329,7 +345,7 @@
       "indexes": []
     },
     {
-      "collectionGroup": "cities",
+      "collectionGroup": "destinations",
       "fieldPath": "status",
       "indexes": [
         { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
@@ -391,13 +407,31 @@
       "indexes": []
     },
     {
-      "collectionGroup": "destinationOverviewCacheItems",
+      "collectionGroup": "destinationOverviewCache",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "placeSearchSessions",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "resolvedPlaceTokens",
       "fieldPath": "expiresAt",
       "ttl": true,
       "indexes": []
     },
     {
       "collectionGroup": "publicRateLimits",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "providerGlobalLimits",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []

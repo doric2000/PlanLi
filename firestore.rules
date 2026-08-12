@@ -32,6 +32,11 @@ service cloud.firestore {
       ).data.status == 'active';
     }
 
+    function activeDestinationCache() {
+      return resource.data.schemaVersion < 3
+        || resource.data.googleCache.expiresAt > request.time;
+    }
+
     function activeRouteRevision(contentId, revisionId) {
       let route = get(
         /databases/$(database)/documents/routes/$(contentId)
@@ -69,13 +74,11 @@ service cloud.firestore {
       allow write: if false;
 
       match /days/{dayId} {
-        allow get: if activeParent('routes', contentId);
-        allow list: if bounded(60) && activeParent('routes', contentId);
+        allow read: if false;
         allow write: if false;
 
         match /stops/{stopId} {
-          allow get: if activeParent('routes', contentId);
-          allow list: if bounded(150) && activeParent('routes', contentId);
+          allow read: if false;
           allow write: if false;
         }
       }
@@ -137,23 +140,22 @@ service cloud.firestore {
       allow list: if admin() || (bounded(250) && activeResource());
       allow write: if false;
 
-      match /cities/{cityId} {
+      match /destinations/{cityId} {
         allow get: if admin() || (
           resource.data.countryId == countryId
           && activeCountry(countryId)
           && activeResource()
+          && activeDestinationCache()
         );
-        allow list: if admin() || (
-          bounded(100)
-          && activeCountry(countryId)
-          && activeResource()
-        );
+        // Cross-destination discovery is served by the bounded callable catalog.
+        // Firestore cannot prove each child's expiring cache in a collection query.
+        allow list: if admin();
         allow write: if false;
       }
     }
 
-    // Required for collectionGroup('cities').
-    match /{parentPath=**}/cities/{cityId} {
+    // Required for collectionGroup('destinations').
+    match /{parentPath=**}/destinations/{cityId} {
       // A collection-group query cannot prove the dynamic parent country's
       // publication state. Public cross-country search uses destinationCatalog.
       allow get, list: if admin();

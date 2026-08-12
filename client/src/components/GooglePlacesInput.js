@@ -114,6 +114,7 @@ export default function GooglePlacesInput({
   }, []);
 
   const handleTextChange = (text) => {
+    setSearchError(null);
     if (isControlled) {
       onChangeValue(text);
     } else {
@@ -193,12 +194,14 @@ export default function GooglePlacesInput({
 
     // Cache hit -> no network call
     const cached = cacheRef.current.get(text);
-    if (cached) {
-      setPredictions(cached);
+    if (cached && cached.expiresAt > Date.now()) {
+      setSearchError(null);
+      setPredictions(cached.results);
       setLoading(false);
       lastRequestedQuery.current = text;
       return;
     }
+    if (cached) cacheRef.current.delete(text);
 
     setLoading(true);
 
@@ -215,10 +218,19 @@ export default function GooglePlacesInput({
         lastRequestedQuery.current = text;
 
         const results = await resolvedGoogleSearchFn(text, { signal: abortRef.current.signal });
-        cacheRef.current.set(text, results);
+        const providerExpiry = Date.parse(results?.[0]?.expiresAt || '');
+        const expiresAt = Number.isFinite(providerExpiry)
+          ? providerExpiry
+          : Date.now() + (5 * 60 * 1000);
+        cacheRef.current.set(text, { results, expiresAt });
+        setSearchError(null);
         setPredictions(results);
       } catch (e) {
-        if (e?.name !== 'AbortError') setSearchError(locationErrorMessage(e));
+        if (e?.name !== 'AbortError') {
+          lastRequestedQuery.current = '';
+          setPredictions([]);
+          setSearchError(locationErrorMessage(e));
+        }
       } finally {
         setLoading(false);
       }
@@ -390,6 +402,7 @@ export default function GooglePlacesInput({
                   <AppText style={googlePlacesInput.listText}>{item.description}</AppText>
                 </TouchableOpacity>
               ))}
+              <AppText style={googlePlacesInput.googleAttribution}>Google Maps</AppText>
             </ScrollView>
           ) : (
             <View style={googlePlacesInput.dropdownStatusRow}>
@@ -475,6 +488,7 @@ export default function GooglePlacesInput({
                     <AppText style={googlePlacesInput.listText}>{item.description}</AppText>
                   </TouchableOpacity>
                 ))}
+                <AppText style={googlePlacesInput.googleAttribution}>Google Maps</AppText>
               </ScrollView>
             ) : (
               <View style={googlePlacesInput.dropdownStatusRow}>

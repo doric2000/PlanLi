@@ -6,7 +6,15 @@ const { normalize } = require('./destinationIdentityService');
 const ISRAEL_OVERRIDES = Object.freeze({
   placeIds: new Set(),
   names: new Set([
-    'ariel', 'אריאל',
+    'ariel', "ari'el", 'אריאל',
+    "ma'ale adumim", 'maale adumim',
+    "modi'in illit", 'modiin illit',
+    'beitar illit', 'beit aryeh-ofarim', 'beit aryeh',
+    "givat ze'ev", 'givat zeev',
+    'efrat', 'alfei menashe', 'karnei shomron', 'kedumim',
+    'kiryat arba', 'oranit', 'elkana', 'har adar',
+    "ma'ale efrayim", 'maale efrayim', 'immanuel',
+    'geva binyamin', 'adam', 'kokhav yaakov', 'shaarei tikva',
     'east jerusalem', 'מזרח ירושלים',
     'golan heights', 'רמת הגולן',
   ].map(normalize)),

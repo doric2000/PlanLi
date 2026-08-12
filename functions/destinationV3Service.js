@@ -16,7 +16,11 @@ function stableDestinationId(countryId, googlePlaceId) {
 }
 
 function destinationName(place) {
-  return String(place?.localityName || place?.displayName || '').trim();
+  const type = destinationType(place);
+  const area = ['region', 'island', 'lake', 'natural_feature'].includes(type);
+  return String(area
+    ? place?.displayName || place?.localityName || ''
+    : place?.localityName || place?.displayName || '').trim();
 }
 
 function destinationType(place) {
@@ -69,7 +73,7 @@ function chooseLocalityCandidate(candidates, expected) {
     .filter(Boolean)
     .sort((left, right) => left.distanceKm - right.distanceKm || String(left.placeId || left.id).localeCompare(String(right.placeId || right.id)));
   if (!matches.length) return null;
-  if (matches.length > 1 && Math.abs(matches[1].distanceKm - matches[0].distanceKm) < 0.001) {
+  if (matches.length > 1 && matches[1].distanceKm - matches[0].distanceKm < 5) {
     throw new HttpsError('failed-precondition', 'The destination locality is ambiguous. Please select a more specific place.');
   }
   return matches[0];

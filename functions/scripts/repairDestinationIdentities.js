@@ -13,7 +13,7 @@ function sleep(milliseconds) {
 }
 
 async function candidates(db) {
-  const snapshot = await db.collectionGroup('cities').where('status', '==', 'active').get();
+  const snapshot = await db.collectionGroup('destinations').where('status', '==', 'active').get();
   const output = [];
   for (const citySnapshot of snapshot.docs) {
     if (citySnapshot.data()?.identity?.sourceId) continue;

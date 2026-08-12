@@ -246,7 +246,7 @@ async function auditFirestore(db) {
         countriesByCode.set(code, document.ref.path);
       }
     }
-    if (/^countries\/[^/]+\/cities\/[^/]+$/.test(document.ref.path)) {
+    if (/^countries\/[^/]+\/destinations\/[^/]+$/.test(document.ref.path)) {
       if (!document.id.startsWith('city_')) report.invalidCityIds.push(document.ref.path);
       const providerId = String(data.googlePlaceId || '').trim();
       if (providerId) {

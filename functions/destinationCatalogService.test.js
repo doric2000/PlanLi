@@ -23,8 +23,8 @@ test('catalog entries are public only when both destination and country are acti
 
 test('catalog page filtering removes entries whose parent country is inactive', () => {
   const documents = [
-    { data: () => ({ countryId: 'FR', cityId: 'PAR' }) },
-    { data: () => ({ countryId: 'ZZ', cityId: 'HIDDEN' }) },
+    { data: () => ({ countryId: 'FR', cityId: 'PAR', cacheExpiresAt: new Date('2099-01-01') }) },
+    { data: () => ({ countryId: 'ZZ', cityId: 'HIDDEN', cacheExpiresAt: new Date('2099-01-01') }) },
   ];
   const filtered = filterCatalogByActiveCountries(documents, new Set(['FR']));
   assert.deepEqual(filtered.map((entry) => entry.data().cityId), ['PAR']);

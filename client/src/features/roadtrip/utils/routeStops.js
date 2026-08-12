@@ -12,6 +12,9 @@ export const getStopCoordinates = (stop) => {
 
 export const hasValidStopLocation = (stop) => !!getStopCoordinates(stop);
 
+export const hasRoutableStopLocation = (stop) =>
+	!!stop?.place?.placeId || hasValidStopLocation(stop);
+
 export const flattenRouteStops = (routeOrDays) => {
 	const days = Array.isArray(routeOrDays)
 		? routeOrDays
@@ -54,7 +57,7 @@ export const buildGoogleMapsPlaceUrl = (stop) => {
 		? `${coords.lat},${coords.lng}`
 		: [place.name, place.address, stop?.location, stop?.country, stop?.title]
 			.filter(Boolean)
-			.join(" ");
+			.join(" ") || place.placeId;
 
 	if (!fallbackQuery) return null;
 
@@ -68,7 +71,7 @@ export const buildGoogleMapsPlaceUrl = (stop) => {
 const stopDirectionsToken = (stop) => {
 	const coords = getStopCoordinates(stop);
 	if (coords) return `${coords.lat},${coords.lng}`;
-	return [stop?.place?.name, stop?.place?.address, stop?.location, stop?.country, stop?.title]
+	return [stop?.place?.name, stop?.place?.address, stop?.location, stop?.country, stop?.title, stop?.place?.placeId]
 		.filter(Boolean)
 		.join(" ");
 };
@@ -105,8 +108,8 @@ const buildGoogleMapsDirectionsSegmentUrl = (stops) => {
 
 export const buildGoogleMapsDirectionsUrls = (routeOrStops) => {
 	const stops = Array.isArray(routeOrStops)
-		? routeOrStops.filter(hasValidStopLocation)
-		: flattenValidRouteStops(routeOrStops);
+		? routeOrStops.filter(hasRoutableStopLocation)
+		: flattenRouteStops(routeOrStops).filter(hasRoutableStopLocation);
 	if (stops.length <= GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT) {
 		return [buildGoogleMapsDirectionsSegmentUrl(stops)].filter(Boolean);
 	}

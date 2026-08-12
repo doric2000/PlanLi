@@ -29,7 +29,13 @@ export default function CommunityInlineMap({ recommendations = [], onOpenRecomme
           testID={`community-map-web-item-${item.id}`}
         >
           <AppText style={community.mapLocationNoticeText}>{item.title}</AppText>
-          <TouchableOpacity onPress={() => Linking.openURL(googleMapsUrl(item)).catch(() => {})} disabled={!googleMapsUrl(item)}>
+          <TouchableOpacity
+            onPress={(event) => {
+              event?.stopPropagation?.();
+              Linking.openURL(googleMapsUrl(item)).catch(() => {});
+            }}
+            disabled={!googleMapsUrl(item)}
+          >
             <Ionicons name="navigate-outline" size={18} color="#1E3A5F" />
           </TouchableOpacity>
         </TouchableOpacity>

@@ -13,6 +13,7 @@ const {
   stableDocumentId,
   validateMediaAssets,
 } = require('./recommendationService');
+const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
 
 test('verified caller accepts verified password users, social users and admins', () => {
   assert.equal(
@@ -125,6 +126,7 @@ test('Ariel and selected Israel policy areas resolve to Israel before providers'
     parsedPlace: {
       countryName: 'Palestine',
       countryCode: 'PS',
+      cityName: 'Ariel',
       coordinates: { lat: 32.1045, lng: 35.1741 },
     },
     parsedCity: null,
@@ -132,7 +134,7 @@ test('Ariel and selected Israel policy areas resolve to Israel before providers'
   });
   assert.equal(result.countryCode, 'IL');
   assert.equal(result.countryName, 'ישראל');
-  assert.equal(result.resolutionSource, 'israel-policy');
+  assert.equal(result.resolutionSource, 'independent-policy-registry');
 });
 
 test('country resolution uses city details when venue details omit country', async () => {
@@ -457,7 +459,7 @@ const validContent = {
 test('saveRecommendation creates against an existing destination and owns server fields', async () => {
   const admin = createFakeAdmin({
     'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
-    'countries/IL/cities/TLV': {
+    'countries/IL/destinations/TLV': {
       name: 'Tel Aviv',
       providerIds: { googlePlaceIds: ['city-1'] },
       status: 'active',
@@ -503,7 +505,7 @@ test('admin edits retain the original owner media without trusting client media 
   };
   const admin = createFakeAdmin({
     'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
-    'countries/IL/cities/TLV': {
+    'countries/IL/destinations/TLV': {
       name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 1 },
     },
     'recommendations/admin-edit': {
@@ -541,10 +543,10 @@ test('admin edits retain the original owner media without trusting client media 
 test('recommendation edits preserve hidden state instead of reactivating content', async () => {
   const admin = createFakeAdmin({
     'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
-    'countries/IL/cities/TLV': {
+    'countries/IL/destinations/TLV': {
       name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 1 },
     },
-    'countries/IL/cities/JLM': {
+    'countries/IL/destinations/JLM': {
       name: 'Jerusalem', status: 'active', stats: { recommendationCount: 0 },
     },
     'recommendations/hidden-edit': {
@@ -569,14 +571,14 @@ test('recommendation edits preserve hidden state instead of reactivating content
   });
 
   assert.equal(admin.documents.get('recommendations/hidden-edit').status, 'inactive');
-  assert.equal(admin.documents.get('countries/IL/cities/TLV').stats.recommendationCount, 1);
-  assert.equal(admin.documents.get('countries/IL/cities/JLM').stats.recommendationCount, 0);
+  assert.equal(admin.documents.get('countries/IL/destinations/TLV').stats.recommendationCount, 1);
+  assert.equal(admin.documents.get('countries/IL/destinations/JLM').stats.recommendationCount, 0);
 });
 
 test('existing destinations under inactive countries cannot be reused', async () => {
   const admin = createFakeAdmin({
     'countries/IL': { name: 'Israel', code: 'IL', status: 'inactive' },
-    'countries/IL/cities/TLV': { name: 'Tel Aviv', status: 'active' },
+    'countries/IL/destinations/TLV': { name: 'Tel Aviv', status: 'active' },
   });
   await assert.rejects(
     saveRecommendation({
@@ -595,7 +597,7 @@ test('existing destinations under inactive countries cannot be reused', async ()
 test('saveRecommendation rejects unverified and foreign edits', async () => {
   const admin = createFakeAdmin({
     'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
-    'countries/IL/cities/TLV': { name: 'Tel Aviv', status: 'active' },
+    'countries/IL/destinations/TLV': { name: 'Tel Aviv', status: 'active' },
     'recommendations/foreign': {
       ownerId: 'someone-else',
       createdAt: 'ORIGINAL',
@@ -660,7 +662,7 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
         ok: true,
         json: async () => ({
           status: 'OK',
-          predictions: [{ place_id: 'city-google-id' }],
+          predictions: [{ place_id: 'city-google-id', structured_formatting: { main_text: 'Tel Aviv' } }],
         }),
       };
     }
@@ -679,6 +681,7 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
             { long_name: 'Israel', short_name: 'IL', types: ['country'] },
           ],
           geometry: { location: { lat: 32.08, lng: 34.78 } },
+          types: requestedPlaceId === 'venue-google-id' ? ['restaurant'] : ['locality', 'political'],
         },
       }),
     };
@@ -696,26 +699,31 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
       },
     });
 
-    const countryId = stableDocumentId('cty', 'IL');
-    const cityId = stableDocumentId('city', `${countryId}:city-google-id`);
+    const countryId = 'IL';
+    const cityId = stableDestinationId(countryId, 'city-google-id');
     assert.equal(result.country.id, countryId);
     assert.equal(result.city.id, cityId);
     assert.equal(admin.documents.get(`countries/${countryId}`).code, 'IL');
     assert.deepEqual(
       Object.keys(admin.documents.get(`countries/${countryId}`)).sort(),
-      ['code', 'createdAt', 'currencyCode', 'name', 'region', 'status', 'updatedAt']
+      ['code', 'createdAt', 'currencyCode', 'name', 'names', 'region', 'status', 'updatedAt']
     );
     assert.deepEqual(
-      admin.documents.get(`countries/${countryId}/cities/${cityId}`).providerRefs.googlePlaceId,
+      admin.documents.get(`countries/${countryId}/destinations/${cityId}`).providerRefs.googlePlaceId,
       'city-google-id'
     );
+    const claimId = destinationClaimId({ countryId, type: 'city', nameEn: 'Tel Aviv' });
+    assert.deepEqual(
+      admin.documents.get(`system/runtime/destinationClaims/${claimId}`).entries,
+      { [cityId]: { providerPlaceId: 'city-google-id' } }
+    );
     assert.equal(
-      Object.hasOwn(admin.documents.get(`countries/${countryId}/cities/${cityId}`), 'rating'),
+      Object.hasOwn(admin.documents.get(`countries/${countryId}/destinations/${cityId}`), 'rating'),
       false
     );
     assert.equal(
       Object.prototype.hasOwnProperty.call(
-        admin.documents.get(`countries/${countryId}/cities/${cityId}`),
+        admin.documents.get(`countries/${countryId}/destinations/${cityId}`),
         'createdBy'
       ),
       false
@@ -730,6 +738,61 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
       { lat: 32.08, lng: 34.78 }
     );
     assert.ok(mapLocation.geohash);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('same-name destinations keep distinct Place-ID identities in one transactional claim', async () => {
+  const admin = createFakeAdmin({
+    'countries/US': {
+      name: 'ארצות הברית', names: { he: 'ארצות הברית', en: 'United States' },
+      code: 'US', region: 'Americas', currencyCode: 'USD', status: 'active',
+    },
+  });
+  const originalFetch = global.fetch;
+  global.fetch = async (urlValue) => {
+    const url = new URL(String(urlValue));
+    const placeId = url.searchParams.get('place_id');
+    const second = placeId === 'springfield-b';
+    return {
+      ok: true,
+      json: async () => ({
+        status: 'OK',
+        result: {
+          place_id: placeId,
+          name: 'Springfield',
+          formatted_address: 'Springfield, United States',
+          address_components: [
+            { long_name: 'Springfield', types: ['locality', 'political'] },
+            { long_name: 'United States', short_name: 'US', types: ['country', 'political'] },
+          ],
+          geometry: { location: { lat: second ? 44.05 : 39.78, lng: second ? -123.02 : -89.64 } },
+          types: ['locality', 'political'],
+        },
+      }),
+    };
+  };
+
+  try {
+    const first = await saveRecommendation({
+      admin, auth: verifiedAuth, mapsKey: 'maps-key',
+      data: { placeId: 'springfield-a', recommendation: { ...validContent, title: 'First Springfield' } },
+    });
+    const second = await saveRecommendation({
+      admin, auth: verifiedAuth, mapsKey: 'maps-key',
+      data: { placeId: 'springfield-b', recommendation: { ...validContent, title: 'Second Springfield' } },
+    });
+
+    assert.notEqual(first.city.id, second.city.id);
+    const claimId = destinationClaimId({ countryId: 'US', type: 'city', nameEn: 'Springfield' });
+    assert.deepEqual(
+      admin.documents.get(`system/runtime/destinationClaims/${claimId}`).entries,
+      {
+        [first.city.id]: { providerPlaceId: 'springfield-a' },
+        [second.city.id]: { providerPlaceId: 'springfield-b' },
+      }
+    );
   } finally {
     global.fetch = originalFetch;
   }
@@ -754,7 +817,7 @@ test('Google place reuses a legacy country document by ISO code', async () => {
         ok: true,
         json: async () => ({
           status: 'OK',
-          predictions: [{ place_id: 'jerusalem-place-id' }],
+          predictions: [{ place_id: 'jerusalem-place-id', structured_formatting: { main_text: 'ירושלים' } }],
         }),
       };
     }
@@ -790,11 +853,11 @@ test('Google place reuses a legacy country document by ISO code', async () => {
     });
 
     assert.equal(result.country.id, 'ישראל');
-    const cityId = stableDocumentId('city', 'ישראל:jerusalem-place-id');
+    const cityId = stableDestinationId('ישראל', 'jerusalem-place-id');
     assert.equal(result.city.id, cityId);
     assert.equal(admin.documents.has('countries/IL'), false);
     assert.deepEqual(
-      admin.documents.get(`countries/ישראל/cities/${cityId}`).providerRefs.googlePlaceId,
+      admin.documents.get(`countries/ישראל/destinations/${cityId}`).providerRefs.googlePlaceId,
       'jerusalem-place-id'
     );
   } finally {
@@ -827,7 +890,7 @@ test('Ariel preview and save use the same Israel destination without a country c
         ok: true,
         json: async () => ({
           status: 'OK',
-          predictions: [{ place_id: 'ariel-city-place-id' }],
+          predictions: [{ place_id: 'ariel-city-place-id', structured_formatting: { main_text: 'אריאל' } }],
         }),
       };
     }
@@ -865,10 +928,10 @@ test('Ariel preview and save use the same Israel destination without a country c
     });
     assert.equal(preview.destination.country.id, 'ישראל');
     assert.equal(preview.destination.country.code, 'IL');
-    assert.equal(preview.resolutionSource, 'israel-policy');
+    assert.equal(preview.resolutionSource, 'independent-policy-registry');
     assert.equal(
       admin.documents.has(
-        `countries/ישראל/cities/${stableDocumentId('city', 'ישראל:ariel-city-place-id')}`
+        `countries/ישראל/destinations/${stableDestinationId('ישראל', 'ariel-city-place-id')}`
       ),
       false
     );
@@ -911,7 +974,7 @@ test('Google errors and unknown country overrides are rejected', async () => {
           recommendation: validContent,
         },
       }),
-      /Invalid Google place/
+      /selected place no longer exists/
     );
   } finally {
     global.fetch = originalFetch;
@@ -924,6 +987,7 @@ test('Google errors and unknown country overrides are rejected', async () => {
       result: {
         place_id: 'venue-google-id',
         name: 'Cafe',
+        types: ['locality'],
         address_components: [
           { long_name: 'Tel Aviv', types: ['locality'] },
           { long_name: 'Israel', short_name: 'IL', types: ['country'] },

@@ -33,7 +33,7 @@ test('favorite types resolve to their authoritative document paths', () => {
       id: 'Springfield',
       countryId: 'US',
     }),
-    { status: 'known', path: 'countries/US/cities/Springfield' }
+    { status: 'known', path: 'countries/US/destinations/Springfield' }
   );
   assert.deepEqual(
     resolveFavoriteSourcePath({
@@ -41,7 +41,7 @@ test('favorite types resolve to their authoritative document paths', () => {
       id: 'Mykonos ',
       countryId: 'GR',
     }),
-    { status: 'known', path: 'countries/GR/cities/Mykonos ' }
+    { status: 'known', path: 'countries/GR/destinations/Mykonos ' }
   );
   assert.equal(
     resolveFavoriteSourcePath({ type: 'future', id: 'item-1' }).status,

@@ -89,7 +89,7 @@ async function createDryRunManifest(db, filePath) {
   delete existing.pauseReason;
   delete existing.retryAfterMs;
   const completed = new Set(existing.entries.map((entry) => entry.path));
-  const snapshot = await db.collectionGroup('cities').where('status', '==', 'active').get();
+  const snapshot = await db.collectionGroup('destinations').where('status', '==', 'active').get();
 
   for (const citySnapshot of snapshot.docs) {
     if (completed.has(citySnapshot.ref.path)) continue;
@@ -221,7 +221,7 @@ async function applyManifest(db, filePath) {
 }
 
 async function activeCityCount(db) {
-  return (await db.collectionGroup('cities').where('status', '==', 'active').get()).size;
+  return (await db.collectionGroup('destinations').where('status', '==', 'active').get()).size;
 }
 
 async function runContinuously(db, filePath, { applyWhenReady }) {

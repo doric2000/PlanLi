@@ -43,6 +43,24 @@ test('legacy adapter fetches Hebrew and English details once each into an expiri
   assert.equal(cache.expiresAt.getTime() - cache.fetchedAt.getTime(), 28 * 24 * 60 * 60 * 1000);
 });
 
+test('legacy adapter rejects conflicting bilingual country codes', async () => {
+  await assert.rejects(
+    fetchLegacyBilingualPlace({
+      placeId: 'place-paris',
+      mapsKey: 'test-key',
+      fetchImpl: async (url) => {
+        const language = url.searchParams.get('language');
+        const payload = result(language);
+        if (language === 'en') {
+          payload.result.address_components.at(-1).short_name = 'US';
+        }
+        return { ok: true, json: async () => payload };
+      },
+    }),
+    /inconsistent country details/
+  );
+});
+
 test('area destinations remain typed instead of being forced into cities', () => {
   assert.equal(destinationTypeFor({ types: ['natural_feature'], displayName: 'Lake Garda' }), 'lake');
   assert.equal(destinationTypeFor({ types: ['island'], displayName: 'Rhodes' }), 'island');

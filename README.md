@@ -59,21 +59,6 @@ Before release, repeat the native map and permission smoke tests in a signed
 Development Build. The `development` and `preview` EAS profiles remain prepared
 for that later step; neither represents a production release.
 
-### Web Places proxy
-
-Browser CORS prevents the web client from calling Google Places directly.
-Run the local proxy in a second terminal:
-
-```powershell
-cd C:\Users\doric\Documents\PlanLi\PlanLi\server
-npm install
-npm run start
-```
-
-Set `GOOGLE_MAPS_KEY` in the ignored `server/.env`. The helper
-`server/run-server-with-logs.cmd` starts the same proxy with visible request
-logs.
-
 ## Canonical data model
 
 The application has one database and media schema. There are no permanent
