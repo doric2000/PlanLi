@@ -75,10 +75,19 @@ jest.mock('../src/services/DestinationService', () => ({
 }));
 
 const mockSaveRecommendation = jest.fn(() =>
-  Promise.resolve({ recommendationId: 'new-doc-id' })
+  Promise.resolve({
+    recommendationId: 'new-doc-id',
+    country: { id: 'IL', name: 'ישראל' },
+    city: { id: 'TLV', name: 'תל אביב' },
+  })
 );
 jest.mock('../src/services/RecommendationService', () => ({
   saveRecommendation: (...args) => mockSaveRecommendation(...args),
+}));
+
+const mockRememberRecentDestination = jest.fn(() => Promise.resolve([]));
+jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
+  rememberDiscoveryDestinations: (...args) => mockRememberRecentDestination(...args),
 }));
 
 // C. Mock Image Picker
@@ -275,6 +284,13 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     // Verify navigation back to the previous screen
     expect(navigationMock.goBack).toHaveBeenCalled();
+    expect(mockRememberRecentDestination).toHaveBeenCalledWith([{
+      countryId: 'IL',
+      cityId: 'TLV',
+      name: 'תל אביב',
+      countryName: 'ישראל',
+      label: 'תל אביב · ישראל',
+    }]);
   });
 
   it('create mode: protects an unfinished recommendation before leaving', async () => {

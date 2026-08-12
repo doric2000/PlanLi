@@ -70,6 +70,16 @@ export const googlePlacesInput = StyleSheet.create({
 		color: '#5E5E5E',
 		textAlign: 'center',
 	},
+	groupTitle: {
+		paddingHorizontal: spacing.md,
+		paddingTop: spacing.md,
+		paddingBottom: spacing.sm,
+		fontSize: 12,
+		fontFamily: fontFamilies.semiBold,
+		color: colors.textSecondary,
+		textAlign: 'right',
+		writingDirection: 'rtl',
+	},
 	listItem: {
 		flexDirection: 'row-reverse',
 		alignItems: 'center',

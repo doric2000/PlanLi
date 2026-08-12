@@ -17,6 +17,7 @@ export default function PageHeader({
   style,
   contentStyle,
   overlapNext = false,
+  allowOverflow = false,
   testID,
 }) {
   const insets = useSafeAreaInsets();
@@ -37,6 +38,7 @@ export default function PageHeader({
         hero ? styles.hero : styles.surface,
         detail && styles.detail,
         overlapNext && styles.overlapNext,
+        allowOverflow && styles.allowOverflow,
         { paddingTop: insets.top + (detail ? 4 : 8) },
         style,
       ]}
@@ -78,6 +80,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 5,
     elevation: 5,
+  },
+  allowOverflow: {
+    overflow: 'visible',
   },
   detail: {
     backgroundColor: colors.surfaceElevated,

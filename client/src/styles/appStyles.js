@@ -1527,6 +1527,11 @@ export const homeScreenStyles = StyleSheet.create({
 		borderBottomRightRadius: 30,
 		overflow: "hidden",
 	},
+	headerLayer: {
+		position: "relative",
+		zIndex: 100,
+		elevation: 12,
+	},
 	headerTop: {
 		position: "relative",
 		zIndex: 2,

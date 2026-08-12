@@ -26,6 +26,7 @@ import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
 import { locationErrorMessage } from '../../../utils/locationErrors';
+import { rememberDiscoveryDestinations } from '../../../utils/recentDiscoveryDestinations';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -727,7 +728,22 @@ const handleSubmit = async () => {
         },
       };
 
-      await saveRecommendation(callablePayload);
+      const savedRecommendation = await saveRecommendation(callablePayload);
+      if (
+        !isEdit &&
+        savedRecommendation?.country?.id &&
+        savedRecommendation?.city?.id
+      ) {
+        const name = savedRecommendation.city.name || savedRecommendation.city.id;
+        const countryName = savedRecommendation.country.name || savedRecommendation.country.id;
+        await rememberDiscoveryDestinations([{
+          countryId: savedRecommendation.country.id,
+          cityId: savedRecommendation.city.id,
+          name,
+          countryName,
+          label: [name, countryName].filter(Boolean).join(' · '),
+        }]);
+      }
       if (!isEdit) {
         Alert.alert("איזה כיף!", "ההמלצה נוספה בהצלחה!");
       } else {

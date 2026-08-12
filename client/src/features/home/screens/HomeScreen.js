@@ -31,6 +31,10 @@ import {
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
 import { filterAndSortDestinations, mergeDestinations } from "../../../utils/destinationSearch";
 import { getDestinationImageUrl } from "../../../utils/destinationImages";
+import {
+	loadRecentDiscoveryDestinations,
+	rememberDiscoveryDestinations,
+} from "../../../utils/recentDiscoveryDestinations";
 
 const DESTINATION_GRADIENTS = [
 	["#78909C", "#546E7A"],
@@ -40,6 +44,33 @@ const DESTINATION_GRADIENTS = [
 
 const ZERO_SCROLL_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
 const ZERO_SCROLL_OFFSET = { x: 0, y: 0 };
+
+function recentDestinationToCity(destination) {
+	if (!destination?.countryId || !destination?.cityId) return null;
+	return {
+		id: destination.cityId,
+		cityId: destination.cityId,
+		countryId: destination.countryId,
+		name: destination.name || destination.label || destination.cityId,
+		description: destination.countryName || "",
+		countryName: destination.countryName || "",
+		label: destination.label,
+	};
+}
+
+function cityToRecentDestination(city) {
+	const cityId = city?.cityId || city?.id;
+	if (!city?.countryId || !cityId) return null;
+	const name = city?.identity?.names?.he || city?.names?.he || city?.name || cityId;
+	const countryName = city?.countryNames?.he || city?.countryName || city?.description || city.countryId;
+	return {
+		countryId: city.countryId,
+		cityId,
+		name,
+		countryName,
+		label: [name, countryName].filter(Boolean).join(" · "),
+	};
+}
 
 export default function HomeScreen({ navigation }) {
 	const insets = useSafeAreaInsets();
@@ -55,6 +86,7 @@ export default function HomeScreen({ navigation }) {
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [recentDestinations, setRecentDestinations] = useState([]);
 	const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
 	const [destinationSort, setDestinationSort] = useState("popular");
 	const [savedOnly, setSavedOnly] = useState(false);
@@ -111,6 +143,18 @@ export default function HomeScreen({ navigation }) {
 	useEffect(() => {
 		fetchDestinations();
 	}, []);
+
+	useEffect(() => {
+		if (!isFocused) return undefined;
+		let active = true;
+		loadRecentDiscoveryDestinations().then((items) => {
+			if (!active) return;
+			setRecentDestinations(items.map(recentDestinationToCity).filter(Boolean));
+		});
+		return () => {
+			active = false;
+		};
+	}, [isFocused]);
 
 	useEffect(() => {
 		const q = searchQuery.trim();
@@ -202,6 +246,23 @@ export default function HomeScreen({ navigation }) {
 		return source.charAt(0).toUpperCase();
 	}, [user]);
 
+	const rememberHomeDestination = (city) => {
+		const entry = cityToRecentDestination(city);
+		if (!entry) return;
+		setRecentDestinations((current) => {
+			const nextCity = recentDestinationToCity(entry);
+			return [
+				nextCity,
+				...current.filter((item) => (
+					`${item.countryId}:${item.id}` !== `${nextCity.countryId}:${nextCity.id}`
+				)),
+			].slice(0, 5);
+		});
+		rememberDiscoveryDestinations([entry]).then((items) => {
+			setRecentDestinations(items.map(recentDestinationToCity).filter(Boolean));
+		}).catch(() => {});
+	};
+
 	const handleGoogleSelect = async (placeId) => {
 		try {
 			if (isGuest || !user) {
@@ -216,6 +277,12 @@ export default function HomeScreen({ navigation }) {
 			}
 			const result = await resolveDestinationForPlacePreview(placeId);
 			if (result?.persisted) {
+				rememberHomeDestination({
+					...result.destination.city,
+					countryId: result.destination.country.id,
+					countryName: result.destination.country.name,
+				});
+				setSearchQuery("");
 				navigation.navigate("LandingPage", {
 					cityId: result.destination.city.id,
 					countryId: result.destination.country.id,
@@ -251,6 +318,12 @@ export default function HomeScreen({ navigation }) {
 			cityId: city.id,
 			countryId: city.countryId,
 		});
+	};
+
+	const selectLocalDestination = (city) => {
+		rememberHomeDestination(city);
+		setSearchQuery("");
+		goToDestination(city);
 	};
 
 	const openDestinationFilters = () => {
@@ -291,7 +364,7 @@ export default function HomeScreen({ navigation }) {
 	);
 
 	const renderHeader = () => (
-		<PageHeader variant="hero">
+		<PageHeader variant="hero" allowOverflow style={styles.headerLayer}>
 
 			<View style={styles.headerTop}>
 				{renderProfileAvatar()}
@@ -313,10 +386,12 @@ export default function HomeScreen({ navigation }) {
 					value={searchQuery}
 					onChangeValue={setSearchQuery}
 					localResults={localAutocompleteResults}
+					idleLocalResults={recentDestinations}
+					idleLocalTitle="חיפושים אחרונים"
 					localResultsLoading={localResultsLoading}
 					inputTestID="home-search-input"
 					placeholder="חפש עיר או יעד..."
-					onSelectLocal={goToDestination}
+					onSelectLocal={selectLocalDestination}
 					onSelect={handleGoogleSelect}
 					googleFallbackDelayMs={2000}
 					searchIconColor="rgba(255,255,255,0.55)"
