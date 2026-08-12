@@ -36,6 +36,20 @@ test('destination image jobs have a state index', () => {
   )));
 });
 
+test('destination catalog indexes match every popular search query and stable ID tie-breaker', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const catalogIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'destinationCatalog')
+    .map(fieldSignature);
+
+  for (const signature of [
+    'status:ASCENDING|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'status:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'countryId:ASCENDING|status:ASCENDING|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'countryId:ASCENDING|status:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
+  ]) assert.ok(catalogIndexes.includes(signature), `Missing destination catalog index: ${signature}`);
+});
+
 test('personalized recommendation candidate queries have global and destination indexes', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const recommendationIndexes = config.indexes

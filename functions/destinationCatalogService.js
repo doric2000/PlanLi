@@ -98,6 +98,20 @@ function cleanLimit(value) {
   return limit;
 }
 
+async function getCatalogSnapshot(query) {
+  try {
+    return await query.get();
+  } catch (error) {
+    if (error?.code === 9 || error?.code === 'failed-precondition') {
+      throw new HttpsError(
+        'unavailable',
+        'Destination search is being prepared. Please try again shortly.'
+      );
+    }
+    throw error;
+  }
+}
+
 async function searchDestinations({ admin, data }) {
   const limit = cleanLimit(data?.limit);
   const sort = data?.sort || 'popular';
@@ -123,7 +137,7 @@ async function searchDestinations({ admin, data }) {
   while (page.length < limit + 1 && hasMoreRaw) {
     let batchQuery = query.limit(limit + 1);
     if (rawCursor) batchQuery = batchQuery.startAfter(rawCursor);
-    const snapshot = await batchQuery.get();
+    const snapshot = await getCatalogSnapshot(batchQuery);
     if (snapshot.empty) break;
     rawCursor = snapshot.docs.at(-1);
     hasMoreRaw = snapshot.size === limit + 1;
@@ -148,6 +162,7 @@ module.exports = {
   catalogData,
   catalogId,
   filterCatalogByActiveCountries,
+  getCatalogSnapshot,
   searchDestinations,
   syncCountryDestinationCatalog,
   syncDestinationCatalog,
