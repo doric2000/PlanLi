@@ -7,9 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, buttons, common } from '../../../styles';
 
 const SUPPORT_ITEMS = [
-  { icon: 'mail-outline', text: 'support@planli.app' },
+  { icon: 'mail-outline', text: 'planli.travel.il@gmail.com' },
   { icon: 'help-circle-outline', text: 'FAQ: Coming soon' },
-  { icon: 'bug-outline', text: 'Report a bug: Nadav Cohen' },
+  { icon: 'bug-outline', text: 'Report a bug: ADMIN' },
   { icon: 'call-outline', text: '+972 54-286-9666' },
 ];
 
