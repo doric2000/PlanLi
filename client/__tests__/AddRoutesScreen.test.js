@@ -375,6 +375,36 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
     expect(navigationMock.goBack).not.toHaveBeenCalled();
   });
 
+  it('shows a localized retry message for Google quota failures without console errors', async () => {
+    const quotaError = Object.assign(
+      new Error('Google request limit reached. Please try again shortly.'),
+      { code: 'functions/resource-exhausted' }
+    );
+    mockSaveRoute.mockRejectedValueOnce(quotaError);
+    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRoutesScreen navigation={navigationMock} route={{ params: { routeToEdit: makeRouteToEdit() } }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('route-title-input').props.value).toBe('Original route'));
+    fireEvent.press(screen.getByTestId('route-submit'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
+      'מגבלת חיפוש זמנית',
+      'מגבלת החיפוש הזמנית הושגה. נסו שוב בעוד זמן קצר.'
+    ));
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(navigationMock.goBack).not.toHaveBeenCalled();
+
+    alertSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
   it('retains canonical remote media without version fields', async () => {
     const navigationMock = {
       goBack: jest.fn(),

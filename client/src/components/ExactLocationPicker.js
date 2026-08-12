@@ -31,7 +31,6 @@ export default function ExactLocationPicker({
 	}, [hydrateSelection, value?.cityId, value?.countryId, value?.place?.placeId]);
 
 	const selectPlace = (placeId) => handleSelectGooglePlace(placeId).catch((error) => {
-		console.error(error);
 		Alert.alert("שגיאת מיקום", error?.userMessage || "לא הצלחנו לאמת את המיקום.");
 	});
 

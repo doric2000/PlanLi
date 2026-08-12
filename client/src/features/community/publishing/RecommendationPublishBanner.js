@@ -5,7 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import { colors, contentPublishBannerStyles as styles } from '../../../styles';
+import { locationErrorKind, locationErrorMessage } from '../../../utils/locationErrors';
 import { useContentPublish } from './RecommendationPublishContext';
+
+function publishErrorMessage(error) {
+  return locationErrorKind(error) === 'unknown'
+    ? error?.message || 'בדקו את החיבור ונסו שוב.'
+    : locationErrorMessage(error);
+}
 
 function statusCopy(job, queuedCount) {
   const noun = job.contentType === 'route' ? 'הטיול' : 'ההמלצה';
@@ -56,7 +63,7 @@ export default function RecommendationPublishBanner({ onReview }) {
           <AppText style={styles.title}>{statusCopy(activeJob, jobs.length)}</AppText>
           {failed ? (
             <AppText style={styles.errorText} numberOfLines={1}>
-              {activeJob.error?.message || 'בדקו את החיבור ונסו שוב.'}
+              {publishErrorMessage(activeJob.error)}
             </AppText>
           ) : !success ? (
             <View
