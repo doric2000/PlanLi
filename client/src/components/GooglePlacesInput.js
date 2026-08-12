@@ -147,6 +147,25 @@ export default function GooglePlacesInput({
     }, 180);
   };
 
+  const settleSearchAfterSelection = () => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    if (googleFallbackTimerRef.current) {
+      clearTimeout(googleFallbackTimerRef.current);
+      googleFallbackTimerRef.current = null;
+    }
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setLoading(false);
+    setSearchError(null);
+    setPredictions([]);
+    setGoogleTriggerQuery('');
+  };
+
   // For developer filter mode: decide when "search ended" (debounced) so we can show the fallback button.
   useEffect(() => {
     if (isGoogleMode) return;
@@ -303,6 +322,7 @@ export default function GooglePlacesInput({
   }, [showDropdown, query]);
 
   const handleSelect = (place) => {
+    settleSearchAfterSelection();
     if (isControlled) {
       onChangeValue(place.description);
     } else {
@@ -314,6 +334,7 @@ export default function GooglePlacesInput({
   };
 
   const handleSelectLocal = (city) => {
+    settleSearchAfterSelection();
     const label = city?.name || city?.description || '';
     if (isControlled) {
       onChangeValue(label);
@@ -329,6 +350,7 @@ export default function GooglePlacesInput({
 
   const handleSelectIdleLocal = (city) => {
     if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+    settleSearchAfterSelection();
     setInputFocused(false);
     setShowList(false);
     if (typeof onSelectLocal === 'function') {
@@ -364,6 +386,7 @@ export default function GooglePlacesInput({
         {rightAccessory}
         {loading && (
           <ActivityIndicator
+            testID="google-places-loading"
             size="small"
             color={loaderColor || colors.primary}
             style={[googlePlacesInput.loader, loaderStyle]}
@@ -463,6 +486,7 @@ export default function GooglePlacesInput({
               {predictions.map((item) => (
                 <TouchableOpacity
                   key={item.place_id}
+                  testID={`google-place-result-${item.place_id}`}
                   style={googlePlacesInput.listItem}
                   onPress={() => handleSelect(item)}
                 >
@@ -578,6 +602,7 @@ export default function GooglePlacesInput({
                 {predictions.map((item) => (
                   <TouchableOpacity
                     key={item.place_id}
+                    testID={`google-place-result-${item.place_id}`}
                     style={googlePlacesInput.listItem}
                     onPress={() => handleSelect(item)}
                   >

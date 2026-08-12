@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import GooglePlacesInput from '../src/components/GooglePlacesInput';
@@ -87,6 +87,35 @@ describe('GooglePlacesInput recent destinations', () => {
     expect(screen.queryByText('חיפושים אחרונים')).toBeNull();
     expect(screen.getByText('רומא')).toBeTruthy();
     expect(searchCities).not.toHaveBeenCalled();
+  });
+
+  it('stops showing search progress immediately when a Google result is selected', async () => {
+    const googleSearchFn = jest.fn(async () => [{
+      place_id: 'place-1',
+      description: 'Tel Aviv, Israel',
+    }]);
+    const onSelect = jest.fn();
+    const screen = render(
+      <ControlledInput
+        googleFallbackDelayMs={0}
+        googleSearchFn={googleSearchFn}
+        onSelect={onSelect}
+      />
+    );
+
+    fireEvent(screen.getByTestId('places-input'), 'focus');
+    fireEvent.changeText(screen.getByTestId('places-input'), 'Tel Aviv');
+    await waitFor(() => expect(screen.getByTestId('google-places-loading')).toBeTruthy());
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    });
+    await waitFor(() => expect(screen.getByTestId('google-place-result-place-1')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('google-place-result-place-1'));
+
+    expect(onSelect).toHaveBeenCalledWith('place-1');
+    expect(screen.queryByTestId('google-places-loading')).toBeNull();
   });
 });
 
