@@ -9,7 +9,7 @@ const mockDiscard = jest.fn();
 let mockPublishState;
 
 jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
-  useRecommendationPublish: () => mockPublishState,
+  useContentPublish: () => mockPublishState,
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 10, left: 0 }),
@@ -33,7 +33,7 @@ describe('RecommendationPublishBanner', () => {
 
   it('shows app-wide upload progress', () => {
     const screen = render(<RecommendationPublishBanner />);
-    expect(screen.getByTestId('recommendation-publish-banner')).toBeTruthy();
+    expect(screen.getByTestId('content-publish-banner')).toBeTruthy();
     expect(screen.getByTestId('publish-progress').props.accessibilityValue.now).toBe(42);
   });
 
@@ -56,7 +56,7 @@ describe('RecommendationPublishBanner', () => {
     fireEvent.press(screen.getByTestId('publish-discard'));
 
     expect(mockRetry).toHaveBeenCalledWith('job-1');
-    expect(onReview).toHaveBeenCalledWith('job-1');
+    expect(onReview).toHaveBeenCalledWith('job-1', undefined);
     expect(mockDiscard).toHaveBeenCalledWith('job-1');
     Alert.alert.mockRestore();
   });

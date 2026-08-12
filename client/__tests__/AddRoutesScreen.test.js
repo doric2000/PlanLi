@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRoutesScreen from '../src/features/roadtrip/screens/AddRoutesScreen';
+import { ENVIRONMENTS, VIBES } from '../src/constants/travelTaxonomy';
 
 const mockSaveRoute = jest.fn(() => Promise.resolve({ routeId: 'route-1' }));
 
@@ -28,10 +29,29 @@ jest.mock('../src/services/RouteService', () => ({
   saveRoute: (...args) => mockSaveRoute(...args),
 }));
 
+const mockEnqueueCreate = jest.fn(async () => 'route-job-1');
+const mockLoadJobForReview = jest.fn(async () => null);
+jest.mock('../src/features/publishing/ContentPublishContext', () => ({
+  useContentPublish: () => ({
+    enqueueCreate: mockEnqueueCreate,
+    loadJobForReview: mockLoadJobForReview,
+  }),
+}));
+
 jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
   useImagePickerWithUpload: () => ({
     uploadImageAssets: mockUploadImageAssets,
     removeUploadedImage: mockRemoveUploadedImage,
+  }),
+}));
+jest.mock('../src/hooks/useDurableDraftMedia', () => ({
+  __esModule: true,
+  default: () => ({
+    draftJobId: '123e4567-e89b-42d3-a456-426614174000',
+    forgetUri: jest.fn(async () => {}),
+    markEnqueued: jest.fn(),
+    mediaForUri: (uri) => ({ uri }),
+    persistUris: async (uris) => uris,
   }),
 }));
 
@@ -124,6 +144,53 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
     fireEvent.press(getByTestId('route-section-basics-continue'));
 
     await waitFor(() => expect(getByTestId('route-section-days-continue')).toBeTruthy());
+  });
+
+  it('closes a reviewed route after durable enqueue without calling the network save', async () => {
+    const source = makeRouteToEdit();
+    mockLoadJobForReview.mockResolvedValueOnce({
+      reviewedDraft: {
+        route: {
+          taxonomyVersion: 4,
+          title: source.title,
+          description: source.description,
+          distanceKm: source.distanceKm,
+          days: source.days,
+          categoryIds: source.categoryIds,
+          subcategoryIds: source.subcategoryIds,
+          attributes: {
+            audienceScope: 'selected',
+            audiences: source.facets.audiences,
+            budgetLevel: source.facets.budgetLevel,
+            vibes: source.facets.vibes,
+            travelerStyles: source.facets.travelerStyles,
+            needs: [],
+            needsCoverageConfirmed: false,
+            seasons: source.facets.seasons,
+            environment: source.facets.environments[0],
+          },
+          difficulty: source.difficulty,
+          experienceLevel: source.experienceLevel,
+          transportModes: source.transportModes,
+          pace: source.pace,
+        },
+      },
+    });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const { getByTestId } = render(
+      <AddRoutesScreen navigation={navigationMock} route={{ params: { publishJobId: 'route-job-1' } }} />
+    );
+    await waitFor(() => expect(mockLoadJobForReview).toHaveBeenCalledWith('route-job-1'));
+    fireEvent.press(getByTestId('route-submit'));
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalled());
+    expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      contentType: 'route', sourceJobId: 'route-job-1',
+    }));
+    expect(mockSaveRoute).not.toHaveBeenCalled();
+    expect(navigationMock.goBack).toHaveBeenCalled();
   });
 
   it('protects unsaved work when creating a new route', async () => {
@@ -228,6 +295,31 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
     beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
 
     expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('restores and resubmits saved vibe and environment while editing', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const routeToEdit = makeRouteToEdit({
+      facets: {
+        ...makeRouteToEdit().facets,
+        vibes: ['relaxed'],
+        environments: ['outdoor'],
+      },
+    });
+    const screen = render(
+      <AddRoutesScreen navigation={navigationMock} route={{ params: { routeToEdit } }} />
+    );
+    await waitFor(() => expect(screen.getByTestId('route-title-input').props.value).toBe('Original route'));
+    fireEvent.press(screen.getByLabelText(/קהל ומאפיינים,/));
+    expect(screen.getByTestId(`route-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId(`route-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'outdoor')}`).props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByTestId('route-submit'));
+    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
+    expect(mockSaveRoute.mock.calls[0][0].attributes.vibes).toEqual(['relaxed']);
+    expect(mockSaveRoute.mock.calls[0][0].attributes.environment).toBe('outdoor');
   });
 
   it('leaves failed prepared media for scheduled server cleanup', async () => {

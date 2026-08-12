@@ -14,6 +14,8 @@ import { auth } from '../../../config/firebase';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { saveRecommendation } from '../../../services/RecommendationService';
+import { saveRoute } from '../../../services/RouteService';
+import { applyRoutePublishMedia } from '../../roadtrip/utils/routeMedia';
 import { rememberDiscoveryDestinations } from '../../../utils/recentDiscoveryDestinations';
 import {
   deleteRecommendationPublishJobMedia,
@@ -42,6 +44,7 @@ const TRANSIENT_CODES = new Set([
 const defaultValue = {
   activeJob: null,
   completedVersion: 0,
+  completedVersionByType: { recommendation: 0, route: 0 },
   discard: async () => {},
   enqueueCreate: null,
   jobs: [],
@@ -49,12 +52,12 @@ const defaultValue = {
   retry: async () => {},
 };
 
-const RecommendationPublishContext = createContext(defaultValue);
+const ContentPublishContext = createContext(defaultValue);
 
 function normalizedError(error) {
   return {
     code: String(error?.code || 'unknown'),
-    message: String(error?.message || 'Could not publish this recommendation.').slice(0, 500),
+    message: String(error?.message || 'Could not publish this content.').slice(0, 500),
   };
 }
 
@@ -91,11 +94,15 @@ function remotePreview(asset) {
   return asset?.feed?.url || asset?.large?.url || asset?.thumb?.url || null;
 }
 
-export function RecommendationPublishProvider({ children }) {
+export function ContentPublishProvider({ children }) {
   const { user, loading: authLoading } = useAuthUser();
   const [jobs, setJobs] = useState([]);
   const [hydrated, setHydrated] = useState(false);
   const [completedVersion, setCompletedVersion] = useState(0);
+  const [completedVersionByType, setCompletedVersionByType] = useState({
+    recommendation: 0,
+    route: 0,
+  });
   const [wakeSerial, setWakeSerial] = useState(0);
   const [appActive, setAppActive] = useState(
     !['background', 'inactive'].includes(AppState.currentState)
@@ -105,9 +112,16 @@ export function RecommendationPublishProvider({ children }) {
   const persistenceRef = useRef(Promise.resolve());
   const reviewSourcesRef = useRef(new Map());
   const successTimersRef = useRef(new Map());
-  const { uploadImageAsset } = useImagePickerWithUpload({ kind: 'recommendation' });
-  const uploadImageAssetRef = useRef(uploadImageAsset);
-  uploadImageAssetRef.current = uploadImageAsset;
+  const recommendationUploader = useImagePickerWithUpload({ kind: 'recommendation' });
+  const routeUploader = useImagePickerWithUpload({ kind: 'route' });
+  const uploadersRef = useRef({
+    recommendation: recommendationUploader.uploadImageAsset,
+    route: routeUploader.uploadImageAsset,
+  });
+  uploadersRef.current = {
+    recommendation: recommendationUploader.uploadImageAsset,
+    route: routeUploader.uploadImageAsset,
+  };
 
   const publishSnapshot = useCallback((nextJobs) => {
     jobsRef.current = nextJobs;
@@ -141,9 +155,14 @@ export function RecommendationPublishProvider({ children }) {
       );
       const restored = storedJobs
         .filter((job) => job && job.id && job.ownerUid && job.status !== 'success')
-        .map((job) => ['uploading', 'saving'].includes(job.status)
-          ? { ...job, status: 'queued', stage: 'queued', retryAt: 0 }
-          : job);
+        .map((job) => ({
+          ...job,
+          version: Number(job.version || 1) < 2 ? 2 : job.version,
+          contentType: job.contentType === 'route' ? 'route' : 'recommendation',
+          ...(['uploading', 'saving'].includes(job.status)
+            ? { status: 'queued', stage: 'queued', retryAt: 0 }
+            : {}),
+        }));
       publishSnapshot(restored);
       if (JSON.stringify(restored) !== JSON.stringify(storedJobs)) persistSnapshot(restored);
       setHydrated(true);
@@ -163,7 +182,12 @@ export function RecommendationPublishProvider({ children }) {
     reviewSourcesRef.current.forEach((source) => source.revokes?.forEach((revoke) => revoke()));
   }, []);
 
-  const enqueueCreate = useCallback(async ({ payload, media, draft, sourceJobId = null }) => {
+  const enqueueCreate = useCallback(async ({
+    contentType = 'recommendation', payload, media, draft, sourceJobId = null, draftJobId = null,
+  }) => {
+    if (!['recommendation', 'route'].includes(contentType)) {
+      throw new Error('Unsupported content publication type.');
+    }
     const ownerUid = user?.uid || auth.currentUser?.uid;
     if (!ownerUid) throw new Error('You must be signed in to publish.');
     const sourceJob = sourceJobId
@@ -171,7 +195,7 @@ export function RecommendationPublishProvider({ children }) {
       : null;
     if (sourceJobId && !sourceJob) throw new Error('The queued recommendation is no longer available.');
 
-    const jobId = sourceJob?.id || randomUUID();
+    const jobId = sourceJob?.id || draftJobId || randomUUID();
     const publishRequestId = sourceJob?.publishRequestId || randomUUID();
     const reviewSource = reviewSourcesRef.current.get(jobId);
     const reusableByUri = reviewSource?.entriesByUri || new Map();
@@ -183,12 +207,23 @@ export function RecommendationPublishProvider({ children }) {
           id: item.asset.assetId || `remote-${index}`,
           type: 'remote',
           asset: item.asset,
+          slot: item.slot || null,
           progress: 1,
         };
       }
       const reusable = reusableByUri.get(item?.uri);
       if (reusable) {
-        return { ...reusable };
+        return { ...reusable, slot: item.slot || reusable.slot || null };
+      }
+      if (item?.localReference?.key) {
+        return {
+          id: item.mediaId || randomUUID(),
+          type: 'local',
+          localReference: item.localReference,
+          slot: item.slot || null,
+          preparedAsset: item.preparedAsset || null,
+          progress: item.preparedAsset ? 1 : 0,
+        };
       }
       const mediaId = randomUUID();
       const localReference = await persistRecommendationPublishMedia({
@@ -202,6 +237,7 @@ export function RecommendationPublishProvider({ children }) {
         id: mediaId,
         type: 'local',
         localReference,
+        slot: item.slot || null,
         preparedAsset: null,
         progress: 0,
       };
@@ -215,8 +251,10 @@ export function RecommendationPublishProvider({ children }) {
 
     const now = Date.now();
     const nextJob = {
+      version: 2,
       id: jobId,
       publishRequestId,
+      contentType,
       ownerUid,
       createdAt: sourceJob?.createdAt || now,
       updatedAt: now,
@@ -245,6 +283,11 @@ export function RecommendationPublishProvider({ children }) {
       await Promise.allSettled(createdReferences.map(deleteRecommendationPublishMedia));
       throw error;
     }
+    console.info('content_publish_durable_enqueue_timing', {
+      contentType,
+      durationMs: Date.now() - now,
+      imageCount: nextMedia.length,
+    });
 
     if (sourceJob) {
       const reusedKeys = new Set(nextMedia.map((entry) => entry.localReference?.key).filter(Boolean));
@@ -265,21 +308,36 @@ export function RecommendationPublishProvider({ children }) {
     const entriesByUri = new Map();
     const revokes = [];
     const imageUris = [];
+    const materializedMedia = [];
     for (const entry of job.media || []) {
       if (entry.type === 'remote') {
         const uri = remotePreview(entry.asset);
-        if (uri) imageUris.push(uri);
+        if (uri) {
+          imageUris.push(uri);
+          materializedMedia.push({ ...entry, uri });
+        }
         continue;
       }
       const materialized = await materializeRecommendationPublishMedia(entry.localReference);
       imageUris.push(materialized.uri);
+      materializedMedia.push({ ...entry, uri: materialized.uri });
       entriesByUri.set(materialized.uri, entry);
       revokes.push(materialized.revoke);
     }
     const previous = reviewSourcesRef.current.get(jobId);
     previous?.revokes?.forEach((revoke) => revoke());
     reviewSourcesRef.current.set(jobId, { entriesByUri, revokes });
-    return { ...job, imageUris };
+    return {
+      ...job,
+      imageUris,
+      materializedMedia,
+      reviewedDraft: job.contentType === 'route'
+        ? {
+            ...job.draft,
+            route: applyRoutePublishMedia(job.draft?.route || {}, materializedMedia, { preview: true }),
+          }
+        : job.draft,
+    };
   }, [user?.uid]);
 
   const retry = useCallback(async (jobId) => {
@@ -332,10 +390,13 @@ export function RecommendationPublishProvider({ children }) {
         const materialized = await materializeRecommendationPublishMedia(mediaEntry.localReference);
         try {
           const mediaStartedAt = Date.now();
-          const preparedAsset = await uploadImageAssetRef.current(materialized.uri, {
+          const uploader = uploadersRef.current[currentJob.contentType || 'recommendation'];
+          if (typeof uploader !== 'function') throw new Error('Media publishing is unavailable.');
+          const preparedAsset = await uploader(materialized.uri, {
             onProgress: (ratio) => setMediaProgress(jobId, mediaId, ratio),
           });
-          console.info('recommendation_publish_stage_timing', {
+          console.info('content_publish_stage_timing', {
+            contentType: currentJob.contentType || 'recommendation',
             stage: 'media_pipeline',
             durationMs: Date.now() - mediaStartedAt,
           });
@@ -377,7 +438,7 @@ export function RecommendationPublishProvider({ children }) {
         entry.type === 'remote' ? entry.asset : entry.preparedAsset
       ).filter(Boolean);
       if (finalMedia.length !== (current.media || []).length) {
-        throw new Error('Not every recommendation image finished preparing.');
+        throw new Error('Not every image finished preparing.');
       }
 
       await updateJob(jobId, (job) => ({
@@ -389,33 +450,43 @@ export function RecommendationPublishProvider({ children }) {
         timings: { ...job.timings, saveStartedAt: Date.now() },
       }));
       current = jobsRef.current.find((entry) => entry.id === jobId);
-      let savePayload = {
-        ...current.payload,
-        publishRequestId: current.publishRequestId,
-        recommendation: { ...current.payload.recommendation, media: finalMedia },
-      };
       let result;
       const saveRequestStartedAt = Date.now();
-      try {
-        result = await saveRecommendation(savePayload);
-      } catch (error) {
-        if (!current.payload?.resolvedPlaceToken || !current.draft?.selectedPlace?.placeId || !isExpiredPlaceTokenError(error)) {
-          throw error;
-        }
-        const { resolvedPlaceToken, ...withoutExpiredToken } = current.payload;
-        savePayload = {
-          ...withoutExpiredToken,
-          placeId: current.draft.selectedPlace.placeId,
+      if (current.contentType === 'route') {
+        const preparedEntries = (current.media || []).map((entry, index) => ({
+          ...entry,
+          asset: finalMedia[index],
+        }));
+        const routePayload = applyRoutePublishMedia(current.payload.route, preparedEntries);
+        result = await saveRoute(routePayload, null, current.publishRequestId);
+      } else {
+        let savePayload = {
+          ...current.payload,
           publishRequestId: current.publishRequestId,
           recommendation: { ...current.payload.recommendation, media: finalMedia },
         };
-        await updateJob(jobId, (job) => ({
-          ...job,
-          payload: { ...withoutExpiredToken, placeId: current.draft.selectedPlace.placeId },
-        }));
-        result = await saveRecommendation(savePayload);
+        try {
+          result = await saveRecommendation(savePayload);
+        } catch (error) {
+          if (!current.payload?.resolvedPlaceToken || !current.draft?.selectedPlace?.placeId || !isExpiredPlaceTokenError(error)) {
+            throw error;
+          }
+          const { resolvedPlaceToken, ...withoutExpiredToken } = current.payload;
+          savePayload = {
+            ...withoutExpiredToken,
+            placeId: current.draft.selectedPlace.placeId,
+            publishRequestId: current.publishRequestId,
+            recommendation: { ...current.payload.recommendation, media: finalMedia },
+          };
+          await updateJob(jobId, (job) => ({
+            ...job,
+            payload: { ...withoutExpiredToken, placeId: current.draft.selectedPlace.placeId },
+          }));
+          result = await saveRecommendation(savePayload);
+        }
       }
-      console.info('recommendation_publish_stage_timing', {
+      console.info('content_publish_stage_timing', {
+        contentType: current.contentType || 'recommendation',
         stage: 'final_save',
         durationMs: Date.now() - saveRequestStartedAt,
       });
@@ -432,17 +503,18 @@ export function RecommendationPublishProvider({ children }) {
         timings: { ...job.timings, completedAt, totalDurationMs: completedAt - job.timings.queuedAt },
       }));
       const completedJob = jobsRef.current.find((entry) => entry.id === jobId);
-      console.info('recommendation_publish_total_timing', {
+      console.info('content_publish_total_timing', {
+        contentType: completedJob.contentType || 'recommendation',
         durationMs: completedAt - completedJob.timings.queuedAt,
         imageCount: completedJob.media?.length || 0,
         retryCount: completedJob.attempts || 0,
       });
       await deleteRecommendationPublishJobMedia(completedJob).catch((error) => {
-        console.warn('recommendation_publish_cleanup_failed', {
+        console.warn('content_publish_cleanup_failed', {
           code: String(error?.code || 'unknown'),
         });
       });
-      if (result?.country?.id && result?.city?.id) {
+      if (completedJob.contentType !== 'route' && result?.country?.id && result?.city?.id) {
         const name = result.city.name || result.city.id;
         const countryName = result.country.name || result.country.id;
         await rememberDiscoveryDestinations([{
@@ -452,12 +524,17 @@ export function RecommendationPublishProvider({ children }) {
           countryName,
           label: [name, countryName].filter(Boolean).join(' · '),
         }]).catch((error) => {
-          console.warn('recommendation_publish_recent_destination_failed', {
+          console.warn('content_publish_recent_destination_failed', {
             code: String(error?.code || 'unknown'),
           });
         });
       }
       setCompletedVersion((value) => value + 1);
+      setCompletedVersionByType((currentVersions) => ({
+        ...currentVersions,
+        [completedJob.contentType || 'recommendation']:
+          Number(currentVersions[completedJob.contentType || 'recommendation'] || 0) + 1,
+      }));
       const timer = setTimeout(() => {
         commitJobs((currentJobs) => currentJobs.filter((entry) => entry.id !== jobId));
         successTimersRef.current.delete(jobId);
@@ -470,7 +547,8 @@ export function RecommendationPublishProvider({ children }) {
       const transient = isTransientPublishError(error);
       const shouldRetry = transient && attempts <= MAX_AUTOMATIC_RETRIES;
       if (shouldRetry) {
-        console.info('recommendation_publish_retry', {
+        console.info('content_publish_retry', {
+          contentType: current.contentType || 'recommendation',
           retryNumber: attempts,
           delayMs: RETRY_DELAYS_MS[attempts - 1],
           failedStage: current.stage,
@@ -526,22 +604,29 @@ export function RecommendationPublishProvider({ children }) {
   const value = useMemo(() => ({
     activeJob,
     completedVersion,
+    completedVersionByType,
     discard,
     enqueueCreate,
     jobs: visibleJobs,
     loadJobForReview,
     retry,
-  }), [activeJob, completedVersion, discard, enqueueCreate, loadJobForReview, retry, visibleJobs]);
+  }), [activeJob, completedVersion, completedVersionByType, discard, enqueueCreate, loadJobForReview, retry, visibleJobs]);
 
   return (
-    <RecommendationPublishContext.Provider value={value}>
+    <ContentPublishContext.Provider value={value}>
       {children}
-    </RecommendationPublishContext.Provider>
+    </ContentPublishContext.Provider>
   );
 }
 
-export function useRecommendationPublish() {
-  return useContext(RecommendationPublishContext);
+export const RecommendationPublishProvider = ContentPublishProvider;
+
+export function useContentPublish() {
+  return useContext(ContentPublishContext);
 }
 
-export default RecommendationPublishContext;
+export function useRecommendationPublish() {
+  return useContentPublish();
+}
+
+export default ContentPublishContext;

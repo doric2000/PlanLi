@@ -2,6 +2,7 @@ import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
 import { Alert } from 'react-native';
+import { ENVIRONMENTS, VIBES } from '../src/constants/travelTaxonomy';
 
 // ==========================================
 // 1. Mocks Setup
@@ -122,6 +123,29 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
     removeUploadedImage: mockRemoveUploadedImage,
   })
 }));
+jest.mock('../src/hooks/useReviewedImagePicker', () => ({
+  __esModule: true,
+  default: () => ({
+    pickImagesForReview: async ({ onComplete }) => {
+      const uris = await mockPickImages();
+      await onComplete?.(uris);
+    },
+    uploadImageAssets: mockUploadImages,
+    reviewUris: [],
+    cancelReview: jest.fn(),
+    completeReview: jest.fn(),
+  }),
+}));
+jest.mock('../src/hooks/useDurableDraftMedia', () => ({
+  __esModule: true,
+  default: () => ({
+    draftJobId: '123e4567-e89b-42d3-a456-426614174000',
+    forgetUri: jest.fn(async () => {}),
+    markEnqueued: jest.fn(),
+    mediaForUri: (uri) => ({ uri }),
+    persistUris: async (uris) => uris,
+  }),
+}));
 
 // D. Mock User Permissions
 // The app's tiers are: guest | unverified | verified
@@ -172,11 +196,12 @@ function makeEditItem(overrides = {}) {
     category: 'אוכל ובילויים',
     tags: ['restaurant'],
     budget: 'economy',
-    facets: { interests: ['food'], audiences: [], vibes: [], needs: [] },
-    countryId: 'IL',
-    cityId: 'TLV',
-    country: 'Israel',
-    location: 'Tel Aviv',
+    facets: {
+      interests: ['food'], audienceScope: 'all', audiences: [], vibes: [], environments: [], needs: [],
+    },
+    destination: {
+      countryId: 'IL', cityId: 'TLV', countryName: 'Israel', cityName: 'Tel Aviv',
+    },
     place: { placeId: 'p1', name: 'Spot', geometry: { location: { lat: 32, lng: 34 } } },
     media: [],
     ...overrides,
@@ -271,6 +296,8 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     await waitFor(() => {
       expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+        contentType: 'recommendation',
+        draftJobId: '123e4567-e89b-42d3-a456-426614174000',
         sourceJobId: null,
         payload: expect.objectContaining({
           placeId: 'google-place-id',
@@ -340,6 +367,66 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => expect(mockLoadJobForReview).toHaveBeenCalledWith('publish-job-1'));
     fireEvent.press(screen.getByLabelText(/המקום,/));
     await waitFor(() => expect(screen.getByTestId('add-rec-title-input').props.value).toBe('Queued title'));
+    fireEvent.press(screen.getByLabelText(/קהל ומאפיינים,/));
+    expect(screen.getByTestId(`add-rec-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId(`add-rec-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'indoor')}`).props.accessibilityState.checked).toBe(true);
+  });
+
+  it('edit mode preserves saved vibe and environment without marking the form dirty', async () => {
+    let beforeRemoveHandler;
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+    const editItem = makeEditItem({
+      facets: {
+        interests: ['food'], audienceScope: 'all', audiences: [],
+        vibes: ['relaxed'], environments: ['indoor'], needs: [],
+      },
+    });
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: { mode: 'edit', item: editItem, postId: editItem.id } }} />
+    );
+    await waitFor(() => expect(screen.getByTestId('add-rec-title-input').props.value).toBe('Original'));
+    fireEvent.press(screen.getByLabelText(/קהל ומאפיינים,/));
+    expect(screen.getByTestId(`add-rec-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId(`add-rec-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'indoor')}`).props.accessibilityState.checked).toBe(true);
+    const preventDefault = jest.fn();
+    beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
+    expect(preventDefault).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('add-rec-submit'));
+    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalled());
+    expect(mockSaveRecommendation.mock.calls[0][0].recommendation.attributes.vibes).toEqual(['relaxed']);
+    expect(mockSaveRecommendation.mock.calls[0][0].recommendation.attributes.environment).toBe('indoor');
+  });
+
+  it('clears hydrated attributes only after an applicable tag is removed', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const editItem = makeEditItem({
+      facets: {
+        interests: ['food'], audienceScope: 'all', audiences: [],
+        vibes: ['relaxed'], environments: ['indoor'], needs: [],
+      },
+    });
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: { mode: 'edit', item: editItem, postId: editItem.id } }} />
+    );
+    await waitFor(() => expect(screen.getByTestId('add-rec-title-input').props.value).toBe('Original'));
+    fireEvent.press(screen.getByLabelText(/קטגוריה וסוג,/));
+    fireEvent.press(screen.getByTestId('add-rec-tag-0'));
+    await waitFor(() => expect(screen.getByTestId('add-rec-tag-0').props.accessibilityState.checked).toBe(false));
+    fireEvent.press(screen.getByTestId('add-rec-tag-0'));
+    fireEvent.press(screen.getByLabelText(/קהל ומאפיינים,/));
+    await waitFor(() => {
+      expect(screen.getByTestId(`add-rec-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(false);
+      expect(screen.getByTestId(`add-rec-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'indoor')}`).props.accessibilityState.checked).toBe(false);
+    });
   });
 
   it('create mode: protects an unfinished recommendation before leaving', async () => {
@@ -425,8 +512,13 @@ describe('AddRecommendationScreen Integration Test', () => {
       }),
     };
 
-    const editItem = makeEditItem();
-    const { getByTestId } = render(
+    const editItem = makeEditItem({
+      facets: {
+        interests: ['food'], audienceScope: 'all', audiences: [],
+        vibes: ['relaxed'], environments: ['indoor'], needs: [],
+      },
+    });
+    const { getByTestId, getByLabelText } = render(
       <AddRecommendationScreen
         navigation={navigationMock}
         route={{ params: { mode: 'edit', item: editItem, postId: 'post-1' } }}
@@ -436,6 +528,9 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => {
       expect(getByTestId('add-rec-title-input').props.value).toBe('Original');
     });
+    fireEvent.press(getByLabelText(/קהל ומאפיינים,/));
+    expect(getByTestId(`add-rec-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(true);
+    expect(getByTestId(`add-rec-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'indoor')}`).props.accessibilityState.checked).toBe(true);
 
     const preventDefault = jest.fn();
     const action = { type: 'POP' };

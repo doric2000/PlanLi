@@ -11,6 +11,41 @@ const HEADER_HEIGHT = 54;
 const SIDE_SIZE = 44;
 const H_PADDING = 10;
 
+// features/publishing/ContentPublishBanner.js
+export const contentPublishBannerStyles = StyleSheet.create({
+	banner: {
+		position: 'absolute',
+		left: 14,
+		right: 14,
+		zIndex: 1000,
+		elevation: 14,
+		borderRadius: 16,
+		backgroundColor: colors.white,
+		borderWidth: 1,
+		borderColor: 'rgba(30,58,95,0.12)',
+		paddingHorizontal: 14,
+		paddingVertical: 12,
+		shadowColor: '#000000',
+		shadowOpacity: 0.16,
+		shadowRadius: 12,
+		shadowOffset: { width: 0, height: 5 },
+	},
+	bannerFailed: { borderColor: 'rgba(196,52,52,0.28)', backgroundColor: '#FFF9F9' },
+	bannerSuccess: { borderColor: 'rgba(23,114,69,0.24)', backgroundColor: '#F7FFF9' },
+	contentRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+	copy: { flex: 1, gap: 7 },
+	title: { textAlign: 'right', color: colors.textPrimary, fontSize: 14, fontFamily: fontFamilies.semiBold },
+	errorText: { textAlign: 'right', color: colors.textMuted, fontSize: 12 },
+	progressTrack: { height: 4, borderRadius: 2, backgroundColor: '#E6EAF0', overflow: 'hidden' },
+	progressFill: { height: 4, borderRadius: 2, backgroundColor: colors.primary },
+	actions: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, marginTop: 10 },
+	action: { paddingHorizontal: 10, paddingVertical: 7 },
+	primaryAction: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 12, backgroundColor: colors.primary },
+	actionText: { color: colors.primary, fontSize: 13, fontFamily: fontFamilies.semiBold },
+	primaryActionText: { color: colors.white, fontSize: 13, fontFamily: fontFamilies.semiBold },
+	discardText: { color: colors.error },
+});
+
 // components/ActionBar.js
 export const actionBarStyles = StyleSheet.create({
 	overlayFooter: {
@@ -414,6 +449,93 @@ export const imagePickerBoxStyles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+});
+
+export const imageCropReviewStyles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#0B1220',
+  },
+  header: {
+    minHeight: 64,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  headerAction: {
+    width: 64,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCopy: {
+    alignItems: 'center',
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontFamily: fontFamilies.semiBold,
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  counter: {
+    marginTop: 2,
+    color: 'rgba(255,255,255,0.68)',
+    fontSize: 12,
+    fontFamily: fontFamilies.regular,
+  },
+  cancelText: {
+    color: 'rgba(255,255,255,0.82)',
+    fontSize: 14,
+    fontFamily: fontFamilies.medium,
+  },
+  confirmText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontFamily: fontFamilies.semiBold,
+  },
+  stage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  viewport: {
+    width: '100%',
+    maxWidth: 640,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  imageWrap: {
+    position: 'absolute',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  footer: {
+    minHeight: 88,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  helper: {
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
 });
 
@@ -3492,14 +3614,46 @@ export const routeDetailScreenStyles = StyleSheet.create({
         textAlign: 'right',
         writingDirection: 'rtl',
     },
-    tagsSection: {
-        marginTop: spacing.sm
+    detailSection: {
+        marginTop: spacing.lg,
+        paddingTop: spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: colors.borderLight,
     },
-    tagsContainer: {
+    factsGrid: {
         flexDirection: 'row-reverse',
         flexWrap: 'wrap',
-        justifyContent: 'flex-start',
-        gap: spacing.sm
+        columnGap: spacing.md,
+    },
+    factItem: {
+        width: '47%',
+    },
+    metadataGroup: {
+        marginTop: spacing.sm,
+    },
+    metadataTitle: {
+        fontSize: 12,
+        color: colors.textMuted,
+        fontFamily: fontFamilies.medium,
+        textAlign: 'right',
+        writingDirection: 'rtl',
+        marginBottom: spacing.xs,
+    },
+    needRow: {
+        minHeight: 48,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        gap: spacing.sm,
+        paddingVertical: spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.borderLight,
+    },
+    needText: {
+        flex: 1,
+        fontSize: 14,
+        color: colors.textPrimary,
+        textAlign: 'right',
+        writingDirection: 'rtl',
     },
     timelineSection: {
         padding: spacing.screenHorizontal,

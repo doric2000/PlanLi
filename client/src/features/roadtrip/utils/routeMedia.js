@@ -12,6 +12,77 @@ const cloneTripDays = (tripDays) =>
       : [],
   }));
 
+export const ensureRouteDraftIds = (tripDays, createId) =>
+  (Array.isArray(tripDays) ? tripDays : []).map((day, dayIndex) => ({
+    ...(day || {}),
+    draftId: day?.draftId || day?.id || createId(`day-${dayIndex + 1}`),
+    stops: (Array.isArray(day?.stops) ? day.stops : []).map((stop, stopIndex) => ({
+      ...(stop || {}),
+      draftId: stop?.draftId || stop?.id || createId(`stop-${dayIndex + 1}-${stopIndex + 1}`),
+    })),
+  }));
+
+export function extractRoutePublishMedia(tripDays) {
+  const days = cloneTripDays(tripDays);
+  const media = [];
+  days.forEach((day, dayIndex) => {
+    if (isLocalImageUri(day.image)) {
+      media.push({
+        uri: day.image,
+        slot: { type: 'route-day', dayIndex, draftId: day.draftId || day.id || null },
+      });
+      delete day.image;
+      day.media = null;
+    }
+    day.stops.forEach((stop, stopIndex) => {
+      if (isLocalImageUri(stop.image)) {
+        media.push({
+          uri: stop.image,
+          slot: {
+            type: 'route-stop',
+            dayIndex,
+            stopIndex,
+            dayDraftId: day.draftId || day.id || null,
+            draftId: stop.draftId || stop.id || null,
+          },
+        });
+        delete stop.image;
+        stop.media = null;
+      }
+    });
+  });
+  return { days, media };
+}
+
+const targetForSlot = (days, slot) => {
+  if (!slot) return null;
+  const desiredDayId = slot.type === 'route-day' ? slot.draftId : slot.dayDraftId;
+  const day = days.find((entry) =>
+    desiredDayId && (entry.draftId === desiredDayId || entry.id === desiredDayId)
+  ) || days[slot.dayIndex];
+  if (!day) return null;
+  if (slot.type === 'route-day') return day;
+  return (day.stops || []).find((entry) =>
+    slot.draftId && (entry.draftId === slot.draftId || entry.id === slot.draftId)
+  ) || day.stops?.[slot.stopIndex] || null;
+};
+
+export function applyRoutePublishMedia(route, mediaEntries, { preview = false } = {}) {
+  const nextRoute = { ...route, days: cloneTripDays(route?.days) };
+  for (const entry of mediaEntries || []) {
+    const target = targetForSlot(nextRoute.days, entry.slot);
+    if (!target) throw new Error('A queued route image no longer matches its day or stop.');
+    if (preview) {
+      target.image = entry.uri;
+      target.media = entry.asset || entry.preparedAsset || target.media || null;
+    } else {
+      delete target.image;
+      target.media = entry.asset || entry.preparedAsset || null;
+    }
+  }
+  return nextRoute;
+}
+
 const isCompleteMediaAsset = (asset) =>
   typeof asset?.assetId === "string" &&
   typeof asset?.large?.url === "string" &&

@@ -1090,6 +1090,49 @@ async function resolveDestinationFromToken({
   return destination;
 }
 
+function isExpiredResolvedPlaceError(error) {
+  return ['not-found', 'deadline-exceeded'].includes(String(error?.code || '')) &&
+    /expired|search again/i.test(String(error?.message || ''));
+}
+
+async function resolveSubmittedPlaceDestination({
+  admin,
+  auth,
+  placeId,
+  resolvedPlaceToken,
+  countryOverrideId,
+  mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
+  restCountriesKey,
+  providerRateLimitKey,
+  providerBudgetConsumed = false,
+}) {
+  if (resolvedPlaceToken) {
+    try {
+      return await resolveDestinationFromToken({
+        admin, auth, resolvedPlaceToken, countryOverrideId, mapsKey,
+        newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
+      });
+    } catch (error) {
+      if (!placeId || !isExpiredResolvedPlaceError(error)) throw error;
+      console.info('place_resolution_token_fallback', { reason: 'expired' });
+    }
+  }
+  if (!providerBudgetConsumed) {
+    await consumeProviderBudget({
+      admin,
+      auth,
+      action: 'bilingualResolution',
+      key: providerRateLimitKey,
+    });
+  }
+  return resolveGoogleDestination({
+    admin, placeId, countryOverrideId, mapsKey, newPlacesKey, placesProvider,
+    restCountriesKey,
+  });
+}
+
 async function resolveRecommendationDestination({
   admin,
   auth,
@@ -1106,23 +1149,17 @@ async function resolveRecommendationDestination({
     'permission-denied',
     'Email verification is required.'
   );
-  if (!data?.resolvedPlaceToken) {
-    await consumeProviderBudget({
-      admin,
-      auth,
-      action: 'bilingualResolution',
-      key: providerRateLimitKey,
-    });
-  }
-  const destination = data?.resolvedPlaceToken
-    ? await resolveDestinationFromToken({
-        admin, auth, resolvedPlaceToken: data.resolvedPlaceToken, mapsKey,
-        newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
-      })
-    : await resolveGoogleDestination({
-        admin, placeId: data?.placeId, mapsKey, newPlacesKey, placesProvider,
-        restCountriesKey,
-      });
+  const destination = await resolveSubmittedPlaceDestination({
+    admin,
+    auth,
+    placeId: data?.placeId,
+    resolvedPlaceToken: data?.resolvedPlaceToken,
+    mapsKey,
+    newPlacesKey,
+    placesProvider,
+    restCountriesKey,
+    providerRateLimitKey,
+  });
   return {
     place: destination.place,
     destination: {
@@ -1249,24 +1286,18 @@ async function saveRecommendation({
   if (data?.destinationRef) {
     destination = await resolveExistingDestination(db, data.destinationRef);
   } else {
-    if (!data?.resolvedPlaceToken) {
-      await consumeProviderBudget({
-        admin,
-        auth,
-        action: 'bilingualResolution',
-        key: providerRateLimitKey,
-      });
-    }
-    destination = data?.resolvedPlaceToken
-      ? await resolveDestinationFromToken({
-          admin, auth, resolvedPlaceToken: data.resolvedPlaceToken,
-          countryOverrideId: data?.countryOverrideId, mapsKey,
-          newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
-        })
-      : await resolveGoogleDestination({
-          admin, placeId: data?.placeId, countryOverrideId: data?.countryOverrideId,
-          mapsKey, newPlacesKey, placesProvider, restCountriesKey,
-        });
+    destination = await resolveSubmittedPlaceDestination({
+      admin,
+      auth,
+      placeId: data?.placeId,
+      resolvedPlaceToken: data?.resolvedPlaceToken,
+      countryOverrideId: data?.countryOverrideId,
+      mapsKey,
+      newPlacesKey,
+      placesProvider,
+      restCountriesKey,
+      providerRateLimitKey,
+    });
   }
 
   const payload = {
@@ -1485,6 +1516,7 @@ module.exports = {
   resolvePlaceCountry,
   resolveGoogleDestination,
   resolveDestinationFromToken,
+  resolveSubmittedPlaceDestination,
   resolveRecommendationDestination,
   sanitizeRecommendationContent,
   sanitizeRecommendationAttributes,

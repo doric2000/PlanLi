@@ -8,9 +8,15 @@ import {
   useRecommendationPublish,
 } from '../src/features/community/publishing/RecommendationPublishContext';
 
+let mockUuidSerial = 0;
+jest.mock('expo-crypto', () => ({
+  randomUUID: () => `123e4567-e89b-42d3-a456-${String(++mockUuidSerial).padStart(12, '0')}`,
+}));
+
 const mockUser = { uid: 'owner-1' };
 const mockUploadImageAsset = jest.fn();
 const mockSaveRecommendation = jest.fn();
+const mockSaveRoute = jest.fn();
 const mockLoadJobs = jest.fn();
 const mockSaveJobs = jest.fn();
 const mockPersistMedia = jest.fn();
@@ -26,6 +32,9 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
 }));
 jest.mock('../src/services/RecommendationService', () => ({
   saveRecommendation: (...args) => mockSaveRecommendation(...args),
+}));
+jest.mock('../src/services/RouteService', () => ({
+  saveRoute: (...args) => mockSaveRoute(...args),
 }));
 jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   rememberDiscoveryDestinations: jest.fn(async () => []),
@@ -60,6 +69,7 @@ describe('RecommendationPublishProvider', () => {
       thumb: { url: 'https://cdn/thumb.webp' },
     });
     mockDeleteJobMedia.mockResolvedValue(undefined);
+    mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
   });
 
   it('durably enqueues before the unresolved network save and completes in the background', async () => {
@@ -96,6 +106,52 @@ describe('RecommendationPublishProvider', () => {
     await waitFor(() => expect(api.activeJob.status).toBe('success'));
     expect(api.completedVersion).toBe(1);
     expect(mockDeleteJobMedia).toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('publishes a route through the same durable queue and restores its nested media slot', async () => {
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        contentType: 'route',
+        payload: { route: { title: 'Queued route', days: [{ draftId: 'day-1', stops: [] }] } },
+        draft: { route: { title: 'Queued route', days: [{ draftId: 'day-1', stops: [] }] } },
+        media: [{ uri: 'file:///day.jpg', slot: { type: 'route-day', dayIndex: 0, draftId: 'day-1' } }],
+      });
+    });
+    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
+    const [routePayload, routeId, publishRequestId] = mockSaveRoute.mock.calls[0];
+    expect(routePayload.days[0].media.assetId).toBe('123e4567-e89b-42d3-a456-426614174000');
+    expect(routePayload.days[0].image).toBeUndefined();
+    expect(routeId).toBeNull();
+    expect(publishRequestId).toMatch(/^[0-9a-f-]{36}$/i);
+    await waitFor(() => expect(api.completedVersionByType.route).toBe(1));
+    screen.unmount();
+  });
+
+  it('writes only the manifest when accepted crops were already persisted', async () => {
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    const alreadyDurable = { platform: 'native', key: 'file:///private/crop.jpg' };
+    await act(async () => {
+      await api.enqueueCreate({
+        draftJobId: '123e4567-e89b-42d3-a456-426614174099',
+        payload: { destinationRef: { countryId: 'IL', cityId: 'TLV' }, recommendation: { media: [] } },
+        draft: {},
+        media: [{
+          uri: 'file:///crop.jpg',
+          mediaId: '123e4567-e89b-42d3-a456-426614174098',
+          localReference: alreadyDurable,
+        }],
+      });
+    });
+    expect(mockPersistMedia).not.toHaveBeenCalled();
+    expect(mockSaveJobs).toHaveBeenCalled();
     screen.unmount();
   });
 

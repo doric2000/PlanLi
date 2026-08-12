@@ -1,8 +1,9 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const {
   isVerifiedCaller,
-  resolveDestinationFromToken,
-  resolveGoogleDestination,
+  normalizePublishRequestId,
+  resolveSubmittedPlaceDestination,
+  stableDocumentId,
   validateMediaAssets,
 } = require('./recommendationService');
 const {
@@ -342,15 +343,18 @@ async function resolveRoutePlaces({
     });
   }
   const resolved = await mapWithConcurrency(entries, 5, async (entry) => {
-    const destination = entry.resolvedPlaceToken
-      ? await resolveDestinationFromToken({
-          admin, auth, resolvedPlaceToken: entry.resolvedPlaceToken, mapsKey,
-          newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
-        })
-      : await resolveGoogleDestination({
-          admin, placeId: entry.placeId, mapsKey, newPlacesKey, placesProvider,
-          restCountriesKey,
-        });
+    const destination = await resolveSubmittedPlaceDestination({
+      admin,
+      auth,
+      placeId: entry.placeId,
+      resolvedPlaceToken: entry.resolvedPlaceToken,
+      mapsKey,
+      newPlacesKey,
+      placesProvider,
+      restCountriesKey,
+      providerRateLimitKey,
+      providerBudgetConsumed: !entry.resolvedPlaceToken,
+    });
     assert(destination.place?.placeId === entry.placeId, 'failed-precondition', 'A route place token does not match its stop. Search again.');
     return destination;
   });
@@ -431,6 +435,7 @@ async function saveRoute({
   restCountriesKey,
   providerRateLimitKey,
 }) {
+  const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
   assert(placesProvider === 'new' ? newPlacesKey : mapsKey, 'failed-precondition',
@@ -440,7 +445,14 @@ async function saveRoute({
   const routeId = typeof data?.routeId === 'string' && data.routeId.trim()
     ? cleanDocumentId(data.routeId, 'routeId', '')
     : null;
-  const routeRef = routeId ? db.doc(`routes/${routeId}`) : db.collection('routes').doc();
+  const publishRequestId = normalizePublishRequestId(data?.publishRequestId);
+  assert(!(routeId && publishRequestId), 'invalid-argument',
+    'publishRequestId is only supported when creating a route.');
+  const routeRef = routeId
+    ? db.doc(`routes/${routeId}`)
+    : publishRequestId
+      ? db.doc(`routes/${stableDocumentId('route', `${uid}:${publishRequestId}`)}`)
+      : db.collection('routes').doc();
   const existingSnapshot = await routeRef.get();
   const isAdmin = auth.token?.admin === true;
   const existingRoute = routeId
@@ -449,6 +461,23 @@ async function saveRoute({
   if (routeId) {
     assert(existingRoute, 'not-found', 'Route does not exist.');
   } else {
+    if (existingSnapshot.exists && publishRequestId) {
+      const replay = existingSnapshot.data() || {};
+      assert(replay.ownerId === uid, 'already-exists',
+        'This publication request conflicts with an existing route.');
+      assert((replay.status || 'active') === 'active' && replay.activeRevisionId,
+        'failed-precondition', 'The existing route publication is not active.');
+      console.info('route_save_timing', {
+        durationMs: Date.now() - saveStartedAt,
+        idempotentReplay: true,
+      });
+      return {
+        routeId: routeRef.id,
+        revisionId: replay.activeRevisionId,
+        revisionVersion: revisionVersion(replay),
+        idempotentReplay: true,
+      };
+    }
     assert(!existingSnapshot.exists, 'already-exists', 'Route already exists.');
   }
   const baseVersion = revisionVersion(existingRoute);
@@ -465,6 +494,7 @@ async function saveRoute({
     existingMedia: existingRoute?.media,
   });
   const mediaDays = replaceValidatedMedia(route.days, validatedMedia);
+  const locationStartedAt = Date.now();
   const resolved = await resolveRoutePlaces({
     admin,
     auth,
@@ -559,12 +589,25 @@ async function saveRoute({
   });
   await batch.commit();
 
-  await db.runTransaction(async (transaction) => {
+  const transactionOutcome = await db.runTransaction(async (transaction) => {
     const currentSnapshot = await transaction.get(routeRef);
     const currentRoute = routeId
       ? assertEditableRoute(currentSnapshot, uid, isAdmin)
       : null;
     if (!routeId) {
+      if (currentSnapshot.exists && publishRequestId) {
+        const replay = currentSnapshot.data() || {};
+        assert(replay.ownerId === uid, 'already-exists',
+          'This publication request conflicts with an existing route.');
+        assert((replay.status || 'active') === 'active' && replay.activeRevisionId,
+          'failed-precondition', 'The existing route publication is not active.');
+        transaction.update(revisionRef, {
+          state: 'superseded',
+          supersededAt: now,
+          expireAt: new Date(Date.now() + PREPARED_REVISION_TTL_MS),
+        });
+        return { replay: true, data: replay };
+      }
       assert(!currentSnapshot.exists, 'already-exists', 'Route already exists.');
     }
     assertRouteRevisionVersion(currentRoute, baseVersion);
@@ -677,6 +720,34 @@ async function saveRoute({
         expireAt: new Date(Date.now() + SUPERSEDED_REVISION_TTL_MS),
       });
     }
+    return { replay: false };
+  });
+  console.info('route_place_resolution_timing', {
+    durationMs: Date.now() - locationStartedAt,
+    stopCount: mediaDays.reduce((sum, day) => sum + day.stops.length, 0),
+  });
+  if (transactionOutcome?.replay) {
+    if (typeof db.recursiveDelete === 'function') {
+      await db.recursiveDelete(revisionRef).catch((error) => {
+        console.warn('route_replay_revision_cleanup_failed', {
+          code: String(error?.code || 'unknown'),
+        });
+      });
+    }
+    console.info('route_save_timing', {
+      durationMs: Date.now() - saveStartedAt,
+      idempotentReplay: true,
+    });
+    return {
+      routeId: routeRef.id,
+      revisionId: transactionOutcome.data?.activeRevisionId,
+      revisionVersion: revisionVersion(transactionOutcome.data),
+      idempotentReplay: true,
+    };
+  }
+  console.info('route_save_timing', {
+    durationMs: Date.now() - saveStartedAt,
+    idempotentReplay: false,
   });
   return { routeId: routeRef.id, revisionId, revisionVersion: baseVersion + 1 };
 }

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, TouchableOpacity, View } from "react-native";
+import { randomUUID } from "expo-crypto";
 import AppText from "../../../components/AppText";
 import { common, spacing } from "../../../styles";
 import {
@@ -21,6 +22,8 @@ import {
 import { auth } from "../../../config/firebase";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import useDurableDraftMedia from "../../../hooks/useDurableDraftMedia";
+import { useContentPublish } from "../../publishing/ContentPublishContext";
 import DayEditorModal from "../components/DayEditorModal";
 import DayList from "../components/DayList";
 import { FormInput } from "../../../components/FormInput";
@@ -32,6 +35,8 @@ import { useBackButton } from "../../../hooks/useBackButton";
 import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
 import { getUserTier } from "../../../utils/userTier";
 import {
+	ensureRouteDraftIds,
+	extractRoutePublishMedia,
 	prepareRouteMedia,
 	revokeRouteObjectUrls,
 } from "../utils/routeMedia";
@@ -124,6 +129,7 @@ function buildRouteFormComparable({
 }
 
 const createEmptyDay = () => ({
+	draftId: randomUUID(),
 	description: "",
 	image: null,
 	stops: [],
@@ -156,7 +162,16 @@ const EMPTY_ROUTE_COMPARABLE = buildRouteFormComparable({
 
 export default function AddRoutesScreen({ navigation, route }) {
 	const routeToEdit = route?.params?.routeToEdit;
+	const publishJobId = route?.params?.publishJobId || null;
 	const editingRouteId = routeToEdit?.id ?? null;
+	const { enqueueCreate, loadJobForReview } = useContentPublish();
+	const {
+		draftJobId,
+		forgetUri: forgetDurableImage,
+		markEnqueued: markDurableImagesEnqueued,
+		mediaForUri: durableMediaForUri,
+		persistUris: persistReviewedImages,
+	} = useDurableDraftMedia({ enabled: !routeToEdit });
 
 	const [title, setTitle] = useState("");
 	const [days, setDays] = useState("");
@@ -213,7 +228,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setDays(routeToEdit.dayCount ? String(routeToEdit.dayCount) : "");
 		setDistance(routeToEdit.distanceKm ? String(routeToEdit.distanceKm) : "");
 		setDesc(routeToEdit.description || "");
-		setTripDays(routeToEdit.days || []);
+		setTripDays(ensureRouteDraftIds(routeToEdit.days || [], () => randomUUID()));
 		setCategoryIds(routeToEdit.categoryIds || []);
 		setSubcategoryIds(routeToEdit.subcategoryIds || []);
 		setAudienceScope(routeToEdit.facets?.audienceScope || (routeToEdit.facets?.audiences?.length ? "selected" : "all"));
@@ -240,6 +255,42 @@ export default function AddRoutesScreen({ navigation, route }) {
 		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
 	}, [editingRouteId]);
+
+	useEffect(() => {
+		if (!publishJobId || routeToEdit) return undefined;
+		let active = true;
+		loadJobForReview(publishJobId).then((job) => {
+			const restored = job?.reviewedDraft?.route;
+			if (!active || !restored) return;
+			const attributes = restored.attributes || {};
+			setTitle(restored.title || "");
+			setDays(restored.days?.length ? String(restored.days.length) : "");
+			setDistance(restored.distanceKm != null ? String(restored.distanceKm) : "");
+			setDesc(restored.description || "");
+			setTripDays(ensureRouteDraftIds(restored.days || [], () => randomUUID()));
+			setCategoryIds(restored.categoryIds || []);
+			setSubcategoryIds(restored.subcategoryIds || []);
+			setAudienceScope(attributes.audienceScope || "selected");
+			setAudiences(attributes.audiences || []);
+			setBudgetLevel(attributes.budgetLevel || "");
+			setDifficulty(restored.difficulty || "");
+			setExperienceLevel(restored.experienceLevel || "");
+			setTransportModes(restored.transportModes || []);
+			setPace(restored.pace || "");
+			setVibes(attributes.vibes || []);
+			setTravelerStyles(attributes.travelerStyles || []);
+			setNeeds(attributes.needs || []);
+			setNeedsCoverageConfirmed(Boolean(attributes.needsCoverageConfirmed));
+			setSeasons(attributes.seasons || []);
+			setEnvironment(attributes.environment || "");
+			setExpandedSection("days");
+			setValidation(emptyValidation());
+		}).catch((error) => {
+			console.error("Could not restore queued route:", error);
+			if (active) Alert.alert("לא הצלחנו לפתוח את הטיול", "אפשר לנסות שוב מסרגל הפרסום.");
+		});
+		return () => { active = false; };
+	}, [loadJobForReview, publishJobId, routeToEdit]);
 
 	const routeFormComparable = useMemo(
 		() =>
@@ -325,13 +376,23 @@ export default function AddRoutesScreen({ navigation, route }) {
 
 		setTripDays((currentDays) => {
 			if (currentDays.length === parsedDays) return currentDays;
-			if (currentDays.length > parsedDays) return currentDays.slice(0, parsedDays);
+			if (currentDays.length > parsedDays) {
+				currentDays.slice(parsedDays).forEach((day) => {
+					Promise.resolve(forgetDurableImage(day?.image)).catch(() => {});
+					(day?.stops || []).forEach((stop) => {
+						Promise.resolve(forgetDurableImage(stop?.image)).catch(() => {});
+					});
+				});
+				return currentDays.slice(0, parsedDays);
+			}
 
 			return [
 				...currentDays,
 				...Array.from({ length: parsedDays - currentDays.length }, createEmptyDay),
 			];
 		});
+	// forgetDurableImage is stable for the lifetime of the draft.
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [days]);
 
 	useEffect(() => {
@@ -453,7 +514,10 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const handleSaveDay = (dayData, index) => {
 		setTripDays((currentDays) => {
 			const nextDays = [...currentDays];
-			nextDays[index] = dayData;
+			nextDays[index] = {
+				...dayData,
+				draftId: currentDays[index]?.draftId || dayData?.draftId || randomUUID(),
+			};
 			return nextDays;
 		});
 	};
@@ -483,16 +547,12 @@ export default function AddRoutesScreen({ navigation, route }) {
 
 		setSubmitting(true);
 		try {
-			const preparedMedia = await prepareRouteMedia(
-				tripDays,
-				uploadImageAssets
-			);
 			const routeData = {
 				taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
 				title: title.trim(),
 				description: desc.trim(),
 				distanceKm: parsedDistance,
-				days: preparedMedia.days,
+				days: [],
 				categoryIds,
 				subcategoryIds,
 				attributes: {
@@ -512,12 +572,33 @@ export default function AddRoutesScreen({ navigation, route }) {
 				pace,
 			};
 
-			await saveRoute(routeData, routeToEdit?.id || null);
-			if (routeToEdit) {
-				Alert.alert("הצלחה", "המסלול עודכן.");
-			} else {
-				Alert.alert("הצלחה", "המסלול נוסף.");
+			if (!routeToEdit) {
+				const durableDays = ensureRouteDraftIds(tripDays, () => randomUUID());
+				const queued = extractRoutePublishMedia(durableDays);
+				const queuedRoute = { ...routeData, days: queued.days };
+				await enqueueCreate({
+					contentType: "route",
+					draftJobId: publishJobId ? null : draftJobId,
+					sourceJobId: publishJobId,
+					payload: { route: queuedRoute },
+					draft: { route: queuedRoute },
+					media: queued.media.map((item) => ({
+						...durableMediaForUri(item.uri),
+						slot: item.slot,
+					})),
+				});
+				markDurableImagesEnqueued();
+				revokeRouteObjectUrls(tripDays);
+				allowLeaveRef.current = true;
+				navigation.goBack();
+				return;
 			}
+
+			const preparedMedia = await prepareRouteMedia(tripDays, uploadImageAssets);
+			routeData.days = preparedMedia.days;
+
+			await saveRoute(routeData, routeToEdit?.id || null);
+			Alert.alert("הצלחה", "המסלול עודכן.");
 			revokeRouteObjectUrls(tripDays);
 			allowLeaveRef.current = true;
 			navigation.goBack();
@@ -701,6 +782,8 @@ export default function AddRoutesScreen({ navigation, route }) {
 				onSave={handleSaveDay}
 				dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
 				initialData={editingDayIndex !== null ? tripDays[editingDayIndex] : {}}
+				onPersistImage={async (uri) => { await persistReviewedImages([uri]); }}
+				onForgetImage={forgetDurableImage}
 			/>
 			<UnsavedChangesModal
 				visible={unsavedModalVisible}

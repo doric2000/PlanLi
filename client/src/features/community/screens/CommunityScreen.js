@@ -79,10 +79,11 @@ export default function CommunityScreen({ navigation }) {
   } = useMapRecommendations({ enabled: mapOpen, request: discoveryRequest });
   const { location: userLocation, requestLocation } = useUserLocation();
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
-  const { completedVersion } = useRecommendationPublish();
+  const { completedVersionByType = {} } = useRecommendationPublish();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
   const feedListRef = useRef(null);
-  const publishVersionRef = useRef(completedVersion);
+  const recommendationPublishVersion = Number(completedVersionByType.recommendation || 0);
+  const publishVersionRef = useRef(recommendationPublishVersion);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -95,10 +96,10 @@ export default function CommunityScreen({ navigation }) {
   }, [discoveryRequest, setDiscoveryRequest]);
 
   useEffect(() => {
-    if (publishVersionRef.current === completedVersion) return;
-    publishVersionRef.current = completedVersion;
+    if (publishVersionRef.current === recommendationPublishVersion) return;
+    publishVersionRef.current = recommendationPublishVersion;
     refresh();
-  }, [completedVersion, refresh]);
+  }, [recommendationPublishVersion, refresh]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',

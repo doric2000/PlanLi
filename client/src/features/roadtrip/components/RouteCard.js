@@ -20,7 +20,7 @@ import { ActionMenu } from "../../../components/ActionMenu";
 import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
 import PreferenceContextLine from "../../../components/PreferenceContextLine";
-import { cards, tags as tagsStyle, routeCardStyles as styles } from "../../../styles";
+import { cards, routeCardStyles as styles } from "../../../styles";
 import { auth } from "../../../config/firebase";
 import { getUserTier } from "../../../utils/userTier";
 import { useAdminClaim } from "../../../hooks/useAdminClaim";
@@ -28,8 +28,6 @@ import { formatTimestamp } from "../../../utils/formatTimestamp";
 import { getRouteImageUrls } from "../../../utils/mediaAssets";
 import {
 	getOptionLabel,
-	getTagLabel,
-	INTERESTS,
 	ROUTE_DIFFICULTIES,
 	TRANSPORT_MODES,
 } from "../../../constants/travelTaxonomy";
@@ -41,56 +39,6 @@ const text = {
 	km: "\u05e7\u05f4\u05de",
 	noImage: "\u05de\u05e1\u05dc\u05d5\u05dc \u05d8\u05d9\u05d5\u05dc",
 };
-
-const getAllTags = (route) => {
-	const tags = [
-		...(route?.subcategoryIds || []).map(getTagLabel),
-		...(route?.facets?.interests || [])
-			.slice(0, 2)
-			.map((interestId) => getOptionLabel(INTERESTS, interestId)),
-	].filter(Boolean);
-
-	return Array.from(new Set(tags));
-};
-
-const RenderTags = ({ tags }) => {
-	const MAX_VISIBLE = 3;
-	const [showAll, setShowAll] = useState(false);
-
-	if (!Array.isArray(tags) || tags.length === 0) return null;
-
-	const visibleTags = showAll ? tags : tags.slice(0, MAX_VISIBLE);
-	const hasMore = tags.length > MAX_VISIBLE;
-
-	return (
-		<View style={tagsStyle.wrapper}>
-			<ScrollViewLike>
-				{visibleTags.map((tag, idx) => (
-					<View key={`${tag}:${idx}`} style={tagsStyle.item}>
-						<AppText style={tagsStyle.text}>#{tag}</AppText>
-					</View>
-				))}
-				{!showAll && hasMore && (
-					<TouchableOpacity onPress={() => setShowAll(true)} activeOpacity={0.8}>
-						<AppText style={styles.moreTagsText}>+{tags.length - MAX_VISIBLE}</AppText>
-					</TouchableOpacity>
-				)}
-			</ScrollViewLike>
-		</View>
-	);
-};
-
-const ScrollViewLike = ({ children }) => (
-	<FlatList
-		horizontal
-		inverted
-		data={React.Children.toArray(children)}
-		keyExtractor={(_, index) => `tag-${index}`}
-		renderItem={({ item }) => item}
-		showsHorizontalScrollIndicator={false}
-		style={tagsStyle.container}
-	/>
-);
 
 export const RouteCard = ({
 	item,
@@ -118,7 +66,6 @@ export const RouteCard = ({
 		() => getRouteImageUrls(item, "thumb")[0] || null,
 		[item]
 	);
-	const allTags = useMemo(() => getAllTags(item), [item]);
 	const [activeImageIndex, setActiveImageIndex] = useState(0);
 	const carouselRef = useRef(null);
 	const imageWindow = useBoundedImageWindow(activeImageIndex, routeImages.length);
@@ -423,7 +370,6 @@ export const RouteCard = ({
 					{item.description}
 				</AppText>
 
-				<RenderTags tags={allTags} />
 			</View>
 		);
 
