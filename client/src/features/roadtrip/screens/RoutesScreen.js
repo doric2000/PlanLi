@@ -44,6 +44,7 @@ import {
 } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
+import { useContentPublish } from '../../publishing/ContentPublishContext';
 
 const text = {
   title: 'מסלולים',
@@ -74,6 +75,9 @@ export default function RoutesScreen({ navigation }) {
   const currentUser = auth.currentUser;
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
+  const { completedVersionByType = {} } = useContentPublish();
+  const routePublishVersion = Number(completedVersionByType.route || 0);
+  const completedRouteVersionRef = useRef(routePublishVersion);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -111,6 +115,12 @@ export default function RoutesScreen({ navigation }) {
   useFocusEffect(useCallback(() => {
     fetchRoutes({ showLoader: routes.length === 0 });
   }, [fetchRoutes]));
+
+  useEffect(() => {
+    if (completedRouteVersionRef.current === routePublishVersion) return;
+    completedRouteVersionRef.current = routePublishVersion;
+    fetchRoutes({ showLoader: false });
+  }, [routePublishVersion, fetchRoutes]);
 
   const refresh = () => {
     setRefreshing(true);

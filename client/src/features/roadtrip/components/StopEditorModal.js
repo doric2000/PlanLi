@@ -5,9 +5,10 @@ import AppText from "../../../components/AppText";
 import ExactLocationPicker from "../../../components/ExactLocationPicker";
 import { FormInput } from "../../../components/FormInput";
 import { ImagePickerBox } from "../../../components/ImagePickerBox";
+import ImageCropReviewModal from "../../../components/ImageCropReviewModal";
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
-import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import useReviewedImagePicker from "../../../hooks/useReviewedImagePicker";
 import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { hasValidStopLocation, getStopCoordinates } from "../utils/routeStops";
 import { stopEditorModalStyles as styles } from "../../../styles";
@@ -34,6 +35,8 @@ export default function StopEditorModal({
 	initialData,
 	dayIndex,
 	stopIndex,
+	onPersistImage,
+	onForgetImage,
 }) {
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
@@ -44,14 +47,17 @@ export default function StopEditorModal({
 	const {
 		imageUri: image,
 		setImageUri: setImage,
-		pickImage,
+		pickOneForReview,
 		clearImage,
+		cancelReview,
+		completeReview,
+		reviewUris,
 		uploading,
-	} = useImagePickerWithUpload({
+	} = useReviewedImagePicker({
 		kind: "route",
 		quality: 1,
-		maxLongEdge: 2560,
-		normalizeCompress: 0.94,
+		maxLongEdge: 2048,
+		processOnSelect: false,
 	});
 
 	useEffect(() => {
@@ -206,14 +212,30 @@ export default function StopEditorModal({
 					<AppText style={styles.photoLabel}>תמונה לתחנה</AppText>
 					<ImagePickerBox
 						imageUri={image}
-						onPress={() => pickImage((uri) => setImage(uri))}
-						onRemove={clearImage}
+						onPress={() => pickOneForReview(async (uri) => {
+							await onPersistImage?.(uri);
+							await onForgetImage?.(image);
+							setImage(uri);
+						})}
+						onRemove={() => {
+							Promise.resolve(onForgetImage?.(image)).catch(() => {});
+							clearImage();
+						}}
 						maxImages={1}
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה לתחנה"}
 						style={styles.imagePickerSpacing}
 						loading={uploading}
 					/>
 				</ScrollView>
+				<ImageCropReviewModal
+					visible={reviewUris.length > 0}
+					uris={reviewUris}
+					aspect={[4, 3]}
+					maxLongEdge={2048}
+					compress={0.94}
+					onCancel={cancelReview}
+					onComplete={completeReview}
+				/>
 			</View>
 		</Modal>
 	);

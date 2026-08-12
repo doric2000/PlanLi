@@ -14,7 +14,7 @@ export default function DayList({ days, onEdit }) {
 
 			{days.map((day, index) => (
 				<TouchableOpacity
-					key={index}
+					key={day.draftId || day.id || index}
 					style={styles.dayCard}
 					activeOpacity={0.85}
 					onPress={() => onEdit(index)}

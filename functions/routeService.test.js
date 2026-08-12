@@ -11,7 +11,9 @@ const {
   revisionVersion,
   sanitizeRouteInput,
   sanitizeRouteMetadata,
+  saveRoute,
 } = require('./routeService');
+const { stableDocumentId } = require('./recommendationService');
 
 function canonicalRoute(overrides = {}) {
   return {
@@ -131,6 +133,64 @@ test('route edits reject deletion races and changed revisions', () => {
 
 test('legacy provider fan-out is capped until resolved place tokens replace it', () => {
   assert.equal(MAX_PROVIDER_RESOLUTIONS_PER_SAVE, 5);
+});
+
+test('publishRequestId route replays return the same active route without creating another revision', async () => {
+  const requestId = '123e4567-e89b-42d3-a456-426614174000';
+  const routeId = stableDocumentId('route', `owner:${requestId}`);
+  let reads = 0;
+  const routeDocument = {
+    ownerId: 'owner', status: 'active', activeRevisionId: 'revision-1', revisionVersion: 1,
+  };
+  const db = {
+    doc: (path) => ({
+      path,
+      id: path.split('/').at(-1),
+      get: async () => {
+        reads += 1;
+        return { exists: path === `routes/${routeId}`, data: () => routeDocument };
+      },
+    }),
+  };
+  const admin = { firestore: () => db };
+  const auth = {
+    uid: 'owner',
+    token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+  };
+  const input = {
+    admin, auth, mapsKey: 'maps-key', data: { publishRequestId: requestId, route: {} },
+  };
+
+  const firstReplay = await saveRoute(input);
+  const secondReplay = await saveRoute(input);
+  assert.equal(firstReplay.routeId, routeId);
+  assert.equal(secondReplay.routeId, routeId);
+  assert.equal(firstReplay.revisionId, 'revision-1');
+  assert.equal(secondReplay.idempotentReplay, true);
+  assert.equal(reads, 2);
+});
+
+test('route publishRequestId rejects malformed IDs and edit combinations', async () => {
+  const auth = {
+    uid: 'owner',
+    token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+  };
+  const admin = { firestore: () => ({ doc: () => ({}) }) };
+  await assert.rejects(
+    saveRoute({ admin, auth, mapsKey: 'maps-key', data: { publishRequestId: 'bad', route: {} } }),
+    /publishRequestId/
+  );
+  await assert.rejects(
+    saveRoute({
+      admin, auth, mapsKey: 'maps-key',
+      data: {
+        routeId: 'route-1',
+        publishRequestId: '123e4567-e89b-42d3-a456-426614174000',
+        route: {},
+      },
+    }),
+    /only supported when creating/
+  );
 });
 
 test('revision cleanup deletes only expired non-active route revisions', async () => {

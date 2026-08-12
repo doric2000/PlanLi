@@ -5,9 +5,10 @@ import AppText from "../../../components/AppText";
 import CachedImage from "../../../components/CachedImage";
 import { FormInput } from "../../../components/FormInput";
 import { ImagePickerBox } from "../../../components/ImagePickerBox";
+import ImageCropReviewModal from "../../../components/ImageCropReviewModal";
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
-import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import useReviewedImagePicker from "../../../hooks/useReviewedImagePicker";
 import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { getStopCoordinates } from "../utils/routeStops";
 import { dayEditorModalStyles as styles } from "../../../styles";
@@ -32,7 +33,9 @@ function buildDayComparable({ description, image, stops }) {
 	});
 }
 
-export default function DayEditorModal({ visible, onClose, onSave, initialData, dayIndex }) {
+export default function DayEditorModal({
+	visible, onClose, onSave, initialData, dayIndex, onPersistImage, onForgetImage,
+}) {
 	const [description, setDescription] = useState("");
 	const [stops, setStops] = useState([]);
 	const [stopModalVisible, setStopModalVisible] = useState(false);
@@ -44,14 +47,17 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 	const {
 		imageUri: image,
 		setImageUri: setImage,
-		pickImage,
+		pickOneForReview,
 		clearImage,
+		cancelReview,
+		completeReview,
+		reviewUris,
 		uploading,
-	} = useImagePickerWithUpload({
+	} = useReviewedImagePicker({
 		kind: "route",
 		quality: 1,
-		maxLongEdge: 2560,
-		normalizeCompress: 0.94,
+		maxLongEdge: 2048,
+		processOnSelect: false,
 	});
 
 	useEffect(() => {
@@ -122,7 +128,10 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 			{
 				text: "מחק",
 				style: "destructive",
-				onPress: () => setStops((prev) => prev.filter((_, i) => i !== index)),
+				onPress: () => setStops((prev) => {
+					Promise.resolve(onForgetImage?.(prev[index]?.image)).catch(() => {});
+					return prev.filter((_, i) => i !== index);
+				}),
 			},
 		]);
 	};
@@ -266,8 +275,15 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 					<AppText style={styles.photoLabel}>תיעוד מהיום</AppText>
 					<ImagePickerBox
 						imageUri={image}
-						onPress={() => pickImage((uri) => setImage(uri))}
-						onRemove={clearImage}
+						onPress={() => pickOneForReview(async (uri) => {
+							await onPersistImage?.(uri);
+							await onForgetImage?.(image);
+							setImage(uri);
+						})}
+						onRemove={() => {
+							Promise.resolve(onForgetImage?.(image)).catch(() => {});
+							clearImage();
+						}}
 						maxImages={1}
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
 						style={styles.imagePickerSpacing}
@@ -282,6 +298,17 @@ export default function DayEditorModal({ visible, onClose, onSave, initialData, 
 					initialData={editingStopIndex !== null ? stops[editingStopIndex] : null}
 					dayIndex={dayIndex}
 					stopIndex={editingStopIndex !== null ? editingStopIndex : stops.length}
+					onPersistImage={onPersistImage}
+					onForgetImage={onForgetImage}
+				/>
+				<ImageCropReviewModal
+					visible={reviewUris.length > 0}
+					uris={reviewUris}
+					aspect={[4, 3]}
+					maxLongEdge={2048}
+					compress={0.94}
+					onCancel={cancelReview}
+					onComplete={completeReview}
 				/>
 			</SafeAreaView>
 		</Modal>

@@ -9,6 +9,7 @@ import { colors, spacing, common } from '../../../styles';
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
+import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from '../../../components/GuidedForm';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
@@ -17,8 +18,9 @@ import { guidedFormStyles as guidedStyles } from '../../../components/guidedForm
 // --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
-import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { resolveDestinationForPlacePreview, searchPlaces } from '../../../services/LocationService';
+import useReviewedImagePicker from '../../../hooks/useReviewedImagePicker';
+import useExactPlaceSelection from '../../../hooks/useExactPlaceSelection';
+import useDurableDraftMedia from '../../../hooks/useDurableDraftMedia';
 import { saveRecommendation } from '../../../services/RecommendationService';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 
@@ -26,7 +28,6 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
-import { locationErrorMessage } from '../../../utils/locationErrors';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -104,9 +105,25 @@ function resolveTagsFromEditItem(editItem) {
   return normalizeTagIds(editItem.tags);
 }
 
+function resolveAttributesFromEditItem(editItem) {
+  const facets = editItem?.facets || {};
+  const audiences = Array.isArray(facets.audiences) ? [...facets.audiences] : [];
+  const vibes = Array.isArray(facets.vibes) ? [...facets.vibes] : [];
+  const needs = Array.isArray(facets.needs) ? [...facets.needs] : [];
+  return {
+    audienceScope: facets.audienceScope || (audiences.length ? 'selected' : 'all'),
+    audiences,
+    vibes,
+    environment: Array.isArray(facets.environments) ? facets.environments[0] || '' : '',
+    needs,
+    needsConfirmed: Boolean(needs.length),
+  };
+}
+
 function buildEditComparable(editItem) {
   if (!editItem) return null;
   const tags = [...resolveTagsFromEditItem(editItem)].sort();
+  const attributes = resolveAttributesFromEditItem(editItem);
   const images = (Array.isArray(editItem.media) ? editItem.media : [])
     .map((asset) => getMediaVariantUrl(asset, 'feed'))
     .filter(Boolean);
@@ -116,13 +133,12 @@ function buildEditComparable(editItem) {
     category: resolveCategoryIdFromEditItem(editItem),
     tags,
     budget: normalizeBudgetId(editItem.budget, { allowFlexible: false }),
-    audienceScope: editItem.facets?.audienceScope ||
-      (editItem.facets?.audiences?.length ? 'selected' : 'all'),
-    audiences: [...(editItem.facets?.audiences || [])].sort(),
-    vibes: [...(editItem.facets?.vibes || [])].sort(),
-    environment: editItem.facets?.environments?.[0] || '',
-    needs: [...(editItem.facets?.needs || [])].sort(),
-    needsConfirmed: Boolean(editItem.facets?.needs?.length),
+    audienceScope: attributes.audienceScope,
+    audiences: [...attributes.audiences].sort(),
+    vibes: [...attributes.vibes].sort(),
+    environment: attributes.environment,
+    needs: [...attributes.needs].sort(),
+    needsConfirmed: attributes.needsConfirmed,
     countryId: editItem.destination?.countryId || null,
     cityId: editItem.destination?.cityId || null,
     place: placeFingerprint(editItem.place),
@@ -209,6 +225,13 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const { enqueueCreate, loadJobForReview } = useRecommendationPublish();
   /** Stable id for the post being edited (avoids re-hydrating when parent passes a new editItem object for the same post). */
   const editingPostKey = editItem?.id ?? editPostId ?? null;
+  const {
+    draftJobId,
+    forgetUri: forgetDurableImage,
+    markEnqueued: markDurableImagesEnqueued,
+    mediaForUri: durableMediaForUri,
+    persistUris: persistReviewedImages,
+  } = useDurableDraftMedia({ enabled: !isEdit });
 
   const pendingDiscardRef = useRef(null);
   /** Post id last fully hydrated into form + baseline (null in create mode or before first edit hydrate). */
@@ -219,6 +242,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const pendingPostSwitchParamsRef = useRef(null);
   /** One-shot: user confirmed discard; allow hydrating the pending post even though form still looks dirty vs old baseline. */
   const forceApplyPendingPostRef = useRef(false);
+  const skipNextAttributeCleanupRef = useRef(false);
 
   // --- Local State ---
   const [title, setTitle] = useState('');
@@ -242,28 +266,31 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const sectionLayoutsRef = useRef({});
 
   // --- Exact Google place handling ---
-  const [locationQuery, setLocationQuery] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState(null); // {id,name}
-  const [selectedCity, setSelectedCity] = useState(null); // {id,name}
-  const [selectedPlace, setSelectedPlace] = useState(null); // {placeId,name,address,coordinates,url}
-  const [locationResolveError, setLocationResolveError] = useState(null);
-  const [resolvingLocation, setResolvingLocation] = useState(false);
-  const locationResolutionGenerationRef = useRef(0);
+  const {
+    googleSearchFn,
+    handleSelectGooglePlace,
+    hydrateSelection,
+    locationQuery,
+    locationResolveError,
+    clearSelectionForTyping: onChangeQuery,
+    resolvingLocation,
+    selectedCity,
+    selectedCountry,
+    selectedPlace,
+  } = useExactPlaceSelection();
 
   // --- Image Handling ---
   const {
-    pickImages,
+    cancelReview,
+    completeReview,
+    pickImagesForReview,
+    reviewUris,
     uploadImageAssets,
-  } = useImagePickerWithUpload({
+  } = useReviewedImagePicker({
     kind: 'recommendation',
     aspect: [1, 1],
-    allowsEditing: true,
+    allowsEditing: false,
     quality: 1,
-    normalizeToAspect: true,
-    normalizeAspect: [1, 1],
-    normalizeWidth: 1600,
-    normalizeHeight: 1600,
-    normalizeCompress: 0.9,
   });
   const [editableImageUris, setEditableImageUris] = useState([]);
   const editablePreviewUris = useMemo(() => {
@@ -274,23 +301,29 @@ export default function AddRecommendationScreen({ navigation , route }) {
   }, [editItem, editableImageUris]);
 
   const handleAddImages = async () => {
-    const uris = await pickImages({ limit: 5 });
-    if (!uris?.length) return;
-
-    setEditableImageUris((prev) => {
-      const next = Array.isArray(prev) ? [...prev] : [];
-      for (const uri of uris) {
-        if (next.length >= 5) break;
-        if (!next.includes(uri)) next.push(uri);
-      }
-      return next;
+    const remaining = Math.max(0, 5 - editableImageUris.length);
+    if (!remaining) return;
+    await pickImagesForReview({
+      limit: remaining,
+      onComplete: async (uris) => {
+        await persistReviewedImages(uris);
+        setEditableImageUris((prev) => {
+          const next = Array.isArray(prev) ? [...prev] : [];
+          for (const uri of uris || []) {
+            if (next.length >= 5) break;
+            if (!next.includes(uri)) next.push(uri);
+          }
+          return next;
+        });
+      },
     });
   };
 
   const removeImageAt = (index) => {
     setEditableImageUris((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
-      next.splice(index, 1);
+      const [removed] = next.splice(index, 1);
+      forgetDurableImage(removed).catch(() => {});
       return next;
     });
   };
@@ -434,24 +467,27 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
     const resolvedCategoryId = resolveCategoryIdFromEditItem(editItem);
     const resolvedTags = resolveTagsFromEditItem(editItem);
+    const resolvedAttributes = resolveAttributesFromEditItem(editItem);
 
+    skipNextAttributeCleanupRef.current = true;
     setCategory(resolvedCategoryId);
     setSelectedTags(resolvedTags);
     setBudget(normalizeBudgetId(editItem.budget, { allowFlexible: false }));
-    setAudienceScope(editItem.facets?.audienceScope ||
-      (editItem.facets?.audiences?.length ? 'selected' : 'all'));
-    setAudiences(Array.isArray(editItem.facets?.audiences) ? editItem.facets.audiences : []);
-    setRecommendationVibes(Array.isArray(editItem.facets?.vibes) ? editItem.facets.vibes : []);
-    setRecommendationEnvironment(editItem.facets?.environments?.[0] || '');
-    setRecommendationNeeds(Array.isArray(editItem.facets?.needs) ? editItem.facets.needs : []);
-    setNeedsConfirmed(Boolean(editItem.facets?.needs?.length));
+    setAudienceScope(resolvedAttributes.audienceScope);
+    setAudiences(resolvedAttributes.audiences);
+    setRecommendationVibes(resolvedAttributes.vibes);
+    setRecommendationEnvironment(resolvedAttributes.environment);
+    setRecommendationNeeds(resolvedAttributes.needs);
+    setNeedsConfirmed(resolvedAttributes.needsConfirmed);
 
     const initialCountryId = editItem.destination?.countryId || null;
     const initialCityId = editItem.destination?.cityId || null;
-    setSelectedCountry(initialCountryId ? { id: initialCountryId, name: editItem.destination?.countryName || initialCountryId } : null);
-    setSelectedCity(initialCityId ? { id: initialCityId, name: editItem.destination?.cityName || initialCityId } : null);
-    setSelectedPlace(editItem.place || null);
-    setLocationQuery(editItem.place?.name || editItem.destination?.cityName || '');
+    hydrateSelection({
+      country: initialCountryId ? { id: initialCountryId, name: editItem.destination?.countryName || initialCountryId } : null,
+      city: initialCityId ? { id: initialCityId, name: editItem.destination?.cityName || initialCityId } : null,
+      place: editItem.place || null,
+      query: editItem.place?.name || editItem.destination?.cityName || '',
+    });
     setEditableImageUris(
       (Array.isArray(editItem.media) ? editItem.media : [])
         .map((asset) => getMediaVariantUrl(asset, 'feed'))
@@ -472,6 +508,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
     editSnapshotBaseline,
     navigation,
     promptDiscardUnsaved,
+    hydrateSelection,
   ]);
 
   useEffect(() => {
@@ -479,14 +516,13 @@ export default function AddRecommendationScreen({ navigation , route }) {
     const prefill = route?.params?.prefillLocation;
     if (!prefill?.place?.placeId || !prefill?.destination) return;
 
-    setSelectedCountry(prefill.destination.country || null);
-    setSelectedCity(prefill.destination.city || null);
-    setSelectedPlace(prefill.place);
-    setLocationQuery(
-      prefill.place.name || prefill.destination.city?.name || ''
-    );
-    setLocationResolveError(null);
-  }, [isEdit, route?.params?.prefillLocation]);
+    hydrateSelection({
+      country: prefill.destination.country || null,
+      city: prefill.destination.city || null,
+      place: prefill.place,
+      query: prefill.place.name || prefill.destination.city?.name || '',
+    });
+  }, [hydrateSelection, isEdit, route?.params?.prefillLocation]);
 
   useEffect(() => {
     if (isEdit || !publishJobId || typeof loadJobForReview !== 'function') return undefined;
@@ -494,6 +530,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
     loadJobForReview(publishJobId).then((job) => {
       if (!active || !job?.draft) return;
       const draft = job.draft;
+      skipNextAttributeCleanupRef.current = true;
       setTitle(draft.title || '');
       setDescription(draft.description || '');
       setCategory(draft.category || '');
@@ -505,10 +542,12 @@ export default function AddRecommendationScreen({ navigation , route }) {
       setRecommendationEnvironment(draft.recommendationEnvironment || '');
       setRecommendationNeeds(Array.isArray(draft.recommendationNeeds) ? draft.recommendationNeeds : []);
       setNeedsConfirmed(Boolean(draft.needsConfirmed));
-      setSelectedCountry(draft.selectedCountry || null);
-      setSelectedCity(draft.selectedCity || null);
-      setSelectedPlace(draft.selectedPlace || null);
-      setLocationQuery(draft.locationQuery || draft.selectedPlace?.name || '');
+      hydrateSelection({
+        country: draft.selectedCountry || null,
+        city: draft.selectedCity || null,
+        place: draft.selectedPlace || null,
+        query: draft.locationQuery || draft.selectedPlace?.name || '',
+      });
       setEditableImageUris(Array.isArray(job.imageUris) ? job.imageUris : []);
       setExpandedSection('story');
       setValidation(emptyValidation());
@@ -518,7 +557,7 @@ export default function AddRecommendationScreen({ navigation , route }) {
       if (active) Alert.alert('לא הצלחנו לפתוח את ההמלצה', 'אפשר לנסות שוב מסרגל הפרסום.');
     });
     return () => { active = false; };
-  }, [isEdit, loadJobForReview, publishJobId]);
+  }, [hydrateSelection, isEdit, loadJobForReview, publishJobId]);
 
   // --- Handlers ---
 
@@ -548,6 +587,10 @@ export default function AddRecommendationScreen({ navigation , route }) {
   );
 
   useEffect(() => {
+    if (skipNextAttributeCleanupRef.current) {
+      skipNextAttributeCleanupRef.current = false;
+      return;
+    }
     if (!attributeRequirements.vibes) setRecommendationVibes([]);
     if (!attributeRequirements.environment) setRecommendationEnvironment('');
     setRecommendationNeeds((current) => current.filter(
@@ -666,31 +709,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
     });
   }, [validationValues]);
 
-  const handleSelectGooglePlace = async (placeId) => {
-    const generation = ++locationResolutionGenerationRef.current;
-    setResolvingLocation(true);
-    setLocationResolveError(null);
-    try {
-      const result = await resolveDestinationForPlacePreview(placeId);
-      if (generation !== locationResolutionGenerationRef.current) return;
-      setSelectedCountry(result.destination.country);
-      setSelectedCity(result.destination.city);
-      setSelectedPlace(result.place);
-    } catch (error) {
-      if (generation !== locationResolutionGenerationRef.current) return;
-      console.error(error);
-      setSelectedCountry(null);
-      setSelectedCity(null);
-      setSelectedPlace(null);
-      const message = locationErrorMessage(error);
-      setLocationResolveError(message);
-      Alert.alert('שגיאת מיקום', message);
-    }
-    finally {
-      if (generation === locationResolutionGenerationRef.current) setResolvingLocation(false);
-    }
-  };
-
 const handleSubmit = async () => {
     const tier = getUserTier(auth.currentUser);
     if (tier === 'guest') {
@@ -725,7 +743,10 @@ const handleSubmit = async () => {
           throw new Error('Recommendation publishing is not available.');
         }
         const destinationPayload = selectedPlace?.resolvedPlaceToken
-          ? { resolvedPlaceToken: selectedPlace.resolvedPlaceToken }
+          ? {
+              resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
+              ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
+            }
           : selectedPlace?.placeId
           ? { placeId: selectedPlace.placeId }
           : {
@@ -735,6 +756,8 @@ const handleSubmit = async () => {
               },
             };
         await enqueueCreate({
+          contentType: 'recommendation',
+          draftJobId: publishJobId ? null : draftJobId,
           sourceJobId: publishJobId,
           payload: {
             ...destinationPayload,
@@ -759,7 +782,7 @@ const handleSubmit = async () => {
           },
           media: current.map((uri) => {
             const asset = isRemote(uri) ? findMediaAssetByUrl(editItem?.media, uri) : null;
-            return asset ? { asset } : { uri };
+            return asset ? { asset } : durableMediaForUri(uri);
           }),
           draft: {
             title,
@@ -779,6 +802,7 @@ const handleSubmit = async () => {
             locationQuery,
           },
         });
+        markDurableImagesEnqueued();
         if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
           current.filter((uri) => typeof uri === 'string' && uri.startsWith('blob:'))
             .forEach((uri) => URL.revokeObjectURL(uri));
@@ -797,7 +821,10 @@ const handleSubmit = async () => {
         return findMediaAssetByUrl(editItem?.media, uri);
       }).filter(Boolean);
       const destinationPayload = selectedPlace?.resolvedPlaceToken
-        ? { resolvedPlaceToken: selectedPlace.resolvedPlaceToken }
+        ? {
+            resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
+            ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
+          }
         : selectedPlace?.placeId
         ? {
             placeId: selectedPlace.placeId,
@@ -905,16 +932,15 @@ const handleSubmit = async () => {
           <GooglePlacesInput
             mode="google"
             value={locationQuery}
-            onChangeValue={(text) => {
-              locationResolutionGenerationRef.current += 1;
-              setLocationQuery(text);
-              setSelectedCountry(null);
-              setSelectedCity(null);
-              setSelectedPlace(null);
-              setLocationResolveError(null);
+            onChangeValue={onChangeQuery}
+            onSelect={async (placeId) => {
+              try {
+                await handleSelectGooglePlace(placeId);
+              } catch (error) {
+                Alert.alert('שגיאת מיקום', error?.userMessage || error?.message);
+              }
             }}
-            onSelect={handleSelectGooglePlace}
-            googleSearchFn={(text, opts) => searchPlaces(text, { ...opts, types: 'all' })}
+            googleSearchFn={googleSearchFn}
             placeholder="חפש מקום / אטרקציה / מסעדה..."
             inputTestID="add-rec-location-input"
           />
@@ -1161,6 +1187,16 @@ const handleSubmit = async () => {
         message={UNSAVED_LEAVE_MESSAGE}
         onCancel={dismissUnsavedModal}
         onConfirm={confirmUnsavedLeave}
+      />
+
+      <ImageCropReviewModal
+        visible={reviewUris.length > 0}
+        uris={reviewUris}
+        aspect={[1, 1]}
+        maxLongEdge={1600}
+        compress={0.9}
+        onCancel={cancelReview}
+        onComplete={completeReview}
       />
 
     </View>

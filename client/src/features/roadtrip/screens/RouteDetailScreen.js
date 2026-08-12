@@ -2,15 +2,18 @@ import React, { useLayoutEffect, useState } from "react";
 import { Modal, ScrollView, TouchableOpacity, View } from "react-native";
 import AppText from "../../../components/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import PlacesRoute from "../components/PlacesRoute";
 import DayViewModal from "../components/DayViewModal";
-import { colors, common, tags as tagsStyle, routeDetailScreenStyles as styles } from "../../../styles";
+import { colors, routeDetailScreenStyles as styles } from "../../../styles";
 import { Avatar } from "../../../components/Avatar";
+import MetadataLine from "../../../components/MetadataLine";
+import UsefulFactItem from "../../../components/UsefulFactItem";
 import { TimelineItem } from "../../../components/TimelineItem";
 import { useUserData } from "../../../hooks/useUserData";
 import { flattenValidRouteStops } from "../utils/routeStops";
 import RouteMapScreen from "./RouteMapScreen";
+import { buildRouteDetailPresentation } from "../utils/routeDetailPresentation";
 
 const text = {
 	detailsTitle: "\u05e4\u05e8\u05d8\u05d9 \u05de\u05e1\u05dc\u05d5\u05dc",
@@ -21,7 +24,6 @@ const text = {
 	openMap: "\u05e4\u05ea\u05d7 \u05de\u05e4\u05d4 \u05e9\u05dc \u05d4\u05de\u05e1\u05dc\u05d5\u05dc",
 	noMapPoints: "\u05d0\u05d9\u05df \u05e0\u05e7\u05d5\u05d3\u05d5\u05ea \u05de\u05e4\u05d4 \u05d1\u05de\u05e1\u05dc\u05d5\u05dc",
 	places: "\u05d9\u05e2\u05d3\u05d9\u05dd",
-	tags: "\u05ea\u05d2\u05d9\u05d5\u05ea",
 	itinerary: "\u05dc\u05d5\u05f4\u05d6 \u05d4\u05de\u05e1\u05dc\u05d5\u05dc",
 	emptyItinerary: "\u05d0\u05d9\u05df \u05dc\u05d5\u05f4\u05d6 \u05d9\u05d5\u05de\u05d9 \u05dc\u05d4\u05e6\u05d2\u05d4.",
 };
@@ -43,13 +45,7 @@ export default function RouteDetailScreen({ route, navigation }) {
 	const userPhoto = author.photoURL;
 	const places = Array.isArray(routeData.summaryPlaces) ? routeData.summaryPlaces : [];
 
-	const dedupe = (values) => Array.from(new Set(values.filter(Boolean)));
-	const allTags = dedupe([
-		routeData.tags?.difficulty,
-		routeData.tags?.travelStyle,
-		...(routeData.tags?.roadTrip || []),
-		...(routeData.tags?.experience || []),
-	]);
+	const presentation = buildRouteDetailPresentation(routeData);
 
 	const openDay = (index) => {
 		setSelectedDay(index);
@@ -111,16 +107,40 @@ export default function RouteDetailScreen({ route, navigation }) {
 						</View>
 					)}
 
-					{allTags.length > 0 && (
-						<View style={styles.tagsSection}>
-							<AppText style={styles.subsectionTitle}>{text.tags}</AppText>
-							<View style={styles.tagsContainer}>
-								{allTags.map((tag) => (
-									<View key={tag} style={tagsStyle.itemSelected}>
-										<AppText style={tagsStyle.textSelected}>#{tag}</AppText>
-									</View>
+
+					{presentation.facts.length > 0 && (
+						<View style={styles.detailSection}>
+							<AppText style={styles.subsectionTitle}>פרטים שימושיים</AppText>
+							<View style={styles.factsGrid}>
+								{presentation.facts.map((fact) => (
+									<UsefulFactItem key={fact.id} {...fact} style={styles.factItem} testID={`route-fact-${fact.id}`} />
 								))}
 							</View>
+						</View>
+					)}
+
+					{presentation.groups.length > 0 && (
+						<View style={styles.detailSection}>
+							<AppText style={styles.subsectionTitle}>מידע נוסף</AppText>
+							{presentation.groups.map((group) => (
+								<View key={group.id} style={styles.metadataGroup}>
+									<AppText style={styles.metadataTitle}>{group.title}</AppText>
+									<MetadataLine icon={group.icon} values={group.values} testID={`route-metadata-${group.id}`} />
+								</View>
+							))}
+						</View>
+					)}
+
+					{presentation.needs.length > 0 && (
+						<View style={styles.detailSection}>
+							<AppText style={styles.subsectionTitle}>חשוב לדעת</AppText>
+							{presentation.needs.map((need) => (
+								<View key={need} style={styles.needRow}>
+									<MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />
+									<AppText style={styles.needText}>{need}</AppText>
+									<Ionicons name="chevron-back" size={17} color={colors.textMuted} />
+								</View>
+							))}
 						</View>
 					)}
 				</View>

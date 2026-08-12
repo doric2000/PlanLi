@@ -27,8 +27,8 @@ import {
 	rtlStackScreenOptions,
 } from "./src/navigation/rtlStackOptions";
 import withRequireAuth from "./src/navigation/withRequireAuth";
-import RecommendationPublishBanner from "./src/features/community/publishing/RecommendationPublishBanner";
-import { RecommendationPublishProvider } from "./src/features/community/publishing/RecommendationPublishContext";
+import ContentPublishBanner from "./src/features/publishing/ContentPublishBanner";
+import { ContentPublishProvider } from "./src/features/publishing/ContentPublishContext";
 
 
 const Stack = createStackNavigator();
@@ -62,7 +62,7 @@ export default function App() {
 	return (
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
-				<RecommendationPublishProvider>
+				<ContentPublishProvider>
 				<NavigationContainer ref={navigationRef}>
 				<Stack.Navigator
 					initialRouteName='Main'
@@ -113,14 +113,17 @@ export default function App() {
 					/>
 				</Stack.Navigator>
 				</NavigationContainer>
-				<RecommendationPublishBanner
-					onReview={(publishJobId) => {
+				<ContentPublishBanner
+					onReview={(publishJobId, contentType) => {
 						if (navigationRef.isReady()) {
-							navigationRef.navigate('AddRecommendation', { publishJobId });
+							navigationRef.navigate(
+								contentType === 'route' ? 'AddRoutesScreen' : 'AddRecommendation',
+								{ publishJobId }
+							);
 						}
 					}}
 				/>
-				</RecommendationPublishProvider>
+				</ContentPublishProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>
 	);

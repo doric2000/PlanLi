@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
-const JOBS_STORAGE_KEY = '@planli/recommendation-publish-jobs-v1';
+const LEGACY_JOBS_STORAGE_KEY = '@planli/recommendation-publish-jobs-v1';
+const JOBS_STORAGE_KEY = '@planli/content-publish-jobs-v2';
 const NATIVE_QUEUE_DIRECTORY = `${FileSystem.documentDirectory || ''}recommendation-publish-queue`;
 const WEB_DB_NAME = 'planli-recommendation-publish-queue';
 const WEB_STORE_NAME = 'media';
@@ -59,7 +60,8 @@ async function withWebStore(mode, operation) {
 
 export async function loadRecommendationPublishJobs() {
   try {
-    const serialized = await AsyncStorage.getItem(JOBS_STORAGE_KEY);
+    const serialized = await AsyncStorage.getItem(JOBS_STORAGE_KEY) ||
+      await AsyncStorage.getItem(LEGACY_JOBS_STORAGE_KEY);
     const parsed = serialized ? JSON.parse(serialized) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -122,4 +124,5 @@ export async function deleteRecommendationPublishJobMedia(job) {
 
 export const recommendationPublishStorageKeys = {
   jobs: JOBS_STORAGE_KEY,
+  legacyJobs: LEGACY_JOBS_STORAGE_KEY,
 };

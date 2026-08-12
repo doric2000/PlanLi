@@ -5,11 +5,12 @@ import { getPersonalizedRoutes, recordRouteOpen } from './PersonalizationService
 let saveRouteCallable;
 let loadRouteDetailsCallable;
 
-export const saveRoute = async (route, routeId = null) => {
+export const saveRoute = async (route, routeId = null, publishRequestId = null) => {
   saveRouteCallable ||= httpsCallable(cloudFunctions, 'saveRoute');
   const response = await saveRouteCallable({
     route,
     ...(routeId ? { routeId } : {}),
+    ...(publishRequestId ? { publishRequestId } : {}),
   });
   return response.data;
 };
