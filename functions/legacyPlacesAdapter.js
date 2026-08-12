@@ -36,6 +36,16 @@ function componentFor(details, types) {
   return null;
 }
 
+function localityCandidatesFor(details) {
+  const components = Array.isArray(details?.address_components) ? details.address_components : [];
+  return Array.from(new Set(LOCALITY_COMPONENT_TYPES.flatMap((type) =>
+    components
+      .filter((entry) => entry?.types?.includes(type))
+      .map((entry) => String(entry.long_name || '').trim())
+      .filter(Boolean)
+  )));
+}
+
 function coordinatesFor(details) {
   const lat = Number(details?.geometry?.location?.lat);
   const lng = Number(details?.geometry?.location?.lng);
@@ -59,6 +69,7 @@ function parseLocalizedPlace(details) {
     countryName: String(country?.long_name || '').trim(),
     countryCode: String(country?.short_name || '').trim().toUpperCase(),
     localityName: String(locality?.long_name || '').trim(),
+    localityCandidates: localityCandidatesFor(details),
     localityType: locality?.types?.find((type) => LOCALITY_COMPONENT_TYPES.includes(type)) || null,
     coordinates: coordinatesFor(details),
     viewport: viewportFor(details),

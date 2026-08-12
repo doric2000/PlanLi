@@ -5,6 +5,7 @@ const {
   fetchGoogleReverseCountry,
   isVerifiedCaller,
   parsePlaceDetails,
+  resolveGoogleDestination,
   resolvePlaceCountry,
   resolveRecommendationDestination,
 	sanitizeRecommendationAttributes,
@@ -455,6 +456,99 @@ const validContent = {
   budget: '$$',
   media: [],
 };
+
+test('Google destination resolution falls back from a district to its containing city', async () => {
+  const admin = createFakeAdmin({
+    'countries/TH': {
+      name: 'Thailand',
+      names: { he: 'Thailand', en: 'Thailand' },
+      code: 'TH',
+      region: 'Asia',
+      currencyCode: 'THB',
+      status: 'active',
+    },
+  });
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'wat-doi-kham',
+      displayName: 'Wat Phra That Doi Kham',
+      countryName: 'Thailand',
+      countryCode: 'TH',
+      localityName: 'Mueang Chiang Mai District',
+      localityCandidates: ['Mueang Chiang Mai District', 'Chiang Mai'],
+      coordinates: { lat: 18.759, lng: 98.918 },
+      types: ['tourist_attraction'],
+    },
+    en: {
+      placeId: 'wat-doi-kham',
+      displayName: 'Wat Phra That Doi Kham',
+      countryName: 'Thailand',
+      countryCode: 'TH',
+      localityName: 'Mueang Chiang Mai District',
+      localityCandidates: ['Mueang Chiang Mai District', 'Chiang Mai'],
+      coordinates: { lat: 18.759, lng: 98.918 },
+      types: ['tourist_attraction'],
+    },
+  };
+  const searches = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (urlValue, options = {}) => {
+    const url = new URL(String(urlValue));
+    if (url.pathname.endsWith('/places:autocomplete')) {
+      const input = JSON.parse(options.body).input;
+      searches.push(input);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          suggestions: input.startsWith('Chiang Mai ')
+            ? [{ placePrediction: {
+                placeId: 'chiang-mai-city',
+                structuredFormat: { mainText: { text: 'Chiang Mai' } },
+                types: ['locality'],
+              } }]
+            : [],
+        }),
+      };
+    }
+    const language = url.searchParams.get('languageCode');
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'chiang-mai-city',
+        displayName: { text: language === 'he' ? 'Chiang Mai' : 'Chiang Mai' },
+        addressComponents: [
+          { longText: 'Chiang Mai', types: ['locality'] },
+          { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+        ],
+        location: { latitude: 18.7883, longitude: 98.9853 },
+        types: ['locality'],
+      }),
+    };
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin,
+      placeId: selectedPlace.en.placeId,
+      resolvedPlace: selectedPlace,
+      mapsKey: 'maps-key',
+      newPlacesKey: 'new-key',
+      placesProvider: 'new',
+    });
+
+    assert.equal(destination.countryId, 'TH');
+    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-mai-city');
+    assert.deepEqual(searches, [
+      'Mueang Chiang Mai District Thailand',
+      'Chiang Mai Thailand',
+    ]);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
 
 test('saveRecommendation creates against an existing destination and owns server fields', async () => {
   const admin = createFakeAdmin({

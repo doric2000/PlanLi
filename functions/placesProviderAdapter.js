@@ -71,6 +71,16 @@ const LOCALITY_TYPES = [
   'administrative_area_level_1',
 ];
 
+function newLocalityCandidatesFor(details) {
+  const components = Array.isArray(details?.addressComponents) ? details.addressComponents : [];
+  return Array.from(new Set(LOCALITY_TYPES.flatMap((type) =>
+    components
+      .filter((entry) => entry?.types?.includes(type))
+      .map((entry) => String(entry.longText || '').trim())
+      .filter(Boolean)
+  )));
+}
+
 function parseNewLocalizedPlace(details) {
   assert(details && typeof details === 'object', 'failed-precondition', 'Google Places returned no result.');
   const country = newComponentFor(details, ['country']);
@@ -89,6 +99,7 @@ function parseNewLocalizedPlace(details) {
     countryName: String(country?.longText || '').trim(),
     countryCode: String(country?.shortText || '').trim().toUpperCase(),
     localityName: String(locality?.longText || '').trim(),
+    localityCandidates: newLocalityCandidatesFor(details),
     localityType: locality?.types?.find((type) => LOCALITY_TYPES.includes(type)) || null,
     coordinates: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
     viewport: [lowLat, lowLng, highLat, highLng].every(Number.isFinite)
@@ -218,8 +229,7 @@ async function fetchBilingualPlace(options) {
   return fetchLegacyBilingualPlace(options);
 }
 
-async function fetchLocalityPlaceId(options) {
-  if (selectedProvider(options.provider) !== 'new') return fetchLegacyLocalityPlaceId(options);
+async function fetchNewLocalityPlaceId(options) {
   const wanted = normalize(options.localityName);
   assert(wanted, 'failed-precondition', 'The selected place has no trustworthy containing locality.');
   const predictions = await newAutocomplete({
@@ -264,6 +274,23 @@ async function fetchLocalityPlaceId(options) {
       'The destination locality is ambiguous. Please select a more specific place.');
   }
   return candidates[0].placeId;
+}
+
+async function fetchLocalityPlaceId(options) {
+  const localityNames = Array.from(new Set([
+    ...(Array.isArray(options.localityCandidates) ? options.localityCandidates : []),
+    options.localityName,
+  ].map((value) => String(value || '').trim()).filter(Boolean))).slice(0, LOCALITY_TYPES.length);
+  assert(localityNames.length, 'failed-precondition',
+    'The selected place has no trustworthy containing locality.');
+  for (const localityName of localityNames) {
+    const request = { ...options, localityName };
+    const placeId = selectedProvider(options.provider) === 'new'
+      ? await fetchNewLocalityPlaceId(request)
+      : await fetchLegacyLocalityPlaceId(request);
+    if (placeId) return placeId;
+  }
+  return null;
 }
 
 module.exports = {
