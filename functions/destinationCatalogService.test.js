@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   catalogData,
   filterCatalogByActiveCountries,
+  getCatalogSnapshot,
 } = require('./destinationCatalogService');
 
 test('catalog entries are public only when both destination and country are active', () => {
@@ -19,6 +20,13 @@ test('catalog entries are public only when both destination and country are acti
     ...base,
     country: { ...base.country, status: 'inactive' },
   }).status, 'inactive');
+});
+
+test('a missing or building catalog index returns a retryable public error', async () => {
+  await assert.rejects(
+    getCatalogSnapshot({ get: async () => { throw Object.assign(new Error('missing index'), { code: 9 }); } }),
+    (error) => error.code === 'unavailable' && /try again shortly/i.test(error.message)
+  );
 });
 
 test('catalog page filtering removes entries whose parent country is inactive', () => {
