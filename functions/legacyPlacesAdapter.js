@@ -42,6 +42,12 @@ function coordinatesFor(details) {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 
+function viewportFor(details) {
+  const northeast = coordinatesFor({ geometry: { location: details?.geometry?.viewport?.northeast } });
+  const southwest = coordinatesFor({ geometry: { location: details?.geometry?.viewport?.southwest } });
+  return northeast && southwest ? { northeast, southwest } : null;
+}
+
 function parseLocalizedPlace(details) {
   assert(details && typeof details === 'object', 'failed-precondition', 'Google Places returned no result.');
   const country = componentFor(details, ['country']);
@@ -55,6 +61,7 @@ function parseLocalizedPlace(details) {
     localityName: String(locality?.long_name || '').trim(),
     localityType: locality?.types?.find((type) => LOCALITY_COMPONENT_TYPES.includes(type)) || null,
     coordinates: coordinatesFor(details),
+    viewport: viewportFor(details),
     types: Array.isArray(details.types) ? details.types.filter((type) => typeof type === 'string') : [],
     url: String(details.url || '').trim(),
   };
@@ -170,6 +177,7 @@ function googleCacheFor({ he, en, fetchedAt = new Date() }) {
   return {
     names: { he: he.displayName, en: en.displayName },
     coordinates: he.coordinates || en.coordinates || null,
+    viewport: he.viewport || en.viewport || null,
     countryCode: he.countryCode || en.countryCode,
     types: Array.from(new Set([...(he.types || []), ...(en.types || [])])),
     fetchedAt,

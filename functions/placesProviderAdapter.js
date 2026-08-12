@@ -17,6 +17,7 @@ const NEW_DETAILS_FIELD_MASK = [
   'addressComponents',
   'formattedAddress',
   'location',
+  'viewport',
   'types',
   'primaryType',
   'businessStatus',
@@ -76,6 +77,10 @@ function parseNewLocalizedPlace(details) {
   const locality = newComponentFor(details, LOCALITY_TYPES);
   const lat = Number(details?.location?.latitude);
   const lng = Number(details?.location?.longitude);
+  const lowLat = Number(details?.viewport?.low?.latitude);
+  const lowLng = Number(details?.viewport?.low?.longitude);
+  const highLat = Number(details?.viewport?.high?.latitude);
+  const highLng = Number(details?.viewport?.high?.longitude);
   return {
     placeId: String(details.id || '').trim(),
     movedPlaceId: String(details.movedPlaceId || '').trim() || null,
@@ -86,6 +91,12 @@ function parseNewLocalizedPlace(details) {
     localityName: String(locality?.longText || '').trim(),
     localityType: locality?.types?.find((type) => LOCALITY_TYPES.includes(type)) || null,
     coordinates: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
+    viewport: [lowLat, lowLng, highLat, highLng].every(Number.isFinite)
+      ? {
+          southwest: { lat: lowLat, lng: lowLng },
+          northeast: { lat: highLat, lng: highLng },
+        }
+      : null,
     types: Array.from(new Set([
       ...(Array.isArray(details.types) ? details.types : []),
       ...(details.primaryType ? [details.primaryType] : []),

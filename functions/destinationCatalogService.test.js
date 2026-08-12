@@ -5,6 +5,7 @@ const {
   catalogData,
   filterCatalogByActiveCountries,
   getCatalogSnapshot,
+  syncDestinationCatalog,
 } = require('./destinationCatalogService');
 
 test('catalog entries are public only when both destination and country are active', () => {
@@ -36,4 +37,29 @@ test('catalog page filtering removes entries whose parent country is inactive', 
   ];
   const filtered = filterCatalogByActiveCountries(documents, new Set(['FR']));
   assert.deepEqual(filtered.map((entry) => entry.data().cityId), ['PAR']);
+});
+
+test('catalog synchronization replaces its owned document instead of merging stale image source fields', async () => {
+  let writeOptions = 'not-called';
+  const destinationImage = { source: { type: 'unsplash', providerPhotoId: 'photo-1' } };
+  const ref = { set: async (_data, options) => { writeOptions = options; } };
+  const admin = {
+    firestore: () => ({
+      doc: (path) => path === 'countries/FR'
+        ? { get: async () => ({ data: () => ({ status: 'active', names: { en: 'France' } }) }) }
+        : ref,
+    }),
+  };
+  admin.firestore.FieldValue = { serverTimestamp: () => 'NOW' };
+  await syncDestinationCatalog({
+    admin,
+    countryId: 'FR',
+    cityId: 'PAR',
+    city: {
+      status: 'active',
+      googleCache: { names: { en: 'Paris' }, expiresAt: new Date('2099-01-01') },
+      destinationImage,
+    },
+  });
+  assert.equal(writeOptions, undefined);
 });
