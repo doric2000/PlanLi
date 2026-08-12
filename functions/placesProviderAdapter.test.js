@@ -7,6 +7,7 @@ const {
   fetchNewBilingualPlace,
   fetchLocalityPlaceId,
   newAutocomplete,
+  parseNewLocalizedPlace,
 } = require('./placesProviderAdapter');
 
 function details(language) {
@@ -148,4 +149,69 @@ test('locality resolution prefers a city over a same-name administrative area', 
     },
   });
   assert.equal(placeId, 'city');
+});
+
+test('locality resolution falls back from a district to its containing city', async () => {
+  const venue = parseNewLocalizedPlace({
+    id: 'wat-doi-kham',
+    displayName: { text: 'Wat Phra That Doi Kham' },
+    addressComponents: [
+      { longText: 'Mueang Chiang Mai District', types: ['administrative_area_level_2'] },
+      { longText: 'Chiang Mai', types: ['administrative_area_level_1'] },
+      { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+    ],
+    location: { latitude: 18.759, longitude: 98.918 },
+    types: ['tourist_attraction', 'place_of_worship'],
+  });
+  assert.deepEqual(venue.localityCandidates, ['Mueang Chiang Mai District', 'Chiang Mai']);
+
+  const searched = [];
+  const placeId = await fetchLocalityPlaceId({
+    provider: 'new',
+    localityName: venue.localityName,
+    localityCandidates: venue.localityCandidates,
+    countryName: venue.countryName,
+    countryCode: venue.countryCode,
+    coordinates: venue.coordinates,
+    newPlacesKey: 'new-key',
+    fetchImpl: async (url, options) => {
+      if (String(url).includes('places:autocomplete')) {
+        const input = JSON.parse(options.body).input;
+        searched.push(input);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            suggestions: input.startsWith('Chiang Mai ')
+              ? [{ placePrediction: {
+                  placeId: 'chiang-mai-city',
+                  structuredFormat: { mainText: { text: 'Chiang Mai' } },
+                  types: ['locality'],
+                } }]
+              : [],
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 'chiang-mai-city',
+          displayName: { text: 'Chiang Mai' },
+          addressComponents: [
+            { longText: 'Chiang Mai', types: ['locality'] },
+            { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+          ],
+          location: { latitude: 18.7883, longitude: 98.9853 },
+          types: ['locality'],
+        }),
+      };
+    },
+  });
+
+  assert.equal(placeId, 'chiang-mai-city');
+  assert.deepEqual(searched, [
+    'Mueang Chiang Mai District Thailand',
+    'Chiang Mai Thailand',
+  ]);
 });

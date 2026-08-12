@@ -311,6 +311,13 @@ function parseResolvedBilingualPlace(bilingual) {
   };
 }
 
+function localityNamesForPlace(place) {
+  return Array.from(new Set([
+    ...(Array.isArray(place?.localityCandidates) ? place.localityCandidates : []),
+    place?.localityName,
+  ].map((value) => String(value || '').trim()).filter(Boolean))).slice(0, 5);
+}
+
 async function fetchGooglePlace(placeId, mapsKey) {
   const normalizedPlaceId = cleanString(placeId, {
     field: 'placeId',
@@ -722,9 +729,11 @@ async function resolveGoogleDestination({
     (selectedEn.types || []).some((type) => ['locality', 'postal_town', 'administrative_area_level_3'].includes(type));
   let destinationBilingual = bilingual;
   if (!selectedIsDestination) {
+    const localityCandidates = localityNamesForPlace(selectedEn);
     const localityPlaceId = await fetchLocalityPlaceId({
       provider: placesProvider,
       localityName: selectedEn.localityName,
+      localityCandidates,
       countryName: selectedEn.countryName,
       countryCode: selectedEn.countryCode || bilingual.he?.countryCode,
       coordinates: selectedEn.coordinates || bilingual.he?.coordinates,
@@ -735,16 +744,20 @@ async function resolveGoogleDestination({
     destinationBilingual = await fetchBilingualPlace({
       provider: placesProvider, placeId: localityPlaceId, mapsKey, newPlacesKey,
     });
-    const validatedLocality = candidateMatchesLocality({
+    const localityCandidate = {
       placeId: localityPlaceId,
       countryCode: destinationBilingual.en?.countryCode,
       nameEn: destinationBilingual.en?.localityName || destinationBilingual.en?.displayName,
       coordinates: destinationBilingual.en?.coordinates || destinationBilingual.he?.coordinates,
-    }, {
-      countryCode: selectedEn.countryCode || bilingual.he?.countryCode,
-      localityName: selectedEn.localityName,
-      coordinates: selectedEn.coordinates || bilingual.he?.coordinates,
-    });
+    };
+    const validatedLocality = localityCandidates.some((localityName) => candidateMatchesLocality(
+      localityCandidate,
+      {
+        countryCode: selectedEn.countryCode || bilingual.he?.countryCode,
+        localityName,
+        coordinates: selectedEn.coordinates || bilingual.he?.coordinates,
+      }
+    ));
     assert(validatedLocality, 'failed-precondition', 'The containing destination could not be validated. Please select a more specific place.');
   }
   const parsedCity = parseResolvedBilingualPlace(destinationBilingual);
@@ -1466,6 +1479,7 @@ module.exports = {
   isVerifiedCaller,
   parsePlaceDetails,
   parseResolvedBilingualPlace,
+  localityNamesForPlace,
   exactPlaceFromBilingual,
   fetchGoogleReverseCountry,
   resolvePlaceCountry,

@@ -5,6 +5,7 @@ const {
   destinationTypeFor,
   fetchLegacyBilingualPlace,
   googleCacheFor,
+  parseLocalizedPlace,
 } = require('./legacyPlacesAdapter');
 
 function result(language) {
@@ -75,4 +76,21 @@ test('area destinations remain typed instead of being forced into cities', () =>
   assert.equal(destinationTypeFor({ types: ['natural_feature'], displayName: 'Lake Garda' }), 'lake');
   assert.equal(destinationTypeFor({ types: ['island'], displayName: 'Rhodes' }), 'island');
   assert.equal(destinationTypeFor({ types: ['administrative_area_level_1'], displayName: 'Tuscany' }), 'region');
+});
+
+test('legacy place parsing preserves the full containing locality hierarchy', () => {
+  const place = parseLocalizedPlace({
+    place_id: 'wat-doi-kham',
+    name: 'Wat Phra That Doi Kham',
+    address_components: [
+      { long_name: 'Mueang Chiang Mai District', types: ['administrative_area_level_2'] },
+      { long_name: 'Chiang Mai', types: ['administrative_area_level_1'] },
+      { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+    ],
+    geometry: { location: { lat: 18.759, lng: 98.918 } },
+    types: ['tourist_attraction'],
+  });
+
+  assert.equal(place.localityName, 'Mueang Chiang Mai District');
+  assert.deepEqual(place.localityCandidates, ['Mueang Chiang Mai District', 'Chiang Mai']);
 });
