@@ -30,11 +30,13 @@ const { buildSearchIndex } = require('./discoverySearch');
 const { buildMapLocation } = require('./mapLocation');
 const { consumeProviderBudget } = require('./providerRateLimitService');
 const {
-  fetchLegacyBilingualPlace,
-  fetchLegacyLocalityPlaceId,
   googleCacheFor,
   isAreaDestination,
 } = require('./legacyPlacesAdapter');
+const {
+  fetchBilingualPlace,
+  fetchLocalityPlaceId,
+} = require('./placesProviderAdapter');
 const {
   buildDestinationV3,
   candidateMatchesLocality,
@@ -435,13 +437,15 @@ async function resolvePlaceCountry({
   const cityCountry = countryFromParsedPlace(parsedCity, 'city-place');
   if (cityCountry) return cityCountry;
 
-  const reverseCountry = await fetchGoogleReverseCountry(
-    coordinates,
-    mapsKey
-  );
-  if (reverseCountry) return reverseCountry;
-
   const localCountry = resolveLocalCountry(coordinates);
+  if (localCountry?.countryCode && localCountry.resolutionSource === 'local-boundary') {
+    return localCountry;
+  }
+
+  const reverseCountry = await fetchGoogleReverseCountry(coordinates, mapsKey);
+  if (reverseCountry && !(reverseCountry.countryCode === 'IL' && localCountry?.countryCode === 'PS')) {
+    return reverseCountry;
+  }
   assert(
     localCountry?.countryCode,
     'failed-precondition',
@@ -688,25 +692,34 @@ async function resolveGoogleDestination({
   resolvedPlace,
   countryOverrideId,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   restCountriesKey,
 }) {
   const resolutionStartedAt = Date.now();
   const db = admin.firestore();
-  const bilingual = resolvedPlace || await fetchLegacyBilingualPlace({ placeId, mapsKey });
+  const bilingual = resolvedPlace || await fetchBilingualPlace({
+    provider: placesProvider, placeId, mapsKey, newPlacesKey,
+  });
   const parsed = parseResolvedBilingualPlace(bilingual);
   const selectedEn = bilingual.en || {};
   const selectedIsDestination = isAreaDestination(selectedEn) ||
     (selectedEn.types || []).some((type) => ['locality', 'postal_town', 'administrative_area_level_3'].includes(type));
   let destinationBilingual = bilingual;
   if (!selectedIsDestination) {
-    const localityPlaceId = await fetchLegacyLocalityPlaceId({
+    const localityPlaceId = await fetchLocalityPlaceId({
+      provider: placesProvider,
       localityName: selectedEn.localityName,
       countryName: selectedEn.countryName,
+      countryCode: selectedEn.countryCode || bilingual.he?.countryCode,
       coordinates: selectedEn.coordinates || bilingual.he?.coordinates,
       mapsKey,
+      newPlacesKey,
     });
     assert(localityPlaceId, 'failed-precondition', 'Could not derive a trustworthy destination from this place.');
-    destinationBilingual = await fetchLegacyBilingualPlace({ placeId: localityPlaceId, mapsKey });
+    destinationBilingual = await fetchBilingualPlace({
+      provider: placesProvider, placeId: localityPlaceId, mapsKey, newPlacesKey,
+    });
     const validatedLocality = candidateMatchesLocality({
       placeId: localityPlaceId,
       countryCode: destinationBilingual.en?.countryCode,
@@ -1010,6 +1023,8 @@ async function resolveDestinationFromToken({
   auth,
   resolvedPlaceToken,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   restCountriesKey,
   providerRateLimitKey,
   countryOverrideId,
@@ -1031,6 +1046,8 @@ async function resolveDestinationFromToken({
     resolvedPlace,
     countryOverrideId,
     mapsKey,
+    newPlacesKey,
+    placesProvider,
     restCountriesKey,
   });
   if (!countryOverrideId) {
@@ -1050,6 +1067,8 @@ async function resolveRecommendationDestination({
   auth,
   data,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   restCountriesKey,
   providerRateLimitKey,
 }) {
@@ -1070,10 +1089,11 @@ async function resolveRecommendationDestination({
   const destination = data?.resolvedPlaceToken
     ? await resolveDestinationFromToken({
         admin, auth, resolvedPlaceToken: data.resolvedPlaceToken, mapsKey,
-        restCountriesKey, providerRateLimitKey,
+        newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
       })
     : await resolveGoogleDestination({
-        admin, placeId: data?.placeId, mapsKey, restCountriesKey,
+        admin, placeId: data?.placeId, mapsKey, newPlacesKey, placesProvider,
+        restCountriesKey,
       });
   return {
     place: destination.place,
@@ -1102,6 +1122,8 @@ async function saveRecommendation({
   auth,
   data,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   restCountriesKey,
   mediaBucket,
   providerRateLimitKey,
@@ -1173,11 +1195,11 @@ async function saveRecommendation({
       ? await resolveDestinationFromToken({
           admin, auth, resolvedPlaceToken: data.resolvedPlaceToken,
           countryOverrideId: data?.countryOverrideId, mapsKey,
-          restCountriesKey, providerRateLimitKey,
+          newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
         })
       : await resolveGoogleDestination({
           admin, placeId: data?.placeId, countryOverrideId: data?.countryOverrideId,
-          mapsKey, restCountriesKey,
+          mapsKey, newPlacesKey, placesProvider, restCountriesKey,
         });
   }
 

@@ -146,6 +146,7 @@ function plan() {
     ],
     secretBindings: [
       { secretId: 'GOOGLE_MAPS_KEY', member: core },
+      { secretId: 'GOOGLE_PLACES_NEW_KEY', member: core },
       { secretId: 'REST_COUNTRIES_KEY', member: core },
       { secretId: 'OPENWEATHER_API_KEY', member: core },
       { secretId: 'UNSPLASH_ACCESS_KEY', member: core },

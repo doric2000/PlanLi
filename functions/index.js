@@ -78,10 +78,17 @@ const CORE_SERVICE_ACCOUNT =
 const MEDIA_SERVICE_ACCOUNT =
   'planli-media-functions@planli-f0b12.iam.gserviceaccount.com';
 const googleMapsKey = defineSecret('GOOGLE_MAPS_KEY');
+const googlePlacesNewKey = defineSecret('GOOGLE_PLACES_NEW_KEY');
 const restCountriesKey = defineSecret('REST_COUNTRIES_KEY');
 const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
 const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
 const publicRateLimitKey = defineSecret('PUBLIC_RATE_LIMIT_KEY');
+const placesProvider = defineString('PLACES_PROVIDER', {
+  description: 'Google Places provider adapter: new or legacy.',
+  // Places API (New) passed the live fixture gate. Set PLACES_PROVIDER=legacy
+  // in the deployment environment for an immediate provider rollback.
+  default: 'new',
+});
 const mediaStorageBucket = defineString('MEDIA_STORAGE_BUCKET', {
   description: 'European Cloud Storage bucket used for PlanLi media.',
   default: 'planli-f0b12-media-eu',
@@ -121,7 +128,7 @@ function firestoreCreated(document, handler, options = {}) {
 
 exports.saveRecommendation = callable(
   {
-    secrets: [googleMapsKey, restCountriesKey, publicRateLimitKey],
+    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 120,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -130,6 +137,8 @@ exports.saveRecommendation = callable(
     auth: request.auth,
     data: request.data,
     mapsKey: googleMapsKey.value(),
+    newPlacesKey: googlePlacesNewKey.value(),
+    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     mediaBucket: mediaStorageBucket.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
@@ -138,7 +147,7 @@ exports.saveRecommendation = callable(
 
 exports.resolveRecommendationDestination = callable(
   {
-    secrets: [googleMapsKey, restCountriesKey, publicRateLimitKey],
+    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -147,6 +156,8 @@ exports.resolveRecommendationDestination = callable(
     auth: request.auth,
     data: request.data,
     mapsKey: googleMapsKey.value(),
+    newPlacesKey: googlePlacesNewKey.value(),
+    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
@@ -154,7 +165,7 @@ exports.resolveRecommendationDestination = callable(
 
 exports.searchPlaces = callable(
   {
-    secrets: [googleMapsKey, publicRateLimitKey],
+    secrets: [googleMapsKey, googlePlacesNewKey, publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -163,13 +174,15 @@ exports.searchPlaces = callable(
     auth: request.auth,
     data: request.data,
     mapsKey: googleMapsKey.value(),
+    newPlacesKey: googlePlacesNewKey.value(),
+    placesProvider: placesProvider.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
 
 exports.resolvePlaceSelection = callable(
   {
-    secrets: [googleMapsKey, publicRateLimitKey],
+    secrets: [googleMapsKey, googlePlacesNewKey, publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -178,6 +191,8 @@ exports.resolvePlaceSelection = callable(
     auth: request.auth,
     data: request.data,
     mapsKey: googleMapsKey.value(),
+    newPlacesKey: googlePlacesNewKey.value(),
+    placesProvider: placesProvider.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
@@ -186,7 +201,7 @@ exports.saveRoute = callable(
   {
     timeoutSeconds: 300,
     memory: '1GiB',
-    secrets: [googleMapsKey, restCountriesKey, publicRateLimitKey],
+    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
     ...PROVIDER_ROUTE_CALLABLE_LIMITS,
   },
   (request) => saveRoute({
@@ -195,6 +210,8 @@ exports.saveRoute = callable(
     data: request.data,
     mediaBucket: mediaStorageBucket.value(),
     mapsKey: googleMapsKey.value(),
+    newPlacesKey: googlePlacesNewKey.value(),
+    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
@@ -517,12 +534,18 @@ exports.refreshDestinationCachesScheduled = onSchedule(
     region: REGION,
     timeoutSeconds: 300,
     serviceAccount: CORE_SERVICE_ACCOUNT,
-    secrets: [googleMapsKey],
+    secrets: [googleMapsKey, googlePlacesNewKey],
   },
   async () => {
     const [destinations, exactPlaces] = await Promise.all([
-      refreshDestinationCaches({ admin, mapsKey: googleMapsKey.value(), limit: 50 }),
-      refreshExactPlaceCaches({ admin, mapsKey: googleMapsKey.value(), limit: 50 }),
+      refreshDestinationCaches({
+        admin, mapsKey: googleMapsKey.value(), newPlacesKey: googlePlacesNewKey.value(),
+        placesProvider: placesProvider.value(), limit: 50,
+      }),
+      refreshExactPlaceCaches({
+        admin, mapsKey: googleMapsKey.value(), newPlacesKey: googlePlacesNewKey.value(),
+        placesProvider: placesProvider.value(), limit: 50,
+      }),
     ]);
     console.log('Google cache refresh complete.', {
       destinations: destinations.length,

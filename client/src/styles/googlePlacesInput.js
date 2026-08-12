@@ -66,7 +66,7 @@ export const googlePlacesInput = StyleSheet.create({
 	},
 	googleAttribution: {
 		fontSize: 14,
-		fontWeight: '400',
+		fontFamily: fontFamilies.regular,
 		color: '#5E5E5E',
 		textAlign: 'center',
 	},

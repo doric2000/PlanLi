@@ -309,6 +309,8 @@ async function resolveRoutePlaces({
   auth,
   days,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   restCountriesKey,
   providerRateLimitKey,
 }) {
@@ -343,10 +345,11 @@ async function resolveRoutePlaces({
     const destination = entry.resolvedPlaceToken
       ? await resolveDestinationFromToken({
           admin, auth, resolvedPlaceToken: entry.resolvedPlaceToken, mapsKey,
-          restCountriesKey, providerRateLimitKey,
+          newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
         })
       : await resolveGoogleDestination({
-          admin, placeId: entry.placeId, mapsKey, restCountriesKey,
+          admin, placeId: entry.placeId, mapsKey, newPlacesKey, placesProvider,
+          restCountriesKey,
         });
     assert(destination.place?.placeId === entry.placeId, 'failed-precondition', 'A route place token does not match its stop. Search again.');
     return destination;
@@ -423,12 +426,15 @@ async function saveRoute({
   data,
   mediaBucket,
   mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
   restCountriesKey,
   providerRateLimitKey,
 }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
-  assert(mapsKey, 'failed-precondition', 'GOOGLE_MAPS_KEY is not configured.');
+  assert(placesProvider === 'new' ? newPlacesKey : mapsKey, 'failed-precondition',
+    placesProvider === 'new' ? 'GOOGLE_PLACES_NEW_KEY is not configured.' : 'GOOGLE_MAPS_KEY is not configured.');
   const db = admin.firestore();
   const uid = auth.uid;
   const routeId = typeof data?.routeId === 'string' && data.routeId.trim()
@@ -464,6 +470,8 @@ async function saveRoute({
     auth,
     days: mediaDays,
     mapsKey,
+    newPlacesKey,
+    placesProvider,
     restCountriesKey,
     providerRateLimitKey,
   });
