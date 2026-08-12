@@ -493,6 +493,57 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
 });
 
+test('publishRequestId makes create retries idempotent without incrementing destination stats twice', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
+    'countries/IL/destinations/TLV': {
+      name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 0 },
+    },
+  });
+  const data = {
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174000',
+    destinationRef: { countryId: 'IL', cityId: 'TLV' },
+    recommendation: validContent,
+  };
+
+  const first = await saveRecommendation({ admin, auth: verifiedAuth, mapsKey: 'unused', data });
+  const replay = await saveRecommendation({ admin, auth: verifiedAuth, mapsKey: 'unused', data });
+
+  assert.equal(replay.recommendationId, first.recommendationId);
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(Object.hasOwn(admin.documents.get(`recommendations/${first.recommendationId}`), 'publishRequestId'), false);
+  assert.equal(
+    admin.documents.get('countries/IL/destinations/TLV')['stats.recommendationCount'],
+    1
+  );
+  assert.equal(
+    Array.from(admin.documents.keys()).filter((path) => path.startsWith('recommendations/')).length,
+    1
+  );
+});
+
+test('publishRequestId rejects malformed create IDs and cannot be combined with edit IDs', async () => {
+  const admin = createFakeAdmin();
+  await assert.rejects(
+    saveRecommendation({
+      admin, auth: verifiedAuth, mapsKey: 'unused',
+      data: { publishRequestId: 'not-a-uuid', recommendation: validContent },
+    }),
+    /publishRequestId/
+  );
+  await assert.rejects(
+    saveRecommendation({
+      admin, auth: verifiedAuth, mapsKey: 'unused',
+      data: {
+        recommendationId: 'existing',
+        publishRequestId: '123e4567-e89b-42d3-a456-426614174000',
+        recommendation: validContent,
+      },
+    }),
+    /only supported when creating/
+  );
+});
+
 test('admin edits retain the original owner media without trusting client media fields', async () => {
   const assetId = '323e4567-e89b-42d3-a456-426614174000';
   const existingAsset = {

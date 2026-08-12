@@ -237,6 +237,21 @@ function stableDocumentId(prefix, seed) {
   return `${normalizedPrefix}_${digest}`;
 }
 
+function normalizePublishRequestId(value) {
+  if (value == null || value === '') return null;
+  const normalized = cleanString(value, {
+    field: 'publishRequestId',
+    min: 36,
+    max: 36,
+  });
+  assert(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized),
+    'invalid-argument',
+    'publishRequestId is invalid.'
+  );
+  return normalized.toLowerCase();
+}
+
 function parsePlaceDetails(result) {
   assert(result && typeof result === 'object', 'failed-precondition', 'Google Places returned no result.');
   const components = Array.isArray(result.address_components)
@@ -1128,6 +1143,7 @@ async function saveRecommendation({
   mediaBucket,
   providerRateLimitKey,
 }) {
+  const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
   if (Array.isArray(data?.recommendation?.media) && data.recommendation.media.length) {
@@ -1139,11 +1155,48 @@ async function saveRecommendation({
     typeof data?.recommendationId === 'string' && data.recommendationId.trim()
       ? data.recommendationId.trim()
       : null;
+  const publishRequestId = normalizePublishRequestId(data?.publishRequestId);
+  assert(
+    !(recommendationId && publishRequestId),
+    'invalid-argument',
+    'publishRequestId is only supported when creating a recommendation.'
+  );
   const recommendationRef = recommendationId
     ? db.doc(`recommendations/${recommendationId}`)
+    : publishRequestId
+    ? db.doc(`recommendations/${stableDocumentId('rec', `${uid}:${publishRequestId}`)}`)
     : db.collection('recommendations').doc();
   const previousSnap = recommendationId ? await recommendationRef.get() : null;
   const previousData = previousSnap?.exists ? previousSnap.data() : null;
+
+  if (!recommendationId && publishRequestId) {
+    const replaySnapshot = await recommendationRef.get();
+    if (replaySnapshot.exists) {
+      const replay = replaySnapshot.data() || {};
+      assert(
+        replay.ownerId === uid,
+        'already-exists',
+        'This publication request conflicts with an existing recommendation.'
+      );
+      console.info('recommendation_save_timing', {
+        durationMs: Date.now() - saveStartedAt,
+        imageCount: Array.isArray(replay.media) ? replay.media.length : 0,
+        replay: true,
+      });
+      return {
+        recommendationId: recommendationRef.id,
+        country: {
+          id: replay.destination?.countryId,
+          name: replay.destination?.countryName || replay.destination?.countryId,
+        },
+        city: {
+          id: replay.destination?.cityId,
+          name: replay.destination?.cityName || replay.destination?.cityId,
+        },
+        idempotentReplay: true,
+      };
+    }
+  }
 
   if (recommendationId) {
     assert(previousSnap.exists, 'not-found', 'Recommendation does not exist.');
@@ -1227,9 +1280,18 @@ async function saveRecommendation({
     interestIds: facets.interests,
   });
 
-  await db.runTransaction(async (transaction) => {
+  const transactionOutcome = await db.runTransaction(async (transaction) => {
     const current = await transaction.get(recommendationRef);
     const currentData = current.exists ? current.data() : null;
+    if (!recommendationId && current.exists) {
+      if (
+        publishRequestId &&
+        currentData?.ownerId === uid
+      ) {
+        return { replay: true, data: currentData };
+      }
+      assert(false, 'already-exists', 'Recommendation already exists.');
+    }
     const previousCountryId = currentData?.destination?.countryId;
     const previousCityId = currentData?.destination?.cityId;
     const previousCityRef = previousCountryId && previousCityId
@@ -1255,8 +1317,6 @@ async function saveRecommendation({
         'permission-denied',
         'Recommendation ownership changed.'
       );
-    } else {
-      assert(!current.exists, 'already-exists', 'Recommendation already exists.');
     }
 
     if (!countrySnapshot.exists) {
@@ -1369,21 +1429,34 @@ async function saveRecommendation({
         stats: { likeCount: 0, commentCount: 0 },
       });
     }
+    return { replay: false };
   });
 
+  console.info('recommendation_save_timing', {
+    durationMs: Date.now() - saveStartedAt,
+    imageCount: media.length,
+    replay: transactionOutcome?.replay === true,
+  });
+  const responseDestination = transactionOutcome?.data?.destination || {
+    countryId: destination.countryId,
+    countryName: destination.countryData.name || destination.countryId,
+    cityId: destination.cityId,
+    cityName: destination.cityData.googleCache?.names?.he || destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
+  };
   return {
     recommendationId: recommendationRef.id,
     country: {
-      id: destination.countryId,
-      name: destination.countryData.name || destination.countryId,
+      id: responseDestination.countryId,
+      name: responseDestination.countryName || responseDestination.countryId,
     },
     city: {
-      id: destination.cityId,
-      name: destination.cityData.googleCache?.names?.he || destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
+      id: responseDestination.cityId,
+      name: responseDestination.cityName || responseDestination.cityId,
     },
-    ...(destination.resolutionSource
+    ...(!transactionOutcome?.replay && destination.resolutionSource
       ? { resolutionSource: destination.resolutionSource }
       : {}),
+    ...(transactionOutcome?.replay ? { idempotentReplay: true } : {}),
   };
 }
 
@@ -1404,5 +1477,6 @@ module.exports = {
   sanitizeSubmittedFacets,
   saveRecommendation,
   stableDocumentId,
+  normalizePublishRequestId,
   validateMediaAssets,
 };

@@ -44,6 +44,7 @@ import {
 import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
+import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -78,8 +79,10 @@ export default function CommunityScreen({ navigation }) {
   } = useMapRecommendations({ enabled: mapOpen, request: discoveryRequest });
   const { location: userLocation, requestLocation } = useUserLocation();
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
+  const { completedVersion } = useRecommendationPublish();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
   const feedListRef = useRef(null);
+  const publishVersionRef = useRef(completedVersion);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -90,6 +93,12 @@ export default function CommunityScreen({ navigation }) {
   useEffect(() => {
     setDiscoveryRequest(discoveryRequest);
   }, [discoveryRequest, setDiscoveryRequest]);
+
+  useEffect(() => {
+    if (publishVersionRef.current === completedVersion) return;
+    publishVersionRef.current = completedVersion;
+    refresh();
+  }, [completedVersion, refresh]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',

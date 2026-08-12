@@ -20,13 +20,13 @@ import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { resolveDestinationForPlacePreview, searchPlaces } from '../../../services/LocationService';
 import { saveRecommendation } from '../../../services/RecommendationService';
+import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 
 // --- Constants ---
 import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { getUserTier } from '../../../utils/userTier';
 import { locationErrorMessage } from '../../../utils/locationErrors';
-import { rememberDiscoveryDestinations } from '../../../utils/recentDiscoveryDestinations';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -205,6 +205,8 @@ export default function AddRecommendationScreen({ navigation , route }) {
   const isEdit = route?.params?.mode === 'edit';
   const editItem = route?.params?.item ?? route?.params?.recommendation ?? null;
   const editPostId = route?.params?.postId || null;
+  const publishJobId = !isEdit ? route?.params?.publishJobId || null : null;
+  const { enqueueCreate, loadJobForReview } = useRecommendationPublish();
   /** Stable id for the post being edited (avoids re-hydrating when parent passes a new editItem object for the same post). */
   const editingPostKey = editItem?.id ?? editPostId ?? null;
 
@@ -259,9 +261,9 @@ export default function AddRecommendationScreen({ navigation , route }) {
     quality: 1,
     normalizeToAspect: true,
     normalizeAspect: [1, 1],
-    normalizeWidth: 2560,
-    normalizeHeight: 2560,
-    normalizeCompress: 0.94,
+    normalizeWidth: 1600,
+    normalizeHeight: 1600,
+    normalizeCompress: 0.9,
   });
   const [editableImageUris, setEditableImageUris] = useState([]);
   const editablePreviewUris = useMemo(() => {
@@ -486,6 +488,38 @@ export default function AddRecommendationScreen({ navigation , route }) {
     setLocationResolveError(null);
   }, [isEdit, route?.params?.prefillLocation]);
 
+  useEffect(() => {
+    if (isEdit || !publishJobId || typeof loadJobForReview !== 'function') return undefined;
+    let active = true;
+    loadJobForReview(publishJobId).then((job) => {
+      if (!active || !job?.draft) return;
+      const draft = job.draft;
+      setTitle(draft.title || '');
+      setDescription(draft.description || '');
+      setCategory(draft.category || '');
+      setSelectedTags(Array.isArray(draft.selectedTags) ? draft.selectedTags : []);
+      setBudget(draft.budget || '');
+      setAudienceScope(draft.audienceScope || 'selected');
+      setAudiences(Array.isArray(draft.audiences) ? draft.audiences : []);
+      setRecommendationVibes(Array.isArray(draft.recommendationVibes) ? draft.recommendationVibes : []);
+      setRecommendationEnvironment(draft.recommendationEnvironment || '');
+      setRecommendationNeeds(Array.isArray(draft.recommendationNeeds) ? draft.recommendationNeeds : []);
+      setNeedsConfirmed(Boolean(draft.needsConfirmed));
+      setSelectedCountry(draft.selectedCountry || null);
+      setSelectedCity(draft.selectedCity || null);
+      setSelectedPlace(draft.selectedPlace || null);
+      setLocationQuery(draft.locationQuery || draft.selectedPlace?.name || '');
+      setEditableImageUris(Array.isArray(job.imageUris) ? job.imageUris : []);
+      setExpandedSection('story');
+      setValidation(emptyValidation());
+      setOptionalFitOpen(Boolean(draft.recommendationNeeds?.length));
+    }).catch((error) => {
+      console.error('Could not restore queued recommendation:', error);
+      if (active) Alert.alert('לא הצלחנו לפתוח את ההמלצה', 'אפשר לנסות שוב מסרגל הפרסום.');
+    });
+    return () => { active = false; };
+  }, [isEdit, loadJobForReview, publishJobId]);
+
   // --- Handlers ---
 
   // Custom handler for category change to reset sub-tags
@@ -685,6 +719,75 @@ const handleSubmit = async () => {
       // Build final images list: keep existing remote URLs, upload local URIs.
       const current = Array.isArray(editableImageUris) ? editableImageUris.slice(0, 5) : [];
       const isRemote = (uri) => typeof uri === 'string' && /^https?:\/\//i.test(uri);
+
+      if (!isEdit) {
+        if (typeof enqueueCreate !== 'function') {
+          throw new Error('Recommendation publishing is not available.');
+        }
+        const destinationPayload = selectedPlace?.resolvedPlaceToken
+          ? { resolvedPlaceToken: selectedPlace.resolvedPlaceToken }
+          : selectedPlace?.placeId
+          ? { placeId: selectedPlace.placeId }
+          : {
+              destinationRef: {
+                countryId: selectedCountry.id,
+                cityId: selectedCity.id,
+              },
+            };
+        await enqueueCreate({
+          sourceJobId: publishJobId,
+          payload: {
+            ...destinationPayload,
+            recommendation: {
+              taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
+              title,
+              description,
+              category: getCategoryLabel(category),
+              categoryId: category,
+              tags: selectedTags,
+              budget,
+              media: [],
+              attributes: {
+                audienceScope,
+                audiences,
+                vibes: recommendationVibes,
+                environment: recommendationEnvironment,
+                needs: recommendationNeeds,
+                needsConfirmed,
+              },
+            },
+          },
+          media: current.map((uri) => {
+            const asset = isRemote(uri) ? findMediaAssetByUrl(editItem?.media, uri) : null;
+            return asset ? { asset } : { uri };
+          }),
+          draft: {
+            title,
+            description,
+            category,
+            selectedTags,
+            budget,
+            audienceScope,
+            audiences,
+            recommendationVibes,
+            recommendationEnvironment,
+            recommendationNeeds,
+            needsConfirmed,
+            selectedCountry,
+            selectedCity,
+            selectedPlace,
+            locationQuery,
+          },
+        });
+        if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+          current.filter((uri) => typeof uri === 'string' && uri.startsWith('blob:'))
+            .forEach((uri) => URL.revokeObjectURL(uri));
+        }
+        allowLeaveRef.current = true;
+        navigation.goBack();
+        return;
+      }
+
       const localUris = current.filter((uri) => !isRemote(uri));
 
       const uploadedLocal = localUris.length ? await uploadImageAssets(localUris) : [];
@@ -706,7 +809,7 @@ const handleSubmit = async () => {
             },
           };
       const callablePayload = {
-        ...(isEdit ? { recommendationId: editPostId } : {}),
+        recommendationId: editPostId,
         ...destinationPayload,
         recommendation: {
           taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
@@ -728,27 +831,8 @@ const handleSubmit = async () => {
         },
       };
 
-      const savedRecommendation = await saveRecommendation(callablePayload);
-      if (
-        !isEdit &&
-        savedRecommendation?.country?.id &&
-        savedRecommendation?.city?.id
-      ) {
-        const name = savedRecommendation.city.name || savedRecommendation.city.id;
-        const countryName = savedRecommendation.country.name || savedRecommendation.country.id;
-        await rememberDiscoveryDestinations([{
-          countryId: savedRecommendation.country.id,
-          cityId: savedRecommendation.city.id,
-          name,
-          countryName,
-          label: [name, countryName].filter(Boolean).join(' · '),
-        }]);
-      }
-      if (!isEdit) {
-        Alert.alert("איזה כיף!", "ההמלצה נוספה בהצלחה!");
-      } else {
-        Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
-      }
+      await saveRecommendation(callablePayload);
+      Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
       if (
         typeof URL !== 'undefined' &&
         typeof URL.revokeObjectURL === 'function'

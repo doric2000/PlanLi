@@ -213,6 +213,7 @@ async function prepareMedia({
   data,
   mediaBucket,
 }) {
+  const preparationStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const kind = String(data?.kind || '');
   assert(MEDIA_PRESETS[kind], 'invalid-argument', 'Unsupported media kind.');
@@ -272,28 +273,38 @@ async function prepareMedia({
   );
 
   const assetId = crypto.randomUUID();
-  const createdFiles = [];
+  const variants = ['large', 'feed', 'thumb'];
+  const candidateFiles = variants.map((variant) =>
+    bucket.file(`media/${auth.uid}/${assetId}/${variant}.webp`)
+  );
   const descriptors = {};
   try {
     const placeholder = await createPlaceholder(sourceBuffer);
-    for (const variant of ['large', 'feed', 'thumb']) {
+    const encodedVariants = {};
+    for (const variant of variants) {
       // Sequential processing keeps peak memory bounded.
       // eslint-disable-next-line no-await-in-loop
-      const encoded = await encodeVariant(sourceBuffer, kind, variant);
-      // eslint-disable-next-line no-await-in-loop
-      descriptors[variant] = await writeVariant({
+      encodedVariants[variant] = await encodeVariant(sourceBuffer, kind, variant);
+    }
+    const writtenVariants = await Promise.all(variants.map((variant) => writeVariant({
         bucket,
         uid: auth.uid,
         assetId,
         sourcePath: stagingPath,
         kind,
         variant,
-        encoded,
-      });
-      createdFiles.push(bucket.file(descriptors[variant].path));
-    }
+        encoded: encodedVariants[variant],
+      })));
+    variants.forEach((variant, index) => {
+      descriptors[variant] = writtenVariants[index];
+    });
 
     await stagingFile.delete({ ignoreNotFound: true });
+    console.info('media_prepare_timing', {
+      kind,
+      sourceBytes,
+      durationMs: Date.now() - preparationStartedAt,
+    });
     return {
       assetId,
       aspectRatio:
@@ -304,7 +315,7 @@ async function prepareMedia({
       thumb: descriptors.thumb,
     };
   } catch (error) {
-    await removeFiles(createdFiles);
+    await removeFiles(candidateFiles);
     if (error instanceof HttpsError) throw error;
     console.error('Media preparation failed.', {
       uid: auth.uid,

@@ -90,6 +90,15 @@ jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   rememberDiscoveryDestinations: (...args) => mockRememberRecentDestination(...args),
 }));
 
+const mockEnqueueCreate = jest.fn(() => Promise.resolve('publish-job-1'));
+const mockLoadJobForReview = jest.fn(() => Promise.resolve(null));
+jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
+  useRecommendationPublish: () => ({
+    enqueueCreate: mockEnqueueCreate,
+    loadJobForReview: mockLoadJobForReview,
+  }),
+}));
+
 // C. Mock Image Picker
 // The screen calls pickImages() to obtain local/remote URIs; we return a remote URL.
 const mockPickImages = jest.fn(() => Promise.resolve(['file:///tasty-pizza.jpg']));
@@ -261,36 +270,76 @@ describe('AddRecommendationScreen Integration Test', () => {
     // ------------------------------------------------
 
     await waitFor(() => {
-      expect(mockSaveRecommendation).toHaveBeenCalledWith({
-        placeId: 'google-place-id',
-        recommendation: expect.objectContaining({
+      expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+        sourceJobId: null,
+        payload: expect.objectContaining({
+          placeId: 'google-place-id',
+          recommendation: expect.objectContaining({
+            title: 'Best Pizza Ever',
+            description: 'Great cheese and crust!',
+            categoryId: 'food',
+            tags: expect.arrayContaining(['restaurant']),
+            budget: 'comfort',
+            taxonomyVersion: 4,
+            media: [],
+            attributes: expect.objectContaining({
+              audienceScope: 'selected',
+              audiences: ['solo'],
+              vibes: ['relaxed'],
+              environment: 'indoor',
+            }),
+          }),
+        }),
+        media: [{ uri: 'file:///tasty-pizza.jpg' }],
+        draft: expect.objectContaining({
           title: 'Best Pizza Ever',
-          description: 'Great cheese and crust!',
-          category: 'אוכל ושתייה',
-          categoryId: 'food',
-          tags: expect.arrayContaining(['restaurant']),
-          budget: 'comfort',
-		  taxonomyVersion: 4,
-		  attributes: expect.objectContaining({
-			audienceScope: 'selected',
-			audiences: ['solo'],
-			vibes: ['relaxed'],
-			environment: 'indoor',
-		  }),
-          media: expect.any(Array),
-        })
-      });
+          selectedPlace: expect.objectContaining({ placeId: 'google-place-id' }),
+        }),
+      }));
     });
 
     // Verify navigation back to the previous screen
     expect(navigationMock.goBack).toHaveBeenCalled();
-    expect(mockRememberRecentDestination).toHaveBeenCalledWith([{
-      countryId: 'IL',
-      cityId: 'TLV',
-      name: 'תל אביב',
-      countryName: 'ישראל',
-      label: 'תל אביב · ישראל',
-    }]);
+    expect(mockUploadImages).not.toHaveBeenCalled();
+    expect(mockSaveRecommendation).not.toHaveBeenCalled();
+    expect(mockRememberRecentDestination).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('restores a failed queued recommendation for review', async () => {
+    mockLoadJobForReview.mockResolvedValueOnce({
+      draft: {
+        title: 'Queued title',
+        description: 'Queued description',
+        category: 'food',
+        selectedTags: ['restaurant'],
+        budget: 'comfort',
+        audienceScope: 'selected',
+        audiences: ['solo'],
+        recommendationVibes: ['relaxed'],
+        recommendationEnvironment: 'indoor',
+        recommendationNeeds: [],
+        needsConfirmed: false,
+        selectedCountry: { id: 'IL', name: 'Israel' },
+        selectedCity: { id: 'TLV', name: 'Tel Aviv' },
+        selectedPlace: { placeId: 'place-1', name: 'Queued place' },
+        locationQuery: 'Queued place',
+      },
+      imageUris: ['file:///durable-queue-image.jpg'],
+    });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { publishJobId: 'publish-job-1' } }}
+      />
+    );
+
+    await waitFor(() => expect(mockLoadJobForReview).toHaveBeenCalledWith('publish-job-1'));
+    fireEvent.press(screen.getByLabelText(/המקום,/));
+    await waitFor(() => expect(screen.getByTestId('add-rec-title-input').props.value).toBe('Queued title'));
   });
 
   it('create mode: protects an unfinished recommendation before leaving', async () => {

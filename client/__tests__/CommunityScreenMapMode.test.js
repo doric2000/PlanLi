@@ -42,6 +42,9 @@ jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({
 jest.mock('../src/hooks/useSmartProfile', () => ({
   useSmartProfile: () => ({ smartProfile: {}, completed: false, loading: false }),
 }));
+jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
+  useRecommendationPublish: () => ({ completedVersion: 0 }),
+}));
 
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
