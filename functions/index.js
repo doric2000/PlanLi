@@ -61,6 +61,7 @@ const {
 } = require('./destinationCatalogService');
 const {
   repairPendingDestinationImages,
+  auditUnvalidatedDestinationImages,
   resolveAndPersistDestinationImage,
   syncDestinationImagesForRecommendationChange,
 } = require('./destinationImageService');
@@ -523,7 +524,12 @@ exports.repairDestinationImagesScheduled = onSchedule(
       unsplashKey: unsplashAccessKey.value(),
       limit: 20,
     });
-    console.log('Destination image repair complete.', { processed: results.length });
+    const audit = await auditUnvalidatedDestinationImages({
+      admin,
+      unsplashKey: unsplashAccessKey.value(),
+      limit: 5,
+    });
+    console.log('Destination image repair complete.', { processed: results.length, audit });
   }
 );
 

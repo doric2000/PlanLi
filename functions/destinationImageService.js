@@ -1,5 +1,5 @@
 const { FieldPath } = require('firebase-admin/firestore');
-const { cityName } = require('./destinationIdentityService');
+const { cityName, distanceKm } = require('./destinationIdentityService');
 
 const MAX_IMAGE_SYNC_ATTEMPTS = 6;
 const IDENTITY_STRATEGY_VERSION = 3;
@@ -7,6 +7,19 @@ const RECOMMENDATION_PAGE_SIZE = 100;
 const UTM_SOURCE = 'planli';
 const UTM_MEDIUM = 'referral';
 const UNSPLASH_HOURLY_REQUEST_BUDGET = 45;
+const IMAGE_VALIDATION_VERSION = 1;
+const UNSPLASH_SEARCH_RESULTS = 8;
+const UNSPLASH_MAX_DETAIL_CHECKS = 5;
+
+const DESTINATION_RADIUS_KM = Object.freeze({
+  village: 10,
+  city: 25,
+  town: 25,
+  lake: 60,
+  island: 60,
+  natural_feature: 60,
+  region: 150,
+});
 
 function timestampMs(value) {
   if (!value) return 0;
@@ -96,7 +109,7 @@ function selectMostPopularRecommendationImage(entries) {
   return null;
 }
 
-function buildUnsplashDestinationImage(photo, query) {
+function buildUnsplashDestinationImage(photo, query, { rank = 1, validation = null } = {}) {
   const raw = photo?.urls?.raw;
   const large = resizeUnsplashUrl(raw, 1600);
   const feed = resizeUnsplashUrl(raw, 1080);
@@ -124,11 +137,134 @@ function buildUnsplashDestinationImage(photo, query) {
       providerUrl: `https://unsplash.com/?utm_source=${UTM_SOURCE}&utm_medium=${UTM_MEDIUM}`,
     },
     selection: {
-      strategy: 'top_relevant',
+      strategy: validation ? 'verified_relevant' : 'top_relevant',
       query,
-      rank: 1,
+      rank,
+      ...(validation ? { validation } : {}),
     },
   };
+}
+
+function normalizeImageText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f\u0591-\u05C7]/g, '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019'`]/g, '')
+    .replace(/[^a-z0-9\u05d0-\u05ea]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function containsExactPhrase(value, expected) {
+  const text = normalizeImageText(value);
+  const phrase = normalizeImageText(expected);
+  if (!text || !phrase) return false;
+  return ` ${text} `.includes(` ${phrase} `);
+}
+
+function destinationImageContext(city, country) {
+  const googleNames = city?.googleCache?.names || {};
+  const identityNames = city?.identity?.names || {};
+  const countryNames = country?.names || {};
+  const countryCode = String(city?.googleCache?.countryCode || city?.identity?.countryCode || country?.code || '')
+    .trim().toUpperCase();
+  const intlCountry = /^[A-Z]{2}$/.test(countryCode)
+    ? new Intl.DisplayNames(['en'], { type: 'region' }).of(countryCode)
+    : null;
+  return {
+    destinationNames: [...new Set([googleNames.en, identityNames.en, cityName(city)].filter(Boolean))],
+    countryNames: [...new Set([countryNames.en, city?.identity?.countryNames?.en, intlCountry].filter(Boolean))],
+    coordinates: city?.googleCache?.coordinates || city?.identity?.coordinates || city?.coordinates || null,
+    viewport: city?.googleCache?.viewport || null,
+    destinationType: city?.destinationType || 'city',
+  };
+}
+
+function photoCoordinates(photo) {
+  const rawLat = photo?.location?.position?.latitude;
+  const rawLng = photo?.location?.position?.longitude;
+  if (rawLat === null || rawLat === undefined || rawLng === null || rawLng === undefined) return null;
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+function maximumDestinationDistanceKm(context) {
+  const configured = DESTINATION_RADIUS_KM[context.destinationType] || DESTINATION_RADIUS_KM.city;
+  const center = context.coordinates;
+  const northeast = context.viewport?.northeast;
+  const southwest = context.viewport?.southwest;
+  if (!center || !northeast || !southwest) return configured;
+  const viewportDistance = Math.max(distanceKm(center, northeast), distanceKm(center, southwest));
+  return Number.isFinite(viewportDistance) && viewportDistance > 0
+    ? Math.min(configured, viewportDistance)
+    : configured;
+}
+
+function photoTextValues(photo) {
+  return [
+    photo?.location?.name,
+    photo?.location?.city,
+    photo?.location?.country,
+    photo?.description,
+    photo?.alt_description,
+    ...(Array.isArray(photo?.tags) ? photo.tags.map((tag) => tag?.title || tag?.source?.title) : []),
+  ].filter(Boolean);
+}
+
+function validateUnsplashPhoto(photo, context) {
+  const destinationMatches = photoTextValues(photo).some((value) =>
+    context.destinationNames.some((name) => containsExactPhrase(value, name))
+  );
+  const explicitCountry = String(photo?.location?.country || '').trim();
+  const countryMatches = context.countryNames.some((name) => containsExactPhrase(explicitCountry, name));
+  if (explicitCountry && !countryMatches) return { valid: false, reason: 'conflicting_country' };
+
+  const coordinates = photoCoordinates(photo);
+  if (coordinates && context.coordinates) {
+    const measuredDistance = distanceKm(context.coordinates, coordinates);
+    const roundedDistance = Number(measuredDistance.toFixed(1));
+    if (measuredDistance > maximumDestinationDistanceKm(context)) {
+      return { valid: false, reason: 'outside_destination', distanceKm: roundedDistance };
+    }
+    const explicitCity = String(photo?.location?.city || '').trim();
+    const cityMatches = context.destinationNames.some((name) => containsExactPhrase(explicitCity, name));
+    if (explicitCity && !cityMatches && measuredDistance > 5) {
+      return { valid: false, reason: 'conflicting_city', distanceKm: roundedDistance };
+    }
+    return {
+      valid: true,
+      score: destinationMatches ? 3 : 2,
+      validation: {
+        version: IMAGE_VALIDATION_VERSION,
+        status: 'geo_verified',
+        method: 'coordinates',
+        distanceKm: roundedDistance,
+      },
+    };
+  }
+
+  const countryTextMatches = photoTextValues(photo).some((value) =>
+    context.countryNames.some((name) => containsExactPhrase(value, name))
+  );
+  const explicitCity = String(photo?.location?.city || '').trim();
+  if (explicitCity && !context.destinationNames.some((name) => containsExactPhrase(explicitCity, name))) {
+    return { valid: false, reason: 'conflicting_city' };
+  }
+  if (destinationMatches && countryTextMatches) {
+    return {
+      valid: true,
+      score: 1,
+      validation: {
+        version: IMAGE_VALIDATION_VERSION,
+        status: 'text_verified',
+        method: 'destination_country_text',
+        distanceKm: 0,
+      },
+    };
+  }
+  return { valid: false, reason: 'unverified_metadata' };
 }
 
 function addressComponent(result, ...types) {
@@ -157,15 +293,16 @@ function destinationQuery(city, country) {
     .join(' ');
 }
 
-async function searchUnsplash({ query, accessKey, fetchImpl = global.fetch }) {
+async function searchUnsplash({ query, accessKey, fetchImpl = global.fetch, onRequest = async () => {} }) {
   if (!accessKey) throw new Error('UNSPLASH_ACCESS_KEY is not configured.');
-  if (!query) return { image: null, downloadLocation: null, rateLimit: null };
+  if (!query) return { photos: [], total: 0, rateLimit: null };
   const url = new URL('https://api.unsplash.com/search/photos');
   url.searchParams.set('query', query);
   url.searchParams.set('order_by', 'relevant');
   url.searchParams.set('orientation', 'landscape');
   url.searchParams.set('content_filter', 'high');
-  url.searchParams.set('per_page', '1');
+  url.searchParams.set('per_page', String(UNSPLASH_SEARCH_RESULTS));
+  await onRequest();
   const response = await fetchImpl(url, {
     headers: {
       Authorization: `Client-ID ${accessKey}`,
@@ -178,16 +315,13 @@ async function searchUnsplash({ query, accessKey, fetchImpl = global.fetch }) {
     throw error;
   }
   const payload = await response.json();
-  const photo = payload?.results?.[0] || null;
-  const image = photo ? buildUnsplashDestinationImage(photo, query) : null;
-  if (photo && !image) throw new Error('Unsplash returned an incomplete photo result.');
   const rateLimitValue = (name) => {
     const value = response.headers?.get?.(name);
     return value === null || value === undefined || value === '' ? null : Number(value);
   };
   return {
-    image,
-    downloadLocation: photo?.links?.download_location || null,
+    photos: Array.isArray(payload?.results) ? payload.results.slice(0, UNSPLASH_SEARCH_RESULTS) : [],
+    total: Number(payload?.total || 0),
     rateLimit: {
       limit: rateLimitValue('x-ratelimit-limit'),
       remaining: rateLimitValue('x-ratelimit-remaining'),
@@ -195,9 +329,25 @@ async function searchUnsplash({ query, accessKey, fetchImpl = global.fetch }) {
   };
 }
 
-async function trackUnsplashDownload({ downloadLocation, accessKey, fetchImpl = global.fetch }) {
+async function fetchUnsplashPhoto({ photoId, accessKey, fetchImpl = global.fetch, onRequest = async () => {} }) {
+  if (!accessKey) throw new Error('UNSPLASH_ACCESS_KEY is not configured.');
+  const url = new URL(`https://api.unsplash.com/photos/${encodeURIComponent(photoId)}`);
+  await onRequest();
+  const response = await fetchImpl(url, {
+    headers: { Authorization: `Client-ID ${accessKey}`, 'Accept-Version': 'v1' },
+  });
+  if (!response.ok) {
+    const error = new Error(`Unsplash photo lookup failed with HTTP ${response.status}.`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+async function trackUnsplashDownload({ downloadLocation, accessKey, fetchImpl = global.fetch, onRequest = async () => {} }) {
   if (!downloadLocation) return;
   if (!isHttpsUrl(downloadLocation)) throw new Error('Invalid Unsplash download tracking URL.');
+  await onRequest();
   const response = await fetchImpl(downloadLocation, {
     headers: {
       Authorization: `Client-ID ${accessKey}`,
@@ -238,14 +388,54 @@ async function resolveDestinationImageCandidate({
   unsplashKey,
   fetchImpl = global.fetch,
   query,
+  maxDetailChecks = UNSPLASH_MAX_DETAIL_CHECKS,
+  excludedPhotoIds = [],
+  onRequest = async () => {},
 }) {
   if (!query) {
     const image = await selectRecommendationFallback(db, countryId, cityId);
     return { image, downloadLocation: null, rateLimit: null, state: image ? 'ready' : 'no_match' };
   }
-  const unsplash = await searchUnsplash({ query, accessKey: unsplashKey, fetchImpl });
-  if (unsplash.image) {
-    return { ...unsplash, state: 'ready' };
+  const unsplash = await searchUnsplash({ query, accessKey: unsplashKey, fetchImpl, onRequest });
+  if (!unsplash.photos.length) {
+    const image = await selectRecommendationFallback(db, countryId, cityId);
+    return { image, downloadLocation: null, rateLimit: unsplash.rateLimit, state: image ? 'ready' : 'no_match', outcome: 'zero_results' };
+  }
+  const context = destinationImageContext(city, country);
+  const excluded = new Set(excludedPhotoIds);
+  const verified = [];
+  let checked = 0;
+  for (let index = 0; index < unsplash.photos.length && checked < maxDetailChecks; index += 1) {
+    const summary = unsplash.photos[index];
+    if (!summary?.id || excluded.has(summary.id)) continue;
+    checked += 1;
+    const photo = await fetchUnsplashPhoto({ photoId: summary.id, accessKey: unsplashKey, fetchImpl, onRequest });
+    const result = validateUnsplashPhoto(photo, context);
+    if (!result.valid) {
+      console.info('Rejected Unsplash destination image.', {
+        photoId: summary.id,
+        reason: result.reason,
+        ...(result.distanceKm === undefined ? {} : { distanceKm: result.distanceKm }),
+      });
+      continue;
+    }
+    verified.push({ photo, rank: index + 1, ...result });
+  }
+  verified.sort((left, right) => right.score - left.score || left.rank - right.rank);
+  if (verified.length) {
+    const selected = verified[0];
+    const image = buildUnsplashDestinationImage(selected.photo, query, {
+      rank: selected.rank,
+      validation: selected.validation,
+    });
+    if (!image) throw new Error('Unsplash returned an incomplete photo result.');
+    return {
+      image,
+      downloadLocation: selected.photo?.links?.download_location || null,
+      rateLimit: unsplash.rateLimit,
+      state: 'ready',
+      outcome: selected.validation.status === 'geo_verified' ? 'match_geo' : 'match_text',
+    };
   }
   const image = await selectRecommendationFallback(db, countryId, cityId);
   return {
@@ -253,6 +443,7 @@ async function resolveDestinationImageCandidate({
     downloadLocation: null,
     rateLimit: unsplash.rateLimit,
     state: image ? 'ready' : 'no_match',
+    outcome: 'no_verified_match',
   };
 }
 
@@ -294,7 +485,7 @@ function retryDelayMs(attempts) {
     [Math.max(0, Math.min(5, attempts - 1))];
 }
 
-async function consumeUnsplashBudget(db, { units = 2, now = Date.now() } = {}) {
+async function consumeUnsplashBudget(db, { units = 1, now = Date.now() } = {}) {
   const ref = db.doc('system/runtime/providerGlobalLimits/unsplash_hour');
   await db.runTransaction(async (transaction) => {
     const previous = (await transaction.get(ref)).data() || {};
@@ -353,7 +544,8 @@ async function resolveAndPersistDestinationImage({
   const [citySnapshot, countrySnapshot] = await Promise.all([cityRef.get(), countryRef.get()]);
   if (!citySnapshot.exists || citySnapshot.data()?.status !== 'active') return { state: 'missing_city' };
   let city = citySnapshot.data();
-  if (!force && city.destinationImage?.source?.type === 'unsplash') {
+  const currentValidationVersion = Number(city.destinationImage?.selection?.validation?.version || 0);
+  if (city.destinationImage?.source?.type === 'unsplash' && currentValidationVersion >= IMAGE_VALIDATION_VERSION) {
     return { state: 'ready', unchanged: true };
   }
   const jobRef = destinationJobRef(db, countryId, cityId);
@@ -377,22 +569,69 @@ async function resolveAndPersistDestinationImage({
     return { state: 'retry', image: city.destinationImage || null };
   }
   try {
-    await consumeUnsplashBudget(db);
-    const candidate = await resolveDestinationImageCandidate({
-      db,
-      city,
-      country: countrySnapshot.exists ? countrySnapshot.data() : null,
-      countryId,
-      cityId,
-      unsplashKey,
-      fetchImpl,
-      query,
-    });
+    const country = countrySnapshot.exists ? countrySnapshot.data() : null;
+    const onRequest = () => consumeUnsplashBudget(db);
+    const currentPhotoId = city.destinationImage?.source?.type === 'unsplash'
+      ? city.destinationImage.source.providerPhotoId
+      : null;
+    let candidate = null;
+    if (currentPhotoId) {
+      try {
+        const currentPhoto = await fetchUnsplashPhoto({
+          photoId: currentPhotoId,
+          accessKey: unsplashKey,
+          fetchImpl,
+          onRequest,
+        });
+        const currentResult = validateUnsplashPhoto(currentPhoto, destinationImageContext(city, country));
+        if (currentResult.valid) {
+          const image = buildUnsplashDestinationImage(currentPhoto, query, {
+            rank: Number(city.destinationImage?.selection?.rank || 1),
+            validation: currentResult.validation,
+          });
+          if (!image) throw new Error('Unsplash returned an incomplete photo result.');
+          candidate = {
+            image,
+            downloadLocation: null,
+            rateLimit: null,
+            state: 'ready',
+            outcome: currentResult.validation.status === 'geo_verified' ? 'match_geo' : 'match_text',
+          };
+        } else {
+          console.info('Rejected existing Unsplash destination image.', {
+            countryId,
+            cityId,
+            photoId: currentPhotoId,
+            reason: currentResult.reason,
+            ...(currentResult.distanceKm === undefined ? {} : { distanceKm: currentResult.distanceKm }),
+          });
+        }
+      } catch (error) {
+        if (Number(error?.status) !== 404) throw error;
+        console.info('Existing Unsplash destination image no longer exists.', { countryId, cityId, photoId: currentPhotoId });
+      }
+    }
+    if (!candidate) {
+      candidate = await resolveDestinationImageCandidate({
+        db,
+        city,
+        country,
+        countryId,
+        cityId,
+        unsplashKey,
+        fetchImpl,
+        query,
+        maxDetailChecks: currentPhotoId ? UNSPLASH_MAX_DETAIL_CHECKS - 1 : UNSPLASH_MAX_DETAIL_CHECKS,
+        excludedPhotoIds: currentPhotoId ? [currentPhotoId] : [],
+        onRequest,
+      });
+    }
     if (candidate.image?.source?.type === 'unsplash') {
       await trackUnsplashDownload({
         downloadLocation: candidate.downloadLocation,
         accessKey: unsplashKey,
         fetchImpl,
+        onRequest,
       });
     }
     if (!sameDestinationImage(city.destinationImage, candidate.image) || force) {
@@ -400,7 +639,7 @@ async function resolveAndPersistDestinationImage({
     }
     await jobRef.set({
       countryId, cityId,
-      imageSync: { state: candidate.state, attempts, query, unsplashOutcome: candidate.image?.source?.type === 'unsplash' ? 'match' : 'no_match', lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() },
+      imageSync: { state: candidate.state, attempts, query, unsplashOutcome: candidate.outcome, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp() },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     return candidate;
@@ -408,7 +647,7 @@ async function resolveAndPersistDestinationImage({
     const state = attempts >= MAX_IMAGE_SYNC_ATTEMPTS ? 'failed' : 'retry';
     await jobRef.set({
       countryId, cityId,
-      imageSync: { state, attempts, query, lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(), ...(state === 'retry' ? { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) } : {}), lastErrorCode: String(error?.status || error?.code || 'unsplash_error') },
+      imageSync: { state, attempts, query, unsplashOutcome: 'provider_error', lastAttemptAt: admin.firestore.FieldValue.serverTimestamp(), ...(state === 'retry' ? { nextAttemptAt: new Date(Date.now() + retryDelayMs(attempts)) } : {}), lastErrorCode: String(error?.status || error?.code || 'unsplash_error') },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     return { state, error };
@@ -497,9 +736,89 @@ async function repairPendingDestinationImages({
   return results;
 }
 
+async function auditUnvalidatedDestinationImages({
+  admin,
+  unsplashKey,
+  fetchImpl = global.fetch,
+  limit = 5,
+  scanLimit = 100,
+  resolveImage = resolveAndPersistDestinationImage,
+}) {
+  const db = admin.firestore();
+  const stateRef = db.doc(`system/runtime/destinationImageAudits/policy_${IMAGE_VALIDATION_VERSION}`);
+  const stateSnapshot = await stateRef.get();
+  const state = stateSnapshot.data() || {};
+  if (Number(state.completedVersion || 0) >= IMAGE_VALIDATION_VERSION) {
+    return { audited: 0, scanned: 0, complete: true };
+  }
+
+  let query = db.collection('destinationCatalog')
+    .orderBy(FieldPath.documentId())
+    .limit(Math.max(1, Math.min(500, scanLimit)));
+  if (state.cursor) query = query.startAfter(state.cursor);
+  const snapshot = await query.get();
+  let audited = 0;
+  let scanned = 0;
+  let cursor = state.cursor || null;
+  let pausedForRetry = false;
+  let stoppedAtLimit = false;
+
+  for (const catalogDocument of snapshot.docs) {
+    if (audited >= limit) {
+      stoppedAtLimit = true;
+      break;
+    }
+    scanned += 1;
+    const catalog = catalogDocument.data() || {};
+    const destinationRef = catalog.countryId && catalog.cityId
+      ? db.doc(`countries/${catalog.countryId}/destinations/${catalog.cityId}`)
+      : null;
+    const destinationSnapshot = destinationRef ? await destinationRef.get() : null;
+    const destination = destinationSnapshot?.exists ? destinationSnapshot.data() : null;
+    const needsAudit = destination?.status === 'active' &&
+      destination?.destinationImage?.source?.type === 'unsplash' &&
+      Number(destination?.destinationImage?.selection?.validation?.version || 0) < IMAGE_VALIDATION_VERSION;
+    if (needsAudit) {
+      const result = await resolveImage({
+        admin,
+        countryId: catalog.countryId,
+        cityId: catalog.cityId,
+        unsplashKey,
+        fetchImpl,
+        force: true,
+      });
+      if (result.state === 'retry') {
+        pausedForRetry = true;
+        break;
+      }
+      audited += 1;
+    }
+    cursor = catalogDocument.id;
+    await stateRef.set({
+      policyVersion: IMAGE_VALIDATION_VERSION,
+      cursor,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  const complete = !pausedForRetry && !stoppedAtLimit && snapshot.size < scanLimit;
+  if (complete) {
+    await stateRef.set({
+      policyVersion: IMAGE_VALIDATION_VERSION,
+      completedVersion: IMAGE_VALIDATION_VERSION,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      cursor: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  return { audited, scanned, complete, pausedForRetry };
+}
+
 module.exports = {
   MAX_IMAGE_SYNC_ATTEMPTS,
   IDENTITY_STRATEGY_VERSION,
+  IMAGE_VALIDATION_VERSION,
+  auditUnvalidatedDestinationImages,
   buildUnsplashDestinationImage,
   consumeUnsplashBudget,
   destinationImageWritePatch,
@@ -511,9 +830,14 @@ module.exports = {
   resolveDestinationImageCandidate,
   destinationJobRef,
   destinationQuery,
+  destinationImageContext,
+  fetchUnsplashPhoto,
+  maximumDestinationDistanceKm,
+  normalizeImageText,
   searchUnsplash,
   selectMostPopularRecommendationImage,
   selectRecommendationFallback,
   syncDestinationImagesForRecommendationChange,
   trackUnsplashDownload,
+  validateUnsplashPhoto,
 };

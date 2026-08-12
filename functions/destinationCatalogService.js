@@ -41,7 +41,7 @@ async function syncDestinationCatalog({ admin, countryId, cityId, city }) {
     return null;
   }
   const data = catalogData({ countryId, cityId, city, country, timestamp });
-  await ref.set(data, { merge: true });
+  await ref.set(data);
   return data;
 }
 
@@ -70,7 +70,7 @@ async function syncCountryDestinationCatalog({ admin, countryId, country, limit 
           city,
           country,
           timestamp,
-        }), { merge: true });
+        }));
       }
     });
     await batch.commit();

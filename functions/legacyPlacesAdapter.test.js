@@ -18,7 +18,13 @@ function result(language) {
         { long_name: language === 'he' ? 'פריז' : 'Paris', types: ['locality', 'political'] },
         { long_name: language === 'he' ? 'צרפת' : 'France', short_name: 'FR', types: ['country', 'political'] },
       ],
-      geometry: { location: { lat: 48.8566, lng: 2.3522 } },
+      geometry: {
+        location: { lat: 48.8566, lng: 2.3522 },
+        viewport: {
+          northeast: { lat: 48.902, lng: 2.47 },
+          southwest: { lat: 48.815, lng: 2.225 },
+        },
+      },
       types: ['locality', 'political'],
     },
   };
@@ -39,6 +45,10 @@ test('legacy adapter fetches Hebrew and English details once each into an expiri
   const cache = googleCacheFor(bilingual);
   assert.deepEqual(cache.names, { he: 'פריז', en: 'Paris' });
   assert.equal(cache.countryCode, 'FR');
+  assert.deepEqual(cache.viewport, {
+    northeast: { lat: 48.902, lng: 2.47 },
+    southwest: { lat: 48.815, lng: 2.225 },
+  });
   assert.equal(cache.refreshAfter.getTime() - cache.fetchedAt.getTime(), 24 * 24 * 60 * 60 * 1000);
   assert.equal(cache.expiresAt.getTime() - cache.fetchedAt.getTime(), 28 * 24 * 60 * 60 * 1000);
 });

@@ -19,6 +19,10 @@ function details(language) {
       { longText: language === 'he' ? 'צרפת' : 'France', shortText: 'FR', types: ['country', 'political'] },
     ],
     location: { latitude: 48.8566, longitude: 2.3522 },
+    viewport: {
+      low: { latitude: 48.815, longitude: 2.225 },
+      high: { latitude: 48.902, longitude: 2.47 },
+    },
     types: ['locality', 'political'],
     primaryType: 'locality',
     businessStatus: 'OPERATIONAL',
@@ -78,6 +82,10 @@ test('Places API New fetches matching Hebrew and English details exactly once', 
   assert.equal(bilingual.he.displayName, 'פריז');
   assert.equal(bilingual.en.displayName, 'Paris');
   assert.equal(bilingual.en.countryCode, 'FR');
+  assert.deepEqual(bilingual.en.viewport, {
+    southwest: { lat: 48.815, lng: 2.225 },
+    northeast: { lat: 48.902, lng: 2.47 },
+  });
 });
 
 test('Places API New rejects conflicting bilingual identities and moved places', async () => {
