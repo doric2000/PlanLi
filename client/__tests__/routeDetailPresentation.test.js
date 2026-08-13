@@ -24,10 +24,11 @@ describe('buildRouteDetailPresentation', () => {
     });
 
     expect(result.facts.map((fact) => fact.id)).toEqual([
-      'budget', 'audiences', 'difficulty', 'environment',
+      'budget', 'audiences', 'vibes', 'environment',
     ]);
-    expect(result.groups.map((group) => group.id)).toEqual([
-      'subcategories', 'vibes', 'transport', 'pace', 'seasons', 'travelerStyles', 'experience',
+    expect(result.tags.length).toBeGreaterThan(0);
+    expect(result.extras.map((group) => group.id)).toEqual([
+      'difficulty', 'experience', 'transport', 'pace', 'seasons', 'travelerStyles',
     ]);
     expect(JSON.stringify(result)).not.toContain('#');
     expect(JSON.stringify(result)).not.toContain('legacy value');

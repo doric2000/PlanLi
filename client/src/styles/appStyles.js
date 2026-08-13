@@ -3564,6 +3564,9 @@ export const addRoutesScreenStyles = StyleSheet.create({
 
 // features/roadtrip/screens/RouteDetailScreen.js
 export const routeDetailScreenStyles = StyleSheet.create({
+    page: {
+        flex: 1,
+    },
     screen: {
         flex: 1,
         backgroundColor: colors.background,
@@ -3652,6 +3655,41 @@ export const routeDetailScreenStyles = StyleSheet.create({
     routePreviewSection: {
         marginTop: spacing.sm,
         marginBottom: spacing.lg,
+    },
+    metricsRow: {
+        marginTop: 22,
+        paddingVertical: 14,
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: colors.divider,
+        flexDirection: 'row-reverse',
+        justifyContent: 'space-around',
+    },
+    metric: {
+        minWidth: 78,
+        alignItems: 'center',
+        gap: 3,
+    },
+    metricValue: {
+        color: colors.textPrimary,
+        fontSize: 16,
+        fontFamily: fontFamilies.semiBold,
+    },
+    metricLabel: {
+        color: colors.textMuted,
+        fontSize: 11,
+        fontFamily: fontFamilies.medium,
+        writingDirection: 'rtl',
+    },
+    mapPreviewSpacing: {
+        marginTop: 13,
+    },
+    destinationsSpacing: {
+        marginTop: 14,
+        overflow: 'hidden',
+    },
+    itinerarySpacing: {
+        marginTop: 14,
     },
     placesRouteSpacing: {
         marginTop: spacing.md,
@@ -3777,6 +3815,130 @@ export const routeDetailScreenStyles = StyleSheet.create({
         textAlign: 'right',
         writingDirection: 'rtl',
     },
+});
+
+// components/MediaGalleryModal.js
+export const mediaGalleryModalStyles = StyleSheet.create({
+	screen: { flex: 1, backgroundColor: '#070B12' },
+	header: {
+		height: 62, paddingHorizontal: 16, flexDirection: 'row-reverse', alignItems: 'center',
+		justifyContent: 'space-between', zIndex: 5,
+	},
+	closeButton: {
+		width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+		backgroundColor: 'rgba(255,255,255,0.12)',
+	},
+	counter: { color: colors.white, fontSize: 14, fontFamily: fontFamilies.semiBold },
+	headerSpacer: { width: 44 },
+	page: { alignItems: 'center', justifyContent: 'center', paddingBottom: 54 },
+	image: { width: '100%', height: '100%' },
+	caption: {
+		position: 'absolute', left: 20, right: 20, bottom: 16, color: colors.white,
+		fontSize: 15, fontFamily: fontFamilies.medium, textAlign: 'center', writingDirection: 'rtl',
+	},
+	webNavigation: {
+		...StyleSheet.absoluteFillObject, paddingHorizontal: 22, flexDirection: 'row',
+		alignItems: 'center', justifyContent: 'space-between',
+	},
+	navButton: {
+		width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.56)',
+		alignItems: 'center', justifyContent: 'center',
+	},
+	navButtonDisabled: { opacity: 0.25 },
+});
+
+// features/roadtrip/components/RouteStopMarker.js
+export const routeStopMarkerStyles = StyleSheet.create({
+	touchTarget: { width: 56, height: 64, alignItems: 'center', justifyContent: 'flex-start' },
+	touchTargetCompact: { width: 42, height: 50 },
+	halo: {
+		width: 52, height: 58, borderRadius: 26, alignItems: 'center', paddingTop: 2,
+		backgroundColor: 'transparent',
+	},
+	haloSelected: { backgroundColor: 'rgba(255,149,31,0.24)' },
+	haloCompact: { width: 40, height: 46, borderRadius: 20 },
+	pinHead: {
+		width: 42, height: 42, borderRadius: 21, overflow: 'hidden', alignItems: 'center',
+		justifyContent: 'center', backgroundColor: colors.primary, borderWidth: 3,
+		borderColor: colors.white, zIndex: 2, ...shadows.small,
+	},
+	pinHeadSelected: { borderColor: colors.brandOrange, transform: [{ scale: 1.08 }] },
+	pinHeadCompact: { width: 32, height: 32, borderRadius: 16, borderWidth: 2 },
+	tail: {
+		width: 15, height: 15, marginTop: -9, backgroundColor: colors.primary,
+		borderRightWidth: 2, borderBottomWidth: 2, borderColor: colors.white,
+		transform: [{ rotate: '45deg' }], zIndex: 1,
+	},
+	tailSelected: { backgroundColor: colors.brandOrange },
+	tailCompact: { width: 12, height: 12, marginTop: -7 },
+	image: { width: '100%', height: '100%' },
+	number: { color: colors.white, fontSize: 16, fontFamily: fontFamilies.semiBold },
+	numberCompact: { fontSize: 12 },
+	badge: {
+		position: 'absolute', right: -1, bottom: -1, minWidth: 18, height: 18, borderRadius: 9,
+		paddingHorizontal: 3, backgroundColor: colors.brandOrange, borderWidth: 2,
+		borderColor: colors.white, alignItems: 'center', justifyContent: 'center',
+	},
+	badgeCompact: { minWidth: 15, height: 15, borderRadius: 8, borderWidth: 1 },
+	badgeText: { color: colors.white, fontSize: 9, fontFamily: fontFamilies.semiBold },
+	badgeTextCompact: { fontSize: 8 },
+});
+
+// features/roadtrip/components/RouteItinerary.js
+export const routeItineraryStyles = StyleSheet.create({
+	container: { gap: 12 },
+	dayCard: {
+		borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white,
+		overflow: 'hidden',
+	},
+	dayCardOpen: { borderColor: 'rgba(30,58,95,0.24)', ...shadows.small },
+	dayHeader: {
+		minHeight: 104, padding: 12, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+		backgroundColor: '#F8FAFC',
+	},
+	dayImageButton: { width: 78, height: 78, borderRadius: 15, overflow: 'hidden' },
+	dayImage: { width: '100%', height: '100%', backgroundColor: colors.borderLight },
+	photoIndicator: {
+		position: 'absolute', left: 5, bottom: 5, width: 26, height: 26, borderRadius: 13,
+		backgroundColor: 'rgba(15,23,42,0.68)', alignItems: 'center', justifyContent: 'center',
+	},
+	dayFallback: {
+		width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary,
+		alignItems: 'center', justifyContent: 'center',
+	},
+	dayFallbackText: { color: colors.white, fontSize: 21, fontFamily: fontFamilies.semiBold },
+	dayCopy: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
+	dayTitle: { fontSize: 17, fontFamily: fontFamilies.semiBold, color: colors.textPrimary, writingDirection: 'rtl' },
+	dayDescription: { marginTop: 3, fontSize: 13, lineHeight: 19, color: colors.textSecondary, textAlign: 'right', writingDirection: 'rtl' },
+	dayMeta: { marginTop: 5, fontSize: 12, fontFamily: fontFamilies.semiBold, color: colors.primary, writingDirection: 'rtl' },
+	stopsGrid: { padding: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
+	stopCard: {
+		width: '100%', minHeight: 94, padding: 10, borderRadius: 15, borderWidth: 1,
+		borderColor: colors.borderLight, backgroundColor: colors.white,
+		flexDirection: 'row-reverse', alignItems: 'center', gap: 10,
+	},
+	stopCardWide: { width: '48.8%' },
+	stopImageButton: { width: 68, height: 68, borderRadius: 13, overflow: 'hidden' },
+	stopImage: { width: '100%', height: '100%', backgroundColor: colors.borderLight },
+	stopNumberOverlay: {
+		position: 'absolute', right: 5, top: 5, minWidth: 24, height: 24, borderRadius: 12,
+		paddingHorizontal: 5, backgroundColor: 'rgba(30,58,95,0.92)', alignItems: 'center', justifyContent: 'center',
+	},
+	stopNumberOverlayText: { color: colors.white, fontSize: 11, fontFamily: fontFamilies.semiBold },
+	stopNumber: {
+		width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary,
+		alignItems: 'center', justifyContent: 'center',
+	},
+	stopNumberText: { color: colors.white, fontSize: 16, fontFamily: fontFamilies.semiBold },
+	stopCopy: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
+	stopTitle: { fontSize: 14, fontFamily: fontFamilies.semiBold, color: colors.textPrimary, textAlign: 'right', writingDirection: 'rtl' },
+	stopDescription: { marginTop: 3, fontSize: 12, lineHeight: 17, color: colors.textSecondary, textAlign: 'right', writingDirection: 'rtl' },
+	stopAddress: { marginTop: 4, fontSize: 11, lineHeight: 16, color: colors.textMuted, textAlign: 'right', writingDirection: 'rtl' },
+	mapButton: {
+		width: 44, height: 44, borderRadius: 14, backgroundColor: '#E7F7F5',
+		alignItems: 'center', justifyContent: 'center',
+	},
+	mapButtonDisabled: { backgroundColor: colors.surfaceSubtle },
 });
 
 // features/roadtrip/components/RouteMapPreview.js
@@ -3962,6 +4124,21 @@ export const routeMapStyles = StyleSheet.create({
 		textAlign: "center",
 		writingDirection: "rtl",
 	},
+	webStopCard: {
+		width: '100%', maxWidth: 680, minHeight: 82, marginTop: 10, padding: 10,
+		borderRadius: 16, borderWidth: 1, borderColor: colors.border,
+		backgroundColor: colors.white, flexDirection: 'row-reverse', alignItems: 'center', gap: 12,
+		...shadows.small,
+	},
+	webStopImage: { width: 58, height: 58, borderRadius: 14, backgroundColor: colors.borderLight },
+	webStopNumber: {
+		width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary,
+		alignItems: 'center', justifyContent: 'center',
+	},
+	webStopNumberText: { color: colors.white, fontFamily: fontFamilies.semiBold, fontSize: 16 },
+	webStopCopy: { flex: 1, minWidth: 0, alignItems: 'flex-end' },
+	webStopTitle: { fontSize: 15, fontFamily: fontFamilies.semiBold, color: colors.textPrimary, textAlign: 'right', writingDirection: 'rtl' },
+	webStopAddress: { marginTop: 4, fontSize: 12, color: colors.textSecondary, textAlign: 'right', writingDirection: 'rtl' },
 	webMap: {
 		width: "100%",
 		height: "100%",

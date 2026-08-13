@@ -33,8 +33,8 @@ export function buildRouteDetailPresentation(route) {
     audienceValues.length ? {
       id: 'audiences', icon: 'groups', title: 'למי מתאים', value: audienceValues.join(' · '),
     } : null,
-    route?.difficulty ? {
-      id: 'difficulty', icon: 'terrain', title: 'רמת קושי', value: getOptionLabel(ROUTE_DIFFICULTIES, route.difficulty),
+    facets.vibes?.length ? {
+      id: 'vibes', icon: 'sentiment-satisfied-alt', title: 'אווירה', value: labels(VIBES, facets.vibes).join(' · '),
     } : null,
     facets.environments?.length ? {
       id: 'environment', icon: 'landscape', title: 'סביבה', value: labels(ENVIRONMENTS, facets.environments).join(' · '),
@@ -44,24 +44,26 @@ export function buildRouteDetailPresentation(route) {
   const categoryLabels = (route?.categoryIds || [])
     .map((id) => CATEGORIES.find((option) => option.id === id)?.label)
     .filter(Boolean);
-  const groups = [
-    { id: 'subcategories', icon: 'local-offer', title: 'מה מחכה בדרך', values: unique([
-      ...categoryLabels,
-      ...(route?.subcategoryIds || []).map(getTagLabel),
-    ]) },
-    { id: 'vibes', icon: 'auto-awesome', title: 'אווירה', values: labels(VIBES, facets.vibes) },
+  const tags = unique([
+    ...categoryLabels,
+    ...(route?.subcategoryIds || []).map(getTagLabel),
+  ]);
+  const extras = [
+    { id: 'difficulty', icon: 'terrain', title: 'רמת קושי', values: route?.difficulty
+      ? [getOptionLabel(ROUTE_DIFFICULTIES, route.difficulty)]
+      : [] },
+    { id: 'experience', icon: 'hiking', title: 'ניסיון נדרש', values: route?.experienceLevel
+      ? [getOptionLabel(ROUTE_EXPERIENCE_LEVELS, route.experienceLevel)]
+      : [] },
     { id: 'transport', icon: 'directions-car', title: 'התניידות', values: labels(TRANSPORT_MODES, route?.transportModes) },
     { id: 'pace', icon: 'speed', title: 'קצב', values: route?.pace ? [getOptionLabel(PACES, route.pace)] : [] },
     { id: 'seasons', icon: 'wb-sunny', title: 'עונות מתאימות', values: labels(SEASONS, facets.seasons) },
     { id: 'travelerStyles', icon: 'explore', title: 'סגנון טיול', values: labels(TRAVELER_STYLES, facets.travelerStyles) },
-    { id: 'experience', icon: 'hiking', title: 'ניסיון נדרש', values: route?.experienceLevel
-      ? [getOptionLabel(ROUTE_EXPERIENCE_LEVELS, route.experienceLevel)]
-      : [] },
   ].filter((group) => group.values.length);
 
   const needs = facets.needsScope === 'entire_route'
     ? labels(NEEDS, facets.needs)
     : [];
 
-  return { facts, groups, needs };
+  return { facts, tags, extras, needs };
 }

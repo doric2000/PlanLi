@@ -33,7 +33,7 @@ import { CommentsModal } from '../../../components/CommentsModal';
 import ActiveRouteFiltersList from '../components/ActiveRouteFiltersList';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
 import { deleteContent } from '../../../services/SocialService';
-import { discoverRoutes, loadRouteDetails, recordRouteOpen } from '../../../services/RouteService';
+import { discoverRoutes, loadRouteDetails } from '../../../services/RouteService';
 import { SortMenuModal } from '../../community/components/SortMenuModal';
 import {
   applySmartProfileFilters,
@@ -152,7 +152,6 @@ export default function RoutesScreen({ navigation }) {
     if (routeToEdit) navigation.navigate('AddRoutesScreen', { routeToEdit });
   };
   const openRoute = async (route) => {
-    if (currentUser?.uid) recordRouteOpen(route.id).catch(() => {});
     const routeData = await loadRouteDetails(route.id);
     if (routeData) navigation.navigate('RouteDetail', { routeData });
   };

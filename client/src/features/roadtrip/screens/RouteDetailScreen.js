@@ -1,177 +1,239 @@
-import React, { useLayoutEffect, useMemo, useState } from "react";
-import { ScrollView, TouchableOpacity, View } from "react-native";
-import AppText from "../../../components/AppText";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import PlacesRoute from "../components/PlacesRoute";
-import DayViewModal from "../components/DayViewModal";
-import { colors, routeDetailScreenStyles as styles } from "../../../styles";
-import { Avatar } from "../../../components/Avatar";
-import MetadataLine from "../../../components/MetadataLine";
-import UsefulFactItem from "../../../components/UsefulFactItem";
-import { TimelineItem } from "../../../components/TimelineItem";
-import { useUserData } from "../../../hooks/useUserData";
-import { flattenValidRouteStops } from "../utils/routeStops";
-import { buildRouteDetailPresentation } from "../utils/routeDetailPresentation";
-import { getRouteDestinationPreviews } from "../utils/routeDestinationPreviews";
-import RouteMapPreview from "../components/RouteMapPreview";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ScrollView, Share, StatusBar, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-const text = {
-	detailsTitle: "\u05e4\u05e8\u05d8\u05d9 \u05de\u05e1\u05dc\u05d5\u05dc",
-	authorPrefix: "\u05de\u05d0\u05ea",
-	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
-	days: "\u05d9\u05de\u05d9\u05dd",
-	km: "\u05e7\u05f4\u05de",
-	openMap: "\u05e4\u05ea\u05d7 \u05de\u05e4\u05d4 \u05e9\u05dc \u05d4\u05de\u05e1\u05dc\u05d5\u05dc",
-	noMapPoints: "\u05d0\u05d9\u05df \u05e0\u05e7\u05d5\u05d3\u05d5\u05ea \u05de\u05e4\u05d4 \u05d1\u05de\u05e1\u05dc\u05d5\u05dc",
-	places: "\u05d9\u05e2\u05d3\u05d9\u05dd",
-	itinerary: "\u05dc\u05d5\u05f4\u05d6 \u05d4\u05de\u05e1\u05dc\u05d5\u05dc",
-	emptyItinerary: "\u05d0\u05d9\u05df \u05dc\u05d5\u05f4\u05d6 \u05d9\u05d5\u05de\u05d9 \u05dc\u05d4\u05e6\u05d2\u05d4.",
+import AppText from '../../../components/AppText';
+import { CommentsModal } from '../../../components/CommentsModal';
+import ContentDetailAuthorRow from '../../../components/ContentDetailAuthorRow';
+import LikesModal from '../../../components/LikesModal';
+import MetadataLine from '../../../components/MetadataLine';
+import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
+import { RecommendationHero } from '../../../components/RecommendationHero';
+import UsefulFactItem from '../../../components/UsefulFactItem';
+import { auth } from '../../../config/firebase';
+import { useAdminClaim } from '../../../hooks/useAdminClaim';
+import { useUserData } from '../../../hooks/useUserData';
+import { recordRouteOpen } from '../../../services/RouteService';
+import { colors, routeDetailScreenStyles as styles } from '../../../styles';
+import { canManageContent } from '../../../utils/contentPermissions';
+import { getRouteImageUrls } from '../../../utils/mediaAssets';
+import { recommendationDetailStyles as detailStyles } from '../../community/components/recommendationDetailStyles';
+import { useCommentsCount } from '../../community/hooks/useCommentsCount';
+import { useLikes } from '../../community/hooks/useLikes';
+import PlacesRoute from '../components/PlacesRoute';
+import RouteItinerary from '../components/RouteItinerary';
+import RouteMapPreview from '../components/RouteMapPreview';
+import { buildRouteDetailPresentation } from '../utils/routeDetailPresentation';
+import { getRouteDestinationPreviews } from '../utils/routeDestinationPreviews';
+import { flattenValidRouteStops } from '../utils/routeStops';
+
+const EXTRA_ICONS = {
+  difficulty: 'terrain',
+  experience: 'hiking',
+  transport: 'directions-car',
+  pace: 'speed',
+  seasons: 'wb-sunny',
+  travelerStyles: 'explore',
 };
 
 export default function RouteDetailScreen({ route, navigation }) {
-	useLayoutEffect(() => {
-		navigation.setOptions({ headerShown: false });
-	}, [navigation]);
+  const insets = useSafeAreaInsets();
+  const { routeData } = route.params;
+  const routeId = routeData?.id || routeData?.routeId || '';
+  const days = Array.isArray(routeData?.days) ? routeData.days : [];
+  const validStops = useMemo(() => flattenValidRouteStops(days), [days]);
+  const author = useUserData(routeData?.ownerId);
+  const { isAdmin } = useAdminClaim();
+  const images = useMemo(() => getRouteImageUrls(routeData, 'large'), [routeData]);
+  const destinations = useMemo(() => getRouteDestinationPreviews(routeData, 4), [routeData]);
+  const presentation = useMemo(() => buildRouteDetailPresentation(routeData), [routeData]);
+  const { isLiked, likeCount, toggleLike } = useLikes('routes', routeId, routeData?.stats?.likeCount || 0);
+  const commentsCount = useCommentsCount('routes', routeId);
+  const [likesVisible, setLikesVisible] = useState(false);
+  const [commentsVisible, setCommentsVisible] = useState(false);
+  const canEdit = canManageContent({ user: auth.currentUser, ownerId: routeData?.ownerId, isAdmin });
+  const destinationLabel = destinations.map((item) => item.name).filter(Boolean).join(' · ');
 
-	const { routeData } = route.params;
-	const [selectedDay, setSelectedDay] = useState(null);
-	const [modalVisible, setModalVisible] = useState(false);
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+    if (auth.currentUser?.uid && routeId) recordRouteOpen(routeId).catch(() => {});
+  }, [navigation, routeId]);
 
-	const tripDays = routeData.days || [];
-	const validStops = flattenValidRouteStops(tripDays);
-	const author = useUserData(routeData.ownerId);
-	const displayUser = author.displayName || text.defaultUser;
-	const userPhoto = author.photoURL;
-	const destinationPreviews = useMemo(() => getRouteDestinationPreviews(routeData, 4), [routeData]);
+  const snapshotData = useMemo(() => ({
+    name: routeData?.title,
+    thumbnail_url: getRouteImageUrls(routeData, 'thumb')[0] || null,
+    sub_text: routeData?.description ? routeData.description.slice(0, 100) : '',
+    days: routeData?.dayCount,
+    distance: routeData?.distanceKm,
+  }), [routeData]);
 
-	const presentation = buildRouteDetailPresentation(routeData);
+  const editRoute = () => navigation.navigate('AddRoutesScreen', { routeToEdit: routeData });
+  const shareRoute = async () => {
+    const message = [routeData?.title, routeData?.description, destinationLabel].filter(Boolean).join('\n\n');
+    try {
+      await Share.share({ title: routeData?.title, message });
+    } catch {
+      Alert.alert('השיתוף לא זמין', 'לא הצלחנו לפתוח את אפשרויות השיתוף כרגע.');
+    }
+  };
 
-	const openDay = (index) => {
-		setSelectedDay(index);
-		setModalVisible(true);
-	};
+  return (
+    <SafeAreaView style={detailStyles.screen} edges={['left', 'right']}>
+      <StatusBar barStyle={images.length ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
+      <View style={styles.page}>
+        <ScrollView
+          contentContainerStyle={[detailStyles.contentContainer, { paddingBottom: 116 + (insets.bottom || 0) }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <RecommendationHero
+            item={routeData}
+            snapshotData={snapshotData}
+            favoriteType="routes"
+            imageUrls={images}
+            emptyIcon="route"
+          />
 
-	return (
-		<SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-			<View style={styles.headerBar}>
-				<TouchableOpacity
-					style={styles.headerBackButton}
-					onPress={() => navigation.goBack()}
-					activeOpacity={0.8}
-				>
-					<Ionicons name="chevron-forward" size={28} color={colors.primary} />
-				</TouchableOpacity>
-				<AppText style={styles.headerTitle}>{text.detailsTitle}</AppText>
-				<View style={styles.headerSideSpacer} />
-			</View>
+          <View style={detailStyles.contentSurface} testID="route-detail-content">
+            <View style={detailStyles.categoryRow}>
+              <MaterialIcons name="route" size={19} color={colors.textSecondary} />
+              <AppText style={detailStyles.categoryText}>מסלול טיול</AppText>
+            </View>
 
-			<ScrollView contentContainerStyle={styles.scrollContent}>
-				<View style={styles.headerSection}>
-					<AppText style={styles.routeTitle}>{routeData.title}</AppText>
+            <AppText style={detailStyles.title}>{routeData?.title}</AppText>
 
-					<View style={styles.authorRow}>
-						<Avatar photoURL={userPhoto} displayName={displayUser} size={24} />
-						<AppText style={styles.authorText}>{text.authorPrefix} {displayUser}</AppText>
-					</View>
+            <ContentDetailAuthorRow
+              author={{ ...author, contentCreatedAt: routeData?.createdAt }}
+              ownerId={routeData?.ownerId}
+              canEdit={canEdit}
+              onEdit={editRoute}
+              navigation={navigation}
+              styles={detailStyles}
+              editTestID="route-detail-edit"
+            />
 
-					<AppText style={styles.descriptionText}>{routeData.description}</AppText>
+            {!!routeData?.description && (
+              <View style={detailStyles.section}>
+                <AppText style={detailStyles.sectionTitle}>על המסלול</AppText>
+                <AppText style={detailStyles.body}>{routeData.description}</AppText>
+              </View>
+            )}
 
-					<View style={styles.metaRow}>
-						<View style={styles.metaItem}>
-							<Ionicons name="calendar-outline" size={16} color={colors.textSecondary} style={styles.metaIcon} />
-							<AppText style={styles.metaText}>{routeData.dayCount} {text.days}</AppText>
-						</View>
-						<View style={styles.metaItem}>
-							<Ionicons name="map-outline" size={16} color={colors.textSecondary} style={styles.metaIcon} />
-							<AppText style={styles.metaText}>{routeData.distanceKm} {text.km}</AppText>
-						</View>
-					</View>
+            <View style={styles.metricsRow}>
+              <View style={styles.metric}>
+                <Ionicons name="calendar-outline" size={19} color={colors.primary} />
+                <AppText style={styles.metricValue}>{routeData?.dayCount || days.length}</AppText>
+                <AppText style={styles.metricLabel}>ימים</AppText>
+              </View>
+              <View style={styles.metric}>
+                <Ionicons name="location-outline" size={19} color={colors.primary} />
+                <AppText style={styles.metricValue}>{validStops.length}</AppText>
+                <AppText style={styles.metricLabel}>תחנות</AppText>
+              </View>
+              <View style={styles.metric}>
+                <Ionicons name="navigate-outline" size={19} color={colors.primary} />
+                <AppText style={styles.metricValue}>{routeData?.distanceKm || 0}</AppText>
+                <AppText style={styles.metricLabel}>ק״מ</AppText>
+              </View>
+            </View>
 
-					{validStops.length > 0 ? (
-						<View style={styles.routePreviewSection}>
-							<RouteMapPreview
-								stops={validStops}
-								onPress={() => navigation.navigate("RouteMap", { routeData })}
-							/>
-							{destinationPreviews.length > 0 ? (
-								<PlacesRoute places={destinationPreviews} compact maximum={4} style={styles.placesRouteSpacing} />
-							) : null}
-						</View>
-					) : (
-						<View style={styles.mapUnavailable}>
-							<Ionicons name="map-outline" size={20} color={colors.textMuted} />
-							<AppText style={styles.mapUnavailableText}>{text.noMapPoints}</AppText>
-						</View>
-					)}
+            <View style={detailStyles.section}>
+              <AppText style={detailStyles.sectionTitle}>המסלול על המפה</AppText>
+              {validStops.length ? (
+                <>
+                  <View style={styles.mapPreviewSpacing}>
+                    <RouteMapPreview stops={validStops} onPress={() => navigation.navigate('RouteMap', { routeData })} />
+                  </View>
+                  {!!destinations.length && <PlacesRoute places={destinations} compact maximum={4} style={styles.destinationsSpacing} />}
+                </>
+              ) : (
+                <View style={styles.mapUnavailable}>
+                  <Ionicons name="map-outline" size={20} color={colors.textMuted} />
+                  <AppText style={styles.mapUnavailableText}>אין נקודות מפה במסלול</AppText>
+                </View>
+              )}
+            </View>
 
+            {!!presentation.facts.length && (
+              <View style={detailStyles.section}>
+                <AppText style={detailStyles.sectionTitle}>פרטים שימושיים</AppText>
+                <View style={detailStyles.factsGrid}>
+                  {presentation.facts.map((fact) => (
+                    <UsefulFactItem
+                      key={fact.id}
+                      {...fact}
+                      style={[detailStyles.factItem, fact.id === 'audiences' && detailStyles.factItemFull]}
+                      testID={`route-fact-${fact.id}`}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
 
-					{presentation.facts.length > 0 && (
-						<View style={styles.detailSection}>
-							<AppText style={styles.subsectionTitle}>פרטים שימושיים</AppText>
-							<View style={styles.factsGrid}>
-								{presentation.facts.map((fact) => (
-									<UsefulFactItem key={fact.id} {...fact} style={styles.factItem} testID={`route-fact-${fact.id}`} />
-								))}
-							</View>
-						</View>
-					)}
+            {!!presentation.tags.length && (
+              <View style={detailStyles.section}>
+                <AppText style={detailStyles.sectionTitle}>מה תמצאו בדרך</AppText>
+                <MetadataLine icon="local-offer" values={presentation.tags} style={detailStyles.metadataLine} testID="route-tags-metadata" />
+              </View>
+            )}
 
-					{presentation.groups.length > 0 && (
-						<View style={styles.detailSection}>
-							<AppText style={styles.subsectionTitle}>מידע נוסף</AppText>
-							{presentation.groups.map((group) => (
-								<View key={group.id} style={styles.metadataGroup}>
-									<AppText style={styles.metadataTitle}>{group.title}</AppText>
-									<MetadataLine icon={group.icon} values={group.values} testID={`route-metadata-${group.id}`} />
-								</View>
-							))}
-						</View>
-					)}
+            {!!presentation.extras.length && (
+              <View style={detailStyles.section}>
+                <AppText style={detailStyles.sectionTitle}>מידע נוסף</AppText>
+                {presentation.extras.map((group) => (
+                  <View key={group.id} style={detailStyles.extraGroup}>
+                    <AppText style={detailStyles.extraTitle}>{group.title}</AppText>
+                    <MetadataLine
+                      icon={EXTRA_ICONS[group.id] || group.icon || 'label-outline'}
+                      values={group.values}
+                      style={detailStyles.extraMetadataLine}
+                      testID={`route-extra-${group.id}`}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
 
-					{presentation.needs.length > 0 && (
-						<View style={styles.detailSection}>
-							<AppText style={styles.subsectionTitle}>חשוב לדעת</AppText>
-							{presentation.needs.map((need) => (
-								<View key={need} style={styles.needRow}>
-									<MaterialIcons name="info-outline" size={20} color={colors.textSecondary} />
-									<AppText style={styles.needText}>{need}</AppText>
-									<Ionicons name="chevron-back" size={17} color={colors.textMuted} />
-								</View>
-							))}
-						</View>
-					)}
-				</View>
+            {!!presentation.needs.length && (
+              <View style={detailStyles.section}>
+                <AppText style={detailStyles.sectionTitle}>חשוב לדעת</AppText>
+                <View style={detailStyles.needsList}>
+                  {presentation.needs.map((need) => (
+                    <View key={need} style={detailStyles.needRow}>
+                      <View style={detailStyles.needIcon}><MaterialIcons name="info-outline" size={20} color={colors.textSecondary} /></View>
+                      <AppText style={detailStyles.needText}>{need}</AppText>
+                      <Ionicons name="chevron-back" size={17} color={colors.textMuted} />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
-				{tripDays.length > 0 ? (
-					<View style={styles.timelineSection}>
-						<AppText style={styles.timelineTitle}>{text.itinerary}</AppText>
-						<View style={styles.timeline}>
-							{tripDays.map((day, index) => (
-								<TimelineItem
-									key={index}
-									day={day}
-									index={index}
-									isLast={index === tripDays.length - 1}
-									onPress={() => openDay(index)}
-								/>
-							))}
-						</View>
-					</View>
-				) : (
-					<View style={styles.emptyState}>
-						<AppText style={styles.emptyText}>{text.emptyItinerary}</AppText>
-					</View>
-				)}
-			</ScrollView>
+            <View style={detailStyles.section}>
+              <AppText style={detailStyles.sectionTitle}>לו״ז המסלול</AppText>
+              <View style={styles.itinerarySpacing}>
+                <RouteItinerary days={days} />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
 
-			<DayViewModal
-				visible={modalVisible}
-				onClose={() => setModalVisible(false)}
-				dayData={selectedDay !== null ? tripDays[selectedDay] : null}
-				dayIndex={selectedDay}
-			/>
+        <View style={[detailStyles.stickyBar, { paddingBottom: Math.max(insets.bottom || 0, 10) }]}>
+          <RecommendationActionBar
+            isLiked={isLiked}
+            likeCount={likeCount}
+            commentsCount={commentsCount}
+            onCommentPress={() => setCommentsVisible(true)}
+            onLikePress={toggleLike}
+            onLikesListPress={() => setLikesVisible(true)}
+            onSharePress={shareRoute}
+            contentLabel="המסלול"
+          />
+        </View>
+      </View>
 
-		</SafeAreaView>
-	);
+      <LikesModal visible={likesVisible} onClose={() => setLikesVisible(false)} collectionName="routes" itemId={routeId} likeCount={likeCount} />
+      <CommentsModal visible={commentsVisible} onClose={() => setCommentsVisible(false)} postId={routeId} collectionName="routes" />
+    </SafeAreaView>
+  );
 }

@@ -5,11 +5,10 @@ import MetadataLine from '../../../components/MetadataLine';
 import UsefulFactItem from '../../../components/UsefulFactItem';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-import { Avatar } from '../../../components/Avatar';
+import ContentDetailAuthorRow from '../../../components/ContentDetailAuthorRow';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
 import { getPlaceCoordinates } from '../../../utils/distance';
-import { formatTimestamp } from '../../../utils/formatTimestamp';
 import { getRecommendationDetailSections } from '../utils/recommendationDetailPresentation';
 import { recommendationDetailStyles as styles } from './recommendationDetailStyles';
 
@@ -58,7 +57,6 @@ export default function RecommendationDetailContent({
   const destinationLabel = getDestinationLabel(item?.destination);
   const mapsUrl = buildMapsUrl(item);
   const placeLabel = item?.place?.name || item?.place?.address || '';
-  const dateLabel = formatTimestamp(item?.createdAt);
 
   const openDestination = () => {
     const destination = item?.destination || {};
@@ -113,41 +111,15 @@ export default function RecommendationDetailContent({
         </View>
       ) : null}
 
-      <View style={styles.authorRow}>
-        <Pressable
-          style={styles.authorButton}
-          onPress={() => item.ownerId && navigation.navigate('UserProfile', { uid: item.ownerId })}
-          disabled={!item.ownerId}
-          accessibilityRole="button"
-          accessibilityLabel={`פתיחת הפרופיל של ${author?.displayName || 'כותב ההמלצה'}`}
-        >
-          <Avatar
-            photoURL={author?.photoURL}
-            photoMedia={author?.photoMedia}
-            displayName={author?.displayName}
-            size={48}
-          />
-          <View style={styles.authorCopy}>
-            <AppText style={styles.authorName} numberOfLines={1}>
-              {author?.displayName || 'מטייל/ת PlanLi'}
-            </AppText>
-            {!!dateLabel && <AppText style={styles.authorDate}>{dateLabel}</AppText>}
-          </View>
-        </Pressable>
-
-        {canEdit ? (
-          <Pressable
-            style={styles.editButton}
-            onPress={onEdit}
-            accessibilityRole="button"
-            accessibilityLabel="עריכת ההמלצה"
-            testID="recommendation-detail-edit"
-          >
-            <MaterialIcons name="edit" size={17} color={colors.primary} />
-            <AppText style={styles.editText}>עריכה</AppText>
-          </Pressable>
-        ) : null}
-      </View>
+      <ContentDetailAuthorRow
+        author={{ ...author, contentCreatedAt: item?.createdAt }}
+        ownerId={item.ownerId}
+        canEdit={canEdit}
+        onEdit={onEdit}
+        navigation={navigation}
+        styles={styles}
+        editTestID="recommendation-detail-edit"
+      />
 
       {!!item.description && (
         <View style={styles.section}>

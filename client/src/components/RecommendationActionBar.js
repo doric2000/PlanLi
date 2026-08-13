@@ -14,6 +14,7 @@ export const RecommendationActionBar = ({
   onLikePress,
   onLikesListPress,
   onSharePress,
+  contentLabel = 'ההמלצה',
   style,
 }) => (
   <View style={[styles.bar, style]}>
@@ -56,7 +57,7 @@ export const RecommendationActionBar = ({
       style={styles.action}
       onPress={onSharePress}
       accessibilityRole="button"
-      accessibilityLabel="שיתוף ההמלצה"
+      accessibilityLabel={`שיתוף ${contentLabel}`}
     >
       <Ionicons name="share-social-outline" size={24} color={colors.textSecondary} />
       <AppText style={styles.text}>שיתוף</AppText>

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import CachedImage from '../../../components/CachedImage';
+import RouteStopMarker from '../components/RouteStopMarker';
 import { USER_MAP_ZOOM } from '../../../config/mapConfig';
 import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
@@ -137,32 +138,16 @@ export default function RouteMapScreen({ route, navigation }) {
             {stops.map((stop) => (
               <Marker
                 key={stop.id || `${stop.dayIndex}:${stop.stopIndex}`}
+                testID={`route-map-marker-${stop.globalIndex + 1}`}
                 coordinate={{
                   latitude: stop.coordinates.lat,
                   longitude: stop.coordinates.lng,
                 }}
                 onPress={() => setSelectedStop(stop)}
                 stopPropagation
+                anchor={{ x: 0.5, y: 1 }}
               >
-                <View style={styles.markerWrap}>
-                  <View style={styles.marker}>
-                    {stop.image || stop.media ? (
-                      <>
-                        <CachedImage
-                          source={{ uri: getMediaVariantUrl(stop.media, 'thumb', stop.image) }}
-                          style={styles.markerImage}
-                          contentFit="cover"
-                          priority="low"
-                        />
-                        <View style={styles.markerNumberBadge}>
-                          <AppText style={styles.markerNumberText}>{stop.globalIndex + 1}</AppText>
-                        </View>
-                      </>
-                    ) : (
-                      <AppText style={styles.markerText}>{stop.globalIndex + 1}</AppText>
-                    )}
-                  </View>
-                </View>
+                <RouteStopMarker stop={stop} selected={selectedStop?.globalIndex === stop.globalIndex} />
               </Marker>
             ))}
           </MapView>

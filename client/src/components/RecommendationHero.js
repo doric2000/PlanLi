@@ -14,11 +14,17 @@ import {
   getRecommendationImageUrls,
 } from '../utils/mediaAssets';
 
-export const RecommendationHero = ({ item, snapshotData }) => {
+export const RecommendationHero = ({
+  item,
+  snapshotData,
+  favoriteType = 'recommendations',
+  imageUrls,
+  emptyIcon,
+}) => {
   const { width: windowWidth } = useWindowDimensions();
   const images = useMemo(
-    () => getRecommendationImageUrls(item, 'large'),
-    [item]
+    () => Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : getRecommendationImageUrls(item, 'large'),
+    [imageUrls, item]
   );
   const hasImage = images.length > 0;
   const categoryPresentation = useMemo(
@@ -60,12 +66,12 @@ export const RecommendationHero = ({ item, snapshotData }) => {
       <View style={styles.noImageHeader}>
         <View style={styles.noImagePresentation} pointerEvents="none">
           <View style={styles.noImageIcon}>
-            <MaterialIcons name={categoryPresentation.icon} size={36} color="#64748B" />
+            <MaterialIcons name={emptyIcon || categoryPresentation.icon} size={36} color="#64748B" />
           </View>
         </View>
         <View style={styles.rtlActionsRow} testID="recommendation-hero-actions">
           <BackButton color="dark" variant="solid" iconDirection="rtl" />
-          <FavoriteButton type="recommendations" id={item.id} variant="dark" snapshotData={snapshotData} />
+          <FavoriteButton type={favoriteType} id={item.id} variant="dark" snapshotData={snapshotData} />
         </View>
       </View>
     );
@@ -166,7 +172,7 @@ export const RecommendationHero = ({ item, snapshotData }) => {
       >
         <View style={styles.rtlActionsRow} pointerEvents="box-none" testID="recommendation-hero-actions">
           <BackButton iconDirection="rtl" />
-          <FavoriteButton type="recommendations" id={item.id} variant="light" snapshotData={snapshotData} />
+          <FavoriteButton type={favoriteType} id={item.id} variant="light" snapshotData={snapshotData} />
         </View>
       </LinearGradient>
     </View>
