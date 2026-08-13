@@ -666,6 +666,10 @@ export const common = {
 		alignItems: "center",
 		marginRight: 10,
 	},
+	avatarInsideRing: {
+		marginRight: 0,
+		overflow: "hidden",
+	},
 
 	// Timeline item styles
 	timelineItem: {

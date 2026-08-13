@@ -164,6 +164,7 @@ export const RouteCard = ({
 						photoMedia={author.photoMedia}
 						displayName={displayUser}
 						size={40}
+						insideRing
 					/>
 				</View>
 				<View style={styles.feedAuthorTextWrap}>
