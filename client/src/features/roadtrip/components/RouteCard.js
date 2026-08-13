@@ -219,10 +219,16 @@ export const RouteCard = ({
 					initialNumToRender={1}
 					maxToRenderPerBatch={1}
 					windowSize={3}
-					renderItem={({ item: uri, index }) => (
-						<View style={[cards.recCarouselItem, { width: pageWidth, height: frameHeight }]}>
-							{renderCarouselImage(uri, index)}
-						</View>
+					renderItem={({ item: imageUri, index }) => (
+						<Pressable
+							style={[cards.recCarouselItem, { width: pageWidth, height: frameHeight }]}
+							onPress={onPress}
+							accessibilityRole="button"
+							accessibilityLabel={`פתיחת פרטי המסלול: ${item.title || text.noImage}`}
+							testID={`route-image-${item.id}-${index}`}
+						>
+							{renderCarouselImage(imageUri, index)}
+						</Pressable>
 					)}
 					onViewableItemsChanged={onViewableItemsChanged}
 					viewabilityConfig={viewabilityConfig}
