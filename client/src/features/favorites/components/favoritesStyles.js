@@ -3,7 +3,7 @@ import { colors, layout, spacing } from '../../../styles';
 
 export const favoritesStyles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
-  headerTabs: { marginHorizontal: layout.screenPadding, marginTop: spacing.md, marginBottom: spacing.md },
+  headerTabs: { marginTop: spacing.xs },
   listContent: {
     width: '100%',
     maxWidth: layout.contentMaxWidth,

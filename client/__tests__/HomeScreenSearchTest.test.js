@@ -95,7 +95,7 @@ jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return ({ children }) => ReactModule.createElement(View, null, children);
+  return ({ children, ...props }) => ReactModule.createElement(View, props, children);
 });
 
 jest.mock('../src/components/CityCard', () => {
@@ -282,6 +282,26 @@ describe('HomeScreenSearchTest', () => {
     expect(screen.getByText('לפי שם א–ת')).toBeTruthy();
     expect(screen.getByText('מועדפים בלבד')).toBeTruthy();
     await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(2));
+  });
+
+  it('uses only a title row and search row in the Home header', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    const header = screen.getByTestId('home-tab-header');
+    expect(React.Children.count(header.props.children)).toBe(2);
+    expect(screen.getByTestId('home-header-title-row')).toBeTruthy();
+    expect(screen.getByText('לאן נוסעים?')).toBeTruthy();
+    expect(screen.getByTestId('home-search-input')).toBeTruthy();
   });
 
   it('lets the hero own the top safe area without an automatic iOS inset', async () => {

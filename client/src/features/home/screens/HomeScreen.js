@@ -246,11 +246,6 @@ export default function HomeScreen({ navigation }) {
 		);
 	}, [filteredDestinations, featuredDestinations, searchQuery, destinationSort, savedOnly]);
 
-	const profileInitial = useMemo(() => {
-		const source = user?.displayName || user?.email || "א";
-		return source.charAt(0).toUpperCase();
-	}, [user]);
-
 	const rememberHomeDestination = (city) => {
 		const entry = cityToRecentDestination(city);
 		if (!entry) return;
@@ -349,33 +344,14 @@ export default function HomeScreen({ navigation }) {
 		}
 	};
 
-	const renderProfileAvatar = () => (
-		<TouchableOpacity
-			style={styles.avatarButton}
-			activeOpacity={0.85}
-			onPress={() => navigation.navigate(isGuest ? "Auth" : "Profile")}
-		>
-			{user?.photoURL ? (
-				<CachedImage
-					source={{ uri: user.photoURL }}
-					style={styles.avatarImage}
-					contentFit="cover"
-					priority="high"
-				/>
-			) : (
-				<AppText style={styles.avatarInitial}>{profileInitial}</AppText>
-			)}
-		</TouchableOpacity>
-	);
-
 	const renderHeader = () => (
-		<PageHeader variant="hero" allowOverflow style={styles.headerLayer}>
-
-			<View style={styles.headerTop}>
-				{renderProfileAvatar()}
-			</View>
-
-			<View style={styles.headlineWrap}>
+		<PageHeader
+			variant="hero"
+			allowOverflow
+			style={styles.headerLayer}
+			testID="home-tab-header"
+		>
+			<View style={styles.headerTitleRow} testID="home-header-title-row">
 				<AppText style={styles.headline}>לאן נוסעים?</AppText>
 			</View>
 

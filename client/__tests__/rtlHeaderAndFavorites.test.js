@@ -6,16 +6,17 @@ import BackButton from '../src/components/BackButton';
 import FavoriteButton from '../src/components/FavoriteButton';
 import PageHeader from '../src/components/PageHeader';
 import { RecommendationHero } from '../src/components/RecommendationHero';
-import { colors, radii } from '../src/styles';
+import { colors, radii, TAB_HERO_BASE_HEIGHT } from '../src/styles';
 
 const mockUseFavorite = jest.fn();
+const mockUseSafeAreaInsets = jest.fn(() => ({ top: 0, right: 0, bottom: 0, left: 0 }));
 
 jest.mock('../src/hooks/useFavorite', () => ({
   useFavorite: (...args) => mockUseFavorite(...args),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => mockUseSafeAreaInsets(),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -41,6 +42,21 @@ jest.mock('../src/components/CachedImage', () => {
 });
 
 describe('overlapping hero headers', () => {
+  beforeEach(() => {
+    mockUseSafeAreaInsets.mockReturnValue({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it.each([0, 44])('uses one tab-header height plus a %ipx top safe area', (top) => {
+    mockUseSafeAreaInsets.mockReturnValue({ top, right: 0, bottom: 0, left: 0 });
+    const { getByTestId } = render(
+      <PageHeader testID="uniform-hero-header" variant="hero" title="קהילה" />
+    );
+
+    const style = StyleSheet.flatten(getByTestId('uniform-hero-header').props.style);
+    expect(style.height).toBe(TAB_HERO_BASE_HEIGHT + top);
+    expect(style.paddingTop).toBe(top + 8);
+  });
+
   it('overlaps the next surface by the same amount as its lower corner radius', () => {
     const { getByTestId } = render(
       <PageHeader testID="hero-header" variant="hero" overlapNext title="קהילה" />
