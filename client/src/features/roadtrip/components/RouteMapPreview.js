@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
 import { colors, routeMapPreviewStyles as styles } from '../../../styles';
 import { getRouteInitialRegion } from '../utils/routeStops';
+import RouteStopMarker from './RouteStopMarker';
 
 export default function RouteMapPreview({ stops, onPress }) {
   const routeStops = Array.isArray(stops) ? stops : [];
@@ -34,8 +35,12 @@ export default function RouteMapPreview({ stops, onPress }) {
           {routeStops.slice(0, 8).map((stop, index) => (
             <Marker
               key={stop.id || `${stop.dayIndex}:${stop.stopIndex}`}
+              testID={`route-map-preview-marker-${stop.globalIndex + 1}`}
               coordinate={coordinates[index]}
-            />
+              anchor={{ x: 0.5, y: 1 }}
+            >
+              <RouteStopMarker stop={stop} compact />
+            </Marker>
           ))}
         </MapView>
         <View style={styles.mapShade} />

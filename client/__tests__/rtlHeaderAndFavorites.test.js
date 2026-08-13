@@ -80,6 +80,19 @@ describe('RTL recommendation actions', () => {
     expect(style.justifyContent).toBe('space-between');
     expect(getByTestId('icon-chevron-forward')).toBeTruthy();
   });
+
+  it('supports the shared route hero without changing recommendation defaults', () => {
+    render(
+      <RecommendationHero
+        item={{ id: 'route-1' }}
+        snapshotData={{}}
+        favoriteType="routes"
+        imageUrls={['https://example.com/route.jpg']}
+        emptyIcon="route"
+      />
+    );
+    expect(mockUseFavorite).toHaveBeenCalledWith('routes', 'route-1', {});
+  });
 });
 
 describe('favorite state presentation', () => {

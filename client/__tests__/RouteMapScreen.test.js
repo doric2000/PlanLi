@@ -61,6 +61,11 @@ describe('RouteMapScreen', () => {
     expect(screen.queryByTestId('map-url-tile')).toBeNull();
     expect(screen.getByTestId('map-route-line')).toBeTruthy();
     expect(screen.getByTestId('map-user-accuracy')).toBeTruthy();
+    expect(screen.getByTestId('route-stop-marker-1')).toBeTruthy();
+    expect(screen.getByTestId('route-stop-marker-2')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('route-map-marker-2'));
+    expect(screen.getByText('Second')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('route-map-my-location'));
     const region = screen.getByTestId('route-map').props.initialRegion;

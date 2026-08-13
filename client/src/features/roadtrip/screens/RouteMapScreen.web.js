@@ -3,6 +3,8 @@ import { Linking, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
+import CachedImage from '../../../components/CachedImage';
+import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { buildGoogleMapsDirectionsUrls, buildGoogleMapsPlaceUrl, flattenValidRouteStops } from '../utils/routeStops';
 import { colors, routeMapStyles as styles } from '../../../styles';
 
@@ -38,8 +40,22 @@ export default function RouteMapScreen({ route, navigation }) {
           </TouchableOpacity>
         ))}
         {stops.map((stop) => (
-          <TouchableOpacity key={stop.id || stop.globalIndex} style={styles.locationNotice} onPress={() => openUrl(buildGoogleMapsPlaceUrl(stop))}>
-            <AppText style={styles.locationNoticeText}>{stop.globalIndex + 1}. {stop.title || stop.place?.name || 'Stop'}</AppText>
+          <TouchableOpacity key={stop.id || stop.globalIndex} style={styles.webStopCard} onPress={() => openUrl(buildGoogleMapsPlaceUrl(stop))}>
+            {getMediaVariantUrl(stop.media, 'thumb', stop.image) ? (
+              <CachedImage
+                source={{ uri: getMediaVariantUrl(stop.media, 'thumb', stop.image) }}
+                style={styles.webStopImage}
+                contentFit="cover"
+                priority="low"
+              />
+            ) : (
+              <View style={styles.webStopNumber}><AppText style={styles.webStopNumberText}>{stop.globalIndex + 1}</AppText></View>
+            )}
+            <View style={styles.webStopCopy}>
+              <AppText style={styles.webStopTitle}>{stop.title || stop.place?.name || 'Stop'}</AppText>
+              <AppText style={styles.webStopAddress}>{stop.place?.address || stop.location}</AppText>
+            </View>
+            <Ionicons name="open-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
         ))}
       </ScrollView>
