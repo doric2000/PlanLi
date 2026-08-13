@@ -21,6 +21,28 @@ describe('progressive discovery filter helpers', () => {
     expect(filterDestinationOptions(options, 'ת')).toEqual([]);
   });
 
+  it('matches punctuation, spacing, diacritics, and hidden English destination names', () => {
+    const options = [{
+      key: 'city:ca:st-johns',
+      name: 'סנט ג׳ונס',
+      names: { he: 'סנט ג׳ונס', en: 'St. John’s' },
+      countryName: 'קנדה',
+      countryNames: { he: 'קנדה', en: 'Canada' },
+      label: 'סנט ג׳ונס · קנדה',
+    }, {
+      key: 'city:br:sao-paulo',
+      name: 'סאו פאולו',
+      names: { he: 'סאו פאולו', en: 'São Paulo' },
+      countryName: 'ברזיל',
+      countryNames: { he: 'ברזיל', en: 'Brazil' },
+      label: 'סאו פאולו · ברזיל',
+    }];
+    expect(filterDestinationOptions(options, 'ST JOHNS')).toEqual([options[0]]);
+    expect(filterDestinationOptions(options, 'stjohns')).toEqual([options[0]]);
+    expect(filterDestinationOptions(options, 'sao-paulo')).toEqual([options[1]]);
+    expect(filterDestinationOptions(options, 'canada')).toEqual([options[0]]);
+  });
+
   it('keeps destination selections non-overlapping and enforces the maximum', () => {
     const country = { countryId: 'il', cityId: '', label: 'מדינה · ישראל' };
     const telAviv = { countryId: 'il', cityId: 'tlv', label: 'תל אביב · ישראל' };

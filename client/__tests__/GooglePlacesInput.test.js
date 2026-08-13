@@ -117,6 +117,27 @@ describe('GooglePlacesInput recent destinations', () => {
     expect(onSelect).toHaveBeenCalledWith('place-1');
     expect(screen.queryByTestId('google-places-loading')).toBeNull();
   });
+
+  it('does not call Google for punctuation-only input or a tolerant local match', async () => {
+    const googleSearchFn = jest.fn(async () => []);
+    const screen = render(
+      <ControlledInput
+        googleFallbackDelayMs={0}
+        googleSearchFn={googleSearchFn}
+        localResults={[{ id: 'st-johns', countryId: 'CA', name: 'St. John’s' }]}
+        onSelect={jest.fn()}
+      />
+    );
+
+    fireEvent(screen.getByTestId('places-input'), 'focus');
+    fireEvent.changeText(screen.getByTestId('places-input'), 'St Johns');
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(googleSearchFn).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByTestId('places-input'), "!–' ");
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    expect(googleSearchFn).not.toHaveBeenCalled();
+  });
 });
 
 describe('PageHeader overflow', () => {

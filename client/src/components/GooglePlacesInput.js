@@ -12,6 +12,7 @@ import { Platform } from 'react-native';
 import { buttons, colors, common, googlePlacesInput, spacing } from '../styles';
 import { searchCities } from '../services/LocationService';
 import WebPortal from './WebPortal';
+import { compactDestinationText } from '../utils/destinationSearch';
 import { locationErrorMessage } from '../utils/locationErrors';
 
 export default function GooglePlacesInput({
@@ -184,6 +185,7 @@ export default function GooglePlacesInput({
   // and there are no local matches.
   useEffect(() => {
     const text = query.trim();
+    const searchKey = compactDestinationText(text);
 
     if (googleFallbackTimerRef.current) {
       clearTimeout(googleFallbackTimerRef.current);
@@ -196,7 +198,7 @@ export default function GooglePlacesInput({
     setLoading(false);
 
     if (!showList) return;
-    if (text.length < MIN_QUERY_LENGTH) return;
+    if (searchKey.length < MIN_QUERY_LENGTH) return;
     if (localResultsLoading) return;
     if (normalizedLocalResults.length > 0) return;
     if (typeof onSelect !== 'function') return;
@@ -221,10 +223,11 @@ export default function GooglePlacesInput({
     }
 
     const text = googleTriggerQuery.trim();
+    const searchKey = compactDestinationText(text);
 
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    if (!showList || text.length < MIN_QUERY_LENGTH) {
+    if (!showList || searchKey.length < MIN_QUERY_LENGTH) {
       if (abortRef.current) abortRef.current.abort();
       setPredictions([]);
       setLoading(false);

@@ -4,10 +4,10 @@ import {
   TAG_OPTIONS_BY_CATEGORY,
   TRAVELER_STYLES,
 } from '../constants/travelTaxonomy';
-
-const HEBREW_MARKS = /[\u0591-\u05C7]/g;
-const NON_WORDS = /[^a-z0-9\u05D0-\u05EA]+/gi;
-const FINAL_LETTERS = Object.freeze({ ך: 'כ', ם: 'מ', ן: 'נ', ף: 'פ', ץ: 'צ' });
+import {
+  destinationSearchRank,
+  normalizeDestinationText,
+} from './destinationSearch';
 
 export const destinationKey = (destination) => (
   destination?.cityId
@@ -16,14 +16,7 @@ export const destinationKey = (destination) => (
 );
 
 export function normalizeDestinationSearchText(value) {
-  return String(value || '')
-    .normalize('NFKD')
-    .replace(HEBREW_MARKS, '')
-    .toLocaleLowerCase('he')
-    .replace(/[ךםןףץ]/g, (letter) => FINAL_LETTERS[letter] || letter)
-    .replace(NON_WORDS, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
+  return normalizeDestinationText(value);
 }
 
 export function filterDestinationOptions(options, query, limit = 10) {
@@ -31,22 +24,27 @@ export function filterDestinationOptions(options, query, limit = 10) {
   if (normalized.length < 2) return [];
   const terms = normalized.split(' ').filter(Boolean);
   return (Array.isArray(options) ? options : [])
-    .filter((option) => {
-      const haystack = normalizeDestinationSearchText([
+    .map((option) => ({
+      option,
+      rank: destinationSearchRank([
         option.name,
         option.countryName,
         option.label,
-      ].filter(Boolean).join(' '));
-      return terms.every((term) => haystack.includes(term));
-    })
+        option.names?.he,
+        option.names?.en,
+        option.countryNames?.he,
+        option.countryNames?.en,
+      ], query),
+    }))
+    .filter((entry) => entry.rank >= 0 && terms.length > 0)
     .sort((a, b) => {
-      const aText = normalizeDestinationSearchText(a.label);
-      const bText = normalizeDestinationSearchText(b.label);
-      const aStarts = aText.startsWith(normalized) ? 1 : 0;
-      const bStarts = bText.startsWith(normalized) ? 1 : 0;
-      return bStarts - aStarts || aText.localeCompare(bText, 'he');
+      if (a.rank !== b.rank) return b.rank - a.rank;
+      const aText = normalizeDestinationSearchText(a.option.label);
+      const bText = normalizeDestinationSearchText(b.option.label);
+      return aText.localeCompare(bText, 'he');
     })
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((entry) => entry.option);
 }
 
 export function addDestinationSelection(current, option, maximum = 5) {
