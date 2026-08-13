@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Pressable, Alert, TouchableOpacity, Platform, FlatList } from 'react-native';
+import { View, Pressable, Alert, TouchableOpacity, Platform } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { useStableCarouselLayout } from '../hooks/useStableCarouselLayout';
 import { Avatar } from './Avatar';
 import { ActionMenu } from './ActionMenu';
 import CachedImage, { prefetchImage } from './CachedImage';
+import RtlPagedFlatList from './RtlPagedFlatList';
 import { cards, colors, recommendationCardStyles as styles } from '../styles';
 import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
@@ -324,15 +325,12 @@ const RecommendationCard = ({
             />
           )}
           {isFeed && renderHeader(true)}
-          <FlatList
+          <RtlPagedFlatList
             ref={carouselRef}
             data={images}
             extraData={imageWindow.currentIndex}
             style={[cards.recCarouselList, { width: pageWidth, height: frameHeight }]}
             keyExtractor={(uri, index) => `${item.id || 'rec'}:${index}:${uri}`}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
             scrollEnabled={images.length > 1}
             nestedScrollEnabled
             initialNumToRender={1}
@@ -354,9 +352,9 @@ const RecommendationCard = ({
             <View style={cards.recNavOverlay} pointerEvents="box-none">
               <Pressable
                 style={cards.recNavZoneLeft}
-                onPress={() => scrollToImageIndex(activeImageIndex - 1)}
+                onPress={() => scrollToImageIndex(activeImageIndex + 1)}
               >
-                {activeImageIndex > 0 && (
+                {activeImageIndex < images.length - 1 && (
                   <View style={cards.recNavButton}>
                     <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
                   </View>
@@ -364,9 +362,9 @@ const RecommendationCard = ({
               </Pressable>
               <Pressable
                 style={cards.recNavZoneRight}
-                onPress={() => scrollToImageIndex(activeImageIndex + 1)}
+                onPress={() => scrollToImageIndex(activeImageIndex - 1)}
               >
-                {activeImageIndex < images.length - 1 && (
+                {activeImageIndex > 0 && (
                   <View style={cards.recNavButton}>
                     <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
                   </View>

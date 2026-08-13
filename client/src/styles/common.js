@@ -122,7 +122,7 @@ export const common = {
 		bottom: 14,
 		left: 0,
 		right: 0,
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		justifyContent: "center",
 		alignItems: "center",
 		gap: 6,

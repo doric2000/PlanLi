@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, ScrollView } from 'react-native';
+import { View } from 'react-native';
 import AppText from "../../../components/AppText";
 import CompactChip from '../../../components/CompactChip';
+import RtlHorizontalScrollView from '../../../components/RtlHorizontalScrollView';
 import { chipSelectorStyles as styles } from '../../../styles';
 
 const ChipSelector = ({
@@ -29,9 +30,7 @@ const ChipSelector = ({
     <View style={styles.inputWrapper}>
       {label && <AppText style={styles.label}>{label}</AppText>}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+      <RtlHorizontalScrollView
         contentContainerStyle={styles.chipScroll}
       >
         {safeItems.map((item, index) => {
@@ -49,7 +48,7 @@ const ChipSelector = ({
             />
           );
         })}
-      </ScrollView>
+      </RtlHorizontalScrollView>
     </View>
   );
 };

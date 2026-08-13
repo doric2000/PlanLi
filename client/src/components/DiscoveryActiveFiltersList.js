@@ -1,6 +1,7 @@
 import React from 'react';
-import { ScrollView, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import AppText from "./AppText";
+import RtlHorizontalScrollView from './RtlHorizontalScrollView';
 import { Ionicons } from '@expo/vector-icons';
 import { activeFiltersListStyles as styles, colors } from '../styles';
 import {
@@ -75,7 +76,7 @@ export default function DiscoveryActiveFiltersList({
         )}
         <AppText style={styles.summaryText}>{activeCount} מסננים פעילים</AppText>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <RtlHorizontalScrollView contentContainerStyle={styles.scrollContent}>
         {!!filters.query && <Chip text={filters.query} onRemove={() => onRemove?.('query')} />}
         {(filters.destinations || []).map((destination) => {
           const key = `${destination.countryId}:${destination.cityId || ''}`;
@@ -94,7 +95,7 @@ export default function DiscoveryActiveFiltersList({
           <Chip text={`מרחק: ${filters.distanceKm.min || '0'}–${filters.distanceKm.max || '∞'} ק״מ`}
             onRemove={() => onRemove?.('distanceKm')} />
         )}
-      </ScrollView>
+      </RtlHorizontalScrollView>
     </View>
   );
 }
