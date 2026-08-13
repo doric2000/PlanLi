@@ -34,7 +34,7 @@ import {
  * // No info (shows person icon)
  * <Avatar size={40} />
  */
-export const Avatar = ({ photoURL, photoMedia, displayName, size = 36 }) => {
+export const Avatar = ({ photoURL, photoMedia, displayName, size = 36, insideRing = false }) => {
 	const resolvedPhotoURL = getMediaVariantUrl(
 		photoMedia,
 		size > 64 ? "feed" : "thumb",
@@ -48,6 +48,7 @@ export const Avatar = ({ photoURL, photoMedia, displayName, size = 36 }) => {
 				placeholder={getMediaPlaceholder(photoMedia)}
 				style={[
 					Platform.OS === "web" ? null : common.avatar,
+					insideRing ? common.avatarInsideRing : null,
 					{ width: size, height: size, borderRadius: size / 2 },
 				]}
 				contentFit="cover"
@@ -60,6 +61,7 @@ export const Avatar = ({ photoURL, photoMedia, displayName, size = 36 }) => {
 		<View
 			style={[
 				common.avatarWithPlaceholder,
+				insideRing ? common.avatarInsideRing : null,
 				{ width: size, height: size, borderRadius: size / 2 },
 			]}
 		>

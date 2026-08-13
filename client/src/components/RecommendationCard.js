@@ -220,6 +220,7 @@ const RecommendationCard = ({
             photoMedia={author.photoMedia}
             displayName={author.displayName}
             size={overlay ? 40 : 36}
+            insideRing={overlay}
           />
         </View>
         <View style={overlay ? styles.feedAuthorTextWrap : null}>
