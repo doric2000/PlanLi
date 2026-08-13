@@ -1,16 +1,27 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { View } from 'react-native';
+import { Easing, View, useWindowDimensions } from 'react-native';
+import { useCallback } from 'react';
 import AppText from "../components/AppText";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { colors, notifications, tabNavigatorStyles as styles } from '../styles';
-import {tabConfigs, tabScreens} from './TabConfigs'
+import { tabConfigs, tabScreens } from './TabConfigs';
 import CachedImage from '../components/CachedImage';
+import SwipeableTabBarButton from './SwipeableTabBarButton';
+import { getAdjacentSwipeItem } from './horizontalSwipe';
+import { getVisibleMainTabNames } from './mainTabOrder';
 
 const Tab = createBottomTabNavigator();
-const RTL_TAB_ORDER = ['Profile', 'Auth', 'Favorites', 'Routes', 'Community', 'Home'];
+const TAB_TRANSITION_SPEC = {
+  animation: 'timing',
+  config: {
+    duration: 240,
+    easing: Easing.out(Easing.cubic),
+  },
+};
+
 /**
  * Bottom Tab Navigator.
  * Manages the main navigation flow of the application.
@@ -25,20 +36,44 @@ export default function TabNavigator() {
   const { user } = useAuthUser();
   const unreadCount = useUnreadCount();
   const insets = useSafeAreaInsets();
-  const visibleScreens = RTL_TAB_ORDER
-    .map((name) => tabScreens.find((screen) => screen.name === name))
-    .filter(Boolean)
-    .filter(({ name }) => {
-      if (user) return name !== 'Auth';
-      return name !== 'Profile';
+  const { width } = useWindowDimensions();
+  const sceneStyleInterpolator = useCallback(({ current }) => ({
+    sceneStyle: {
+      transform: [{
+        translateX: current.progress.interpolate({
+          inputRange: [-1, 0, 1],
+          outputRange: [-Math.max(width, 1), 0, Math.max(width, 1)],
+        }),
+      }],
+    },
+  }), [width]);
+  const handleTabBarSwipe = useCallback((navigation, gestureState) => {
+    const state = navigation.getState();
+    const targetRoute = getAdjacentSwipeItem({
+      items: state.routes,
+      activeIndex: state.index,
+      gestureState,
     });
+    if (!targetRoute) return;
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: targetRoute.key,
+      canPreventDefault: true,
+    });
+    if (!event.defaultPrevented) {
+      navigation.navigate(targetRoute.name, targetRoute.params);
+    }
+  }, []);
+  const visibleScreens = getVisibleMainTabNames(Boolean(user))
+    .map((name) => tabScreens.find((screen) => screen.name === name))
+    .filter(Boolean);
 
   console.log('Unread notification count in TabNavigator:', unreadCount);
 
   return (
     <Tab.Navigator
       initialRouteName="Home"
-      screenOptions={({ route }) => {
+      screenOptions={({ route, navigation }) => {
         const config = tabConfigs[route.name];
         return ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -98,6 +133,12 @@ export default function TabNavigator() {
           tabBarShowLabel: false,
           tabBarLabelStyle: styles.label,
           tabBarItemStyle: styles.item,
+          tabBarButton: (props) => (
+            <SwipeableTabBarButton
+              {...props}
+              onSwipe={(gestureState) => handleTabBarSwipe(navigation, gestureState)}
+            />
+          ),
           tabBarStyle: [
             styles.tabBar,
             {
@@ -106,6 +147,8 @@ export default function TabNavigator() {
           ],
           tabBarIconStyle: styles.iconSlot,
           tabBarHideOnKeyboard: true,
+          sceneStyleInterpolator,
+          transitionSpec: TAB_TRANSITION_SPEC,
           headerShown: false,
         });
       }}

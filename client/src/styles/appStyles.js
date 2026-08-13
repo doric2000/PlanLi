@@ -4340,6 +4340,17 @@ export const routesScreenStyles = StyleSheet.create({
 	},
 });
 
+// features/favorites/screen/FavoritesScreen.js
+export const favoritesSwipeStyles = StyleSheet.create({
+  content: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  page: {
+    flex: 1,
+  },
+});
+
 // navigation/TabNavigator.js
 export const tabNavigatorStyles = StyleSheet.create({
   tabBar: {
@@ -4365,6 +4376,9 @@ export const tabNavigatorStyles = StyleSheet.create({
   item: {
     paddingVertical: 0,
     height: 62,
+  },
+  swipeButton: {
+    flex: 1,
   },
   iconSlot: {
     marginTop: 0,
