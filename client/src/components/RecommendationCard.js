@@ -338,9 +338,15 @@ const RecommendationCard = ({
             maxToRenderPerBatch={1}
             windowSize={3}
             renderItem={({ item: uri, index }) => (
-              <View style={[cards.recCarouselItem, { width: pageWidth, height: frameHeight }]}>
+              <Pressable
+                style={[cards.recCarouselItem, { width: pageWidth, height: frameHeight }]}
+                onPress={handleCardPress}
+                accessibilityRole="button"
+                accessibilityLabel={`פתיחת פרטי ההמלצה: ${item.title || 'המלצה'}`}
+                testID={`recommendation-image-${item.id}-${index}`}
+              >
                 {renderCarouselImage(uri, index)}
-              </View>
+              </Pressable>
             )}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
