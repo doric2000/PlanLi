@@ -47,8 +47,15 @@ export default function FavoritesScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
-      <PageHeader variant="hero" title="מועדפים" />
-      <SegmentedTabs tabs={TABS} value={activeTab} onChange={setActiveTab} style={styles.headerTabs} />
+      <PageHeader variant="hero" title="מועדפים" testID="favorites-tab-header">
+        <SegmentedTabs
+          tabs={TABS}
+          value={activeTab}
+          onChange={setActiveTab}
+          style={styles.headerTabs}
+          testID="favorites-header-tabs"
+        />
+      </PageHeader>
       <View style={{ flex: 1 }}>
         {activeTab === 'destinations' ? <FavoriteCitiesList flatListRef={citiesListRef} onScroll={onScroll} /> : null}
         {activeTab === 'recommendations' ? (
