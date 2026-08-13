@@ -1,13 +1,49 @@
 const { HttpsError } = require('firebase-functions/v2/https');
-const { normalize } = require('./destinationIdentityService');
 const { hasUsableDestinationCache } = require('./destinationCacheService');
+
+const COMBINING_MARKS = /[\u0300-\u036f\u0591-\u05C7]/g;
+const NON_ALPHANUMERIC = /[^a-z0-9\u05D0-\u05EA]+/gi;
+const HEBREW_FINAL_LETTERS = Object.freeze({ ך: 'כ', ם: 'מ', ן: 'נ', ף: 'פ', ץ: 'צ' });
+const MAX_CATALOG_PREFIXES = 160;
+const MAX_PREFIX_LENGTH = 16;
+
+function foldDestinationSearchText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(COMBINING_MARKS, '')
+    .toLowerCase()
+    .replace(/[ךםןףץ]/g, (letter) => HEBREW_FINAL_LETTERS[letter] || letter);
+}
+
+function normalizeDestinationSearchText(value) {
+  return foldDestinationSearchText(value)
+    .replace(NON_ALPHANUMERIC, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function compactDestinationSearchText(value) {
+  return normalizeDestinationSearchText(value).replace(/\s+/g, '');
+}
+
+function destinationSearchForms(value) {
+  const folded = foldDestinationSearchText(value);
+  const normalized = normalizeDestinationSearchText(folded);
+  return Array.from(new Set([
+    compactDestinationSearchText(normalized),
+    ...folded.split(/\s+/).map((chunk) => chunk.replace(NON_ALPHANUMERIC, '')),
+    ...normalized.split(' '),
+  ].filter(Boolean)));
+}
 
 function prefixes(...values) {
   const output = new Set();
-  values.forEach((value) => normalize(value).split(' ').forEach((word) => {
-    for (let size = 2; size <= Math.min(16, word.length); size += 1) output.add(word.slice(0, size));
+  values.forEach((value) => destinationSearchForms(value).forEach((form) => {
+    for (let size = 2; size <= Math.min(MAX_PREFIX_LENGTH, form.length); size += 1) {
+      output.add(form.slice(0, size));
+    }
   }));
-  return [...output].slice(0, 80);
+  return [...output].slice(0, MAX_CATALOG_PREFIXES);
 }
 
 function catalogId(countryId, cityId) {
@@ -117,8 +153,8 @@ async function searchDestinations({ admin, data }) {
   const sort = data?.sort || 'popular';
   if (!['popular', 'name'].includes(sort)) throw new HttpsError('invalid-argument', 'sort is invalid.');
   const countryId = typeof data?.countryId === 'string' && data.countryId.trim() ? data.countryId.trim() : null;
-  const queryText = normalize(data?.query);
-  const prefix = queryText.split(' ').at(-1);
+  const queryText = compactDestinationSearchText(data?.query);
+  const prefix = queryText.slice(0, MAX_PREFIX_LENGTH);
   let query = admin.firestore().collection('destinationCatalog').where('status', '==', 'active');
   if (countryId) query = query.where('countryId', '==', countryId);
   if (prefix?.length >= 2) query = query.where('search.prefixes', 'array-contains', prefix);
@@ -161,6 +197,8 @@ async function searchDestinations({ admin, data }) {
 module.exports = {
   catalogData,
   catalogId,
+  compactDestinationSearchText,
+  destinationSearchForms,
   filterCatalogByActiveCountries,
   getCatalogSnapshot,
   searchDestinations,

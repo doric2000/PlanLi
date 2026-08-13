@@ -188,7 +188,7 @@ describe('HomeScreenSearchTest', () => {
 
   it('filters destinations when searching by text', async () => {
     const navigationMock = { navigate: jest.fn() };
-    const { getByTestId, queryAllByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, queryAllByTestId, queryByTestId } = render(
       <SafeAreaProvider
         initialMetrics={{
           frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -218,13 +218,44 @@ describe('HomeScreenSearchTest', () => {
       countryId: 'gr',
     });
 
-    // Search for "!@#" and expect empty results.
+    const callsBeforePunctuation = mockSearchDestinations.mock.calls.length;
+    // Punctuation-only input is not a searchable query and must not trigger another catalog request.
     fireEvent.changeText(getByTestId('home-search-input'), '!@#');
     await waitFor(() => {
-      expect(queryAllByTestId('city-card')).toHaveLength(0);
-      expect(getByTestId('home-empty-state')).toBeTruthy();
-      expect(getByText('לא נמצאו יעדים')).toBeTruthy();
+      expect(queryAllByTestId('city-card')).toHaveLength(2);
+      expect(queryByTestId('home-empty-state')).toBeNull();
     });
+    expect(mockSearchDestinations).toHaveBeenCalledTimes(callsBeforePunctuation);
+  });
+
+  it('shows a remote catalog destination when punctuation and spacing differ', async () => {
+    mockSearchDestinations.mockImplementation(async (payload = {}) => ({
+      items: payload.query ? [{
+        cityId: 'st-johns',
+        countryId: 'CA',
+        names: { he: 'סנט ג׳ונס', en: 'St. John’s' },
+        countryNames: { he: 'קנדה', en: 'Canada' },
+        recommendationCount: 2,
+      }] : [],
+    }));
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    fireEvent.changeText(screen.getByTestId('home-search-input'), 'st johns');
+
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'st johns',
+    })));
+    await waitFor(() => expect(screen.getByTestId('city-card-st-johns')).toBeTruthy());
   });
 
   it('opens a destination-only filter with real sort controls', async () => {

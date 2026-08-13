@@ -3,8 +3,11 @@ const assert = require('node:assert/strict');
 
 const {
   catalogData,
+  compactDestinationSearchText,
+  destinationSearchForms,
   filterCatalogByActiveCountries,
   getCatalogSnapshot,
+  searchDestinations,
   syncDestinationCatalog,
 } = require('./destinationCatalogService');
 
@@ -21,6 +24,45 @@ test('catalog entries are public only when both destination and country are acti
     ...base,
     country: { ...base.country, status: 'inactive' },
   }).status, 'inactive');
+});
+
+test('catalog search forms tolerate punctuation, spacing, diacritics, and Hebrew variants', () => {
+  assert.equal(compactDestinationSearchText('  St. John’s '), 'stjohns');
+  assert.deepEqual(destinationSearchForms("St. John's").sort(), ['john', 'johns', 's', 'st', 'stjohns'].sort());
+  assert.equal(compactDestinationSearchText('São Paulo'), 'saopaulo');
+  assert.equal(compactDestinationSearchText('יְרוּשָׁלַיִם'), 'ירושלימ');
+});
+
+test('catalog data stores bounded prefixes for full names and punctuation-separated words', () => {
+  const data = catalogData({
+    countryId: 'CA',
+    cityId: 'st-johns',
+    city: {
+      status: 'active',
+      googleCache: { names: { en: 'St. John’s', he: 'סנט ג׳ונס' } },
+    },
+    country: { status: 'active', names: { en: 'Canada', he: 'קנדה' } },
+    timestamp: 'NOW',
+  });
+  assert.ok(data.search.prefixes.includes('stjohns'));
+  assert.ok(data.search.prefixes.includes('johns'));
+  assert.ok(data.search.prefixes.length <= 160);
+});
+
+test('destination search uses one indexed query with a compact bounded prefix', async () => {
+  const whereCalls = [];
+  const firestoreQuery = {
+    where(...args) { whereCalls.push(args); return this; },
+    orderBy() { return this; },
+    limit() { return this; },
+    async get() { return { empty: true, docs: [], size: 0 }; },
+  };
+  const firestore = () => ({ collection: () => firestoreQuery });
+  const result = await searchDestinations({ admin: { firestore }, data: { query: 'St. John’s', limit: 10 } });
+  assert.deepEqual(result, { items: [], nextCursor: null });
+  assert.deepEqual(whereCalls.filter((args) => args[0] === 'search.prefixes'), [
+    ['search.prefixes', 'array-contains', 'stjohns'],
+  ]);
 });
 
 test('a missing or building catalog index returns a retryable public error', async () => {

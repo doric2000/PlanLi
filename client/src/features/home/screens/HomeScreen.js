@@ -30,7 +30,11 @@ import {
 	searchDestinations,
 } from "../../../services/DestinationService";
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
-import { filterAndSortDestinations, mergeDestinations } from "../../../utils/destinationSearch";
+import {
+	compactDestinationText,
+	filterAndSortDestinations,
+	mergeDestinations,
+} from "../../../utils/destinationSearch";
 import { getDestinationImageUrl } from "../../../utils/destinationImages";
 import {
 	loadRecentDiscoveryDestinations,
@@ -159,7 +163,7 @@ export default function HomeScreen({ navigation }) {
 
 	useEffect(() => {
 		const q = searchQuery.trim();
-		if (q.length < 2) {
+		if (compactDestinationText(q).length < 2) {
 			destinationSearchRequestRef.current += 1;
 			setAllDestinationsForSearch([]);
 			setHasLoadedAllDestinationsForSearch(false);
@@ -225,7 +229,7 @@ export default function HomeScreen({ navigation }) {
 		: [];
 
 	const localResultsLoading =
-		searchQuery.trim().length >= 2 && !hasLoadedAllDestinationsForSearch;
+		compactDestinationText(searchQuery).length >= 2 && !hasLoadedAllDestinationsForSearch;
 
 	const featuredDestinations = useMemo(
 		() => destinations.slice(0, 3),

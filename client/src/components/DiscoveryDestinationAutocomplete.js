@@ -55,7 +55,12 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [recent, setRecent] = useState([]);
   const [notice, setNotice] = useState('');
-  const { options, popularOptions, loading } = useDestinationFilterOptions(enabled);
+  const {
+    options,
+    popularOptions,
+    loading,
+    searchLoading,
+  } = useDestinationFilterOptions(enabled, debouncedQuery);
   const { favorites } = useFavoriteCityIds({ enabled });
   const selected = Array.isArray(destinations) ? destinations : [];
   const trimmedQuery = query.trim();
@@ -160,7 +165,7 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
       {showSuggestions && (
         <View style={styles.destinationSuggestionsPanel}>
           {trimmedQuery.length >= 2 ? (
-            !searchSettled ? (
+            !searchSettled || (searchLoading && !searchResults.length) ? (
               <View style={styles.destinationLoadingRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
                 <AppText style={styles.destinationEmptyText}>מחפש...</AppText>

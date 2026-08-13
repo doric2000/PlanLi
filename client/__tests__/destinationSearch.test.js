@@ -1,4 +1,6 @@
 import {
+  compactDestinationText,
+  destinationSearchForms,
   filterAndSortDestinations,
   mergeDestinations,
   normalizeDestinationText,
@@ -13,6 +15,43 @@ const cities = [
 describe('destinationSearch', () => {
   it('normalizes whitespace and case', () => {
     expect(normalizeDestinationText('  PARIS ')).toBe('paris');
+    expect(compactDestinationText('  St.  John’s ')).toBe('stjohns');
+    expect(destinationSearchForms("St. John's")).toEqual(expect.arrayContaining(['stjohns', 'johns']));
+  });
+
+  it.each([
+    ['St. John’s', 'st johns'],
+    ["St. John's", 'ST JOHNS'],
+    ['St. John’s', 'stjohns'],
+    ['Winston-Salem', 'winston salem'],
+    ['Winston-Salem', 'salem'],
+    ['São Paulo', 'sao paulo'],
+  ])('matches formatting variants for %s with %s', (name, query) => {
+    const destination = { id: 'match', countryId: 'ca', names: { en: name } };
+    expect(filterAndSortDestinations([destination], { query })).toEqual([destination]);
+  });
+
+  it('matches Hebrew and English aliases while leaving misspellings unmatched', () => {
+    const jerusalem = {
+      id: 'jerusalem',
+      countryId: 'il',
+      identity: { names: { he: 'יְרוּשָׁלַיִם', en: 'Jerusalem' } },
+    };
+    expect(filterAndSortDestinations([jerusalem], { query: 'ירושלימ' })).toEqual([jerusalem]);
+    expect(filterAndSortDestinations([jerusalem], { query: '  JERUSALEM  ' })).toEqual([jerusalem]);
+    expect(filterAndSortDestinations([
+      { id: 'paris', countryId: 'fr', names: { en: 'Paris' } },
+    ], { query: 'Pariis' })).toEqual([]);
+  });
+
+  it('ranks exact normalized matches before prefixes and contained terms', () => {
+    const ranked = [
+      { id: 'contains', countryId: 'us', names: { en: 'New Johns Harbor' }, stats: { recommendationCount: 100 } },
+      { id: 'prefix', countryId: 'ca', names: { en: 'St. John’s Bay' }, stats: { recommendationCount: 50 } },
+      { id: 'exact', countryId: 'ca', names: { en: 'St. John’s' }, stats: { recommendationCount: 1 } },
+    ];
+    expect(filterAndSortDestinations(ranked, { query: 'st johns' }).map((city) => city.id))
+      .toEqual(['exact', 'prefix']);
   });
 
   it('searches city, country, and description and prefers prefix matches', () => {
