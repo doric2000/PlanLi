@@ -151,7 +151,7 @@ describe('AddRoutesScreen unsaved guard (edit)', () => {
     mockLoadJobForReview.mockResolvedValueOnce({
       reviewedDraft: {
         route: {
-          taxonomyVersion: 4,
+          taxonomyVersion: 5,
           title: source.title,
           description: source.description,
           distanceKm: source.distanceKm,

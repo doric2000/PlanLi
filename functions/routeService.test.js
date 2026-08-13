@@ -80,9 +80,9 @@ test('legacy route input is normalized at the server boundary without storing a 
   assert.deepEqual(route.facets.audiences, ['couple']);
 });
 
-test('taxonomy v4 route attributes are factual, scoped and derive interests from content', () => {
+test('taxonomy v5 route attributes are factual, scoped and derive interests from content', () => {
 	const route = sanitizeRouteInput(canonicalRoute({
-		taxonomyVersion: 4,
+		taxonomyVersion: 5,
 		facets: undefined,
 		attributes: {
 			audienceScope: 'all', audiences: [], budgetLevel: 'balanced', vibes: ['adventurous'],
@@ -94,8 +94,17 @@ test('taxonomy v4 route attributes are factual, scoped and derive interests from
 	assert.deepEqual(route.facets.audiences, []);
 	assert.equal(route.facets.needsScope, 'entire_route');
 	assert.ok(route.facets.interests.includes('hiking'));
+	assert.equal(sanitizeRouteInput(canonicalRoute({
+		taxonomyVersion: 5,
+		facets: undefined,
+		attributes: {
+			audienceScope: 'all', audiences: [], budgetLevel: 'free', vibes: [],
+			travelerStyles: [], needs: [], needsCoverageConfirmed: false,
+			seasons: ['spring'], environment: 'outdoor',
+		},
+	})).facets.budgetLevel, 'free');
 	assert.throws(() => sanitizeRouteInput(canonicalRoute({
-		taxonomyVersion: 4,
+		taxonomyVersion: 5,
 		facets: undefined,
 		attributes: {
 			audienceScope: 'all', audiences: [], budgetLevel: 'balanced', vibes: [],
@@ -104,7 +113,7 @@ test('taxonomy v4 route attributes are factual, scoped and derive interests from
 		},
 	})), /confirmed/);
 	assert.throws(() => sanitizeRouteInput(canonicalRoute({
-		taxonomyVersion: 4,
+		taxonomyVersion: 5,
 		facets: undefined,
 		attributes: {
 			audienceScope: 'all', audiences: [], budgetLevel: 'flexible', vibes: [],
@@ -133,6 +142,21 @@ test('route edits reject deletion races and changed revisions', () => {
 
 test('legacy provider fan-out is capped until resolved place tokens replace it', () => {
   assert.equal(MAX_PROVIDER_RESOLUTIONS_PER_SAVE, 5);
+});
+
+test('saveRoute requires taxonomy v5 for budget-bearing writes', async () => {
+  const routeRef = {
+    id: 'new-route', path: 'routes/new-route',
+    get: async () => ({ exists: false, data: () => null }),
+  };
+  const db = { collection: () => ({ doc: () => routeRef }) };
+  const admin = { firestore: () => db };
+  const auth = {
+    uid: 'owner', token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+  };
+  await assert.rejects(saveRoute({
+    admin, auth, mapsKey: 'maps-key', data: { route: canonicalRoute({ taxonomyVersion: 4 }) },
+  }), /Update PlanLi/);
 });
 
 test('publishRequestId route replays return the same active route without creating another revision', async () => {

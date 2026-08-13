@@ -11,6 +11,19 @@ test('profile bio can be cleared with an empty string', () => {
   assert.equal(cleanOptionalBio('   '), '');
 });
 
+test('smart budget writes require taxonomy v5 while unrelated profile writes do not', async () => {
+  const admin = {
+    firestore: Object.assign(() => ({
+      doc: () => ({ get: async () => ({ exists: true, data: () => ({}) }) }),
+    }), { FieldValue: { serverTimestamp: () => 'timestamp', delete: () => 'delete' } }),
+  };
+  await assert.rejects(updateProfile({
+    admin,
+    auth: { uid: 'user-1', token: {} },
+    data: { taxonomyVersion: 4, smartProfile: { budget: 'economy' } },
+  }), /Update PlanLi/);
+});
+
 test('profile bio rejects more than two lines and more than 160 unicode characters', () => {
   assert.throws(() => cleanOptionalBio('א\nב\nג'), /two lines/);
   assert.throws(() => cleanOptionalBio('🌍'.repeat(161)), /160/);

@@ -164,6 +164,20 @@ affinity, and marks empty broken routes inactive without deleting their media
 or interactions. Any ambiguous recommendation or route keeps the migration
 audit from passing and must be reviewed before `--apply`.
 
+The taxonomy-v5 budget migration separates `free` (חינם) from `economy` (₪).
+It is dry-run by default, refuses unclassified legacy `economy` content, and
+writes a private rollback checkpoint before applying changes:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm run migrate-budget-taxonomy
+# Only after reviewing every classified record:
+npm run migrate-budget-taxonomy -- --apply
+# Restore the exact previous budget/version fields if a rollback is required:
+npm run migrate-budget-taxonomy -- --rollback .budget-taxonomy-v5\<checkpoint>.json
+npm run audit-live
+```
+
 Recommendation content curation is also dry-run by default. A dry run scans
 the live collection, applies canonical taxonomy rules plus an optional ignored
 override file, and writes a reviewable manifest containing each document's

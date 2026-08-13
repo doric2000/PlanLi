@@ -10,6 +10,7 @@ functions/.database-canonical-migration/
 functions/.recommendation-curation/
 functions/.public-profiles-backfill/
 functions/.rating-removal/
+functions/.budget-taxonomy-v5/
 functions/.destination-images/
 functions/.destination-identities/
 functions/.prelaunch-reset/

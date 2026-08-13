@@ -196,7 +196,7 @@ function overlapScore(wanted, actual, missingValue = 0.5) {
 function budgetScore(preferred, actual) {
   if (!preferred || preferred === 'flexible') return 0.5;
   if (!actual || actual === 'flexible') return 0.5;
-  const ordered = ['economy', 'balanced', 'comfort', 'premium'];
+  const ordered = ['free', 'economy', 'balanced', 'comfort', 'premium'];
   const distance = Math.abs(ordered.indexOf(preferred) - ordered.indexOf(actual));
   if (distance === 0) return 1;
   if (distance === 1) return 0.6;

@@ -81,7 +81,7 @@ test('taxonomy IDs and cross-references are unique and valid', () => {
 
 test('recommendation attribute rules reference only canonical subcategories and needs', () => {
 	const taxonomy = require('./travelTaxonomy.generated.json');
-	assert.equal(taxonomy.version, 4);
+	assert.equal(taxonomy.version, 5);
 	const tagIds = new Set(taxonomy.tags.map((tag) => tag.id));
 	const needIds = new Set(taxonomy.needs.map((need) => need.id));
 	const rules = taxonomy.contentAttributeRules?.recommendations;

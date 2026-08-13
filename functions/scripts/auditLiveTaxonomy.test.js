@@ -7,7 +7,7 @@ const { buildSearchIndex } = require('../discoverySearch');
 test('live audit accepts canonical active recommendations and rejects client-era metadata', () => {
   const canonical = {
     status: 'active',
-	taxonomyVersion: 4,
+	taxonomyVersion: 5,
     categoryId: 'nature',
     tags: ['beach'],
     budget: 'balanced',
@@ -18,12 +18,15 @@ test('live audit accepts canonical active recommendations and rejects client-era
     search: buildSearchIndex({ title: 'חוף', categoryIds: ['nature'], subcategoryIds: ['beach'] }),
   };
   assert.deepEqual(taxonomyContentErrors('recommendations/r1', canonical), []);
+  assert.ok(taxonomyContentErrors('recommendations/r1', {
+    ...canonical, facets: { ...canonical.facets, budgetLevel: 'comfort' },
+  }).includes('budget-facet-mismatch'));
   assert.ok(taxonomyContentErrors('recommendations/r1', { ...canonical, taxonomyVersion: 2 }).includes('taxonomy-version'));
 });
 
 test('live audit requires route-only canonical facets and destinations', () => {
   const route = {
-	status: 'active', taxonomyVersion: 4,
+	status: 'active', taxonomyVersion: 5,
     categoryIds: ['nature'], subcategoryIds: ['hiking'],
     facets: {
 	  interests: ['hiking'], audienceScope: 'selected', audiences: ['friends'], vibes: [], travelerStyles: ['roadtrip'], needs: [],

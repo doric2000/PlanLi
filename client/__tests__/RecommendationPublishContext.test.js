@@ -5,6 +5,7 @@ import {
   RecommendationPublishProvider,
   recommendationPublishProgress,
   isTransientPublishError,
+  upgradeRestoredPublishJob,
   useRecommendationPublish,
 } from '../src/features/community/publishing/RecommendationPublishContext';
 
@@ -244,5 +245,40 @@ describe('publish status helpers', () => {
       status: 'uploading', stage: 'uploading', media: [{ progress: 1 }, { progress: 0.5 }],
     })).toBeCloseTo(0.645);
     expect(recommendationPublishProgress({ status: 'success' })).toBe(1);
+  });
+
+  it('pauses ambiguous pre-v5 queue jobs for review and clears only their budget', () => {
+    const recommendation = upgradeRestoredPublishJob({
+      id: 'old-rec', status: 'queued', payload: {
+        recommendation: { taxonomyVersion: 4, title: 'Old', budget: 'economy' },
+      },
+      draft: { title: 'Old', budget: 'economy', description: 'Kept' },
+    });
+    expect(recommendation.status).toBe('failed');
+    expect(recommendation.reviewRequired).toBe(true);
+    expect(recommendation.payload.recommendation.taxonomyVersion).toBe(5);
+    expect(recommendation.payload.recommendation.budget).toBe('');
+    expect(recommendation.draft).toEqual(expect.objectContaining({ budget: '', description: 'Kept' }));
+
+    const route = upgradeRestoredPublishJob({
+      id: 'old-route', contentType: 'route', status: 'queued', payload: {
+        route: { taxonomyVersion: 4, attributes: { budgetLevel: 'economy', pace: 'balanced' } },
+      },
+      draft: { route: { attributes: { budgetLevel: 'economy', pace: 'balanced' } } },
+    });
+    expect(route.reviewRequired).toBe(true);
+    expect(route.payload.route.attributes).toEqual({ budgetLevel: '', pace: 'balanced' });
+    expect(route.draft.route.attributes).toEqual({ budgetLevel: '', pace: 'balanced' });
+  });
+
+  it('upgrades an unambiguous pre-v5 queue job without requiring review', () => {
+    const upgraded = upgradeRestoredPublishJob({
+      contentType: 'recommendation', status: 'queued', payload: {
+        recommendation: { taxonomyVersion: 4, budget: 'balanced' },
+      }, draft: { budget: 'balanced' },
+    });
+    expect(upgraded.status).toBe('queued');
+    expect(upgraded.reviewRequired).toBeUndefined();
+    expect(upgraded.payload.recommendation.taxonomyVersion).toBe(5);
   });
 });

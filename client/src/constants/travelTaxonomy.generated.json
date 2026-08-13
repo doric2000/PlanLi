@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "interests": [
     {
       "id": "nature_scenery",
@@ -104,10 +104,17 @@
   ],
   "budgets": [
     {
+      "id": "free",
+      "label": "חינם",
+      "helper": "ללא תשלום",
+      "postLabel": "חינם",
+      "postApplicable": true
+    },
+    {
       "id": "economy",
       "label": "חסכוני",
-      "helper": "חינמי–₪",
-      "postLabel": "חינמי–₪",
+      "helper": "₪",
+      "postLabel": "₪",
       "postApplicable": true
     },
     {
@@ -1480,7 +1487,9 @@
       "שירותים ואנשי מקצוע": "services"
     },
     "budgetAliases": {
-      "חינמי": "economy",
+      "חינם": "free",
+      "חינמי": "free",
+      "free": "free",
       "₪": "economy",
       "$": "economy",
       "₪₪": "balanced",

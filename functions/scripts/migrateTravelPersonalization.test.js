@@ -127,7 +127,7 @@ test('route migration builds canonical facets, destinations and search without t
   }]);
 
   assert.equal(result.reviewRequired, false);
-	assert.equal(result.patch.taxonomyVersion, 4);
+	assert.equal(result.patch.taxonomyVersion, 5);
   assert.equal(result.patch.difficulty, 'easy');
   assert.deepEqual(result.patch.transportModes, ['mixed']);
   assert.deepEqual(result.patch.destinationKeys, ['cty-il:*', 'cty-il:city-tlv']);

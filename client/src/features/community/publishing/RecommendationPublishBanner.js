@@ -80,9 +80,11 @@ export default function RecommendationPublishBanner({ onReview }) {
 
       {failed ? (
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.primaryAction} onPress={() => retry(activeJob.id)} testID="publish-retry">
-            <AppText style={styles.primaryActionText}>נסו שוב</AppText>
-          </TouchableOpacity>
+          {!activeJob.reviewRequired ? (
+            <TouchableOpacity style={styles.primaryAction} onPress={() => retry(activeJob.id)} testID="publish-retry">
+              <AppText style={styles.primaryActionText}>נסו שוב</AppText>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity style={styles.action} onPress={() => onReview?.(activeJob.id, activeJob.contentType)} testID="publish-review">
             <AppText style={styles.actionText}>עריכה</AppText>
           </TouchableOpacity>
