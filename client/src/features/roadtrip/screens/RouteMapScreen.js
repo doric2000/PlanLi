@@ -152,7 +152,14 @@ export default function RouteMapScreen({ route, navigation }) {
             ))}
           </MapView>
 
-          <View style={styles.mapControls} pointerEvents="box-none">
+          <View
+            style={[
+              styles.mapControls,
+              selectedStop ? styles.mapControlsSelected : styles.mapControlsDefault,
+            ]}
+            pointerEvents="box-none"
+            testID="route-map-controls"
+          >
             <TouchableOpacity
               style={styles.mapControlButton}
               onPress={centerOnUser}

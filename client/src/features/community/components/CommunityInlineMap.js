@@ -266,8 +266,14 @@ export default function CommunityInlineMap({
       </MapView>
 
       <View
-        style={[community.mapControls, { bottom: overlayBottomInset + (selectedMapItem ? 174 : 12) }]}
+        style={[
+          community.mapControls,
+          selectedMapItem
+            ? community.mapControlsSelected
+            : { bottom: overlayBottomInset + 12 },
+        ]}
         pointerEvents="box-none"
+        testID="community-map-controls"
       >
         <TouchableOpacity
           style={community.mapControlButton}

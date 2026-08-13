@@ -4087,9 +4087,14 @@ export const routeMapStyles = StyleSheet.create({
 	mapControls: {
 		position: "absolute",
 		right: 14,
-		bottom: 22,
 		gap: 10,
 		zIndex: 20,
+	},
+	mapControlsDefault: {
+		bottom: 22,
+	},
+	mapControlsSelected: {
+		top: 14,
 	},
 	mapControlButton: {
 		width: 46,
