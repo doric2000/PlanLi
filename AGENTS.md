@@ -140,6 +140,7 @@ If credentials, conflicts, required checks, reviews, or GitHub availability prev
 
 ## Deployment and release truthfulness
 
+- The client is currently in Expo Go development only; there is no active production, EAS Build, EAS Update/OTA, app-store, TestFlight, or internal-distribution release channel. Do not create or submit client builds or updates merely because EAS configuration exists. Continue using Metro/Expo Go reloads unless the user explicitly authorizes moving the client to a named release channel or production stage.
 - Merge first. Deploy backend, rules, indexes, or hosting only from the updated `main` branch and only when the user has explicitly authorized deployment for that task. Verify the selected Firebase project, region, deployed targets, and post-deploy health.
 - Client code is not on a phone merely because it was merged or exported. State whether activation requires a Metro/Expo reload, an eligible over-the-air update, or a new store/internal build, and do not claim delivery until that step is actually complete.
 - When a change requires both backend and client rollout, state and follow the safe order explicitly. A backend fix is not effective in production until deployed; a client fix is not effective for users until distributed.
