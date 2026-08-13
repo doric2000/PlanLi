@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import RouteMapScreen from '../src/features/roadtrip/screens/RouteMapScreen';
@@ -67,9 +68,18 @@ describe('RouteMapScreen', () => {
       x: 0.5,
       y: 50 / 64,
     });
+    expect(StyleSheet.flatten(screen.getByTestId('route-map-controls').props.style)).toMatchObject({
+      right: 14,
+      bottom: 22,
+    });
 
     fireEvent.press(screen.getByTestId('route-map-marker-2'));
     expect(screen.getByText('Second')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('route-map-controls').props.style)).toMatchObject({
+      right: 14,
+      top: 14,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('route-map-controls').props.style).bottom).toBeUndefined();
 
     fireEvent.press(screen.getByTestId('route-map-my-location'));
     const region = screen.getByTestId('route-map').props.initialRegion;

@@ -177,6 +177,9 @@ export const community = {
 		right: 14,
 		zIndex: 60,
 	},
+	mapControlsSelected: {
+		top: 68,
+	},
 	mapControlButton: {
 		width: 48,
 		height: 48,

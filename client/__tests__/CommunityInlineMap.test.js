@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import CommunityInlineMap from '../src/features/community/components/CommunityInlineMap';
@@ -113,10 +114,20 @@ describe('CommunityInlineMap', () => {
     );
     await act(async () => {});
 
+    expect(StyleSheet.flatten(screen.getByTestId('community-map-controls').props.style)).toMatchObject({
+      right: 14,
+      bottom: 104,
+    });
+
     for (let index = 0; index < 40; index += 1) {
       fireEvent.press(screen.getByTestId(`recommendation-map-marker-rec-${(index % 2) + 1}`));
     }
     expect(screen.getByText('Nature reserve')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('community-map-controls').props.style)).toMatchObject({
+      right: 14,
+      top: 68,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-map-controls').props.style).bottom).toBeUndefined();
     fireEvent.press(screen.getByTestId('mock-map-preview-open'));
     expect(onOpenRecommendation).toHaveBeenCalledWith('post-2');
 
