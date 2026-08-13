@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "interests": [
     { "id": "nature_scenery", "label": "טבע ונופים" },
     { "id": "hiking", "label": "מסלולי הליכה" },
@@ -28,7 +28,8 @@
     { "id": "travel_tips_services", "label": "שירותים שימושיים למטיילים" }
   ],
   "budgets": [
-    { "id": "economy", "label": "חסכוני", "helper": "חינמי–₪", "postLabel": "חינמי–₪", "postApplicable": true },
+    { "id": "free", "label": "חינם", "helper": "ללא תשלום", "postLabel": "חינם", "postApplicable": true },
+    { "id": "economy", "label": "חסכוני", "helper": "₪", "postLabel": "₪", "postApplicable": true },
     { "id": "balanced", "label": "מאוזן", "helper": "₪₪", "postLabel": "₪₪", "postApplicable": true },
     { "id": "comfort", "label": "נוח", "helper": "₪₪₪", "postLabel": "₪₪₪", "postApplicable": true },
     { "id": "premium", "label": "מפנק", "helper": "₪₪₪₪", "postLabel": "₪₪₪₪", "postApplicable": true },
@@ -263,7 +264,8 @@
       "שירותים ואנשי מקצוע": "services"
     },
     "budgetAliases": {
-      "חינמי": "economy", "₪": "economy", "$": "economy", "₪₪": "balanced", "$$": "balanced",
+      "חינם": "free", "חינמי": "free", "free": "free",
+      "₪": "economy", "$": "economy", "₪₪": "balanced", "$$": "balanced",
       "₪₪₪": "comfort", "$$$": "comfort", "₪₪₪₪": "premium", "$$$$": "premium",
       "budget": "economy", "medium": "balanced", "luxury": "premium"
     },

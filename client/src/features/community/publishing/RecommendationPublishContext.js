@@ -11,6 +11,7 @@ import React, {
 import { AppState } from 'react-native';
 
 import { auth } from '../../../config/firebase';
+import { TRAVEL_TAXONOMY_VERSION } from '../../../constants/travelTaxonomy';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { saveRecommendation } from '../../../services/RecommendationService';
@@ -94,6 +95,73 @@ function remotePreview(asset) {
   return asset?.feed?.url || asset?.large?.url || asset?.thumb?.url || null;
 }
 
+export function upgradeRestoredPublishJob(job) {
+  const contentType = job?.contentType === 'route' ? 'route' : 'recommendation';
+  const payloadContent = contentType === 'route' ? job?.payload?.route : job?.payload?.recommendation;
+  const sourceVersion = Number(payloadContent?.taxonomyVersion || 0);
+  const base = {
+    ...job,
+    version: Number(job?.version || 1) < 2 ? 2 : job.version,
+    contentType,
+    ...(['uploading', 'saving'].includes(job?.status)
+      ? { status: 'queued', stage: 'queued', retryAt: 0 }
+      : {}),
+  };
+  if (sourceVersion >= TRAVEL_TAXONOMY_VERSION) return base;
+
+  const budget = contentType === 'route'
+    ? payloadContent?.attributes?.budgetLevel
+    : payloadContent?.budget;
+  if (budget !== 'economy') {
+    return {
+      ...base,
+      payload: contentType === 'route'
+        ? { ...base.payload, route: { ...payloadContent, taxonomyVersion: TRAVEL_TAXONOMY_VERSION } }
+        : {
+            ...base.payload,
+            recommendation: { ...payloadContent, taxonomyVersion: TRAVEL_TAXONOMY_VERSION },
+          },
+    };
+  }
+
+  const reviewMessage = 'יש לבחור מחדש חינם או ₪ לפני הפרסום.';
+  return {
+    ...base,
+    status: 'failed',
+    stage: 'failed',
+    retryAt: 0,
+    reviewRequired: true,
+    error: { code: 'taxonomy/review-required', message: reviewMessage },
+    payload: contentType === 'route'
+      ? {
+          ...base.payload,
+          route: {
+            ...payloadContent,
+            taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
+            attributes: { ...payloadContent?.attributes, budgetLevel: '' },
+          },
+        }
+      : {
+          ...base.payload,
+          recommendation: {
+            ...payloadContent,
+            taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
+            budget: '',
+          },
+        },
+    draft: contentType === 'route'
+      ? {
+          ...base.draft,
+          route: {
+            ...base.draft?.route,
+            taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
+            attributes: { ...base.draft?.route?.attributes, budgetLevel: '' },
+          },
+        }
+      : { ...base.draft, budget: '' },
+  };
+}
+
 export function ContentPublishProvider({ children }) {
   const { user, loading: authLoading } = useAuthUser();
   const [jobs, setJobs] = useState([]);
@@ -155,14 +223,7 @@ export function ContentPublishProvider({ children }) {
       );
       const restored = storedJobs
         .filter((job) => job && job.id && job.ownerUid && job.status !== 'success')
-        .map((job) => ({
-          ...job,
-          version: Number(job.version || 1) < 2 ? 2 : job.version,
-          contentType: job.contentType === 'route' ? 'route' : 'recommendation',
-          ...(['uploading', 'saving'].includes(job.status)
-            ? { status: 'queued', stage: 'queued', retryAt: 0 }
-            : {}),
-        }));
+        .map(upgradeRestoredPublishJob);
       publishSnapshot(restored);
       if (JSON.stringify(restored) !== JSON.stringify(storedJobs)) persistSnapshot(restored);
       setHydrated(true);
@@ -341,6 +402,8 @@ export function ContentPublishProvider({ children }) {
   }, [user?.uid]);
 
   const retry = useCallback(async (jobId) => {
+    const current = jobsRef.current.find((job) => job.id === jobId);
+    if (current?.reviewRequired) return;
     await updateJob(jobId, (job) => ({
       ...job,
       status: 'queued',

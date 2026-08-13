@@ -4,6 +4,7 @@ import {
   CATEGORIES,
   INTERESTS,
   NEEDS,
+  normalizeBudgetId,
   normalizeTagIds,
   POST_BUDGETS,
   suggestedInterestIds,
@@ -28,9 +29,13 @@ describe('shared travel taxonomy', () => {
       'gluten_free', 'halal', 'stroller_accessible',
     ]));
     expect(POST_BUDGETS.map((item) => item.value)).toEqual([
-      'economy', 'balanced', 'comfort', 'premium',
+      'free', 'economy', 'balanced', 'comfort', 'premium',
     ]);
     expect(BUDGETS.map((item) => item.value)).toContain('flexible');
+    expect(normalizeBudgetId('חינם')).toBe('free');
+    expect(normalizeBudgetId('חינמי')).toBe('free');
+    expect(normalizeBudgetId('free')).toBe('free');
+    expect(normalizeBudgetId('₪')).toBe('economy');
   });
 
   it('suggests precise interests from post category and stable tag IDs', () => {

@@ -8,6 +8,7 @@ const {
   TRAVELER_STYLE_IDS,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
+  taxonomy,
   normalizeSmartProfile,
   uniqueAllowed,
 } = require('./travelTaxonomy');
@@ -103,7 +104,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   assert(data && typeof data === 'object' && !Array.isArray(data),
     'invalid-argument', 'Profile update is invalid.');
   assert(Object.keys(data).every((key) => (
-    ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'].includes(key)
+    ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia', 'taxonomyVersion'].includes(key)
   )), 'invalid-argument', 'נשלח שדה שאינו נתמך בעדכון הפרופיל.');
   if (Object.prototype.hasOwnProperty.call(data, 'completeSmartProfile')) {
     assert(typeof data.completeSmartProfile === 'boolean',
@@ -114,6 +115,10 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   const bio = cleanOptionalBio(data?.bio);
   const completeSmartProfile = data?.completeSmartProfile === true;
   const smartProfile = sanitizeSmartProfile(data?.smartProfile, { complete: completeSmartProfile });
+  if (data?.smartProfile && Object.prototype.hasOwnProperty.call(data.smartProfile, 'budget')) {
+    assert(Number(data.taxonomyVersion || 0) >= taxonomy.version, 'failed-precondition',
+      'Update PlanLi to choose Free or Cheap as separate budget options.');
+  }
   const db = admin.firestore();
   const userRef = db.doc(`users/${uid}`);
   const existing = await userRef.get();

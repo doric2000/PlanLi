@@ -13,11 +13,11 @@ export const getBudgetTheme = (budget) => {
 
 	if (!value) return fallback;
 
-	switch (value) {
+		switch (value) {
 		// 5₪ coin-ish silver
 		case 'חינמי':
+		case 'חינם':
 		case 'free':
-		case 'economy':
 			return {
 				backgroundColor: '#E5E7EB',
 				borderColor: '#9CA3AF',
@@ -26,6 +26,7 @@ export const getBudgetTheme = (budget) => {
 
 		// 20₪ bill-ish soft pink/red (not too aggressive)
 		case '₪':
+		case 'economy':
 			return {
 				backgroundColor: '#F5A3B7',
 				borderColor: '#E46A8C',

@@ -71,6 +71,11 @@ test('recommendation content ignores client-controlled ownership and location fi
   });
 });
 
+test('recommendation budget keeps free and economy as separate canonical values', () => {
+  assert.equal(sanitizeRecommendationContent({ ...validContent, budget: 'free' }).budget, 'free');
+  assert.equal(sanitizeRecommendationContent({ ...validContent, budget: '₪' }).budget, 'economy');
+});
+
 test('recommendation content rejects unknown tag IDs and profile-only budgets', () => {
   const base = {
     title: 'Good place', description: 'Useful details', categoryId: 'food', category: 'ignored',
@@ -80,28 +85,28 @@ test('recommendation content rejects unknown tag IDs and profile-only budgets', 
   assert.throws(() => sanitizeRecommendationContent({ ...base, tags: [], budget: 'flexible' }), /budget/);
 });
 
-test('taxonomy v4 recommendation attributes require only facts applicable to the selected place type', () => {
+test('taxonomy v5 recommendation attributes require only facts applicable to the selected place type', () => {
 	const content = sanitizeRecommendationContent({
-		taxonomyVersion: 4,
+		taxonomyVersion: 5,
 		title: 'Cafe', description: 'Useful details', categoryId: 'food', tags: ['cafe'], budget: 'balanced',
 	});
 	const attributes = sanitizeRecommendationAttributes({
 		audienceScope: 'all', audiences: [], vibes: ['relaxed'], environment: 'indoor',
 		needs: ['vegetarian'], needsConfirmed: true,
-	}, content, { taxonomyVersion: 4 });
+	}, content, { taxonomyVersion: 5 });
 	assert.equal(attributes.audienceScope, 'all');
 	assert.deepEqual(attributes.needs, ['vegetarian']);
 	assert.throws(() => sanitizeRecommendationAttributes({
 		audienceScope: 'all', audiences: [], vibes: [], environment: '', needs: [], needsConfirmed: false,
-	}, content, { taxonomyVersion: 4 }), /vibe/);
+	}, content, { taxonomyVersion: 5 }), /vibe/);
 	const service = sanitizeRecommendationContent({
-		taxonomyVersion: 4,
+		taxonomyVersion: 5,
 		title: 'SIM', description: 'Useful details', categoryId: 'services', tags: ['sim_esim'], budget: 'balanced',
 	});
 	assert.throws(() => sanitizeRecommendationAttributes({
 		audienceScope: 'all', audiences: [], vibes: [], environment: '',
 		needs: ['vegetarian'], needsConfirmed: true,
-	}, service, { taxonomyVersion: 4 }), /not applicable/);
+	}, service, { taxonomyVersion: 5 }), /not applicable/);
 });
 
 test('place parser derives server-controlled country, city and coordinates', () => {
@@ -448,14 +453,29 @@ const verifiedAuth = {
   },
 };
 const validContent = {
+  taxonomyVersion: 5,
   title: 'Server saved',
   description: 'A valid recommendation',
   category: 'Food',
   categoryId: 'food',
-  tags: [],
+  tags: ['cafe'],
   budget: '$$',
   media: [],
+  attributes: {
+    audienceScope: 'all', audiences: [], vibes: ['relaxed'], environment: 'indoor',
+    needs: [], needsConfirmed: false,
+  },
 };
+
+test('saveRecommendation requires taxonomy v5 for budget-bearing writes', async () => {
+  const admin = createFakeAdmin();
+  await assert.rejects(saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: { recommendation: { ...validContent, taxonomyVersion: 4 } },
+  }), /Update PlanLi/);
+});
 
 test('Google destination resolution falls back from a district to its containing city', async () => {
   const admin = createFakeAdmin({
@@ -580,7 +600,7 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.deepEqual(saved.stats, { likeCount: 0, commentCount: 0 });
   assert.equal(saved.destination.countryId, 'IL');
   assert.equal(saved.destination.cityId, 'TLV');
-	assert.equal(saved.taxonomyVersion, 4);
+	assert.equal(saved.taxonomyVersion, 5);
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(Object.hasOwn(saved.search, 'tokens'), false);
   assert.ok(Array.isArray(saved.search.prefixes));

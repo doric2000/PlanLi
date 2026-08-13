@@ -1257,6 +1257,9 @@ async function saveRecommendation({
     );
   }
 
+  assert(Number(data?.recommendation?.taxonomyVersion || 0) >= taxonomy.version,
+    'failed-precondition', 'Update PlanLi to choose Free or Cheap as separate budget options.');
+
   const content = sanitizeRecommendationContent(data?.recommendation);
   const attributes = sanitizeRecommendationAttributes(
     data?.recommendation?.attributes,

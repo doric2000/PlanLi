@@ -67,6 +67,7 @@ describe('ProfileService smart-profile persistence', () => {
     expect(mockCallable).toHaveBeenCalledWith({
       smartProfile: requested,
       completeSmartProfile: false,
+      taxonomyVersion: 5,
     });
     expect(getDocFromServer).not.toHaveBeenCalled();
   });

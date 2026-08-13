@@ -137,6 +137,10 @@ test('manual filters stay hard constraints and reject malformed values', () => {
   });
   assert.throws(() => cleanFilters({ tags: [42] }), /subcategoryIds must be a string/);
   assert.throws(() => cleanFilters({ budgetLevels: ['unknown'] }), /budgetLevels is invalid/);
+  const freeOnly = cleanFilters({ budgetLevels: ['free'] });
+  const base = { categoryId: 'food', tags: ['restaurant'], facets: { budgetLevel: 'free' } };
+  assert.equal(matchesFilters(base, freeOnly), true);
+  assert.equal(matchesFilters({ ...base, facets: { budgetLevel: 'economy' } }, freeOnly), false);
 });
 
 test('route filters use OR within each group and AND between groups', () => {

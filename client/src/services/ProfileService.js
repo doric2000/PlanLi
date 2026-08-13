@@ -1,6 +1,7 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
+import { TRAVEL_TAXONOMY_VERSION } from '../constants/travelTaxonomy';
 import {
   normalizeProfileBio,
   validateProfileBio,
@@ -66,6 +67,9 @@ export const saveProfile = async (
     const error = validateProfileBio(fields.bio);
     if (error) throw new Error(error);
     payload.bio = bio;
+  }
+  if (fields?.smartProfile && Object.prototype.hasOwnProperty.call(fields.smartProfile, 'budget')) {
+    payload.taxonomyVersion = TRAVEL_TAXONOMY_VERSION;
   }
   let response;
   try {

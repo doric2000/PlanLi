@@ -481,6 +481,8 @@ async function saveRoute({
     }
     assert(!existingSnapshot.exists, 'already-exists', 'Route already exists.');
   }
+  assert(Number(data?.route?.taxonomyVersion || 0) >= taxonomy.version,
+    'failed-precondition', 'Update PlanLi to choose Free or Cheap as separate budget options.');
   const baseVersion = revisionVersion(existingRoute);
   const route = sanitizeRouteInput(data?.route);
   const requestedMedia = collectMedia(route.days);

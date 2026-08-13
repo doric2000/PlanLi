@@ -280,7 +280,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(getByTestId('add-rec-section-category-continue'));
 
     // 6. Select Budget
-    fireEvent.press(getByTestId('add-rec-budget-2'));
+    fireEvent.press(getByTestId('add-rec-budget-3'));
 
 	// 7. Select the factual attributes required for a restaurant recommendation.
 	fireEvent.press(getByTestId('add-rec-audience-0'));
@@ -307,7 +307,7 @@ describe('AddRecommendationScreen Integration Test', () => {
             categoryId: 'food',
             tags: expect.arrayContaining(['restaurant']),
             budget: 'comfort',
-            taxonomyVersion: 4,
+            taxonomyVersion: 5,
             media: [],
             attributes: expect.objectContaining({
               audienceScope: 'selected',

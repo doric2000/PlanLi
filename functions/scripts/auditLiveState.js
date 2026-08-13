@@ -107,6 +107,7 @@ function taxonomyContentErrors(documentPath, data = {}) {
 	if (!requirements.environment && data.facets?.environments.length) errors.push('inapplicable-environment');
 	if (data.facets?.needs.some((needId) => !requirements.needs.includes(needId))) errors.push('inapplicable-need');
 	if (!POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
+	if (data.budget !== data.facets?.budgetLevel) errors.push('budget-facet-mismatch');
     if (!canonicalSearchIndex(data.search)) errors.push('search');
   }
   if (/^routes\/[^/]+$/.test(documentPath) && active) {
