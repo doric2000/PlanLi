@@ -473,6 +473,8 @@ export const imageCropReviewStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerCopy: {
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
   },
   title: {
@@ -500,12 +502,13 @@ export const imageCropReviewStyles = StyleSheet.create({
   },
   stage: {
     flex: 1,
+    minHeight: 0,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   viewport: {
-    width: '100%',
     maxWidth: 640,
     overflow: 'hidden',
     alignItems: 'center',
