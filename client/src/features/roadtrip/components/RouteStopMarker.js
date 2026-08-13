@@ -6,6 +6,12 @@ import CachedImage from '../../../components/CachedImage';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { routeStopMarkerStyles as styles } from '../../../styles';
 
+// react-native-maps anchors against the complete marker view, including the
+// transparent touch area below the visible pin. These ratios place the map
+// coordinate at the rendered tail tip instead of the container's bottom edge.
+export const ROUTE_STOP_MARKER_ANCHOR = { x: 0.5, y: 50 / 64 };
+export const COMPACT_ROUTE_STOP_MARKER_ANCHOR = { x: 0.5, y: 39 / 50 };
+
 export default function RouteStopMarker({ stop, selected = false, compact = false }) {
   const number = Number(stop?.globalIndex ?? 0) + 1;
   const imageUrl = getMediaVariantUrl(stop?.media, 'thumb', stop?.image);
