@@ -2,6 +2,7 @@ import {
   getAdjacentSwipeIndex,
   getAdjacentSwipeItem,
   getCommittedSwipeDirection,
+  navigateToAdjacentSwipeItem,
   resolveAdjacentSwipe,
   shouldCaptureHorizontalSwipe,
 } from '../src/navigation/horizontalSwipe';
@@ -35,6 +36,22 @@ describe('horizontal swipe navigation', () => {
       activeIndex: 1,
       gestureState: { dx: -60, vx: -0.2 },
     })).toEqual({ name: 'Community' });
+  });
+
+  it('navigates adjacent bottom tabs without requiring navigation.emit', () => {
+    const navigation = {
+      getState: () => ({
+        index: 1,
+        routes: [{ name: 'Favorites' }, { name: 'Routes' }, { name: 'Community' }],
+      }),
+      navigate: jest.fn(),
+    };
+
+    expect(() => navigateToAdjacentSwipeItem({
+      navigation,
+      gestureState: { dx: -60, vx: -0.2 },
+    })).not.toThrow();
+    expect(navigation.navigate).toHaveBeenCalledWith('Community', undefined);
   });
 
   it('follows the reversed Favorites visual order one category at a time', () => {

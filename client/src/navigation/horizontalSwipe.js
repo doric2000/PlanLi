@@ -60,6 +60,21 @@ export function getAdjacentSwipeItem({
   return targetIndex === activeIndex ? null : items?.[targetIndex] || null;
 }
 
+export function navigateToAdjacentSwipeItem({ navigation, gestureState }) {
+  if (typeof navigation?.getState !== 'function' || typeof navigation?.navigate !== 'function') {
+    return null;
+  }
+  const state = navigation.getState();
+  const targetItem = getAdjacentSwipeItem({
+    items: state?.routes,
+    activeIndex: state?.index,
+    gestureState,
+  });
+  if (!targetItem) return null;
+  navigation.navigate(targetItem.name, targetItem.params);
+  return targetItem;
+}
+
 export function useHorizontalSwipeResponder({
   enabled = true,
   onMove,

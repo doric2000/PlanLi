@@ -10,7 +10,7 @@ import { colors, notifications, tabNavigatorStyles as styles } from '../styles';
 import { tabConfigs, tabScreens } from './TabConfigs';
 import CachedImage from '../components/CachedImage';
 import SwipeableTabBarButton from './SwipeableTabBarButton';
-import { getAdjacentSwipeItem } from './horizontalSwipe';
+import { navigateToAdjacentSwipeItem } from './horizontalSwipe';
 import { getVisibleMainTabNames } from './mainTabOrder';
 
 const Tab = createBottomTabNavigator();
@@ -48,21 +48,10 @@ export default function TabNavigator() {
     },
   }), [width]);
   const handleTabBarSwipe = useCallback((navigation, gestureState) => {
-    const state = navigation.getState();
-    const targetRoute = getAdjacentSwipeItem({
-      items: state.routes,
-      activeIndex: state.index,
+    navigateToAdjacentSwipeItem({
+      navigation,
       gestureState,
     });
-    if (!targetRoute) return;
-    const event = navigation.emit({
-      type: 'tabPress',
-      target: targetRoute.key,
-      canPreventDefault: true,
-    });
-    if (!event.defaultPrevented) {
-      navigation.navigate(targetRoute.name, targetRoute.params);
-    }
   }, []);
   const visibleScreens = getVisibleMainTabNames(Boolean(user))
     .map((name) => tabScreens.find((screen) => screen.name === name))

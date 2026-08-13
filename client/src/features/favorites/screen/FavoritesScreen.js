@@ -141,7 +141,6 @@ export default function FavoritesScreen() {
   }, [activeTab, transitionToIndex]);
 
   const swipeResponder = useHorizontalSwipeResponder({
-    enabled: !transitionActiveRef.current,
     onMove: handleSwipeMove,
     onRelease: handleSwipeRelease,
     onCancel: returnToCenter,
