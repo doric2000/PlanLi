@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
 import { colors, routeMapPreviewStyles as styles } from '../../../styles';
 import { getRouteInitialRegion } from '../utils/routeStops';
-import RouteStopMarker from './RouteStopMarker';
+import RouteStopMarker, { COMPACT_ROUTE_STOP_MARKER_ANCHOR } from './RouteStopMarker';
 
 export default function RouteMapPreview({ stops, onPress }) {
   const routeStops = Array.isArray(stops) ? stops : [];
@@ -37,7 +37,7 @@ export default function RouteMapPreview({ stops, onPress }) {
               key={stop.id || `${stop.dayIndex}:${stop.stopIndex}`}
               testID={`route-map-preview-marker-${stop.globalIndex + 1}`}
               coordinate={coordinates[index]}
-              anchor={{ x: 0.5, y: 1 }}
+              anchor={COMPACT_ROUTE_STOP_MARKER_ANCHOR}
             >
               <RouteStopMarker stop={stop} compact />
             </Marker>

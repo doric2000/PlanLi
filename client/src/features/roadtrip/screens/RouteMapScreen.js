@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import CachedImage from '../../../components/CachedImage';
-import RouteStopMarker from '../components/RouteStopMarker';
+import RouteStopMarker, { ROUTE_STOP_MARKER_ANCHOR } from '../components/RouteStopMarker';
 import { USER_MAP_ZOOM } from '../../../config/mapConfig';
 import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
@@ -145,7 +145,7 @@ export default function RouteMapScreen({ route, navigation }) {
                 }}
                 onPress={() => setSelectedStop(stop)}
                 stopPropagation
-                anchor={{ x: 0.5, y: 1 }}
+                anchor={ROUTE_STOP_MARKER_ANCHOR}
               >
                 <RouteStopMarker stop={stop} selected={selectedStop?.globalIndex === stop.globalIndex} />
               </Marker>

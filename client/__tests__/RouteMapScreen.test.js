@@ -63,6 +63,10 @@ describe('RouteMapScreen', () => {
     expect(screen.getByTestId('map-user-accuracy')).toBeTruthy();
     expect(screen.getByTestId('route-stop-marker-1')).toBeTruthy();
     expect(screen.getByTestId('route-stop-marker-2')).toBeTruthy();
+    expect(screen.getByTestId('route-map-marker-1').props.anchor).toEqual({
+      x: 0.5,
+      y: 50 / 64,
+    });
 
     fireEvent.press(screen.getByTestId('route-map-marker-2'));
     expect(screen.getByText('Second')).toBeTruthy();

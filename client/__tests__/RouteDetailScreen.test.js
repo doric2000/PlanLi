@@ -78,6 +78,10 @@ describe('RouteDetailScreen', () => {
     expect(screen.getAllByText('חיפה')).toHaveLength(1);
     fireEvent.press(screen.getByTestId('route-map-preview'));
     expect(navigation.navigate).toHaveBeenCalledWith('RouteMap', { routeData });
+    expect(screen.getByTestId('route-map-preview-marker-1').props.anchor).toEqual({
+      x: 0.5,
+      y: 39 / 50,
+    });
 
     expect(screen.getByTestId('route-day-stops-0')).toBeTruthy();
     expect(screen.queryByTestId('route-day-stops-1')).toBeNull();
