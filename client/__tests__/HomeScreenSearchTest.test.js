@@ -9,8 +9,9 @@
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContext } from '@react-navigation/native';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
 
 const mockSearchDestinations = jest.fn();
@@ -302,6 +303,33 @@ describe('HomeScreenSearchTest', () => {
     expect(screen.getByTestId('home-header-title-row')).toBeTruthy();
     expect(screen.getByText('לאן נוסעים?')).toBeTruthy();
     expect(screen.getByTestId('home-search-input')).toBeTruthy();
+  });
+
+  it('does not refresh or displace Home when entering it from another tab', async () => {
+    let handleTabPress;
+    const tabNavigation = {
+      addListener: jest.fn((event, handler) => {
+        if (event === 'tabPress') handleTabPress = handler;
+        return jest.fn();
+      }),
+      isFocused: jest.fn(() => false),
+    };
+    render(
+      <NavigationContext.Provider value={tabNavigation}>
+        <SafeAreaProvider
+          initialMetrics={{
+            frame: { x: 0, y: 0, width: 390, height: 844 },
+            insets: { top: 44, left: 0, right: 0, bottom: 34 },
+          }}
+        >
+          <HomeScreen navigation={{ navigate: jest.fn() }} />
+        </SafeAreaProvider>
+      </NavigationContext.Provider>
+    );
+
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    act(() => handleTabPress());
+    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
   });
 
   it('lets the hero own the top safe area without an automatic iOS inset', async () => {

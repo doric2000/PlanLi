@@ -45,6 +45,9 @@ export function useTabPressScrollOrRefresh({
   useEffect(() => {
     if (!enabled || !navigation?.addListener) return undefined;
     return navigation.addListener("tabPress", () => {
+      // React Navigation also emits tabPress when entering this tab from a
+      // different tab. Only an already-focused tab press is a re-press.
+      if (typeof navigation.isFocused === "function" && !navigation.isFocused()) return;
       if (scrollY.current > TOP_THRESHOLD) {
         scrollToTop();
       } else {
