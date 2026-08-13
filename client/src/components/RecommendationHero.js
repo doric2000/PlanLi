@@ -20,6 +20,7 @@ export const RecommendationHero = ({
   favoriteType = 'recommendations',
   imageUrls,
   emptyIcon,
+  onImagePress,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
   const images = useMemo(
@@ -101,24 +102,28 @@ export const RecommendationHero = ({
             return <View style={[common.heroImage, { width: pageWidth }]} />;
           }
 
+          const pageStyle = Platform.OS === 'web'
+            ? { width: pageWidth, height: '100%', backgroundColor: '#F3F4F6' }
+            : [common.heroImage, { width: pageWidth }];
           return (
-            <CachedImage
-              source={{ uri }}
-              placeholder={getMediaPlaceholder(item?.media?.[index])}
-              srcSet={getMediaSrcSet(item?.media?.[index])}
-              sizes="100vw"
-              style={
-                Platform.OS === 'web'
-                  ? {
-                      width: pageWidth,
-                      height: '100%',
-                      backgroundColor: '#F3F4F6',
-                    }
-                  : [common.heroImage, { width: pageWidth }]
-              }
-              contentFit="cover"
-              priority={index === imageWindow.currentIndex ? 'high' : 'low'}
-            />
+            <Pressable
+              style={pageStyle}
+              onPress={() => onImagePress?.(index)}
+              disabled={!onImagePress}
+              accessibilityRole={onImagePress ? 'button' : undefined}
+              accessibilityLabel={onImagePress ? `פתיחת תמונה ${index + 1} במסך מלא` : undefined}
+              testID={`recommendation-hero-image-${index}`}
+            >
+              <CachedImage
+                source={{ uri }}
+                placeholder={getMediaPlaceholder(item?.media?.[index])}
+                srcSet={getMediaSrcSet(item?.media?.[index])}
+                sizes="100vw"
+                style={StyleSheet.absoluteFillObject}
+                contentFit="cover"
+                priority={index === imageWindow.currentIndex ? 'high' : 'low'}
+              />
+            </Pressable>
           );
         }}
         onViewableItemsChanged={onViewableItemsChanged}
@@ -128,26 +133,20 @@ export const RecommendationHero = ({
       {Platform.OS === 'web' && images.length > 1 && (
         <View style={cards.recNavOverlay} pointerEvents="box-none">
           <View style={cards.recNavOverlayRow} pointerEvents="box-none">
-            <Pressable
-              style={cards.recNavZoneLeft}
-              onPress={() => scrollToImageIndex(activeImageIndex - 1)}
-            >
+            <View style={cards.recNavZoneLeft} pointerEvents="box-none">
               {activeImageIndex > 0 && (
-                <View style={cards.recNavButton}>
+                <Pressable style={cards.recNavButton} onPress={() => scrollToImageIndex(activeImageIndex - 1)}>
                   <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-                </View>
+                </Pressable>
               )}
-            </Pressable>
-            <Pressable
-              style={cards.recNavZoneRight}
-              onPress={() => scrollToImageIndex(activeImageIndex + 1)}
-            >
+            </View>
+            <View style={cards.recNavZoneRight} pointerEvents="box-none">
               {activeImageIndex < images.length - 1 && (
-                <View style={cards.recNavButton}>
+                <Pressable style={cards.recNavButton} onPress={() => scrollToImageIndex(activeImageIndex + 1)}>
                   <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
-                </View>
+                </Pressable>
               )}
-            </Pressable>
+            </View>
           </View>
         </View>
       )}

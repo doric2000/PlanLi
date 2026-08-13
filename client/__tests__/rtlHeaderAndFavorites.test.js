@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 import BackButton from '../src/components/BackButton';
 import FavoriteButton from '../src/components/FavoriteButton';
@@ -92,6 +92,20 @@ describe('RTL recommendation actions', () => {
       />
     );
     expect(mockUseFavorite).toHaveBeenCalledWith('routes', 'route-1', {});
+  });
+
+  it('opens the selected detail image through the shared gallery callback', () => {
+    const onImagePress = jest.fn();
+    const screen = render(
+      <RecommendationHero
+        item={{ id: 'rec-gallery', media: [{ large: { url: 'https://example.com/photo.jpg' } }] }}
+        snapshotData={{}}
+        onImagePress={onImagePress}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId('recommendation-hero-image-0'));
+    expect(onImagePress).toHaveBeenCalledWith(0);
   });
 });
 
