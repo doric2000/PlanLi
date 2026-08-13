@@ -1,15 +1,23 @@
 import React from 'react';
+import { Animated } from 'react-native';
 import { fireEvent, render, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import FavoritesScreen from '../src/features/favorites/screen/FavoritesScreen';
 
+const mockFavoriteRecommendationsFull = jest.fn(() => ({
+  favorites: [], loading: false, reload: jest.fn(),
+}));
+const mockFavoriteRoadTripsFull = jest.fn(() => ({
+  favorites: [], loading: false, reload: jest.fn(),
+}));
+
 jest.mock('../src/hooks/useFavoriteRecommendationsFull', () => ({
-  useFavoriteRecommendationsFull: () => ({ favorites: [], loading: false, reload: jest.fn() }),
+  useFavoriteRecommendationsFull: (options) => mockFavoriteRecommendationsFull(options),
 }));
 
 jest.mock('../src/hooks/useFavoriteRoadTripsFull', () => ({
-  useFavoriteRoadTripsFull: () => ({ favorites: [], loading: false, reload: jest.fn() }),
+  useFavoriteRoadTripsFull: (options) => mockFavoriteRoadTripsFull(options),
 }));
 
 jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({
@@ -37,6 +45,22 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 describe('Favorites blue header', () => {
+  beforeEach(() => {
+    mockFavoriteRecommendationsFull.mockClear();
+    mockFavoriteRoadTripsFull.mockClear();
+    jest.spyOn(Animated, 'timing').mockImplementation((value, config) => ({
+      start: (callback) => {
+        value.setValue(config.toValue);
+        callback?.({ finished: true });
+      },
+      stop: jest.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it('keeps the category tabs inside the shared hero and switches content', () => {
     const screen = render(
       <SafeAreaProvider
@@ -52,8 +76,13 @@ describe('Favorites blue header', () => {
     const header = screen.getByTestId('favorites-tab-header');
     expect(within(header).getByTestId('favorites-header-tabs')).toBeTruthy();
     expect(screen.getByTestId('favorite-destinations-list')).toBeTruthy();
+    expect(mockFavoriteRecommendationsFull).toHaveBeenLastCalledWith({ enabled: false });
+    expect(mockFavoriteRoadTripsFull).toHaveBeenLastCalledWith({ enabled: false });
 
     fireEvent.press(within(header).getByText('המלצות'));
     expect(screen.getByTestId('favorite-recommendations-list')).toBeTruthy();
+    expect(screen.getByTestId('favorites-swipe-surface')).toBeTruthy();
+    expect(mockFavoriteRecommendationsFull).toHaveBeenLastCalledWith({ enabled: true });
+    expect(mockFavoriteRoadTripsFull).toHaveBeenLastCalledWith({ enabled: false });
   });
 });
