@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -12,9 +12,23 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import AppText from './AppText';
 import CachedImage from './CachedImage';
 import { getImageSize } from '../hooks/useImagePicker';
-import { colors, imageCropReviewStyles as styles } from '../styles';
+import { colors, imageCropReviewStyles as styles, spacing } from '../styles';
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+const MAX_CROP_VIEWPORT_WIDTH = 640;
+const ZERO_SAFE_AREA_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+
+export function fitCropViewport({ containerWidth, containerHeight, aspectRatio }) {
+  const width = Math.min(MAX_CROP_VIEWPORT_WIDTH, Math.max(0, Number(containerWidth) || 0));
+  const height = Math.max(0, Number(containerHeight) || 0);
+  const ratio = Math.max(0.01, Number(aspectRatio) || 1);
+  if (!width || !height) return null;
+  const fittedWidth = Math.min(width, height * ratio);
+  return {
+    width: fittedWidth,
+    height: fittedWidth / ratio,
+  };
+}
 
 export function calculateCropRect({
   sourceWidth,
@@ -82,8 +96,10 @@ export default function ImageCropReviewModal({
   onCancel,
   onComplete,
 }) {
+  const insets = useContext(SafeAreaInsetsContext) || ZERO_SAFE_AREA_INSETS;
   const [index, setIndex] = useState(0);
   const [sourceSize, setSourceSize] = useState(null);
+  const [stageSize, setStageSize] = useState(null);
   const [viewport, setViewport] = useState(null);
   const [processed, setProcessed] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -95,6 +111,11 @@ export default function ImageCropReviewModal({
   const startZoom = useSharedValue(1);
   const uri = uris[index] || null;
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
+  const fittedViewport = useMemo(() => fitCropViewport({
+    containerWidth: stageSize?.width,
+    containerHeight: stageSize?.height,
+    aspectRatio: ratio,
+  }), [ratio, stageSize]);
 
   useEffect(() => {
     if (!visible) return;
@@ -204,25 +225,58 @@ export default function ImageCropReviewModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onCancel}
+    >
       <GestureHandlerRootView style={styles.screen}>
-      <SafeAreaView style={styles.screen}>
-        <View style={styles.header}>
-          <Pressable onPress={onCancel} disabled={saving} style={styles.headerAction}>
+      <View
+        style={[
+          styles.screen,
+          { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 8) },
+        ]}
+        testID="image-crop-safe-area"
+      >
+        <View style={styles.header} testID="image-crop-header">
+          <Pressable
+            onPress={onCancel}
+            disabled={saving}
+            style={styles.headerAction}
+            testID="image-crop-cancel"
+          >
             <AppText style={styles.cancelText}>ביטול</AppText>
           </Pressable>
           <View style={styles.headerCopy}>
             <AppText style={styles.title}>התאמת התמונה</AppText>
             <AppText style={styles.counter}>{index + 1}/{uris.length}</AppText>
           </View>
-          <Pressable onPress={confirmCurrent} disabled={saving || !displaySize} style={styles.headerAction}>
+          <Pressable
+            onPress={confirmCurrent}
+            disabled={saving || !displaySize}
+            style={styles.headerAction}
+            testID="image-crop-confirm"
+          >
             <AppText style={styles.confirmText}>{index === uris.length - 1 ? 'סיום' : 'הבא'}</AppText>
           </Pressable>
         </View>
 
-        <View style={styles.stage}>
-          <View
-            style={[styles.viewport, { aspectRatio: ratio }]}
+        <View
+          style={styles.stage}
+          onLayout={(event) => {
+            const layout = event.nativeEvent.layout;
+            setStageSize({
+              width: Math.max(0, layout.width - (2 * spacing.md)),
+              height: Math.max(0, layout.height - (2 * spacing.sm)),
+            });
+          }}
+          testID="image-crop-stage"
+        >
+          {fittedViewport ? <View
+            style={[styles.viewport, fittedViewport]}
             onLayout={(event) => setViewport(event.nativeEvent.layout)}
             testID="image-crop-viewport"
           >
@@ -241,14 +295,14 @@ export default function ImageCropReviewModal({
             ) : (
               <ActivityIndicator size="large" color={colors.white} />
             )}
-          </View>
+          </View> : null}
         </View>
 
         <View style={styles.footer}>
           <AppText style={styles.helper}>צבטו להגדלה וגררו כדי לבחור את החיתוך</AppText>
           {saving ? <ActivityIndicator color={colors.primary} /> : null}
         </View>
-      </SafeAreaView>
+      </View>
       </GestureHandlerRootView>
     </Modal>
   );

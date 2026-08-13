@@ -1,6 +1,29 @@
-import { calculateCropRect } from '../src/components/ImageCropReviewModal';
+import { calculateCropRect, fitCropViewport } from '../src/components/ImageCropReviewModal';
 
 describe('calculateCropRect', () => {
+  it('fits crop frames inside both compact portrait and landscape stages', () => {
+    expect(fitCropViewport({
+      containerWidth: 390,
+      containerHeight: 420,
+      aspectRatio: 1,
+    })).toEqual({ width: 390, height: 390 });
+    expect(fitCropViewport({
+      containerWidth: 720,
+      containerHeight: 260,
+      aspectRatio: 1,
+    })).toEqual({ width: 260, height: 260 });
+    expect(fitCropViewport({
+      containerWidth: 720,
+      containerHeight: 260,
+      aspectRatio: 4 / 3,
+    })).toEqual({ width: 260 * (4 / 3), height: 260 });
+    expect(fitCropViewport({
+      containerWidth: 1024,
+      containerHeight: 900,
+      aspectRatio: 1,
+    })).toEqual({ width: 640, height: 640 });
+  });
+
   it('centers a square crop and never exceeds the source', () => {
     expect(calculateCropRect({
       sourceWidth: 4000,
