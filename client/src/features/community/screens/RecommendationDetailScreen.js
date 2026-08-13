@@ -6,6 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { CommentsModal } from '../../../components/CommentsModal';
 import LikesModal from '../../../components/LikesModal';
+import MediaGalleryModal from '../../../components/MediaGalleryModal';
 import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
 import { RecommendationHero } from '../../../components/RecommendationHero';
 import { auth } from '../../../config/firebase';
@@ -15,7 +16,7 @@ import { useUserData } from '../../../hooks/useUserData';
 import { recordRecommendationOpen } from '../../../services/PersonalizationService';
 import { colors } from '../../../styles';
 import { canManageRecommendation } from '../../../utils/contentPermissions';
-import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
+import { findMediaAssetByUrl, getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import RecommendationDetailContent from '../components/RecommendationDetailContent';
 import { recommendationDetailStyles as styles } from '../components/recommendationDetailStyles';
 import { useCommentsCount } from '../hooks/useCommentsCount';
@@ -68,12 +69,19 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
   const commentsCount = useCommentsCount('recommendations', postId);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [gallery, setGallery] = useState({ visible: false, index: 0 });
   const canEdit = canManageRecommendation({
     user: auth.currentUser,
     ownerId: item.ownerId,
     isAdmin,
   });
   const hasImage = getRecommendationImageUrls(item, 'large').length > 0;
+  const galleryItems = useMemo(() => getRecommendationImageUrls(item, 'large').map((url, index) => ({
+    id: `${postId}:gallery:${index}`,
+    url,
+    media: findMediaAssetByUrl(item.media, url),
+    caption: item.title,
+  })), [item, postId]);
 
   useEffect(() => {
     if (!auth.currentUser?.uid || !postId) return;
@@ -122,7 +130,11 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <RecommendationHero item={{ ...item, id: postId }} snapshotData={snapshotData} />
+          <RecommendationHero
+            item={{ ...item, id: postId }}
+            snapshotData={snapshotData}
+            onImagePress={(index) => setGallery({ visible: true, index })}
+          />
           <RecommendationDetailContent
             item={{ ...item, id: postId }}
             author={author}
@@ -157,6 +169,12 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
         onClose={() => setCommentsModalVisible(false)}
         postId={postId}
         collectionName="recommendations"
+      />
+      <MediaGalleryModal
+        visible={gallery.visible}
+        items={galleryItems}
+        initialIndex={gallery.index}
+        onClose={() => setGallery((current) => ({ ...current, visible: false }))}
       />
     </SafeAreaView>
   );
