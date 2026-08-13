@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Platform, Pressable, SafeAreaView, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, SafeAreaView, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from './AppText';
 import CachedImage from './CachedImage';
+import RtlPagedFlatList from './RtlPagedFlatList';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { getMediaPlaceholder, getMediaSrcSet } from '../utils/mediaAssets';
 import { colors, mediaGalleryModalStyles as styles } from '../styles';
@@ -14,6 +15,11 @@ export default function MediaGalleryModal({ visible, items = [], initialIndex = 
   const normalized = useMemo(() => items.filter((item) => item?.url), [items]);
   const [activeIndex, setActiveIndex] = useState(0);
   const window = useBoundedImageWindow(activeIndex, normalized.length);
+  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 60 }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    const first = viewableItems?.[0]?.index;
+    if (typeof first === 'number') setActiveIndex(first);
+  }).current;
 
   useEffect(() => {
     if (!visible || !normalized.length) return;
@@ -39,15 +45,13 @@ export default function MediaGalleryModal({ visible, items = [], initialIndex = 
           <View style={styles.headerSpacer} />
         </View>
 
-        <FlatList
+        <RtlPagedFlatList
           ref={listRef}
           data={normalized}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
           keyExtractor={(item, index) => item.id || `${item.url}:${index}`}
           getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-          onMomentumScrollEnd={(event) => setActiveIndex(Math.round(event.nativeEvent.contentOffset.x / Math.max(1, width)))}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           initialNumToRender={1}
           maxToRenderPerBatch={1}
           windowSize={3}
@@ -72,18 +76,18 @@ export default function MediaGalleryModal({ visible, items = [], initialIndex = 
         {Platform.OS === 'web' && normalized.length > 1 ? (
           <View style={styles.webNavigation} pointerEvents="box-none">
             <Pressable
-              style={[styles.navButton, activeIndex === 0 && styles.navButtonDisabled]}
-              onPress={() => goTo(activeIndex - 1)}
-              disabled={activeIndex === 0}
-              accessibilityLabel="תמונה קודמת"
-            >
-              <Ionicons name="chevron-back" size={28} color={colors.white} />
-            </Pressable>
-            <Pressable
               style={[styles.navButton, activeIndex === normalized.length - 1 && styles.navButtonDisabled]}
               onPress={() => goTo(activeIndex + 1)}
               disabled={activeIndex === normalized.length - 1}
               accessibilityLabel="תמונה הבאה"
+            >
+              <Ionicons name="chevron-back" size={28} color={colors.white} />
+            </Pressable>
+            <Pressable
+              style={[styles.navButton, activeIndex === 0 && styles.navButtonDisabled]}
+              onPress={() => goTo(activeIndex - 1)}
+              disabled={activeIndex === 0}
+              accessibilityLabel="תמונה קודמת"
             >
               <Ionicons name="chevron-forward" size={28} color={colors.white} />
             </Pressable>

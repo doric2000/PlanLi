@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import RtlChoiceGroup from '../src/components/RtlChoiceGroup';
 
@@ -17,7 +18,7 @@ describe('RtlChoiceGroup', () => {
 
     const rail = getByTestId('rtl-choice-rail');
     expect(rail.props.horizontal).toBe(true);
-    expect(rail.props.contentContainerStyle.flexDirection).toBe('row-reverse');
+    expect(StyleSheet.flatten(rail.props.contentContainerStyle).flexDirection).toBe('row-reverse');
     fireEvent.press(getByTestId('rtl-choice-1'));
     expect(onToggle).toHaveBeenCalledWith('two');
   });

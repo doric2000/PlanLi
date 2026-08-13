@@ -9,6 +9,7 @@ import {
 	View,
 } from "react-native";
 import AppText from "../../../components/AppText";
+import RtlHorizontalScrollView from "../../../components/RtlHorizontalScrollView";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -489,13 +490,11 @@ export default function HomeScreen({ navigation }) {
 					</AppText>
 				</View>
 			) : (
-				<ScrollView
-					horizontal
-					showsHorizontalScrollIndicator={false}
+				<RtlHorizontalScrollView
 					contentContainerStyle={styles.featuredContentScroll}
 				>
 					{featuredDestinations.map(renderFeaturedCard)}
-				</ScrollView>
+				</RtlHorizontalScrollView>
 			)}
 		</View>
 	);

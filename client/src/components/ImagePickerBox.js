@@ -1,9 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, TouchableOpacity, FlatList, Platform, useWindowDimensions, Pressable } from 'react-native';
+import { View, TouchableOpacity, Platform, useWindowDimensions, Pressable } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { colors, imagePickerBoxStyles as styles } from '../styles';
 import CachedImage from './CachedImage';
+import RtlPagedFlatList from './RtlPagedFlatList';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 
 /**
@@ -94,14 +95,11 @@ export const ImagePickerBox = ({
             imageFit === 'contain' ? styles.carouselWrapContain : null,
           ]}
         >
-          <FlatList
+          <RtlPagedFlatList
             ref={listRef}
             data={images}
             extraData={currentIndex}
             keyExtractor={(uri, index) => `${index}:${uri}`}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
             scrollEnabled={canSwipe}
             renderItem={({ item: uri, index }) => (
               <View style={{ width: pageWidth || '100%', height: '100%' }}>
@@ -151,9 +149,9 @@ export const ImagePickerBox = ({
             <View style={styles.navOverlay} pointerEvents="box-none">
               <Pressable
                 style={styles.navZoneLeft}
-                onPress={() => scrollToIndex(activeIndex - 1)}
+                onPress={() => scrollToIndex(activeIndex + 1)}
               >
-                {activeIndex > 0 ? (
+                {activeIndex < count - 1 ? (
                   <View style={styles.navBtn}>
                     <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
                   </View>
@@ -161,9 +159,9 @@ export const ImagePickerBox = ({
               </Pressable>
               <Pressable
                 style={styles.navZoneRight}
-                onPress={() => scrollToIndex(activeIndex + 1)}
+                onPress={() => scrollToIndex(activeIndex - 1)}
               >
-                {activeIndex < count - 1 ? (
+                {activeIndex > 0 ? (
                   <View style={styles.navBtn}>
                     <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
                   </View>

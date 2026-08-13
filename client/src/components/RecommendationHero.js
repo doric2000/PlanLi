@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, FlatList, Platform, useWindowDimensions, Pressable, StyleSheet } from 'react-native';
+import { View, Platform, useWindowDimensions, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { BackButton } from './BackButton';
 import CachedImage, { prefetchImage } from './CachedImage';
 import FavoriteButton from './FavoriteButton';
+import RtlPagedFlatList from './RtlPagedFlatList';
 import { common, cards } from '../styles';
 import { getTravelCategoryPresentation } from '../constants/travelPresentation';
 import {
@@ -80,14 +81,11 @@ export const RecommendationHero = ({
 
   return (
     <View style={[common.heroContainer, styles.heroFrame]} onLayout={(e) => setHeroWidth(e.nativeEvent.layout.width)}>
-      <FlatList
+      <RtlPagedFlatList
         ref={heroRef}
         data={images}
         extraData={imageWindow.currentIndex}
         keyExtractor={(uri, index) => `${item.id || 'hero'}:${index}:${uri}`}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
         scrollEnabled={images.length > 1}
         initialNumToRender={1}
         maxToRenderPerBatch={1}
@@ -134,15 +132,15 @@ export const RecommendationHero = ({
         <View style={cards.recNavOverlay} pointerEvents="box-none">
           <View style={cards.recNavOverlayRow} pointerEvents="box-none">
             <View style={cards.recNavZoneLeft} pointerEvents="box-none">
-              {activeImageIndex > 0 && (
-                <Pressable style={cards.recNavButton} onPress={() => scrollToImageIndex(activeImageIndex - 1)}>
+              {activeImageIndex < images.length - 1 && (
+                <Pressable style={cards.recNavButton} onPress={() => scrollToImageIndex(activeImageIndex + 1)}>
                   <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
                 </Pressable>
               )}
             </View>
             <View style={cards.recNavZoneRight} pointerEvents="box-none">
-              {activeImageIndex < images.length - 1 && (
-                <Pressable style={cards.recNavButton} onPress={() => scrollToImageIndex(activeImageIndex + 1)}>
+              {activeImageIndex > 0 && (
+                <Pressable style={cards.recNavButton} onPress={() => scrollToImageIndex(activeImageIndex - 1)}>
                   <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
                 </Pressable>
               )}

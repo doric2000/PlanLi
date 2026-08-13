@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-	FlatList,
 	Platform,
 	Pressable,
 	TouchableOpacity,
@@ -15,6 +14,7 @@ import { useBoundedImageWindow } from "../../../hooks/useBoundedImageWindow";
 import { useStableCarouselLayout } from "../../../hooks/useStableCarouselLayout";
 import { Avatar } from "../../../components/Avatar";
 import CachedImage, { prefetchImage } from "../../../components/CachedImage";
+import RtlPagedFlatList from "../../../components/RtlPagedFlatList";
 import PlacesRoute from "./PlacesRoute";
 import { ActionMenu } from "../../../components/ActionMenu";
 import ActionBar from "../../../components/ActionBar";
@@ -207,15 +207,12 @@ export const RouteCard = ({
 			onLayout={onCarouselLayout}
 		>
 			{routeImages.length > 0 ? (
-				<FlatList
+				<RtlPagedFlatList
 					ref={carouselRef}
 					data={routeImages}
 					extraData={imageWindow.currentIndex}
 					style={[cards.recCarouselList, { width: pageWidth, height: frameHeight }]}
 					keyExtractor={(uri, index) => `${item.id || "route"}:${index}:${uri}`}
-					horizontal
-					pagingEnabled
-					showsHorizontalScrollIndicator={false}
 					scrollEnabled={routeImages.length > 1}
 					nestedScrollEnabled
 					initialNumToRender={1}
@@ -264,9 +261,9 @@ export const RouteCard = ({
 				<View style={cards.recNavOverlay} pointerEvents="box-none">
 					<Pressable
 						style={cards.recNavZoneLeft}
-						onPress={() => scrollToImageIndex(activeImageIndex - 1)}
+						onPress={() => scrollToImageIndex(activeImageIndex + 1)}
 					>
-						{activeImageIndex > 0 && (
+						{activeImageIndex < routeImages.length - 1 && (
 							<View style={cards.recNavButton}>
 								<Ionicons name="chevron-back" size={22} color="#FFFFFF" />
 							</View>
@@ -274,9 +271,9 @@ export const RouteCard = ({
 					</Pressable>
 					<Pressable
 						style={cards.recNavZoneRight}
-						onPress={() => scrollToImageIndex(activeImageIndex + 1)}
+						onPress={() => scrollToImageIndex(activeImageIndex - 1)}
 					>
-						{activeImageIndex < routeImages.length - 1 && (
+						{activeImageIndex > 0 && (
 							<View style={cards.recNavButton}>
 								<Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
 							</View>

@@ -1,7 +1,8 @@
 import React from "react";
-import { View, ScrollView } from "react-native";
+import { View } from "react-native";
 import AppText from "./AppText";
 import CompactChip from './CompactChip';
+import RtlHorizontalScrollView from './RtlHorizontalScrollView';
 import { tags as tagsStyle, spacing } from "../styles";
 
 /**
@@ -68,9 +69,7 @@ export const TagSelector = ({
     return (
         <View style={tagsStyle.container}>
             {label && <AppText style={tagsStyle.sectionLabel}>{label}</AppText>}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
+            <RtlHorizontalScrollView
                 contentContainerStyle={{
                     paddingLeft: spacing.screenHorizontal,
                     flexDirection: "row-reverse",
@@ -84,7 +83,7 @@ export const TagSelector = ({
                         onPress={() => handlePress(tag)}
                     />
                 ))}
-            </ScrollView>
+            </RtlHorizontalScrollView>
         </View>
     );
 };

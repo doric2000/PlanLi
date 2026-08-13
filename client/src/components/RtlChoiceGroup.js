@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Platform, ScrollView, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import AppText from "./AppText";
 import CompactChip from './CompactChip';
+import RtlHorizontalScrollView from './RtlHorizontalScrollView';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../styles';
 import { guidedFormStyles as styles } from './guidedFormStyles';
@@ -23,20 +24,10 @@ export default function RtlChoiceGroup({
   getItemTheme,
   testIDPrefix,
 }) {
-  const scrollRef = useRef(null);
   const { width } = useWindowDimensions();
   const isResponsiveRail = layout === 'responsive';
   const useRail = layout === 'rail' || (isResponsiveRail && width < 720);
   const selected = useMemo(() => new Set(Array.isArray(selectedIds) ? selectedIds : [selectedIds].filter(Boolean)), [selectedIds]);
-
-  const alignRailToRight = useCallback(() => {
-    if (!useRail) return;
-    scrollRef.current?.scrollToEnd?.({ animated: false });
-  }, [useRail]);
-
-  useEffect(() => {
-    if (useRail) alignRailToRight();
-  }, [alignRailToRight, options.length, useRail]);
 
   const content = options.map((option, index) => {
     const id = optionId(option);
@@ -92,19 +83,14 @@ export default function RtlChoiceGroup({
       {!!label && <AppText style={styles.fieldLabel}>{label}</AppText>}
       {!!helper && <AppText style={styles.fieldHelper}>{helper}</AppText>}
       {useRail ? (
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
+        <RtlHorizontalScrollView
           style={styles.choiceRail}
           contentContainerStyle={styles.choiceRailContent}
-          onContentSizeChange={alignRailToRight}
           keyboardShouldPersistTaps="handled"
           testID={testIDPrefix ? `${testIDPrefix}-rail` : undefined}
-          {...(Platform.OS === 'web' ? { dir: 'rtl' } : {})}
         >
           {content}
-        </ScrollView>
+        </RtlHorizontalScrollView>
       ) : (
         <View style={styles.choiceWrap} testID={testIDPrefix ? `${testIDPrefix}-wrap` : undefined}>{content}</View>
       )}
