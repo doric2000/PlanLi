@@ -1,14 +1,28 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { cleanOptionalBio, completeAccountSetup, registerUser, updateProfile } = require('./profileService');
+const {
+  cleanOptionalBio,
+  cleanOptionalName,
+  completeAccountSetup,
+  registerUser,
+  updateProfile,
+} = require('./profileService');
 
 function createRegistrationAdmin(initialData = null, { serializeTransactions = false } = {}) {
   let stored = initialData ? { ...initialData } : null;
   const writes = [];
-  const ref = { path: 'users/user-1' };
+  const snapshot = () => ({ exists: Boolean(stored), data: () => stored });
+  const ref = {
+    path: 'users/user-1',
+    get: async () => snapshot(),
+    set: async (fields, options) => {
+      writes.push({ fields, options });
+      stored = options?.merge ? { ...(stored || {}), ...fields } : { ...fields };
+    },
+  };
   const executeTransaction = async (handler) => handler({
-    get: async () => ({ exists: Boolean(stored), data: () => stored }),
+    get: async () => snapshot(),
     set: (_target, fields, options) => {
       writes.push({ fields, options });
       stored = options?.merge ? { ...(stored || {}), ...fields } : { ...fields };
@@ -66,6 +80,90 @@ test('profile bio accepts a short two-line string and removes control characters
 
 test('profile bio can be cleared with an empty string', () => {
   assert.equal(cleanOptionalBio('   '), '');
+});
+
+test('profile names normalize spacing and enforce six words and 60 characters', () => {
+  assert.equal(cleanOptionalName('  Dana   Cohen  '), 'Dana Cohen');
+  assert.throws(() => cleanOptionalName('one two three four five six seven'), /six words/);
+  assert.throws(() => cleanOptionalName('א'.repeat(61)), /invalid/);
+});
+
+test('a verified user can change the display name only once', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    displayName: 'Old Name',
+  });
+  const request = {
+    admin: fixture.admin,
+    auth: { uid: 'user-1', token: { email_verified: true } },
+    data: { displayName: 'New Name' },
+  };
+
+  await updateProfile(request);
+  assert.equal(fixture.getStored().displayName, 'New Name');
+  assert.equal(fixture.getStored().profileManagement.displayNameChangedAt, 'timestamp');
+  await assert.rejects(
+    updateProfile({ ...request, data: { displayName: 'Third Name' } }),
+    (error) => error?.details?.reason === 'DISPLAY_NAME_CHANGE_ALREADY_USED'
+  );
+});
+
+test('an unverified email user cannot change the display name', async () => {
+  const fixture = createRegistrationAdmin({ uid: 'user-1', displayName: 'Old Name' });
+  await assert.rejects(
+    updateProfile({
+      admin: fixture.admin,
+      auth: { uid: 'user-1', token: { email_verified: false } },
+      data: { displayName: 'New Name' },
+    }),
+    (error) => error?.details?.reason === 'EMAIL_VERIFICATION_REQUIRED'
+  );
+  assert.equal(fixture.getStored().displayName, 'Old Name');
+});
+
+test('travel preferences require verified email and current legal consent', async () => {
+  const completeProfile = {
+    uid: 'user-1',
+    displayName: 'Dana Cohen',
+    onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
+    legal: {
+      termsVersion: '2026-08-14-draft',
+      privacyVersion: '2026-08-14-draft',
+      acceptedAt: 'timestamp',
+    },
+    smartProfile: { setupRequired: true },
+  };
+  const smartProfile = {
+    interests: ['food', 'nature_scenery', 'hiking'],
+    budget: 'balanced',
+    travelParties: ['couple'],
+  };
+
+  const unverified = createRegistrationAdmin(completeProfile);
+  await assert.rejects(
+    updateProfile({
+      admin: unverified.admin,
+      auth: {
+        uid: 'user-1',
+        token: { email_verified: false, firebase: { sign_in_provider: 'password' } },
+      },
+      data: { smartProfile, completeSmartProfile: true, taxonomyVersion: 5 },
+    }),
+    (error) => error?.details?.reason === 'EMAIL_VERIFICATION_REQUIRED'
+  );
+
+  const missingLegal = createRegistrationAdmin({ ...completeProfile, legal: {} });
+  await assert.rejects(
+    updateProfile({
+      admin: missingLegal.admin,
+      auth: {
+        uid: 'user-1',
+        token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+      },
+      data: { smartProfile, completeSmartProfile: true, taxonomyVersion: 5 },
+    }),
+    (error) => error?.details?.reason === 'LEGAL_CONSENT_REQUIRED'
+  );
 });
 
 test('smart budget writes require taxonomy v5 while unrelated profile writes do not', async () => {

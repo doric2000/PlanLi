@@ -17,6 +17,20 @@ const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSm
 
 const sortedUnique = (values) => Array.from(new Set(Array.isArray(values) ? values : [])).sort();
 
+export function formatProfileUpdateError(error, fallback = 'לא הצלחנו לעדכן את הפרופיל.') {
+  const reason = error?.details?.reason;
+  if (reason === 'EMAIL_VERIFICATION_REQUIRED') {
+    return 'כדי לשנות את השם צריך לאמת קודם את כתובת האימייל.';
+  }
+  if (reason === 'DISPLAY_NAME_CHANGE_ALREADY_USED') {
+    return 'כבר השתמשת באפשרות שינוי השם החד־פעמית.';
+  }
+  if (reason === 'ACCOUNT_SETUP_REQUIRED') {
+    return 'צריך להשלים קודם את פרטי החשבון.';
+  }
+  return fallback;
+}
+
 export function verifyPersistedSmartProfile(requested, persisted, { complete = false } = {}) {
   if (!persisted || typeof persisted !== 'object') return false;
   for (const field of PROFILE_ARRAY_FIELDS) {

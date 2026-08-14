@@ -44,7 +44,7 @@ const SettingsAuthed = withRequireAuth(SettingsScreen);
 const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
-const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen);
+const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen, CAPABILITIES.PREFERENCES_SETUP);
 const AddRecommendationActive = withRequireAuth(AddRecommendationScreen, CAPABILITIES.ACTIVE);
 const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
 

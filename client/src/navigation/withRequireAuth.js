@@ -2,13 +2,18 @@ import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../features/auth/AuthContext';
-import { CAPABILITIES } from '../constants/authPolicy';
+import { AUTH_STATES, CAPABILITIES } from '../constants/authPolicy';
 import { colors, common } from '../styles';
 
 function RequireAuthWrapper(ScreenComponent, capability = CAPABILITIES.SIGNED_IN) {
   return function RequireAuthScreen(props) {
-    const { isGuest, isActive, loading, requireCapability } = useAuth();
-    const blocked = capability === CAPABILITIES.ACTIVE ? !isActive : isGuest;
+    const { isGuest, isActive, loading, requireCapability, status } = useAuth();
+    const preferencesAllowed = [AUTH_STATES.PREFERENCES_REQUIRED, AUTH_STATES.READY].includes(status);
+    const blocked = capability === CAPABILITIES.ACTIVE
+      ? !isActive
+      : capability === CAPABILITIES.PREFERENCES_SETUP
+        ? !preferencesAllowed
+        : isGuest;
 
     useEffect(() => {
       if (loading) return;

@@ -8,11 +8,11 @@ import { AUTH_STATES } from '../constants/authPolicy';
 import { colors, common } from '../styles';
 
 export default function PreferenceSetupGate({ navigation, route }) {
-  const { status, loading } = useAuth();
+  const { status, loading, authFlowInProgress } = useAuth();
   const allowUnverified = route?.params?.allowUnverified === true;
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || authFlowInProgress) return;
     if (status === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED && !allowUnverified) {
       navigation.reset({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     } else if (status === AUTH_STATES.ACCOUNT_SETUP_REQUIRED) {
@@ -20,7 +20,9 @@ export default function PreferenceSetupGate({ navigation, route }) {
     } else if (status === AUTH_STATES.PREFERENCES_REQUIRED) {
       navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
     }
-  }, [allowUnverified, loading, navigation, status]);
+  }, [allowUnverified, authFlowInProgress, loading, navigation, status]);
+
+  if (authFlowInProgress) return <RightDrawerNavigator />;
 
   if (loading || (
     status !== AUTH_STATES.READY

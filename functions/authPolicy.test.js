@@ -6,6 +6,7 @@ const path = require('node:path');
 const {
   ACCESS_LEVELS,
   AUTH_REASONS,
+  assertAccountSetupComplete,
   authorizeRequest,
 } = require('./authPolicy');
 
@@ -73,6 +74,22 @@ test('active access accepts password and social accounts only after all gates', 
     auth: { uid: 'user-1', token: { firebase: { sign_in_provider: 'google.com' } } },
     access: ACCESS_LEVELS.ACTIVE,
   }));
+});
+
+test('account setup gate requires verification and legal consent but not preferences', () => {
+  const setupOnlyUser = {
+    ...activeUser,
+    smartProfile: { setupRequired: true },
+  };
+  assert.doesNotThrow(() => assertAccountSetupComplete(passwordAuth(true), setupOnlyUser));
+  assert.throws(
+    () => assertAccountSetupComplete(passwordAuth(false), setupOnlyUser),
+    (error) => error?.details?.reason === AUTH_REASONS.EMAIL_VERIFICATION_REQUIRED
+  );
+  assert.throws(
+    () => assertAccountSetupComplete(passwordAuth(true), { ...setupOnlyUser, legal: {} }),
+    (error) => error?.details?.reason === AUTH_REASONS.LEGAL_CONSENT_REQUIRED
+  );
 });
 
 test('every exported callable declares its access level', () => {

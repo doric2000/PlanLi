@@ -9,6 +9,11 @@ import { formatAuthError, signOutCentral } from '../../../services/AuthService';
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import LegalConsent from '../components/LegalConsent';
+import {
+  normalizeDisplayName,
+  sanitizeDisplayNameInput,
+  validateDisplayName,
+} from '../utils/displayName';
 
 export default function CompleteAccountScreen({ navigation }) {
   const { user, userDocument } = useAuth();
@@ -20,8 +25,9 @@ export default function CompleteAccountScreen({ navigation }) {
     setDisplayName(userDocument?.displayName || user?.displayName || '');
   }, [user?.displayName, userDocument?.displayName]);
   const submit = async () => {
-    const name = displayName.trim();
-    if (name.length < 2) return setError('יש להזין שם מלא באורך של לפחות שני תווים.');
+    const name = normalizeDisplayName(displayName);
+    const displayNameError = validateDisplayName(name);
+    if (displayNameError) return setError(displayNameError);
     if (!acceptedLegal) return setError('יש לאשר את תנאי השימוש ומדיניות הפרטיות.');
     setLoading(true); setError('');
     try {
@@ -35,8 +41,8 @@ export default function CompleteAccountScreen({ navigation }) {
     <AuthLayout testID="complete-account-screen">
       <BrandWordmark compact />
       <AppText style={authStyles.title}>כמעט סיימנו</AppText>
-      <AppText style={authStyles.subtitle}>הפרטים האלה נדרשים מכל משתמש, גם בהתחברות עם Google או Apple.</AppText>
-      <AuthInput label="שם מלא" value={displayName} onChangeText={setDisplayName} placeholder="הזינו את שמכם המלא" iconName="person-outline" autoCapitalize="words" />
+      <AppText style={authStyles.subtitle}>בכניסה הראשונה עם Google או Apple משלימים שם ומאשרים את תנאי השימוש ומדיניות הפרטיות.</AppText>
+      <AuthInput label="שם מלא" value={displayName} onChangeText={(value) => setDisplayName(sanitizeDisplayNameInput(value))} placeholder="הזינו את שמכם המלא" iconName="person-outline" autoCapitalize="words" />
       <AppText style={authStyles.email}>{user?.email || 'כתובת פרטית של Apple'}</AppText>
       <LegalConsent accepted={acceptedLegal} onChange={setAcceptedLegal} navigation={navigation} disabled={loading} />
       {error ? <AppText style={authStyles.error}>{error}</AppText> : null}

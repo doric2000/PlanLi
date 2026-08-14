@@ -2137,6 +2137,19 @@ export const changeNameScreenStyles = StyleSheet.create({
 
   container: { flex: 1, paddingHorizontal: 16, paddingTop: 18, gap: 12 },
 
+  notice: {
+    borderRadius: 12,
+    backgroundColor: '#FFF7E8',
+    color: '#7A4B00',
+    fontFamily: fontFamilies.medium,
+    fontSize: 14,
+    lineHeight: 21,
+    padding: 14,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  noticeBlocked: { backgroundColor: '#F3F4F6', color: '#4B5563' },
+
   label: { fontSize: 14, fontFamily: fontFamilies.semiBold, textAlign: 'right', color: '#111827' },
   input: {
     height: 54,

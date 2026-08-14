@@ -5,22 +5,31 @@ import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { auth } from '../../../config/firebase';
-import { saveProfile } from '../../../services/ProfileService';
+import { formatProfileUpdateError, saveProfile } from '../../../services/ProfileService';
 import { changeNameScreenStyles as styles } from '../../../styles';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
+import { useAuth } from '../../auth/AuthContext';
+import {
+  normalizeDisplayName,
+  sanitizeDisplayNameInput,
+  validateDisplayName,
+} from '../../auth/utils/displayName';
 
 
 export default function ChangeNameScreen({ navigation }) {
-  const u = auth.currentUser;
-  const nameBaseline = useMemo(() => (u?.displayName || '').trim(), [u?.displayName]);
+  const { user: u, userDocument } = useAuth();
+  const nameBaseline = useMemo(() => normalizeDisplayName(u?.displayName), [u?.displayName]);
   const [name, setName] = useState(() => (u?.displayName || ''));
   const [saving, setSaving] = useState(false);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 
-  const hasUnsavedChanges = name.trim() !== nameBaseline;
+  const emailVerified = u?.emailVerified === true;
+  const nameChangeAlreadyUsed = Boolean(userDocument?.profileManagement?.displayNameChangedAt);
+  const canChangeName = emailVerified && !nameChangeAlreadyUsed;
+  const normalizedName = normalizeDisplayName(name);
+  const hasUnsavedChanges = normalizedName !== nameBaseline;
 
   const pendingDiscardRef = useRef(null);
   const dismissUnsavedModal = useCallback(() => {
@@ -51,8 +60,16 @@ export default function ChangeNameScreen({ navigation }) {
 
   const onSave = async () => {
     if (!u) return Alert.alert('שגיאה', 'אין משתמש מחובר');
-    const next = name.trim();
-    if (!next) return Alert.alert('שגיאה', 'נא להכניס שם');
+    if (!emailVerified) {
+      return Alert.alert('נדרש אימות אימייל', 'כדי לשנות את השם צריך לאמת קודם את כתובת האימייל.');
+    }
+    if (nameChangeAlreadyUsed) {
+      return Alert.alert('לא ניתן לשנות שוב', 'אפשר לשנות את השם פעם אחת בלבד.');
+    }
+    const next = normalizeDisplayName(name);
+    const validationError = validateDisplayName(next);
+    if (validationError) return Alert.alert('שם לא תקין', validationError);
+    if (!hasUnsavedChanges) return Alert.alert('אין שינוי', 'יש להזין שם שונה מהשם הנוכחי.');
 
     setSaving(true);
     try {
@@ -68,8 +85,8 @@ export default function ChangeNameScreen({ navigation }) {
           },
         },
       ]);
-    } catch (e) {
-      Alert.alert('שגיאה', e?.message || 'עדכון השם נכשל');
+    } catch (error) {
+      Alert.alert('לא הצלחנו לעדכן', formatProfileUpdateError(error, 'עדכון השם נכשל. נסו שוב.'));
     } finally {
       setSaving(false);
     }
@@ -104,27 +121,35 @@ export default function ChangeNameScreen({ navigation }) {
       </View>
 
       <View style={styles.container}>
+        <AppText style={[styles.notice, !canChangeName && styles.noticeBlocked]} testID="change-name-notice">
+          {nameChangeAlreadyUsed
+            ? 'כבר השתמשת באפשרות שינוי השם. לא ניתן לשנות אותו שוב.'
+            : !emailVerified
+              ? 'כדי לשנות שם צריך לאמת קודם את כתובת האימייל.'
+              : 'אפשר לשנות את השם פעם אחת בלבד. לאחר השמירה לא ניתן יהיה לשנות אותו שוב.'}
+        </AppText>
         <AppText style={styles.label}>שם חדש</AppText>
         <AppTextInput
           style={styles.input}
           value={name}
-          onChangeText={setName}
+          onChangeText={(value) => setName(sanitizeDisplayNameInput(value))}
           placeholder="כאן מוסיפים את השם החדש"
           placeholderTextColor="#9aa3af"
           autoCapitalize="words"
           textAlign="right"
           writingDirection="rtl"
+          editable={canChangeName && !saving}
           testID="change-name-input"
         />
 
         <TouchableOpacity
-          style={[styles.primaryBtn, saving && styles.btnDisabled]}
+          style={[styles.primaryBtn, (!canChangeName || saving || !hasUnsavedChanges) && styles.btnDisabled]}
           activeOpacity={0.9}
           onPress={onSave}
-          disabled={saving}
+          disabled={!canChangeName || saving || !hasUnsavedChanges}
           testID="change-name-submit"
         >
-          {saving ? <ActivityIndicator color="#fff" /> : <AppText style={styles.primaryBtnText}>עדכן</AppText>}
+          {saving ? <ActivityIndicator color="#fff" /> : <AppText style={styles.primaryBtnText}>שמירת שינוי חד־פעמי</AppText>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

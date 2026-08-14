@@ -11,6 +11,8 @@ import SettingsScreen from '../src/features/profile/screens/SettingsScreen';
 import ChangeNameScreen from '../src/features/profile/screens/ChangeNameScreen';
 import { saveProfile } from '../src/services/ProfileService';
 
+let mockUserDocument = {};
+
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const MockIcon = (props) => <mock-icon {...props} />;
@@ -19,7 +21,12 @@ jest.mock('@expo/vector-icons', () => {
 
 jest.mock('../src/config/firebase', () => {
   const mockAuth = {
-    currentUser: { uid: 'user-123', displayName: 'Old Name', reload: jest.fn(() => Promise.resolve()) },
+    currentUser: {
+      uid: 'user-123',
+      displayName: 'Old Name',
+      emailVerified: true,
+      reload: jest.fn(() => Promise.resolve()),
+    },
   };
   return {
     auth: mockAuth,
@@ -31,6 +38,13 @@ jest.mock('firebase/auth', () => ({
   signOut: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../src/features/auth/AuthContext', () => ({
+  useAuth: () => ({
+    user: require('../src/config/firebase').auth.currentUser,
+    userDocument: mockUserDocument,
+  }),
+}));
+
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(() => ({ __type: 'docRef' })),
   setDoc: jest.fn(() => Promise.resolve()),
@@ -39,6 +53,7 @@ jest.mock('firebase/firestore', () => ({
 
 jest.mock('../src/services/ProfileService', () => ({
   saveProfile: jest.fn(() => Promise.resolve()),
+  formatProfileUpdateError: (_error, fallback) => fallback,
 }));
 
 jest.mock('../src/services/AuthService', () => ({
@@ -63,6 +78,8 @@ const { auth: mockedAuth } = require('../src/config/firebase');
 describe('ChangeNameFlow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUserDocument = {};
+    mockedAuth.currentUser.emailVerified = true;
   });
 
   it('updates the name and navigates back after confirming success', async () => {
@@ -100,6 +117,7 @@ describe('ChangeNameFlow', () => {
     expect(mockedAuth.currentUser).toEqual({
       uid: 'user-123',
       displayName: 'Old Name',
+      emailVerified: true,
       reload: expect.any(Function),
     });
     expect(getByTestId('change-name-input').props.value).toBe(
@@ -122,5 +140,31 @@ describe('ChangeNameFlow', () => {
     });
 
     alertSpy.mockRestore?.();
+  });
+
+  it('blocks name changes until the email address is verified', () => {
+    mockedAuth.currentUser.emailVerified = false;
+    const { getByTestId } = render(
+      <ChangeNameScreen navigation={{ addListener: jest.fn(() => jest.fn()), goBack: jest.fn() }} />
+    );
+
+    expect(getByTestId('change-name-notice').props.children).toContain('לאמת');
+    expect(getByTestId('change-name-input').props.editable).toBe(false);
+    expect(getByTestId('change-name-submit').props.accessibilityState.disabled).toBe(true);
+    expect(saveProfile).not.toHaveBeenCalled();
+  });
+
+  it('blocks a second name change when the one-time change was already used', () => {
+    mockUserDocument = {
+      profileManagement: { displayNameChangedAt: { seconds: 1 } },
+    };
+    const { getByTestId } = render(
+      <ChangeNameScreen navigation={{ addListener: jest.fn(() => jest.fn()), goBack: jest.fn() }} />
+    );
+
+    expect(getByTestId('change-name-notice').props.children).toContain('כבר השתמשת');
+    expect(getByTestId('change-name-input').props.editable).toBe(false);
+    expect(getByTestId('change-name-submit').props.accessibilityState.disabled).toBe(true);
+    expect(saveProfile).not.toHaveBeenCalled();
   });
 });
