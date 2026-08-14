@@ -121,6 +121,10 @@ jest.mock('../src/hooks/useAuthUser', () => ({
   }),
 }));
 
+jest.mock('../src/features/auth/AuthContext', () => ({
+  useAuth: () => ({ requireCapability: jest.fn(() => false) }),
+}));
+
 describe('HomeScreenSearchTest', () => {
   const makeDoc = (id, countryId, data) => ({
     id,

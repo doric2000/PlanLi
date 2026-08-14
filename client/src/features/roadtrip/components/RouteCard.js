@@ -21,8 +21,6 @@ import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
 import PreferenceContextLine from "../../../components/PreferenceContextLine";
 import { cards, routeCardStyles as styles } from "../../../styles";
-import { auth } from "../../../config/firebase";
-import { getUserTier } from "../../../utils/userTier";
 import { useAdminClaim } from "../../../hooks/useAdminClaim";
 import { formatTimestamp } from "../../../utils/formatTimestamp";
 import { getRouteImageUrls } from "../../../utils/mediaAssets";
@@ -32,6 +30,8 @@ import {
 	TRANSPORT_MODES,
 } from "../../../constants/travelTaxonomy";
 import { getRouteDestinationPreviews } from "../utils/routeDestinationPreviews";
+import { useAuthUser } from "../../../hooks/useAuthUser";
+import { CAPABILITIES } from "../../../constants/authPolicy";
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
@@ -53,6 +53,7 @@ export const RouteCard = ({
 	variant = "default",
 }) => {
 	const navigation = useNavigation();
+	const { isActive, requireCapability } = useAuthUser();
 	const isFeed = variant === "feed";
 	const {
 		pageWidth,
@@ -106,9 +107,12 @@ export const RouteCard = ({
 		distance: item?.distanceKm,
 	};
 
-	const tier = getUserTier(auth.currentUser);
 	const { isAdmin } = useAdminClaim();
-	const canManage = tier === "verified" && (isOwner || isAdmin);
+	const canManage = isActive && (isOwner || isAdmin);
+	const guardedDelete = () => {
+		if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+		onDelete?.();
+	};
 	const destinationPreviews = useMemo(() => getRouteDestinationPreviews(item, 4), [item]);
 
 	const handleAuthorPress = () => {
@@ -190,7 +194,7 @@ export const RouteCard = ({
 					<ActionMenu
 						iconColor="#FFFFFF"
 						onEdit={onEdit}
-						onDelete={onDelete}
+						onDelete={guardedDelete}
 						title={text.menuTitle}
 					/>
 				) : null}
@@ -407,7 +411,7 @@ export const RouteCard = ({
 					{canManage && showActionMenu && (
 						<ActionMenu
 							onEdit={onEdit}
-							onDelete={onDelete}
+							onDelete={guardedDelete}
 							title={text.menuTitle}
 						/>
 					)}

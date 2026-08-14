@@ -23,7 +23,7 @@ export const SocialLoginButtons = ({
     return () => { active = false; };
   }, []);
 
-  if (Platform.OS !== 'ios') return null;
+  if (Platform.OS === 'web') return null;
 
   return (
     <View style={forms.authSocialContainer} testID="auth-social-buttons">
@@ -35,7 +35,7 @@ export const SocialLoginButtons = ({
         disabled={disabled}
         testID="auth-google-button"
       />
-      {appleAvailable ? (
+      {Platform.OS === 'ios' && appleAvailable ? (
         <AppleAuthentication.AppleAuthenticationButton
           buttonType={mode === 'register'
             ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP

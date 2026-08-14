@@ -57,6 +57,19 @@ test.beforeEach(async () => {
       uid: 'owner',
       email: 'owner@example.com',
       displayName: 'Private owner',
+      onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: new Date() },
+      legal: {
+        termsVersion: '2026-08-14-draft',
+        privacyVersion: '2026-08-14-draft',
+        acceptedAt: new Date(),
+      },
+      smartProfile: { setupRequired: false, completedAt: new Date() },
+    });
+    await setDoc(doc(db, 'users', 'incomplete'), {
+      uid: 'incomplete',
+      email: 'incomplete@example.com',
+      displayName: 'Incomplete user',
+      smartProfile: { setupRequired: true },
     });
     await setDoc(doc(db, 'publicProfiles', 'owner'), {
       displayName: 'Public owner',
@@ -295,11 +308,12 @@ test('notification queries are owner-only and bounded', {
   )));
 });
 
-test('storage accepts only verified owned JPEG staging creates', {
+test('storage accepts only active owned JPEG staging creates', {
   skip: !hasEmulators,
 }, async () => {
   const ownerStorage = env.authenticatedContext('owner', verifiedClaims).storage();
   const unverifiedStorage = env.authenticatedContext('owner', unverifiedClaims).storage();
+  const incompleteStorage = env.authenticatedContext('incomplete', verifiedClaims).storage();
   const validPath = 'media-staging/owner/123e4567-e89b-42d3-a456-426614174000.jpg';
   const metadata = {
     contentType: 'image/jpeg',
@@ -310,6 +324,11 @@ test('storage accepts only verified owned JPEG staging creates', {
   await assertFails(uploadBytes(
     ref(unverifiedStorage, 'media-staging/owner/123e4567-e89b-42d3-a456-426614174001.jpg'),
     new Uint8Array([1]), metadata
+  ));
+  await assertFails(uploadBytes(
+    ref(incompleteStorage, 'media-staging/incomplete/123e4567-e89b-42d3-a456-426614174004.jpg'),
+    new Uint8Array([1]),
+    { contentType: 'image/jpeg', customMetadata: { ownerUid: 'incomplete', variant: 'staging' } }
   ));
   await assertFails(uploadBytes(
     ref(ownerStorage, 'media-staging/other/123e4567-e89b-42d3-a456-426614174002.jpg'),

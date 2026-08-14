@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { cleanOptionalBio, registerUser, updateProfile } = require('./profileService');
+const { cleanOptionalBio, completeAccountSetup, registerUser, updateProfile } = require('./profileService');
 
 function createRegistrationAdmin(initialData = null, { serializeTransactions = false } = {}) {
   let stored = initialData ? { ...initialData } : null;
@@ -29,11 +29,36 @@ function createRegistrationAdmin(initialData = null, { serializeTransactions = f
       firestore: Object.assign(() => db, {
         FieldValue: { serverTimestamp: () => 'timestamp', delete: () => 'delete' },
       }),
+      auth: () => ({ updateUser: async () => {} }),
     },
     getStored: () => stored,
     writes,
   };
 }
+
+test('complete account setup records server-owned profile and legal versions', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    smartProfile: { setupRequired: true },
+  });
+  const result = await completeAccountSetup({
+    admin: fixture.admin,
+    auth: { uid: 'user-1', token: { email: 'private@example.com' } },
+    data: { displayName: 'Dana Cohen', acceptedLegal: true },
+  });
+  const stored = fixture.getStored();
+  assert.equal(stored.displayName, 'Dana Cohen');
+  assert.deepEqual(stored.onboarding, {
+    profileDetailsVersion: 1,
+    profileDetailsCompletedAt: 'timestamp',
+  });
+  assert.deepEqual(stored.legal, {
+    termsVersion: '2026-08-14-draft',
+    privacyVersion: '2026-08-14-draft',
+    acceptedAt: 'timestamp',
+  });
+  assert.equal(result.profileDetailsVersion, 1);
+});
 
 test('profile bio accepts a short two-line string and removes control characters', () => {
   assert.equal(cleanOptionalBio('  מטייל/ת 🌍\r\n  עם קפה  '), 'מטייל/ת 🌍\nעם קפה');

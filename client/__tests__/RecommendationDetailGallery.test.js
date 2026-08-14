@@ -14,11 +14,14 @@ jest.mock('react-native-safe-area-context', () => {
 });
 jest.mock('../src/config/firebase', () => ({ auth: { currentUser: null } }));
 jest.mock('../src/hooks/useAdminClaim', () => ({ useAdminClaim: () => ({ isAdmin: false }) }));
+jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ isActive: true }) }));
 jest.mock('../src/hooks/useRecommendationById', () => ({
   useRecommendationById: () => ({ data: null, loading: false, refresh: jest.fn() }),
 }));
 jest.mock('../src/hooks/useUserData', () => ({ useUserData: () => ({ displayName: 'Dana' }) }));
-jest.mock('../src/services/PersonalizationService', () => ({ recordRecommendationOpen: jest.fn() }));
+jest.mock('../src/services/PersonalizationService', () => ({
+  recordRecommendationOpen: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('../src/features/community/hooks/useLikes', () => ({
   useLikes: () => ({ isLiked: false, likeCount: 0, toggleLike: jest.fn() }),
 }));

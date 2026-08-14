@@ -13,6 +13,7 @@ import { RecommendationHero } from '../../../components/RecommendationHero';
 import UsefulFactItem from '../../../components/UsefulFactItem';
 import { auth } from '../../../config/firebase';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
+import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useUserData } from '../../../hooks/useUserData';
 import { recordRouteOpen } from '../../../services/RouteService';
 import { colors, routeDetailScreenStyles as styles } from '../../../styles';
@@ -45,6 +46,7 @@ export default function RouteDetailScreen({ route, navigation }) {
   const validStops = useMemo(() => flattenValidRouteStops(days), [days]);
   const author = useUserData(routeData?.ownerId);
   const { isAdmin } = useAdminClaim();
+  const { isActive } = useAuthUser();
   const images = useMemo(() => getRouteImageUrls(routeData, 'large'), [routeData]);
   const destinations = useMemo(() => getRouteDestinationPreviews(routeData, 4), [routeData]);
   const presentation = useMemo(() => buildRouteDetailPresentation(routeData), [routeData]);
@@ -52,13 +54,13 @@ export default function RouteDetailScreen({ route, navigation }) {
   const commentsCount = useCommentsCount('routes', routeId);
   const [likesVisible, setLikesVisible] = useState(false);
   const [commentsVisible, setCommentsVisible] = useState(false);
-  const canEdit = canManageContent({ user: auth.currentUser, ownerId: routeData?.ownerId, isAdmin });
+  const canEdit = isActive && canManageContent({ user: auth.currentUser, ownerId: routeData?.ownerId, isAdmin });
   const destinationLabel = destinations.map((item) => item.name).filter(Boolean).join(' · ');
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
-    if (auth.currentUser?.uid && routeId) recordRouteOpen(routeId).catch(() => {});
-  }, [navigation, routeId]);
+    if (isActive && routeId) recordRouteOpen(routeId).catch(() => {});
+  }, [isActive, navigation, routeId]);
 
   const snapshotData = useMemo(() => ({
     name: routeData?.title,

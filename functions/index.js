@@ -14,7 +14,8 @@ const {
 } = require('./recommendationService');
 const { cleanupRouteRevisions, loadRouteDetails, saveRoute } = require('./routeService');
 const { saveTrip } = require('./tripService');
-const { registerUser, updateProfile } = require('./profileService');
+const { completeAccountSetup, registerUser, updateProfile } = require('./profileService');
+const { authorizeRequest } = require('./authPolicy');
 const {
   getPersonalizedRecommendations,
   getPersonalizedRoutes,
@@ -105,7 +106,7 @@ const mediaStorageBucket = defineString('MEDIA_STORAGE_BUCKET', {
   description: 'European Cloud Storage bucket used for PlanLi media.',
   default: 'planli-f0b12-media-eu',
 });
-// Keep false for Expo Go/local debug. Set PLANLI_ENFORCE_APP_CHECK=true only
+// Keep false for private Development Build validation. Set PLANLI_ENFORCE_APP_CHECK=true only
 // after App Check providers and debug tokens are configured on every client.
 const ENFORCE_APP_CHECK = process.env.PLANLI_ENFORCE_APP_CHECK === 'true';
 const CALLABLE_OPTIONS = {
@@ -115,7 +116,12 @@ const CALLABLE_OPTIONS = {
 };
 
 function callable(options, handler) {
-  return onCall({ ...CALLABLE_OPTIONS, ...options }, handler);
+  const { access, ...firebaseOptions } = options;
+  if (!access) throw new Error('Every callable must declare an access level.');
+  return onCall({ ...CALLABLE_OPTIONS, ...firebaseOptions }, async (request) => {
+    const accessContext = await authorizeRequest({ admin, auth: request.auth, access });
+    return handler(request, accessContext);
+  });
 }
 
 function firestoreWritten(document, handler, options = {}) {
@@ -140,6 +146,7 @@ function firestoreCreated(document, handler, options = {}) {
 
 exports.saveRecommendation = callable(
   {
+    access: 'active',
     secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 120,
     ...PROVIDER_CALLABLE_LIMITS,
@@ -159,6 +166,7 @@ exports.saveRecommendation = callable(
 
 exports.resolveRecommendationDestination = callable(
   {
+    access: 'active',
     secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
@@ -177,6 +185,7 @@ exports.resolveRecommendationDestination = callable(
 
 exports.searchPlaces = callable(
   {
+    access: 'active',
     secrets: [googleMapsKey, googlePlacesNewKey, publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
@@ -194,6 +203,7 @@ exports.searchPlaces = callable(
 
 exports.resolvePlaceSelection = callable(
   {
+    access: 'active',
     secrets: [googleMapsKey, googlePlacesNewKey, publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
@@ -211,6 +221,7 @@ exports.resolvePlaceSelection = callable(
 
 exports.saveRoute = callable(
   {
+    access: 'active',
     timeoutSeconds: 300,
     memory: '1GiB',
     secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
@@ -230,7 +241,7 @@ exports.saveRoute = callable(
 );
 
 exports.loadRouteDetails = callable(
-  { timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  { access: 'public', timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({
       admin,
@@ -244,7 +255,7 @@ exports.loadRouteDetails = callable(
 );
 
 exports.saveTrip = callable(
-  { timeoutSeconds: 120, memory: '1GiB' },
+  { access: 'active', timeoutSeconds: 120, memory: '1GiB' },
   (request) => saveTrip({
     admin,
     auth: request.auth,
@@ -253,36 +264,40 @@ exports.saveTrip = callable(
   })
 );
 
-exports.setFavorite = callable({}, (request) =>
+exports.setFavorite = callable({ access: 'active' }, (request) =>
   setFavorite({ admin, auth: request.auth, data: request.data })
 );
-exports.setReaction = callable({}, (request) =>
+exports.setReaction = callable({ access: 'active' }, (request) =>
   setReaction({ admin, auth: request.auth, data: request.data })
 );
-exports.getReactionState = callable({}, (request) =>
+exports.getReactionState = callable({ access: 'active' }, (request) =>
   getReactionState({ admin, auth: request.auth, data: request.data })
 );
-exports.saveComment = callable({}, (request) =>
+exports.saveComment = callable({ access: 'active' }, (request) =>
   saveComment({ admin, auth: request.auth, data: request.data })
 );
-exports.deleteComment = callable({}, (request) =>
+exports.deleteComment = callable({ access: 'active' }, (request) =>
   deleteComment({ admin, auth: request.auth, data: request.data })
 );
-exports.setNotificationRead = callable({}, (request) =>
+exports.setNotificationRead = callable({ access: 'signedIn' }, (request) =>
   setNotificationRead({ admin, auth: request.auth, data: request.data })
 );
-exports.clearNotifications = callable({}, (request) =>
+exports.clearNotifications = callable({ access: 'signedIn' }, (request) =>
   clearNotifications({ admin, auth: request.auth })
 );
-exports.deleteNotification = callable({}, (request) =>
+exports.deleteNotification = callable({ access: 'signedIn' }, (request) =>
   deleteNotification({ admin, auth: request.auth, data: request.data })
 );
 
-exports.registerUser = callable({ serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
+exports.registerUser = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   registerUser({ admin, auth: request.auth, data: request.data })
 );
+exports.completeAccountSetup = callable(
+  { access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => completeAccountSetup({ admin, auth: request.auth, data: request.data })
+);
 exports.updateProfile = callable(
-  { timeoutSeconds: 60, serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  { access: 'signedIn', timeoutSeconds: 60, serviceAccount: MEDIA_SERVICE_ACCOUNT },
   (request) => updateProfile({
     admin,
     auth: request.auth,
@@ -292,7 +307,7 @@ exports.updateProfile = callable(
 );
 
 exports.getPersonalizedRecommendations = callable(
-  { timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  { access: 'public', timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return getPersonalizedRecommendations({ admin, auth: request.auth, data: request.data });
@@ -300,7 +315,7 @@ exports.getPersonalizedRecommendations = callable(
 );
 
 exports.getMapRecommendations = callable(
-  { timeoutSeconds: 30, memory: '512MiB', secrets: [publicRateLimitKey] },
+  { access: 'public', timeoutSeconds: 30, memory: '512MiB', secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'map', key: publicRateLimitKey.value() });
     return getMapRecommendations({ admin, auth: request.auth, data: request.data });
@@ -308,7 +323,7 @@ exports.getMapRecommendations = callable(
 );
 
 exports.getPersonalizedRoutes = callable(
-  { timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  { access: 'public', timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return getPersonalizedRoutes({ admin, auth: request.auth, data: request.data });
@@ -316,7 +331,7 @@ exports.getPersonalizedRoutes = callable(
 );
 
 exports.getDestinationOverview = callable(
-  { timeoutSeconds: 30, secrets: [openWeatherKey, publicRateLimitKey] },
+  { access: 'public', timeoutSeconds: 30, secrets: [openWeatherKey, publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'destinationOverview', key: publicRateLimitKey.value() });
     return getDestinationOverview({ admin, data: request.data, weatherApiKey: openWeatherKey.value() });
@@ -324,23 +339,24 @@ exports.getDestinationOverview = callable(
 );
 
 exports.searchDestinations = callable(
-  { timeoutSeconds: 20, secrets: [publicRateLimitKey] },
+  { access: 'public', timeoutSeconds: 20, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return searchDestinations({ admin, data: request.data });
   }
 );
 
-exports.recordDiscoverySignal = callable({}, (request) =>
+exports.recordDiscoverySignal = callable({ access: 'active' }, (request) =>
   recordDiscoverySignal({ admin, auth: request.auth, data: request.data })
 );
 
-exports.resetPersonalizationActivity = callable({}, (request) =>
+exports.resetPersonalizationActivity = callable({ access: 'signedIn' }, (request) =>
   resetPersonalizationActivity({ admin, auth: request.auth })
 );
 
 exports.deleteContent = callable(
   {
+    access: 'active',
     timeoutSeconds: 300,
     memory: '1GiB',
     consumeAppCheckToken: ENFORCE_APP_CHECK,
@@ -356,6 +372,7 @@ exports.deleteContent = callable(
 
 exports.requestAccountDeletion = callable(
   {
+    access: 'signedIn',
     timeoutSeconds: 540,
     memory: '1GiB',
     consumeAppCheckToken: ENFORCE_APP_CHECK,
@@ -378,6 +395,7 @@ exports.requestAccountDeletion = callable(
 
 exports.prepareMedia = callable(
   {
+    access: 'active',
     memory: '1GiB',
     concurrency: 1,
     timeoutSeconds: 120,

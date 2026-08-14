@@ -5,9 +5,10 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 ## Current environment status
 
 The PlanLi client has **not** been publicly released to the App Store, Google
-Play, TestFlight, or a public web domain. The source now includes native Google
-and Apple authentication, so complete iPhone validation requires a signed
-Development Build. No Development Build or TestFlight release is active yet.
+Play, TestFlight, or a public web domain. Native development is performed with
+an installed, signed EAS Development Build connected to Metro. Expo Go is not
+supported. No production, preview/internal-distribution, TestFlight, store, or
+EAS Update/OTA release channel is active.
 The deployed Firebase backend is not evidence of a public client release.
 
 ## Run the client
@@ -56,15 +57,16 @@ Ordinary JavaScript changes only require Fast Refresh or restarting Metro:
 npx expo start --web
 ```
 
-Before release, repeat the native map and permission smoke tests in a signed
-Development Build. The `development` and `preview` EAS profiles remain prepared
-for that later step; neither represents a production release.
+Before release, repeat the native map and permission smoke tests in the active
+signed Development Build. The `development` and `preview` EAS profiles are
+configuration only; neither represents a production release.
 
 ### Native authentication release gate
 
-The client keeps password authentication and supports native Google and Apple
-authentication on iOS. Facebook and the legacy Expo AuthSession proxy are not
-used. Before requesting the first Development Build:
+The client keeps password authentication, supports native Google on iOS and
+Android, and shows the official Apple button on iOS. Facebook and the legacy
+Expo AuthSession proxy are not used. Before requesting a replacement
+Development Build or any release build:
 
 1. Enable Sign in with Apple for the primary App ID
    `com.planli.planlitravels` and create a Sign in with Apple key.
@@ -85,6 +87,24 @@ used. Before requesting the first Development Build:
 ```powershell
 firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY --project planli-f0b12
 ```
+
+The current legal drafts are available in-app and are configured for Firebase
+Hosting at `https://planli-f0b12.web.app/terms` and
+`https://planli-f0b12.web.app/privacy`. They are not public until Hosting is
+explicitly deployed from an updated `main`, and they require legal review plus
+final contact details before a public release.
+
+Before App Store submission, publish the privacy URL, expose it inside the app,
+complete App Store Connect's data-practice answers, and retain in-app account
+deletion and social-credential revocation. The registration checkbox is a
+PlanLi audit choice, not a separate Apple checkbox requirement. Recheck the
+current [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
+and [App Privacy instructions](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/)
+as part of every release review.
+
+Brand icon, adaptive-icon, splash and favicon changes require a replacement EAS
+Development Build to appear in the installed native shell. JavaScript-only auth
+screen changes appear after reconnecting or refreshing Metro.
 
 At the next authorized Functions deployment, provide these parameter values
 when prompted:

@@ -8,14 +8,19 @@ import {
   EmailAuthProvider,
   GoogleAuthProvider,
   OAuthProvider,
+  createUserWithEmailAndPassword,
   reauthenticateWithCredential,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithCredential,
+  signOut,
   updateProfile,
+  validatePassword,
 } from 'firebase/auth';
 
 import { auth } from '../config/firebase';
-import { registerUserDocument } from './ProfileService';
-import { getUserTier } from '../utils/userTier';
+import { completeAccountSetup, registerUserDocument } from './ProfileService';
 
 export const DEFAULT_DISPLAY_NAME = 'מטייל/ת PlanLi';
 
@@ -35,7 +40,7 @@ export const formatAuthError = (error) => {
   if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
     return 'האימייל או הסיסמה שגויים.';
   }
-  if (code === 'auth/weak-password') return 'הסיסמה חלשה מדי. השתמשו בלפחות 6 תווים.';
+  if (code === 'auth/weak-password') return 'הסיסמה אינה עומדת במדיניות האבטחה. השתמשו בלפחות 10 תווים.';
   if (code === 'auth/network-request-failed' || code === 'functions/unavailable') {
     return 'לא הצלחנו להתחבר לשרת. בדקו את החיבור לאינטרנט ונסו שוב.';
   }
@@ -140,6 +145,88 @@ export async function signInWithGoogle() {
   return { user: userCredential.user, profile: providerResult.profile };
 }
 
+export async function signInWithEmail(email, password) {
+  const credential = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
+  await ensureAuthenticatedUserProfile(credential.user);
+  return credential.user;
+}
+
+export async function validateNewPassword(password) {
+  if (String(password || '').length < 10) {
+    return { isValid: false, message: 'הסיסמה חייבת להכיל לפחות 10 תווים.' };
+  }
+  try {
+    const status = await validatePassword(auth, password);
+    if (status.isValid) return { isValid: true, status };
+    return {
+      isValid: false,
+      status,
+      message: 'הסיסמה אינה עומדת במדיניות האבטחה של החשבון.',
+    };
+  } catch (error) {
+    if (error?.code === 'auth/operation-not-allowed') return { isValid: true };
+    throw error;
+  }
+}
+
+export async function registerWithEmail({ displayName, email, password, acceptedLegal }) {
+  const normalizedEmail = normalizeEmail(email);
+  const pendingUser = auth.currentUser
+    && normalizeEmail(auth.currentUser.email) === normalizedEmail
+    && getProviderIds(auth.currentUser).includes('password')
+    ? auth.currentUser
+    : null;
+  const user = pendingUser || (
+    await createUserWithEmailAndPassword(auth, normalizedEmail, password)
+  ).user;
+  await updateProfile(user, { displayName });
+  await ensureAuthenticatedUserProfile(user, { displayName, photoURL: null });
+  await completeAccountSetup({ displayName, acceptedLegal });
+  auth.languageCode = 'he';
+  await sendEmailVerification(user);
+  return user;
+}
+
+export async function sendResetEmail(email) {
+  auth.languageCode = 'he';
+  try {
+    await sendPasswordResetEmail(auth, normalizeEmail(email));
+  } catch (error) {
+    if (['auth/user-not-found', 'auth/invalid-credential'].includes(error?.code)) return;
+    throw error;
+  }
+}
+
+export async function resendVerificationEmail() {
+  if (!auth.currentUser) {
+    const error = new Error('No authenticated user.');
+    error.code = 'auth/user-not-found';
+    throw error;
+  }
+  auth.languageCode = 'he';
+  await sendEmailVerification(auth.currentUser);
+}
+
+export async function refreshAuthenticatedUser() {
+  if (!auth.currentUser) return null;
+  await auth.currentUser.reload();
+  await auth.currentUser.getIdToken(true);
+  return auth.currentUser;
+}
+
+export async function signOutCentral() {
+  const providerIds = getProviderIds(auth.currentUser);
+  if (providerIds.includes('google.com')) {
+    await GoogleSignin.signOut().catch(() => {});
+  }
+  await signOut(auth);
+}
+
+export async function revokeGoogleAccessForDeletion() {
+  if (!getProviderIds(auth.currentUser).includes('google.com')) return;
+  await GoogleSignin.revokeAccess();
+}
+
 export async function signInWithApple() {
   const providerResult = await getAppleCredential();
   const userCredential = await signInWithCredential(auth, providerResult.credential);
@@ -180,17 +267,6 @@ export async function ensureAuthenticatedUserProfile(user, profile = {}) {
     displayName: profile.displayName || user.displayName || DEFAULT_DISPLAY_NAME,
     photoURL: profile.photoURL || user.photoURL || null,
   });
-}
-
-export async function completeAuthentication(user, profile = {}) {
-  const registration = await ensureAuthenticatedUserProfile(user, profile);
-  if (getUserTier(user) === 'unverified') {
-    return { registration, routeName: 'VerifyEmail' };
-  }
-  return {
-    registration,
-    routeName: registration?.setupRequired ? 'PreferenceSetup' : 'Main',
-  };
 }
 
 export const getProviderIds = (user) => (

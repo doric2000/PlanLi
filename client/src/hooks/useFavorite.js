@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { db } from '../config/firebase';
 import { setFavorite } from '../services/SocialService';
-import { getUserTier } from '../utils/userTier';
 import { getFavoriteErrorAlert } from '../utils/favoriteErrors';
+import { useAuth } from '../features/auth/AuthContext';
+import { CAPABILITIES } from '../constants/authPolicy';
 
 const TYPE_ALIASES = {
   recommendations: 'recommendation',
@@ -53,7 +54,7 @@ export async function buildFavoriteKey(target) {
 }
 
 export function useFavorite(type, id, snapshotData = {}) {
-  const user = auth.currentUser;
+  const { user, requireCapability, handleCallableAuthError } = useAuth();
   const target = useMemo(
     () => buildFavoriteTarget(type, id, snapshotData?.countryId),
     [type, id, snapshotData?.countryId]
@@ -88,14 +89,7 @@ export function useFavorite(type, id, snapshotData = {}) {
   }, [user, favoriteKey]);
 
   const toggleFavorite = useCallback(async () => {
-    if (!user) {
-      Alert.alert('שגיאה', 'יש להתחבר כדי לשמור למועדפים.');
-      return;
-    }
-    if (getUserTier(user) !== 'verified') {
-      Alert.alert('נדרש אימות', 'כדי לשמור למועדפים צריך לאמת את האימייל.');
-      return;
-    }
+    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
     if (!target || !favoriteKey) {
       Alert.alert('שגיאה', 'לא ניתן לזהות את הפריט שנבחר.');
       return;
@@ -109,12 +103,13 @@ export function useFavorite(type, id, snapshotData = {}) {
     } catch (error) {
       setIsFavorite(!nextSaved);
       console.error('Error toggling favorite:', error);
+      if (handleCallableAuthError(error)) return;
       const alert = getFavoriteErrorAlert(error, nextSaved ? 'add' : 'remove');
       Alert.alert(alert.title, alert.message);
     } finally {
       setLoading(false);
     }
-  }, [favoriteKey, isFavorite, target, user]);
+  }, [favoriteKey, handleCallableAuthError, isFavorite, requireCapability, target]);
 
   return { isFavorite, toggleFavorite, loading };
 }

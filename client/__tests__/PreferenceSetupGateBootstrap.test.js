@@ -1,54 +1,45 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
-
+import { render, waitFor } from '@testing-library/react-native';
 import PreferenceSetupGate from '../src/navigation/PreferenceSetupGate';
+import { AUTH_STATES } from '../src/constants/authPolicy';
 
-const mockEnsureAuthenticatedUserProfile = jest.fn();
+let mockStatus = AUTH_STATES.READY;
+let mockLoading = false;
 
 jest.mock('../src/navigation/RightDrawerNavigator', () => {
-  const React = require('react');
+  const ReactModule = require('react');
   const { View } = require('react-native');
-  return () => React.createElement(View, { testID: 'main-navigator' });
+  return () => ReactModule.createElement(View, { testID: 'main-navigator' });
 });
 
-jest.mock('../src/hooks/useAuthUser', () => ({
-  useAuthUser: () => ({ user: { uid: 'user-1', providerData: [] }, loading: false }),
+jest.mock('../src/features/auth/AuthContext', () => ({
+  useAuth: () => ({ status: mockStatus, loading: mockLoading }),
 }));
 
-jest.mock('../src/hooks/useSmartProfile', () => ({
-  useSmartProfile: (retryKey) => ({
-    loading: false,
-    setupRequired: false,
-    error: retryKey === 0 ? new Error('profile read failed') : null,
-  }),
-}));
-
-jest.mock('../src/services/AuthService', () => ({
-  ensureAuthenticatedUserProfile: (...args) => mockEnsureAuthenticatedUserProfile(...args),
-  formatAuthError: (error) => error?.message || 'שגיאה',
-}));
-
-jest.mock('../src/utils/userTier', () => ({
-  getUserTier: () => 'verified',
-}));
-
-describe('PreferenceSetupGate profile bootstrap', () => {
+describe('PreferenceSetupGate auth state routing', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockEnsureAuthenticatedUserProfile.mockResolvedValue({ setupRequired: false });
+    mockStatus = AUTH_STATES.READY;
+    mockLoading = false;
   });
 
-  it('blocks a partial profile on read failure and retries the server flow', async () => {
+  it.each([
+    [AUTH_STATES.EMAIL_VERIFICATION_REQUIRED, 'VerifyEmail'],
+    [AUTH_STATES.ACCOUNT_SETUP_REQUIRED, 'CompleteAccount'],
+    [AUTH_STATES.PREFERENCES_REQUIRED, 'PreferenceSetup'],
+  ])('routes %s to %s', async (status, routeName) => {
+    mockStatus = status;
+    const navigation = { reset: jest.fn() };
+    render(<PreferenceSetupGate navigation={navigation} />);
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: routeName }],
+    }));
+  });
+
+  it('renders public navigation for ready and guest states', () => {
     const navigation = { reset: jest.fn() };
     const screen = render(<PreferenceSetupGate navigation={navigation} />);
-
-    const retryButton = await screen.findByTestId('profile-bootstrap-retry');
-    expect(screen.queryByTestId('main-navigator')).toBeNull();
-    fireEvent.press(retryButton);
-
-    await waitFor(() => {
-      expect(mockEnsureAuthenticatedUserProfile).toHaveBeenCalledTimes(2);
-      expect(screen.getByTestId('main-navigator')).toBeTruthy();
-    });
+    expect(screen.getByTestId('main-navigator')).toBeTruthy();
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 });

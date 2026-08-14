@@ -16,12 +16,13 @@ import {
   onSnapshot,
   limit,
 } from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
+import { db } from '../config/firebase';
 import { common } from '../styles';
 import { Avatar } from './Avatar';
 import { formatTimestamp } from '../utils/formatTimestamp';
-import { getUserTier } from '../utils/userTier';
 import { saveComment } from '../services/SocialService';
+import { useAuth } from '../features/auth/AuthContext';
+import { AUTH_STATES, CAPABILITIES } from '../constants/authPolicy';
 
 /**
  * CommentItem - Displays a single comment with user info.
@@ -67,14 +68,19 @@ const CommentItem = ({ item }) => {
  * @param {string} postId - The ID of the post to show comments for
  */
 export const CommentsSection = ({ collectionName, postId }) => {
+  const {
+    user: authUser,
+    status,
+    isActive,
+    requireCapability,
+    handleCallableAuthError,
+  } = useAuth();
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isNewestFirst, setIsNewestFirst] = useState(true);
 
-  const authUser = auth.currentUser;
-  const tier = getUserTier(authUser);
-  const canComment = tier === 'verified';
+  const canComment = isActive;
 
   useEffect(() => {
     if (!postId || !collectionName) return;
@@ -108,14 +114,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
 
   const handleAddComment = async () => {
     if (newComment.trim() === '') return;
-    if (!auth.currentUser) {
-      Alert.alert('שגיאה', 'יש להתחבר כדי להגיב.');
-      return;
-    }
-    if (!canComment) {
-      Alert.alert('נדרש אימות', 'כדי להגיב צריך לאמת את האימייל.');
-      return;
-    }
+    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
 
     setSubmitting(true);
     try {
@@ -131,7 +130,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
       setNewComment('');
     } catch (error) {
       console.error("Error adding comment:", error);
-      Alert.alert("Error", "Could not send comment");
+      if (!handleCallableAuthError(error)) Alert.alert("Error", "Could not send comment");
     } finally {
       setSubmitting(false);
     }
@@ -168,28 +167,28 @@ export const CommentsSection = ({ collectionName, postId }) => {
 
       <View style={common.commentInputContainer}>
         <Avatar 
-          photoURL={auth.currentUser?.photoURL} 
-          displayName={auth.currentUser?.displayName} 
+          photoURL={authUser?.photoURL}
+          displayName={authUser?.displayName}
           size={32} 
         />
         <AppTextInput
           style={common.commentInput}
           placeholder={
-            tier === 'guest'
+            status === AUTH_STATES.GUEST
               ? 'התחבר/י כדי להגיב...'
-              : tier === 'unverified'
-                ? 'אמת/י אימייל כדי להגיב...'
+              : !canComment
+                ? 'השלימו את החשבון כדי להגיב...'
                 : 'כתוב תגובה...'
           }
           value={newComment}
           onChangeText={setNewComment}
           multiline
-          editable={canComment}
+          editable
         />
         <TouchableOpacity 
           style={[common.commentSendButton, (!newComment.trim() || submitting || !canComment) && common.commentSendDisabled]} 
           onPress={handleAddComment}
-          disabled={!newComment.trim() || submitting || !canComment}
+          disabled={!newComment.trim() || submitting}
         >
           {submitting ? (
             <ActivityIndicator size="small" color="#fff" />

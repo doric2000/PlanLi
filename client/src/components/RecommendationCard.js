@@ -12,11 +12,9 @@ import { ActionMenu } from './ActionMenu';
 import CachedImage, { prefetchImage } from './CachedImage';
 import RtlPagedFlatList from './RtlPagedFlatList';
 import { cards, colors, recommendationCardStyles as styles } from '../styles';
-import { auth } from '../config/firebase';
 import ActionBar from './ActionBar';
 import FavoriteButton from './FavoriteButton';
 import PreferenceContextLine from './PreferenceContextLine';
-import { getUserTier } from '../utils/userTier';
 import { canManageRecommendation } from '../utils/contentPermissions';
 import { useAdminClaim } from '../hooks/useAdminClaim';
 import { formatTimestamp } from '../utils/formatTimestamp';
@@ -26,6 +24,8 @@ import {
   getRecommendationImageUrls,
 } from '../utils/mediaAssets';
 import { deleteContent } from '../services/SocialService';
+import { useAuthUser } from '../hooks/useAuthUser';
+import { CAPABILITIES } from '../constants/authPolicy';
 
 
 /**
@@ -47,6 +47,7 @@ const RecommendationCard = ({
   topContentInset = 0,
 }) => {
   const navigation = useNavigation();
+  const { user, isActive, requireCapability } = useAuthUser();
 
   const isFeed = variant === 'feed';
   const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
@@ -97,8 +98,8 @@ const RecommendationCard = ({
   const author = useUserData(ownerId);
   // Check if current user is the owner
   const { isAdmin } = useAdminClaim();
-  const canManage = canManageRecommendation({
-    user: auth.currentUser,
+  const canManage = isActive && canManageRecommendation({
+    user,
     ownerId,
     isAdmin,
   });
@@ -173,10 +174,7 @@ const RecommendationCard = ({
 
 
   const handleDelete = async () => {
-    if (getUserTier(auth.currentUser) !== 'verified') {
-      Alert.alert('נדרש אימות', 'כדי למחוק המלצה צריך לאמת את האימייל.');
-      return;
-    }
+    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
 
     const ok =
       Platform.OS === 'web'

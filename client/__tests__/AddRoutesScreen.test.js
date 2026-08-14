@@ -55,10 +55,6 @@ jest.mock('../src/hooks/useDurableDraftMedia', () => ({
   }),
 }));
 
-jest.mock('../src/utils/userTier', () => ({
-  getUserTier: () => 'verified',
-}));
-
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
 
 jest.mock('../src/features/roadtrip/components/DayEditorModal', () => {

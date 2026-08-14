@@ -13,7 +13,8 @@ export const AuthInput = ({
   iconName, 
   isPassword = false, 
   keyboardType = 'default',
-  autoCapitalize = 'none' 
+  autoCapitalize = 'none',
+  testID,
 }) => {
   const [isSecure, setIsSecure] = useState(isPassword);
 
@@ -31,6 +32,8 @@ export const AuthInput = ({
           secureTextEntry={isSecure}
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          testID={testID}
         />
         {isPassword && (
           <TouchableOpacity onPress={() => setIsSecure(!isSecure)} style={forms.authEyeIcon}>

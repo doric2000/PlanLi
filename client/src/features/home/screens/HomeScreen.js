@@ -21,6 +21,8 @@ import GooglePlacesInput from "../../../components/GooglePlacesInput";
 import PageHeader from "../../../components/PageHeader";
 import SearchFilterRow from "../../../components/SearchFilterRow";
 import { useAuthUser } from "../../../hooks/useAuthUser";
+import { useAuth } from "../../auth/AuthContext";
+import { CAPABILITIES } from "../../../constants/authPolicy";
 import { useFavoriteCityIds } from "../../../hooks/useFavoriteCityIds";
 import { useSmartProfile } from "../../../hooks/useSmartProfile";
 import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRefresh";
@@ -81,6 +83,7 @@ export default function HomeScreen({ navigation }) {
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
+	const { requireCapability, handleCallableAuthError } = useAuth();
 	const { completed: preferencesCompleted, loading: preferencesLoading } = useSmartProfile();
 	const [destinations, setDestinations] = useState([]);
 	const [allDestinationsForSearch, setAllDestinationsForSearch] = useState([]);
@@ -265,16 +268,7 @@ export default function HomeScreen({ navigation }) {
 
 	const handleGoogleSelect = async (placeId) => {
 		try {
-			if (isGuest || !user) {
-				Alert.alert("Login required", "Sign in to select a new Google destination.");
-				navigation.navigate("Login");
-				return;
-			}
-			if (!user.emailVerified) {
-				Alert.alert("Verification required", "Verify your email before adding a destination.");
-				navigation.navigate("VerifyEmail");
-				return;
-			}
+			if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
 			const result = await resolveDestinationForPlacePreview(placeId);
 			if (result?.persisted) {
 				rememberHomeDestination({
@@ -332,22 +326,12 @@ export default function HomeScreen({ navigation }) {
 	};
 
 	const toggleCityFavorite = async (city) => {
-		if (!user || isGuest) {
-			Alert.alert("נדרשת התחברות", "כדי לשמור יעד במועדפים צריך להתחבר.");
-			return;
-		}
+		if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
 		try {
 			await favoriteCities.toggleFavorite(city);
 				} 
 		catch (error) {
-		if (error?.code === 'functions/permission-denied' &&
-			/email verification/i.test(error?.message || '')) {
-			Alert.alert(
-			'נדרש אימות אימייל',
-			'כדי לשמור יעדים במועדפים צריך לאמת את כתובת האימייל.'
-			);
-			return;
-		}
+		if (handleCallableAuthError(error, { name: 'Main' })) return;
 
 		console.error('Failed to toggle destination favorite:', error);
 		Alert.alert('שגיאה', 'לא הצלחנו לעדכן את המועדפים. נסו שוב.');

@@ -9,6 +9,7 @@ import {
 
 let updateProfileCallable;
 let registerUserCallable;
+let completeAccountSetupCallable;
 
 const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'needs'];
 const PROFILE_SCALAR_FIELDS = ['budget'];
@@ -92,5 +93,12 @@ export const saveProfile = async (
 export const registerUserDocument = async (fields = {}) => {
   registerUserCallable ||= httpsCallable(cloudFunctions, 'registerUser');
   const response = await registerUserCallable(fields);
+  return response.data;
+};
+
+export const completeAccountSetup = async ({ displayName, acceptedLegal }) => {
+  completeAccountSetupCallable ||= httpsCallable(cloudFunctions, 'completeAccountSetup');
+  const response = await completeAccountSetupCallable({ displayName, acceptedLegal });
+  await auth.currentUser?.reload?.();
   return response.data;
 };

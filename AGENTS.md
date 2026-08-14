@@ -51,6 +51,9 @@ system/**
 - Country currency/region comes from REST Countries with the pinned `countries-list` fallback. Scheduled synchronization may update only `currencyCode` and `region`.
 - Secrets belong in Google Secret Manager or ignored local `.env` files. Never commit API keys, service-account JSON, credentials, tokens, migration state, audit output, or production data. Local Admin scripts use Firebase CLI/ADC; Cloud Functions use the dedicated keyless core/media service accounts.
 - App Check enforcement remains off only during the first private Development Build and preview validation. Configure valid Web/Android/iOS providers and private debug tokens before public release.
+- Authentication has one client state machine in `AuthProvider`: `loading`, `guest`, `emailVerificationRequired`, `accountSetupRequired`, `preferencesRequired`, and `ready`. Protected client actions call `requireCapability`; do not add screen-local auth redirects or parse server error text.
+- Every callable Function declares exactly one access level: `public`, `signedIn`, or `active`. `active` requires an eligible verified token, current profile-details and legal-consent versions, and completed travel preferences. Ownership and admin checks remain service-local.
+- Current auth/legal versions are duplicated intentionally in `client/src/constants/authPolicy.js`, `functions/authPolicy.js`, and `storage.rules`; update all three plus the in-app and hosted legal drafts in one focused change. Existing users are gated lazily, without a backfill.
 
 ## Media and Storage
 
@@ -140,7 +143,7 @@ If credentials, conflicts, required checks, reviews, or GitHub availability prev
 
 ## Deployment and release truthfulness
 
-- The client source now includes native Google and Apple authentication and requires a signed Development Build for complete iOS validation; Expo Go cannot load the full client. There is still no active production, EAS Build, EAS Update/OTA, app-store, TestFlight, or internal-distribution release channel. Do not create or submit client builds or updates merely because EAS configuration exists. Continue using Web-only Metro where applicable until the user explicitly authorizes creating a named Development Build, preview, or production release.
+- The active native development workflow is an installed, signed EAS Development Build using Metro; Expo Go is unsupported because the client includes native Google and Apple authentication. There is no active production, preview/internal-distribution, EAS Update/OTA, App Store, TestFlight, or Google Play release channel. Do not create or submit another build or update unless the user explicitly authorizes that named build or release.
 - Merge first. Deploy backend, rules, indexes, or hosting only from the updated `main` branch and only when the user has explicitly authorized deployment for that task. Verify the selected Firebase project, region, deployed targets, and post-deploy health.
 - Client code is not on a phone merely because it was merged or exported. State whether activation requires a Metro/Expo reload, an eligible over-the-air update, or a new store/internal build, and do not claim delivery until that step is actually complete.
 - When a change requires both backend and client rollout, state and follow the safe order explicitly. A backend fix is not effective in production until deployed; a client fix is not effective for users until distributed.

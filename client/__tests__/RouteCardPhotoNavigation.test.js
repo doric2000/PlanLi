@@ -19,6 +19,10 @@ jest.mock('../src/hooks/useAdminClaim', () => ({
   useAdminClaim: () => ({ isAdmin: false }),
 }));
 
+jest.mock('../src/hooks/useAuthUser', () => ({
+  useAuthUser: () => ({ isActive: false, requireCapability: jest.fn(() => false) }),
+}));
+
 jest.mock('../src/hooks/useBoundedImageWindow', () => ({
   useBoundedImageWindow: () => ({ currentIndex: 0, indices: [0] }),
 }));

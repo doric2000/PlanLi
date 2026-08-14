@@ -16,8 +16,8 @@ import PageHeader from '../../../components/PageHeader';
 import SearchFilterRow from '../../../components/SearchFilterRow';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RoutesFilterModal from '../../../components/RoutesFilterModal';
-import { auth } from '../../../config/firebase';
-import { getUserTier } from '../../../utils/userTier';
+import { useAuthUser } from '../../../hooks/useAuthUser';
+import { CAPABILITIES } from '../../../constants/authPolicy';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import { useSmartProfile } from '../../../hooks/useSmartProfile';
 import {
@@ -57,6 +57,7 @@ const text = {
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
+  const { requireCapability } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,17 +161,7 @@ export default function RoutesScreen({ navigation }) {
   const sortLabel = sortBy === 'personalized' ? 'בשבילך' : sortBy === 'newest' ? 'חדש' : 'פופולרי';
 
   const openCreateRoute = () => {
-    const tier = getUserTier(auth.currentUser);
-    if (tier === 'guest') {
-      Alert.alert('יש להתחבר', 'כדי ליצור מסלול צריך להתחבר.');
-      navigation.navigate('Login');
-      return;
-    }
-    if (tier === 'unverified') {
-      Alert.alert('נדרש אימות', 'כדי ליצור מסלול צריך לאמת את האימייל.');
-      navigation.navigate('VerifyEmail');
-      return;
-    }
+    if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'AddRoutesScreen' })) return;
     navigation.navigate('AddRoutesScreen');
   };
 

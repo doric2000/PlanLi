@@ -1,162 +1,110 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
+import ForgotPasswordScreen from '../src/features/auth/screens/ForgotPasswordScreen';
 import LoginScreen from '../src/features/auth/screens/LoginScreen';
 import RegisterScreen from '../src/features/auth/screens/RegisterScreen';
 
-const mockSignInWithEmailAndPassword = jest.fn();
-const mockCreateUserWithEmailAndPassword = jest.fn();
-const mockSendEmailVerification = jest.fn();
-const mockSendPasswordResetEmail = jest.fn();
-const mockUpdateProfile = jest.fn();
-const mockCompleteAuthentication = jest.fn();
+const mockSignInWithEmail = jest.fn();
+const mockRegisterWithEmail = jest.fn();
+const mockValidateNewPassword = jest.fn();
+const mockSendResetEmail = jest.fn();
 
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: (props) => {
-    const React = require('react');
+    const ReactModule = require('react');
     const { View } = require('react-native');
-    return React.createElement(View, props);
+    return ReactModule.createElement(View, props);
   },
 }));
 
-jest.mock('expo-linear-gradient', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return {
-    LinearGradient: ({ children, ...props }) => React.createElement(View, props, children),
-  };
-});
-
 jest.mock('../src/features/auth/components/SocialLoginButtons', () => {
-  const React = require('react');
+  const ReactModule = require('react');
   const { View } = require('react-native');
   return {
-    SocialLoginButtons: () => React.createElement(View, { testID: 'mock-social-buttons' }),
+    SocialLoginButtons: () => ReactModule.createElement(View, { testID: 'mock-social-buttons' }),
   };
 });
-
-jest.mock('../src/config/firebase', () => ({
-  auth: { currentUser: null, languageCode: null },
-}));
-
-jest.mock('firebase/auth', () => ({
-  signInWithEmailAndPassword: (...args) => mockSignInWithEmailAndPassword(...args),
-  createUserWithEmailAndPassword: (...args) => mockCreateUserWithEmailAndPassword(...args),
-  sendEmailVerification: (...args) => mockSendEmailVerification(...args),
-  sendPasswordResetEmail: (...args) => mockSendPasswordResetEmail(...args),
-  updateProfile: (...args) => mockUpdateProfile(...args),
-}));
 
 jest.mock('../src/services/AuthService', () => ({
-  completeAuthentication: (...args) => mockCompleteAuthentication(...args),
+  ensureAuthenticatedUserProfile: jest.fn(),
   formatAuthError: (error) => error?.message || 'שגיאה',
   isProviderCancellation: () => false,
   normalizeEmail: (value) => String(value || '').trim().toLowerCase(),
+  registerWithEmail: (...args) => mockRegisterWithEmail(...args),
+  sendResetEmail: (...args) => mockSendResetEmail(...args),
   signInWithApple: jest.fn(),
+  signInWithEmail: (...args) => mockSignInWithEmail(...args),
   signInWithGoogle: jest.fn(),
+  validateNewPassword: (...args) => mockValidateNewPassword(...args),
 }));
-
-const { auth } = require('../src/config/firebase');
 
 describe('authentication screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    auth.currentUser = null;
+    mockValidateNewPassword.mockResolvedValue({ isValid: true });
   });
 
-  it('normalizes email, completes the private profile, and navigates after password login', async () => {
-    const navigation = { reset: jest.fn(), replace: jest.fn() };
-    const user = { uid: 'user-1' };
-    mockSignInWithEmailAndPassword.mockResolvedValue({ user });
-    mockCompleteAuthentication.mockResolvedValue({ routeName: 'Main' });
+  it('uses the central email login service and returns to the app', async () => {
+    const navigation = { reset: jest.fn(), replace: jest.fn(), navigate: jest.fn() };
+    mockSignInWithEmail.mockResolvedValue({ uid: 'user-1' });
     const screen = render(<LoginScreen navigation={navigation} />);
 
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו כתובת אימייל'), ' Person@Example.COM ');
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו סיסמה'), 'secret');
+    fireEvent.changeText(screen.getByTestId('login-email'), ' Person@Example.COM ');
+    fireEvent.changeText(screen.getByTestId('login-password'), 'secret');
     fireEvent.press(screen.getByTestId('email-login-button'));
 
     await waitFor(() => {
-      expect(mockSignInWithEmailAndPassword).toHaveBeenCalledWith(
-        expect.anything(),
-        'person@example.com',
-        'secret'
-      );
-      expect(mockCompleteAuthentication).toHaveBeenCalledWith(user, undefined);
+      expect(mockSignInWithEmail).toHaveBeenCalledWith(' Person@Example.COM ', 'secret');
       expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
     });
   });
 
-  it('sends a Hebrew password-reset email using the normalized address', async () => {
-    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockSendPasswordResetEmail.mockResolvedValue();
-    const screen = render(<LoginScreen navigation={{ reset: jest.fn(), replace: jest.fn() }} />);
+  it('opens the dedicated forgot-password flow', () => {
+    const navigation = { navigate: jest.fn(), reset: jest.fn(), replace: jest.fn() };
+    const screen = render(<LoginScreen navigation={navigation} />);
+    fireEvent.press(screen.getByText('שכחתי סיסמה'));
+    expect(navigation.navigate).toHaveBeenCalledWith('ForgotPassword');
+  });
 
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו כתובת אימייל'), ' Person@Example.COM ');
-    fireEvent.press(screen.getByTestId('forgot-password-button'));
-
+  it('sends a generic reset request and opens the sent confirmation', async () => {
+    const navigation = { replace: jest.fn() };
+    mockSendResetEmail.mockResolvedValue();
+    const screen = render(<ForgotPasswordScreen navigation={navigation} />);
+    fireEvent.changeText(screen.getByTestId('reset-email-input'), ' Person@Example.COM ');
+    fireEvent.press(screen.getByTestId('send-reset-link'));
     await waitFor(() => {
-      expect(mockSendPasswordResetEmail).toHaveBeenCalledWith(expect.anything(), 'person@example.com');
-      expect(Alert.alert).toHaveBeenCalledWith('המייל נשלח', expect.any(String));
+      expect(mockSendResetEmail).toHaveBeenCalledWith('person@example.com');
+      expect(navigation.replace).toHaveBeenCalledWith('ResetEmailSent', { email: 'person@example.com' });
     });
   });
 
-  it('creates the Firebase account and private profile before opening verification', async () => {
-    const navigation = { reset: jest.fn(), replace: jest.fn() };
-    const user = { uid: 'new-user' };
-    mockCreateUserWithEmailAndPassword.mockResolvedValue({ user });
-    mockUpdateProfile.mockResolvedValue();
-    mockCompleteAuthentication.mockResolvedValue({ routeName: 'VerifyEmail' });
-    mockSendEmailVerification.mockResolvedValue();
+  it('requires current legal consent and the password policy before registration', async () => {
+    const navigation = { reset: jest.fn(), replace: jest.fn(), navigate: jest.fn() };
+    mockRegisterWithEmail.mockResolvedValue({ uid: 'new-user' });
     const screen = render(<RegisterScreen navigation={navigation} />);
 
     fireEvent.changeText(screen.getByPlaceholderText('הזינו את שמכם המלא'), ' Dana Cohen ');
     fireEvent.changeText(screen.getByPlaceholderText('הזינו כתובת אימייל'), ' Dana@Example.COM ');
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו סיסמה'), 'secret1');
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו שוב את הסיסמה'), 'secret1');
+    fireEvent.changeText(screen.getByPlaceholderText('לפחות 10 תווים'), 'StrongPass1');
+    fireEvent.changeText(screen.getByPlaceholderText('הזינו שוב את הסיסמה'), 'StrongPass1');
+    fireEvent.press(screen.getByTestId('legal-consent-checkbox'));
     fireEvent.press(screen.getByTestId('email-register-button'));
 
     await waitFor(() => {
-      expect(mockCreateUserWithEmailAndPassword).toHaveBeenCalledWith(
-        expect.anything(),
-        'dana@example.com',
-        'secret1'
-      );
-      expect(mockCompleteAuthentication).toHaveBeenCalledWith(user, {
+      expect(mockValidateNewPassword).toHaveBeenCalledWith('StrongPass1');
+      expect(mockRegisterWithEmail).toHaveBeenCalledWith({
         displayName: 'Dana Cohen',
-        photoURL: null,
+        email: ' Dana@Example.COM ',
+        password: 'StrongPass1',
+        acceptedLegal: true,
       });
-      expect(mockSendEmailVerification).toHaveBeenCalledWith(user);
       expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     });
   });
 
-  it('retries profile creation without creating a duplicate Firebase Auth account', async () => {
-    const navigation = { reset: jest.fn(), replace: jest.fn() };
-    const pendingUser = {
-      uid: 'pending-user',
-      email: 'dana@example.com',
-      providerData: [{ providerId: 'password' }],
-    };
-    auth.currentUser = pendingUser;
-    mockUpdateProfile.mockResolvedValue();
-    mockCompleteAuthentication.mockResolvedValue({ routeName: 'VerifyEmail' });
-    mockSendEmailVerification.mockResolvedValue();
-    const screen = render(<RegisterScreen navigation={navigation} />);
-
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו את שמכם המלא'), 'Dana Cohen');
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו כתובת אימייל'), 'dana@example.com');
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו סיסמה'), 'secret1');
-    fireEvent.changeText(screen.getByPlaceholderText('הזינו שוב את הסיסמה'), 'secret1');
-    fireEvent.press(screen.getByTestId('email-register-button'));
-
-    await waitFor(() => {
-      expect(mockCreateUserWithEmailAndPassword).not.toHaveBeenCalled();
-      expect(mockCompleteAuthentication).toHaveBeenCalledWith(pendingUser, {
-        displayName: 'Dana Cohen',
-        photoURL: null,
-      });
-      expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyEmail' }] });
-    });
+  it('shows the selected horizontal PlanLi wordmark on login and registration', () => {
+    expect(render(<LoginScreen navigation={{ navigate: jest.fn() }} />).getByTestId('brand-wordmark')).toBeTruthy();
+    expect(render(<RegisterScreen navigation={{ navigate: jest.fn() }} />).getByTestId('brand-wordmark')).toBeTruthy();
   });
 });

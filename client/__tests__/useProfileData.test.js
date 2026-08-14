@@ -14,6 +14,7 @@ const mockDoc = jest.fn((database, collectionName, uid) => ({
 }));
 const mockQuery = jest.fn((...parts) => ({ parts }));
 const mockWhere = jest.fn((...parts) => ({ parts }));
+const mockLimit = jest.fn((...parts) => ({ parts }));
 
 jest.mock('firebase/firestore', () => ({
   collection: (...args) => mockCollection(...args),
@@ -21,6 +22,7 @@ jest.mock('firebase/firestore', () => ({
   getCountFromServer: (...args) => mockGetCountFromServer(...args),
   getDoc: (...args) => mockGetDoc(...args),
   getDocs: (...args) => mockGetDocs(...args),
+  limit: (...args) => mockLimit(...args),
   query: (...args) => mockQuery(...args),
   where: (...args) => mockWhere(...args),
 }));

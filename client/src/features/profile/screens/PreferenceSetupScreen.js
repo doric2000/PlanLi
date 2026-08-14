@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from "../../../components/AppText";
+import BrandWordmark from '../../auth/components/BrandWordmark';
 import CompactChip from '../../../components/CompactChip';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -215,6 +216,7 @@ export default function PreferenceSetupScreen({ navigation }) {
           <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${((step + 1) / 3) * 100}%` }]} /></View>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {setupRequired ? <View style={styles.brandSurface}><BrandWordmark compact /></View> : null}
           {renderStep()}
         </ScrollView>
         <View style={styles.footer}>

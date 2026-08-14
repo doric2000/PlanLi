@@ -1,22 +1,24 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuthUser } from '../hooks/useAuthUser';
+import { useAuth } from '../features/auth/AuthContext';
+import { CAPABILITIES } from '../constants/authPolicy';
 import { colors, common } from '../styles';
 
-function RequireAuthWrapper(ScreenComponent) {
+function RequireAuthWrapper(ScreenComponent, capability = CAPABILITIES.SIGNED_IN) {
   return function RequireAuthScreen(props) {
-    const { isGuest, loading } = useAuthUser();
+    const { isGuest, isActive, loading, requireCapability } = useAuth();
+    const blocked = capability === CAPABILITIES.ACTIVE ? !isActive : isGuest;
 
     useEffect(() => {
       if (loading) return;
-      if (!isGuest) return;
+      if (!blocked) return;
 
-      props.navigation?.reset?.({
-        index: 0,
-        routes: [{ name: 'Login' }],
+      requireCapability(capability, {
+        name: props.route?.name || 'Main',
+        params: props.route?.params,
       });
-    }, [isGuest, loading, props.navigation]);
+    }, [blocked, capability, loading, props.route?.name, props.route?.params, requireCapability]);
 
     if (loading) {
       return (
@@ -28,7 +30,7 @@ function RequireAuthWrapper(ScreenComponent) {
       );
     }
 
-    if (isGuest) return null;
+    if (blocked) return null;
 
     return <ScreenComponent {...props} />;
   };
