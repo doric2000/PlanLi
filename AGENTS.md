@@ -50,7 +50,7 @@ system/**
 - Place selection is preview-only on the client. The server revalidates Google Place IDs and resolves the country. Israel policy maps Ariel, Judea and Samaria, East Jerusalem, and the Golan Heights to `IL`; Gaza is excluded. Fallback order is place, city, Google reverse geocoding, local borders, then nearest border.
 - Country currency/region comes from REST Countries with the pinned `countries-list` fallback. Scheduled synchronization may update only `currencyCode` and `region`.
 - Secrets belong in Google Secret Manager or ignored local `.env` files. Never commit API keys, service-account JSON, credentials, tokens, migration state, audit output, or production data. Local Admin scripts use Firebase CLI/ADC; Cloud Functions use the dedicated keyless core/media service accounts.
-- App Check enforcement remains off only for Expo Go development. Configure valid Web/Android/iOS providers and private debug tokens before public release.
+- App Check enforcement remains off only during the first private Development Build and preview validation. Configure valid Web/Android/iOS providers and private debug tokens before public release.
 
 ## Media and Storage
 
@@ -140,7 +140,7 @@ If credentials, conflicts, required checks, reviews, or GitHub availability prev
 
 ## Deployment and release truthfulness
 
-- The client is currently in Expo Go development only; there is no active production, EAS Build, EAS Update/OTA, app-store, TestFlight, or internal-distribution release channel. Do not create or submit client builds or updates merely because EAS configuration exists. Continue using Metro/Expo Go reloads unless the user explicitly authorizes moving the client to a named release channel or production stage.
+- The client source now includes native Google and Apple authentication and requires a signed Development Build for complete iOS validation; Expo Go cannot load the full client. There is still no active production, EAS Build, EAS Update/OTA, app-store, TestFlight, or internal-distribution release channel. Do not create or submit client builds or updates merely because EAS configuration exists. Continue using Web-only Metro where applicable until the user explicitly authorizes creating a named Development Build, preview, or production release.
 - Merge first. Deploy backend, rules, indexes, or hosting only from the updated `main` branch and only when the user has explicitly authorized deployment for that task. Verify the selected Firebase project, region, deployed targets, and post-deploy health.
 - Client code is not on a phone merely because it was merged or exported. State whether activation requires a Metro/Expo reload, an eligible over-the-air update, or a new store/internal build, and do not claim delivery until that step is actually complete.
 - When a change requires both backend and client rollout, state and follow the safe order explicitly. A backend fix is not effective in production until deployed; a client fix is not effective for users until distributed.

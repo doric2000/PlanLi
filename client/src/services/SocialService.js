@@ -37,4 +37,4 @@ export const clearNotifications = () => call('clearNotifications');
 export const deleteNotification = (notificationId) =>
   call('deleteNotification', { notificationId });
 
-export const requestAccountDeletion = () => call('requestAccountDeletion');
+export const requestAccountDeletion = (payload = {}) => call('requestAccountDeletion', payload);

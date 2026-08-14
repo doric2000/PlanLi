@@ -41,6 +41,15 @@ jest.mock('../src/services/ProfileService', () => ({
   saveProfile: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../src/services/AuthService', () => ({
+  formatAuthError: (error) => error?.message || 'error',
+  getProviderIds: () => [],
+  isProviderCancellation: () => false,
+  reauthenticateWithApple: jest.fn(),
+  reauthenticateWithGoogle: jest.fn(),
+  reauthenticateWithPassword: jest.fn(),
+}));
+
 jest.mock('../src/services/SocialService', () => ({
   requestAccountDeletion: jest.fn(() => Promise.resolve()),
 }));

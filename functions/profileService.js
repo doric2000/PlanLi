@@ -201,26 +201,68 @@ async function registerUser({ admin, auth, data }) {
     'invalid-argument', 'Registration profile is invalid.');
   assert(Object.keys(data || {}).every((key) => ['displayName', 'photoURL'].includes(key)),
     'invalid-argument', 'Registration profile contains unsupported fields.');
-  const displayName = cleanOptionalName(data?.displayName || auth.token?.name || 'Traveler');
-  const photoURL = typeof data?.photoURL === 'string' && data.photoURL.startsWith('https://')
+  const requestedDisplayName = cleanOptionalName(
+    data?.displayName || auth.token?.name || 'מטייל/ת PlanLi'
+  );
+  const requestedPhotoURL = typeof data?.photoURL === 'string' && data.photoURL.startsWith('https://')
     ? data.photoURL.slice(0, 2000)
     : null;
-  const ref = admin.firestore().doc(`users/${auth.uid}`);
-  const snapshot = await ref.get();
-  await ref.set({
-    uid: auth.uid,
-    email: auth.token?.email || '',
-    displayName,
-    photoURL,
-    ...(snapshot.exists
-      ? {}
-      : {
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          smartProfile: { setupRequired: true },
-        }),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  return { uid: auth.uid, displayName, photoURL };
+  const db = admin.firestore();
+  const ref = db.doc(`users/${auth.uid}`);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const existing = snapshot.exists ? snapshot.data() || {} : null;
+    if (!existing) {
+      const created = {
+        uid: auth.uid,
+        email: auth.token?.email || '',
+        displayName: requestedDisplayName,
+        photoURL: requestedPhotoURL,
+        smartProfile: { setupRequired: true },
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      transaction.set(ref, created);
+      return {
+        uid: auth.uid,
+        created: true,
+        displayName: created.displayName,
+        photoURL: created.photoURL,
+        setupRequired: true,
+      };
+    }
+
+    const patch = {};
+    if (!existing.uid) patch.uid = auth.uid;
+    if (!existing.email && auth.token?.email) patch.email = auth.token.email;
+    if (!existing.displayName) patch.displayName = requestedDisplayName;
+    if (!Object.prototype.hasOwnProperty.call(existing, 'photoURL')) {
+      patch.photoURL = requestedPhotoURL;
+    }
+    if (!existing.smartProfile || typeof existing.smartProfile !== 'object') {
+      patch.smartProfile = { setupRequired: true };
+    } else if (
+      !Object.prototype.hasOwnProperty.call(existing.smartProfile, 'setupRequired') &&
+      !existing.smartProfile.completedAt
+    ) {
+      patch.smartProfile = { ...existing.smartProfile, setupRequired: true };
+    }
+    if (Object.keys(patch).length) {
+      patch.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+      transaction.set(ref, patch, { merge: true });
+    }
+    const smartProfile = patch.smartProfile || existing.smartProfile || {};
+    const setupRequired = smartProfile.setupRequired === true;
+    return {
+      uid: auth.uid,
+      created: false,
+      displayName: patch.displayName || existing.displayName || requestedDisplayName,
+      photoURL: Object.prototype.hasOwnProperty.call(patch, 'photoURL')
+        ? patch.photoURL
+        : (existing.photoURL ?? null),
+      setupRequired,
+    };
+  });
 }
 
 module.exports = {

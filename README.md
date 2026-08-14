@@ -5,11 +5,10 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 ## Current environment status
 
 The PlanLi client has **not** been publicly released to the App Store, Google
-Play, TestFlight, or a public web domain. During the current stabilization phase
-the iPhone client runs in Expo Go. A signed Development Build and a small
-private preview are deferred until the application is ready for final native
-validation. The deployed Firebase backend is not evidence of a public client
-release.
+Play, TestFlight, or a public web domain. The source now includes native Google
+and Apple authentication, so complete iPhone validation requires a signed
+Development Build. No Development Build or TestFlight release is active yet.
+The deployed Firebase backend is not evidence of a public client release.
 
 ## Run the client
 
@@ -18,10 +17,12 @@ Run these commands from the `client` directory:
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\client
 npm install
-npx expo start -c
+npx expo start --dev-client -c
 ```
 
-Scan the QR code with Expo Go. For Web, run `npm run web` in a separate terminal.
+Open the project from an installed PlanLi Development Build. Expo Go cannot load
+the native Google Sign-In module. For Web-only work, run `npm run web` in a
+separate terminal; Apple and Google buttons are intentionally hidden on Web.
 
 The local client must contain these bucket values in `client/.env`:
 
@@ -30,10 +31,10 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
 EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
 ```
 
-### Maps during Expo Go development
+### Maps during development
 
-The iOS/Android maps use `react-native-maps` with OpenStreetMap tiles so they can
-run inside Expo Go. The Web maps continue to use MapLibre GL 5.24 with
+The iOS/Android maps use `react-native-maps` with OpenStreetMap tiles inside a
+Development Build. The Web maps continue to use MapLibre GL 5.24 with
 MapTiler's `Dataviz Light` style. A local Web session uses the testing key from
 the ignored `client/.env` file:
 
@@ -58,6 +59,46 @@ npx expo start --web
 Before release, repeat the native map and permission smoke tests in a signed
 Development Build. The `development` and `preview` EAS profiles remain prepared
 for that later step; neither represents a production release.
+
+### Native authentication release gate
+
+The client keeps password authentication and supports native Google and Apple
+authentication on iOS. Facebook and the legacy Expo AuthSession proxy are not
+used. Before requesting the first Development Build:
+
+1. Enable Sign in with Apple for the primary App ID
+   `com.planli.planlitravels` and create a Sign in with Apple key.
+2. Enable Google and Apple in Firebase Authentication. Configure Apple's Team
+   ID, Key ID, private key and Services ID. Register
+   `https://planli-f0b12.firebaseapp.com/__/auth/handler` as the return URL and
+   register Firebase's sending address with Apple Private Email Relay.
+3. Download the current `GoogleService-Info.plist` for the same bundle ID and
+   replace `client/GoogleService-Info.plist`. Confirm that Google Cloud contains
+   an iOS OAuth client, reversed URL scheme and a Web OAuth client.
+4. Set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in the EAS `development`, `preview`
+   and `production` environments. This is a public OAuth identifier, not a
+   private API secret. Also set the bundle-restricted `GOOGLE_MAPS_IOS_KEY` and
+   `GOOGLE_MAPS_ANDROID_KEY`; the current native config validates both during
+   every EAS build.
+5. Configure the server-side Apple key without committing it:
+
+```powershell
+firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY --project planli-f0b12
+```
+
+At the next authorized Functions deployment, provide these parameter values
+when prompted:
+
+```text
+APPLE_SIGN_IN_TEAM_ID=<Apple Team ID>
+APPLE_SIGN_IN_KEY_ID=<Sign in with Apple Key ID>
+APPLE_SIGN_IN_CLIENT_ID=com.planli.planlitravels
+```
+
+The account-deletion callable exchanges and revokes a fresh Apple authorization
+code before deleting the user's data. Deploy the updated Functions before
+distributing a client build that exposes Apple sign-in. Build and submission
+remain explicit release operations; merging source code does not perform them.
 
 ## Canonical data model
 
@@ -375,8 +416,8 @@ document does not delete its subcollections.
 
 ## App Check before public launch
 
-App Check enforcement remains intentionally disabled during private
-Development Build and preview testing. Before a public release, configure
+App Check enforcement remains intentionally disabled during the first private
+Development Build and preview validation. Before a public release, configure
 platform providers and private debug tokens for local/CI builds, then deploy
 Functions with:
 
