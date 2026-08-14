@@ -3,7 +3,7 @@
     "name": "PlanLi Travels",
     "slug": "client",
     "scheme": "client",
-    "version": "0.19.4",
+    "version": "1.0.0",
     "owner": "doric2000",
     "orientation": "portrait",
     "icon": "./assets/brand-app-icon.png",
