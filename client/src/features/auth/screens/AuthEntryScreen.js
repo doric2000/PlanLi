@@ -4,6 +4,7 @@ import AppText from '../../../components/AppText';
 import { authStyles } from '../../../styles';
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
+import { openMainTab } from '../../../navigation/authNavigation';
 
 export default function AuthEntryScreen({ navigation }) {
   return (
@@ -19,7 +20,11 @@ export default function AuthEntryScreen({ navigation }) {
       <TouchableOpacity style={authStyles.secondaryButton} onPress={() => navigation.navigate('Register')}>
         <AppText style={authStyles.secondaryButtonText}>יצירת חשבון</AppText>
       </TouchableOpacity>
-      <TouchableOpacity style={authStyles.textButton} onPress={() => navigation.navigate('Main')}>
+      <TouchableOpacity
+        style={authStyles.textButton}
+        onPress={() => openMainTab(navigation, 'Home')}
+        testID="continue-as-guest"
+      >
         <AppText style={authStyles.textButtonText}>המשך גלישה כאורח</AppText>
       </TouchableOpacity>
     </AuthLayout>

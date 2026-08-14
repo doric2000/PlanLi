@@ -25,13 +25,18 @@ import { completeAccountSetup, registerUserDocument } from './ProfileService';
 export const DEFAULT_DISPLAY_NAME = 'מטייל/ת PlanLi';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_WEB_CLIENT_ID_PATTERN = /^\d+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/;
 const NONCE_CHARACTERS = '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
 let googleConfigured = false;
 
 export const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+export const isValidGoogleWebClientId = (value) => (
+  GOOGLE_WEB_CLIENT_ID_PATTERN.test(String(value || '').trim())
+);
 
 export const formatAuthError = (error) => {
   const code = String(error?.code || '');
+  const message = String(error?.message || '');
   if (code === 'auth/account-exists-with-different-credential' || code === 'auth/email-already-in-use') {
     return 'כבר קיים חשבון עם כתובת האימייל הזו. התחברו באמצעות שיטת ההתחברות המקורית.';
   }
@@ -47,7 +52,10 @@ export const formatAuthError = (error) => {
   if (code === 'auth/too-many-requests') return 'בוצעו יותר מדי ניסיונות. המתינו מעט ונסו שוב.';
   if (code === 'auth/requires-recent-login') return 'מטעמי אבטחה צריך להתחבר מחדש ולנסות שוב.';
   if (code === 'auth/user-mismatch') return 'החשבון שנבחר אינו החשבון שמחובר כעת. נסו שוב עם החשבון המקורי.';
-  if (code === 'DEVELOPER_ERROR' || /DEVELOPER_ERROR|configuration error/i.test(String(error?.message || ''))) {
+  if (
+    code === 'DEVELOPER_ERROR'
+    || /DEVELOPER_ERROR|configuration error|invalid_audience|not a valid client id/i.test(message)
+  ) {
     return 'התחברות Google אינה מוגדרת נכון בגרסה הזו. יש לבדוק את הגדרות ה־OAuth.';
   }
   if (code === 'functions/failed-precondition') return 'האימות החדש אינו תקף עוד. התחברו מחדש ונסו שוב.';
@@ -57,7 +65,7 @@ export const formatAuthError = (error) => {
   if (code === 'auth/provider-not-configured') return 'שיטת ההתחברות עדיין אינה מוגדרת בגרסה הזו.';
   if (code === 'auth/missing-token') return 'ספק ההתחברות לא החזיר אישור תקין. נסו שוב.';
   if (code === 'auth/profile-bootstrap-failed') return 'לא הצלחנו להכין את הפרופיל. נסו שוב.';
-  return error?.message || 'אירעה שגיאה. נסו שוב.';
+  return 'אירעה שגיאה בתהליך האימות. נסו שוב.';
 };
 
 export const isProviderCancellation = (error) => (
@@ -78,7 +86,7 @@ const missingToken = () => {
 
 function configureGoogle() {
   if (googleConfigured) return;
-  if (!GOOGLE_WEB_CLIENT_ID) {
+  if (!isValidGoogleWebClientId(GOOGLE_WEB_CLIENT_ID)) {
     const error = new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not configured.');
     error.code = 'auth/provider-not-configured';
     throw error;

@@ -7,6 +7,8 @@ export const authStyles = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 24 },
   shell: { width: '100%', maxWidth: 460, alignSelf: 'center', paddingHorizontal: 20 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 22, shadowColor: '#102A43', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 3 },
+  backRow: { minHeight: 44, flexDirection: 'row-reverse', justifyContent: 'flex-start', marginBottom: 2 },
+  backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: '#F4F5F9' },
   logo: { width: 244, height: 82, alignSelf: 'center', marginBottom: 22 },
   compactLogo: { width: 174, height: 58, alignSelf: 'center', marginBottom: 18 },
   title: { fontFamily: fontFamilies.semiBold, fontSize: 28, lineHeight: 34, color: '#1E3A5F', textAlign: 'right', writingDirection: 'rtl' },

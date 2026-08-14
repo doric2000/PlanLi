@@ -1,22 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import { AuthInput } from '../../../components/AuthInput';
 import { authStyles } from '../../../styles';
 import {
-  ensureAuthenticatedUserProfile,
   formatAuthError,
-  isProviderCancellation,
   normalizeEmail,
   registerWithEmail,
-  signInWithApple,
-  signInWithGoogle,
   validateNewPassword,
 } from '../../../services/AuthService';
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import LegalConsent from '../components/LegalConsent';
-import { SocialLoginButtons } from '../components/SocialLoginButtons';
+import { resetToRootRoute } from '../../../navigation/authNavigation';
 
 export default function RegisterScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
@@ -40,7 +36,7 @@ export default function RegisterScreen({ navigation }) {
       const policy = await validateNewPassword(password);
       if (!policy.isValid) return setError(policy.message);
       await registerWithEmail({ displayName, email, password, acceptedLegal });
-      navigation.reset({ index: 0, routes: [{ name: 'VerifyEmail' }] });
+      resetToRootRoute(navigation, 'VerifyEmail');
     } catch (registrationError) {
       setError(formatAuthError(registrationError));
     } finally {
@@ -48,22 +44,8 @@ export default function RegisterScreen({ navigation }) {
     }
   };
 
-  const handleSocial = async (provider) => {
-    setLoading(true);
-    setError('');
-    try {
-      const result = provider === 'apple' ? await signInWithApple() : await signInWithGoogle();
-      await ensureAuthenticatedUserProfile(result.user, result.profile);
-      navigation.reset({ index: 0, routes: [{ name: 'CompleteAccount' }] });
-    } catch (socialError) {
-      if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <AuthLayout testID="register-screen">
+    <AuthLayout testID="register-screen" showBack onBack={() => navigation.goBack()}>
       <BrandWordmark compact />
       <AppText style={authStyles.title}>יוצאים לדרך</AppText>
       <AppText style={authStyles.subtitle}>כמה פרטים קצרים והחשבון מוכן.</AppText>
@@ -77,10 +59,6 @@ export default function RegisterScreen({ navigation }) {
       <TouchableOpacity style={[authStyles.primaryButton, loading && authStyles.primaryButtonDisabled]} onPress={handleRegister} disabled={loading} testID="email-register-button">
         {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>יצירת חשבון</AppText>}
       </TouchableOpacity>
-      {Platform.OS !== 'web' ? (
-        <><View style={authStyles.dividerRow}><View style={authStyles.divider} /><AppText style={authStyles.dividerText}>או</AppText><View style={authStyles.divider} /></View>
-          <SocialLoginButtons mode="register" onGoogleLogin={() => handleSocial('google')} onAppleLogin={() => handleSocial('apple')} disabled={loading} /></>
-      ) : null}
       <View style={authStyles.footerRow}><AppText style={authStyles.footerText}>כבר יש חשבון? </AppText><TouchableOpacity onPress={() => navigation.replace('Login')}><AppText style={authStyles.link}>התחברות</AppText></TouchableOpacity></View>
     </AuthLayout>
   );

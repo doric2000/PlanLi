@@ -3,11 +3,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import AppFontProvider from "./src/components/AppFontProvider";
 
-import LoginScreen from "./src/features/auth/screens/LoginScreen";
-import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import VerifyEmailScreen from "./src/features/auth/screens/VerifyEmailScreen";
-import ForgotPasswordScreen from "./src/features/auth/screens/ForgotPasswordScreen";
-import ResetEmailSentScreen from "./src/features/auth/screens/ResetEmailSentScreen";
 import CompleteAccountScreen from "./src/features/auth/screens/CompleteAccountScreen";
 import LegalDocumentScreen from "./src/features/legal/screens/LegalDocumentScreen";
 import ChangeNameScreen from "./src/features/profile/screens/ChangeNameScreen";
@@ -79,11 +75,7 @@ export default function App() {
 					initialRouteName='Main'
 					screenOptions={rtlStackScreenOptions}
 				>
-					<Stack.Screen name='Login' component={LoginScreen} />
-					<Stack.Screen name='Register' component={RegisterScreen} />
 					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />
-					<Stack.Screen name='ForgotPassword' component={ForgotPasswordScreen} />
-					<Stack.Screen name='ResetEmailSent' component={ResetEmailSentScreen} />
 					<Stack.Screen name='CompleteAccount' component={CompleteAccountScreen} />
 					<Stack.Screen name='Terms' component={LegalDocumentScreen} />
 					<Stack.Screen name='Privacy' component={LegalDocumentScreen} />

@@ -53,13 +53,14 @@ jest.mock('../src/services/ProfileService', () => ({
   registerUserDocument: (...args) => mockRegisterUserDocument(...args),
 }));
 
-process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'web-client.apps.googleusercontent.com';
+process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = '123456789012-web-client.apps.googleusercontent.com';
 
 const { auth } = require('../src/config/firebase');
 const {
   DEFAULT_DISPLAY_NAME,
   ensureAuthenticatedUserProfile,
   formatAuthError,
+  isValidGoogleWebClientId,
   normalizeEmail,
   reauthenticateWithApple,
   signInWithApple,
@@ -76,6 +77,25 @@ describe('AuthService', () => {
     expect(normalizeEmail('  Person@Example.COM ')).toBe('person@example.com');
     expect(formatAuthError({ code: 'auth/account-exists-with-different-credential' }))
       .toContain('שיטת ההתחברות המקורית');
+  });
+
+  it('never exposes native provider details in authentication errors', () => {
+    const providerError = {
+      code: '-61440',
+      message: 'invalid_audience: Audience is not a valid client ID. private-native-details',
+    };
+    expect(formatAuthError(providerError)).toContain('Google');
+    expect(formatAuthError(providerError)).not.toContain('invalid_audience');
+    expect(formatAuthError(providerError)).not.toContain('private-native-details');
+
+    const unknownError = new Error('unexpected internal provider payload');
+    expect(formatAuthError(unknownError)).toBe('אירעה שגיאה בתהליך האימות. נסו שוב.');
+    expect(formatAuthError(unknownError)).not.toContain('internal provider payload');
+  });
+
+  it('rejects placeholder and malformed Google Web client IDs before native sign-in', () => {
+    expect(isValidGoogleWebClientId('YOUR_WEB_CLIENT_ID.apps.googleusercontent.com')).toBe(false);
+    expect(isValidGoogleWebClientId('123456789012-web-client.apps.googleusercontent.com')).toBe(true);
   });
 
   it('creates or repairs the private profile without choosing a navigation destination', async () => {
@@ -104,7 +124,7 @@ describe('AuthService', () => {
       profile: { displayName: 'Google User', photoURL: undefined },
     });
     expect(mockGoogleConfigure).toHaveBeenCalledWith({
-      webClientId: 'web-client.apps.googleusercontent.com',
+      webClientId: '123456789012-web-client.apps.googleusercontent.com',
       offlineAccess: false,
     });
 
