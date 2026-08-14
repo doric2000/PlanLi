@@ -13,9 +13,25 @@ service firebase.storage {
         );
     }
 
+    function activeAccount() {
+      let user = firestore.get(
+        /databases/(default)/documents/users/$(request.auth.uid)
+      ).data;
+      return verified()
+        && user.displayName is string
+        && user.displayName.size() >= 2
+        && user.onboarding.profileDetailsVersion == 1
+        && user.onboarding.profileDetailsCompletedAt != null
+        && user.legal.termsVersion == '2026-08-14-draft'
+        && user.legal.privacyVersion == '2026-08-14-draft'
+        && user.legal.acceptedAt != null
+        && user.smartProfile.setupRequired == false
+        && user.smartProfile.completedAt != null;
+    }
+
     match /media-staging/{uid}/{fileName} {
       allow read, delete: if signedIn() && request.auth.uid == uid;
-      allow create: if verified()
+      allow create: if activeAccount()
         && request.auth.uid == uid
         && resource == null
         && fileName.matches(

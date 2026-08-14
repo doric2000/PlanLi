@@ -33,8 +33,8 @@ import {
   communityScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
 } from '../../../styles';
-import { auth } from '../../../config/firebase';
-import { getUserTier } from '../../../utils/userTier';
+import { useAuthUser } from '../../../hooks/useAuthUser';
+import { CAPABILITIES } from '../../../constants/authPolicy';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import {
   getFabBottomInset,
@@ -48,6 +48,7 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { requireCapability } = useAuthUser();
   // --- State ---
   const [sortBy, setSortBy] = useState('popularity');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -310,17 +311,7 @@ export default function CommunityScreen({ navigation }) {
         <FabButton
           style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
           onPress={() => {
-            const tier = getUserTier(auth.currentUser);
-            if (tier === 'guest') {
-              Alert.alert('יש להתחבר', 'כדי ליצור המלצה צריך להתחבר.');
-              navigation.navigate('Login');
-              return;
-            }
-            if (tier === 'unverified') {
-              Alert.alert('נדרש אימות', 'כדי ליצור המלצה צריך לאמת את האימייל.');
-              navigation.navigate('VerifyEmail');
-              return;
-            }
+            if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'AddRecommendation' })) return;
             navigation.navigate('AddRecommendation');
           }}
         />

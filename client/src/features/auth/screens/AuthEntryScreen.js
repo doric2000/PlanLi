@@ -1,70 +1,27 @@
-import React, { useCallback } from 'react';
-import { View, TouchableOpacity } from 'react-native';
-import AppText from "../../../components/AppText";
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { forms, common, spacing, typography } from '../../../styles';
-
-function getRootNavigation(navigation) {
-  let current = navigation;
-  let parent = current?.getParent?.();
-  while (parent) {
-    current = parent;
-    parent = current?.getParent?.();
-  }
-  return current;
-}
+import React from 'react';
+import { TouchableOpacity } from 'react-native';
+import AppText from '../../../components/AppText';
+import { authStyles } from '../../../styles';
+import AuthLayout from '../components/AuthLayout';
+import BrandWordmark from '../components/BrandWordmark';
 
 export default function AuthEntryScreen({ navigation }) {
-  const goTo = useCallback(
-    (screen) => {
-      const rootNav = getRootNavigation(navigation);
-      rootNav?.navigate?.(screen);
-    },
-    [navigation]
-  );
-
   return (
-    <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={forms.authContainer}>
-      <SafeAreaView style={forms.authSafeArea}>
-        <View style={[forms.authCard, { paddingVertical: 28 }]}>
-          <View style={{ alignItems: 'flex-end' }}>
-            <AppText style={[forms.authTitle, { textAlign: 'right' }]}>ברוכים הבאים</AppText>
-            <AppText style={[forms.authSubtitle, { textAlign: 'right' }]}>התחבר/י או הירשם/י כדי להיכנס לפרופיל</AppText>
-          </View>
-
-          <View style={{ height: 18 }} />
-
-          <TouchableOpacity onPress={() => goTo('Login')} activeOpacity={0.85}>
-            <LinearGradient
-              colors={['#1E3A8A', '#2563EB']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[forms.authButton, { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10 }]}
-            >
-              <Ionicons name="log-in-outline" size={20} color="#fff" />
-              <AppText style={forms.authButtonText}>התחברות</AppText>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <View style={{ height: 12 }} />
-
-          <TouchableOpacity onPress={() => goTo('Register')} activeOpacity={0.85} style={forms.authSecondaryButton}>
-            <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <Ionicons name="person-add-outline" size={20} color="#fff" />
-              <AppText style={forms.authSecondaryButtonText}>הרשמה</AppText>
-            </View>
-          </TouchableOpacity>
-
-          <View style={{ height: 12 }} />
-
-          <AppText style={[typography.meta, { textAlign: 'right', color: 'rgba(255,255,255,0.85)' }]}
-          >
-            כאורח/ת אפשר לצפות בתוכן, אבל פרופיל דורש התחברות.
-          </AppText>
-        </View>
-      </SafeAreaView>
-    </LinearGradient>
+    <AuthLayout testID="auth-entry-screen" keyboard={false}>
+      <BrandWordmark />
+      <AppText style={[authStyles.title, authStyles.centeredTitle]}>תכנון טיולים מתחיל כאן</AppText>
+      <AppText style={[authStyles.subtitle, authStyles.centeredText]}>
+        התחברו כדי לשמור יעדים, לבנות מסלולים ולקבל התאמה אישית.
+      </AppText>
+      <TouchableOpacity style={authStyles.primaryButton} onPress={() => navigation.navigate('Login')}>
+        <AppText style={authStyles.primaryButtonText}>התחברות</AppText>
+      </TouchableOpacity>
+      <TouchableOpacity style={authStyles.secondaryButton} onPress={() => navigation.navigate('Register')}>
+        <AppText style={authStyles.secondaryButtonText}>יצירת חשבון</AppText>
+      </TouchableOpacity>
+      <TouchableOpacity style={authStyles.textButton} onPress={() => navigation.navigate('Main')}>
+        <AppText style={authStyles.textButtonText}>המשך גלישה כאורח</AppText>
+      </TouchableOpacity>
+    </AuthLayout>
   );
 }

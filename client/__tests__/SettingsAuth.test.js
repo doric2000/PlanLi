@@ -10,6 +10,7 @@ const mockReauthenticateWithGoogle = jest.fn();
 const mockReauthenticateWithPassword = jest.fn();
 const mockRequestAccountDeletion = jest.fn();
 const mockSignOut = jest.fn();
+const mockRevokeGoogleAccess = jest.fn();
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -21,10 +22,6 @@ jest.mock('../src/config/firebase', () => ({
   auth: { currentUser: { uid: 'user-1' } },
 }));
 
-jest.mock('firebase/auth', () => ({
-  signOut: (...args) => mockSignOut(...args),
-}));
-
 jest.mock('../src/services/AuthService', () => ({
   formatAuthError: (error) => error?.message || 'שגיאה',
   getProviderIds: () => mockProviderIds,
@@ -32,6 +29,8 @@ jest.mock('../src/services/AuthService', () => ({
   reauthenticateWithApple: (...args) => mockReauthenticateWithApple(...args),
   reauthenticateWithGoogle: (...args) => mockReauthenticateWithGoogle(...args),
   reauthenticateWithPassword: (...args) => mockReauthenticateWithPassword(...args),
+  revokeGoogleAccessForDeletion: (...args) => mockRevokeGoogleAccess(...args),
+  signOutCentral: (...args) => mockSignOut(...args),
 }));
 
 jest.mock('../src/services/SocialService', () => ({
@@ -48,6 +47,7 @@ describe('Settings authentication behavior', () => {
     mockProviderIds = [];
     mockRequestAccountDeletion.mockResolvedValue({ status: 'complete' });
     mockSignOut.mockResolvedValue();
+    mockRevokeGoogleAccess.mockResolvedValue();
     jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
       if (title === 'מחיקת חשבון') buttons?.[1]?.onPress?.();
     });
@@ -97,5 +97,21 @@ describe('Settings authentication behavior', () => {
       expect(mockRequestAccountDeletion).toHaveBeenCalledWith({});
       expect(mockSignOut).toHaveBeenCalled();
     });
+  });
+
+  it('revokes Google access before deleting the Firebase account', async () => {
+    mockProviderIds = ['google.com'];
+    mockReauthenticateWithGoogle.mockResolvedValue({});
+    const screen = render(<SettingsScreen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} />);
+
+    fireEvent.press(screen.getByTestId('settings-delete-account-button'));
+
+    await waitFor(() => {
+      expect(mockReauthenticateWithGoogle).toHaveBeenCalled();
+      expect(mockRevokeGoogleAccess).toHaveBeenCalled();
+      expect(mockRequestAccountDeletion).toHaveBeenCalledWith({});
+    });
+    expect(mockRevokeGoogleAccess.mock.invocationCallOrder[0])
+      .toBeLessThan(mockRequestAccountDeletion.mock.invocationCallOrder[0]);
   });
 });

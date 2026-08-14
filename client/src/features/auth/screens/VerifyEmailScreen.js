@@ -1,111 +1,43 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { View, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import AppText from "../../../components/AppText";
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { sendEmailVerification } from 'firebase/auth';
-import { auth } from '../../../config/firebase';
-import { forms } from '../../../styles';
-import { getUserTier } from '../../../utils/userTier';
+import React, { useState } from 'react';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AppText from '../../../components/AppText';
+import { authStyles } from '../../../styles';
+import { useAuth } from '../AuthContext';
+import { formatAuthError, refreshAuthenticatedUser, resendVerificationEmail, signOutCentral } from '../../../services/AuthService';
+import AuthLayout from '../components/AuthLayout';
+import BrandWordmark from '../components/BrandWordmark';
 
 export default function VerifyEmailScreen({ navigation }) {
-  const [submitting, setSubmitting] = useState(false);
-
-  const authUser = auth.currentUser;
-  const tier = useMemo(() => getUserTier(authUser), [authUser]);
-
-  const handleResend = useCallback(async () => {
-    if (!auth.currentUser) {
-      Alert.alert('שגיאה', 'יש להתחבר כדי לשלוח אימייל אימות.');
-      navigation.replace('Login');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await sendEmailVerification(auth.currentUser);
-      Alert.alert('נשלח!', 'שלחנו לך אימייל אימות. בדוק/י גם בספאם.');
-    } catch (e) {
-      Alert.alert('שגיאה', e?.message || 'לא הצלחנו לשלוח אימייל אימות.');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [navigation]);
-
-  const handleRefresh = useCallback(async () => {
-    if (!auth.currentUser) {
-      navigation.replace('Login');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await auth.currentUser.reload();
-      if (getUserTier(auth.currentUser) === 'verified') {
-        Alert.alert('מעולה!', 'האימייל אומת בהצלחה.');
-        navigation.replace('Main');
-      } else {
-        Alert.alert('עדיין לא מאומת', 'פתח/י את האימייל ולחץ/י על הקישור ואז נסה/י שוב.');
-      }
-    } catch (e) {
-      Alert.alert('שגיאה', e?.message || 'לא הצלחנו לרענן סטטוס אימות.');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [navigation]);
-
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const run = async (operation) => {
+    setLoading(true); setMessage('');
+    try { await operation(); } catch (error) { setMessage(formatAuthError(error)); } finally { setLoading(false); }
+  };
+  const refresh = () => run(async () => {
+    const current = await refreshAuthenticatedUser();
+    if (current?.emailVerified) navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+    else setMessage('האימייל עדיין לא אומת. פתחו את הקישור שקיבלתם ונסו שוב.');
+  });
   return (
-    <LinearGradient colors={['#1E3A8A', '#3B82F6']} style={forms.authContainer}>
-      <SafeAreaView style={forms.authSafeArea}>
-        <View style={[forms.authCard, { paddingVertical: 28 }]}>
-          <AppText style={forms.authTitle}>אימות אימייל</AppText>
-          <AppText style={forms.authSubtitle}>
-            כדי לפתוח את כל הפיצ׳רים (תגובות, שמירה, יצירה/עריכה), צריך לאמת את האימייל.
-          </AppText>
-
-          <View style={{ height: 16 }} />
-
-          <View style={{ gap: 12 }}>
-            <TouchableOpacity onPress={handleResend} activeOpacity={0.8} disabled={submitting}>
-              <LinearGradient
-                colors={['#1E3A8A', '#2563EB']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={forms.authButton}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <AppText style={forms.authButtonText}>שלח אימייל אימות שוב</AppText>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleRefresh}
-              activeOpacity={0.8}
-              style={[forms.authSecondaryButton, { borderColor: 'rgba(255,255,255,0.35)' }]}
-              disabled={submitting}
-            >
-              <AppText style={forms.authSecondaryButtonText}>רענן סטטוס</AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() =>
-                navigation.replace('Main', {
-                  allowUnverified: true,
-                })
-              }
-              activeOpacity={0.8}
-              style={[forms.authSecondaryButton, { borderColor: 'rgba(255,255,255,0.35)' }]}
-            >
-              <AppText style={forms.authSecondaryButtonText}>
-                {tier === 'unverified' ? 'המשך לאפליקציה (מוגבל)' : 'המשך לאפליקציה'}
-              </AppText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    </LinearGradient>
+    <AuthLayout testID="verify-email-screen" keyboard={false}>
+      <BrandWordmark compact />
+      <View style={authStyles.statusIcon}><Ionicons name="mail-unread-outline" size={32} color="#F5961D" /></View>
+      <AppText style={[authStyles.title, authStyles.centeredTitle]}>אמתו את כתובת האימייל</AppText>
+      <AppText style={[authStyles.subtitle, authStyles.centeredText]}>שלחנו קישור מאובטח לכתובת:</AppText>
+      <AppText style={authStyles.email}>{user?.email || ''}</AppText>
+      {message ? <AppText style={authStyles.error}>{message}</AppText> : null}
+      <TouchableOpacity style={authStyles.primaryButton} onPress={refresh} disabled={loading} testID="verify-email-refresh">
+        {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>כבר אימתתי — רענון</AppText>}
+      </TouchableOpacity>
+      <TouchableOpacity style={authStyles.secondaryButton} onPress={() => run(resendVerificationEmail)} disabled={loading} testID="verify-email-resend"><AppText style={authStyles.secondaryButtonText}>שליחה חוזרת</AppText></TouchableOpacity>
+      <TouchableOpacity style={authStyles.textButton} onPress={() => navigation.replace('Main', { allowUnverified: true })}><AppText style={authStyles.textButtonText}>המשך לגלישה ציבורית</AppText></TouchableOpacity>
+      <View style={authStyles.utilityRow}>
+        <TouchableOpacity style={authStyles.utilityLink} onPress={() => run(async () => { await signOutCentral(); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); })}><AppText style={authStyles.utilityText}>התנתקות</AppText></TouchableOpacity>
+        <TouchableOpacity style={authStyles.utilityLink} onPress={() => navigation.navigate('Settings')}><AppText style={authStyles.utilityText}>מחיקת חשבון</AppText></TouchableOpacity>
+      </View>
+    </AuthLayout>
   );
 }

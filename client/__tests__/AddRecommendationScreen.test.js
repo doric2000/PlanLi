@@ -147,13 +147,7 @@ jest.mock('../src/hooks/useDurableDraftMedia', () => ({
   }),
 }));
 
-// D. Mock User Permissions
-// The app's tiers are: guest | unverified | verified
-jest.mock('../src/utils/userTier', () => ({
-  getUserTier: () => 'verified',
-}));
-
-// E. Mock GooglePlacesInput Component
+// D. Mock GooglePlacesInput Component
 // Replaces the complex Google Autocomplete component with a simple TextInput and a Button.
 // This allows us to "type" and "select" a location programmatically.
 jest.mock('../src/components/GooglePlacesInput', () => {

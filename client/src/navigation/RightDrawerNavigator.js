@@ -3,12 +3,12 @@ import { Alert, View, TouchableOpacity } from 'react-native';
 import AppText from "../components/AppText";
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import { MaterialIcons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
 import { DrawerActions } from '@react-navigation/native';
 import appConfig from '../../app.json';
 import TabNavigator from './TabNavigator';
 import ProfileMenuList from '../features/profile/components/ProfileMenuList';
 import { auth } from '../config/firebase';
+import { signOutCentral } from '../services/AuthService';
 import { buttons, colors, typography, common } from '../styles';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { useAuthUser } from '../hooks/useAuthUser';
@@ -120,7 +120,7 @@ const handleSignOut = useCallback(() => {
       navigation.closeDrawer?.();
 
       setTimeout(async () => {
-        await signOut(auth);
+        await signOutCentral();
         
         (rootStackNav || navigation).reset?.({
           index: 0,

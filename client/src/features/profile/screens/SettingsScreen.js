@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { signOut } from 'firebase/auth';
 
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
@@ -21,6 +20,8 @@ import {
   reauthenticateWithApple,
   reauthenticateWithGoogle,
   reauthenticateWithPassword,
+  revokeGoogleAccessForDeletion,
+  signOutCentral,
 } from '../../../services/AuthService';
 import { requestAccountDeletion } from '../../../services/SocialService';
 import { resetPersonalizationActivity } from '../../../services/PersonalizationService';
@@ -77,8 +78,9 @@ export default function SettingsScreen({ navigation }) {
   const completeDeletion = async (payload = {}) => {
     setDeleting(true);
     try {
+      if (providerIds.includes('google.com')) await revokeGoogleAccessForDeletion();
       await requestAccountDeletion(payload);
-      await signOut(auth);
+      await signOutCentral().catch(() => {});
     } catch (error) {
       if (!isProviderCancellation(error)) {
         Alert.alert('לא ניתן למחוק את החשבון', formatAuthError(error));
@@ -233,6 +235,24 @@ export default function SettingsScreen({ navigation }) {
             <AppText style={styles.primaryBtnText}>שינוי סיסמה</AppText>
           </TouchableOpacity>
         ) : null}
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Terms')}
+          testID="settings-terms-button"
+        >
+          <AppText style={styles.primaryBtnText}>תנאי שימוש</AppText>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Privacy')}
+          testID="settings-privacy-button"
+        >
+          <AppText style={styles.primaryBtnText}>מדיניות פרטיות</AppText>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.primaryBtn, styles.dangerButton]}

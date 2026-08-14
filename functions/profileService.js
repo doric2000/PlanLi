@@ -1,6 +1,11 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { validateMediaAssets } = require('./recommendationService');
 const {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} = require('./authPolicy');
+const {
   BUDGET_IDS,
   INTEREST_IDS,
   NEED_IDS,
@@ -265,8 +270,57 @@ async function registerUser({ admin, auth, data }) {
   });
 }
 
+async function completeAccountSetup({ admin, auth, data }) {
+  assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  assert(data && typeof data === 'object' && !Array.isArray(data),
+    'invalid-argument', 'Account setup is invalid.');
+  assert(Object.keys(data).every((key) => ['displayName', 'acceptedLegal'].includes(key)),
+    'invalid-argument', 'Account setup contains unsupported fields.');
+  assert(data.acceptedLegal === true, 'failed-precondition', 'Legal consent is required.');
+  const displayName = cleanOptionalName(data.displayName);
+  assert(displayName && displayName.length >= 2, 'invalid-argument', 'displayName is invalid.');
+  const db = admin.firestore();
+  const ref = db.doc(`users/${auth.uid}`);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const existing = snapshot.exists ? snapshot.data() || {} : {};
+    transaction.set(ref, {
+      uid: auth.uid,
+      email: existing.email || auth.token?.email || '',
+      displayName,
+      photoURL: Object.prototype.hasOwnProperty.call(existing, 'photoURL')
+        ? existing.photoURL
+        : null,
+      onboarding: {
+        ...(existing.onboarding || {}),
+        profileDetailsVersion: PROFILE_DETAILS_VERSION,
+        profileDetailsCompletedAt: timestamp,
+      },
+      legal: {
+        termsVersion: TERMS_VERSION,
+        privacyVersion: PRIVACY_VERSION,
+        acceptedAt: timestamp,
+      },
+      smartProfile: existing.smartProfile && typeof existing.smartProfile === 'object'
+        ? existing.smartProfile
+        : { setupRequired: true },
+      ...(snapshot.exists ? {} : { createdAt: timestamp }),
+      updatedAt: timestamp,
+    }, { merge: true });
+  });
+  await admin.auth().updateUser(auth.uid, { displayName });
+  return {
+    displayName,
+    profileDetailsVersion: PROFILE_DETAILS_VERSION,
+    termsVersion: TERMS_VERSION,
+    privacyVersion: PRIVACY_VERSION,
+  };
+}
+
 module.exports = {
   cleanOptionalBio,
+  completeAccountSetup,
   registerUser,
   sanitizeSmartProfile,
   updateProfile,

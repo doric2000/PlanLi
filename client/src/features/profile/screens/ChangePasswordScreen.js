@@ -6,7 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { auth } from '../../../config/firebase';
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, signOut } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { signOutCentral } from '../../../services/AuthService';
 import { changePasswordScreenStyles as styles } from '../../../styles';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
@@ -104,7 +105,7 @@ export default function ChangePasswordScreen({ navigation }) {
 
       // logout מיד אחרי שינוי
       try {
-        await signOut(auth);
+        await signOutCentral();
       } finally {
         allowLeaveRef.current = true;
         navigation.reset({ index: 0, routes: [{ name: 'Login' }] });

@@ -6,6 +6,10 @@ import AppFontProvider from "./src/components/AppFontProvider";
 import LoginScreen from "./src/features/auth/screens/LoginScreen";
 import RegisterScreen from "./src/features/auth/screens/RegisterScreen";
 import VerifyEmailScreen from "./src/features/auth/screens/VerifyEmailScreen";
+import ForgotPasswordScreen from "./src/features/auth/screens/ForgotPasswordScreen";
+import ResetEmailSentScreen from "./src/features/auth/screens/ResetEmailSentScreen";
+import CompleteAccountScreen from "./src/features/auth/screens/CompleteAccountScreen";
+import LegalDocumentScreen from "./src/features/legal/screens/LegalDocumentScreen";
 import ChangeNameScreen from "./src/features/profile/screens/ChangeNameScreen";
 import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordScreen";
 import AddRecommendationScreen from "./src/features/community/screens/AddRecommendationScreen";
@@ -30,6 +34,9 @@ import {
 import withRequireAuth from "./src/navigation/withRequireAuth";
 import ContentPublishBanner from "./src/features/publishing/ContentPublishBanner";
 import { ContentPublishProvider } from "./src/features/publishing/ContentPublishContext";
+import { AuthProvider } from "./src/features/auth/AuthContext";
+import AuthGateModal from "./src/features/auth/components/AuthGateModal";
+import { CAPABILITIES } from "./src/constants/authPolicy";
 
 
 const Stack = createStackNavigator();
@@ -42,6 +49,8 @@ const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
 const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen);
+const AddRecommendationActive = withRequireAuth(AddRecommendationScreen, CAPABILITIES.ACTIVE);
+const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
 
 /**
  * Main App Component.
@@ -63,7 +72,8 @@ export default function App() {
 	return (
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
-				<ContentPublishProvider>
+				<AuthProvider navigationRef={navigationRef}>
+				 <ContentPublishProvider>
 				<NavigationContainer ref={navigationRef}>
 				<Stack.Navigator
 					initialRouteName='Main'
@@ -72,6 +82,11 @@ export default function App() {
 					<Stack.Screen name='Login' component={LoginScreen} />
 					<Stack.Screen name='Register' component={RegisterScreen} />
 					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />
+					<Stack.Screen name='ForgotPassword' component={ForgotPasswordScreen} />
+					<Stack.Screen name='ResetEmailSent' component={ResetEmailSentScreen} />
+					<Stack.Screen name='CompleteAccount' component={CompleteAccountScreen} />
+					<Stack.Screen name='Terms' component={LegalDocumentScreen} />
+					<Stack.Screen name='Privacy' component={LegalDocumentScreen} />
 					<Stack.Screen name='Main' component={PreferenceSetupGate} />
 					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupAuthed} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
@@ -84,7 +99,7 @@ export default function App() {
 					<Stack.Screen name='Route' component={RoutesScreen} />
 					<Stack.Screen
 						name='AddRecommendation'
-						component={AddRecommendationScreen}
+						component={AddRecommendationActive}
 						options={rtlModalScreenOptions}
 					/>
 					<Stack.Screen
@@ -99,7 +114,7 @@ export default function App() {
 					/>
 					<Stack.Screen
 						name='AddRoutesScreen'
-						component={AddRoutesScreen}
+						component={AddRoutesActive}
 						options={rtlModalScreenOptions}
 					/>
 					<Stack.Screen
@@ -114,6 +129,7 @@ export default function App() {
 					/>
 				</Stack.Navigator>
 				</NavigationContainer>
+				<AuthGateModal />
 				<ContentPublishBanner
 					onReview={(publishJobId, contentType) => {
 						if (navigationRef.isReady()) {
@@ -124,7 +140,8 @@ export default function App() {
 						}
 					}}
 				/>
-				</ContentPublishProvider>
+				 </ContentPublishProvider>
+				</AuthProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>
 	);

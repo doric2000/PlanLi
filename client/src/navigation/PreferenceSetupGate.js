@@ -1,79 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import AppText from '../components/AppText';
 import RightDrawerNavigator from './RightDrawerNavigator';
-import { useSmartProfile } from '../hooks/useSmartProfile';
-import { useAuthUser } from '../hooks/useAuthUser';
-import { ensureAuthenticatedUserProfile, formatAuthError } from '../services/AuthService';
-import { getUserTier } from '../utils/userTier';
-import { colors, common, preferenceSetupStyles as styles } from '../styles';
+import { useAuth } from '../features/auth/AuthContext';
+import { AUTH_STATES } from '../constants/authPolicy';
+import { colors, common } from '../styles';
 
 export default function PreferenceSetupGate({ navigation, route }) {
-  const { user, loading: authLoading } = useAuthUser();
-  const [bootstrapState, setBootstrapState] = useState('loading');
-  const [bootstrapError, setBootstrapError] = useState('');
-  const [retryKey, setRetryKey] = useState(0);
-  const { loading, setupRequired, error: profileError } = useSmartProfile(retryKey);
+  const { status, loading } = useAuth();
   const allowUnverified = route?.params?.allowUnverified === true;
 
   useEffect(() => {
-    let active = true;
-    if (authLoading) return () => { active = false; };
-    if (!user?.uid) {
-      setBootstrapState('ready');
-      setBootstrapError('');
-      return () => { active = false; };
-    }
-    setBootstrapState('loading');
-    setBootstrapError('');
-    ensureAuthenticatedUserProfile(user)
-      .then(() => {
-        if (active) setBootstrapState('ready');
-      })
-      .catch((error) => {
-        if (!active) return;
-        setBootstrapError(formatAuthError(error));
-        setBootstrapState('error');
-      });
-    return () => { active = false; };
-  }, [authLoading, retryKey, user?.uid]);
-
-  useEffect(() => {
-    if (bootstrapState !== 'ready' || !profileError) return;
-    setBootstrapError('לא הצלחנו לטעון את הפרופיל מהשרת. בדקו את החיבור ונסו שוב.');
-    setBootstrapState('error');
-  }, [bootstrapState, profileError]);
-
-  useEffect(() => {
-    if (bootstrapState !== 'ready' || !user) return;
-    if (getUserTier(user) === 'unverified' && !allowUnverified) {
+    if (loading) return;
+    if (status === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED && !allowUnverified) {
       navigation.reset({ index: 0, routes: [{ name: 'VerifyEmail' }] });
-    } else if (!loading && setupRequired) {
+    } else if (status === AUTH_STATES.ACCOUNT_SETUP_REQUIRED) {
+      navigation.reset({ index: 0, routes: [{ name: 'CompleteAccount' }] });
+    } else if (status === AUTH_STATES.PREFERENCES_REQUIRED) {
       navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
     }
-  }, [bootstrapState, loading, navigation, setupRequired, user, allowUnverified]);
+  }, [allowUnverified, loading, navigation, status]);
 
-  if (bootstrapState === 'error') {
-    return (
-      <SafeAreaView style={common.containerCentered} testID="profile-bootstrap-error">
-        <View style={styles.promptCard}>
-          <AppText style={styles.promptTitle}>לא הצלחנו להכין את הפרופיל</AppText>
-          <AppText style={styles.promptText}>{bootstrapError}</AppText>
-          <TouchableOpacity
-            style={styles.promptButton}
-            onPress={() => setRetryKey((value) => value + 1)}
-            testID="profile-bootstrap-retry"
-          >
-            <AppText style={styles.promptButtonText}>נסו שוב</AppText>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (authLoading || bootstrapState !== 'ready' || loading || setupRequired) {
+  if (loading || (
+    status !== AUTH_STATES.READY
+    && status !== AUTH_STATES.GUEST
+    && !(status === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED && allowUnverified)
+  )) {
     return (
       <SafeAreaView style={common.container}>
         <View style={common.loadingContainer}>

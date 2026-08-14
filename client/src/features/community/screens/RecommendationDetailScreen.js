@@ -11,6 +11,7 @@ import { RecommendationActionBar } from '../../../components/RecommendationActio
 import { RecommendationHero } from '../../../components/RecommendationHero';
 import { auth } from '../../../config/firebase';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
+import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
 import { useUserData } from '../../../hooks/useUserData';
 import { recordRecommendationOpen } from '../../../services/PersonalizationService';
@@ -61,6 +62,7 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
   const insets = useSafeAreaInsets();
   const author = useUserData(item.ownerId);
   const { isAdmin } = useAdminClaim();
+  const { isActive } = useAuthUser();
   const { isLiked, likeCount, toggleLike } = useLikes(
     'recommendations',
     postId,
@@ -70,7 +72,7 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
   const [likesModalVisible, setLikesModalVisible] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [gallery, setGallery] = useState({ visible: false, index: 0 });
-  const canEdit = canManageRecommendation({
+  const canEdit = isActive && canManageRecommendation({
     user: auth.currentUser,
     ownerId: item.ownerId,
     isAdmin,
@@ -84,9 +86,9 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
   })), [item, postId]);
 
   useEffect(() => {
-    if (!auth.currentUser?.uid || !postId) return;
+    if (!isActive || !postId) return;
     recordRecommendationOpen(postId).catch(() => {});
-  }, [postId]);
+  }, [isActive, postId]);
 
   const snapshotData = useMemo(() => ({
     name: item.title,

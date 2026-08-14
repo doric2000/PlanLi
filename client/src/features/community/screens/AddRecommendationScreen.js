@@ -2,7 +2,6 @@ import { fontFamilies } from "../../../styles/typography";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import AppText from "../../../components/AppText";
-import { auth } from '../../../config/firebase';
 import { colors, spacing, common } from '../../../styles';
 
 // --- Custom Components ---
@@ -27,7 +26,6 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 // --- Constants ---
 import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
-import { getUserTier } from '../../../utils/userTier';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -710,18 +708,6 @@ export default function AddRecommendationScreen({ navigation , route }) {
   }, [validationValues]);
 
 const handleSubmit = async () => {
-    const tier = getUserTier(auth.currentUser);
-    if (tier === 'guest') {
-      Alert.alert('יש להתחבר', 'כדי ליצור/לערוך המלצה צריך להתחבר.');
-      navigation.navigate('Login');
-      return;
-    }
-    if (tier === 'unverified') {
-      Alert.alert('נדרש אימות', 'כדי ליצור/לערוך המלצה צריך לאמת את האימייל.');
-      navigation.navigate('VerifyEmail');
-      return;
-    }
-
     const nextValidation = validateRecommendationForm(validationValues);
     setValidation(nextValidation);
     const invalidSection = firstInvalidSection(nextValidation, RECOMMENDATION_SECTION_ORDER);

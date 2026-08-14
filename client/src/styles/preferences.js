@@ -19,6 +19,7 @@ export const preferenceSetupStyles = StyleSheet.create({
   progressTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.24)', marginTop: 16 },
   progressFill: { height: 5, borderRadius: 3, backgroundColor: '#FFFFFF' },
   content: { padding: 20, paddingBottom: 130 },
+  brandSurface: { backgroundColor: '#FFFFFF', borderRadius: 20, alignItems: 'center', paddingTop: 16, marginBottom: 20 },
   sectionTitle: { color: colors.textPrimary, fontSize: 22, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
   sectionHelp: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, textAlign: 'right', marginTop: 6 },
   counter: { color: colors.primary, fontSize: 13, fontFamily: fontFamilies.medium, textAlign: 'right', marginTop: 8 },

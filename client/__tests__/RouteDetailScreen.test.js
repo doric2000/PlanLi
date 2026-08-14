@@ -8,6 +8,7 @@ jest.mock('../src/hooks/useUserData', () => ({
   useUserData: () => ({ displayName: 'Dana', photoURL: null }),
 }));
 jest.mock('../src/hooks/useAdminClaim', () => ({ useAdminClaim: () => ({ isAdmin: false }) }));
+jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ isActive: true }) }));
 jest.mock('../src/config/firebase', () => ({ auth: { currentUser: null } }));
 jest.mock('../src/services/RouteService', () => ({ recordRouteOpen: jest.fn(() => Promise.resolve()) }));
 jest.mock('../src/features/community/hooks/useLikes', () => ({

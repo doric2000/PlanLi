@@ -6,6 +6,7 @@ export { shadows } from "./shadows";
 export { buttons } from "./buttons";
 export { cards } from "./cards";
 export { forms } from "./forms";
+export { authStyles } from "./auth";
 export { tags } from "./tags";
 export { common } from "./common";
 export { googlePlacesInput } from "./googlePlacesInput";

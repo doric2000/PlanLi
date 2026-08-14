@@ -8,15 +8,15 @@ import { useLikes } from '../../community/hooks/useLikes';
 import { Avatar } from '../../../components/Avatar';
 import { ActionMenu } from '../../../components/ActionMenu';
 import { cards } from '../../../styles';
-import { auth } from '../../../config/firebase';
 import ActionBar from '../../../components/ActionBar';
 import CachedImage from '../../../components/CachedImage';
-import { getUserTier } from '../../../utils/userTier';
 import { canManageRecommendation } from '../../../utils/contentPermissions';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { formatTimestamp } from '../../../utils/formatTimestamp';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { deleteContent } from '../../../services/SocialService';
+import { useAuthUser } from '../../../hooks/useAuthUser';
+import { CAPABILITIES } from '../../../constants/authPolicy';
 
 
 /**
@@ -30,6 +30,7 @@ import { deleteContent } from '../../../services/SocialService';
  */
 const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true }) => {
   const navigation = useNavigation();
+  const { user, isActive, requireCapability } = useAuthUser();
   const imageUrl = getRecommendationImageUrls(item, 'feed')[0];
   
   // Use custom hooks
@@ -44,8 +45,8 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
 
   // Check if current user is the owner
   const { isAdmin } = useAdminClaim();
-  const canManage = canManageRecommendation({
-    user: auth.currentUser,
+  const canManage = isActive && canManageRecommendation({
+    user,
     ownerId,
     isAdmin,
   });
@@ -68,10 +69,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   };
 
   const handleDelete = async () => {
-    if (getUserTier(auth.currentUser) !== 'verified') {
-      Alert.alert('נדרש אימות', 'כדי למחוק המלצה צריך לאמת את האימייל.');
-      return;
-    }
+    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
 
     const ok =
       Platform.OS === 'web'

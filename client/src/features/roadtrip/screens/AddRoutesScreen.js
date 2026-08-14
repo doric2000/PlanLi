@@ -19,7 +19,6 @@ import {
 	TRAVEL_TAXONOMY_VERSION,
 	VIBES,
 } from "../../../constants/travelTaxonomy";
-import { auth } from "../../../config/firebase";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
 import useDurableDraftMedia from "../../../hooks/useDurableDraftMedia";
@@ -33,7 +32,6 @@ import { guidedFormStyles as guidedStyles } from "../../../components/guidedForm
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { useBackButton } from "../../../hooks/useBackButton";
 import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
-import { getUserTier } from "../../../utils/userTier";
 import { locationErrorKind, locationErrorMessage } from "../../../utils/locationErrors";
 import {
 	ensureRouteDraftIds,
@@ -498,17 +496,6 @@ export default function AddRoutesScreen({ navigation, route }) {
 	}, [validationValues]);
 
 	const ensureVerifiedForWrite = () => {
-		const tier = getUserTier(auth.currentUser);
-		if (tier === "guest") {
-			Alert.alert("יש להתחבר", "כדי ליצור או לערוך מסלול צריך להתחבר.");
-			navigation.navigate("Login");
-			return false;
-		}
-		if (tier === "unverified") {
-			Alert.alert("נדרש אימות", "כדי ליצור או לערוך מסלול צריך לאמת את האימייל.");
-			navigation.navigate("VerifyEmail");
-			return false;
-		}
 		return true;
 	};
 

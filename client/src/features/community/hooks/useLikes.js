@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { auth } from '../../../config/firebase';
+import { useAuth } from '../../auth/AuthContext';
+import { CAPABILITIES } from '../../../constants/authPolicy';
 import {
   getReactionState,
   setReaction,
@@ -11,7 +12,8 @@ const typeFromCollection = (collectionName) => {
   return 'recommendation';
 };
 export const useLikes = (collectionName, itemId, initialLikes = 0) => {
-  const currentUserId = auth.currentUser?.uid;
+  const { user, isActive, requireCapability, handleCallableAuthError } = useAuth();
+  const currentUserId = user?.uid;
   const target = useMemo(
     () => ({ type: typeFromCollection(collectionName), id: itemId }),
     [collectionName, itemId]
@@ -25,7 +27,7 @@ export const useLikes = (collectionName, itemId, initialLikes = 0) => {
 
   useEffect(() => {
     let active = true;
-    if (!currentUserId || !itemId) {
+    if (!currentUserId || !isActive || !itemId) {
       setIsLiked(false);
       return () => { active = false; };
     }
@@ -35,10 +37,10 @@ export const useLikes = (collectionName, itemId, initialLikes = 0) => {
       })
       .catch((error) => console.error('Failed to load reaction state:', error));
     return () => { active = false; };
-  }, [currentUserId, itemId, target]);
+  }, [currentUserId, isActive, itemId, target]);
 
   const toggleLike = async () => {
-    if (!currentUserId || !itemId) return;
+    if (!itemId || !requireCapability(CAPABILITIES.ACTIVE)) return;
     const nextLiked = !isLiked;
     const previousCount = likeCount;
     setIsLiked(nextLiked);
@@ -51,6 +53,7 @@ export const useLikes = (collectionName, itemId, initialLikes = 0) => {
       console.error('Error updating like:', error);
       setIsLiked(!nextLiked);
       setLikeCount(previousCount);
+      handleCallableAuthError(error);
     }
   };
 

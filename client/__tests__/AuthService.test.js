@@ -10,6 +10,8 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
   GoogleSignin: {
     configure: (...args) => mockGoogleConfigure(...args),
     signIn: (...args) => mockGoogleSignIn(...args),
+    signOut: jest.fn(),
+    revokeAccess: jest.fn(),
   },
   isCancelledResponse: (response) => response?.type === 'cancelled',
 }));
@@ -27,14 +29,20 @@ jest.mock('expo-crypto', () => ({
 }));
 
 jest.mock('firebase/auth', () => ({
+  createUserWithEmailAndPassword: jest.fn(),
   EmailAuthProvider: { credential: jest.fn((email, password) => ({ email, password })) },
   GoogleAuthProvider: { credential: jest.fn((idToken) => ({ providerId: 'google.com', idToken })) },
   OAuthProvider: jest.fn().mockImplementation(() => ({
     credential: ({ idToken, rawNonce }) => ({ providerId: 'apple.com', idToken, rawNonce }),
   })),
   reauthenticateWithCredential: (...args) => mockReauthenticateWithCredential(...args),
+  sendEmailVerification: jest.fn(),
+  sendPasswordResetEmail: jest.fn(),
+  signInWithEmailAndPassword: jest.fn(),
   signInWithCredential: (...args) => mockSignInWithCredential(...args),
+  signOut: jest.fn(),
   updateProfile: (...args) => mockUpdateProfile(...args),
+  validatePassword: jest.fn(async () => ({ isValid: true })),
 }));
 
 jest.mock('../src/config/firebase', () => ({
@@ -50,7 +58,7 @@ process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'web-client.apps.googleuserconten
 const { auth } = require('../src/config/firebase');
 const {
   DEFAULT_DISPLAY_NAME,
-  completeAuthentication,
+  ensureAuthenticatedUserProfile,
   formatAuthError,
   normalizeEmail,
   reauthenticateWithApple,
@@ -70,7 +78,7 @@ describe('AuthService', () => {
       .toContain('שיטת ההתחברות המקורית');
   });
 
-  it('creates or repairs the private profile before choosing the destination', async () => {
+  it('creates or repairs the private profile without choosing a navigation destination', async () => {
     const socialUser = {
       uid: 'social-1',
       email: 'social@example.com',
@@ -79,20 +87,8 @@ describe('AuthService', () => {
       providerData: [{ providerId: 'google.com' }],
     };
     mockRegisterUserDocument.mockResolvedValueOnce({ created: true, setupRequired: true });
-    await expect(completeAuthentication(socialUser)).resolves.toMatchObject({ routeName: 'PreferenceSetup' });
+    await expect(ensureAuthenticatedUserProfile(socialUser)).resolves.toEqual({ created: true, setupRequired: true });
     expect(mockRegisterUserDocument).toHaveBeenCalledWith({ displayName: 'Traveler', photoURL: null });
-
-    mockRegisterUserDocument.mockResolvedValueOnce({ created: false, setupRequired: false });
-    await expect(completeAuthentication(socialUser)).resolves.toMatchObject({ routeName: 'Main' });
-
-    const passwordUser = {
-      ...socialUser,
-      uid: 'password-1',
-      emailVerified: false,
-      providerData: [{ providerId: 'password' }],
-    };
-    mockRegisterUserDocument.mockResolvedValueOnce({ created: false, setupRequired: true });
-    await expect(completeAuthentication(passwordUser)).resolves.toMatchObject({ routeName: 'VerifyEmail' });
   });
 
   it('uses the native Google ID token and handles cancellation separately', async () => {
@@ -162,7 +158,7 @@ describe('AuthService', () => {
     mockRegisterUserDocument.mockResolvedValueOnce({ created: true, setupRequired: true });
 
     const result = await signInWithApple();
-    await completeAuthentication(result.user, result.profile);
+    await ensureAuthenticatedUserProfile(result.user, result.profile);
 
     expect(mockUpdateProfile).not.toHaveBeenCalled();
     expect(mockRegisterUserDocument).toHaveBeenCalledWith({
