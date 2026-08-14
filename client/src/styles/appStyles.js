@@ -2490,6 +2490,32 @@ export const settingsScreenStyles = StyleSheet.create({
     backgroundColor: '#22375B',
   },
   primaryBtnText: { color: '#fff', fontFamily: fontFamilies.semiBold, fontSize: 16 },
+  dangerButton: { backgroundColor: '#B42318' },
+  buttonDisabled: { opacity: 0.6 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.48)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: { width: '100%', maxWidth: 420, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 20 },
+  modalTitle: { fontSize: 20, fontFamily: fontFamilies.semiBold, color: '#111827', textAlign: 'right' },
+  modalText: { marginTop: 8, color: '#4B5563', lineHeight: 20, textAlign: 'right' },
+  modalInput: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginTop: 18,
+    textAlign: 'right',
+  },
+  modalActions: { flexDirection: 'row-reverse', gap: 10, marginTop: 18 },
+  modalCancelButton: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#F3F4F6' },
+  modalCancelText: { color: '#374151', fontFamily: fontFamilies.semiBold },
+  modalDeleteButton: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#B42318' },
+  modalDeleteText: { color: '#FFFFFF', fontFamily: fontFamilies.semiBold },
 });
 
 // features/profile/screens/UserProfileScreen.js

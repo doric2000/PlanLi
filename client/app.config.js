@@ -1,6 +1,4 @@
-const { expo } = require('./app.json');
-
-module.exports = () => {
+module.exports = ({ config }) => {
   const iosKey = String(process.env.GOOGLE_MAPS_IOS_KEY || '').trim();
   const androidKey = String(process.env.GOOGLE_MAPS_ANDROID_KEY || '').trim();
   if (process.env.EAS_BUILD && (!iosKey || !androidKey)) {
@@ -8,15 +6,15 @@ module.exports = () => {
   }
 
   return {
-    ...expo,
+    ...config,
     ios: {
-      ...expo.ios,
-      ...(iosKey ? { config: { ...(expo.ios?.config || {}), googleMapsApiKey: iosKey } } : {}),
+      ...config.ios,
+      ...(iosKey ? { config: { ...(config.ios?.config || {}), googleMapsApiKey: iosKey } } : {}),
     },
     android: {
-      ...expo.android,
+      ...config.android,
       ...(androidKey
-        ? { config: { ...(expo.android?.config || {}), googleMaps: { apiKey: androidKey } } }
+        ? { config: { ...(config.android?.config || {}), googleMaps: { apiKey: androidKey } } }
         : {}),
     },
   };

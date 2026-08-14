@@ -84,6 +84,17 @@ const restCountriesKey = defineSecret('REST_COUNTRIES_KEY');
 const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
 const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
 const publicRateLimitKey = defineSecret('PUBLIC_RATE_LIMIT_KEY');
+const appleSignInPrivateKey = defineSecret('APPLE_SIGN_IN_PRIVATE_KEY');
+const appleSignInTeamId = defineString('APPLE_SIGN_IN_TEAM_ID', {
+  description: 'Apple Developer Team ID used by Sign in with Apple.',
+});
+const appleSignInKeyId = defineString('APPLE_SIGN_IN_KEY_ID', {
+  description: 'Sign in with Apple private key identifier.',
+});
+const appleSignInClientId = defineString('APPLE_SIGN_IN_CLIENT_ID', {
+  description: 'Native Sign in with Apple client ID.',
+  default: 'com.planli.planlitravels',
+});
 const placesProvider = defineString('PLACES_PROVIDER', {
   description: 'Google Places provider adapter: new or legacy.',
   // Places API (New) passed the live fixture gate. Set PLACES_PROVIDER=legacy
@@ -349,11 +360,19 @@ exports.requestAccountDeletion = callable(
     memory: '1GiB',
     consumeAppCheckToken: ENFORCE_APP_CHECK,
     serviceAccount: MEDIA_SERVICE_ACCOUNT,
+    secrets: [appleSignInPrivateKey],
   },
   (request) => requestAccountDeletion({
     admin,
     auth: request.auth,
+    data: request.data,
     mediaBucket: mediaStorageBucket.value(),
+    appleConfig: {
+      privateKey: appleSignInPrivateKey.value(),
+      teamId: appleSignInTeamId.value(),
+      keyId: appleSignInKeyId.value(),
+      clientId: appleSignInClientId.value(),
+    },
   })
 );
 

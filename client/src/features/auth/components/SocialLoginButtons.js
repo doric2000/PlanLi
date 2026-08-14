@@ -1,29 +1,52 @@
-import React from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Platform, View } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { GoogleSigninButton } from '@react-native-google-signin/google-signin';
+
 import { forms } from '../../../styles';
-import CachedImage from '../../../components/CachedImage';
 
-const SOCIALS = [
-  { logo: "https://cdn-icons-png.flaticon.com/512/300/300221.png", key: "google" },
-  { logo: "https://cdn-icons-png.flaticon.com/512/5968/5968764.png", key: "facebook" },
-  { logo: "https://cdn-icons-png.flaticon.com/512/0/747.png", key: "apple" },
-];
+export const SocialLoginButtons = ({
+  mode = 'login',
+  onGoogleLogin,
+  onAppleLogin,
+  disabled = false,
+}) => {
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
-export const SocialLoginButtons = ({ onGoogleLogin }) => (
-  <View style={forms.authSocialContainer}>
-    {SOCIALS.map((item, index) => (
-      <TouchableOpacity
-        key={index}
-        style={forms.authSocialButton}
-        onPress={item.key === "google" ? onGoogleLogin : undefined}
-      >
-        <CachedImage
-          source={{ uri: item.logo }}
-          style={forms.authSocialIcon}
-          contentFit="contain"
-          priority="low"
+  useEffect(() => {
+    let active = true;
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync()
+        .then((available) => active && setAppleAvailable(available))
+        .catch(() => active && setAppleAvailable(false));
+    }
+    return () => { active = false; };
+  }, []);
+
+  if (Platform.OS !== 'ios') return null;
+
+  return (
+    <View style={forms.authSocialContainer} testID="auth-social-buttons">
+      <GoogleSigninButton
+        style={forms.authGoogleButton}
+        size={GoogleSigninButton.Size.Wide}
+        color={GoogleSigninButton.Color.Light}
+        onPress={onGoogleLogin}
+        disabled={disabled}
+        testID="auth-google-button"
+      />
+      {appleAvailable ? (
+        <AppleAuthentication.AppleAuthenticationButton
+          buttonType={mode === 'register'
+            ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+            : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+          cornerRadius={12}
+          style={forms.authAppleButton}
+          onPress={disabled ? () => {} : onAppleLogin}
+          testID="auth-apple-button"
         />
-      </TouchableOpacity>
-    ))}
-  </View>
-);
+      ) : null}
+    </View>
+  );
+};

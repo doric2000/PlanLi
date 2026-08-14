@@ -14,36 +14,42 @@ export const shouldRequirePreferenceSetup = (smartProfile) => (
   smartProfile?.setupRequired === true && !isSmartProfileComplete(smartProfile)
 );
 
-export function useSmartProfile() {
+export function useSmartProfile(retryKey = 0) {
   const { user, loading: authLoading } = useAuthUser();
   const [smartProfile, setSmartProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (authLoading) return undefined;
     if (!user?.uid) {
       setSmartProfile(null);
+      setError(null);
       setLoading(false);
       return undefined;
     }
     setLoading(true);
+    setError(null);
     return onSnapshot(
       doc(db, 'users', user.uid),
       (snapshot) => {
         setSmartProfile(snapshot.data()?.smartProfile || null);
+        setError(null);
         setLoading(false);
       },
-      () => {
+      (snapshotError) => {
         setSmartProfile(null);
+        setError(snapshotError);
         setLoading(false);
       }
     );
-  }, [authLoading, user?.uid]);
+  }, [authLoading, retryKey, user?.uid]);
 
   return {
     smartProfile,
     loading: authLoading || loading,
     completed: isSmartProfileComplete(smartProfile),
     setupRequired: shouldRequirePreferenceSetup(smartProfile),
+    error,
   };
 }

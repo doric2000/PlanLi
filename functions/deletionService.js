@@ -9,6 +9,7 @@ const {
   normalizeTarget,
 } = require('./socialService');
 const { refreshRecommendationFallbackForDestination } = require('./destinationImageService');
+const { revokeAppleAuthorization } = require('./appleAuthService');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -197,8 +198,19 @@ async function removeAuthoredInteractions({ admin, uid }) {
   return { comments: comments.size, likes: likes.size, notifications: actorNotifications.size };
 }
 
-async function requestAccountDeletion({ admin, auth, mediaBucket }) {
+async function requestAccountDeletion({
+  admin,
+  auth,
+  data,
+  mediaBucket,
+  appleConfig,
+  revokeAppleAuthorizationImpl = revokeAppleAuthorization,
+}) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  assert(data == null || (data && typeof data === 'object' && !Array.isArray(data)),
+    'invalid-argument', 'Account deletion request is invalid.');
+  assert(Object.keys(data || {}).every((key) => key === 'appleAuthorizationCode'),
+    'invalid-argument', 'Account deletion request contains unsupported fields.');
   const authTimeSeconds = Number(auth.token?.auth_time || 0);
   assert(
     authTimeSeconds > 0 && Date.now() / 1000 - authTimeSeconds <= 5 * 60,
@@ -206,6 +218,17 @@ async function requestAccountDeletion({ admin, auth, mediaBucket }) {
     'Recent sign-in is required before deleting an account.'
   );
   const uid = auth.uid;
+  const authUser = await admin.auth().getUser(uid);
+  const appleProvider = (authUser.providerData || []).find((provider) => provider.providerId === 'apple.com');
+  if (appleProvider) {
+    await revokeAppleAuthorizationImpl({
+      authorizationCode: data?.appleAuthorizationCode,
+      expectedSubject: appleProvider.uid,
+      config: appleConfig,
+    });
+  } else {
+    assert(!data?.appleAuthorizationCode, 'invalid-argument', 'Apple authorization is not linked to this account.');
+  }
   const db = admin.firestore();
   const jobRef = db.doc(`system/accountDeletion/jobs/${uid}`);
   const updateJob = (step, extra = {}) => jobRef.set({
