@@ -57,7 +57,7 @@ const text = {
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
-  const { requireCapability } = useAuthUser();
+  const { requireCapability, user: currentUser } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +73,6 @@ export default function RoutesScreen({ navigation }) {
   const personalizationInitialized = useRef(false);
   const requestSerial = useRef(0);
   const routesListRef = useRef(null);
-  const currentUser = auth.currentUser;
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
   const { completedVersionByType = {} } = useContentPublish();

@@ -25,7 +25,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     }
   };
   return (
-    <AuthLayout testID="forgot-password-screen">
+    <AuthLayout testID="forgot-password-screen" showBack onBack={() => navigation.goBack()}>
       <BrandWordmark compact />
       <AppText style={authStyles.title}>איפוס סיסמה</AppText>
       <AppText style={authStyles.subtitle}>נשלח קישור מאובטח למייל. מטעמי פרטיות התשובה זהה בין אם קיים חשבון ובין אם לא.</AppText>

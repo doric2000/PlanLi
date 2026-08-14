@@ -22,7 +22,7 @@ export default function ResetEmailSentScreen({ navigation, route }) {
     try { await sendResetEmail(email); setSeconds(45); } finally { setSending(false); }
   };
   return (
-    <AuthLayout testID="reset-email-sent-screen" keyboard={false}>
+    <AuthLayout testID="reset-email-sent-screen" keyboard={false} showBack onBack={() => navigation.goBack()}>
       <BrandWordmark compact />
       <View style={authStyles.statusIcon}><Ionicons name="mail-outline" size={34} color="#F5961D" /></View>
       <AppText style={[authStyles.title, authStyles.centeredTitle]}>בדקו את תיבת הדואר</AppText>

@@ -14,6 +14,7 @@ import {
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
+import { resetToMain } from '../../../navigation/authNavigation';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -21,7 +22,7 @@ export default function LoginScreen({ navigation }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const complete = () => navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+  const complete = () => resetToMain(navigation);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) return setError('יש להזין אימייל וסיסמה.');
@@ -52,7 +53,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <AuthLayout testID="login-screen">
+    <AuthLayout testID="login-screen" showBack onBack={() => navigation.goBack()}>
       <BrandWordmark compact />
       <AppText style={authStyles.title}>ברוכים השבים</AppText>
       <AppText style={authStyles.subtitle}>התחברו והמשיכו לתכנן את הטיול הבא.</AppText>

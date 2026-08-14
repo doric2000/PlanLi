@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ForgotPasswordScreen from '../src/features/auth/screens/ForgotPasswordScreen';
+import AuthEntryScreen from '../src/features/auth/screens/AuthEntryScreen';
 import LoginScreen from '../src/features/auth/screens/LoginScreen';
 import RegisterScreen from '../src/features/auth/screens/RegisterScreen';
 
@@ -61,10 +62,35 @@ describe('authentication screens', () => {
   });
 
   it('opens the dedicated forgot-password flow', () => {
-    const navigation = { navigate: jest.fn(), reset: jest.fn(), replace: jest.fn() };
+    const navigation = { navigate: jest.fn(), reset: jest.fn(), replace: jest.fn(), goBack: jest.fn() };
     const screen = render(<LoginScreen navigation={navigation} />);
     fireEvent.press(screen.getByText('שכחתי סיסמה'));
     expect(navigation.navigate).toHaveBeenCalledWith('ForgotPassword');
+  });
+
+  it('keeps social providers on login and provides a working back action', () => {
+    const navigation = {
+      navigate: jest.fn(), reset: jest.fn(), replace: jest.fn(), goBack: jest.fn(),
+    };
+    const screen = render(<LoginScreen navigation={navigation} />);
+    expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('auth-back-button'));
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('opens the Home tab when the guest continues browsing', () => {
+    const rootNavigation = { navigate: jest.fn() };
+    const tabNavigation = { getParent: jest.fn(() => rootNavigation) };
+    const navigation = {
+      navigate: jest.fn(),
+      getParent: jest.fn(() => tabNavigation),
+    };
+    const screen = render(<AuthEntryScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('continue-as-guest'));
+    expect(rootNavigation.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'Tabs',
+      params: { screen: 'Home' },
+    });
   });
 
   it('sends a generic reset request and opens the sent confirmation', async () => {
@@ -80,7 +106,9 @@ describe('authentication screens', () => {
   });
 
   it('requires current legal consent and the password policy before registration', async () => {
-    const navigation = { reset: jest.fn(), replace: jest.fn(), navigate: jest.fn() };
+    const navigation = {
+      reset: jest.fn(), replace: jest.fn(), navigate: jest.fn(), goBack: jest.fn(),
+    };
     mockRegisterWithEmail.mockResolvedValue({ uid: 'new-user' });
     const screen = render(<RegisterScreen navigation={navigation} />);
 
@@ -101,6 +129,16 @@ describe('authentication screens', () => {
       });
       expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     });
+  });
+
+  it('keeps registration email-only and provides a working back action', () => {
+    const navigation = {
+      reset: jest.fn(), replace: jest.fn(), navigate: jest.fn(), goBack: jest.fn(),
+    };
+    const screen = render(<RegisterScreen navigation={navigation} />);
+    expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
+    fireEvent.press(screen.getByTestId('auth-back-button'));
+    expect(navigation.goBack).toHaveBeenCalled();
   });
 
   it('shows the selected horizontal PlanLi wordmark on login and registration', () => {

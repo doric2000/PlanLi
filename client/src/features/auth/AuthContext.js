@@ -9,6 +9,7 @@ import {
   deriveAuthState,
 } from '../../constants/authPolicy';
 import { getRequiredAuthState } from '../../services/CallableErrorService';
+import { openAuthFlow } from '../../navigation/authNavigation';
 
 const AuthContext = createContext(null);
 
@@ -80,7 +81,7 @@ export function AuthProvider({ children, navigationRef }) {
     setGate(null);
     if (!navigationRef?.isReady?.()) return;
     if (nextStatus === AUTH_STATES.GUEST) {
-      navigationRef.navigate('Login');
+      openAuthFlow(navigationRef, 'Login');
       return;
     }
     if (routeName) navigationRef.navigate(routeName);
@@ -88,7 +89,7 @@ export function AuthProvider({ children, navigationRef }) {
 
   const openRegistration = useCallback(() => {
     setGate(null);
-    if (navigationRef?.isReady?.()) navigationRef.navigate('Register');
+    if (navigationRef?.isReady?.()) openAuthFlow(navigationRef, 'Register');
   }, [navigationRef]);
 
   const requireCapability = useCallback((capability, returnTo) => {

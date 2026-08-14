@@ -3,7 +3,7 @@ import CommunityScreen from "../features/community/screens/CommunityScreen";
 import RoutesScreen from "../features/roadtrip/screens/RoutesScreen";
 import ProfileScreen from "../features/profile/screens/ProfileScreen";
 import FavoritesScreen from "../features/favorites/screen/FavoritesScreen";
-import AuthEntryScreen from "../features/auth/screens/AuthEntryScreen";
+import AuthNavigator from "./AuthNavigator";
 
 const ACTIVE_COLOR = "#1E3A5F";
 
@@ -22,5 +22,5 @@ export const tabScreens = [
 	{ name: "Routes", component: RoutesScreen },
 	{ name: "Favorites", component: FavoritesScreen },
 	{ name: "Profile", component: ProfileScreen },
-	{ name: "Auth", component: AuthEntryScreen },
+	{ name: "Auth", component: AuthNavigator },
 ];

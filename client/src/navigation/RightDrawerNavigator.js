@@ -9,6 +9,7 @@ import TabNavigator from './TabNavigator';
 import ProfileMenuList from '../features/profile/components/ProfileMenuList';
 import { auth } from '../config/firebase';
 import { signOutCentral } from '../services/AuthService';
+import { openAuthFlow } from './authNavigation';
 import { buttons, colors, typography, common } from '../styles';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { useAuthUser } from '../hooks/useAuthUser';
@@ -63,20 +64,20 @@ function CustomDrawerContent(props) {
     (key) => {
       if (key === 'login') {
         navigation.closeDrawer?.();
-        rootStackNav?.navigate?.('Login');
+        openAuthFlow(rootStackNav || navigation, 'Login');
         return;
       }
 
       if (key === 'register') {
         navigation.closeDrawer?.();
-        rootStackNav?.navigate?.('Register');
+        openAuthFlow(rootStackNav || navigation, 'Register');
         return;
       }
 
       if (isGuest) {
         // Safety: if guest-only menu is not used for some reason.
         navigation.closeDrawer?.();
-        rootStackNav?.navigate?.('Login');
+        openAuthFlow(rootStackNav || navigation, 'Login');
         return;
       }
 
@@ -116,21 +117,20 @@ function CustomDrawerContent(props) {
   );
 
 const handleSignOut = useCallback(() => {
-    try {
-      navigation.closeDrawer?.();
+    navigation.closeDrawer?.();
 
-      setTimeout(async () => {
+    setTimeout(async () => {
+      try {
         await signOutCentral();
-        
+
         (rootStackNav || navigation).reset?.({
           index: 0,
           routes: [{ name: 'Main' }],
         });
-      }, 300);
-
-    } catch (e) {
-      Alert.alert('שגיאה', 'לא ניתן להתנתק: ' + e.message);
-    }
+      } catch {
+        Alert.alert('שגיאה', 'לא הצלחנו להתנתק. נסו שוב.');
+      }
+    }, 300);
   }, [navigation, rootStackNav]);
 
   return (
