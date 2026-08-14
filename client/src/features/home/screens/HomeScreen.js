@@ -338,9 +338,19 @@ export default function HomeScreen({ navigation }) {
 		}
 		try {
 			await favoriteCities.toggleFavorite(city);
-		} catch (error) {
-			console.error("Failed to toggle destination favorite:", error);
-			Alert.alert("שגיאה", "לא הצלחנו לעדכן את המועדפים. נסו שוב.");
+				} 
+		catch (error) {
+		if (error?.code === 'functions/permission-denied' &&
+			/email verification/i.test(error?.message || '')) {
+			Alert.alert(
+			'נדרש אימות אימייל',
+			'כדי לשמור יעדים במועדפים צריך לאמת את כתובת האימייל.'
+			);
+			return;
+		}
+
+		console.error('Failed to toggle destination favorite:', error);
+		Alert.alert('שגיאה', 'לא הצלחנו לעדכן את המועדפים. נסו שוב.');
 		}
 	};
 

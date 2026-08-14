@@ -10,12 +10,13 @@ import { ensureAuthenticatedUserProfile, formatAuthError } from '../services/Aut
 import { getUserTier } from '../utils/userTier';
 import { colors, common, preferenceSetupStyles as styles } from '../styles';
 
-export default function PreferenceSetupGate({ navigation }) {
+export default function PreferenceSetupGate({ navigation, route }) {
   const { user, loading: authLoading } = useAuthUser();
   const [bootstrapState, setBootstrapState] = useState('loading');
   const [bootstrapError, setBootstrapError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
   const { loading, setupRequired, error: profileError } = useSmartProfile(retryKey);
+  const allowUnverified = route?.params?.allowUnverified === true;
 
   useEffect(() => {
     let active = true;
@@ -47,12 +48,12 @@ export default function PreferenceSetupGate({ navigation }) {
 
   useEffect(() => {
     if (bootstrapState !== 'ready' || !user) return;
-    if (getUserTier(user) === 'unverified') {
+    if (getUserTier(user) === 'unverified' && !allowUnverified) {
       navigation.reset({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     } else if (!loading && setupRequired) {
       navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
     }
-  }, [bootstrapState, loading, navigation, setupRequired, user]);
+  }, [bootstrapState, loading, navigation, setupRequired, user, allowUnverified]);
 
   if (bootstrapState === 'error') {
     return (

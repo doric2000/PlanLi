@@ -91,7 +91,11 @@ export default function VerifyEmailScreen({ navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => navigation.replace('Main')}
+              onPress={() =>
+                navigation.replace('Main', {
+                  allowUnverified: true,
+                })
+              }
               activeOpacity={0.8}
               style={[forms.authSecondaryButton, { borderColor: 'rgba(255,255,255,0.35)' }]}
             >

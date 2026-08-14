@@ -5,6 +5,7 @@ import {
   getCountFromServer,
   getDoc,
   getDocs,
+  limit,
   query,
   where,
 } from 'firebase/firestore';
@@ -41,7 +42,8 @@ const fetchRoutesCount = async (uid) => {
     const routesQ = query(
       collection(db, 'routes'),
       where('ownerId', '==', uid),
-      where('status', '==', 'active')
+      where('status', '==', 'active'),
+      limit(50)
     );
     const routesAgg = await getCountFromServer(routesQ);
     return routesAgg.data().count || 0;
@@ -56,7 +58,8 @@ const fetchRecommendationStats = async (uid) => {
     const recQ = query(
       collection(db, 'recommendations'),
       where('ownerId', '==', uid),
-      where('status', '==', 'active')
+      where('status', '==', 'active'),
+      limit(50)
     );
     const recSnap = await getDocs(recQ);
 
