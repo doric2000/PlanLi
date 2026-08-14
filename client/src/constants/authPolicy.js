@@ -12,6 +12,7 @@ export const CAPABILITIES = Object.freeze({
   SIGNED_IN: 'signedIn',
   ACTIVE: 'active',
   ACCOUNT_MANAGEMENT: 'accountManagement',
+  PREFERENCES_SETUP: 'preferencesSetup',
 });
 
 export const PROFILE_DETAILS_VERSION = 1;

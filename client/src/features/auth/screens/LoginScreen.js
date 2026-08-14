@@ -14,9 +14,11 @@ import {
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
-import { resetToMain } from '../../../navigation/authNavigation';
+import { resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
+import { useAuth } from '../AuthContext';
 
 export default function LoginScreen({ navigation }) {
+  const { runAuthTransition } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -29,8 +31,10 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     setError('');
     try {
-      await signInWithEmail(email, password);
-      complete();
+      await runAuthTransition(async () => {
+        await signInWithEmail(email, password);
+        complete();
+      });
     } catch (loginError) {
       setError(formatAuthError(loginError));
     } finally {
@@ -42,9 +46,12 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     setError('');
     try {
-      const result = provider === 'apple' ? await signInWithApple() : await signInWithGoogle();
-      await ensureAuthenticatedUserProfile(result.user, result.profile);
-      complete();
+      await runAuthTransition(async () => {
+        const result = provider === 'apple' ? await signInWithApple() : await signInWithGoogle();
+        const bootstrap = await ensureAuthenticatedUserProfile(result.user, result.profile);
+        if (bootstrap?.created) resetToRootRoute(navigation, 'CompleteAccount');
+        else complete();
+      });
     } catch (socialError) {
       if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
     } finally {

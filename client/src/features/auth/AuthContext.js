@@ -25,6 +25,7 @@ export function AuthProvider({ children, navigationRef }) {
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState(null);
   const [gate, setGate] = useState(null);
+  const [authFlowTransitionCount, setAuthFlowTransitionCount] = useState(0);
   const pendingReturnToRef = useRef(null);
 
   useEffect(() => {
@@ -97,6 +98,10 @@ export function AuthProvider({ children, navigationRef }) {
     const signedInCapability = capability === CAPABILITIES.SIGNED_IN
       || capability === CAPABILITIES.ACCOUNT_MANAGEMENT;
     if (signedInCapability && user?.uid) return true;
+    if (
+      capability === CAPABILITIES.PREFERENCES_SETUP
+      && [AUTH_STATES.PREFERENCES_REQUIRED, AUTH_STATES.READY].includes(status)
+    ) return true;
     if (capability === CAPABILITIES.ACTIVE && status === AUTH_STATES.READY) return true;
     if (returnTo?.name) pendingReturnToRef.current = returnTo;
     setGate({ capability, status, returnTo: returnTo || null });
@@ -115,12 +120,25 @@ export function AuthProvider({ children, navigationRef }) {
     pendingReturnToRef.current = null;
   }, []);
 
+  const runAuthTransition = useCallback(async (operation) => {
+    setAuthFlowTransitionCount((count) => count + 1);
+    try {
+      return await operation();
+    } finally {
+      setAuthFlowTransitionCount((count) => Math.max(0, count - 1));
+    }
+  }, []);
+
+  const authFlowInProgress = authFlowTransitionCount > 0;
+
   const value = useMemo(() => ({
     user,
     userDocument,
     status,
     loading,
     profileError,
+    authFlowInProgress,
+    runAuthTransition,
     isGuest: status === AUTH_STATES.GUEST,
     isActive: status === AUTH_STATES.READY,
     gate,
@@ -138,6 +156,8 @@ export function AuthProvider({ children, navigationRef }) {
     openRegistration,
     openRequiredStep,
     profileError,
+    authFlowInProgress,
+    runAuthTransition,
     requireCapability,
     handleCallableAuthError,
     status,

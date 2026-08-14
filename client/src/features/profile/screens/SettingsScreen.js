@@ -203,7 +203,7 @@ export default function SettingsScreen({ navigation }) {
           onPress={() => navigation.navigate('ChangeName')}
           testID="settings-change-name-button"
         >
-          <AppText style={styles.primaryBtnText}>שינוי שם</AppText>
+          <AppText style={styles.primaryBtnText}>שינוי שם — פעם אחת בלבד</AppText>
         </TouchableOpacity>
 
         <TouchableOpacity

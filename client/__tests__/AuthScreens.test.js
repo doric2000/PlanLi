@@ -10,6 +10,13 @@ const mockSignInWithEmail = jest.fn();
 const mockRegisterWithEmail = jest.fn();
 const mockValidateNewPassword = jest.fn();
 const mockSendResetEmail = jest.fn();
+const mockEnsureAuthenticatedUserProfile = jest.fn();
+const mockSignInWithGoogle = jest.fn();
+const mockRunAuthTransition = jest.fn(async (operation) => operation());
+
+jest.mock('../src/features/auth/AuthContext', () => ({
+  useAuth: () => ({ runAuthTransition: mockRunAuthTransition }),
+}));
 
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: (props) => {
@@ -21,14 +28,21 @@ jest.mock('@expo/vector-icons', () => ({
 
 jest.mock('../src/features/auth/components/SocialLoginButtons', () => {
   const ReactModule = require('react');
-  const { View } = require('react-native');
+  const { TouchableOpacity, View } = require('react-native');
   return {
-    SocialLoginButtons: () => ReactModule.createElement(View, { testID: 'mock-social-buttons' }),
+    SocialLoginButtons: ({ onGoogleLogin }) => ReactModule.createElement(
+      View,
+      { testID: 'mock-social-buttons' },
+      ReactModule.createElement(TouchableOpacity, {
+        testID: 'mock-google-login',
+        onPress: onGoogleLogin,
+      })
+    ),
   };
 });
 
 jest.mock('../src/services/AuthService', () => ({
-  ensureAuthenticatedUserProfile: jest.fn(),
+  ensureAuthenticatedUserProfile: (...args) => mockEnsureAuthenticatedUserProfile(...args),
   formatAuthError: (error) => error?.message || 'שגיאה',
   isProviderCancellation: () => false,
   normalizeEmail: (value) => String(value || '').trim().toLowerCase(),
@@ -36,7 +50,7 @@ jest.mock('../src/services/AuthService', () => ({
   sendResetEmail: (...args) => mockSendResetEmail(...args),
   signInWithApple: jest.fn(),
   signInWithEmail: (...args) => mockSignInWithEmail(...args),
-  signInWithGoogle: jest.fn(),
+  signInWithGoogle: (...args) => mockSignInWithGoogle(...args),
   validateNewPassword: (...args) => mockValidateNewPassword(...args),
 }));
 
@@ -44,6 +58,7 @@ describe('authentication screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockValidateNewPassword.mockResolvedValue({ isValid: true });
+    mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
   });
 
   it('uses the central email login service and returns to the app', async () => {
@@ -76,6 +91,23 @@ describe('authentication screens', () => {
     expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-back-button'));
     expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('sends a new external-provider user to legal consent before preferences', async () => {
+    const navigation = {
+      navigate: jest.fn(), reset: jest.fn(), replace: jest.fn(), goBack: jest.fn(),
+    };
+    const user = { uid: 'new-google-user' };
+    mockSignInWithGoogle.mockResolvedValue({ user, profile: { displayName: 'Dana' } });
+    mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: true });
+
+    const screen = render(<LoginScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('mock-google-login'));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'CompleteAccount' }],
+    }));
   });
 
   it('opens the Home tab when the guest continues browsing', () => {

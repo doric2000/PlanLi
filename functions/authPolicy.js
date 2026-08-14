@@ -32,7 +32,7 @@ function assertSignedIn(auth) {
   }
 }
 
-function assertActiveUser(auth, userDocument) {
+function assertAccountSetupComplete(auth, userDocument) {
   assertSignedIn(auth);
   if (isPasswordProvider(auth) && auth.token?.email_verified !== true) {
     throw policyError(
@@ -68,6 +68,10 @@ function assertActiveUser(auth, userDocument) {
       AUTH_REASONS.LEGAL_CONSENT_REQUIRED
     );
   }
+}
+
+function assertActiveUser(auth, userDocument) {
+  assertAccountSetupComplete(auth, userDocument);
   if (userDocument?.smartProfile?.setupRequired !== false || !userDocument?.smartProfile?.completedAt) {
     throw policyError(
       'failed-precondition',
@@ -96,6 +100,7 @@ module.exports = {
   PRIVACY_VERSION,
   PROFILE_DETAILS_VERSION,
   TERMS_VERSION,
+  assertAccountSetupComplete,
   assertActiveUser,
   assertSignedIn,
   authorizeRequest,

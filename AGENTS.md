@@ -54,6 +54,7 @@ system/**
 - Authentication has one client state machine in `AuthProvider`: `loading`, `guest`, `emailVerificationRequired`, `accountSetupRequired`, `preferencesRequired`, and `ready`. Protected client actions call `requireCapability`; do not add screen-local auth redirects or parse server error text.
 - Guest-facing login, registration, and password-reset screens live in the nested `Auth` tab navigator so the bottom tab bar remains available. External entry points use `openAuthFlow`; do not restore duplicate root-stack auth screens.
 - Every callable Function declares exactly one access level: `public`, `signedIn`, or `active`. `active` requires an eligible verified token, current profile-details and legal-consent versions, and completed travel preferences. Ownership and admin checks remain service-local.
+- Travel preferences may be written only after the current profile details and legal consent are complete and password-email accounts are verified. A display name may be changed once after initial account setup, only with a verified email, and the server records the consumed change in `users/{uid}.profileManagement.displayNameChangedAt`.
 - Current auth/legal versions are duplicated intentionally in `client/src/constants/authPolicy.js`, `functions/authPolicy.js`, and `storage.rules`; update all three plus the in-app and hosted legal drafts in one focused change. Existing users are gated lazily, without a backfill.
 
 ## Media and Storage
@@ -86,27 +87,23 @@ system/**
 
 ## Validation
 
-Run the smallest relevant set, then expand for cross-cutting changes. Commands are PowerShell and must run from the shown directory.
+Run the smallest relevant set first. Target the exact test files that cover the changed behavior and expand only when the change is cross-cutting, the targeted tests expose a wider regression, or release preparation explicitly calls for a full pass. Do not run full suites, exports, emulators, audits, or native builds by default for a focused JavaScript or service change. Commands are PowerShell and must run from the shown directory.
 
-Client changes, from `client/`:
-
-```powershell
-npm.cmd test -- --runInBand
-npx.cmd expo export --platform web --output-dir .expo-validation\web
-npx.cmd expo export --platform android --output-dir .expo-validation\android
-rg "StyleSheet|const styles =|const localStyles =" src --glob "!src/styles/**"
-```
-
-Functions and rules, from `functions/`:
+Focused client changes, from `client/`:
 
 ```powershell
-npm.cmd test
-npm.cmd run test:rules:emulator
-npm.cmd audit --omit=dev
-npm.cmd run audit-live
+npm.cmd test -- --runInBand __tests__\RelevantScreen.test.js __tests__\RelevantService.test.js
 ```
 
-`audit-live` is read-only. Run it for data, favorites, counters, destination IDs, or Storage changes. Rules changes require emulator tests; media changes require Web plus one native export and an upload/display/delete smoke test. Migration scripts must pass dry-run before `--apply`.
+Use the full client suite only for shared runtime, navigation infrastructure, dependency, or release-readiness changes. Run an Expo export only when app configuration, native dependencies, assets, bundler behavior, or an entry point changed. Run the stylesheet-location scan only when components or styles changed.
+
+Focused Functions changes, from `functions/`:
+
+```powershell
+node --test relevantService.test.js relevantPolicy.test.js
+```
+
+Use the full Functions suite only for shared callable infrastructure, multi-service changes, dependency changes, or release readiness. Rules changes require the relevant emulator tests. `audit-live` is read-only and runs only for data, favorites, counters, destination IDs, or Storage changes. Media changes require Web plus one relevant native export and an upload/display/delete smoke test. Migration scripts must pass dry-run before `--apply`. Dependency audits run when dependencies or lockfiles change, during release preparation, or when the task explicitly requests them.
 
 Before every commit, from the repository root:
 

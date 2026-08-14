@@ -13,8 +13,15 @@ import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import LegalConsent from '../components/LegalConsent';
 import { resetToRootRoute } from '../../../navigation/authNavigation';
+import { useAuth } from '../AuthContext';
+import {
+  normalizeDisplayName,
+  sanitizeDisplayNameInput,
+  validateDisplayName,
+} from '../utils/displayName';
 
 export default function RegisterScreen({ navigation }) {
+  const { runAuthTransition } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,8 +32,9 @@ export default function RegisterScreen({ navigation }) {
   const strength = useMemo(() => Math.min(100, Math.round((password.length / 14) * 100)), [password]);
 
   const handleRegister = async () => {
-    const displayName = fullName.trim();
-    if (displayName.length < 2) return setError('יש להזין שם מלא באורך של לפחות שני תווים.');
+    const displayName = normalizeDisplayName(fullName);
+    const displayNameError = validateDisplayName(displayName);
+    if (displayNameError) return setError(displayNameError);
     if (!normalizeEmail(email) || !normalizeEmail(email).includes('@')) return setError('יש להזין כתובת אימייל תקינה.');
     if (password !== confirmPassword) return setError('הסיסמאות אינן תואמות.');
     if (!acceptedLegal) return setError('יש לאשר את תנאי השימוש ומדיניות הפרטיות.');
@@ -35,8 +43,10 @@ export default function RegisterScreen({ navigation }) {
     try {
       const policy = await validateNewPassword(password);
       if (!policy.isValid) return setError(policy.message);
-      await registerWithEmail({ displayName, email, password, acceptedLegal });
-      resetToRootRoute(navigation, 'VerifyEmail');
+      await runAuthTransition(async () => {
+        await registerWithEmail({ displayName, email, password, acceptedLegal });
+        resetToRootRoute(navigation, 'VerifyEmail');
+      });
     } catch (registrationError) {
       setError(formatAuthError(registrationError));
     } finally {
@@ -49,7 +59,7 @@ export default function RegisterScreen({ navigation }) {
       <BrandWordmark compact />
       <AppText style={authStyles.title}>יוצאים לדרך</AppText>
       <AppText style={authStyles.subtitle}>כמה פרטים קצרים והחשבון מוכן.</AppText>
-      <AuthInput label="שם מלא" value={fullName} onChangeText={setFullName} placeholder="הזינו את שמכם המלא" iconName="person-outline" autoCapitalize="words" />
+      <AuthInput label="שם מלא" value={fullName} onChangeText={(value) => setFullName(sanitizeDisplayNameInput(value))} placeholder="הזינו את שמכם המלא" iconName="person-outline" autoCapitalize="words" />
       <AuthInput label="אימייל" value={email} onChangeText={setEmail} placeholder="הזינו כתובת אימייל" iconName="mail-outline" keyboardType="email-address" />
       <AuthInput label="סיסמה" value={password} onChangeText={setPassword} placeholder="לפחות 10 תווים" iconName="lock-closed-outline" isPassword />
       <View style={authStyles.strengthTrack} accessibilityLabel={`חוזק סיסמה ${strength} אחוז`}><View style={[authStyles.strengthFill, { width: `${strength}%` }]} /></View>

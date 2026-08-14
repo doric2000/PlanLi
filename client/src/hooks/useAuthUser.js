@@ -8,6 +8,7 @@ export function useAuthUser() {
     isGuest,
     isActive,
     status,
+    authFlowInProgress,
     requireCapability,
     handleCallableAuthError,
   } = useAuth();
@@ -18,6 +19,7 @@ export function useAuthUser() {
     isGuest,
     isActive,
     status,
+    authFlowInProgress,
     requireCapability,
     handleCallableAuthError,
   };

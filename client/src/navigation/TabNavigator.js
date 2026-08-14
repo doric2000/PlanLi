@@ -33,7 +33,7 @@ const TAB_TRANSITION_SPEC = {
  * - Profile: User settings and profile
  */
 export default function TabNavigator() {
-  const { user } = useAuthUser();
+  const { user, authFlowInProgress } = useAuthUser();
   const unreadCount = useUnreadCount();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -53,7 +53,7 @@ export default function TabNavigator() {
       gestureState,
     });
   }, []);
-  const visibleScreens = getVisibleMainTabNames(Boolean(user))
+  const visibleScreens = getVisibleMainTabNames(Boolean(user) && !authFlowInProgress)
     .map((name) => tabScreens.find((screen) => screen.name === name))
     .filter(Boolean);
 

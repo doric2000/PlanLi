@@ -4,6 +4,7 @@ const {
   PRIVACY_VERSION,
   PROFILE_DETAILS_VERSION,
   TERMS_VERSION,
+  assertAccountSetupComplete,
 } = require('./authPolicy');
 const {
   BUDGET_IDS,
@@ -25,9 +26,17 @@ function assert(condition, code, message) {
 function cleanOptionalName(value) {
   if (value == null) return undefined;
   assert(typeof value === 'string', 'invalid-argument', 'displayName must be a string.');
-  const result = value.trim();
-  assert(result.length >= 1 && result.length <= 80, 'invalid-argument', 'displayName is invalid.');
+  const trimmed = value.trim();
+  assert((trimmed.match(/\s/gu) || []).length <= 5,
+    'invalid-argument', 'displayName may contain at most six words.');
+  const result = trimmed.replace(/\s+/gu, ' ');
+  const length = Array.from(result).length;
+  assert(length >= 2 && length <= 60, 'invalid-argument', 'displayName is invalid.');
   return result;
+}
+
+function profilePolicyError(code, message, reason) {
+  throw new HttpsError(code, message, { reason });
 }
 
 function cleanOptionalBio(value) {
@@ -127,6 +136,26 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   const db = admin.firestore();
   const userRef = db.doc(`users/${uid}`);
   const existing = await userRef.get();
+  const existingData = existing.exists ? existing.data() || {} : {};
+  if (smartProfile !== undefined) {
+    assertAccountSetupComplete(auth, existing.exists ? existingData : null);
+  }
+  if (displayName !== undefined) {
+    if (auth.token?.email_verified !== true) {
+      profilePolicyError(
+        'failed-precondition',
+        'Email verification is required before changing the display name.',
+        'EMAIL_VERIFICATION_REQUIRED'
+      );
+    }
+    if (!existing.exists) {
+      profilePolicyError(
+        'failed-precondition',
+        'Account setup is required before changing the display name.',
+        'ACCOUNT_SETUP_REQUIRED'
+      );
+    }
+  }
   let photoMedia;
   if (data && Object.prototype.hasOwnProperty.call(data, 'photoMedia')) {
     if (data.photoMedia == null) {
@@ -139,7 +168,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
         media: [data.photoMedia],
         mediaBucket,
         maxAssets: 1,
-        existingMedia: existing.data()?.photoMedia ? [existing.data().photoMedia] : [],
+        existingMedia: existingData.photoMedia ? [existingData.photoMedia] : [],
       });
       photoMedia = validated[0];
     }
@@ -149,7 +178,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     'invalid-argument',
     'No profile fields were provided.'
   );
-  const existingSmartProfile = existing.data()?.smartProfile || {};
+  const existingSmartProfile = existingData.smartProfile || {};
   const nextSmartProfile = smartProfile === undefined
     ? undefined
     : {
@@ -184,7 +213,30 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
-  await userRef.set(fields, { merge: true });
+  if (displayName !== undefined) {
+    await db.runTransaction(async (transaction) => {
+      const latestSnapshot = await transaction.get(userRef);
+      const latest = latestSnapshot.exists ? latestSnapshot.data() || {} : {};
+      if (latest?.profileManagement?.displayNameChangedAt) {
+        profilePolicyError(
+          'failed-precondition',
+          'The display name can only be changed once.',
+          'DISPLAY_NAME_CHANGE_ALREADY_USED'
+        );
+      }
+      const currentName = String(latest.displayName || '').replace(/\s+/gu, ' ').trim();
+      assert(currentName !== displayName, 'invalid-argument', 'Choose a different display name.');
+      transaction.set(userRef, {
+        ...fields,
+        profileManagement: {
+          ...(latest.profileManagement || {}),
+          displayNameChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }, { merge: true });
+    });
+  } else {
+    await userRef.set(fields, { merge: true });
+  }
 
   const authFields = {};
   if (displayName !== undefined) authFields.displayName = displayName;
@@ -193,7 +245,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     await admin.auth().updateUser(uid, authFields);
   }
   return {
-    displayName: displayName ?? existing.data()?.displayName ?? 'Traveler',
+    displayName: displayName ?? existingData.displayName ?? 'Traveler',
     ...(bio !== undefined ? { bio } : {}),
     ...(photoMedia !== undefined ? { photoMedia, photoURL: photoMedia?.feed?.url || null } : {}),
     ...(smartProfile !== undefined ? { smartProfile } : {}),
@@ -320,6 +372,7 @@ async function completeAccountSetup({ admin, auth, data }) {
 
 module.exports = {
   cleanOptionalBio,
+  cleanOptionalName,
   completeAccountSetup,
   registerUser,
   sanitizeSmartProfile,
