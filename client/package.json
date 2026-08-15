@@ -7,6 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "export:admin-web": "node scripts/exportAdminWeb.js",
     "test": "jest"
   },
   "dependencies": {

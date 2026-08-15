@@ -34,7 +34,7 @@ import { useClearNotifications } from '../hooks/useClearNotifications';
 import { notifications as notificationStyles, notificationScreenStyles as styles } from '../../../styles';
 
 // Models
-import { PostType } from '../models/NotificationModel';
+import { NotificationType, PostType } from '../models/NotificationModel';
 
 export default function NotificationScreen() {
   const navigation = useNavigation();
@@ -54,6 +54,10 @@ export default function NotificationScreen() {
 
     // Fetch the full post data from Firestore
     try {
+      if (notification.type === NotificationType.MODERATION) {
+        navigation.navigate('AdminPanel');
+        return;
+      }
       if (postType === PostType.RECOMMENDATION) {
         const docRef = doc(db, 'recommendations', postId);
         const docSnap = await getDoc(docRef);

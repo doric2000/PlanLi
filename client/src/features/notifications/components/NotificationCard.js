@@ -34,12 +34,15 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
         return <Ionicons name="heart" size={20} color={colors.heart} />;
       case NotificationType.COMMENT:
         return <Ionicons name="chatbubble" size={20} color={colors.secondary} />;
+      case NotificationType.MODERATION:
+        return <Ionicons name="shield-checkmark" size={20} color={colors.primary} />;
       default:
         return <Ionicons name="notifications" size={20} color={colors.primary} />;
     }
   };
 
   const getPostTypeLabel = () => {
+    if (type === NotificationType.MODERATION) return 'ניהול';
     return postType === PostType.ROUTE ? 'מסלול' : 'קהילה';
   };
 
@@ -69,7 +72,9 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
         </View>
         <View style={notifications.cardBody}>
           <AppText style={notifications.cardMessage} numberOfLines={2}>{message}</AppText>
-          <AppText style={notifications.cardPostTitle} numberOfLines={1}>"{postTitle}"</AppText>
+          {type !== NotificationType.MODERATION ? (
+            <AppText style={notifications.cardPostTitle} numberOfLines={1}>"{postTitle}"</AppText>
+          ) : null}
           <View style={notifications.cardFooter}>
             <View style={notifications.cardPostTypeBadge}>
               <AppText style={notifications.cardPostTypeText}>{getPostTypeLabel()}</AppText>

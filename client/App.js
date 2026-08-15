@@ -66,6 +66,7 @@ const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
  * - RouteDetail: Detailed view of a specific route
  */
 export default function App() {
+	const initialRouteName = process.env.EXPO_PUBLIC_ADMIN_WEB === 'true' ? 'AdminPanel' : 'Main';
 	return (
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
@@ -74,7 +75,7 @@ export default function App() {
 				 <ContentPublishProvider>
 				<NavigationContainer ref={navigationRef}>
 				<Stack.Navigator
-					initialRouteName='Main'
+					initialRouteName={initialRouteName}
 					screenOptions={rtlStackScreenOptions}
 				>
 					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />

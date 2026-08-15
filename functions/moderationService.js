@@ -166,6 +166,23 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
       });
     }
   });
+  const admins = await db.collection('system/moderation/admins').where('active', '==', true).limit(50).get();
+  if (!admins.empty) {
+    const batch = db.batch();
+    admins.docs.forEach((entry) => batch.set(
+      db.doc(`users/${entry.id}/notifications/moderation_${caseId}`),
+      {
+        type: 'moderation',
+        caseId,
+        priority: ['child_safety', 'violence_dangerous_illegal'].includes(category) ? 'urgent' : 'normal',
+        target,
+        isRead: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    ));
+    await batch.commit();
+  }
   return { submitted: true, caseId, held };
 }
 

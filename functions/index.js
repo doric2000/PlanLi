@@ -53,6 +53,20 @@ const {
 } = require('./socialService');
 const { deleteContent, requestAccountDeletion } = require('./deletionService');
 const { setBlockedUser, submitReport } = require('./moderationService');
+const {
+  deleteUserAsAdmin,
+  getAdminUser,
+  getModerationCase,
+  getModerationDashboard,
+  listAdminUsers,
+  listHeldContent,
+  listModerationAudit,
+  listModerationCases,
+  moderateContent,
+  setUserAdmin,
+  setUserEmailVerified,
+  setUserSuspension,
+} = require('./adminService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
@@ -117,10 +131,10 @@ const CALLABLE_OPTIONS = {
 };
 
 function callable(options, handler) {
-  const { access, ...firebaseOptions } = options;
+  const { access, allowSuspended = false, ...firebaseOptions } = options;
   if (!access) throw new Error('Every callable must declare an access level.');
   return onCall({ ...CALLABLE_OPTIONS, ...firebaseOptions }, async (request) => {
-    const accessContext = await authorizeRequest({ admin, auth: request.auth, access });
+    const accessContext = await authorizeRequest({ admin, auth: request.auth, access, allowSuspended });
     return handler(request, accessContext);
   });
 }
@@ -379,9 +393,49 @@ exports.setBlockedUser = callable({ access: 'active' }, (request) =>
   setBlockedUser({ admin, auth: request.auth, data: request.data })
 );
 
+exports.getModerationDashboard = callable({ access: 'signedIn' }, (request) =>
+  getModerationDashboard({ admin, auth: request.auth })
+);
+exports.listModerationCases = callable({ access: 'signedIn' }, (request) =>
+  listModerationCases({ admin, auth: request.auth, data: request.data })
+);
+exports.getModerationCase = callable({ access: 'signedIn' }, (request) =>
+  getModerationCase({ admin, auth: request.auth, data: request.data })
+);
+exports.listHeldContent = callable({ access: 'signedIn' }, (request) =>
+  listHeldContent({ admin, auth: request.auth, data: request.data })
+);
+exports.moderateContent = callable(
+  { access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => moderateContent({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() })
+);
+exports.listAdminUsers = callable({ access: 'signedIn' }, (request) =>
+  listAdminUsers({ admin, auth: request.auth, data: request.data })
+);
+exports.getAdminUser = callable({ access: 'signedIn' }, (request) =>
+  getAdminUser({ admin, auth: request.auth, data: request.data })
+);
+exports.setUserSuspension = callable({ access: 'signedIn' }, (request) =>
+  setUserSuspension({ admin, auth: request.auth, data: request.data })
+);
+exports.setUserEmailVerified = callable({ access: 'signedIn' }, (request) =>
+  setUserEmailVerified({ admin, auth: request.auth, data: request.data })
+);
+exports.setUserAdmin = callable({ access: 'signedIn' }, (request) =>
+  setUserAdmin({ admin, auth: request.auth, data: request.data })
+);
+exports.deleteUserAsAdmin = callable(
+  { access: 'signedIn', timeoutSeconds: 540, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => deleteUserAsAdmin({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() })
+);
+exports.listModerationAudit = callable({ access: 'signedIn' }, (request) =>
+  listModerationAudit({ admin, auth: request.auth, data: request.data })
+);
+
 exports.requestAccountDeletion = callable(
   {
     access: 'signedIn',
+    allowSuspended: true,
     timeoutSeconds: 540,
     memory: '1GiB',
     consumeAppCheckToken: ENFORCE_APP_CHECK,

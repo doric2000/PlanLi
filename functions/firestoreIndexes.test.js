@@ -90,3 +90,18 @@ test('route discovery candidate queries have search, facet, quality and destinat
     'status:ASCENDING|destinationKeys:CONTAINS|stats.likeCount:DESCENDING',
   ]) assert.ok(routeIndexes.includes(signature), `Missing route index: ${signature}`);
 });
+
+test('moderation queues and reporter cleanup have their required indexes', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const caseIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'cases')
+    .map(fieldSignature);
+  assert.ok(caseIndexes.includes('status:ASCENDING|updatedAt:DESCENDING'));
+  assert.ok(caseIndexes.includes('priority:ASCENDING|status:ASCENDING'));
+  const reporterOverride = config.fieldOverrides.find((entry) => (
+    entry.collectionGroup === 'reports' && entry.fieldPath === 'reporterId'
+  ));
+  assert.ok(reporterOverride?.indexes.some((index) => (
+    index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
+  )));
+});
