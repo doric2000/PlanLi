@@ -423,19 +423,19 @@ exports.moderateContent = callable(
   { access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
   (request) => moderateContent({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() })
 );
-exports.listAdminUsers = callable({ access: 'signedIn' }, (request) =>
+exports.listAdminUsers = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   listAdminUsers({ admin, auth: request.auth, data: request.data })
 );
-exports.getAdminUser = callable({ access: 'signedIn' }, (request) =>
+exports.getAdminUser = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   getAdminUser({ admin, auth: request.auth, data: request.data })
 );
-exports.setUserSuspension = callable({ access: 'signedIn' }, (request) =>
+exports.setUserSuspension = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   setUserSuspension({ admin, auth: request.auth, data: request.data })
 );
-exports.setUserEmailVerified = callable({ access: 'signedIn' }, (request) =>
+exports.setUserEmailVerified = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   setUserEmailVerified({ admin, auth: request.auth, data: request.data })
 );
-exports.setUserAdmin = callable({ access: 'signedIn' }, (request) =>
+exports.setUserAdmin = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   setUserAdmin({ admin, auth: request.auth, data: request.data })
 );
 exports.deleteUserAsAdmin = callable(

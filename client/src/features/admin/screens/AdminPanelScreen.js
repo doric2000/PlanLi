@@ -33,6 +33,7 @@ import {
 import { adminStyles as styles, colors } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { safeAdminError } from '../adminErrors';
+import ModerationTargetPreview from '../components/ModerationTargetPreview';
 
 const TABS = [
   { id: 'overview', label: 'סקירה' },
@@ -286,7 +287,9 @@ export default function AdminPanelScreen({ navigation }) {
         ].map(([label, value]) => <View key={label} style={styles.metric}><AppText style={styles.metricValue}>{value ?? 0}</AppText><AppText style={styles.metricLabel}>{label}</AppText></View>)}</View> : null}
 
         {(tab === 'reports' || tab === 'content') && cases.map((item) => <View key={item.id} style={styles.card}>
-          <View style={styles.row}><AppText style={styles.cardTitle}>{TARGET_LABELS[item.target?.type] || 'תוכן'} · {item.target?.id}</AppText><View style={styles.badge}><AppText style={styles.badgeText}>{item.priority === 'urgent' ? 'דחוף' : `${item.uniqueCount24h || 0} מדווחים`}</AppText></View></View>
+          <View style={styles.row}><AppText style={styles.cardTitle}>{TARGET_LABELS[item.target?.type] || 'תוכן'}</AppText><View style={styles.badge}><AppText style={styles.badgeText}>{item.priority === 'urgent' ? 'דחוף' : `${item.uniqueCount24h || 0} מדווחים`}</AppText></View></View>
+          <ModerationTargetPreview preview={item.targetPreview} />
+          <AppText style={styles.technicalId}>מזהה טכני: {item.target?.id}</AppText>
           <AppText style={styles.body}>סטטוס: {item.status} · סך דיווחים: {item.reportCount || 0}</AppText>
           {item.categoryCounts ? <AppText style={styles.body}>{Object.entries(item.categoryCounts).filter(([, count]) => count > 0).map(([category, count]) => `${CATEGORY_LABELS[category] || category}: ${count}`).join(' · ')}</AppText> : null}
           <View style={styles.actions}>

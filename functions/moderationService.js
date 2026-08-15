@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { buildModerationPreview, preserveReportedPreview } = require('./moderationPreview');
 
 const REPORT_CATEGORIES = Object.freeze([
   'inaccurate_or_unsafe_travel_info',
@@ -107,10 +108,14 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
   let held = false;
 
   await db.runTransaction(async (transaction) => {
-    const [targetSnapshot, caseSnapshot, existingReport] = await Promise.all([
+    const parentRef = target.type === 'comment'
+      ? db.doc(`${TARGET_COLLECTIONS[target.parentType]}/${target.parentId}`)
+      : null;
+    const [targetSnapshot, caseSnapshot, existingReport, parentSnapshot] = await Promise.all([
       transaction.get(targetRef),
       transaction.get(caseRef),
       transaction.get(reportRef),
+      parentRef ? transaction.get(parentRef) : Promise.resolve(null),
     ]);
     if (!targetSnapshot.exists) fail('not-found', 'The reported item no longer exists.', 'target_missing');
     const targetData = targetSnapshot.data() || {};
@@ -120,6 +125,16 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
     const ownerId = targetOwner(target, targetData);
     if (!ownerId) fail('failed-precondition', 'The reported item has no owner.', 'target_owner_missing');
     if (ownerId === auth.uid) fail('failed-precondition', 'You cannot report your own content.', 'self_report');
+
+    const ownerProfileSnapshot = target.type === 'profile'
+      ? targetSnapshot
+      : await transaction.get(db.doc(`publicProfiles/${ownerId}`));
+    const targetPreview = buildModerationPreview({
+      target,
+      data: targetData,
+      parentData: parentSnapshot?.exists ? parentSnapshot.data() : null,
+      ownerProfile: ownerProfileSnapshot?.exists ? ownerProfileSnapshot.data() : null,
+    });
 
     const previous = caseSnapshot.exists ? caseSnapshot.data() || {} : {};
     const recentReporters = Object.fromEntries(Object.entries(previous.recentReporters || {})
@@ -134,6 +149,7 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
       caseId,
       target,
       targetOwnerId: ownerId,
+      targetPreview: preserveReportedPreview(previous.targetPreview, targetPreview),
       status: held ? 'auto_held' : (previous.status || 'open'),
       priority: ['child_safety', 'violence_dangerous_illegal'].includes(category) ? 'urgent' : (previous.priority || 'normal'),
       reportCount: Number(previous.reportCount || 0) + (existingReport.exists ? 0 : 1),

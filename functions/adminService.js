@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { normalizeReportTarget } = require('./moderationService');
+const { buildModerationPreview, hydrateModerationPreviews } = require('./moderationPreview');
 const { deleteComment } = require('./socialService');
 const { syncPublicProfile } = require('./publicProfiles');
 const {
@@ -42,6 +43,38 @@ function serialize(value) {
   return value;
 }
 
+function publicModerationReport(entry) {
+  const report = entry?.data?.() || {};
+  return {
+    id: entry?.id || '',
+    category: report.category || 'other',
+    details: report.details || '',
+    createdAt: report.createdAt || null,
+    updatedAt: report.updatedAt || null,
+  };
+}
+
+function publicModerationCase(item = {}) {
+  return {
+    id: item.id || '',
+    caseId: item.caseId || item.id || '',
+    target: item.target || null,
+    targetOwnerId: item.targetOwnerId || null,
+    targetPreview: item.targetPreview || null,
+    status: item.status || 'open',
+    priority: item.priority || 'normal',
+    reportCount: Number(item.reportCount || 0),
+    uniqueCount24h: Number(item.uniqueCount24h || 0),
+    categoryCounts: item.categoryCounts || {},
+    firstReportedAt: item.firstReportedAt || null,
+    updatedAt: item.updatedAt || null,
+    dueAtMs: Number(item.dueAtMs || 0) || null,
+    resolvedAt: item.resolvedAt || null,
+    resolvedBy: item.resolvedBy || null,
+    resolutionReason: item.resolutionReason || '',
+  };
+}
+
 async function ensureAdminRegistry({ admin, auth }) {
   const ref = admin.firestore().doc(`system/moderation/admins/${auth.uid}`);
   const snapshot = await ref.get();
@@ -71,19 +104,17 @@ async function getModerationDashboard({ admin, auth }) {
   await prepareAdmin(admin, auth);
   const db = admin.firestore();
   const cases = db.collection('system/moderation/cases');
-  const [open, urgent, heldRecommendations, heldRoutes, heldTrips, users] = await Promise.all([
+  const [open, urgent, heldRecommendations, heldRoutes, heldTrips] = await Promise.all([
     cases.where('status', 'in', ['open', 'auto_held']).count().get(),
     cases.where('priority', '==', 'urgent').where('status', 'in', ['open', 'auto_held']).count().get(),
     db.collection('recommendations').where('status', '==', 'moderation_hold').count().get(),
     db.collection('routes').where('status', '==', 'moderation_hold').count().get(),
     db.collection('trips').where('status', '==', 'moderation_hold').count().get(),
-    admin.auth().listUsers(1),
   ]);
   return {
     openCases: open.data().count,
     urgentCases: urgent.data().count,
     heldContent: heldRecommendations.data().count + heldRoutes.data().count + heldTrips.data().count,
-    hasUsers: users.users.length > 0,
   };
 }
 
@@ -99,8 +130,12 @@ async function listModerationCases({ admin, auth, data }) {
     if (cursor.exists) query = query.startAfter(cursor);
   }
   const snapshot = await query.get();
+  const items = await hydrateModerationPreviews(admin, snapshot.docs.map((entry) => ({
+    id: entry.id,
+    ...entry.data(),
+  })));
   return {
-    items: snapshot.docs.map((entry) => serialize({ id: entry.id, ...entry.data() })),
+    items: items.map((item) => serialize(publicModerationCase(item))),
     nextCursor: snapshot.size === PAGE_SIZE ? snapshot.docs[snapshot.docs.length - 1].id : null,
   };
 }
@@ -114,10 +149,13 @@ async function getModerationCase({ admin, auth, data }) {
     ref.collection('reports').orderBy('updatedAt', 'desc').limit(50).get(),
   ]);
   if (!snapshot.exists) fail('not-found', 'Moderation case was not found.', 'case_missing');
-  return serialize({
+  const [item] = await hydrateModerationPreviews(admin, [{
     id: snapshot.id,
     ...snapshot.data(),
-    reports: reports.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
+  }]);
+  return serialize({
+    ...publicModerationCase(item),
+    reports: reports.docs.map(publicModerationReport),
   });
 }
 
@@ -129,7 +167,7 @@ async function listHeldContent({ admin, auth }) {
     ['route', db.collection('routes').where('status', '==', 'moderation_hold').limit(PAGE_SIZE).get()],
     ['trip', db.collection('trips').where('status', '==', 'moderation_hold').limit(PAGE_SIZE).get()],
   ].map(async ([type, promise]) => [type, await promise]));
-  const items = groups.flatMap(([type, snapshot]) => snapshot.docs.map((entry) => serialize({
+  const items = groups.flatMap(([type, snapshot]) => snapshot.docs.map((entry) => ({
     id: `content_${type}_${entry.id}`,
     target: { type, id: entry.id, path: entry.ref.path },
     targetOwnerId: entry.data()?.ownerId || null,
@@ -137,9 +175,13 @@ async function listHeldContent({ admin, auth }) {
     status: entry.data()?.status,
     priority: 'normal',
     updatedAt: entry.data()?.updatedAt || null,
+    targetPreview: buildModerationPreview({
+      target: { type, id: entry.id, path: entry.ref.path },
+      data: entry.data(),
+    }),
   })));
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  return { items: items.slice(0, PAGE_SIZE), nextCursor: null };
+  return { items: items.slice(0, PAGE_SIZE).map(serialize), nextCursor: null };
 }
 
 async function moderateContent({ admin, auth, data, mediaBucket }) {
@@ -434,6 +476,8 @@ module.exports = {
   listModerationCases,
   moderateContent,
   prepareAdmin,
+  publicModerationCase,
+  publicModerationReport,
   setUserAdmin,
   setUserEmailVerified,
   setUserSuspension,
