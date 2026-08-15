@@ -59,8 +59,8 @@ test.beforeEach(async () => {
       displayName: 'Private owner',
       onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: new Date() },
       legal: {
-        termsVersion: '2026-08-14-draft',
-        privacyVersion: '2026-08-14-draft',
+        termsVersion: '2026-08-15-community-safety',
+        privacyVersion: '2026-08-15-community-safety',
         acceptedAt: new Date(),
       },
       smartProfile: { setupRequired: false, completedAt: new Date() },
@@ -122,12 +122,15 @@ test.beforeEach(async () => {
     await setDoc(doc(db, 'users', 'owner', 'notifications', 'notification-1'), {
       actorId: 'other', type: 'like', isRead: false,
     });
+    await setDoc(doc(db, 'users', 'owner', 'blockedUsers', 'other'), {
+      blockedUid: 'other', createdAt: new Date(),
+    });
     await setDoc(doc(db, 'system', 'accountDeletion', 'jobs', 'private'), { status: 'running' });
     await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'comment-1'), {
-      ownerId: 'owner', text: 'Hello',
+      ownerId: 'owner', text: 'Hello', status: 'active',
     });
     await setDoc(doc(db, 'recommendations', 'rec-deleting', 'comments', 'comment-1'), {
-      ownerId: 'owner', text: 'Hidden',
+      ownerId: 'owner', text: 'Hidden', status: 'active',
     });
     await setDoc(doc(db, 'recommendations', 'rec-active', 'likes', 'owner'), {
       userId: 'owner',
@@ -162,6 +165,18 @@ test('social children inherit their parent publication state', {
   await assertSucceeds(getDoc(doc(db, 'recommendations', 'rec-active', 'likes', 'owner')));
   await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting', 'comments', 'comment-1')));
   await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting', 'likes', 'owner')));
+});
+
+test('blocked-user documents are private to their owner and server-written', {
+  skip: !hasEmulators,
+}, async () => {
+  const ownerDb = env.authenticatedContext('owner', verifiedClaims).firestore();
+  const otherDb = env.authenticatedContext('other', verifiedClaims).firestore();
+  await assertSucceeds(getDoc(doc(ownerDb, 'users', 'owner', 'blockedUsers', 'other')));
+  await assertFails(getDoc(doc(otherDb, 'users', 'owner', 'blockedUsers', 'other')));
+  await assertFails(setDoc(doc(ownerDb, 'users', 'owner', 'blockedUsers', 'new-user'), {
+    blockedUid: 'new-user',
+  }));
 });
 
 test('public collection queries require an active filter and bounded limit', {

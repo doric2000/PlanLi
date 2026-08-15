@@ -6,6 +6,7 @@ import { useCommentsCount } from "../features/community/hooks/useCommentsCount";
 import { cards, colors, actionBarStyles as styles } from "../styles";
 import LikesModal from './LikesModal';
 import { useState } from 'react';
+import ReportButton from '../features/moderation/components/ReportButton';
 
 /**
  * ActionBar - Reusable footer component for cards with like, comment, and share actions.
@@ -94,6 +95,16 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 					</AppText>
 				</TouchableOpacity>
 			</View>
+
+			<ReportButton
+				target={{
+					type: collectionName === 'routes' ? 'route' : collectionName === 'trips' ? 'trip' : 'recommendation',
+					id: item.id,
+				}}
+				ownerId={item.ownerId}
+				compact={isOverlay}
+				color={isOverlay ? '#FFFFFF' : colors.textSecondary}
+			/>
 
 			{/* <TouchableOpacity>
 				<Ionicons

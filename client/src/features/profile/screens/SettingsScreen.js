@@ -255,6 +255,15 @@ export default function SettingsScreen({ navigation }) {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('CommunityGuidelines')}
+          testID="settings-community-guidelines-button"
+        >
+          <AppText style={styles.primaryBtnText}>כללי הקהילה</AppText>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.primaryBtn, styles.dangerButton]}
           activeOpacity={0.9}
           onPress={deleteAccount}

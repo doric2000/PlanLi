@@ -31,6 +31,7 @@ import withRequireAuth from "./src/navigation/withRequireAuth";
 import ContentPublishBanner from "./src/features/publishing/ContentPublishBanner";
 import { ContentPublishProvider } from "./src/features/publishing/ContentPublishContext";
 import { AuthProvider } from "./src/features/auth/AuthContext";
+import { BlockedUsersProvider } from "./src/features/moderation/BlockedUsersContext";
 import AuthGateModal from "./src/features/auth/components/AuthGateModal";
 import { CAPABILITIES } from "./src/constants/authPolicy";
 
@@ -69,6 +70,7 @@ export default function App() {
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<AuthProvider navigationRef={navigationRef}>
+				 <BlockedUsersProvider>
 				 <ContentPublishProvider>
 				<NavigationContainer ref={navigationRef}>
 				<Stack.Navigator
@@ -79,6 +81,7 @@ export default function App() {
 					<Stack.Screen name='CompleteAccount' component={CompleteAccountScreen} />
 					<Stack.Screen name='Terms' component={LegalDocumentScreen} />
 					<Stack.Screen name='Privacy' component={LegalDocumentScreen} />
+					<Stack.Screen name='CommunityGuidelines' component={LegalDocumentScreen} />
 					<Stack.Screen name='Main' component={PreferenceSetupGate} />
 					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupAuthed} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
@@ -133,6 +136,7 @@ export default function App() {
 					}}
 				/>
 				 </ContentPublishProvider>
+				 </BlockedUsersProvider>
 				</AuthProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>

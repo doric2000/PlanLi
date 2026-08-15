@@ -14,8 +14,8 @@ const activeUser = {
   displayName: 'Dana Cohen',
   onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
   legal: {
-    termsVersion: '2026-08-14-draft',
-    privacyVersion: '2026-08-14-draft',
+    termsVersion: '2026-08-15-community-safety',
+    privacyVersion: '2026-08-15-community-safety',
     acceptedAt: 'timestamp',
   },
   smartProfile: { setupRequired: false, completedAt: 'timestamp' },

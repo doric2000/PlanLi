@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { applyAffinitySignalInTransaction } = require('./personalizationService');
+const { evaluateTextSafety } = require('./moderationService');
 
 const TARGETS = Object.freeze({
   recommendation: { collection: 'recommendations' },
@@ -338,6 +339,8 @@ async function saveComment({ admin, auth, data }) {
   const target = normalizeTarget(data?.target);
   assert(target.type !== 'city', 'invalid-argument', 'Cities do not support comments.');
   const text = cleanText(data?.text, { field: 'text', min: 1, max: 2000 });
+  const textSafety = evaluateTextSafety(text);
+  assert(textSafety.safe, 'invalid-argument', 'This comment cannot be published. Please revise it.');
   const commentId = data?.commentId ? cleanId(data.commentId, 'commentId') : null;
   await consumeRateLimit({ admin, uid: auth.uid, action: 'comment' });
 
@@ -378,6 +381,7 @@ async function saveComment({ admin, auth, data }) {
         authorId: auth.uid,
         authorPreview,
         text,
+        status: 'active',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });

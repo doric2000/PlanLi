@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { evaluateTextSafety } = require('./moderationService');
 const { validateMediaAssets } = require('./recommendationService');
 const {
   PRIVACY_VERSION,
@@ -127,6 +128,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   const uid = auth.uid;
   const displayName = cleanOptionalName(data?.displayName);
   const bio = cleanOptionalBio(data?.bio);
+  assert(evaluateTextSafety([displayName, bio]).safe, 'invalid-argument', 'Profile text cannot be published.');
   const completeSmartProfile = data?.completeSmartProfile === true;
   const smartProfile = sanitizeSmartProfile(data?.smartProfile, { complete: completeSmartProfile });
   if (data?.smartProfile && Object.prototype.hasOwnProperty.call(data.smartProfile, 'budget')) {

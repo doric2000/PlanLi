@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { evaluateTextSafety } = require('./moderationService');
 const {
   isVerifiedCaller,
   normalizePublishRequestId,
@@ -485,6 +486,11 @@ async function saveRoute({
     'failed-precondition', 'Update PlanLi to choose Free or Cheap as separate budget options.');
   const baseVersion = revisionVersion(existingRoute);
   const route = sanitizeRouteInput(data?.route);
+  const textSafety = evaluateTextSafety([
+    route.title,
+    route.description,
+    ...route.days.flatMap((day) => [day.description, ...day.stops.flatMap((stop) => [stop.title, stop.description])]),
+  ]);
   const requestedMedia = collectMedia(route.days);
   assert(requestedMedia.length <= MAX_ROUTE_MEDIA, 'invalid-argument', 'Route contains too many images.');
   if (requestedMedia.length) assert(mediaBucket, 'failed-precondition', 'MEDIA_STORAGE_BUCKET is not configured.');
@@ -688,7 +694,10 @@ async function saveRoute({
       ownerId: currentRoute?.ownerId || uid,
       title: route.title,
       description: route.description,
-      status: preservedRouteStatus(currentRoute),
+      status: preservedRouteStatus(currentRoute) === 'active' && !textSafety.safe
+        ? 'moderation_hold'
+        : preservedRouteStatus(currentRoute),
+      ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
       dayCount: route.dayCount,
       distanceKm: route.distanceKm,
       categoryIds: route.categoryIds,

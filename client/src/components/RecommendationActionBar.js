@@ -5,6 +5,7 @@ import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors } from '../styles';
+import ReportButton from '../features/moderation/components/ReportButton';
 
 export const RecommendationActionBar = ({
   isLiked,
@@ -15,6 +16,8 @@ export const RecommendationActionBar = ({
   onLikesListPress,
   onSharePress,
   contentLabel = 'ההמלצה',
+  reportTarget,
+  ownerId,
   style,
 }) => (
   <View style={[styles.bar, style]}>
@@ -62,6 +65,8 @@ export const RecommendationActionBar = ({
       <Ionicons name="share-social-outline" size={24} color={colors.textSecondary} />
       <AppText style={styles.text}>שיתוף</AppText>
     </TouchableOpacity>
+
+    <ReportButton target={reportTarget} ownerId={ownerId} />
   </View>
 );
 

@@ -38,3 +38,9 @@ export const deleteNotification = (notificationId) =>
   call('deleteNotification', { notificationId });
 
 export const requestAccountDeletion = (payload = {}) => call('requestAccountDeletion', payload);
+
+export const submitReport = (target, category, details = '') =>
+  call('submitReport', { target, category, details });
+
+export const setBlockedUser = (blockedUid, blocked = true) =>
+  call('setBlockedUser', { blockedUid, blocked });

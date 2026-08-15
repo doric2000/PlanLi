@@ -22,8 +22,8 @@ service firebase.storage {
         && user.displayName.size() >= 2
         && user.onboarding.profileDetailsVersion == 1
         && user.onboarding.profileDetailsCompletedAt != null
-        && user.legal.termsVersion == '2026-08-14-draft'
-        && user.legal.privacyVersion == '2026-08-14-draft'
+        && user.legal.termsVersion == '2026-08-15-community-safety'
+        && user.legal.privacyVersion == '2026-08-15-community-safety'
         && user.legal.acceptedAt != null
         && user.smartProfile.setupRequired == false
         && user.smartProfile.completedAt != null;

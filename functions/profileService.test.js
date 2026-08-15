@@ -67,8 +67,8 @@ test('complete account setup records server-owned profile and legal versions', a
     profileDetailsCompletedAt: 'timestamp',
   });
   assert.deepEqual(stored.legal, {
-    termsVersion: '2026-08-14-draft',
-    privacyVersion: '2026-08-14-draft',
+    termsVersion: '2026-08-15-community-safety',
+    privacyVersion: '2026-08-15-community-safety',
     acceptedAt: 'timestamp',
   });
   assert.equal(result.profileDetailsVersion, 1);
@@ -127,8 +127,8 @@ test('travel preferences require verified email and current legal consent', asyn
     displayName: 'Dana Cohen',
     onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
     legal: {
-      termsVersion: '2026-08-14-draft',
-      privacyVersion: '2026-08-14-draft',
+      termsVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-15-community-safety',
       acceptedAt: 'timestamp',
     },
     smartProfile: { setupRequired: true },

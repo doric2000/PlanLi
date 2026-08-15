@@ -493,8 +493,14 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
   const filters = cleanFilters(data?.filters || {}, { route });
   const { destinations, context } = cleanDestinations(data || {});
   const db = admin.firestore();
-  const userSnapshot = auth?.uid ? await db.doc(`users/${auth.uid}`).get() : null;
+  const [userSnapshot, blockedSnapshot] = auth?.uid
+    ? await Promise.all([
+        db.doc(`users/${auth.uid}`).get(),
+        db.collection(`users/${auth.uid}/blockedUsers`).limit(250).get(),
+      ])
+    : [null, null];
   const userData = userSnapshot?.exists ? userSnapshot.data() : {};
+  const blockedUserIds = new Set(blockedSnapshot?.docs?.map((entry) => entry.id) || []);
   const completed = Boolean(auth?.uid && isSmartProfileComplete(userData.smartProfile || {}));
   const declaredProfile = completed ? normalizeSmartProfile(userData.smartProfile) : {};
   const shouldPersonalize = completed && ['forYou', 'relevance'].includes(sort);
@@ -520,6 +526,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
     byId.set(document.id, { id: document.id, ...document.data() });
   }));
   const candidates = Array.from(byId.values()).filter((item) => {
+    if (blockedUserIds.has(item.ownerId)) return false;
     if (!matchesDestinations(item, destinations)) return false;
     if (!matchesFilters(item, filters, { route })) return false;
     const relevance = searchRelevance(item, parsedQuery);

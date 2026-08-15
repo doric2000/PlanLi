@@ -30,12 +30,15 @@ trips/{id}
 countries/{cty_hash}/cities/{city_hash}
 users/{uid}/favorites/{sha256(target.path)}
 users/{uid}/notifications/{notificationId}
+users/{uid}/blockedUsers/{blockedUid}
 system/**
 ```
 
 - `users` is private. `publicProfiles` exposes only approved public identity/profile fields and is synchronized by the server.
 - Destination IDs are stable hashes. Names, ISO codes, and provider IDs are attributes, never document IDs.
 - Likes and comments are subcollections; do not add `likedBy` arrays. Parent `stats` counters are server-maintained.
+- Moderation cases, private reports, audit records, and resumable moderation jobs live under `system/moderation/**`. Reports use a deterministic hash of the target path and never expose reporter identity to clients.
+- User-generated posts and comments use `active`, `moderation_hold`, `suspended`, or `deleting`. Public comment queries must filter `status == active` just like their parent content.
 - Favorites use a deterministic key and server-built preview so a tab loads with one query. Source triggers refresh previews and delete favorites when their source disappears; the scheduled repair handles rare misses.
 - Routes keep days/stops in subcollections; do not grow unbounded arrays in the parent document.
 - `system/**` is server-only. Do not create ad-hoc migration or synchronization collections.
@@ -54,6 +57,7 @@ system/**
 - Authentication has one client state machine in `AuthProvider`: `loading`, `guest`, `emailVerificationRequired`, `accountSetupRequired`, `preferencesRequired`, and `ready`. Protected client actions call `requireCapability`; do not add screen-local auth redirects or parse server error text.
 - Guest-facing login, registration, and password-reset screens live in the nested `Auth` tab navigator so the bottom tab bar remains available. External entry points use `openAuthFlow`; do not restore duplicate root-stack auth screens.
 - Every callable Function declares exactly one access level: `public`, `signedIn`, or `active`. `active` requires an eligible verified token, current profile-details and legal-consent versions, and completed travel preferences. Ownership and admin checks remain service-local.
+- All user-generated posts, comments, and public profiles expose one shared report flow. Three unique reporters within 24 hours automatically hold posts only; comment and profile reports remain visible until an admin decision. User blocks are private, server-written, and must filter content, comments, and notifications for the blocking user.
 - Travel preferences may be written only after the current profile details and legal consent are complete and password-email accounts are verified. A display name may be changed once after initial account setup, only with a verified email, and the server records the consumed change in `users/{uid}.profileManagement.displayNameChangedAt`.
 - Current auth/legal versions are duplicated intentionally in `client/src/constants/authPolicy.js`, `functions/authPolicy.js`, and `storage.rules`; update all three plus the in-app and hosted legal drafts in one focused change. Existing users are gated lazily, without a backfill.
 

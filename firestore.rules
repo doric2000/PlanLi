@@ -26,6 +26,11 @@ service cloud.firestore {
       ).data.status == 'active';
     }
 
+    function activeComment(collectionName, contentId) {
+      return activeParent(collectionName, contentId)
+        && resource.data.status == 'active';
+    }
+
     function activeCountry(countryId) {
       return get(
         /databases/$(database)/documents/countries/$(countryId)
@@ -62,8 +67,8 @@ service cloud.firestore {
       }
 
       match /comments/{commentId} {
-        allow get: if admin() || activeParent('recommendations', contentId);
-        allow list: if admin() || (bounded(30) && activeParent('recommendations', contentId));
+        allow get: if admin() || activeComment('recommendations', contentId);
+        allow list: if admin() || (bounded(30) && activeComment('recommendations', contentId));
         allow write: if false;
       }
     }
@@ -111,8 +116,8 @@ service cloud.firestore {
       }
 
       match /comments/{commentId} {
-        allow get: if admin() || activeParent('routes', contentId);
-        allow list: if admin() || (bounded(30) && activeParent('routes', contentId));
+        allow get: if admin() || activeComment('routes', contentId);
+        allow list: if admin() || (bounded(30) && activeComment('routes', contentId));
         allow write: if false;
       }
     }
@@ -129,8 +134,8 @@ service cloud.firestore {
       }
 
       match /comments/{commentId} {
-        allow get: if admin() || activeParent('trips', contentId);
-        allow list: if admin() || (bounded(30) && activeParent('trips', contentId));
+        allow get: if admin() || activeComment('trips', contentId);
+        allow list: if admin() || (bounded(30) && activeComment('trips', contentId));
         allow write: if false;
       }
     }
@@ -175,6 +180,12 @@ service cloud.firestore {
       match /notifications/{notificationId} {
         allow get: if signedIn() && request.auth.uid == userId;
         allow list: if signedIn() && request.auth.uid == userId && bounded(50);
+        allow write: if false;
+      }
+
+      match /blockedUsers/{blockedUserId} {
+        allow get: if signedIn() && request.auth.uid == userId;
+        allow list: if signedIn() && request.auth.uid == userId && bounded(250);
         allow write: if false;
       }
 

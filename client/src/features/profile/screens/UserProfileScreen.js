@@ -53,6 +53,7 @@ export default function UserProfileScreen({ route, navigation }) {
       routes={routes}
       contentLoading={contentLoading}
       isOwner={false}
+      profileUid={uid}
       onBackPress={() => navigation.goBack()}
       onRefresh={() => {
         refresh();
