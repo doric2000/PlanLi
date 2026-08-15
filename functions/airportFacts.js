@@ -114,6 +114,20 @@ function closestScheduledAirport(cityCoordinates, airports, options = {}) {
   return closest;
 }
 
+function nearestScheduledAirports(cityCoordinates, airports, options = {}) {
+  const limit = Math.max(1, Math.min(20, Number(options.limit || 8)));
+  const maxDistanceKm = Number(options.maxDistanceKm ?? MAX_AIRPORT_DISTANCE_KM);
+  return (airports || [])
+    .map((airport) => ({
+      ...airport,
+      distanceKm: haversineDistanceKm(cityCoordinates, airport.coordinates),
+    }))
+    .filter((airport) => Number.isFinite(airport.distanceKm) && airport.distanceKm <= maxDistanceKm)
+    .sort((left, right) => left.distanceKm - right.distanceKm || left.iataCode.localeCompare(right.iataCode))
+    .slice(0, limit)
+    .map((airport) => ({ ...airport, distanceKm: Math.round(airport.distanceKm * 10) / 10 }));
+}
+
 async function downloadAirports({
   fetchImpl = global.fetch,
   url = OUR_AIRPORTS_URL,
@@ -227,6 +241,7 @@ module.exports = {
   closestScheduledAirport,
   downloadAirports,
   haversineDistanceKm,
+  nearestScheduledAirports,
   parseCsvRows,
   parseOurAirportsCsv,
   syncAirportFacts,

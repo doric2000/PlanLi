@@ -104,4 +104,14 @@ test('moderation queues and reporter cleanup have their required indexes', () =>
   assert.ok(reporterOverride?.indexes.some((index) => (
     index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
   )));
+  const destinationReviewIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'destinationReviews')
+    .map(fieldSignature);
+  assert.ok(destinationReviewIndexes.includes('status:ASCENDING|updatedAt:DESCENDING'));
+  const candidateExpiry = config.fieldOverrides.find((entry) => (
+    entry.collectionGroup === 'imageCandidates' && entry.fieldPath === 'expireAt'
+  ));
+  assert.ok(candidateExpiry?.indexes.some((index) => (
+    index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
+  )));
 });

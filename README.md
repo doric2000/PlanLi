@@ -404,6 +404,22 @@ changed by Firebase deployment:
 - Verify the support inbox `planli.travel.il@gmail.com` is monitored before
   submission, especially for urgent child-safety and violence reports.
 
+## Destination quality control
+
+The admin console includes a destination-quality queue. New cities are added
+automatically and a daily scheduled audit continues scanning the existing
+catalog. Approval is blocked when bilingual identity, Google Place identity,
+country, or coordinates are missing or contradictory. The queue also surfaces
+stale cache data, missing or weak images, missing attribution, missing airports,
+and failed provider jobs.
+
+Administrators can request verified Unsplash/Wikimedia suggestions, upload a
+manually reviewed JPEG through the normal EXIF-stripping media pipeline, select
+only nearby scheduled airports returned by OurAirports, recheck a destination,
+approve it with a recorded reason, or deactivate it. Deactivation removes the
+public catalog entry and places linked recommendations, trips, and routes on
+moderation hold; it never silently republishes them later.
+
 The Storage deployment applies the normal rules to the EU bucket and the
 read-only rollback rules to the US bucket. `storage.cors.json` restricts web
 origins, and `storage.lifecycle.json` removes abandoned staging objects.
