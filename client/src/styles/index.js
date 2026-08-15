@@ -14,6 +14,7 @@ export { notifications } from "./notifications";
 export { community } from "./community";
 export { preferenceSetupStyles } from "./preferences";
 export { moderationStyles } from "./moderation";
+export { adminStyles } from "./admin";
 export { rtlHorizontalStyles } from "./rtlHorizontal";
 export { pageHeaderStyles, TAB_HERO_BASE_HEIGHT } from "./pageHeader";
 export * from "./appStyles";

@@ -76,6 +76,26 @@ test('active access accepts password and social accounts only after all gates', 
   }));
 });
 
+test('suspended accounts are rejected centrally before signed-in and active handlers', async () => {
+  const suspended = { ...activeUser, moderation: { status: 'suspended' } };
+  for (const access of [ACCESS_LEVELS.SIGNED_IN, ACCESS_LEVELS.ACTIVE]) {
+    await assert.rejects(
+      authorizeRequest({ admin: adminWithUser(suspended), auth: passwordAuth(true), access }),
+      (error) => error?.details?.reason === AUTH_REASONS.ACCOUNT_SUSPENDED
+    );
+  }
+});
+
+test('a suspended account may reach only an explicitly exempted signed-in handler', async () => {
+  const suspended = { ...activeUser, moderation: { status: 'suspended' } };
+  await assert.doesNotReject(authorizeRequest({
+    admin: adminWithUser(suspended),
+    auth: passwordAuth(true),
+    access: ACCESS_LEVELS.SIGNED_IN,
+    allowSuspended: true,
+  }));
+});
+
 test('account setup gate requires verification and legal consent but not preferences', () => {
   const setupOnlyUser = {
     ...activeUser,

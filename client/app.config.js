@@ -7,6 +7,10 @@ module.exports = ({ config }) => {
 
   return {
     ...config,
+    experiments: {
+      ...(config.experiments || {}),
+      ...(process.env.PLANLI_ADMIN_WEB === 'true' ? { baseUrl: '/admin' } : {}),
+    },
     ios: {
       ...config.ios,
       ...(iosKey ? { config: { ...(config.ios?.config || {}), googleMapsApiKey: iosKey } } : {}),

@@ -1,0 +1,37 @@
+import { StyleSheet } from 'react-native';
+import { colors } from './colors';
+import { fontFamilies } from './typography';
+
+export const adminStyles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#F4F5F9' },
+  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: 16, paddingBottom: 48 },
+  header: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+  title: { fontFamily: fontFamilies.bold, fontSize: 26, color: colors.primary, textAlign: 'right' },
+  subtitle: { fontFamily: fontFamilies.regular, color: colors.textSecondary, textAlign: 'right' },
+  tabs: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  tab: { minHeight: 44, borderRadius: 14, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
+  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabText: { fontFamily: fontFamilies.semiBold, color: colors.textSecondary },
+  tabTextActive: { color: colors.white },
+  metrics: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 12 },
+  metric: { flexGrow: 1, flexBasis: 180, minHeight: 120, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#E8ECF2' },
+  metricValue: { fontFamily: fontFamilies.bold, fontSize: 30, color: colors.primary, textAlign: 'right' },
+  metricLabel: { fontFamily: fontFamilies.semiBold, color: colors.textSecondary, textAlign: 'right', marginTop: 6 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E8ECF2' },
+  row: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  cardTitle: { flex: 1, fontFamily: fontFamilies.bold, fontSize: 17, color: colors.textPrimary, textAlign: 'right' },
+  body: { fontFamily: fontFamilies.regular, color: colors.textSecondary, textAlign: 'right', marginTop: 6 },
+  badge: { borderRadius: 999, backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 5 },
+  badgeText: { fontFamily: fontFamilies.semiBold, color: '#C2410C', fontSize: 12 },
+  input: { minHeight: 48, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 14, textAlign: 'right', writingDirection: 'rtl', fontFamily: fontFamilies.regular, marginBottom: 10 },
+  actions: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  action: { minHeight: 44, borderRadius: 12, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF0FF' },
+  actionText: { color: colors.primary, fontFamily: fontFamilies.bold },
+  danger: { backgroundColor: '#FEE2E2' },
+  dangerText: { color: '#B91C1C' },
+  empty: { paddingVertical: 48, alignItems: 'center' },
+  emptyText: { color: colors.textSecondary, fontFamily: fontFamilies.regular, textAlign: 'center' },
+  loading: { paddingVertical: 50 },
+  error: { borderRadius: 14, backgroundColor: '#FEF2F2', padding: 12, marginBottom: 12 },
+  errorText: { color: '#B91C1C', fontFamily: fontFamilies.semiBold, textAlign: 'right' },
+});

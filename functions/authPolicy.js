@@ -12,6 +12,7 @@ const AUTH_REASONS = Object.freeze({
   ACCOUNT_SETUP_REQUIRED: 'ACCOUNT_SETUP_REQUIRED',
   LEGAL_CONSENT_REQUIRED: 'LEGAL_CONSENT_REQUIRED',
   PREFERENCES_REQUIRED: 'PREFERENCES_REQUIRED',
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
 });
 
 const PROFILE_DETAILS_VERSION = 1;
@@ -81,15 +82,22 @@ function assertActiveUser(auth, userDocument) {
   }
 }
 
-async function authorizeRequest({ admin, auth, access }) {
+async function authorizeRequest({ admin, auth, access, allowSuspended = false }) {
   if (!Object.values(ACCESS_LEVELS).includes(access)) {
     throw new Error(`Callable access level is missing or invalid: ${access || '<empty>'}`);
   }
   if (access === ACCESS_LEVELS.PUBLIC) return { access, userDocument: null };
   assertSignedIn(auth);
-  if (access === ACCESS_LEVELS.SIGNED_IN) return { access, userDocument: null };
   const snapshot = await admin.firestore().doc(`users/${auth.uid}`).get();
   const userDocument = snapshot.exists ? snapshot.data() : null;
+  if (!allowSuspended && userDocument?.moderation?.status === 'suspended') {
+    throw policyError(
+      'permission-denied',
+      'This account is suspended.',
+      AUTH_REASONS.ACCOUNT_SUSPENDED
+    );
+  }
+  if (access === ACCESS_LEVELS.SIGNED_IN) return { access, userDocument };
   assertActiveUser(auth, userDocument);
   return { access, userDocument };
 }

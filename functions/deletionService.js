@@ -287,5 +287,6 @@ module.exports = {
   deleteContentInternal,
   deleteOwnedContent,
   deleteQueryInBatches,
+  removeAuthoredInteractions,
   requestAccountDeletion,
 };

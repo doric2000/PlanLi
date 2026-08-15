@@ -13,6 +13,7 @@
 export const NotificationType = {
   LIKE: 'like',
   COMMENT: 'comment',
+  MODERATION: 'moderation',
 };
 
 /**
@@ -146,6 +147,12 @@ export const isValidNotification = (notification) => {
  */
 export const formatNotificationMessage = (notification) => {
   const { type, actorName, count, postTitle } = notification;
+
+  if (type === NotificationType.MODERATION) {
+    return notification.priority === 'urgent'
+      ? 'דיווח בטיחות דחוף ממתין לבדיקה'
+      : 'דיווח קהילה חדש ממתין לבדיקה';
+  }
 
   if (count === 1) {
     if (type === NotificationType.LIKE) {

@@ -24,6 +24,11 @@ async function main() {
   const nextClaims = { ...existing, admin: true };
 
   await admin.auth().setCustomUserClaims(user.uid, nextClaims);
+  await admin.firestore().doc(`system/moderation/admins/${user.uid}`).set({
+    uid: user.uid,
+    active: true,
+    bootstrappedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
   console.log(`✅ Admin claim set for uid=${user.uid}`);
   console.log('User must sign out/in (or refresh token) to pick up the claim.');
 }

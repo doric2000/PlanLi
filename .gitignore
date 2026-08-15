@@ -17,6 +17,7 @@ functions/.prelaunch-reset/
 .codex_tmp/
 client/.codex_tmp/
 client/.expo-validation/
+hosting/admin/
 .firebase/
 firebase-debug.log
 firestore-debug.log

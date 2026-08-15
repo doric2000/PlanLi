@@ -357,6 +357,53 @@ firebase deploy --only functions --project planli-f0b12
 firebase deploy --only storage --project planli-f0b12
 ```
 
+## Admin moderation console
+
+The same responsive moderation console runs inside the iOS Development Build
+and as a Firebase Hosting web application at
+`https://planli-f0b12.web.app/admin`. Access requires the Firebase `admin`
+custom claim; the server checks the claim again for every operation. Sensitive
+actions require a sign-in from the last ten minutes, a written reason, and are
+recorded in the append-only moderation audit log. The web console signs out
+after 30 minutes without activity.
+
+Build the generated, ignored Hosting bundle before a Hosting deployment:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npm.cmd run export:admin-web
+```
+
+Bootstrap the first administrator from an authenticated Firebase CLI session.
+The script synchronizes both the Auth claim and the private admin registry:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm.cmd run bootstrap-admin -- '<uid-or-email>'
+```
+
+Never commit administrator credentials or App Review demo credentials.
+
+## App Store Connect moderation checklist
+
+These settings are configured manually in App Store Connect and are not
+changed by Firebase deployment:
+
+- Link the public privacy policy, terms, community guidelines, and support
+  pages in the listing and review notes.
+- Complete the privacy questionnaire for account/profile data, user content,
+  location, identifiers, product interaction, diagnostics, and moderation data
+  according to the behavior of the submitted build.
+- Confirm the age-rating answers for user-generated content and unrestricted
+  web access based on the current app experience.
+- Give App Review a dedicated demo account that can reach reporting, blocking,
+  and in-app account deletion. Store its credentials only in App Store Connect.
+- Explain in review notes that reports are prioritized, three unique reports in
+  24 hours automatically hold posts, users can block other users, and account
+  deletion removes the account, content, interactions, and media.
+- Verify the support inbox `planli.travel.il@gmail.com` is monitored before
+  submission, especially for urgent child-safety and violence reports.
+
 The Storage deployment applies the normal rules to the EU bucket and the
 read-only rollback rules to the US bucket. `storage.cors.json` restricts web
 origins, and `storage.lifecycle.json` removes abandoned staging objects.
