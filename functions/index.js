@@ -52,6 +52,7 @@ const {
   setReaction,
 } = require('./socialService');
 const { deleteContent, requestAccountDeletion } = require('./deletionService');
+const { setBlockedUser, submitReport } = require('./moderationService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
@@ -368,6 +369,14 @@ exports.deleteContent = callable(
     data: request.data,
     mediaBucket: mediaStorageBucket.value(),
   })
+);
+
+exports.submitReport = callable({ access: 'active' }, (request) =>
+  submitReport({ admin, auth: request.auth, data: request.data })
+);
+
+exports.setBlockedUser = callable({ access: 'active' }, (request) =>
+  setBlockedUser({ admin, auth: request.auth, data: request.data })
 );
 
 exports.requestAccountDeletion = callable(

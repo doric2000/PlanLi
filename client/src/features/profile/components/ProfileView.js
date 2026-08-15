@@ -20,6 +20,7 @@ import {
 import ProfileHeader from './ProfileHeader';
 import { createProfileStyles } from './profileStyles';
 import { selectProfileHeroMedia } from '../utils/profileMetrics';
+import ReportButton from '../../moderation/components/ReportButton';
 
 export default function ProfileView({
   navigation,
@@ -37,6 +38,7 @@ export default function ProfileView({
   onMenuPress,
   onBackPress,
   onRefresh,
+  profileUid,
 }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -88,6 +90,11 @@ export default function ProfileView({
         >
           <MaterialIcons name="arrow-back" size={23} color={colors.textPrimary} />
         </Pressable>
+      ) : null}
+      {!isOwner && profileUid ? (
+        <View style={[styles.topAction, styles.topActionEnd]}>
+          <ReportButton target={{ type: 'profile', id: profileUid }} ownerId={profileUid} compact />
+        </View>
       ) : null}
 
       <FlatList

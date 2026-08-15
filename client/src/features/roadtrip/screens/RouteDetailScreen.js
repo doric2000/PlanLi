@@ -225,6 +225,8 @@ export default function RouteDetailScreen({ route, navigation }) {
             isLiked={isLiked}
             likeCount={likeCount}
             commentsCount={commentsCount}
+            reportTarget={{ type: 'route', id: routeId }}
+            ownerId={routeData?.ownerId}
             onCommentPress={() => setCommentsVisible(true)}
             onLikePress={toggleLike}
             onLikesListPress={() => setLikesVisible(true)}

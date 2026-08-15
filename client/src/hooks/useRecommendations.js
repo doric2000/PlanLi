@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { getPersonalizedRecommendations } from '../services/PersonalizationService';
+import { useBlockedUsers } from '../features/moderation/BlockedUsersContext';
 
 const serverSort = (sortBy) => sortBy === 'personalized'
   ? 'forYou'
   : sortBy === 'newest' ? 'newest' : 'popular';
 
 export const useRecommendations = (sortBy = 'popularity') => {
+  const { isBlocked } = useBlockedUsers();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,7 +35,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
         limit: 30,
       });
       if (requestSerial.current !== serial) return;
-      setData(Array.isArray(response?.items) ? response.items : []);
+      setData(Array.isArray(response?.items) ? response.items.filter((item) => !isBlocked(item.ownerId)) : []);
     } catch (error) {
       if (requestSerial.current !== serial) return;
       console.error('Error fetching recommendations:', error);
@@ -44,7 +46,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [requestKey, sortBy]);
+  }, [requestKey, sortBy, isBlocked]);
 
   useFocusEffect(useCallback(() => {
     fetchRecommendations({ showLoader: data.length === 0 });

@@ -15,6 +15,7 @@ import {
   orderBy,
   onSnapshot,
   limit,
+  where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { common } from '../styles';
@@ -23,6 +24,8 @@ import { formatTimestamp } from '../utils/formatTimestamp';
 import { saveComment } from '../services/SocialService';
 import { useAuth } from '../features/auth/AuthContext';
 import { AUTH_STATES, CAPABILITIES } from '../constants/authPolicy';
+import ReportButton from '../features/moderation/components/ReportButton';
+import { useBlockedUsers } from '../features/moderation/BlockedUsersContext';
 
 /**
  * CommentItem - Displays a single comment with user info.
@@ -32,7 +35,7 @@ import { AUTH_STATES, CAPABILITIES } from '../constants/authPolicy';
  * 
  * @param {Object} item - Comment object containing userId and text
  */
-const CommentItem = ({ item }) => {
+const CommentItem = ({ item, collectionName, postId }) => {
   const userData = {
     name: item.authorPreview?.displayName || 'Traveler',
     photo: item.authorPreview?.photoURL || null,
@@ -48,6 +51,16 @@ const CommentItem = ({ item }) => {
         </View>
         <AppText style={common.commentText}>{item.text}</AppText>
       </View>
+      <ReportButton
+        target={{
+          type: 'comment',
+          parentType: collectionName === 'routes' ? 'route' : collectionName === 'trips' ? 'trip' : 'recommendation',
+          parentId: postId,
+          id: item.id,
+        }}
+        ownerId={item.authorId}
+        compact
+      />
     </View>
   );
 };
@@ -68,6 +81,7 @@ const CommentItem = ({ item }) => {
  * @param {string} postId - The ID of the post to show comments for
  */
 export const CommentsSection = ({ collectionName, postId }) => {
+  const { isBlocked } = useBlockedUsers();
   const {
     user: authUser,
     status,
@@ -86,18 +100,23 @@ export const CommentsSection = ({ collectionName, postId }) => {
     if (!postId || !collectionName) return;
 
     const commentsRef = collection(db, collectionName, postId, 'comments');
-    const q = query(commentsRef, orderBy('createdAt', 'desc'), limit(30));
+    const q = query(
+      commentsRef,
+      where('status', '==', 'active'),
+      orderBy('createdAt', 'desc'),
+      limit(30)
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedComments = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setComments(fetchedComments);
+      setComments(fetchedComments.filter((item) => !isBlocked(item.authorId)));
     });
 
     return () => unsubscribe(); 
-  }, [postId, collectionName]);
+  }, [postId, collectionName, isBlocked]);
 
   const getSortedComments = () => {
     return [...comments].sort((a, b) => {
@@ -157,7 +176,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
 
       <FlatList
         data={getSortedComments()} 
-        renderItem={({ item }) => <CommentItem item={item} />}
+        renderItem={({ item }) => <CommentItem item={item} collectionName={collectionName} postId={postId} />}
         keyExtractor={item => item.id}
         style={common.commentList}
         nestedScrollEnabled={true}

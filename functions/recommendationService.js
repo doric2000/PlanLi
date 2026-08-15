@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { evaluateTextSafety } = require('./moderationService');
 const { resolveCountryMetadata } = require('./countryMetadata');
 const {
   getHebrewCountryName,
@@ -1261,6 +1262,7 @@ async function saveRecommendation({
     'failed-precondition', 'Update PlanLi to choose Free or Cheap as separate budget options.');
 
   const content = sanitizeRecommendationContent(data?.recommendation);
+  const textSafety = evaluateTextSafety([content.title, content.description]);
   const attributes = sanitizeRecommendationAttributes(
     data?.recommendation?.attributes,
     content,
@@ -1463,13 +1465,17 @@ async function saveRecommendation({
     if (recommendationId) {
       transaction.update(recommendationRef, {
         ...payload,
-        status: currentData.status || 'active',
+        status: currentData.status === 'active' && !textSafety.safe
+          ? 'moderation_hold'
+          : (currentData.status || (textSafety.safe ? 'active' : 'moderation_hold')),
+        ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
       transaction.create(recommendationRef, {
         ...payload,
-        status: 'active',
+        status: textSafety.safe ? 'active' : 'moderation_hold',
+        ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
         ownerId: uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),

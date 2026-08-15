@@ -1,5 +1,6 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { isVerifiedCaller, validateMediaAssets } = require('./recommendationService');
+const { evaluateTextSafety } = require('./moderationService');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -48,6 +49,9 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
   const tripId = data?.tripId ? cleanId(data.tripId, 'tripId') : null;
   const tripRef = tripId ? db.doc(`trips/${tripId}`) : db.collection('trips').doc();
   const input = data?.trip || {};
+  const title = cleanString(input.title, 'title', 120);
+  const description = cleanString(input.description, 'description', 5000);
+  const textSafety = evaluateTextSafety([title, description]);
   const existing = await tripRef.get();
   if (tripId) {
     assert(existing.exists, 'not-found', 'Trip does not exist.');
@@ -69,9 +73,12 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   await tripRef.set({
     ownerId: existing.exists ? existing.data().ownerId : auth.uid,
-    title: cleanString(input.title, 'title', 120),
-    description: cleanString(input.description, 'description', 5000),
-    status: 'active',
+    title,
+    description,
+    status: existing.exists && existing.data()?.status !== 'active'
+      ? existing.data().status
+      : (textSafety.safe ? 'active' : 'moderation_hold'),
+    ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
     destination,
     media,
     stats: existing.exists

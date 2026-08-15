@@ -4,10 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
 import { authStyles } from '../../../styles';
-import { PRIVACY_DOCUMENT, TERMS_DOCUMENT } from '../legalContent';
+import { COMMUNITY_DOCUMENT, PRIVACY_DOCUMENT, TERMS_DOCUMENT } from '../legalContent';
 
 export default function LegalDocumentScreen({ navigation, route }) {
-  const document = route?.name === 'Privacy' ? PRIVACY_DOCUMENT : TERMS_DOCUMENT;
+  const document = route?.name === 'Privacy'
+    ? PRIVACY_DOCUMENT
+    : route?.name === 'CommunityGuidelines' ? COMMUNITY_DOCUMENT : TERMS_DOCUMENT;
   return (
     <SafeAreaView style={authStyles.legalSafe} testID={`${route?.name?.toLowerCase()}-screen`}>
       <View style={authStyles.legalHeader}>

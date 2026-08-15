@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth } from '../../../config/firebase';
 import { subscribeToNotifications, getNotifications } from '../services/NotificationService';
+import { useBlockedUsers } from '../../moderation/BlockedUsersContext';
 
 /**
  * Custom hook to fetch and subscribe to real-time notifications
@@ -27,6 +28,7 @@ import { subscribeToNotifications, getNotifications } from '../services/Notifica
  * - unreadCount: Number of unread notifications
  */
 export const useNotifications = () => {
+  const { isBlocked } = useBlockedUsers();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,7 +53,7 @@ export const useNotifications = () => {
       currentUser.uid,
       (fetchedNotifications) => {
         console.log('Notifications received:', fetchedNotifications.length);
-        setNotifications(fetchedNotifications);
+        setNotifications(fetchedNotifications.filter((item) => !isBlocked(item.actorId)));
         setLoading(false);
         setRefreshing(false);
       },
@@ -69,7 +71,7 @@ export const useNotifications = () => {
         unsubscribe();
       }
     };
-  }, [currentUser]);
+  }, [currentUser, isBlocked]);
 
   // Manual refresh function for pull-to-refresh
   const refresh = useCallback(async () => {
@@ -80,14 +82,14 @@ export const useNotifications = () => {
 
     try {
       const fetchedNotifications = await getNotifications(currentUser.uid);
-      setNotifications(fetchedNotifications);
+      setNotifications(fetchedNotifications.filter((item) => !isBlocked(item.actorId)));
     } catch (err) {
       console.error('Error refreshing notifications:', err);
       setError(err);
     } finally {
       setRefreshing(false);
     }
-  }, [currentUser]);
+  }, [currentUser, isBlocked]);
 
   return {
     notifications,

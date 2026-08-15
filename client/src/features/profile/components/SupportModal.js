@@ -8,8 +8,8 @@ import { colors, typography, buttons, common } from '../../../styles';
 
 const SUPPORT_ITEMS = [
   { icon: 'mail-outline', text: 'planli.travel.il@gmail.com' },
-  { icon: 'help-circle-outline', text: 'FAQ: Coming soon' },
-  { icon: 'bug-outline', text: 'Report a bug: ADMIN' },
+  { icon: 'help-circle-outline', text: 'מענה לשאלות, ערעורים ודיווחי בטיחות' },
+  { icon: 'bug-outline', text: 'דיווח על תקלה: planli.travel.il@gmail.com' },
   { icon: 'call-outline', text: '+972 54-286-9666' },
 ];
 
@@ -19,7 +19,7 @@ export default function SupportModal({ visible, onClose }) {
       <View style={common.supportModalOverlay}>
         <View style={common.supportModalCard}>
           <View style={common.supportHeader}>
-            <AppText style={[typography.sectionTitle, { fontFamily: fontFamilies.semiBold, fontSize: 25 }]}>Help & Support</AppText>
+            <AppText style={[typography.sectionTitle, { fontFamily: fontFamilies.semiBold, fontSize: 25 }]}>עזרה ותמיכה</AppText>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -37,7 +37,7 @@ export default function SupportModal({ visible, onClose }) {
           </View>
 
           <TouchableOpacity style={[buttons.primary, { marginTop: 14 }]} onPress={onClose} activeOpacity={0.85}>
-            <AppText style={buttons.primaryText}>Close</AppText>
+            <AppText style={buttons.primaryText}>סגירה</AppText>
           </TouchableOpacity>
         </View>
       </View>

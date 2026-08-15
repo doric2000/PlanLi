@@ -15,8 +15,8 @@ const AUTH_REASONS = Object.freeze({
 });
 
 const PROFILE_DETAILS_VERSION = 1;
-const TERMS_VERSION = '2026-08-14-draft';
-const PRIVACY_VERSION = '2026-08-14-draft';
+const TERMS_VERSION = '2026-08-15-community-safety';
+const PRIVACY_VERSION = '2026-08-15-community-safety';
 
 function policyError(code, message, reason) {
   return new HttpsError(code, message, { reason });
