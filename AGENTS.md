@@ -38,6 +38,7 @@ system/**
 - Destination IDs are stable hashes. Names, ISO codes, and provider IDs are attributes, never document IDs.
 - Likes and comments are subcollections; do not add `likedBy` arrays. Parent `stats` counters are server-maintained.
 - Moderation cases, private reports, audit records, and resumable moderation jobs live under `system/moderation/**`. Reports use a deterministic hash of the target path and never expose reporter identity to clients.
+- Destination quality reviews and route-review jobs also live under `system/moderation/**`; provider retry state stays under `system/runtime/destinationJobs/**`. Do not expose either collection to public clients.
 - User-generated posts and comments use `active`, `moderation_hold`, `suspended`, or `deleting`. Public comment queries must filter `status == active` just like their parent content.
 - Favorites use a deterministic key and server-built preview so a tab loads with one query. Source triggers refresh previews and delete favorites when their source disappears; the scheduled repair handles rare misses.
 - Routes keep days/stops in subcollections; do not grow unbounded arrays in the parent document.
@@ -60,6 +61,7 @@ system/**
 - All user-generated posts, comments, and public profiles expose one shared report flow. Three unique reporters within 24 hours automatically hold posts only; comment and profile reports remain visible until an admin decision. User blocks are private, server-written, and must filter content, comments, and notifications for the blocking user.
 - Admin moderation uses one `admin` custom claim, mirrored in `system/moderation/admins/{uid}`. Every admin callable rechecks the claim; destructive actions require recent authentication, a reason, self-action prevention, last-admin protection, and an append-only audit event.
 - Suspensions disable Firebase Auth, revoke refresh tokens, mark the private profile suspended, remove the public profile, and hide existing posts and comments. Unsuspension restores account/profile access but never republishes content automatically.
+- Every new destination enters the admin quality queue. Core identity errors block approval; image, attribution, airport, cache, and provider-job problems remain visible warnings. Deactivation removes the destination catalog entry and holds linked recommendations, trips, and routes for review.
 - Travel preferences may be written only after the current profile details and legal consent are complete and password-email accounts are verified. A display name may be changed once after initial account setup, only with a verified email, and the server records the consumed change in `users/{uid}.profileManagement.displayNameChangedAt`.
 - Current auth/legal versions are duplicated intentionally in `client/src/constants/authPolicy.js`, `functions/authPolicy.js`, and `storage.rules`; update all three plus the in-app and hosted legal drafts in one focused change. Existing users are gated lazily, without a backfill.
 
@@ -68,6 +70,7 @@ system/**
 - Active media bucket: `planli-f0b12-media-eu` in `europe-west1`.
 - The former US bucket is read-only rollback storage. Never write to or delete it until the rollback period documented in `README.md` has ended, `npm run audit-live` reports zero references, and the user explicitly authorizes deletion.
 - Clients upload JPEG source files only to user-owned staging paths. `prepareMedia` strips EXIF/GPS data and creates immutable WebP `large`, `feed`, and `thumb` variants directly from the source.
+- Admin-uploaded destination images must first use that same prepared-media pipeline, then a media-service callable copies all variants to canonical `destinations/{countryId}/{cityId}/{assetId}/` objects before deleting the temporary user-owned copies.
 - Details/heroes use `large`; full-width cards and edit previews use `feed`; grids, maps, favorites, and avatars use `thumb`.
 - Preserve cached rendering, bounded list mounting, and the three-image carousel window. Do not prefetch complete feeds or carousels.
 

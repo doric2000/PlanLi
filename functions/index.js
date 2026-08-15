@@ -67,6 +67,20 @@ const {
   setUserEmailVerified,
   setUserSuspension,
 } = require('./adminService');
+const {
+  approveDestination,
+  deactivateDestination,
+  getAirportCandidates,
+  getDestinationImageCandidates,
+  getDestinationReview,
+  listDestinationReviews,
+  onDestinationCreated,
+  recheckDestination,
+  scanDestinationQuality,
+  selectDestinationImageCandidate,
+  setDestinationAirport,
+  setDestinationUploadedImage,
+} = require('./destinationAdminService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
@@ -431,6 +445,40 @@ exports.deleteUserAsAdmin = callable(
 exports.listModerationAudit = callable({ access: 'signedIn' }, (request) =>
   listModerationAudit({ admin, auth: request.auth, data: request.data })
 );
+exports.listDestinationReviews = callable({ access: 'signedIn', timeoutSeconds: 120 }, (request) =>
+  listDestinationReviews({ admin, auth: request.auth, data: request.data })
+);
+exports.getDestinationReview = callable({ access: 'signedIn' }, (request) =>
+  getDestinationReview({ admin, auth: request.auth, data: request.data })
+);
+exports.recheckDestination = callable(
+  { access: 'signedIn', timeoutSeconds: 180, secrets: [unsplashAccessKey], serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => recheckDestination({ admin, auth: request.auth, data: request.data, unsplashKey: unsplashAccessKey.value(), mediaBucket: mediaStorageBucket.value() })
+);
+exports.approveDestination = callable({ access: 'signedIn' }, (request) =>
+  approveDestination({ admin, auth: request.auth, data: request.data })
+);
+exports.getDestinationImageCandidates = callable(
+  { access: 'signedIn', timeoutSeconds: 180, secrets: [unsplashAccessKey] },
+  (request) => getDestinationImageCandidates({ admin, auth: request.auth, data: request.data, unsplashKey: unsplashAccessKey.value() })
+);
+exports.selectDestinationImageCandidate = callable(
+  { access: 'signedIn', timeoutSeconds: 120, secrets: [unsplashAccessKey], serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => selectDestinationImageCandidate({ admin, auth: request.auth, data: request.data, unsplashKey: unsplashAccessKey.value(), mediaBucket: mediaStorageBucket.value() })
+);
+exports.setDestinationUploadedImage = callable(
+  { access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => setDestinationUploadedImage({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() })
+);
+exports.getAirportCandidates = callable({ access: 'signedIn', timeoutSeconds: 120 }, (request) =>
+  getAirportCandidates({ admin, auth: request.auth, data: request.data })
+);
+exports.setDestinationAirport = callable({ access: 'signedIn', timeoutSeconds: 120 }, (request) =>
+  setDestinationAirport({ admin, auth: request.auth, data: request.data })
+);
+exports.deactivateDestination = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
+  deactivateDestination({ admin, auth: request.auth, data: request.data })
+);
 
 exports.requestAccountDeletion = callable(
   {
@@ -600,13 +648,30 @@ async function handleMediaCleanup(event, collectionName) {
 
 exports.onDestinationImageCreated = firestoreCreated(
   'countries/{countryId}/destinations/{cityId}',
-  (event) => resolveAndPersistDestinationImage({
-    admin,
-    countryId: event.params.countryId,
-    cityId: event.params.cityId,
-    unsplashKey: unsplashAccessKey.value(),
-  }),
+  async (event) => {
+    await resolveAndPersistDestinationImage({
+      admin,
+      countryId: event.params.countryId,
+      cityId: event.params.cityId,
+      unsplashKey: unsplashAccessKey.value(),
+    });
+    return onDestinationCreated({ admin, countryId: event.params.countryId, cityId: event.params.cityId });
+  },
   { secrets: [unsplashAccessKey], timeoutSeconds: 120 }
+);
+
+exports.auditDestinationQualityScheduled = onSchedule(
+  {
+    schedule: 'every day 03:15',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const result = await scanDestinationQuality({ admin, limit: 100 });
+    console.log('Destination quality audit complete.', result);
+  }
 );
 
 exports.repairDestinationImagesScheduled = onSchedule(

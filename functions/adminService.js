@@ -421,6 +421,7 @@ async function listModerationAudit({ admin, auth, data }) {
 }
 
 module.exports = {
+  audit,
   assertAdmin,
   assertRecentAuth,
   deleteUserAsAdmin,
@@ -432,6 +433,7 @@ module.exports = {
   listModerationAudit,
   listModerationCases,
   moderateContent,
+  prepareAdmin,
   setUserAdmin,
   setUserEmailVerified,
   setUserSuspension,

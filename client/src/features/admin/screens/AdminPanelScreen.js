@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
@@ -7,15 +7,25 @@ import { signOut } from 'firebase/auth';
 import AppText from '../../../components/AppText';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useBackButton } from '../../../hooks/useBackButton';
+import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import {
+  approveDestination,
+  deactivateDestination,
   deleteUserAsAdmin,
+  getAirportCandidates,
+  getDestinationImageCandidates,
   getModerationCase,
   getModerationDashboard,
   listAdminUsers,
+  listDestinationReviews,
   listModerationAudit,
   listModerationCases,
   listHeldContent,
   moderateContent,
+  recheckDestination,
+  selectDestinationImageCandidate,
+  setDestinationAirport,
+  setDestinationUploadedImage,
   setUserAdmin,
   setUserEmailVerified,
   setUserSuspension,
@@ -28,6 +38,7 @@ const TABS = [
   { id: 'overview', label: 'סקירה' },
   { id: 'reports', label: 'דיווחים' },
   { id: 'content', label: 'תוכן בהמתנה' },
+  { id: 'destinations', label: 'בקרת ערים' },
   { id: 'users', label: 'משתמשים' },
   { id: 'audit', label: 'יומן פעילות' },
 ];
@@ -60,12 +71,21 @@ export default function AdminPanelScreen({ navigation }) {
   const [cases, setCases] = useState([]);
   const [users, setUsers] = useState([]);
   const [audit, setAudit] = useState([]);
+  const [destinations, setDestinations] = useState([]);
+  const [imageCandidates, setImageCandidates] = useState({});
+  const [airportCandidates, setAirportCandidates] = useState({});
   const [query, setQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const destinationUploader = useImagePickerWithUpload({
+    kind: 'route',
+    aspect: [16, 9],
+    normalizeToAspect: true,
+    normalizeAspect: [16, 9],
+  });
 
   useBackButton(navigation, { title: '', color: colors.primary });
   useEffect(() => navigation.setOptions({ headerTitle: 'ניהול פלאן לי' }), [navigation]);
@@ -95,6 +115,9 @@ export default function AdminPanelScreen({ navigation }) {
       }
       if (tab === 'content') {
         const result = await listHeldContent(); setCases(result.items || []); setNextCursor(null);
+      }
+      if (tab === 'destinations') {
+        const result = await listDestinationReviews(); setDestinations(result.items || []); setNextCursor(result.nextCursor || null);
       }
       if (tab === 'users') {
         const result = await listAdminUsers(activeQuery ? { query: activeQuery } : {}); setUsers(result.items || []); setNextCursor(result.nextCursor || null);
@@ -157,6 +180,9 @@ export default function AdminPanelScreen({ navigation }) {
       if (tab === 'audit') {
         const result = await listModerationAudit({ cursor: nextCursor }); setAudit((current) => [...current, ...(result.items || [])]); setNextCursor(result.nextCursor || null);
       }
+      if (tab === 'destinations') {
+        const result = await listDestinationReviews({ cursor: nextCursor, scan: false }); setDestinations((current) => [...current, ...(result.items || [])]); setNextCursor(result.nextCursor || null);
+      }
     } catch (loadError) {
       setError(safeAdminError(loadError));
     } finally {
@@ -196,6 +222,49 @@ export default function AdminPanelScreen({ navigation }) {
     }
   };
 
+  const loadImageCandidates = async (item) => {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await getDestinationImageCandidates(item.countryId, item.cityId);
+      setImageCandidates((current) => ({ ...current, [item.id]: result.items || [] }));
+    } catch (candidateError) {
+      setError(safeAdminError(candidateError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadAirportCandidates = async (item) => {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await getAirportCandidates(item.countryId, item.cityId);
+      setAirportCandidates((current) => ({ ...current, [item.id]: result.items || [] }));
+    } catch (candidateError) {
+      setError(safeAdminError(candidateError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadDestinationImage = async (item) => {
+    setBusy(true);
+    setError('');
+    try {
+      const uri = await destinationUploader.pickFromGallery();
+      if (!uri) return;
+      const asset = await destinationUploader.uploadImageAsset(uri);
+      askReason('החלפת תמונת עיר', 'כתבו מדוע התמונה הידנית מתאימה לעיר.', (reason) => run(() => (
+        setDestinationUploadedImage(item.countryId, item.cityId, asset, reason, item.names?.he || item.names?.en || '')
+      )));
+    } catch (uploadError) {
+      setError(safeAdminError(uploadError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (adminLoading) return <SafeAreaView style={styles.screen}><ActivityIndicator style={styles.loading} color={colors.primary} /></SafeAreaView>;
   if (!isAdmin) return <SafeAreaView style={styles.screen}><View style={styles.empty}><Ionicons name="lock-closed" size={42} color={colors.textSecondary} /><AppText style={styles.emptyText}>אין הרשאת מנהל לחשבון זה.</AppText></View></SafeAreaView>;
 
@@ -203,7 +272,7 @@ export default function AdminPanelScreen({ navigation }) {
     <SafeAreaView style={styles.screen} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
         <View style={styles.header}>
-          <View><AppText style={styles.title}>מרכז הבקרה</AppText><AppText style={styles.subtitle}>דיווחים, תוכן, משתמשים ופעולות מנהל במקום אחד</AppText></View>
+          <View><AppText style={styles.title}>מרכז הבקרה</AppText><AppText style={styles.subtitle}>דיווחים, תוכן, ערים ומשתמשים במקום אחד</AppText></View>
           {busy ? <ActivityIndicator color={colors.primary} /> : null}
         </View>
         <View style={styles.tabs}>
@@ -228,6 +297,37 @@ export default function AdminPanelScreen({ navigation }) {
           </View>
         </View>)}
 
+        {tab === 'destinations' && destinations.map((item) => <View key={item.id} style={styles.card}>
+          <View style={styles.row}>
+            <View>
+              <AppText style={styles.cardTitle}>{item.names?.he || item.names?.en || item.cityId}</AppText>
+              <AppText style={styles.body}>{item.countryNames?.he || item.countryId} · {item.countryId}/{item.cityId}</AppText>
+            </View>
+            <View style={styles.badge}><AppText style={styles.badgeText}>{item.status === 'blocked' ? 'חסום' : item.status === 'inactive' ? 'לא פעיל' : item.status === 'approved' ? 'מאושר' : 'לבדיקה'}</AppText></View>
+          </View>
+          {item.image?.urls?.feed ? <Image source={{ uri: item.image.urls.feed }} style={styles.destinationImage} resizeMode="cover" /> : null}
+          <AppText style={styles.body}>המלצות: {item.recommendationCount || 0} · שדה תעופה: {item.closestAirport?.iataCode || 'חסר'}</AppText>
+          {(item.issues || []).map((issue) => <View key={issue.code} style={[styles.issue, issue.severity === 'error' && styles.issueError]}><AppText style={styles.body}>{issue.severity === 'error' ? 'שגיאה: ' : issue.severity === 'warning' ? 'אזהרה: ' : ''}{issue.label}</AppText></View>)}
+          <View style={styles.actions}>
+            <Action label="בדיקה חוזרת" disabled={busy} onPress={() => run(() => recheckDestination(item.countryId, item.cityId))} />
+            <Action label="אישור העיר" disabled={busy || item.status === 'blocked'} onPress={() => askReason('אישור עיר', 'כתבו את סיבת האישור.', (reason) => run(() => approveDestination(item.countryId, item.cityId, reason)))} />
+            <Action label="הצעות לתמונה" disabled={busy} onPress={() => loadImageCandidates(item)} />
+            <Action label="העלאת תמונה" disabled={busy} onPress={() => uploadDestinationImage(item)} />
+            <Action label="בחירת שדה תעופה" disabled={busy} onPress={() => loadAirportCandidates(item)} />
+            <Action label="השבתת העיר" danger disabled={busy || item.destinationStatus === 'inactive'} onPress={() => askReason('השבתת עיר', 'התוכן המקושר יוסתר ויעבור לבדיקה.', (reason) => run(() => deactivateDestination(item.countryId, item.cityId, reason)), true)} />
+          </View>
+          {(imageCandidates[item.id] || []).map((candidate) => <View key={candidate.id} style={styles.candidate}>
+            <Image source={{ uri: candidate.image?.urls?.feed }} style={styles.candidateImage} resizeMode="cover" />
+            <AppText style={styles.body}>{candidate.image?.attribution?.providerName || 'מקור פנימי מאומת'}</AppText>
+            <Action label="בחירת התמונה" disabled={busy} onPress={() => askReason('בחירת תמונה', 'כתבו מדוע התמונה מתאימה לעיר.', (reason) => run(() => selectDestinationImageCandidate(item.countryId, item.cityId, candidate.id, reason)))} />
+          </View>)}
+          {(airportCandidates[item.id] || []).map((airport) => <View key={airport.ident || airport.iataCode} style={styles.candidate}>
+            <AppText style={styles.cardTitle}>{airport.iataCode} · {airport.name}</AppText>
+            <AppText style={styles.body}>{airport.distanceKm} ק״מ מהעיר · מקור: מאגר שדות התעופה הפתוח</AppText>
+            <Action label="בחירת שדה התעופה" disabled={busy} onPress={() => askReason('בחירת שדה תעופה', 'כתבו את סיבת הבחירה.', (reason) => run(() => setDestinationAirport(item.countryId, item.cityId, airport.iataCode, reason)))} />
+          </View>)}
+        </View>)}
+
         {tab === 'users' ? <>
           <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="חיפוש לפי אימייל או מזהה משתמש" autoCapitalize="none" onSubmitEditing={() => setActiveQuery(query.trim())} />
           <View style={styles.actions}><Action label="חיפוש" onPress={() => setActiveQuery(query.trim())} /><Action label="ניקוי" onPress={() => { setQuery(''); setActiveQuery(''); }} /></View>
@@ -245,7 +345,7 @@ export default function AdminPanelScreen({ navigation }) {
 
         {tab === 'audit' && audit.map((item) => <View key={item.id} style={styles.card}><AppText style={styles.cardTitle}>{item.action}</AppText><AppText style={styles.body}>{item.reason}</AppText><AppText style={styles.body}>מנהל: {item.actorUid}</AppText></View>)}
         {nextCursor ? <Action label="טעינת פריטים נוספים" onPress={loadMore} disabled={loading} /> : null}
-        {!loading && ((['reports', 'content'].includes(tab) && !cases.length) || (tab === 'audit' && !audit.length)) ? <View style={styles.empty}><AppText style={styles.emptyText}>אין פריטים להצגה כרגע.</AppText></View> : null}
+        {!loading && ((['reports', 'content'].includes(tab) && !cases.length) || (tab === 'destinations' && !destinations.length) || (tab === 'audit' && !audit.length)) ? <View style={styles.empty}><AppText style={styles.emptyText}>אין פריטים להצגה כרגע.</AppText></View> : null}
       </ScrollView>
     </SafeAreaView>
   );

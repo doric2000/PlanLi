@@ -20,3 +20,13 @@ export const setUserEmailVerified = (identifier, verified, reason) => call('setU
 export const setUserAdmin = (identifier, admin, reason) => call('setUserAdmin', { identifier, admin, reason });
 export const deleteUserAsAdmin = (identifier, reason) => call('deleteUserAsAdmin', { identifier, reason });
 export const listModerationAudit = (payload = {}) => call('listModerationAudit', payload);
+export const listDestinationReviews = (payload = {}) => call('listDestinationReviews', payload);
+export const getDestinationReview = (countryId, cityId) => call('getDestinationReview', { countryId, cityId });
+export const recheckDestination = (countryId, cityId) => call('recheckDestination', { countryId, cityId });
+export const approveDestination = (countryId, cityId, reason) => call('approveDestination', { countryId, cityId, reason });
+export const getDestinationImageCandidates = (countryId, cityId) => call('getDestinationImageCandidates', { countryId, cityId });
+export const selectDestinationImageCandidate = (countryId, cityId, candidateId, reason) => call('selectDestinationImageCandidate', { countryId, cityId, candidateId, reason });
+export const setDestinationUploadedImage = (countryId, cityId, asset, reason, alt = '') => call('setDestinationUploadedImage', { countryId, cityId, asset, reason, alt });
+export const getAirportCandidates = (countryId, cityId) => call('getAirportCandidates', { countryId, cityId });
+export const setDestinationAirport = (countryId, cityId, iataCode, reason) => call('setDestinationAirport', { countryId, cityId, iataCode, reason });
+export const deactivateDestination = (countryId, cityId, reason) => call('deactivateDestination', { countryId, cityId, reason });

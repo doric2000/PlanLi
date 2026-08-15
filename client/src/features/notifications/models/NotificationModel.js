@@ -149,6 +149,9 @@ export const formatNotificationMessage = (notification) => {
   const { type, actorName, count, postTitle } = notification;
 
   if (type === NotificationType.MODERATION) {
+    if (typeof notification.message === 'string' && notification.message.trim()) {
+      return notification.message.trim().slice(0, 180);
+    }
     return notification.priority === 'urgent'
       ? 'דיווח בטיחות דחוף ממתין לבדיקה'
       : 'דיווח קהילה חדש ממתין לבדיקה';
