@@ -2,8 +2,25 @@ import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
 
 const callables = new Map();
+export const ADMIN_CALLABLE_TIMEOUTS = Object.freeze({
+  moderateContent: 320000,
+  setUserSuspension: 320000,
+  deleteUserAsAdmin: 560000,
+  listDestinationReviews: 140000,
+  recheckDestination: 200000,
+  getDestinationImageCandidates: 200000,
+  selectDestinationImageCandidate: 140000,
+  setDestinationUploadedImage: 320000,
+  getAirportCandidates: 140000,
+  setDestinationAirport: 140000,
+  deactivateDestination: 320000,
+});
 const call = async (name, payload = {}) => {
-  if (!callables.has(name)) callables.set(name, httpsCallable(cloudFunctions, name));
+  if (!callables.has(name)) {
+    callables.set(name, httpsCallable(cloudFunctions, name, {
+      timeout: ADMIN_CALLABLE_TIMEOUTS[name] || 70000,
+    }));
+  }
   const response = await callables.get(name)(payload);
   return response.data;
 };

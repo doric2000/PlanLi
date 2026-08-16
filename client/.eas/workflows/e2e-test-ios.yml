@@ -1,0 +1,21 @@
+name: iOS E2E smoke test
+
+on:
+  pull_request_labeled:
+    labels: [ios-e2e]
+
+jobs:
+  build_ios_simulator:
+    name: Build iOS simulator app
+    type: build
+    params:
+      platform: ios
+      profile: e2e-test
+
+  run_maestro:
+    name: Run Maestro smoke test
+    needs: [build_ios_simulator]
+    type: maestro
+    params:
+      build_id: ${{ needs.build_ios_simulator.outputs.build_id }}
+      flow_path: [.maestro/smoke.yml]

@@ -1,4 +1,4 @@
-export function safeAdminError(error) {
+export function safeAdminError(error, { operationMayContinue = false } = {}) {
   const reason = error?.details?.reason || error?.customData?.details?.reason;
   if (reason === 'recent_sign_in_required') return 'מטעמי אבטחה יש להתנתק ולהתחבר מחדש לפני פעולה רגישה.';
   if (reason === 'last_admin') return 'אי אפשר להסיר את מנהל המערכת האחרון.';
@@ -8,5 +8,9 @@ export function safeAdminError(error) {
   if (reason === 'missing_coordinates') return 'אי אפשר לאתר שדה תעופה בלי נקודות ציון תקינות לעיר.';
   if (reason === 'invalid_airport') return 'שדה התעופה שנבחר אינו מועמד מאומת וקרוב לעיר.';
   if (reason === 'invalid_media') return 'קובץ התמונה אינו תקין או אינו שייך לחשבון המנהל.';
+  const code = String(error?.code || error?.name || '').toLowerCase();
+  if (operationMayContinue && (code.includes('deadline-exceeded') || code.includes('timeout') || code.includes('unavailable'))) {
+    return 'הפעולה אורכת זמן רב. ייתכן שהיא עדיין מתבצעת בשרת; אין להפעיל אותה שוב לפני רענון ובדיקת המצב.';
+  }
   return 'הפעולה לא הושלמה. אפשר לרענן ולנסות שוב.';
 }

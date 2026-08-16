@@ -10,4 +10,8 @@ const result = spawnSync(process.execPath, [
   env: { ...process.env, PLANLI_ADMIN_WEB: 'true', EXPO_PUBLIC_ADMIN_WEB: 'true' },
   stdio: 'inherit',
 });
+if (result.status === 0) {
+  const { verifyAdminExport } = require('./verifyAdminExport');
+  verifyAdminExport(output);
+}
 process.exitCode = result.status ?? 1;

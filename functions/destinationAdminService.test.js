@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { qualityIssues } = require('./destinationAdminService');
+const { listDestinationReviews, qualityIssues } = require('./destinationAdminService');
 const { nearestScheduledAirports } = require('./airportFacts');
 
 function validDestination() {
@@ -47,4 +47,35 @@ test('airport candidates are bounded, sorted and distance annotated', () => {
   ], { limit: 2, maxDistanceKm: 300 });
   assert.deepEqual(result.map((entry) => entry.iataCode), ['AAA', 'BBB']);
   assert.ok(result[0].distanceKm < result[1].distanceKm);
+});
+
+test('listing destination reviews is a pure read and never starts a quality scan', async () => {
+  let collectionGroupCalls = 0;
+  const query = {
+    orderBy: () => query,
+    limit: () => query,
+    where: () => query,
+    get: async () => ({ size: 0, docs: [] }),
+  };
+  const db = {
+    doc(path) {
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      throw new Error(`Unexpected Firestore path: ${path}`);
+    },
+    collection(path) {
+      assert.equal(path, 'system/moderation/destinationReviews');
+      return query;
+    },
+    collectionGroup() {
+      collectionGroupCalls += 1;
+      throw new Error('list must not scan destinations');
+    },
+  };
+  const result = await listDestinationReviews({
+    admin: { firestore: () => db },
+    auth: { uid: 'admin-1', token: { admin: true } },
+    data: {},
+  });
+  assert.deepEqual(result, { items: [], nextCursor: null });
+  assert.equal(collectionGroupCalls, 0);
 });

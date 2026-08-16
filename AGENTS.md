@@ -24,6 +24,14 @@ Prefer existing feature structure, hooks, services, shared components, and style
 - Visible UI is Hebrew unless intentionally English.
 - Preserve RTL, safe areas, test IDs, navigation route names, and accessibility behavior.
 
+Tool routing and subsystem validation details live in `client/AGENTS.md` and
+`functions/AGENTS.md`. In short: use the relevant installed Firebase or Expo
+skill before version-sensitive work, use its MCP for real environment state,
+use the browser skill for rendered admin/Web behavior, and use `/review` only
+as a diff review—not as a replacement for targeted tests or runtime checks.
+Security-sensitive Auth/admin/Rules/Storage/deletion diffs also require a
+security-focused diff review.
+
 ## Canonical data and security model
 
 One production schema only. Do not introduce permanent `v1`/`v2` branches, duplicate schemas, bucket fallbacks, or temporary client-write paths.
@@ -194,7 +202,7 @@ Start with the smallest relevant checks. Expand for cross-cutting/shared infrast
 Client, from `client/`:
 
 ```powershell
-npm.cmd test -- --runInBand __tests__\RelevantScreen.test.js __tests__\RelevantService.test.js
+npm.cmd test -- --runInBand __tests__/RelevantScreen.test.js __tests__/RelevantService.test.js
 ```
 
 - Full client suite: shared runtime/navigation/dependency/release changes.
