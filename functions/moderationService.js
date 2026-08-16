@@ -66,6 +66,11 @@ function caseIdForPath(path) {
   return crypto.createHash('sha256').update(path).digest('base64url');
 }
 
+function caseStatusForReport(previousStatus, held) {
+  if (held) return 'auto_held';
+  return ['open', 'auto_held'].includes(previousStatus) ? previousStatus : 'open';
+}
+
 function normalizeReportInput(data) {
   const target = normalizeReportTarget(data?.target);
   const category = String(data?.category || '').trim();
@@ -137,6 +142,8 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
     });
 
     const previous = caseSnapshot.exists ? caseSnapshot.data() || {} : {};
+    const previousStatus = previous.status || 'open';
+    const reopening = !['open', 'auto_held'].includes(previousStatus);
     const recentReporters = Object.fromEntries(Object.entries(previous.recentReporters || {})
       .filter(([, timestamp]) => nowMs - Number(timestamp) < REPORT_WINDOW_MS));
     const alreadyCounted = Boolean(recentReporters[auth.uid]);
@@ -150,7 +157,7 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
       target,
       targetOwnerId: ownerId,
       targetPreview: preserveReportedPreview(previous.targetPreview, targetPreview),
-      status: held ? 'auto_held' : (previous.status || 'open'),
+      status: caseStatusForReport(previousStatus, held),
       priority: ['child_safety', 'violence_dangerous_illegal'].includes(category) ? 'urgent' : (previous.priority || 'normal'),
       reportCount: Number(previous.reportCount || 0) + (existingReport.exists ? 0 : 1),
       uniqueCount24h,
@@ -162,6 +169,11 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
       firstReportedAt: previous.firstReportedAt || admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       dueAtMs: nowMs + (['child_safety', 'violence_dangerous_illegal'].includes(category) ? 4 : 24) * 60 * 60 * 1000,
+      ...(reopening ? {
+        resolvedAt: admin.firestore.FieldValue.delete(),
+        resolvedBy: admin.firestore.FieldValue.delete(),
+        resolutionReason: admin.firestore.FieldValue.delete(),
+      } : {}),
     }, { merge: true });
     transaction.set(reportRef, {
       reporterId: auth.uid,
@@ -241,6 +253,7 @@ module.exports = {
   REPORT_CATEGORIES,
   REPORT_WINDOW_MS,
   caseIdForPath,
+  caseStatusForReport,
   evaluateTextSafety,
   normalizeReportInput,
   normalizeReportTarget,

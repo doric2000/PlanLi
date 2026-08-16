@@ -203,16 +203,36 @@ async function scanDestinationQuality({ admin, limit = 50 }) {
 async function listDestinationReviews({ admin, auth, data }) {
   await prepareAdmin(admin, auth);
   const requestedStatus = typeof data?.status === 'string' ? data.status : 'all';
-  let query = admin.firestore().collection('system/moderation/destinationReviews').orderBy('updatedAt', 'desc').limit(PAGE_SIZE);
-  if (requestedStatus !== 'all') query = query.where('status', '==', requestedStatus);
-  if (data?.cursor) {
-    const cursor = await admin.firestore().doc(`system/moderation/destinationReviews/${cleanId(data.cursor, 'cursor')}`).get();
-    if (cursor.exists) query = query.startAfter(cursor);
+  const db = admin.firestore();
+  const collection = db.collection('system/moderation/destinationReviews');
+  const cursor = data?.cursor
+    ? await db.doc(`system/moderation/destinationReviews/${cleanId(data.cursor, 'cursor')}`).get()
+    : null;
+  let documents = [];
+  if (requestedStatus !== 'all') {
+    let query = collection.where('status', '==', requestedStatus).orderBy('updatedAt', 'desc').limit(PAGE_SIZE);
+    if (cursor?.exists) query = query.startAfter(cursor);
+    documents = (await query.get()).docs;
+  } else {
+    const pendingStatuses = ['blocked', 'open', 'ready'];
+    const reviewedStatuses = ['approved', 'approved_with_warnings', 'inactive'];
+    const cursorIsPending = cursor?.exists && pendingStatuses.includes(cursor.data()?.status);
+    if (!cursor?.exists || cursorIsPending) {
+      let pendingQuery = collection.where('status', 'in', pendingStatuses).orderBy('updatedAt', 'desc').limit(PAGE_SIZE);
+      if (cursorIsPending) pendingQuery = pendingQuery.startAfter(cursor);
+      documents = (await pendingQuery.get()).docs;
+    }
+    if (documents.length < PAGE_SIZE) {
+      let reviewedQuery = collection.where('status', 'in', reviewedStatuses)
+        .orderBy('updatedAt', 'desc')
+        .limit(PAGE_SIZE - documents.length);
+      if (cursor?.exists && !cursorIsPending) reviewedQuery = reviewedQuery.startAfter(cursor);
+      documents.push(...(await reviewedQuery.get()).docs);
+    }
   }
-  const snapshot = await query.get();
   return {
-    items: snapshot.docs.map((entry) => serialize({ id: entry.id, ...entry.data() })),
-    nextCursor: snapshot.size === PAGE_SIZE ? snapshot.docs.at(-1).id : null,
+    items: documents.map((entry) => serialize({ id: entry.id, ...entry.data() })),
+    nextCursor: documents.length === PAGE_SIZE ? documents.at(-1).id : null,
   };
 }
 

@@ -191,7 +191,11 @@ async function hydrateModerationPreviews(admin, items) {
     if (item?.targetPreview && typeof item.targetPreview === 'object') {
       return {
         ...item,
-        targetPreview: { ...item.targetPreview, available: Boolean(targetSnapshot?.exists) },
+        targetPreview: {
+          ...item.targetPreview,
+          available: Boolean(targetSnapshot?.exists),
+          ...(targetData?.status ? { status: cleanText(targetData.status, 40) } : {}),
+        },
       };
     }
     const parentPath = parentTargetPath(item.target);

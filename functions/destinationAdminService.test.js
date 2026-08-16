@@ -79,3 +79,36 @@ test('listing destination reviews is a pure read and never starts a quality scan
   assert.deepEqual(result, { items: [], nextCursor: null });
   assert.equal(collectionGroupCalls, 0);
 });
+
+test('listing destination reviews puts pending cities before approved cities', async () => {
+  const pendingDoc = { id: 'pending', data: () => ({ status: 'open', names: { he: 'ממתינה' } }) };
+  const approvedDoc = { id: 'approved', data: () => ({ status: 'approved', names: { he: 'מאושרת' } }) };
+  const responses = [[pendingDoc], [approvedDoc]];
+  const whereCalls = [];
+  const query = {
+    where: (...args) => { whereCalls.push(args); return query; },
+    orderBy: () => query,
+    limit: () => query,
+    get: async () => ({ docs: responses.shift() || [] }),
+  };
+  const db = {
+    doc(path) {
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      throw new Error(`Unexpected Firestore path: ${path}`);
+    },
+    collection(path) {
+      assert.equal(path, 'system/moderation/destinationReviews');
+      return query;
+    },
+  };
+  const result = await listDestinationReviews({
+    admin: { firestore: () => db },
+    auth: { uid: 'admin-1', token: { admin: true } },
+    data: {},
+  });
+  assert.deepEqual(result.items.map((item) => item.id), ['pending', 'approved']);
+  assert.deepEqual(whereCalls, [
+    ['status', 'in', ['blocked', 'open', 'ready']],
+    ['status', 'in', ['approved', 'approved_with_warnings', 'inactive']],
+  ]);
+});
