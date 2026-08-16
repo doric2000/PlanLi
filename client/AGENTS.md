@@ -1,37 +1,106 @@
 # PlanLi Client Agent Guide
 
-This file applies to `client/**` and supplements the repository guide.
+Applies to `client/**` and supplements the repository guide.
+
+## Client architecture
+
+- Expo SDK, React Native, React, navigation, and Firebase client APIs are
+  version-sensitive. Inspect installed versions and existing patterns first.
+- Feature code lives in `src/features`, shared services in `src/services`, and
+  `StyleSheet.create` definitions in `src/styles`.
+- Visible product UI is Hebrew unless intentionally English. Preserve RTL, safe
+  areas, accessibility, stable test IDs, navigation route names, and 44px targets.
+- Reuse shared components, hooks, providers, services, and tokens before adding
+  new abstractions. Never expose raw provider, Firebase, callable, or network errors.
+
+## Authentication and protected actions
+
+Auth uses one `AuthProvider` state machine:
+
+`loading` → `guest` / `emailVerificationRequired` /
+`accountSetupRequired` / `preferencesRequired` / `ready`
+
+- Protected actions use `requireCapability`; external entry points use `openAuthFlow`.
+- Guest auth screens remain inside the nested Auth tab navigator.
+- Active access requires verified eligibility, current profile/legal completion,
+  and completed preferences; server checks remain authoritative.
+- Display-name changes follow the single-change and verified-email policy.
+- Keep auth/legal versions aligned with Functions, Storage Rules, and legal drafts.
+
+## Admin, UI, and media behavior
+
+- The admin console is the same responsive surface used on iOS and Hosting `/admin`.
+- Async screens must handle relevant loading, empty, error, retry, success, and
+  stale-response states. Unit tests alone do not establish responsiveness.
+- Admin request and error state stays isolated per tab, action, and target. One slow
+  operation must not freeze unrelated buttons or views.
+- Long actions show immediate persistent progress and use a timeout aligned with
+  the server. Never automatically retry destructive or non-idempotent mutations.
+- After a mutation, update or refresh the affected target instead of the whole tab
+  unless the operation genuinely changes the collection.
+- Preserve cached rendering, bounded list mounting, and the three-image carousel
+  window. Use the intended `large`, `feed`, and `thumb` media variants.
+
+## Windows and iPhone workflow
+
+The development computer is Windows and the available Apple test device is a
+physical iPhone. Expo Go is unsupported because PlanLi uses native auth modules.
+
+- Use the installed signed EAS Development Build with Metro:
+  `npx expo start --dev-client -c`.
+- Do not run local Xcode, CocoaPods, `npm run ios`, or iOS Simulator commands.
+- JavaScript-only changes need a Metro reload, not a new EAS build.
+- Native dependency, app-config, entitlement, icon, splash, or signing changes need
+  an explicitly authorized cloud EAS Development Build installed on the iPhone.
+- Use EAS logs for native build failures; local Xcode logs are unavailable.
+- EAS Maestro/iOS Simulator workflows are optional, remote, paid-plan dependent,
+  and never a default or blocking gate.
+- Production/TestFlight builds and EAS Submit can run from Windows, but require
+  separate release authorization.
 
 ## Tool routing
 
-- Read installed Expo, React Native, React, Firebase client, and navigation versions before changing version-sensitive APIs.
-- For Expo configuration, Development Builds, EAS Build, EAS Workflows, or native modules, use an applicable installed Expo skill first and then Expo MCP to inspect or validate real project state. If the Expo skill is unavailable, state that and use official Expo documentation plus Expo MCP.
-- For Firebase client Authentication, callable Functions, Storage, or Firestore behavior, use the relevant official Firebase skill first. Use Firebase MCP for live project state when available; repository code alone is not evidence of deployed configuration.
-- For the hosted admin console or React Native Web behavior, use the browser skill to exercise the rendered UI. Unit tests and `/review` do not replace a runtime check.
-- Never expose raw provider, Firebase, network, or callable error messages. Map structured reasons to safe Hebrew copy.
+- Expo/EAS: use Expo MCP for current project, credentials, builds, and workflows.
+  If OAuth or MCP is unavailable, state it and use EAS CLI plus official Expo docs.
+- Firebase client behavior: load the relevant Firebase skill; use Firebase MCP only
+  when live Auth/project/deployed state is necessary.
+- Hosted admin/Web behavior: use the browser skill against the local export or
+  deployed URL as appropriate. Do not use production admin mutations for testing.
 
-## React Native and admin validation
+## Client validation ladder
 
-- Prefer React Native Testing Library tests that operate through roles, labels, text, and stable `testID` values. Avoid implementation-state assertions.
-- Every async screen must cover loading, empty, error, retry, success, and stale-response behavior where relevant.
-- Admin tabs must keep request state isolated. Admin mutations must keep pending/error state scoped to the exact action and target; a slow action must not freeze unrelated tabs or buttons.
-- Long callable actions need immediate persistent progress, a timeout aligned with the server limit, and a safe warning that the server operation may still finish. Do not automatically retry destructive or non-idempotent actions.
-- After a successful admin mutation, patch or remove the affected item, or refresh only that target. Do not reload an entire tab unless the operation changes the whole collection.
-- Preserve RTL, Hebrew copy, safe areas, accessibility roles/states, disabled styling, and 44px minimum targets.
-
-## Efficient test ladder
-
-Run the smallest useful checks from `client/`:
+Run commands from `client/` and start with the narrowest relevant test:
 
 ```powershell
 npm.cmd test -- --runInBand __tests__/RelevantScreen.test.js __tests__/RelevantService.test.js
 ```
 
-- Run the admin export and asset verifier for admin UI, assets, entry-point, or bundler changes.
-- Run an iOS export for native configuration, assets, dependency, or entry-point changes.
-- Run the full client suite only for shared runtime/navigation/dependency changes or release readiness.
-- The EAS Maestro workflow is an explicit, on-demand iOS gate. Do not trigger a paid/remote build without authorization.
+### Level 0
 
-## Review gate
+Documentation or Codex configuration only: no client tests or exports.
 
-For non-trivial changes, inspect the final diff as a skeptical senior React Native engineer. Then use `/review` (or the equivalent base-branch diff review) for regressions, stale state, races, navigation/auth edges, platform differences, and accidental extra requests. `/review` is diff analysis only; perform the targeted runtime flow separately.
+### Level 1
+
+- Run directly affected Jest tests.
+- Prefer React Native Testing Library assertions through roles, labels, text, and
+  stable test IDs rather than component implementation state.
+- For UI changes, exercise the changed loading/error/success path in Web/admin or
+  on the iPhone when practical.
+
+### Level 2
+
+- Run related test groups.
+- Admin UI/assets/entry/bundler changes require `npm run export:admin-web`,
+  `npm run verify:admin-web`, and browser smoke testing.
+- Native config/dependency/assets/bundler/entry changes require an iOS export.
+- Shared navigation/auth/runtime changes require the related navigation/auth groups.
+- Run one base-branch `/review` after checks.
+
+### Level 3
+
+- Run the full client suite with `npm.cmd test -- --runInBand`.
+- Run applicable admin and iOS exports plus critical iPhone/browser smoke flows.
+- Request an EAS build only for a native/release need; do not build for JS-only work.
+
+Do not add a new E2E framework for a focused fix. The existing remote Maestro smoke
+workflow is on-demand only and cannot replace manual physical-device coverage.
