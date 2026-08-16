@@ -5,6 +5,8 @@ const {
   closestScheduledAirport,
   haversineDistanceKm,
   parseOurAirportsCsv,
+  downloadAirports,
+  resetAirportDownloadCacheForTests,
 } = require('./airportFacts');
 
 const csv = [
@@ -44,4 +46,32 @@ test('invalid coordinates do not produce an airport', () => {
   const airports = parseOurAirportsCsv(csv);
   assert.equal(closestScheduledAirport({}, airports), null);
   assert.equal(haversineDistanceKm({}, airports[0].coordinates), Infinity);
+});
+
+test('airport downloads share a warm bounded cache', async () => {
+  resetAirportDownloadCacheForTests();
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      headers: { get: () => 'Mon, 01 Jan 2024 00:00:00 GMT' },
+      text: async () => csv,
+    };
+  };
+  const first = await downloadAirports({ fetchImpl, url: 'https://example.test/airports.csv' });
+  const second = await downloadAirports({ fetchImpl, url: 'https://example.test/airports.csv' });
+  assert.equal(calls, 1);
+  assert.equal(first, second);
+});
+
+test('airport download aborts after its configured timeout', async () => {
+  resetAirportDownloadCacheForTests();
+  const fetchImpl = (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  });
+  await assert.rejects(
+    downloadAirports({ fetchImpl, url: 'https://example.test/slow.csv', timeoutMs: 5, useCache: false }),
+    (error) => error.name === 'AbortError'
+  );
 });

@@ -429,7 +429,7 @@ exports.listAdminUsers = callable({ access: 'signedIn', serviceAccount: MEDIA_SE
 exports.getAdminUser = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   getAdminUser({ admin, auth: request.auth, data: request.data })
 );
-exports.setUserSuspension = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
+exports.setUserSuspension = callable({ access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   setUserSuspension({ admin, auth: request.auth, data: request.data })
 );
 exports.setUserEmailVerified = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>

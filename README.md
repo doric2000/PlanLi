@@ -13,6 +13,18 @@ The deployed Firebase backend is not evidence of a public client release.
 
 ## Run the client
 
+PlanLi development and Firebase tooling use Node.js 22. From the repository
+root, switch to the version declared in `.nvmrc` before installing packages or
+running Expo, Functions, emulators, or Firebase CLI commands:
+
+```powershell
+nvm use 22
+node --version
+```
+
+If the Firebase MCP server reports an unsupported Node version, switch the
+Codex host to Node 22 and restart Codex so the MCP process inherits it.
+
 Run these commands from the `client` directory:
 
 ```powershell
@@ -31,6 +43,12 @@ The local client must contain these bucket values in `client/.env`:
 EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
 EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
 ```
+
+The on-demand iOS simulator smoke test is defined in
+`client/.eas/workflows/e2e-test-ios.yml`. It runs only when a pull request is
+labeled `ios-e2e`; it is not a per-commit gate and must not be triggered without
+authorization for a remote EAS build. It checks the guest/authentication shell
+without credentials or destructive administrator actions.
 
 ### Maps during development
 

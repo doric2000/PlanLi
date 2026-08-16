@@ -42,7 +42,9 @@ export const adminStyles = StyleSheet.create({
   badgeText: { fontFamily: fontFamilies.semiBold, color: '#C2410C', fontSize: 12 },
   input: { minHeight: 48, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 14, backgroundColor: '#FFFFFF', paddingHorizontal: 14, textAlign: 'right', writingDirection: 'rtl', fontFamily: fontFamilies.regular, marginBottom: 10 },
   actions: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  action: { minHeight: 44, borderRadius: 12, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF0FF' },
+  action: { minHeight: 44, borderRadius: 12, paddingHorizontal: 14, flexDirection: 'row-reverse', gap: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF0FF' },
+  actionDisabled: { opacity: 0.55 },
+  actionPressed: { opacity: 0.78 },
   actionText: { color: colors.primary, fontFamily: fontFamilies.bold },
   danger: { backgroundColor: '#FEE2E2' },
   dangerText: { color: '#B91C1C' },
@@ -51,4 +53,7 @@ export const adminStyles = StyleSheet.create({
   loading: { paddingVertical: 50 },
   error: { borderRadius: 14, backgroundColor: '#FEF2F2', padding: 12, marginBottom: 12 },
   errorText: { color: '#B91C1C', fontFamily: fontFamilies.semiBold, textAlign: 'right' },
+  inlineError: { color: '#B91C1C', fontFamily: fontFamilies.semiBold, textAlign: 'right', marginTop: 10 },
+  stateBlock: { minHeight: 140, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  stateText: { color: colors.textSecondary, fontFamily: fontFamilies.regular, textAlign: 'center' },
 });

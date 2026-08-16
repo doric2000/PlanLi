@@ -361,9 +361,9 @@ async function setUserEmailVerified({ admin, auth, data }) {
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'You cannot modify your own verification.', 'self_admin_action');
   const verified = data?.verified === true;
+  const reason = cleanText(data?.reason, 'reason');
   await admin.auth().updateUser(user.uid, { emailVerified: verified });
   await admin.auth().revokeRefreshTokens(user.uid);
-  const reason = cleanText(data?.reason, 'reason');
   await audit({ admin, auth, action: verified ? 'email_verified' : 'email_unverified', target: { uid: user.uid }, reason });
   return { uid: user.uid, verified };
 }

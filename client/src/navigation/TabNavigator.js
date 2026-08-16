@@ -119,6 +119,7 @@ export default function TabNavigator() {
           tabBarActiveTintColor: colors.navActive,
           tabBarInactiveTintColor: colors.navInactive,
           tabBarLabel: config.label,
+          tabBarButtonTestID: `main-tab-${route.name.toLowerCase()}`,
           tabBarShowLabel: false,
           tabBarLabelStyle: styles.label,
           tabBarItemStyle: styles.item,

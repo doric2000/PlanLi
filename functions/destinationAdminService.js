@@ -202,7 +202,6 @@ async function scanDestinationQuality({ admin, limit = 50 }) {
 
 async function listDestinationReviews({ admin, auth, data }) {
   await prepareAdmin(admin, auth);
-  if (data?.scan !== false) await scanDestinationQuality({ admin, limit: PAGE_SIZE });
   const requestedStatus = typeof data?.status === 'string' ? data.status : 'all';
   let query = admin.firestore().collection('system/moderation/destinationReviews').orderBy('updatedAt', 'desc').limit(PAGE_SIZE);
   if (requestedStatus !== 'all') query = query.where('status', '==', requestedStatus);

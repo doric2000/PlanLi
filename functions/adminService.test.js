@@ -6,6 +6,7 @@ const {
   getModerationDashboard,
   publicModerationCase,
   publicModerationReport,
+  setUserEmailVerified,
 } = require('./adminService');
 
 test('admin operations require an explicit admin claim', () => {
@@ -89,4 +90,37 @@ test('moderation case responses never expose the reporter registry', () => {
   assert.equal(result.targetPreview.title, 'פוסט');
   assert.equal('recentReporters' in result, false);
   assert.equal(JSON.stringify(result).includes('private-user'), false);
+});
+
+test('email verification validates the audit reason before mutating Firebase Auth', async () => {
+  let updateCalls = 0;
+  const db = {
+    doc(path) {
+      if (path === 'system/moderation/admins/admin-1') {
+        return { get: async () => ({ exists: true }) };
+      }
+      throw new Error(`Unexpected Firestore path: ${path}`);
+    },
+  };
+  const authApi = {
+    getUser: async () => ({ uid: 'user-1', customClaims: {} }),
+    updateUser: async () => { updateCalls += 1; },
+    revokeRefreshTokens: async () => {},
+  };
+  const admin = { firestore: () => db, auth: () => authApi };
+
+  await assert.rejects(
+    setUserEmailVerified({
+      admin,
+      auth: { uid: 'admin-1', token: { admin: true, auth_time: Math.floor(Date.now() / 1000) } },
+      data: { identifier: 'user-1', verified: true, reason: '' },
+    }),
+    (error) => error.details?.reason === 'invalid_input'
+  );
+  assert.equal(updateCalls, 0);
+});
+
+test('user suspension callable declares a timeout suitable for bounded content cleanup', () => {
+  const source = require('node:fs').readFileSync(require.resolve('./index'), 'utf8');
+  assert.match(source, /exports\.setUserSuspension = callable\(\{[^}]*timeoutSeconds:\s*300[^}]*memory:\s*'1GiB'/s);
 });

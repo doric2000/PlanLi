@@ -2,6 +2,14 @@ const OUR_AIRPORTS_URL =
   'https://davidmegginson.github.io/ourairports-data/airports.csv';
 const MAX_AIRPORT_DISTANCE_KM = 300;
 const ALLOWED_AIRPORT_TYPES = new Set(['large_airport', 'medium_airport']);
+const airportDownloadCache = { url: null, value: null, expiresAt: 0, promise: null };
+
+function resetAirportDownloadCacheForTests() {
+  airportDownloadCache.url = null;
+  airportDownloadCache.value = null;
+  airportDownloadCache.expiresAt = 0;
+  airportDownloadCache.promise = null;
+}
 
 function parseCsvRows(text) {
   const rows = [];
@@ -131,18 +139,45 @@ function nearestScheduledAirports(cityCoordinates, airports, options = {}) {
 async function downloadAirports({
   fetchImpl = global.fetch,
   url = OUR_AIRPORTS_URL,
+  cacheTtlMs = 15 * 60 * 1000,
+  timeoutMs = 15000,
+  useCache = true,
 }) {
   if (typeof fetchImpl !== 'function') throw new Error('Fetch is unavailable.');
-  const response = await fetchImpl(url);
-  if (!response.ok) {
-    throw new Error(`OurAirports download failed with HTTP ${response.status}.`);
+  const now = Date.now();
+  if (useCache && airportDownloadCache.value && airportDownloadCache.url === url && airportDownloadCache.expiresAt > now) {
+    return airportDownloadCache.value;
   }
-  const sourceUpdatedAt = response.headers?.get?.('last-modified') ||
-    new Date().toISOString();
-  return {
-    airports: parseOurAirportsCsv(await response.text()),
-    sourceUpdatedAt: new Date(sourceUpdatedAt).toISOString(),
-  };
+  if (useCache && airportDownloadCache.promise && airportDownloadCache.url === url) return airportDownloadCache.promise;
+  if (useCache && airportDownloadCache.url !== url) resetAirportDownloadCacheForTests();
+
+  const request = (async () => {
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), Math.max(1, timeoutMs)) : null;
+    try {
+      const response = await fetchImpl(url, controller ? { signal: controller.signal } : undefined);
+      if (!response.ok) throw new Error(`OurAirports download failed with HTTP ${response.status}.`);
+      const sourceUpdatedAt = response.headers?.get?.('last-modified') || new Date().toISOString();
+      const value = {
+        airports: parseOurAirportsCsv(await response.text()),
+        sourceUpdatedAt: new Date(sourceUpdatedAt).toISOString(),
+      };
+      if (useCache) airportDownloadCache.value = value;
+      if (useCache) airportDownloadCache.expiresAt = Date.now() + Math.max(0, cacheTtlMs);
+      return value;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  })();
+  if (useCache) {
+    airportDownloadCache.url = url;
+    airportDownloadCache.promise = request;
+  }
+  try {
+    return await request;
+  } finally {
+    if (airportDownloadCache.promise === request) airportDownloadCache.promise = null;
+  }
 }
 
 function normalizedCityCoordinates(value) {
@@ -245,4 +280,5 @@ module.exports = {
   parseCsvRows,
   parseOurAirportsCsv,
   syncAirportFacts,
+  resetAirportDownloadCacheForTests,
 };

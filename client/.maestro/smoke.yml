@@ -1,0 +1,27 @@
+appId: com.planli.planlitravels
+name: PlanLi iOS guest and authentication shell smoke test
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: home-tab-header
+- tapOn:
+    id: main-tab-auth
+- assertVisible:
+    id: auth-entry-screen
+- assertVisible: "התחברות"
+- assertVisible: "יצירת חשבון"
+- tapOn:
+    id: continue-as-guest
+- assertVisible:
+    id: home-tab-header
+- tapOn:
+    id: main-tab-auth
+- assertVisible:
+    id: auth-entry-screen
+- tapOn: "התחברות"
+- assertVisible:
+    id: login-screen
+- back
+- assertVisible:
+    id: auth-entry-screen
