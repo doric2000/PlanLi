@@ -8,6 +8,10 @@ export function safeAdminError(error, { operationMayContinue = false } = {}) {
   if (reason === 'missing_coordinates') return 'אי אפשר לאתר שדה תעופה בלי נקודות ציון תקינות לעיר.';
   if (reason === 'invalid_airport') return 'שדה התעופה שנבחר אינו מועמד מאומת וקרוב לעיר.';
   if (reason === 'invalid_media') return 'קובץ התמונה אינו תקין או אינו שייך לחשבון המנהל.';
+  if (reason === 'user_missing') return 'לא נמצא משתמש התואם לחיפוש.';
+  if (reason === 'content_not_held') return 'התוכן כבר מפורסם ולכן אין צורך להחזיר אותו לפרסום.';
+  if (reason === 'content_not_active') return 'מצב התוכן השתנה והוא כבר אינו מפורסם. יש לרענן ולבחור פעולה מתאימה.';
+  if (reason === 'content_missing') return 'התוכן כבר אינו זמין. יש לרענן את רשימת הדיווחים.';
   const code = String(error?.code || error?.name || '').toLowerCase();
   if (operationMayContinue && (code.includes('deadline-exceeded') || code.includes('timeout') || code.includes('unavailable'))) {
     return 'הפעולה אורכת זמן רב. ייתכן שהיא עדיין מתבצעת בשרת; אין להפעיל אותה שוב לפני רענון ובדיקת המצב.';

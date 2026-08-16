@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   REPORT_CATEGORIES,
   caseIdForPath,
+  caseStatusForReport,
   evaluateTextSafety,
   normalizeReportInput,
   normalizeReportTarget,
@@ -36,6 +37,14 @@ test('case ids are stable and do not expose the target path', () => {
   assert.equal(first, caseIdForPath('recommendations/abc'));
   assert.notEqual(first, caseIdForPath('recommendations/def'));
   assert.equal(first.includes('recommendations'), false);
+});
+
+test('a new report reopens resolved cases while preserving unresolved states', () => {
+  assert.equal(caseStatusForReport('resolved_dismissed', false), 'open');
+  assert.equal(caseStatusForReport('resolved_deleted', false), 'open');
+  assert.equal(caseStatusForReport('open', false), 'open');
+  assert.equal(caseStatusForReport('auto_held', false), 'auto_held');
+  assert.equal(caseStatusForReport('open', true), 'auto_held');
 });
 
 test('text safety detects explicit severe and suspicious terms in Hebrew and English', () => {

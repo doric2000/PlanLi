@@ -90,6 +90,18 @@ test('stored report snapshots remain visible while reflecting current target ava
   assert.equal(item.targetPreview.text, 'התוכן שנשמר');
 });
 
+test('stored report snapshots reflect the current moderation status', async () => {
+  const stored = { available: true, title: 'הגרסה המקורית', status: 'active' };
+  const [item] = await hydrateModerationPreviews(fakeAdmin({
+    'recommendations/rec-1': { title: 'גרסה נוכחית', status: 'moderation_hold' },
+  }), [{
+    id: 'case-1',
+    target: { type: 'recommendation', id: 'rec-1' },
+    targetPreview: stored,
+  }]);
+  assert.equal(item.targetPreview.status, 'moderation_hold');
+});
+
 test('first-reported snapshots are immutable and unsafe preview input is bounded', () => {
   const original = { available: true, title: 'הגרסה שדווחה' };
   assert.equal(preserveReportedPreview(original, { title: 'גרסה חדשה' }), original);

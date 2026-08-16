@@ -85,6 +85,7 @@ async function audit({ admin, auth, action, target = null, reason, metadata = {}
   const id = `${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
   await admin.firestore().doc(`system/moderation/audit/${id}`).create({
     actorUid: auth.uid,
+    actorName: typeof auth.token?.name === 'string' ? auth.token.name.trim().slice(0, 80) : '',
     action,
     target,
     reason,
@@ -104,17 +105,22 @@ async function getModerationDashboard({ admin, auth }) {
   await prepareAdmin(admin, auth);
   const db = admin.firestore();
   const cases = db.collection('system/moderation/cases');
-  const [open, urgent, heldRecommendations, heldRoutes, heldTrips] = await Promise.all([
+  const [open, urgent, heldRecommendations, heldRoutes, heldTrips, pendingDestinations] = await Promise.all([
     cases.where('status', 'in', ['open', 'auto_held']).count().get(),
     cases.where('priority', '==', 'urgent').where('status', 'in', ['open', 'auto_held']).count().get(),
     db.collection('recommendations').where('status', '==', 'moderation_hold').count().get(),
     db.collection('routes').where('status', '==', 'moderation_hold').count().get(),
     db.collection('trips').where('status', '==', 'moderation_hold').count().get(),
+    db.collection('system/moderation/destinationReviews')
+      .where('status', 'in', ['blocked', 'open', 'ready'])
+      .count()
+      .get(),
   ]);
   return {
     openCases: open.data().count,
     urgentCases: urgent.data().count,
     heldContent: heldRecommendations.data().count + heldRoutes.data().count + heldTrips.data().count,
+    pendingDestinations: pendingDestinations.data().count,
   };
 }
 
@@ -124,7 +130,13 @@ async function listModerationCases({ admin, auth, data }) {
   let query = admin.firestore().collection('system/moderation/cases')
     .orderBy('updatedAt', 'desc')
     .limit(PAGE_SIZE);
-  if (requestedStatus && requestedStatus !== 'all') query = query.where('status', '==', requestedStatus);
+  if (requestedStatus === 'all') {
+    // Explicitly requested history includes resolved cases.
+  } else if (requestedStatus) {
+    query = query.where('status', '==', requestedStatus);
+  } else {
+    query = query.where('status', 'in', ['open', 'auto_held']);
+  }
   if (data?.cursor) {
     const cursor = await admin.firestore().doc(`system/moderation/cases/${cleanText(data.cursor, 'cursor', 180)}`).get();
     if (cursor.exists) query = query.startAfter(cursor);
@@ -188,13 +200,35 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
   await prepareAdmin(admin, auth, { recent: true });
   const reason = cleanText(data?.reason, 'reason');
   const action = String(data?.action || '');
-  if (!['hold', 'restore', 'delete'].includes(action)) fail('invalid-argument', 'Invalid moderation action.', 'invalid_action');
+  if (!['dismiss', 'hold', 'restore', 'delete'].includes(action)) fail('invalid-argument', 'Invalid moderation action.', 'invalid_action');
   const target = normalizeReportTarget(data?.target);
   if (!['recommendation', 'route', 'trip', 'comment'].includes(target.type)) {
     fail('invalid-argument', 'Target cannot be moderated here.', 'invalid_target');
   }
+  const db = admin.firestore();
+  const caseId = data?.caseId ? cleanText(data.caseId, 'caseId', 180) : null;
+  if (action === 'dismiss' && !caseId) {
+    fail('invalid-argument', 'A moderation case is required to dismiss a report.', 'case_required');
+  }
+  let caseSnapshot = null;
+  if (caseId) {
+    caseSnapshot = await db.doc(`system/moderation/cases/${caseId}`).get();
+    if (!caseSnapshot.exists) fail('not-found', 'Moderation case was not found.', 'case_missing');
+    const caseTarget = normalizeReportTarget(caseSnapshot.data()?.target);
+    if (caseTarget.path !== target.path) fail('invalid-argument', 'Moderation target does not match the case.', 'invalid_target');
+  }
+  const targetSnapshot = await db.doc(target.path).get();
+  if (!targetSnapshot.exists) {
+    fail('not-found', 'Moderated content is no longer available.', 'content_missing');
+  }
+  if (action === 'dismiss' && targetSnapshot.data()?.status !== 'active') {
+    fail('failed-precondition', 'Only published content can remain published.', 'content_not_active');
+  }
   if (action === 'restore') {
-    const snapshot = await admin.firestore().doc(target.path).get();
+    if (targetSnapshot.data()?.status !== 'moderation_hold') {
+      fail('failed-precondition', 'Only held content can be restored.', 'content_not_held');
+    }
+    const snapshot = targetSnapshot;
     const ownerId = target.type === 'comment' ? snapshot.data()?.authorId : snapshot.data()?.ownerId;
     if (ownerId) {
       const owner = await admin.firestore().doc(`users/${ownerId}`).get();
@@ -203,7 +237,9 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       }
     }
   }
-  if (action === 'delete') {
+  if (action === 'dismiss') {
+    // Dismissing a report deliberately leaves the already-published target unchanged.
+  } else if (action === 'delete') {
     if (target.type === 'comment') {
       await deleteComment({
         admin,
@@ -214,7 +250,7 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       await deleteContentInternal({ admin, target, actorUid: auth.uid, isAdmin: true, mediaBucket });
     }
   } else {
-    await admin.firestore().doc(target.path).update({
+    await db.doc(target.path).update({
       status: action === 'restore' ? 'active' : 'moderation_hold',
       moderation: {
         lastAction: action,
@@ -225,17 +261,23 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   }
-  if (target.type === 'comment') {
-    const parentRef = admin.firestore().doc(`${target.path.split('/').slice(0, 2).join('/')}`);
+  if (target.type === 'comment' && action !== 'dismiss') {
+    const parentRef = db.doc(`${target.path.split('/').slice(0, 2).join('/')}`);
     const activeComments = await parentRef.collection('comments').where('status', '==', 'active').count().get();
     await parentRef.update({
       'stats.commentCount': activeComments.data().count,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => {});
   }
-  if (data?.caseId) {
-    await admin.firestore().doc(`system/moderation/cases/${cleanText(data.caseId, 'caseId', 180)}`).set({
-      status: action === 'restore' ? 'resolved_restored' : action === 'delete' ? 'resolved_deleted' : 'resolved_held',
+  if (caseId) {
+    await db.doc(`system/moderation/cases/${caseId}`).set({
+      status: action === 'dismiss'
+        ? 'resolved_dismissed'
+        : action === 'restore'
+          ? 'resolved_restored'
+          : action === 'delete'
+            ? 'resolved_deleted'
+            : 'resolved_held',
       resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       resolvedBy: auth.uid,
       resolutionReason: reason,
@@ -273,8 +315,26 @@ function publicAdminUser(user) {
 async function listAdminUsers({ admin, auth, data }) {
   await prepareAdmin(admin, auth);
   if (data?.query) {
-    const user = await resolveUser(admin, { identifier: data.query });
-    return { items: [publicAdminUser(user)], nextCursor: null };
+    const identifier = cleanText(data.query, 'query', 320);
+    if (identifier.includes('@')) {
+      const user = await resolveUser(admin, { identifier });
+      return { items: [publicAdminUser(user)], nextCursor: null };
+    }
+    if (!/\s/u.test(identifier) && identifier.length <= 128) {
+      try {
+        const user = await admin.auth().getUser(identifier);
+        return { items: [publicAdminUser(user)], nextCursor: null };
+      } catch (error) {
+        if (!['auth/user-not-found', 'auth/invalid-uid'].includes(error?.code)) throw error;
+      }
+    }
+    const profiles = await admin.firestore().collection('users')
+      .where('displayName', '==', identifier)
+      .limit(PAGE_SIZE)
+      .get();
+    if (profiles.empty) fail('not-found', 'User was not found.', 'user_missing');
+    const result = await admin.auth().getUsers(profiles.docs.map((entry) => ({ uid: entry.id })));
+    return { items: result.users.map(publicAdminUser), nextCursor: null };
   }
   const result = await admin.auth().listUsers(PAGE_SIZE, data?.cursor || undefined);
   return { items: result.users.map(publicAdminUser), nextCursor: result.pageToken || null };
@@ -459,7 +519,24 @@ async function listModerationAudit({ admin, auth, data }) {
     if (cursor.exists) query = query.startAfter(cursor);
   }
   const snapshot = await query.get();
-  return { items: snapshot.docs.map((entry) => serialize({ id: entry.id, ...entry.data() })), nextCursor: snapshot.size === PAGE_SIZE ? snapshot.docs[snapshot.docs.length - 1].id : null };
+  const items = snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() }));
+  const missingNames = Array.from(new Set(items
+    .filter((item) => !item.actorName && item.actorUid)
+    .map((item) => item.actorUid)));
+  const actorSnapshots = missingNames.length
+    ? await admin.firestore().getAll(...missingNames.map((uid) => admin.firestore().doc(`users/${uid}`)))
+    : [];
+  const actorNames = new Map(actorSnapshots.map((entry) => [
+    entry.id,
+    typeof entry.data()?.displayName === 'string' ? entry.data().displayName.trim().slice(0, 80) : '',
+  ]));
+  return {
+    items: items.map((item) => serialize({
+      ...item,
+      actorName: item.actorName || actorNames.get(item.actorUid) || 'מנהל מערכת',
+    })),
+    nextCursor: snapshot.size === PAGE_SIZE ? snapshot.docs[snapshot.docs.length - 1].id : null,
+  };
 }
 
 module.exports = {

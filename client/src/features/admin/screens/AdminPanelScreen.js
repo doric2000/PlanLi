@@ -34,6 +34,16 @@ const CATEGORY_LABELS = {
 };
 const INITIAL_TAB_STATE = Object.fromEntries(TABS.map(({ id }) => [id, { loading: false, loadingMore: false, error: '', nextCursor: null }]));
 
+const DESTINATION_STATUS_ORDER = Object.freeze({ blocked: 0, open: 1, ready: 2, approved_with_warnings: 3, approved: 3, inactive: 4 });
+
+function sortDestinationReviews(items) {
+  return [...items].sort((left, right) => {
+    const rank = (DESTINATION_STATUS_ORDER[left.status] ?? 2) - (DESTINATION_STATUS_ORDER[right.status] ?? 2);
+    if (rank) return rank;
+    return String(right.updatedAt || '').localeCompare(String(left.updatedAt || ''));
+  });
+}
+
 function Action({ label, onPress, danger = false, disabled = false, busy = false, testID }) {
   const unavailable = disabled || busy;
   return (
@@ -80,6 +90,8 @@ export default function AdminPanelScreen({ navigation }) {
   const [users, setUsers] = useState([]);
   const [audit, setAudit] = useState([]);
   const [destinations, setDestinations] = useState([]);
+  const [reportDetails, setReportDetails] = useState({});
+  const [expandedReports, setExpandedReports] = useState({});
   const [imageCandidates, setImageCandidates] = useState({});
   const [airportCandidates, setAirportCandidates] = useState({});
   const [query, setQuery] = useState('');
@@ -129,6 +141,10 @@ export default function AdminPanelScreen({ navigation }) {
       } else if (targetTab === 'reports') {
         const result = await listModerationCases(cursor ? { cursor } : {});
         if (requestIds.current[targetTab] !== requestId) return;
+        if (!append) {
+          setReportDetails({});
+          setExpandedReports({});
+        }
         setReportCases((current) => append ? [...current, ...(result.items || [])] : (result.items || []));
         updateTabState(targetTab, { nextCursor: result.nextCursor || null });
       } else if (targetTab === 'content') {
@@ -139,7 +155,7 @@ export default function AdminPanelScreen({ navigation }) {
       } else if (targetTab === 'destinations') {
         const result = await listDestinationReviews(cursor ? { cursor } : {});
         if (requestIds.current[targetTab] !== requestId) return;
-        setDestinations((current) => append ? [...current, ...(result.items || [])] : (result.items || []));
+        setDestinations((current) => sortDestinationReviews(append ? [...current, ...(result.items || [])] : (result.items || [])));
         updateTabState(targetTab, { nextCursor: result.nextCursor || null });
       } else if (targetTab === 'users') {
         const payload = searchQuery ? { query: searchQuery } : (cursor ? { cursor } : {});
@@ -212,14 +228,22 @@ export default function AdminPanelScreen({ navigation }) {
 
   const refreshDestination = async (item) => {
     const details = await getDestinationReview(item.countryId, item.cityId);
-    setDestinations((current) => current.map((entry) => entry.id === item.id ? destinationFromDetails(entry, details) : entry));
+    setDestinations((current) => sortDestinationReviews(
+      current.map((entry) => entry.id === item.id ? destinationFromDetails(entry, details) : entry)
+    ));
   };
   const runDestinationMutation = (item, actionName, operation) => runAction({
     key: `${actionName}:${item.id}`, scope: `destination:${item.id}`, operation, onSuccess: () => refreshDestination(item),
   });
 
   const moderate = (item, action) => askReason(
-    action === 'restore' ? 'החזרת תוכן' : action === 'delete' ? 'מחיקה מלאה' : 'השארה בהמתנה',
+    action === 'dismiss'
+      ? 'סגירת הדיווח'
+      : action === 'restore'
+        ? 'החזרת תוכן לפרסום'
+        : action === 'delete'
+          ? 'מחיקה מלאה'
+          : 'הסרה זמנית מהפרסום',
     'כתבו סיבה ברורה להחלטה.',
     (reason) => runAction({
       key: `moderate:${item.id}:${action}`, scope: `case:${item.id}`,
@@ -233,18 +257,23 @@ export default function AdminPanelScreen({ navigation }) {
     action === 'delete', `case:${item.id}`
   );
 
-  const showReportDetails = (item) => runAction({
-    key: `details:${item.id}`, scope: `case:${item.id}`, operation: () => getModerationCase(item.id),
-    onSuccess: (details) => {
-      const lines = (details.reports || []).slice(0, 20).map((report, index) => {
-        const note = typeof report.details === 'string' && report.details.trim() ? ` — ${report.details.trim()}` : '';
-        return `${index + 1}. ${CATEGORY_LABELS[report.category] || 'אחר'}${note}`;
-      });
-      const message = lines.length ? lines.join('\n') : 'לא נמצאו פרטי דיווח להצגה.';
-      if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(message);
-      else Alert.alert('פרטי הדיווחים', message);
-    },
-  });
+  const toggleReportDetails = (item) => {
+    if (expandedReports[item.id]) {
+      setExpandedReports((current) => ({ ...current, [item.id]: false }));
+      return;
+    }
+    if (reportDetails[item.id]) {
+      setExpandedReports((current) => ({ ...current, [item.id]: true }));
+      return;
+    }
+    runAction({
+      key: `details:${item.id}`, scope: `case:${item.id}`, operation: () => getModerationCase(item.id),
+      onSuccess: (details) => {
+        setReportDetails((current) => ({ ...current, [item.id]: details }));
+        setExpandedReports((current) => ({ ...current, [item.id]: true }));
+      },
+    });
+  };
 
   const loadImageCandidates = (item) => runAction({
     key: `image-candidates:${item.id}`, scope: `destination:${item.id}`,
@@ -292,25 +321,37 @@ export default function AdminPanelScreen({ navigation }) {
         {currentState.error ? <View style={styles.error} testID={`admin-${tab}-error`}><AppText style={styles.errorText}>{currentState.error}</AppText><Action label="ניסיון נוסף" testID={`admin-${tab}-retry`} onPress={() => loadTab(tab)} /></View> : null}
         {currentState.loading && !currentItems.length ? <View style={styles.stateBlock} testID={`admin-${tab}-loading`}><ActivityIndicator color={colors.primary} /><AppText style={styles.stateText}>טוען נתונים…</AppText></View> : null}
 
-        {tab === 'overview' && dashboard ? <View style={styles.metrics}>{[['דיווחים פתוחים', dashboard.openCases], ['דחופים', dashboard.urgentCases], ['תוכן בהמתנה', dashboard.heldContent]].map(([label, value]) => <View key={label} style={styles.metric}><AppText style={styles.metricValue}>{value ?? 0}</AppText><AppText style={styles.metricLabel}>{label}</AppText></View>)}</View> : null}
+        {tab === 'overview' && dashboard ? <View style={styles.metrics}>{[['דיווחים פתוחים', dashboard.openCases], ['דחופים', dashboard.urgentCases], ['תוכן בהמתנה', dashboard.heldContent], ['ערים ממתינות לאישור', dashboard.pendingDestinations]].map(([label, value]) => <View key={label} style={styles.metric}><AppText style={styles.metricValue}>{value ?? 0}</AppText><AppText style={styles.metricLabel}>{label}</AppText></View>)}</View> : null}
 
-        {(tab === 'reports' || tab === 'content') && currentCases.map((item) => <View key={item.id} style={styles.card} testID={`admin-case-${item.id}`}>
+        {(tab === 'reports' || tab === 'content') && currentCases.map((item) => {
+          const available = item.targetPreview?.available !== false;
+          const held = tab === 'content' || item.status === 'auto_held' || item.targetPreview?.status === 'moderation_hold';
+          const details = reportDetails[item.id];
+          return <View key={item.id} style={styles.card} testID={`admin-case-${item.id}`}>
           <View style={styles.row}><AppText style={styles.cardTitle}>{TARGET_LABELS[item.target?.type] || 'תוכן'}</AppText><View style={styles.badge}><AppText style={styles.badgeText}>{item.priority === 'urgent' ? 'דחוף' : `${item.uniqueCount24h || 0} מדווחים`}</AppText></View></View>
           <ModerationTargetPreview preview={item.targetPreview} />
           <AppText style={styles.technicalId}>מזהה טכני: {item.target?.id}</AppText>
           <AppText style={styles.body}>סטטוס: {item.status} · סך דיווחים: {item.reportCount || 0}</AppText>
           {item.categoryCounts ? <AppText style={styles.body}>{Object.entries(item.categoryCounts).filter(([, count]) => count > 0).map(([category, count]) => `${CATEGORY_LABELS[category] || category}: ${count}`).join(' · ')}</AppText> : null}
+          {tab === 'reports' && expandedReports[item.id] ? <View style={styles.reportDetails} testID={`admin-case-details-panel-${item.id}`}>
+            <AppText style={styles.cardTitle}>פרטי הדיווחים</AppText>
+            {(details?.reports || []).length ? details.reports.map((report, index) => <View key={report.id || `${item.id}-${index}`} style={styles.reportDetailRow}>
+              <AppText style={styles.body}>{index + 1}. {CATEGORY_LABELS[report.category] || 'אחר'}</AppText>
+              {report.details?.trim() ? <AppText style={styles.reportDetailText}>{report.details.trim()}</AppText> : null}
+            </View>) : <AppText style={styles.body}>לא נמצאו פרטים נוספים לדיווח.</AppText>}
+          </View> : null}
           {actionErrors[`case:${item.id}`] ? <AppText style={styles.inlineError}>{actionErrors[`case:${item.id}`]}</AppText> : null}
           <View style={styles.actions}>
-            {tab === 'reports' ? <Action label="פרטי הדיווחים" testID={`admin-case-details-${item.id}`} busy={pendingActions[`details:${item.id}`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => showReportDetails(item)} /> : null}
-            <Action label="החזרה לפרסום" testID={`admin-case-restore-${item.id}`} busy={pendingActions[`moderate:${item.id}:restore`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => moderate(item, 'restore')} />
-            <Action label="השארה בהמתנה" testID={`admin-case-hold-${item.id}`} busy={pendingActions[`moderate:${item.id}:hold`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => moderate(item, 'hold')} />
-            <Action label="מחיקה מלאה" testID={`admin-case-delete-${item.id}`} busy={pendingActions[`moderate:${item.id}:delete`]} disabled={pendingScopes[`case:${item.id}`]} danger onPress={() => moderate(item, 'delete')} />
+            {tab === 'reports' ? <Action label={expandedReports[item.id] ? 'הסתרת פרטי הדיווחים' : 'הצגת פרטי הדיווחים'} testID={`admin-case-details-${item.id}`} busy={pendingActions[`details:${item.id}`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => toggleReportDetails(item)} /> : null}
+            {tab === 'reports' && available && !held ? <Action label="סגירת הדיווח — השארה בפרסום" testID={`admin-case-dismiss-${item.id}`} busy={pendingActions[`moderate:${item.id}:dismiss`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => moderate(item, 'dismiss')} /> : null}
+            {available && held ? <Action label="החזרה לפרסום" testID={`admin-case-restore-${item.id}`} busy={pendingActions[`moderate:${item.id}:restore`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => moderate(item, 'restore')} /> : null}
+            {tab === 'reports' && available && !held ? <Action label="הסרה זמנית מהפרסום" testID={`admin-case-hold-${item.id}`} busy={pendingActions[`moderate:${item.id}:hold`]} disabled={pendingScopes[`case:${item.id}`]} onPress={() => moderate(item, 'hold')} /> : null}
+            {available ? <Action label="מחיקה מלאה" testID={`admin-case-delete-${item.id}`} busy={pendingActions[`moderate:${item.id}:delete`]} disabled={pendingScopes[`case:${item.id}`]} danger onPress={() => moderate(item, 'delete')} /> : null}
           </View>
-        </View>)}
+        </View>})}
 
         {tab === 'destinations' && destinations.map((item) => <View key={item.id} style={styles.card} testID={`admin-destination-${item.id}`}>
-          <View style={styles.row}><View><AppText style={styles.cardTitle}>{item.names?.he || item.names?.en || item.cityId}</AppText><AppText style={styles.body}>{item.countryNames?.he || item.countryId} · {item.countryId}/{item.cityId}</AppText></View><View style={styles.badge}><AppText style={styles.badgeText}>{item.status === 'blocked' ? 'חסום' : item.status === 'inactive' ? 'לא פעיל' : item.status === 'approved' ? 'מאושר' : 'לבדיקה'}</AppText></View></View>
+          <View style={styles.row}><View><AppText style={styles.cardTitle}>{item.names?.he || item.names?.en || item.cityId}</AppText><AppText style={styles.body}>{item.countryNames?.he || item.countryId} · {item.countryId}/{item.cityId}</AppText></View><View style={styles.badge}><AppText style={styles.badgeText}>{item.status === 'blocked' ? 'חסום' : item.status === 'inactive' ? 'לא פעיל' : item.status === 'approved' ? 'מאושר' : item.status === 'approved_with_warnings' ? 'מאושר עם אזהרות' : 'לבדיקה'}</AppText></View></View>
           {item.image?.urls?.feed ? <Image source={{ uri: item.image.urls.feed }} style={styles.destinationImage} resizeMode="cover" /> : null}
           <AppText style={styles.body}>המלצות: {item.recommendationCount || 0} · שדה תעופה: {item.closestAirport?.iataCode || 'חסר'}</AppText>
           {(item.issues || []).map((issue) => <View key={issue.code} style={[styles.issue, issue.severity === 'error' && styles.issueError]}><AppText style={styles.body}>{issue.severity === 'error' ? 'שגיאה: ' : issue.severity === 'warning' ? 'אזהרה: ' : ''}{issue.label}</AppText></View>)}
@@ -328,7 +369,7 @@ export default function AdminPanelScreen({ navigation }) {
         </View>)}
 
         {tab === 'users' ? <>
-          <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="חיפוש לפי אימייל או מזהה משתמש" autoCapitalize="none" onSubmitEditing={searchUsers} testID="admin-user-search-input" />
+          <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="חיפוש לפי שם מלא, אימייל או מזהה משתמש" autoCapitalize="none" onSubmitEditing={searchUsers} testID="admin-user-search-input" />
           <View style={styles.actions}><Action label="חיפוש" testID="admin-user-search" busy={currentState.loading && users.length > 0} onPress={searchUsers} /><Action label="ניקוי" testID="admin-user-search-clear" onPress={() => { setQuery(''); activeQueryRef.current = ''; loadTab('users', { searchQuery: '' }); }} /></View>
           {users.map((item) => <View key={item.uid} style={styles.card} testID={`admin-user-${item.uid}`}>
             <AppText style={styles.cardTitle}>{item.displayName || 'ללא שם'}</AppText><AppText style={styles.body}>{item.email || item.uid}</AppText><AppText style={styles.body}>{item.disabled ? 'מושעה' : 'פעיל'} · {item.emailVerified ? 'אימייל מאומת' : 'אימייל לא מאומת'} · {item.admin ? 'מנהל' : 'משתמש'}</AppText>
@@ -342,7 +383,7 @@ export default function AdminPanelScreen({ navigation }) {
           </View>)}
         </> : null}
 
-        {tab === 'audit' && audit.map((item) => <View key={item.id} style={styles.card}><AppText style={styles.cardTitle}>{item.action}</AppText><AppText style={styles.body}>{item.reason}</AppText><AppText style={styles.body}>מנהל: {item.actorUid}</AppText></View>)}
+        {tab === 'audit' && audit.map((item) => <View key={item.id} style={styles.card}><AppText style={styles.cardTitle}>{item.action}</AppText><AppText style={styles.body}>{item.reason}</AppText><AppText style={styles.body}>מנהל: {item.actorName || 'מנהל מערכת'}</AppText></View>)}
         {currentState.nextCursor ? <Action label="טעינת פריטים נוספים" testID={`admin-${tab}-load-more`} busy={currentState.loadingMore} onPress={() => loadTab(tab, { append: true })} /> : null}
         {!currentState.loading && !currentState.error && !currentItems.length ? <View style={styles.empty} testID={`admin-${tab}-empty`}><AppText style={styles.emptyText}>אין פריטים להצגה כרגע.</AppText></View> : null}
       </ScrollView>
