@@ -41,7 +41,7 @@ const activeDocument = {
 };
 
 function Harness() {
-  const { status, gate, requireCapability, handleCallableAuthError } = useAuth();
+  const { status, gate, dismissGate, requireCapability, handleCallableAuthError } = useAuth();
   return (
     <>
       <Text testID="auth-status">{status}</Text>
@@ -59,6 +59,15 @@ function Harness() {
           details: { reason: 'LEGAL_CONSENT_REQUIRED' },
         }, { name: 'LandingPage', params: { cityId: 'tlv' } })}
       />
+      <TouchableOpacity
+        testID="require-blocked-route"
+        onPress={() => requireCapability(
+          CAPABILITIES.ACTIVE,
+          { name: 'PreferenceSetup' },
+          { blockedRoute: true }
+        )}
+      />
+      <TouchableOpacity testID="dismiss-gate" onPress={dismissGate} />
     </>
   );
 }
@@ -78,13 +87,13 @@ describe('AuthProvider capability gate', () => {
     const screen = render(
       <AuthProvider navigationRef={navigationRef}><Harness /></AuthProvider>
     );
-    await act(async () => {});
+    act(() => {});
     expect(screen.getByTestId('auth-status').props.children).toBe(AUTH_STATES.GUEST);
     fireEvent.press(screen.getByTestId('require-active'));
     expect(screen.getByTestId('gate-status').props.children).toBe(AUTH_STATES.GUEST);
 
     const user = { uid: 'user-1', emailVerified: true, providerData: [{ providerId: 'password' }] };
-    await act(async () => {
+    act(() => {
       authListener(user);
       profileListener({ exists: () => true, data: () => activeDocument });
     });
@@ -105,9 +114,28 @@ describe('AuthProvider capability gate', () => {
     const screen = render(
       <AuthProvider navigationRef={navigationRef}><Harness /></AuthProvider>
     );
-    await act(async () => {});
+    act(() => {});
     fireEvent.press(screen.getByTestId('handle-server-auth-error'));
     expect(screen.getByTestId('gate-status').props.children)
       .toBe(AUTH_STATES.ACCOUNT_SETUP_REQUIRED);
+  });
+
+  it('leaves a blocked route safely when the user chooses not now', async () => {
+    const navigationRef = {
+      isReady: jest.fn(() => true),
+      navigate: jest.fn(),
+      resetRoot: jest.fn(),
+    };
+    const screen = render(
+      <AuthProvider navigationRef={navigationRef}><Harness /></AuthProvider>
+    );
+    act(() => {});
+    fireEvent.press(screen.getByTestId('require-blocked-route'));
+    fireEvent.press(screen.getByTestId('dismiss-gate'));
+    expect(navigationRef.resetRoot).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'Main', params: { allowIncomplete: true } }],
+    });
+    expect(screen.getByTestId('gate-status').props.children).toBe('');
   });
 });

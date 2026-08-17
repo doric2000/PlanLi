@@ -65,6 +65,9 @@ export const formatAuthError = (error) => {
   if (code === 'auth/provider-not-configured') return 'שיטת ההתחברות עדיין אינה מוגדרת בגרסה הזו.';
   if (code === 'auth/missing-token') return 'ספק ההתחברות לא החזיר אישור תקין. נסו שוב.';
   if (code === 'auth/profile-bootstrap-failed') return 'לא הצלחנו להכין את הפרופיל. נסו שוב.';
+  if (code === 'profile/account-setup-persistence-mismatch') {
+    return 'האישור לא נשמר בגרסה הנוכחית. יש לעדכן את שירות השרת לפני ניסיון נוסף.';
+  }
   return 'אירעה שגיאה בתהליך האימות. נסו שוב.';
 };
 

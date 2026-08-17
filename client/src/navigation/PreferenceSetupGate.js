@@ -10,9 +10,11 @@ import { colors, common } from '../styles';
 export default function PreferenceSetupGate({ navigation, route }) {
   const { status, loading, authFlowInProgress } = useAuth();
   const allowUnverified = route?.params?.allowUnverified === true;
+  const allowIncomplete = route?.params?.allowIncomplete === true;
 
   useEffect(() => {
     if (loading || authFlowInProgress) return;
+    if (allowIncomplete) return;
     if (status === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED && !allowUnverified) {
       navigation.reset({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     } else if (status === AUTH_STATES.ACCOUNT_SETUP_REQUIRED) {
@@ -20,15 +22,15 @@ export default function PreferenceSetupGate({ navigation, route }) {
     } else if (status === AUTH_STATES.PREFERENCES_REQUIRED) {
       navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
     }
-  }, [allowUnverified, authFlowInProgress, loading, navigation, status]);
+  }, [allowIncomplete, allowUnverified, authFlowInProgress, loading, navigation, status]);
 
   if (authFlowInProgress) return <RightDrawerNavigator />;
 
-  if (loading || (
+  if (loading || (!allowIncomplete && (
     status !== AUTH_STATES.READY
     && status !== AUTH_STATES.GUEST
     && !(status === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED && allowUnverified)
-  )) {
+  ))) {
     return (
       <SafeAreaView style={common.container}>
         <View style={common.loadingContainer}>

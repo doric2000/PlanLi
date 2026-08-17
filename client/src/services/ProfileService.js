@@ -1,6 +1,11 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
+import {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} from '../constants/authPolicy';
 import { TRAVEL_TAXONOMY_VERSION } from '../constants/travelTaxonomy';
 import {
   normalizeProfileBio,
@@ -50,6 +55,16 @@ export function verifyPersistedSmartProfile(requested, persisted, { complete = f
     if (!Array.isArray(persisted.travelParties) || persisted.travelParties.length < 1) return false;
   }
   return true;
+}
+
+export function verifyPersistedAccountSetup(userDocument) {
+  return Boolean(
+    userDocument?.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
+    && userDocument?.onboarding?.profileDetailsCompletedAt
+    && userDocument?.legal?.termsVersion === TERMS_VERSION
+    && userDocument?.legal?.privacyVersion === PRIVACY_VERSION
+    && userDocument?.legal?.acceptedAt
+  );
 }
 
 async function readBackSmartProfile(requested, { complete }) {
@@ -113,6 +128,14 @@ export const registerUserDocument = async (fields = {}) => {
 export const completeAccountSetup = async ({ displayName, acceptedLegal }) => {
   completeAccountSetupCallable ||= httpsCallable(cloudFunctions, 'completeAccountSetup');
   const response = await completeAccountSetupCallable({ displayName, acceptedLegal });
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('לא נמצא משתמש מחובר. התחברו מחדש ונסו שוב.');
+  const snapshot = await getDocFromServer(doc(db, 'users', uid));
+  if (!verifyPersistedAccountSetup(snapshot.data())) {
+    const error = new Error('שירות החשבון אינו מעודכן לגרסאות ההסכמה הנוכחיות.');
+    error.code = 'profile/account-setup-persistence-mismatch';
+    throw error;
+  }
   await auth.currentUser?.reload?.();
   return response.data;
 };

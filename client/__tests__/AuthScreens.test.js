@@ -5,6 +5,8 @@ import ForgotPasswordScreen from '../src/features/auth/screens/ForgotPasswordScr
 import AuthEntryScreen from '../src/features/auth/screens/AuthEntryScreen';
 import LoginScreen from '../src/features/auth/screens/LoginScreen';
 import RegisterScreen from '../src/features/auth/screens/RegisterScreen';
+import CompleteAccountScreen from '../src/features/auth/screens/CompleteAccountScreen';
+import { AUTH_STATES } from '../src/constants/authPolicy';
 
 const mockSignInWithEmail = jest.fn();
 const mockRegisterWithEmail = jest.fn();
@@ -13,9 +15,20 @@ const mockSendResetEmail = jest.fn();
 const mockEnsureAuthenticatedUserProfile = jest.fn();
 const mockSignInWithGoogle = jest.fn();
 const mockRunAuthTransition = jest.fn(async (operation) => operation());
+const mockCompleteAccountSetup = jest.fn();
+let mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
 
 jest.mock('../src/features/auth/AuthContext', () => ({
-  useAuth: () => ({ runAuthTransition: mockRunAuthTransition }),
+  useAuth: () => ({
+    runAuthTransition: mockRunAuthTransition,
+    status: mockAuthStatus,
+    user: { uid: 'user-1', email: 'a@b.com', displayName: 'Admin' },
+    userDocument: { displayName: 'Admin' },
+  }),
+}));
+
+jest.mock('../src/services/ProfileService', () => ({
+  completeAccountSetup: (...args) => mockCompleteAccountSetup(...args),
 }));
 
 jest.mock('@expo/vector-icons', () => ({
@@ -59,6 +72,8 @@ describe('authentication screens', () => {
     jest.clearAllMocks();
     mockValidateNewPassword.mockResolvedValue({ isValid: true });
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
+    mockCompleteAccountSetup.mockResolvedValue({ ok: true });
+    mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
   });
 
   it('uses the central email login service and returns to the app', async () => {
@@ -161,6 +176,26 @@ describe('authentication screens', () => {
       });
       expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     });
+  });
+
+  it('waits for the persisted auth state before leaving account setup', async () => {
+    const navigation = { reset: jest.fn(), navigate: jest.fn() };
+    const screen = render(<CompleteAccountScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('legal-consent-checkbox'));
+    fireEvent.press(screen.getByTestId('complete-account-submit'));
+
+    await waitFor(() => expect(mockCompleteAccountSetup).toHaveBeenCalledWith({
+      displayName: 'Admin',
+      acceptedLegal: true,
+    }));
+    expect(navigation.reset).not.toHaveBeenCalled();
+
+    mockAuthStatus = AUTH_STATES.READY;
+    screen.rerender(<CompleteAccountScreen navigation={navigation} />);
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    }));
   });
 
   it('keeps registration email-only and provides a working back action', () => {

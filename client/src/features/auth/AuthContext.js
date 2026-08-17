@@ -74,7 +74,17 @@ export function AuthProvider({ children, navigationRef }) {
     navigationRef.resetRoot({ index: 0, routes: [{ name: returnTo.name, params: returnTo.params }] });
   }, [navigationRef, status]);
 
-  const dismissGate = useCallback(() => setGate(null), []);
+  const dismissGate = useCallback(() => {
+    const shouldLeaveBlockedRoute = gate?.blockedRoute === true;
+    pendingReturnToRef.current = null;
+    setGate(null);
+    if (shouldLeaveBlockedRoute && navigationRef?.isReady?.()) {
+      navigationRef.resetRoot({
+        index: 0,
+        routes: [{ name: 'Main', params: { allowIncomplete: true } }],
+      });
+    }
+  }, [gate?.blockedRoute, navigationRef]);
 
   const openRequiredStep = useCallback(() => {
     const nextStatus = gate?.status || status;
@@ -93,7 +103,7 @@ export function AuthProvider({ children, navigationRef }) {
     if (navigationRef?.isReady?.()) openAuthFlow(navigationRef, 'Register');
   }, [navigationRef]);
 
-  const requireCapability = useCallback((capability, returnTo) => {
+  const requireCapability = useCallback((capability, returnTo, options = {}) => {
     if (capability === CAPABILITIES.PUBLIC) return true;
     const signedInCapability = capability === CAPABILITIES.SIGNED_IN
       || capability === CAPABILITIES.ACCOUNT_MANAGEMENT;
@@ -104,7 +114,12 @@ export function AuthProvider({ children, navigationRef }) {
     ) return true;
     if (capability === CAPABILITIES.ACTIVE && status === AUTH_STATES.READY) return true;
     if (returnTo?.name) pendingReturnToRef.current = returnTo;
-    setGate({ capability, status, returnTo: returnTo || null });
+    setGate({
+      capability,
+      status,
+      returnTo: returnTo || null,
+      blockedRoute: options.blockedRoute === true,
+    });
     return false;
   }, [status, user?.uid]);
 
