@@ -29,7 +29,7 @@ coverage/
 .expo/
 package-lock.json
 !functions/package-lock.json
-client/package-lock.json
+!client/package-lock.json
 server/.env
 server/.env.example
 agent.md

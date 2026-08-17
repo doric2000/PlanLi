@@ -1,6 +1,7 @@
 {
   "name": "client",
   "version": "0..0",
+  "packageManager": "npm@10.9.8",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
