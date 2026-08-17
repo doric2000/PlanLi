@@ -57,7 +57,7 @@ test('complete account setup records server-owned profile and legal versions', a
   });
   const result = await completeAccountSetup({
     admin: fixture.admin,
-    auth: { uid: 'user-1', token: { email: 'private@example.com' } },
+    auth: { uid: 'user-1', token: { email: 'private@example.com', email_verified: true } },
     data: { displayName: 'Dana Cohen', acceptedLegal: true },
   });
   const stored = fixture.getStored();
@@ -68,10 +68,24 @@ test('complete account setup records server-owned profile and legal versions', a
   });
   assert.deepEqual(stored.legal, {
     termsVersion: '2026-08-15-community-safety',
-    privacyVersion: '2026-08-15-community-safety',
+    privacyVersion: '2026-08-16-diagnostics',
     acceptedAt: 'timestamp',
   });
   assert.equal(result.profileDetailsVersion, 1);
+});
+
+test('an unverified password account can persist setup but remains blocked by the active policy', async () => {
+  const fixture = createRegistrationAdmin({ uid: 'user-1', smartProfile: { setupRequired: true } });
+  await completeAccountSetup({
+    admin: fixture.admin,
+    auth: {
+      uid: 'user-1',
+      token: { email: 'private@example.com', email_verified: false, firebase: { sign_in_provider: 'password' } },
+    },
+    data: { displayName: 'Dana Cohen', acceptedLegal: true },
+  });
+  assert.equal(fixture.writes.length, 1);
+  assert.equal(fixture.getStored().legal.privacyVersion, '2026-08-16-diagnostics');
 });
 
 test('profile bio accepts a short two-line string and removes control characters', () => {
@@ -128,7 +142,7 @@ test('travel preferences require verified email and current legal consent', asyn
     onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
     legal: {
       termsVersion: '2026-08-15-community-safety',
-      privacyVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-16-diagnostics',
       acceptedAt: 'timestamp',
     },
     smartProfile: { setupRequired: true },
@@ -260,14 +274,14 @@ test('registerUser creates the canonical private profile once', async () => {
   const result = await registerUser({
     admin: fixture.admin,
     auth: { uid: 'user-1', token: { email: 'private@example.com', name: 'Provider Name' } },
-    data: { displayName: 'New Traveler', photoURL: 'https://images.example/avatar.jpg' },
+    data: { displayName: 'New Traveler', photoURL: 'https://lh3.googleusercontent.com/avatar.jpg' },
   });
 
   assert.deepEqual(result, {
     uid: 'user-1',
     created: true,
     displayName: 'New Traveler',
-    photoURL: 'https://images.example/avatar.jpg',
+    photoURL: 'https://lh3.googleusercontent.com/avatar.jpg',
     setupRequired: true,
   });
   assert.deepEqual(fixture.getStored().smartProfile, { setupRequired: true });
@@ -282,6 +296,7 @@ test('registerUser retries do not overwrite edited profile fields or write times
     photoURL: null,
     bio: 'Edited bio',
     smartProfile: { setupRequired: false, completedAt: 'complete' },
+    moderation: { status: 'active' },
   });
   const result = await registerUser({
     admin: fixture.admin,

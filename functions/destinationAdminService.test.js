@@ -59,7 +59,7 @@ test('listing destination reviews is a pure read and never starts a quality scan
   };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       throw new Error(`Unexpected Firestore path: ${path}`);
     },
     collection(path) {
@@ -93,7 +93,7 @@ test('listing destination reviews puts pending cities before approved cities', a
   };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       throw new Error(`Unexpected Firestore path: ${path}`);
     },
     collection(path) {

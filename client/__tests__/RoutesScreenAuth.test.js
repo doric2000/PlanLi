@@ -62,7 +62,6 @@ jest.mock('../src/components/SearchFilterRow', () => {
 jest.mock('../src/components/RoutesFilterModal', () => () => null);
 jest.mock('../src/components/FabButton', () => () => null);
 jest.mock('../src/features/roadtrip/components/RouteCard', () => ({ RouteCard: () => null }));
-jest.mock('../src/features/roadtrip/components/GenerateTripCard', () => ({ GenerateTripCard: () => null }));
 jest.mock('../src/components/CommentsModal', () => ({ CommentsModal: () => null }));
 jest.mock('../src/features/roadtrip/components/ActiveRouteFiltersList', () => () => null);
 jest.mock('../src/features/community/components/SortMenuModal', () => ({ SortMenuModal: () => null }));

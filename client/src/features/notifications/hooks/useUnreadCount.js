@@ -25,16 +25,12 @@ export const useUnreadCount = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const currentUser = auth.currentUser;
 
-  console.log('useUnreadCount hook - currentUser:', currentUser?.uid);
-
   useEffect(() => {
     if (!currentUser) {
-      console.log('No current user in useUnreadCount');
       setUnreadCount(0);
       return;
     }
 
-    console.log('Setting up unread count listener for user:', currentUser.uid);
     const notificationsRef = collection(db, 'users', currentUser.uid, 'notifications');
     const q = query(
       notificationsRef,
@@ -45,7 +41,6 @@ export const useUnreadCount = () => {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        console.log('Unread notifications count:', snapshot.size);
         setUnreadCount(snapshot.size);
       },
       (error) => {
@@ -57,7 +52,6 @@ export const useUnreadCount = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  console.log('useUnreadCount returning:', unreadCount);
   return unreadCount;
 };
 

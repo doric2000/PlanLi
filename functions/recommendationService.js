@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { evaluateTextSafety } = require('./moderationService');
 const { resolveCountryMetadata } = require('./countryMetadata');
@@ -218,7 +219,6 @@ function sanitizeRecommendationAttributes(value, content, { legacyFacets = null,
 
 function isVerifiedCaller(auth) {
   if (!auth?.uid) return false;
-  if (auth.token?.admin === true) return true;
   const provider = auth.token?.firebase?.sign_in_provider;
   return provider !== 'password' || auth.token?.email_verified === true;
 }
@@ -555,6 +555,11 @@ async function validateVariant({
     metadata.metadata?.assetId === assetId,
     'invalid-argument',
     'Image asset metadata is invalid.'
+  );
+  assert(
+    metadata.metadata?.state === 'prepared',
+    'failed-precondition',
+    'This prepared image has already been used.'
   );
 
   return {
@@ -1219,6 +1224,9 @@ async function saveRecommendation({
     : db.collection('recommendations').doc();
   const previousSnap = recommendationId ? await recommendationRef.get() : null;
   const previousData = previousSnap?.exists ? previousSnap.data() : null;
+  const isAdmin = recommendationId
+    ? await hasActiveAdminAccess({ admin, auth })
+    : false;
 
   if (!recommendationId && publishRequestId) {
     const replaySnapshot = await recommendationRef.get();
@@ -1252,7 +1260,7 @@ async function saveRecommendation({
   if (recommendationId) {
     assert(previousSnap.exists, 'not-found', 'Recommendation does not exist.');
     assert(
-      previousData.ownerId === uid || auth.token?.admin === true,
+      previousData.ownerId === uid || isAdmin,
       'permission-denied',
       'You do not own this recommendation.'
     );
@@ -1362,7 +1370,7 @@ async function saveRecommendation({
     if (recommendationId) {
       assert(current.exists, 'not-found', 'Recommendation no longer exists.');
       assert(
-        currentData.ownerId === uid || auth.token?.admin === true,
+        currentData.ownerId === uid || isAdmin,
         'permission-denied',
         'Recommendation ownership changed.'
       );

@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { requestAccountDeletion } = require('./deletionService');
+const {
+  deleteDocumentStrict,
+  removeReporterModerationData,
+  requestAccountDeletion,
+} = require('./deletionService');
 
 function recentAuth() {
   return {
@@ -58,4 +62,52 @@ test('account deletion still requires a recent Firebase authentication', async (
     auth: { uid: 'firebase-user-1', token: { auth_time: 1 } },
     data: {},
   }), (error) => error.code === 'failed-precondition');
+});
+
+test('reporter moderation records are removed and aggregate counters are decremented', async () => {
+  const reportRef = { path: 'system/moderation/cases/case-1/reports/user-1' };
+  reportRef.parent = { parent: { path: 'system/moderation/cases/case-1' } };
+  let update;
+  let deleted;
+  const db = {
+    collectionGroup: () => ({
+      where: () => ({
+        get: async () => ({
+          size: 1,
+          docs: [{ ref: reportRef, data: () => ({ category: 'spam_scam_commercial' }) }],
+        }),
+      }),
+    }),
+    runTransaction: async (handler) => handler({
+      get: async () => ({
+        exists: true,
+        data: () => ({
+          reportCount: 2,
+          uniqueCount24h: 1,
+          recentReporters: { 'user-1': 123 },
+          categoryCounts: { spam_scam_commercial: 2 },
+        }),
+      }),
+      update: (_ref, value) => { update = value; },
+      delete: (ref) => { deleted = ref.path; },
+    }),
+  };
+  const admin = {
+    firestore: Object.assign(() => db, {
+      FieldValue: { delete: () => 'DELETE', serverTimestamp: () => 'time' },
+    }),
+  };
+  assert.equal(await removeReporterModerationData({ admin, uid: 'user-1' }), 1);
+  assert.equal(update.reportCount, 1);
+  assert.equal(update.uniqueCount24h, 0);
+  assert.equal(update['recentReporters.user-1'], 'DELETE');
+  assert.equal(update['categoryCounts.spam_scam_commercial'], 1);
+  assert.equal(deleted, reportRef.path);
+});
+
+test('public-profile deletion ignores only not-found errors', async () => {
+  await assert.doesNotReject(deleteDocumentStrict({ delete: async () => { throw { code: 404 }; } }));
+  const failure = new Error('permission denied');
+  failure.code = 7;
+  await assert.rejects(deleteDocumentStrict({ delete: async () => { throw failure; } }), failure);
 });

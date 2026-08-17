@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { isVerifiedCaller, validateMediaAssets } = require('./recommendationService');
 const { evaluateTextSafety } = require('./moderationService');
 
@@ -53,10 +54,11 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
   const description = cleanString(input.description, 'description', 5000);
   const textSafety = evaluateTextSafety([title, description]);
   const existing = await tripRef.get();
+  const isAdmin = tripId ? await hasActiveAdminAccess({ admin, auth }) : false;
   if (tripId) {
     assert(existing.exists, 'not-found', 'Trip does not exist.');
     assert(
-      existing.data()?.ownerId === auth.uid || auth.token?.admin === true,
+      existing.data()?.ownerId === auth.uid || isAdmin,
       'permission-denied',
       'You do not own this trip.'
     );

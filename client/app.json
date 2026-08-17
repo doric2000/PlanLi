@@ -15,12 +15,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.planli.planlitravels",
       "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We use your location to sort recommendations by proximity.",
+        "NSLocationWhenInUseUsageDescription": "PlanLi משתמשת במיקום שלך כדי למיין המלצות ויעדים לפי הקרבה אליך.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -41,7 +41,16 @@
     },
     "plugins": [
       "expo-apple-authentication",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PlanLi מבקשת גישה לתמונות שבחרת כדי להעלות תמונת פרופיל, המלצה או מסלול.",
+          "cameraPermission": "PlanLi מבקשת גישה למצלמה כדי לצלם ולהעלות תמונה לפרופיל, להמלצה או למסלול.",
+          "microphonePermission": false
+        }
+      ],
+      "@sentry/react-native"
     ],
     "extra": {
       "eas": {

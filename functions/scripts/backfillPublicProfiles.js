@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
-const { sanitizePublicProfile } = require('../publicProfiles');
+const { isPublicProfileEligible, sanitizePublicProfile } = require('../publicProfiles');
 const { initializeAdmin } = require('./localCredentials');
 
 const PAGE_SIZE = 400;
@@ -63,13 +63,19 @@ async function runBackfill({ apply, resume, limit, stateDir }) {
 
     if (apply) {
       const batch = db.batch();
-      snapshot.docs.forEach((userDoc) => batch.set(
-        db.doc(`publicProfiles/${userDoc.id}`),
-        {
-          ...sanitizePublicProfile(userDoc.id, userDoc.data()),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      snapshot.docs.forEach((userDoc) => {
+        const publicRef = db.doc(`publicProfiles/${userDoc.id}`);
+        const data = userDoc.data();
+        if (isPublicProfileEligible(data)) {
+          batch.set(publicRef, {
+            ...sanitizePublicProfile(userDoc.id, data),
+            status: 'active',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        } else {
+          batch.delete(publicRef);
         }
-      ));
+      });
       await batch.commit();
     }
 

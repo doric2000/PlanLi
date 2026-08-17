@@ -10,6 +10,7 @@ const {
 } = require('./socialService');
 const { refreshRecommendationFallbackForDestination } = require('./destinationImageService');
 const { revokeAppleAuthorization } = require('./appleAuthService');
+const { hasActiveAdminAccess } = require('./adminAuthorization');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -27,6 +28,50 @@ async function deleteQueryInBatches(db, buildQuery, limit = 400) {
     if (snapshot.size < limit) break;
   }
   return deleted;
+}
+
+function isNotFound(error) {
+  return error?.code === 5 || error?.code === 404 || error?.code === '404';
+}
+
+async function deleteDocumentStrict(ref) {
+  try {
+    await ref.delete();
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+}
+
+async function removeReporterModerationData({ admin, uid }) {
+  const db = admin.firestore();
+  const reports = await db.collectionGroup('reports').where('reporterId', '==', uid).get();
+  for (const entry of reports.docs) {
+    const caseRef = entry.ref.parent.parent;
+    await db.runTransaction(async (transaction) => {
+      const caseSnapshot = caseRef ? await transaction.get(caseRef) : null;
+      if (caseSnapshot?.exists) {
+        const caseData = caseSnapshot.data() || {};
+        const category = entry.data()?.category;
+        transaction.update(caseRef, {
+          reportCount: Math.max(0, Number(caseData.reportCount || 0) - 1),
+          uniqueCount24h: Math.max(
+            0,
+            Number(caseData.uniqueCount24h || 0) - (caseData.recentReporters?.[uid] ? 1 : 0)
+          ),
+          [`recentReporters.${uid}`]: admin.firestore.FieldValue.delete(),
+          ...(category ? {
+            [`categoryCounts.${category}`]: Math.max(
+              0,
+              Number(caseData.categoryCounts?.[category] || 0) - 1
+            ),
+          } : {}),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      transaction.delete(entry.ref);
+    });
+  }
+  return reports.size;
 }
 
 async function markDeleting({ admin, target, actorUid, isAdmin }) {
@@ -124,13 +169,14 @@ async function deleteContentInternal({
 
 async function deleteContent({ admin, auth, data, mediaBucket }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
-  assert(isVerified(auth), 'permission-denied', 'Email verification is required.');
+  const isAdmin = await hasActiveAdminAccess({ admin, auth });
+  assert(isVerified(auth) || isAdmin, 'permission-denied', 'Email verification is required.');
   await consumeRateLimit({ admin, uid: auth.uid, action: 'deleteContent' });
   return deleteContentInternal({
     admin,
     target: data?.target,
     actorUid: auth.uid,
-    isAdmin: auth.token?.admin === true,
+    isAdmin,
     mediaBucket,
   });
 }
@@ -229,6 +275,11 @@ async function requestAccountDeletion({
   } else {
     assert(!data?.appleAuthorizationCode, 'invalid-argument', 'Apple authorization is not linked to this account.');
   }
+  const result = await deleteAccountInternal({ admin, uid, mediaBucket });
+  return { jobId: result.jobId, status: result.status };
+}
+
+async function deleteAccountInternal({ admin, uid, mediaBucket }) {
   const db = admin.firestore();
   const jobRef = db.doc(`system/accountDeletion/jobs/${uid}`);
   const updateJob = (step, extra = {}) => jobRef.set({
@@ -249,7 +300,13 @@ async function requestAccountDeletion({
   const ownedContent = await deleteOwnedContent({ admin, uid, mediaBucket });
   await updateJob('interactions', { ownedContent });
   const interactions = await removeAuthoredInteractions({ admin, uid });
-  await updateJob('private-data', { interactions });
+  const purgedReports = await removeReporterModerationData({ admin, uid });
+  await updateJob('public-profile', { interactions, purgedReports });
+
+  const publicProfileRef = db.doc(`publicProfiles/${uid}`);
+  await publicProfileRef.set({ status: 'deleting' }, { merge: true });
+  await deleteDocumentStrict(publicProfileRef);
+  await updateJob('private-data');
 
   const userRef = db.doc(`users/${uid}`);
   if (typeof db.recursiveDelete === 'function') {
@@ -258,11 +315,15 @@ async function requestAccountDeletion({
     await Promise.all([
       deleteQueryInBatches(db, () => userRef.collection('favorites')),
       deleteQueryInBatches(db, () => userRef.collection('notifications')),
+      deleteQueryInBatches(db, () => userRef.collection('blockedUsers')),
       deleteQueryInBatches(db, () => userRef.collection('serverState')),
     ]);
-    await userRef.delete().catch(() => {});
+    await deleteDocumentStrict(userRef);
   }
-  await db.doc(`publicProfiles/${uid}`).delete().catch(() => {});
+  await Promise.all([
+    deleteQueryInBatches(db, () => db.collection('system/media/assets').where('ownerUid', '==', uid)),
+    deleteDocumentStrict(db.doc(`system/moderation/admins/${uid}`)),
+  ]);
   if (mediaBucket) {
     const bucket = admin.storage().bucket(mediaBucket);
     await Promise.all([
@@ -279,14 +340,23 @@ async function requestAccountDeletion({
     completedAt: admin.firestore.FieldValue.serverTimestamp(),
     expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000),
   }, { merge: true });
-  return { jobId: uid, status: 'complete' };
+  return {
+    jobId: uid,
+    status: 'complete',
+    ownedContent,
+    interactions,
+    purgedReports,
+  };
 }
 
 module.exports = {
+  deleteAccountInternal,
   deleteContent,
   deleteContentInternal,
   deleteOwnedContent,
   deleteQueryInBatches,
+  deleteDocumentStrict,
   removeAuthoredInteractions,
+  removeReporterModerationData,
   requestAccountDeletion,
 };

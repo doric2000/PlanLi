@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { applyAffinitySignalInTransaction } = require('./personalizationService');
 const { evaluateTextSafety } = require('./moderationService');
 
@@ -52,7 +53,6 @@ function cleanText(value, { field, min = 1, max }) {
 
 function isVerified(auth) {
   if (!auth?.uid) return false;
-  if (auth.token?.admin === true) return true;
   const provider = auth.token?.firebase?.sign_in_provider;
   return provider !== 'password' || auth.token?.email_verified === true;
 }
@@ -335,7 +335,8 @@ async function getReactionState({ admin, auth, data }) {
 }
 
 async function saveComment({ admin, auth, data }) {
-  assertVerified(auth);
+  const isAdmin = await hasActiveAdminAccess({ admin, auth });
+  if (!isAdmin) assertVerified(auth);
   const target = normalizeTarget(data?.target);
   assert(target.type !== 'city', 'invalid-argument', 'Cities do not support comments.');
   const text = cleanText(data?.text, { field: 'text', min: 1, max: 2000 });
@@ -367,7 +368,7 @@ async function saveComment({ admin, auth, data }) {
       assert(commentSnapshot.exists, 'not-found', 'Comment does not exist.');
       const previous = commentSnapshot.data();
       assert(
-        previous.authorId === auth.uid || auth.token?.admin === true,
+        previous.authorId === auth.uid || isAdmin,
         'permission-denied',
         'You do not own this comment.'
       );
@@ -414,7 +415,8 @@ async function saveComment({ admin, auth, data }) {
 }
 
 async function deleteComment({ admin, auth, data }) {
-  assertVerified(auth);
+  const isAdmin = await hasActiveAdminAccess({ admin, auth });
+  if (!isAdmin) assertVerified(auth);
   const target = normalizeTarget(data?.target);
   const commentId = cleanId(data?.commentId, 'commentId');
   await consumeRateLimit({ admin, uid: auth.uid, action: 'comment' });
@@ -430,7 +432,7 @@ async function deleteComment({ admin, auth, data }) {
     assert(commentSnapshot.exists, 'not-found', 'Comment does not exist.');
     const comment = commentSnapshot.data();
     assert(
-      comment.authorId === auth.uid || auth.token?.admin === true,
+      comment.authorId === auth.uid || isAdmin,
       'permission-denied',
       'You do not own this comment.'
     );

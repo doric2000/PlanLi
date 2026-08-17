@@ -43,9 +43,7 @@ export const useClearNotifications = () => {
     setError(null);
 
     try {
-      const count = await clearAllNotifications(currentUser.uid);
-      console.log(`Cleared ${count} notifications`);
-      return count;
+      return await clearAllNotifications(currentUser.uid);
     } catch (err) {
       console.error('Error clearing notifications:', err);
       setError(err);

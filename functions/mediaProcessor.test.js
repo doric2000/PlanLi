@@ -3,11 +3,38 @@ const assert = require('node:assert/strict');
 const sharp = require('sharp');
 
 const {
+  CACHE_CONTROL,
   cleanupPreparedMedia,
   collectCanonicalMediaAssets,
+  consumeMediaProcessingBudget,
   createPlaceholder,
   encodeVariant,
 } = require('./mediaProcessor');
+
+test('canonical media uses a bounded cache so moderation takedowns can converge', () => {
+  assert.equal(CACHE_CONTROL, 'public,max-age=300,must-revalidate');
+});
+
+test('media processing enforces aggregate per-user job and byte budgets', async () => {
+  let stored = null;
+  const db = {
+    doc: () => ({}),
+    runTransaction: async (handler) => handler({
+      get: async () => ({ exists: Boolean(stored), data: () => stored }),
+      set: (_ref, value) => { stored = value; },
+    }),
+  };
+  const admin = {
+    firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'time' } }),
+  };
+  for (let count = 0; count < 6; count += 1) {
+    await consumeMediaProcessingBudget({ admin, uid: 'user-1', sourceBytes: 1, nowMs: 1_000 });
+  }
+  await assert.rejects(
+    consumeMediaProcessingBudget({ admin, uid: 'user-1', sourceBytes: 1, nowMs: 1_000 }),
+    (error) => error?.code === 'resource-exhausted'
+  );
+});
 
 test('recommendation variants are WebP, square and never upscale', async () => {
   const source = await sharp({

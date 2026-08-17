@@ -17,7 +17,7 @@ const AUTH_REASONS = Object.freeze({
 
 const PROFILE_DETAILS_VERSION = 1;
 const TERMS_VERSION = '2026-08-15-community-safety';
-const PRIVACY_VERSION = '2026-08-15-community-safety';
+const PRIVACY_VERSION = '2026-08-16-diagnostics';
 
 function policyError(code, message, reason) {
   return new HttpsError(code, message, { reason });
@@ -33,7 +33,7 @@ function assertSignedIn(auth) {
   }
 }
 
-function assertAccountSetupComplete(auth, userDocument) {
+function assertVerifiedIdentity(auth) {
   assertSignedIn(auth);
   if (isPasswordProvider(auth) && auth.token?.email_verified !== true) {
     throw policyError(
@@ -42,6 +42,10 @@ function assertAccountSetupComplete(auth, userDocument) {
       AUTH_REASONS.EMAIL_VERIFICATION_REQUIRED
     );
   }
+}
+
+function assertAccountSetupComplete(auth, userDocument) {
+  assertVerifiedIdentity(auth);
   const displayName = typeof userDocument?.displayName === 'string'
     ? userDocument.displayName.trim()
     : '';
@@ -82,7 +86,12 @@ function assertActiveUser(auth, userDocument) {
   }
 }
 
-async function authorizeRequest({ admin, auth, access, allowSuspended = false }) {
+async function authorizeRequest({
+  admin,
+  auth,
+  access,
+  allowSuspended = false,
+}) {
   if (!Object.values(ACCESS_LEVELS).includes(access)) {
     throw new Error(`Callable access level is missing or invalid: ${access || '<empty>'}`);
   }
@@ -111,5 +120,6 @@ module.exports = {
   assertAccountSetupComplete,
   assertActiveUser,
   assertSignedIn,
+  assertVerifiedIdentity,
   authorizeRequest,
 };

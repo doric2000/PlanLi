@@ -144,14 +144,14 @@ test('practical needs derived from an existing canonical tag do not require a se
 test('deactivation and destination changes produce balanced city counter deltas', () => {
   assert.deepEqual(
     Array.from(getCityCountDeltas(recommendation(), recommendation({ status: 'inactive' })).entries()),
-    [['countries/country/cities/city', -1]]
+    [['countries/country/destinations/city', -1]]
   );
   assert.deepEqual(Array.from(getCityCountDeltas(
     recommendation(),
     recommendation({ destination: { countryId: 'country', cityId: 'other-city' } })
   ).entries()), [
-    ['countries/country/cities/city', -1],
-    ['countries/country/cities/other-city', 1],
+    ['countries/country/destinations/city', -1],
+    ['countries/country/destinations/other-city', 1],
   ]);
 });
 

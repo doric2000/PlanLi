@@ -245,13 +245,14 @@ function fakeAdminForMetadata(metadataByPath) {
 
 test('media validation accepts canonical WebP assets and rejects foreign ownership', async () => {
   const assetId = '123e4567-e89b-42d3-a456-426614174000';
-  const metadata = (variant, ownerUid = 'u1') => ({
+  const metadata = (variant, ownerUid = 'u1', state = 'prepared') => ({
     size: '1024',
     contentType: 'image/webp',
     metadata: {
       ownerUid,
       assetId,
       variant,
+      state,
       width: '800',
       height: '600',
       firebaseStorageDownloadTokens: `${variant}-token`,
@@ -313,6 +314,26 @@ test('media validation accepts canonical WebP assets and rejects foreign ownersh
       }],
     }),
     /owner does not match/
+  );
+
+  const claimedAdmin = fakeAdminForMetadata({
+    [`media/u1/${assetId}/large.webp`]: metadata('large', 'u1', 'claimed'),
+    [`media/u1/${assetId}/feed.webp`]: metadata('feed', 'u1', 'claimed'),
+    [`media/u1/${assetId}/thumb.webp`]: metadata('thumb', 'u1', 'claimed'),
+  });
+  await assert.rejects(
+    validateMediaAssets({
+      admin: claimedAdmin,
+      uid: 'u1',
+      mediaBucket: 'test.appspot.com',
+      media: [{
+        assetId,
+        large: { path: `media/u1/${assetId}/large.webp` },
+        feed: { path: `media/u1/${assetId}/feed.webp` },
+        thumb: { path: `media/u1/${assetId}/thumb.webp` },
+      }],
+    }),
+    /already been used/
   );
 });
 
@@ -680,6 +701,7 @@ test('admin edits retain the original owner media without trusting client media 
       media: [existingAsset],
       stats: { likeCount: 2, commentCount: 1 },
     },
+    'system/moderation/admins/admin-editor': { active: true },
   });
 
   await saveRecommendation({
