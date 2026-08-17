@@ -12,6 +12,7 @@
     "verify:admin-web": "node scripts/verifyAdminExport.js",
     "verify:ios-release-config": "node scripts/verifyIosRelease.js --config-only",
     "verify:ios-release": "node scripts/verifyIosRelease.js",
+    "eas-build-pre-install": "node -e \"require('node:fs').chmodSync(process.cwd(), 0o755)\"",
     "test": "jest"
   },
   "dependencies": {
