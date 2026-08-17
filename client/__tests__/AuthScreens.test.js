@@ -17,13 +17,14 @@ const mockSignInWithGoogle = jest.fn();
 const mockRunAuthTransition = jest.fn(async (operation) => operation());
 const mockCompleteAccountSetup = jest.fn();
 let mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+let mockUserDocument = { displayName: 'Admin' };
 
 jest.mock('../src/features/auth/AuthContext', () => ({
   useAuth: () => ({
     runAuthTransition: mockRunAuthTransition,
     status: mockAuthStatus,
     user: { uid: 'user-1', email: 'a@b.com', displayName: 'Admin' },
-    userDocument: { displayName: 'Admin' },
+    userDocument: mockUserDocument,
   }),
 }));
 
@@ -74,6 +75,7 @@ describe('authentication screens', () => {
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
     mockCompleteAccountSetup.mockResolvedValue({ ok: true });
     mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+    mockUserDocument = { displayName: 'Admin' };
   });
 
   it('uses the central email login service and returns to the app', async () => {
@@ -196,6 +198,20 @@ describe('authentication screens', () => {
       index: 0,
       routes: [{ name: 'Main' }],
     }));
+  });
+
+  it('locks the existing display name when only renewed legal consent is required', () => {
+    mockUserDocument = {
+      displayName: 'Admin',
+      onboarding: {
+        profileDetailsVersion: 1,
+        profileDetailsCompletedAt: { seconds: 1 },
+      },
+    };
+    const screen = render(<CompleteAccountScreen navigation={{ reset: jest.fn(), navigate: jest.fn() }} />);
+
+    expect(screen.getByText(/מדיניות הפרטיות עודכנה/)).toBeTruthy();
+    expect(screen.getByPlaceholderText('הזינו את שמכם המלא').props.editable).toBe(false);
   });
 
   it('keeps registration email-only and provides a working back action', () => {

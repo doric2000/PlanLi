@@ -62,7 +62,7 @@ test.beforeEach(async () => {
       onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: new Date() },
       legal: {
         termsVersion: '2026-08-15-community-safety',
-        privacyVersion: '2026-08-16-diagnostics',
+        privacyVersion: '2026-08-18-beta-observability',
         acceptedAt: new Date(),
       },
       smartProfile: { setupRequired: false, completedAt: new Date() },

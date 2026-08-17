@@ -46,7 +46,7 @@ test('public profiles require current onboarding, legal consent, preferences, an
     onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'time' },
     legal: {
       termsVersion: '2026-08-15-community-safety',
-      privacyVersion: '2026-08-16-diagnostics',
+      privacyVersion: '2026-08-18-beta-observability',
       acceptedAt: 'time',
     },
     smartProfile: { setupRequired: false, completedAt: 'time' },
@@ -70,7 +70,7 @@ test('private preference and activity updates do not refresh the public projecti
     onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'time' },
     legal: {
       termsVersion: '2026-08-15-community-safety',
-      privacyVersion: '2026-08-16-diagnostics',
+      privacyVersion: '2026-08-18-beta-observability',
       acceptedAt: 'time',
     },
     moderation: { status: 'active' },

@@ -8,6 +8,13 @@ import { AUTH_STATES, CAPABILITIES } from '../src/constants/authPolicy';
 let authListener;
 let profileListener;
 
+jest.mock('../src/services/ErrorReporting', () => ({
+  addDiagnosticBreadcrumb: jest.fn(),
+  captureDiagnosticException: jest.fn(),
+  setDiagnosticTag: jest.fn(),
+  setErrorReportingUser: jest.fn(),
+}));
+
 jest.mock('firebase/auth', () => ({
   onIdTokenChanged: (_auth, callback) => {
     authListener = callback;
@@ -34,7 +41,7 @@ const activeDocument = {
   onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: { seconds: 1 } },
   legal: {
     termsVersion: '2026-08-15-community-safety',
-    privacyVersion: '2026-08-16-diagnostics',
+    privacyVersion: '2026-08-18-beta-observability',
     acceptedAt: { seconds: 1 },
   },
   smartProfile: { setupRequired: false, completedAt: { seconds: 1 } },

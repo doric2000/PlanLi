@@ -15,7 +15,7 @@ const activeUser = {
   onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
   legal: {
     termsVersion: '2026-08-15-community-safety',
-    privacyVersion: '2026-08-16-diagnostics',
+    privacyVersion: '2026-08-18-beta-observability',
     acceptedAt: 'timestamp',
   },
   smartProfile: { setupRequired: false, completedAt: 'timestamp' },

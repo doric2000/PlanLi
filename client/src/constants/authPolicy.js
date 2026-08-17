@@ -17,7 +17,7 @@ export const CAPABILITIES = Object.freeze({
 
 export const PROFILE_DETAILS_VERSION = 1;
 export const TERMS_VERSION = '2026-08-15-community-safety';
-export const PRIVACY_VERSION = '2026-08-16-diagnostics';
+export const PRIVACY_VERSION = '2026-08-18-beta-observability';
 
 export const AUTH_REASONS = Object.freeze({
   SIGN_IN_REQUIRED: 'SIGN_IN_REQUIRED',

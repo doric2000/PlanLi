@@ -68,7 +68,7 @@ test('complete account setup records server-owned profile and legal versions', a
   });
   assert.deepEqual(stored.legal, {
     termsVersion: '2026-08-15-community-safety',
-    privacyVersion: '2026-08-16-diagnostics',
+    privacyVersion: '2026-08-18-beta-observability',
     acceptedAt: 'timestamp',
   });
   assert.equal(result.profileDetailsVersion, 1);
@@ -85,7 +85,34 @@ test('an unverified password account can persist setup but remains blocked by th
     data: { displayName: 'Dana Cohen', acceptedLegal: true },
   });
   assert.equal(fixture.writes.length, 1);
-  assert.equal(fixture.getStored().legal.privacyVersion, '2026-08-16-diagnostics');
+  assert.equal(fixture.getStored().legal.privacyVersion, '2026-08-18-beta-observability');
+});
+
+test('renewing legal consent cannot bypass the display-name change policy', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    displayName: 'Existing Name',
+    onboarding: {
+      profileDetailsVersion: 1,
+      profileDetailsCompletedAt: 'older-timestamp',
+    },
+    legal: {
+      termsVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-16-diagnostics',
+      acceptedAt: 'older-timestamp',
+    },
+    smartProfile: { setupRequired: false, completedAt: 'older-timestamp' },
+  });
+
+  const result = await completeAccountSetup({
+    admin: fixture.admin,
+    auth: { uid: 'user-1', token: { email: 'private@example.com', email_verified: true } },
+    data: { displayName: 'Bypassed Name', acceptedLegal: true },
+  });
+
+  assert.equal(fixture.getStored().displayName, 'Existing Name');
+  assert.equal(result.displayName, 'Existing Name');
+  assert.equal(fixture.getStored().legal.privacyVersion, '2026-08-18-beta-observability');
 });
 
 test('profile bio accepts a short two-line string and removes control characters', () => {
@@ -142,7 +169,7 @@ test('travel preferences require verified email and current legal consent', asyn
     onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
     legal: {
       termsVersion: '2026-08-15-community-safety',
-      privacyVersion: '2026-08-16-diagnostics',
+      privacyVersion: '2026-08-18-beta-observability',
       acceptedAt: 'timestamp',
     },
     smartProfile: { setupRequired: true },

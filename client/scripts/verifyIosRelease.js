@@ -108,14 +108,18 @@ if (!metroConfig.includes('getSentryExpoConfig')) fail('Metro is not configured 
 const errorReporting = fs.readFileSync(path.join(clientRoot, 'src/services/ErrorReporting.js'), 'utf8');
 [
   'sendDefaultPii: false',
-  'maxBreadcrumbs: 0',
-  'tracesSampleRate: 0',
+  'maxBreadcrumbs: 50',
+  'tracesSampleRate: 0.1',
   'profilesSampleRate: 0',
   'replaysSessionSampleRate: 0',
-  'replaysOnErrorSampleRate: 0',
+  'replaysOnErrorSampleRate: 1',
+  'maskAllText: true',
+  'maskAllImages: true',
+  'maskAllVectors: true',
   'attachScreenshot: false',
   'attachViewHierarchy: false',
   'enableCaptureFailedRequests: false',
+  'beforeSendTransaction: scrubTransaction',
 ].forEach((setting) => {
   if (!errorReporting.includes(setting)) fail(`Crash reporting privacy setting is missing: ${setting}.`);
 });

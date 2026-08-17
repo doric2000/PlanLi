@@ -23,7 +23,7 @@ service firebase.storage {
         && user.data.onboarding.profileDetailsVersion == 1
         && user.data.onboarding.profileDetailsCompletedAt != null
         && user.data.legal.termsVersion == '2026-08-15-community-safety'
-        && user.data.legal.privacyVersion == '2026-08-16-diagnostics'
+        && user.data.legal.privacyVersion == '2026-08-18-beta-observability'
         && user.data.legal.acceptedAt != null
         && user.data.smartProfile.setupRequired == false
         && user.data.smartProfile.completedAt != null

@@ -355,13 +355,22 @@ async function completeAccountSetup({ admin, auth, data }) {
   const db = admin.firestore();
   const ref = db.doc(`users/${auth.uid}`);
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  await db.runTransaction(async (transaction) => {
+  const resolvedDisplayName = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const existing = snapshot.exists ? snapshot.data() || {} : {};
+    const existingDisplayName = typeof existing.displayName === 'string'
+      ? existing.displayName.trim()
+      : '';
+    const hasCompletedProfileDetails = Boolean(
+      existingDisplayName
+      && existing.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
+      && existing.onboarding?.profileDetailsCompletedAt
+    );
+    const storedDisplayName = hasCompletedProfileDetails ? existingDisplayName : displayName;
     transaction.set(ref, {
       uid: auth.uid,
       email: existing.email || auth.token?.email || '',
-      displayName,
+      displayName: storedDisplayName,
       photoURL: Object.prototype.hasOwnProperty.call(existing, 'photoURL')
         ? existing.photoURL
         : null,
@@ -384,10 +393,11 @@ async function completeAccountSetup({ admin, auth, data }) {
       ...(snapshot.exists ? {} : { createdAt: timestamp }),
       updatedAt: timestamp,
     }, { merge: true });
+    return storedDisplayName;
   });
-  await admin.auth().updateUser(auth.uid, { displayName });
+  await admin.auth().updateUser(auth.uid, { displayName: resolvedDisplayName });
   return {
-    displayName,
+    displayName: resolvedDisplayName,
     profileDetailsVersion: PROFILE_DETAILS_VERSION,
     termsVersion: TERMS_VERSION,
     privacyVersion: PRIVACY_VERSION,

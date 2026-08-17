@@ -10,6 +10,11 @@ import {
 
 const mockCallable = jest.fn(() => Promise.resolve({ data: { ok: true } }));
 
+jest.mock('../src/services/ErrorReporting', () => ({
+  addDiagnosticBreadcrumb: jest.fn(),
+  captureDiagnosticException: jest.fn(),
+}));
+
 jest.mock('../src/config/firebase', () => ({
   auth: { currentUser: { uid: 'user-1' } },
   cloudFunctions: { kind: 'functions' },
@@ -102,7 +107,7 @@ describe('ProfileService smart-profile persistence', () => {
       },
       legal: {
         termsVersion: '2026-08-15-community-safety',
-        privacyVersion: '2026-08-16-diagnostics',
+        privacyVersion: '2026-08-18-beta-observability',
         acceptedAt: { seconds: 1 },
       },
     };

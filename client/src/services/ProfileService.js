@@ -11,6 +11,10 @@ import {
   normalizeProfileBio,
   validateProfileBio,
 } from '../features/profile/utils/profileBio';
+import {
+  addDiagnosticBreadcrumb,
+  captureDiagnosticException,
+} from './ErrorReporting';
 
 let updateProfileCallable;
 let registerUserCallable;
@@ -19,6 +23,39 @@ let completeAccountSetupCallable;
 const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'needs'];
 const PROFILE_SCALAR_FIELDS = ['budget'];
 const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'];
+
+async function runProfileOperation(operation, callback) {
+  const startedAt = Date.now();
+  addDiagnosticBreadcrumb({
+    category: 'callable',
+    message: 'Profile operation started',
+    data: { operation, outcome: 'started' },
+  });
+  try {
+    const result = await callback();
+    addDiagnosticBreadcrumb({
+      category: 'callable',
+      message: 'Profile operation completed',
+      data: { operation, outcome: 'success', durationMs: Date.now() - startedAt },
+    });
+    return result;
+  } catch (error) {
+    addDiagnosticBreadcrumb({
+      category: 'callable',
+      message: 'Profile operation failed',
+      level: 'error',
+      data: {
+        operation,
+        outcome: 'error',
+        code: error?.code || 'unknown',
+        reason: error?.details?.reason || 'unknown',
+        durationMs: Date.now() - startedAt,
+      },
+    });
+    captureDiagnosticException(error, { operation, code: error?.code || 'unknown' });
+    throw error;
+  }
+}
 
 const sortedUnique = (values) => Array.from(new Set(Array.isArray(values) ? values : [])).sort();
 
@@ -83,7 +120,7 @@ async function readBackSmartProfile(requested, { complete }) {
 export const saveProfile = async (
   fields,
   { completeSmartProfile = false, verifySmartProfile = true } = {}
-) => {
+) => runProfileOperation('update_profile', async () => {
   updateProfileCallable ||= httpsCallable(cloudFunctions, 'updateProfile');
   const payload = Object.fromEntries(
     PROFILE_UPDATE_FIELDS
@@ -117,15 +154,17 @@ export const saveProfile = async (
     complete: completeSmartProfile,
   });
   return { ...(response.data || {}), smartProfile };
-};
+});
 
-export const registerUserDocument = async (fields = {}) => {
+export const registerUserDocument = async (fields = {}) => runProfileOperation('register_user', async () => {
   registerUserCallable ||= httpsCallable(cloudFunctions, 'registerUser');
   const response = await registerUserCallable(fields);
   return response.data;
-};
+});
 
-export const completeAccountSetup = async ({ displayName, acceptedLegal }) => {
+export const completeAccountSetup = async ({ displayName, acceptedLegal }) => runProfileOperation(
+  'complete_account_setup',
+  async () => {
   completeAccountSetupCallable ||= httpsCallable(cloudFunctions, 'completeAccountSetup');
   const response = await completeAccountSetupCallable({ displayName, acceptedLegal });
   const uid = auth.currentUser?.uid;
@@ -138,4 +177,5 @@ export const completeAccountSetup = async ({ displayName, acceptedLegal }) => {
   }
   await auth.currentUser?.reload?.();
   return response.data;
-};
+  }
+);

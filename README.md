@@ -168,33 +168,41 @@ production values without committing them:
 - `SENTRY_AUTH_TOKEN` as a sensitive EAS secret. Never place it in `app.json`,
   `.env.example`, a build log or App Store Connect notes.
 
-Sentry is configured for crash/error diagnostics only. Product analytics,
-performance traces, profiles, session replay, screenshots, view hierarchy,
-request capture, breadcrumbs and default PII are disabled. The client removes
-request/user/extra data and redacts common email and credential patterns before
-sending an event. The EAS production build fails early if any Sentry value is
-missing, so a release cannot silently ship without symbolicated diagnostics.
+Sentry is configured for beta crash/error diagnostics with a bounded 10%
+performance sample, 50 allowlisted breadcrumbs, and an error-only mobile replay
+buffer. Regular session replay, profiles, screenshots, view hierarchy, failed
+request capture and default PII remain disabled. Error replays mask all text,
+images and vector graphics and use low quality. The client attaches only the
+Firebase UID as a pseudonymous user identifier, removes request/extra data,
+allowlists diagnostic tags and device contexts, and redacts common email and
+credential patterns before sending an event. The EAS production build fails
+early if any Sentry value is missing, so a release cannot silently ship without
+symbolicated diagnostics.
 
-The updated privacy version is `2026-08-16-diagnostics`. Publish the matching
+The updated privacy version is `2026-08-18-beta-observability`. Publish the matching
 Hosting policy and deploy the matching Functions and Storage Rules immediately
 before distributing the new client. This coordinated release is required
 because old clients cannot accept the new server-owned privacy version.
 
 Before enabling the production Sentry DSN, also enable Sentry's server-side
-default data scrubbing, prevent IP-address storage, add sensitive-field rules
-for authorization, cookie, email, password, secret and token values, require
-two-factor authentication for the Sentry organization, and create alerts for
-new fatal and regressed issues. Those account settings cannot be enforced by
-the repository and must be verified from the Sentry project before the build.
+default data scrubbing, prevent IP-address storage, add sensitive-field rules,
+disable public issue sharing, source fetching and join requests, and create
+alerts for new fatal and regressed issues. Require organization-wide two-factor
+authentication only after every current member has enrolled, because Sentry
+removes unenrolled members when the requirement is enabled. Those account
+settings cannot be enforced by the repository and must be verified from the
+Sentry project before the build.
 
-For App Store Connect privacy answers, the new Sentry integration adds Crash
-Data and Other Diagnostic Data for App Functionality; it is configured as not
-linked to the user and not used for tracking. Performance Data and Product
-Interaction are not collected by Sentry. Reconcile the rest of the existing
-PlanLi answers against the final binary and deployed behavior, including name,
-email, user ID, photos/text, travel preferences, saved/liked activity, reports,
-support messages, and any location or place-search data transmitted off-device.
-Do not copy these notes into App Store Connect without that final verification.
+For App Store Connect privacy answers, the Sentry integration adds Crash Data,
+Performance Data, Other Diagnostic Data and error-only Product Interaction for
+App Functionality. Because events carry a Firebase UID, treat those categories
+as linked to the user unless final event inspection establishes otherwise; they
+are not used for tracking. Reconcile the rest of the existing PlanLi answers
+against the final binary and deployed behavior, including name, email, user ID,
+photos/text, travel preferences, saved/liked activity, reports, support messages,
+and any location or place-search data transmitted off-device. Do not copy these
+notes into App Store Connect without inspecting a real production-mode Sentry
+event and replay from the signed beta build.
 
 ### Local and remote gates
 

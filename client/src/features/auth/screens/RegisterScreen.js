@@ -46,7 +46,7 @@ export default function RegisterScreen({ navigation }) {
       await runAuthTransition(async () => {
         await registerWithEmail({ displayName, email, password, acceptedLegal });
         resetToRootRoute(navigation, 'VerifyEmail');
-      });
+      }, 'register_email');
     } catch (registrationError) {
       setError(formatAuthError(registrationError));
     } finally {
