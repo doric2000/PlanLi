@@ -13,7 +13,7 @@ const activeDocument = {
   onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: { seconds: 1 } },
   legal: {
     termsVersion: '2026-08-15-community-safety',
-    privacyVersion: '2026-08-15-community-safety',
+    privacyVersion: '2026-08-18-beta-observability',
     acceptedAt: { seconds: 1 },
   },
   smartProfile: { setupRequired: false, completedAt: { seconds: 1 } },

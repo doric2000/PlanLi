@@ -1,4 +1,9 @@
 const { INTEREST_IDS, VIBE_IDS } = require('./travelTaxonomy');
+const {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} = require('./authPolicy');
 
 const PUBLIC_SMART_PROFILE_FIELDS = [
   'interests',
@@ -45,6 +50,36 @@ function sanitizePublicSmartProfile(smartProfile) {
   return Object.keys(result).length ? result : null;
 }
 
+function sanitizePublicPhotoURL(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    const trusted = hostname === 'firebasestorage.googleapis.com'
+      || hostname === 'googleusercontent.com'
+      || hostname.endsWith('.googleusercontent.com');
+    return parsed.protocol === 'https:' && trusted ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPublicProfileEligible(data) {
+  return Boolean(
+    data
+    && typeof data.displayName === 'string'
+    && data.displayName.trim().length >= 2
+    && data.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
+    && data.onboarding?.profileDetailsCompletedAt
+    && data.legal?.termsVersion === TERMS_VERSION
+    && data.legal?.privacyVersion === PRIVACY_VERSION
+    && data.legal?.acceptedAt
+    && data.smartProfile?.setupRequired === false
+    && data.smartProfile?.completedAt
+    && data.moderation?.status === 'active'
+  );
+}
+
 function sanitizePublicProfile(userId, data = {}) {
   return compactObject({
     uid: userId,
@@ -52,10 +87,7 @@ function sanitizePublicProfile(userId, data = {}) {
       typeof data.displayName === 'string' && data.displayName.trim()
         ? data.displayName.trim().slice(0, 80)
         : 'Traveler',
-    photoURL:
-      typeof data.photoURL === 'string' && data.photoURL
-        ? data.photoURL
-        : null,
+    photoURL: sanitizePublicPhotoURL(data.photoURL),
     photoMedia:
       data.photoMedia && typeof data.photoMedia === 'object'
         ? data.photoMedia
@@ -67,15 +99,19 @@ function sanitizePublicProfile(userId, data = {}) {
 }
 
 function publicProfileProjectionChanged(userId, before, after) {
-  const beforeProjection = before ? sanitizePublicProfile(userId, before) : null;
-  const afterProjection = after ? sanitizePublicProfile(userId, after) : null;
+  const beforeProjection = isPublicProfileEligible(before)
+    ? { ...sanitizePublicProfile(userId, before), status: 'active' }
+    : null;
+  const afterProjection = isPublicProfileEligible(after)
+    ? { ...sanitizePublicProfile(userId, after), status: 'active' }
+    : null;
   return JSON.stringify(beforeProjection) !== JSON.stringify(afterProjection);
 }
 
 async function syncPublicProfile(admin, userId, afterData) {
   const publicRef = admin.firestore().doc(`publicProfiles/${userId}`);
 
-  if (!afterData) {
+  if (!isPublicProfileEligible(afterData)) {
     await publicRef.delete().catch((error) => {
       if (error?.code !== 5 && error?.code !== 404) throw error;
     });
@@ -85,6 +121,7 @@ async function syncPublicProfile(admin, userId, afterData) {
   await publicRef.set(
     {
       ...sanitizePublicProfile(userId, afterData),
+      status: 'active',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: false }
@@ -93,9 +130,11 @@ async function syncPublicProfile(admin, userId, afterData) {
 
 module.exports = {
   PUBLIC_SMART_PROFILE_FIELDS,
+  isPublicProfileEligible,
   publicProfileProjectionChanged,
   sanitizePublicProfile,
   sanitizePublicBio,
+  sanitizePublicPhotoURL,
   sanitizePublicSmartProfile,
   syncPublicProfile,
 };

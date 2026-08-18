@@ -4,11 +4,11 @@ const { normalizeReportTarget } = require('./moderationService');
 const { buildModerationPreview, hydrateModerationPreviews } = require('./moderationPreview');
 const { deleteComment } = require('./socialService');
 const { syncPublicProfile } = require('./publicProfiles');
+const { setMediaAvailability } = require('./mediaModeration');
 const {
+  deleteAccountInternal,
   deleteContentInternal,
-  deleteOwnedContent,
   deleteQueryInBatches,
-  removeAuthoredInteractions,
 } = require('./deletionService');
 
 const PAGE_SIZE = 30;
@@ -75,10 +75,12 @@ function publicModerationCase(item = {}) {
   };
 }
 
-async function ensureAdminRegistry({ admin, auth }) {
+async function assertActiveAdminRegistry({ admin, auth }) {
   const ref = admin.firestore().doc(`system/moderation/admins/${auth.uid}`);
   const snapshot = await ref.get();
-  if (!snapshot.exists) await ref.set({ uid: auth.uid, active: true, syncedAt: admin.firestore.FieldValue.serverTimestamp() });
+  if (!snapshot.exists || snapshot.data()?.active !== true) {
+    fail('permission-denied', 'Admin access is required.', 'admin_required');
+  }
 }
 
 async function audit({ admin, auth, action, target = null, reason, metadata = {} }) {
@@ -98,7 +100,7 @@ async function audit({ admin, auth, action, target = null, reason, metadata = {}
 async function prepareAdmin(admin, auth, { recent = false } = {}) {
   assertAdmin(auth);
   if (recent) assertRecentAuth(auth);
-  await ensureAdminRegistry({ admin, auth });
+  await assertActiveAdminRegistry({ admin, auth });
 }
 
 async function getModerationDashboard({ admin, auth }) {
@@ -260,6 +262,15 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    if (target.type !== 'comment') {
+      await setMediaAvailability({
+        admin,
+        data: targetSnapshot.data(),
+        mediaBucket,
+        available: action === 'restore',
+        reason: action === 'hold' ? reason : null,
+      });
+    }
   }
   if (target.type === 'comment' && action !== 'dismiss') {
     const parentRef = db.doc(`${target.path.split('/').slice(0, 2).join('/')}`);
@@ -347,7 +358,7 @@ async function getAdminUser({ admin, auth, data }) {
   return serialize({ ...publicAdminUser(user), profile: profile.exists ? profile.data() : null });
 }
 
-async function hideUserContent({ admin, uid }) {
+async function hideUserContent({ admin, uid, mediaBucket }) {
   const db = admin.firestore();
   let hidden = 0;
   for (const collectionName of ['recommendations', 'routes', 'trips']) {
@@ -361,6 +372,15 @@ async function hideUserContent({ admin, uid }) {
         }
       });
       await batch.commit();
+      await Promise.all(snapshot.docs.slice(offset, offset + 400).map((entry) => (
+        setMediaAvailability({
+          admin,
+          data: entry.data(),
+          mediaBucket,
+          available: false,
+          reason: 'owner_suspended',
+        })
+      )));
     }
   }
   const comments = await db.collectionGroup('comments').where('authorId', '==', uid).get();
@@ -389,7 +409,7 @@ async function hideUserContent({ admin, uid }) {
   return hidden;
 }
 
-async function setUserSuspension({ admin, auth, data }) {
+async function setUserSuspension({ admin, auth, data, mediaBucket }) {
   await prepareAdmin(admin, auth, { recent: true });
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'You cannot suspend yourself.', 'self_admin_action');
@@ -405,12 +425,21 @@ async function setUserSuspension({ admin, auth, data }) {
       actorUid: auth.uid,
     },
   }, { merge: true });
-  const hidden = suspended ? await hideUserContent({ admin, uid: user.uid }) : 0;
+  const privateProfile = await admin.firestore().doc(`users/${user.uid}`).get();
+  if (privateProfile.exists) {
+    await setMediaAvailability({
+      admin,
+      data: privateProfile.data(),
+      mediaBucket,
+      available: !suspended,
+      reason: suspended ? 'owner_suspended' : null,
+    });
+  }
+  const hidden = suspended ? await hideUserContent({ admin, uid: user.uid, mediaBucket }) : 0;
   if (suspended) {
     await admin.firestore().doc(`publicProfiles/${user.uid}`).delete().catch(() => {});
   } else {
-    const profile = await admin.firestore().doc(`users/${user.uid}`).get();
-    if (profile.exists) await syncPublicProfile(admin, user.uid, profile.data());
+    if (privateProfile.exists) await syncPublicProfile(admin, user.uid, privateProfile.data());
   }
   await audit({ admin, auth, action: suspended ? 'user_suspended' : 'user_unsuspended', target: { uid: user.uid }, reason, metadata: { hidden } });
   return { uid: user.uid, suspended, hidden };
@@ -456,49 +485,23 @@ async function deleteUserAsAdmin({ admin, auth, data, mediaBucket }) {
   const deletionKey = crypto.createHash('sha256').update(`delete-user:${user.uid}`).digest('base64url');
   const jobRef = db.doc(`system/moderation/jobs/${deletionKey}`);
   await jobRef.set({ type: 'delete_user', uid: user.uid, status: 'running', step: 'content', createdAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  const ownedContent = await deleteOwnedContent({ admin, uid: user.uid, mediaBucket });
-  await jobRef.set({ step: 'interactions', ownedContent, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  const interactions = await removeAuthoredInteractions({ admin, uid: user.uid });
-  const reports = await db.collectionGroup('reports').where('reporterId', '==', user.uid).get();
-  for (const entry of reports.docs) {
-    const caseRef = entry.ref.parent.parent;
-    await db.runTransaction(async (transaction) => {
-      const caseSnapshot = caseRef ? await transaction.get(caseRef) : null;
-      if (caseSnapshot?.exists) {
-        const caseData = caseSnapshot.data() || {};
-        const category = entry.data()?.category;
-        transaction.update(caseRef, {
-          reportCount: Math.max(0, Number(caseData.reportCount || 0) - 1),
-          uniqueCount24h: Math.max(0, Number(caseData.uniqueCount24h || 0) - (caseData.recentReporters?.[user.uid] ? 1 : 0)),
-          [`recentReporters.${user.uid}`]: admin.firestore.FieldValue.delete(),
-          ...(category ? { [`categoryCounts.${category}`]: Math.max(0, Number(caseData.categoryCounts?.[category] || 0) - 1) } : {}),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-      transaction.delete(entry.ref);
-    });
-  }
-  const userRef = db.doc(`users/${user.uid}`);
-  if (typeof db.recursiveDelete === 'function') await db.recursiveDelete(userRef);
-  else {
-    await Promise.all([
-      deleteQueryInBatches(db, () => userRef.collection('favorites')),
-      deleteQueryInBatches(db, () => userRef.collection('notifications')),
-      deleteQueryInBatches(db, () => userRef.collection('blockedUsers')),
-      deleteQueryInBatches(db, () => userRef.collection('serverState')),
-    ]);
-    await userRef.delete().catch(() => {});
-  }
-  await db.doc(`publicProfiles/${user.uid}`).delete().catch(() => {});
-  if (mediaBucket) {
-    const bucket = admin.storage().bucket(mediaBucket);
-    await Promise.all([
-      bucket.deleteFiles({ prefix: `media/${user.uid}/`, force: true }),
-      bucket.deleteFiles({ prefix: `media-staging/${user.uid}/`, force: true }),
-    ]);
-  }
-  await admin.auth().deleteUser(user.uid);
-  await audit({ admin, auth, action: 'user_deleted', target: { uid: 'deleted-user' }, reason, metadata: { ownedContent, interactions, purgedReports: reports.size } });
+  const deletion = await deleteAccountInternal({
+    admin,
+    uid: user.uid,
+    mediaBucket,
+  });
+  await audit({
+    admin,
+    auth,
+    action: 'user_deleted',
+    target: { uid: 'deleted-user' },
+    reason,
+    metadata: {
+      ownedContent: deletion.ownedContent,
+      interactions: deletion.interactions,
+      purgedReports: deletion.purgedReports,
+    },
+  });
   await jobRef.set({
     uid: admin.firestore.FieldValue.delete(),
     subjectHash: deletionKey,

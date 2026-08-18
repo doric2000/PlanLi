@@ -75,6 +75,8 @@ describe('Favorites blue header', () => {
 
     const header = screen.getByTestId('favorites-tab-header');
     expect(within(header).getByTestId('favorites-header-tabs')).toBeTruthy();
+    expect(within(header).queryByText('טיולים')).toBeNull();
+    expect(within(header).getByText('מסלולים')).toBeTruthy();
     expect(screen.getByTestId('favorite-destinations-list')).toBeTruthy();
     expect(mockFavoriteRecommendationsFull).toHaveBeenLastCalledWith({ enabled: false });
     expect(mockFavoriteRoadTripsFull).toHaveBeenLastCalledWith({ enabled: false });

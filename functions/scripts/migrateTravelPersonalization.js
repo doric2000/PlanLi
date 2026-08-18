@@ -740,9 +740,9 @@ async function seedActivity(db, options, checkpoint, rollbackPath, report) {
     const targetPath = data.target?.path;
     const isRecommendation = typeof targetPath === 'string' && targetPath.startsWith('recommendations/');
     const isRoute = typeof targetPath === 'string' && targetPath.startsWith('routes/');
-    const isCity = typeof targetPath === 'string' && /^countries\/[^/]+\/cities\/[^/]+$/.test(targetPath);
+    const isCity = typeof targetPath === 'string' && /^countries\/[^/]+\/destinations\/[^/]+$/.test(targetPath);
     if (!isRecommendation && !isRoute && !isCity) return;
-    const delta = data.type === 'city' || targetPath?.includes('/cities/') ? 6 : 5;
+    const delta = data.type === 'city' || targetPath?.includes('/destinations/') ? 6 : 5;
     add(userId, targetPath, delta, 'historical-favorite');
   });
   likes.docs.forEach((document) => {

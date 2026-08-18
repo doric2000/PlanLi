@@ -22,7 +22,7 @@ function RequireAuthWrapper(ScreenComponent, capability = CAPABILITIES.SIGNED_IN
       requireCapability(capability, {
         name: props.route?.name || 'Main',
         params: props.route?.params,
-      });
+      }, { blockedRoute: true });
     }, [blocked, capability, loading, props.route?.name, props.route?.params, requireCapability]);
 
     if (loading) {

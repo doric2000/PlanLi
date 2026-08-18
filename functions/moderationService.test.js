@@ -8,6 +8,7 @@ const {
   evaluateTextSafety,
   normalizeReportInput,
   normalizeReportTarget,
+  setBlockedUser,
 } = require('./moderationService');
 
 test('normalizes every supported moderation target to a canonical path', () => {
@@ -51,4 +52,54 @@ test('text safety detects explicit severe and suspicious terms in Hebrew and Eng
   assert.equal(evaluateTextSafety('מסלול משפחתי ליד הים').safe, true);
   assert.equal(evaluateTextSafety('שלחו לי וואטסאפ לרווח מובטח').severity, 'suspicious');
   assert.equal(evaluateTextSafety('child porn').severity, 'severe');
+});
+
+test('blocking requires an active public target and enforces the per-user cap transactionally', async () => {
+  const makeAdmin = ({ targetExists = true, targetStatus = 'active', count = 0 } = {}) => {
+    const writes = [];
+    const db = {
+      doc(path) {
+        return { path };
+      },
+      runTransaction: async (handler) => handler({
+        get: async (ref) => {
+          if (ref.path === 'publicProfiles/target-1') {
+            return { exists: targetExists, data: () => ({ status: targetStatus }) };
+          }
+          if (ref.path.endsWith('/serverState/moderation')) {
+            return { exists: true, data: () => ({ blockedUserCount: count }) };
+          }
+          return { exists: false, data: () => null };
+        },
+        set: (ref, value, options) => writes.push({ type: 'set', path: ref.path, value, options }),
+        delete: (ref) => writes.push({ type: 'delete', path: ref.path }),
+      }),
+    };
+    return {
+      admin: {
+        firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'time' } }),
+      },
+      writes,
+    };
+  };
+
+  await assert.rejects(setBlockedUser({
+    admin: makeAdmin({ targetExists: false }).admin,
+    auth: { uid: 'user-1' },
+    data: { blockedUid: 'target-1', blocked: true },
+  }), (error) => error?.details?.reason === 'block_target_missing');
+  await assert.rejects(setBlockedUser({
+    admin: makeAdmin({ count: 250 }).admin,
+    auth: { uid: 'user-1' },
+    data: { blockedUid: 'target-1', blocked: true },
+  }), (error) => error?.details?.reason === 'block_limit_reached');
+
+  const fixture = makeAdmin({ count: 249 });
+  await setBlockedUser({
+    admin: fixture.admin,
+    auth: { uid: 'user-1' },
+    data: { blockedUid: 'target-1', blocked: true },
+  });
+  assert(fixture.writes.some((entry) => entry.path === 'users/user-1/blockedUsers/target-1'));
+  assert(fixture.writes.some((entry) => entry.value?.blockedUserCount === 250));
 });

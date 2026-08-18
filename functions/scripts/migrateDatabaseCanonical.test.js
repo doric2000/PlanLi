@@ -4,6 +4,8 @@ const admin = require('firebase-admin');
 const {
   canonicalBio,
   canonicalAsset,
+  canonicalCountryId,
+  canonicalDestinationId,
   compact,
   legacyDestinationKey,
   mappedCity,
@@ -32,6 +34,22 @@ test('stable destination IDs are deterministic and separated by type', () => {
   assert.equal(stableId('cty', 'IL'), stableId('cty', 'IL'));
   assert.notEqual(stableId('cty', 'IL'), stableId('city', 'IL'));
   assert.match(stableId('cty', 'IL'), /^cty_[A-Za-z0-9_-]{20}$/);
+});
+
+test('canonical destination documents keep their current stable ID', () => {
+  assert.equal(
+    canonicalDestinationId('destinations', 'dst_existing', 'TH'),
+    'dst_existing'
+  );
+  assert.match(
+    canonicalDestinationId('cities', 'legacy city', 'legacy country'),
+    /^city_[A-Za-z0-9_-]{20}$/
+  );
+});
+
+test('ISO country IDs remain canonical while legacy names map to their code', () => {
+  assert.equal(canonicalCountryId('TH', { code: 'TH' }), 'TH');
+  assert.equal(canonicalCountryId('ישראל', { code: 'IL' }), 'IL');
 });
 
 test('document IDs reject path separators and media requires all variants', () => {

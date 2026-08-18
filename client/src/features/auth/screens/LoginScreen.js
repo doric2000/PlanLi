@@ -34,7 +34,7 @@ export default function LoginScreen({ navigation }) {
       await runAuthTransition(async () => {
         await signInWithEmail(email, password);
         complete();
-      });
+      }, 'sign_in_email');
     } catch (loginError) {
       setError(formatAuthError(loginError));
     } finally {
@@ -51,7 +51,7 @@ export default function LoginScreen({ navigation }) {
         const bootstrap = await ensureAuthenticatedUserProfile(result.user, result.profile);
         if (bootstrap?.created) resetToRootRoute(navigation, 'CompleteAccount');
         else complete();
-      });
+      }, provider === 'apple' ? 'sign_in_apple' : 'sign_in_google');
     } catch (socialError) {
       if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
     } finally {

@@ -35,6 +35,8 @@ const unverifiedClaims = {
   email_verified: false,
   firebase: { sign_in_provider: 'password' },
 };
+const ACTIVE_ASSET_ID = '123e4567-e89b-42d3-a456-426614174000';
+const UNREGISTERED_ASSET_ID = '123e4567-e89b-42d3-a456-426614174001';
 
 test.before(async () => {
   if (!hasEmulators) return;
@@ -60,10 +62,11 @@ test.beforeEach(async () => {
       onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: new Date() },
       legal: {
         termsVersion: '2026-08-15-community-safety',
-        privacyVersion: '2026-08-15-community-safety',
+        privacyVersion: '2026-08-18-beta-observability',
         acceptedAt: new Date(),
       },
       smartProfile: { setupRequired: false, completedAt: new Date() },
+      moderation: { status: 'active' },
     });
     await setDoc(doc(db, 'users', 'incomplete'), {
       uid: 'incomplete',
@@ -72,8 +75,13 @@ test.beforeEach(async () => {
       smartProfile: { setupRequired: true },
     });
     await setDoc(doc(db, 'publicProfiles', 'owner'), {
-      displayName: 'Public owner',
+      displayName: 'Public owner', status: 'active',
     });
+    await setDoc(doc(db, 'system', 'media', 'assets', ACTIVE_ASSET_ID), {
+      status: 'active', ownerUid: 'owner',
+    });
+    await setDoc(doc(db, 'system', 'moderation', 'admins', 'active-admin'), { active: true });
+    await setDoc(doc(db, 'system', 'moderation', 'admins', 'inactive-admin'), { active: false });
     await setDoc(doc(db, 'countries', 'cty_il'), {
       name: 'Israel', code: 'IL', status: 'active',
     });
@@ -140,7 +148,7 @@ test.beforeEach(async () => {
     });
 
     const storage = context.storage();
-    await uploadBytes(ref(storage, 'media/owner/asset/large.webp'), new Uint8Array([1, 2, 3]), {
+    await uploadBytes(ref(storage, `media/owner/${ACTIVE_ASSET_ID}/large.webp`), new Uint8Array([1, 2, 3]), {
       contentType: 'image/webp',
     });
   });
@@ -155,6 +163,17 @@ test('public active documents are readable while private and deleting documents 
   await assertSucceeds(getDoc(doc(db, 'publicProfiles', 'owner')));
   await assertFails(getDoc(doc(db, 'users', 'owner')));
   await assertFails(getDoc(doc(db, 'system', 'accountDeletion', 'jobs', 'private')));
+});
+
+test('an admin claim also requires an active server-owned admin registry entry', {
+  skip: !hasEmulators,
+}, async () => {
+  const active = env.authenticatedContext('active-admin', { admin: true }).firestore();
+  const inactive = env.authenticatedContext('inactive-admin', { admin: true }).firestore();
+  const missing = env.authenticatedContext('missing-admin', { admin: true }).firestore();
+  await assertSucceeds(getDoc(doc(active, 'users', 'owner')));
+  await assertFails(getDoc(doc(inactive, 'users', 'owner')));
+  await assertFails(getDoc(doc(missing, 'users', 'owner')));
 });
 
 test('social children inherit their parent publication state', {
@@ -323,12 +342,13 @@ test('notification queries are owner-only and bounded', {
   )));
 });
 
-test('storage accepts only active owned JPEG staging creates', {
+test('storage accepts active owned JPEG staging creates without a tester allowlist', {
   skip: !hasEmulators,
 }, async () => {
   const ownerStorage = env.authenticatedContext('owner', verifiedClaims).storage();
   const unverifiedStorage = env.authenticatedContext('owner', unverifiedClaims).storage();
   const incompleteStorage = env.authenticatedContext('incomplete', verifiedClaims).storage();
+  const missingProfileStorage = env.authenticatedContext('missing-profile', verifiedClaims).storage();
   const validPath = 'media-staging/owner/123e4567-e89b-42d3-a456-426614174000.jpg';
   const metadata = {
     contentType: 'image/jpeg',
@@ -336,6 +356,11 @@ test('storage accepts only active owned JPEG staging creates', {
   };
   await assertSucceeds(uploadBytes(ref(ownerStorage, validPath), new Uint8Array([1, 2, 3]), metadata));
   await assertFails(uploadBytes(ref(ownerStorage, validPath), new Uint8Array([4]), metadata));
+  await assertFails(uploadBytes(
+    ref(missingProfileStorage, 'media-staging/missing-profile/123e4567-e89b-42d3-a456-426614174005.jpg'),
+    new Uint8Array([1]),
+    { contentType: 'image/jpeg', customMetadata: { ownerUid: 'missing-profile', variant: 'staging' } }
+  ));
   await assertFails(uploadBytes(
     ref(unverifiedStorage, 'media-staging/owner/123e4567-e89b-42d3-a456-426614174001.jpg'),
     new Uint8Array([1]), metadata
@@ -355,17 +380,92 @@ test('storage accepts only active owned JPEG staging creates', {
   ));
 });
 
-test('final media permits public get but never list or client mutation', {
+test('registered active media permits public get but never list or client mutation', {
   skip: !hasEmulators,
 }, async () => {
   const anonymousStorage = env.unauthenticatedContext().storage();
   const ownerStorage = env.authenticatedContext('owner', verifiedClaims).storage();
-  const mediaRef = ref(anonymousStorage, 'media/owner/asset/large.webp');
+  const mediaRef = ref(anonymousStorage, `media/owner/${ACTIVE_ASSET_ID}/large.webp`);
   await assertSucceeds(getBytes(mediaRef));
-  await assertFails(listAll(ref(anonymousStorage, 'media/owner/asset')));
+  await assertFails(listAll(ref(anonymousStorage, `media/owner/${ACTIVE_ASSET_ID}`)));
   await assertFails(uploadBytes(
     ref(ownerStorage, 'media/owner/other/large.webp'),
     new Uint8Array([1]), { contentType: 'image/webp' }
   ));
-  await assertFails(deleteObject(ref(ownerStorage, 'media/owner/asset/large.webp')));
+  await assertFails(deleteObject(ref(ownerStorage, `media/owner/${ACTIVE_ASSET_ID}/large.webp`)));
+});
+
+test('held canonical media is no longer publicly readable through Storage Rules', {
+  skip: !hasEmulators,
+}, async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'system', 'media', 'assets', ACTIVE_ASSET_ID), {
+      status: 'held', ownerUid: 'owner',
+    });
+  });
+  const anonymousStorage = env.unauthenticatedContext().storage();
+  await assertFails(getBytes(ref(anonymousStorage, `media/owner/${ACTIVE_ASSET_ID}/large.webp`)));
+});
+
+test('unregistered canonical media is not publicly readable', {
+  skip: !hasEmulators,
+}, async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await uploadBytes(
+      ref(context.storage(), `media/owner/${UNREGISTERED_ASSET_ID}/large.webp`),
+      new Uint8Array([1, 2, 3]),
+      { contentType: 'image/webp' }
+    );
+  });
+  const anonymousStorage = env.unauthenticatedContext().storage();
+  await assertFails(getBytes(ref(anonymousStorage, `media/owner/${UNREGISTERED_ASSET_ID}/large.webp`)));
+});
+
+test('a registry entry cannot publish media under a different owner path', {
+  skip: !hasEmulators,
+}, async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await uploadBytes(
+      ref(context.storage(), `media/other/${ACTIVE_ASSET_ID}/large.webp`),
+      new Uint8Array([1, 2, 3]),
+      { contentType: 'image/webp' }
+    );
+  });
+  const anonymousStorage = env.unauthenticatedContext().storage();
+  await assertFails(getBytes(ref(anonymousStorage, `media/other/${ACTIVE_ASSET_ID}/large.webp`)));
+});
+
+test('the media registry publishes only canonical image variants', {
+  skip: !hasEmulators,
+}, async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await uploadBytes(
+      ref(context.storage(), `media/owner/${ACTIVE_ASSET_ID}/original.jpg`),
+      new Uint8Array([1, 2, 3]),
+      { contentType: 'image/jpeg' }
+    );
+  });
+  const anonymousStorage = env.unauthenticatedContext().storage();
+  await assertFails(getBytes(ref(anonymousStorage, `media/owner/${ACTIVE_ASSET_ID}/original.jpg`)));
+});
+
+test('legacy user-media prefixes are no longer public', {
+  skip: !hasEmulators,
+}, async () => {
+  const paths = [
+    'optimized/old.webp',
+    'profilePicture/owner/avatar.jpg',
+    'recommendations/owner/old.jpg',
+    'routes/owner/old.jpg',
+    'trips/owner/old.jpg',
+  ];
+  await env.withSecurityRulesDisabled(async (context) => {
+    await Promise.all(paths.map((path) => uploadBytes(
+      ref(context.storage(), path),
+      new Uint8Array([1, 2, 3]),
+      { contentType: 'image/jpeg' }
+    )));
+  });
+  const anonymousStorage = env.unauthenticatedContext().storage();
+  await Promise.all(paths.map((path) => assertFails(getBytes(ref(anonymousStorage, path)))));
 });

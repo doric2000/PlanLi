@@ -7,7 +7,13 @@ service cloud.firestore {
 
     function admin() {
       return signedIn()
-        && request.auth.token.admin == true;
+        && request.auth.token.admin == true
+        && exists(
+          /databases/$(database)/documents/system/moderation/admins/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/system/moderation/admins/$(request.auth.uid)
+        ).data.active == true;
     }
 
     function bounded(maximum) {
@@ -195,7 +201,7 @@ service cloud.firestore {
     }
 
     match /publicProfiles/{userId} {
-      allow get: if true;
+      allow get: if resource.data.status == 'active';
       allow list, write: if false;
     }
 

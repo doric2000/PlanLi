@@ -28,7 +28,6 @@ import {
 } from '../../../styles';
 import FabButton from '../../../components/FabButton';
 import { RouteCard } from '../components/RouteCard';
-import { GenerateTripCard } from '../components/GenerateTripCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import ActiveRouteFiltersList from '../components/ActiveRouteFiltersList';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
@@ -218,7 +217,6 @@ export default function RoutesScreen({ navigation }) {
               onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)}
               onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed" />
           )}
-          ListHeaderComponent={<View style={styles.generateCardWrap}><GenerateTripCard onPress={() => Alert.alert('יצירת מסלול אוטומטי בקרוב!')} /></View>}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[colors.primary]} tintColor={colors.primary} />}
           ListEmptyComponent={<View style={common.emptyState}><Ionicons name="trail-sign-outline" size={50} color={colors.textMuted} />
             <AppText style={common.emptyText}>{error

@@ -2,9 +2,12 @@ const crypto = require('crypto');
 const sharp = require('sharp');
 const { HttpsError } = require('firebase-functions/v2/https');
 
-const CACHE_CONTROL = 'public,max-age=31536000,immutable';
+const CACHE_CONTROL = 'public,max-age=300,must-revalidate';
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_PIXELS = 40 * 1000 * 1000;
+const MEDIA_MINUTE_MAXIMUM = 6;
+const MEDIA_DAY_MAXIMUM = 40;
+const MEDIA_DAY_BYTES_MAXIMUM = 250 * 1024 * 1024;
 const STAGING_PATH_PATTERN =
   /^media-staging\/([^/]+)\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.jpg$/i;
 const FINAL_PATH_PATTERN =
@@ -207,11 +210,39 @@ async function removeFiles(files) {
   );
 }
 
+async function consumeMediaProcessingBudget({ admin, uid, sourceBytes, nowMs = Date.now() }) {
+  const db = admin.firestore();
+  const ref = db.doc(`users/${uid}/serverState/mediaProcessingBudget`);
+  const minuteWindow = Math.floor(nowMs / 60_000);
+  const dayWindow = Math.floor(nowMs / 86_400_000);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const previous = snapshot.exists ? snapshot.data() || {} : {};
+    const minuteCount = previous.minuteWindow === minuteWindow
+      ? Number(previous.minuteCount || 0)
+      : 0;
+    const dayCount = previous.dayWindow === dayWindow ? Number(previous.dayCount || 0) : 0;
+    const dayBytes = previous.dayWindow === dayWindow ? Number(previous.dayBytes || 0) : 0;
+    assert(minuteCount < MEDIA_MINUTE_MAXIMUM, 'resource-exhausted', 'Too many images are being processed. Try again shortly.');
+    assert(dayCount < MEDIA_DAY_MAXIMUM, 'resource-exhausted', 'The daily image-processing limit was reached.');
+    assert(dayBytes + sourceBytes <= MEDIA_DAY_BYTES_MAXIMUM, 'resource-exhausted', 'The daily image-processing size limit was reached.');
+    transaction.set(ref, {
+      minuteWindow,
+      minuteCount: minuteCount + 1,
+      dayWindow,
+      dayCount: dayCount + 1,
+      dayBytes: dayBytes + sourceBytes,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: false });
+  });
+}
+
 async function prepareMedia({
   admin,
   auth,
   data,
   mediaBucket,
+  nowMs = Date.now(),
 }) {
   const preparationStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -253,6 +284,8 @@ async function prepareMedia({
     'invalid-argument',
     'Staging image is too large.'
   );
+
+  await consumeMediaProcessingBudget({ admin, uid: auth.uid, sourceBytes, nowMs });
 
   const [sourceBuffer] = await stagingFile.download();
   let sourceInfo;
@@ -396,11 +429,15 @@ module.exports = {
   FINAL_PATH_PATTERN,
   MAX_SOURCE_BYTES,
   MAX_SOURCE_PIXELS,
+  MEDIA_DAY_BYTES_MAXIMUM,
+  MEDIA_DAY_MAXIMUM,
+  MEDIA_MINUTE_MAXIMUM,
   MEDIA_PRESETS,
   STAGING_PATH_PATTERN,
   buildDownloadUrl,
   cleanupPreparedMedia,
   collectCanonicalMediaAssets,
+  consumeMediaProcessingBudget,
   createPlaceholder,
   encodeVariant,
   getMediaBucket,

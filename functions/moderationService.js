@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { buildModerationPreview, preserveReportedPreview } = require('./moderationPreview');
+const { setMediaAvailability } = require('./mediaModeration');
 
 const REPORT_CATEGORIES = Object.freeze([
   'inaccurate_or_unsafe_travel_info',
@@ -29,6 +30,8 @@ const TARGET_COLLECTIONS = Object.freeze({
 const REPORT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const AUTO_HOLD_THRESHOLD = 3;
 const REPORT_RATE_LIMIT = { max: 20, windowMs: 24 * 60 * 60 * 1000 };
+const BLOCK_LIMIT = 250;
+const BLOCK_MUTATION_RATE_LIMIT = { max: 60, windowMs: 24 * 60 * 60 * 1000 };
 
 function fail(code, message, reason) {
   throw new HttpsError(code, message, { reason });
@@ -89,7 +92,7 @@ function targetOwner(target, data) {
   return target.type === 'profile' ? target.id : data?.ownerId || data?.authorId || null;
 }
 
-async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
+async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now() }) {
   if (!auth?.uid) fail('unauthenticated', 'Sign in is required.', 'sign_in_required');
   const { target, category, details } = normalizeReportInput(data);
   const db = admin.firestore();
@@ -111,6 +114,7 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
   const caseRef = db.doc(`system/moderation/cases/${caseId}`);
   const reportRef = caseRef.collection('reports').doc(auth.uid);
   let held = false;
+  let heldTargetData = null;
 
   await db.runTransaction(async (transaction) => {
     const parentRef = target.type === 'comment'
@@ -151,6 +155,7 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
     const uniqueCount24h = Object.keys(recentReporters).length;
     held = POST_TYPES.has(target.type) && uniqueCount24h >= AUTO_HOLD_THRESHOLD
       && targetData.status === 'active';
+    if (held) heldTargetData = targetData;
 
     transaction.set(caseRef, {
       caseId,
@@ -194,6 +199,15 @@ async function submitReport({ admin, auth, data, nowMs = Date.now() }) {
       });
     }
   });
+  if (held && heldTargetData) {
+    await setMediaAvailability({
+      admin,
+      data: heldTargetData,
+      mediaBucket,
+      available: false,
+      reason: 'community_reports',
+    });
+  }
   const admins = await db.collection('system/moderation/admins').where('active', '==', true).limit(50).get();
   if (!admins.empty) {
     const batch = db.batch();
@@ -219,12 +233,49 @@ async function setBlockedUser({ admin, auth, data }) {
   const blockedUid = cleanId(data?.blockedUid, 'blockedUid');
   if (blockedUid === auth.uid) fail('failed-precondition', 'You cannot block yourself.', 'self_block');
   if (typeof data?.blocked !== 'boolean') fail('invalid-argument', 'blocked must be boolean.', 'invalid_block_state');
-  const ref = admin.firestore().doc(`users/${auth.uid}/blockedUsers/${blockedUid}`);
-  if (data.blocked) {
-    await ref.set({ blockedUid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-  } else {
-    await ref.delete();
-  }
+  const db = admin.firestore();
+  const ref = db.doc(`users/${auth.uid}/blockedUsers/${blockedUid}`);
+  const stateRef = db.doc(`users/${auth.uid}/serverState/moderation`);
+  const targetRef = db.doc(`publicProfiles/${blockedUid}`);
+  const nowMs = Date.now();
+  await db.runTransaction(async (transaction) => {
+    const [existing, state, target] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(stateRef),
+      data.blocked ? transaction.get(targetRef) : Promise.resolve(null),
+    ]);
+    if (data.blocked && (!target?.exists || target.data()?.status !== 'active')) {
+      fail('not-found', 'The account to block is unavailable.', 'block_target_missing');
+    }
+    const previous = state.exists ? state.data() || {} : {};
+    const inWindow = nowMs - Number(previous.blockWindowStartedAtMs || 0)
+      < BLOCK_MUTATION_RATE_LIMIT.windowMs;
+    const mutations = inWindow ? Number(previous.blockMutationCount || 0) : 0;
+    if (mutations >= BLOCK_MUTATION_RATE_LIMIT.max) {
+      fail('resource-exhausted', 'Too many block-list changes.', 'block_rate_limited');
+    }
+    let currentCount = Math.max(0, Number(previous.blockedUserCount || 0));
+    if (!state.exists) {
+      const existingBlocks = await transaction.get(ref.parent.limit(BLOCK_LIMIT + 1));
+      currentCount = existingBlocks.size;
+    }
+    const adding = data.blocked && !existing.exists;
+    const removing = !data.blocked && existing.exists;
+    if (adding && currentCount >= BLOCK_LIMIT) {
+      fail('resource-exhausted', 'The blocked-user limit was reached.', 'block_limit_reached');
+    }
+    if (adding) {
+      transaction.set(ref, { blockedUid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    } else if (removing) {
+      transaction.delete(ref);
+    }
+    transaction.set(stateRef, {
+      blockedUserCount: adding ? currentCount + 1 : removing ? Math.max(0, currentCount - 1) : currentCount,
+      blockMutationCount: mutations + 1,
+      blockWindowStartedAtMs: inWindow ? previous.blockWindowStartedAtMs : nowMs,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
   return { blocked: data.blocked, blockedUid };
 }
 
@@ -249,6 +300,7 @@ function evaluateTextSafety(fields) {
 
 module.exports = {
   AUTO_HOLD_THRESHOLD,
+  BLOCK_LIMIT,
   DETAILS_REQUIRED,
   REPORT_CATEGORIES,
   REPORT_WINDOW_MS,

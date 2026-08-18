@@ -18,6 +18,22 @@ test('admin operations require an explicit admin claim', () => {
   assert.doesNotThrow(() => assertAdmin({ uid: 'admin', token: { admin: true } }));
 });
 
+test('an admin claim is rejected when the server-owned registry is missing or inactive', async () => {
+  for (const registry of [null, { active: false }]) {
+    const admin = {
+      firestore: () => ({
+        doc: () => ({
+          get: async () => ({ exists: Boolean(registry), data: () => registry }),
+        }),
+      }),
+    };
+    await assert.rejects(
+      getModerationDashboard({ admin, auth: { uid: 'admin-1', token: { admin: true } } }),
+      (error) => error?.details?.reason === 'admin_required'
+    );
+  }
+});
+
 test('destructive admin operations require recent authentication', () => {
   assert.doesNotThrow(() => assertRecentAuth({ token: { auth_time: Math.floor(Date.now() / 1000) } }));
   assert.throws(
@@ -36,7 +52,7 @@ test('dashboard uses Firestore counters without requesting Firebase Auth access'
   };
   const offsets = new Map();
   const db = {
-    doc: () => ({ get: async () => ({ exists: true }) }),
+    doc: () => ({ get: async () => ({ exists: true, data: () => ({ active: true }) }) }),
     collection(name) {
       const query = {
         where: () => query,
@@ -70,7 +86,7 @@ test('report queue requests only unresolved cases by default', async () => {
   };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       throw new Error(`Unexpected Firestore path: ${path}`);
     },
     collection(path) {
@@ -93,7 +109,7 @@ test('dismissing a report resolves its case without rewriting published content'
   const target = { type: 'recommendation', id: 'rec-1' };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       if (path === 'system/moderation/cases/case-1') return {
         get: async () => ({ exists: true, data: () => ({ target }) }),
         set: async (value) => { caseResolution = value; },
@@ -126,7 +142,7 @@ test('dismissing a report fails if the target became held after the row loaded',
   const target = { type: 'recommendation', id: 'rec-1' };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       if (path === 'system/moderation/cases/case-1') return {
         get: async () => ({ exists: true, data: () => ({ target, status: 'auto_held' }) }),
         set: async () => { resolved = true; },
@@ -156,7 +172,7 @@ test('user search supports an exact display name after UID lookup is not applica
   };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       throw new Error(`Unexpected Firestore path: ${path}`);
     },
     collection(path) {
@@ -186,7 +202,7 @@ test('audit history hydrates legacy admin names from private profiles', async ()
   };
   const db = {
     doc(path) {
-      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true }) };
+      if (path === 'system/moderation/admins/admin-1') return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       return { path, id: path.split('/').pop() };
     },
     collection(path) {
@@ -245,7 +261,7 @@ test('email verification validates the audit reason before mutating Firebase Aut
   const db = {
     doc(path) {
       if (path === 'system/moderation/admins/admin-1') {
-        return { get: async () => ({ exists: true }) };
+        return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       }
       throw new Error(`Unexpected Firestore path: ${path}`);
     },
@@ -271,4 +287,13 @@ test('email verification validates the audit reason before mutating Firebase Aut
 test('user suspension callable declares a timeout suitable for bounded content cleanup', () => {
   const source = require('node:fs').readFileSync(require.resolve('./index'), 'utf8');
   assert.match(source, /exports\.setUserSuspension = callable\(\{[^}]*timeoutSeconds:\s*300[^}]*memory:\s*'1GiB'/s);
+});
+
+test('admin-panel account deletion uses the shared resumable account deletion workflow', () => {
+  const source = require('node:fs').readFileSync(require.resolve('./adminService'), 'utf8');
+  const start = source.indexOf('async function deleteUserAsAdmin');
+  const end = source.indexOf('async function listModerationAudit', start);
+  const block = source.slice(start, end);
+  assert.match(block, /deleteAccountInternal\(\{/);
+  assert.doesNotMatch(block, /deleteOwnedContent|auth\(\)\.deleteUser|bucket\.deleteFiles/);
 });

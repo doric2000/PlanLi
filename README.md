@@ -108,9 +108,10 @@ firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY --project planli-f0b12
 
 The current legal drafts are available in-app and are configured for Firebase
 Hosting at `https://planli-f0b12.web.app/terms` and
-`https://planli-f0b12.web.app/privacy`. They are not public until Hosting is
-explicitly deployed from an updated `main`, and they require legal review plus
-final contact details before a public release.
+`https://planli-f0b12.web.app/privacy`. The legal and support pages are already
+reachable on Firebase Hosting; their deployed version must still be compared
+with the release commit before every beta or store submission. They require
+legal review plus final contact details before a public release.
 
 Before App Store submission, publish the privacy URL, expose it inside the app,
 complete App Store Connect's data-practice answers, and retain in-app account
@@ -138,6 +139,204 @@ code before deleting the user's data. Deploy the updated Functions before
 distributing a client build that exposes Apple sign-in. Build and submission
 remain explicit release operations; merging source code does not perform them.
 
+## Open-registration TestFlight beta release
+
+The current release target is an **external TestFlight beta with open PlanLi
+registration**, not an App Store listing. PlanLi does not maintain a Firebase
+tester allowlist: anyone who receives the TestFlight invitation or public link
+may create an account. External distribution still requires Apple's Beta App
+Review and App Store Connect configuration. Testers install Apple's TestFlight
+app and then install PlanLi from the invitation or public link; no provisioning
+profile is installed manually.
+
+The beta is iPhone-only because iPad has not been exercised. The production EAS
+profile is pinned to the SDK 54 Xcode 26 image, uses store distribution, takes
+values from the EAS `production` environment and auto-increments the remote iOS
+build number. A production EAS build is suitable for both TestFlight and a later
+App Store version, but uploading it to App Store Connect does not publish a
+public listing.
+
+### Release configuration
+
+Before requesting an authorized production build, configure these EAS
+production values without committing them:
+
+- Existing public Firebase client values, the Google Web OAuth client ID and
+  the bundle-restricted native Maps keys described above.
+- `EXPO_PUBLIC_SENTRY_DSN` as a public client identifier.
+- `SENTRY_ORG` and `SENTRY_PROJECT` for symbolication.
+- `SENTRY_AUTH_TOKEN` as a sensitive EAS secret. Never place it in `app.json`,
+  `.env.example`, a build log or App Store Connect notes.
+
+Sentry is configured for beta crash/error diagnostics with a bounded 10%
+performance sample, 50 allowlisted breadcrumbs, and an error-only mobile replay
+buffer. Regular session replay, profiles, screenshots, view hierarchy, failed
+request capture and default PII remain disabled. Error replays mask all text,
+images and vector graphics and use low quality. The client attaches only the
+Firebase UID as a pseudonymous user identifier, removes request/extra data,
+allowlists diagnostic tags and device contexts, and redacts common email and
+credential patterns before sending an event. The EAS production build fails
+early if any Sentry value is missing, so a release cannot silently ship without
+symbolicated diagnostics.
+
+The updated privacy version is `2026-08-18-beta-observability`. Publish the matching
+Hosting policy and deploy the matching Functions and Storage Rules immediately
+before distributing the new client. This coordinated release is required
+because old clients cannot accept the new server-owned privacy version.
+
+Before enabling the production Sentry DSN, also enable Sentry's server-side
+default data scrubbing, prevent IP-address storage, add sensitive-field rules,
+disable public issue sharing, source fetching and join requests, and create
+alerts for new fatal and regressed issues. Require organization-wide two-factor
+authentication only after every current member has enrolled, because Sentry
+removes unenrolled members when the requirement is enabled. Those account
+settings cannot be enforced by the repository and must be verified from the
+Sentry project before the build.
+
+For App Store Connect privacy answers, the Sentry integration adds Crash Data,
+Performance Data, Other Diagnostic Data and error-only Product Interaction for
+App Functionality. Because events carry a Firebase UID, treat those categories
+as linked to the user unless final event inspection establishes otherwise; they
+are not used for tracking. Reconcile the rest of the existing PlanLi answers
+against the final binary and deployed behavior, including name, email, user ID,
+photos/text, travel preferences, saved/liked activity, reports, support messages,
+and any location or place-search data transmitted off-device. Do not copy these
+notes into App Store Connect without inspecting a real production-mode Sentry
+event and replay from the signed beta build.
+
+### Local and remote gates
+
+Run release checks on Node.js 22 from a clean release commit:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+npm.cmd ci
+npm.cmd run verify:ios-release
+npm.cmd test -- --runInBand
+npx.cmd expo export --platform ios --output-dir .expo-validation\ios-release
+
+cd ..\functions
+npm.cmd ci
+npm.cmd test
+npm.cmd run test:rules:emulator
+npm.cmd run audit-live
+```
+
+`verify:ios-release` checks the bundle ID, Firebase plist, app icon,
+permissions, native plugins, EAS profile, Sentry privacy controls and known
+debug markers. `audit-live` and the Rules emulator are read-only validation;
+they require the correct Firebase identity/project and do not authorize a
+deployment. Complete one release review against `main` after these checks.
+
+After local checks, manually exercise the signed build on a physical iPhone:
+
+- Email/password, Google and Apple sign-in, email verification, onboarding,
+  legal consent, sign-out and relaunch.
+- Location denied/allowed, photo library denied/limited/allowed and camera
+  denied/allowed.
+- Create, edit and delete a recommendation and route; like, comment, favorite,
+  report and block; verify held content is no longer public.
+- Account deletion for password, Google and Apple accounts, including a failed
+  recent-auth attempt and a successful retry.
+- Offline, slow-network, provider-limit and server-error states without raw
+  provider messages or permanent loading indicators.
+- One deliberate non-PII test exception in a release candidate, followed by
+  confirmation that its Sentry stack trace is symbolicated; remove the trigger
+  before the final build.
+
+Only after the gates pass and build authorization is given, create the EAS iOS
+production build. Only after separate submission authorization, upload that
+specific build to App Store Connect. First exercise it with the account owner,
+then submit the build and beta metadata for Apple's external Beta App Review.
+After approval, enable the external group and public link. Record the branch,
+commit, EAS build ID, iOS build number, review status and processing result. Do
+not use auto-submit for the first beta.
+
+### Beta operations and cost controls
+
+Provider-backed callables are limited to one instance each, four concurrent
+requests per instance, 10 weighted units per user/minute and 25 per user/day. This allows
+normal place selection while limiting accidental spend. Public discovery
+callables are also limited to one instance and ten concurrent requests each, in
+addition to their per-user/network request budgets. Configure a US$10
+Google Cloud billing budget and alerts, but remember that budget alerts do not
+stop charges. During the beta, check Functions errors, Sentry crashes, reports
+and the support inbox twice daily; acknowledge urgent safety reports within
+24 hours.
+
+There is no per-tester Firebase configuration. Signed-in callables are open to
+all authenticated accounts; actions that publish or modify content still
+require the existing identity-verification, current legal-consent, completed
+profile/preferences and active moderation-status checks. Staging uploads apply
+the same active-account gates plus ownership, filename, MIME type, metadata and
+20 MB size validation.
+
+Before release, resolve every issue reported by `audit-live` and the canonical
+database dry-run. Do not apply a partial canonical migration while it still
+reports unmapped destinations, categories, tags, or media. Then preview and
+explicitly authorize the account moderation backfill and admin registry:
+
+```powershell
+npm.cmd run backfill-account-moderation
+npm.cmd run backfill-account-moderation -- --apply
+npm.cmd run bootstrap-admin -- owner@example.com
+npm.cmd run bootstrap-admin -- owner@example.com --apply
+```
+
+`bootstrap-admin` is dry-run by default. Review the resolved UID before using
+`--apply`; the account must refresh its ID token afterwards. Next run the media
+availability backfill for every canonical media collection. Account moderation
+must run first so existing user images are not incorrectly registered as held:
+
+```powershell
+npm.cmd run backfill-media-availability -- --collection recommendations
+npm.cmd run backfill-media-availability -- --collection recommendations --apply
+```
+
+Repeat the media command for `routes`, `trips`, and `users`; it replaces legacy
+one-year cache metadata, creates the required registry entries and revokes
+tokens for already-held media.
+
+Only after all supported documents use canonical EU media, quarantine every
+legacy user-media prefix so old download tokens and public cache metadata are
+revoked; repeat the command for `optimized`, `profilePicture`, `recommendations`,
+`routes`, and `trips`:
+
+Do not apply quarantine until `audit-live` and a dry-run of `migrate-database`
+confirm that no supported document still references a legacy object. If either
+check reports a reference, migrate that document first; quarantine would make
+the legacy URL intentionally unreadable.
+
+```powershell
+npm.cmd run quarantine-legacy-media -- --prefix recommendations
+npm.cmd run quarantine-legacy-media -- --prefix recommendations --apply
+```
+
+Storage Rules deny legacy and unregistered media, so the account, canonical
+media, registry and quarantine migrations must finish successfully before the
+updated rules are deployed. Rebuild public projections only after eligible
+users have accepted the current legal versions:
+
+```powershell
+node scripts/backfillPublicProfiles.js
+node scripts/backfillPublicProfiles.js --apply
+```
+
+Use every command's reported `nextAfter` value with `--after` whenever it returns
+a full page; this applies to both the account-state and media-availability
+backfills. Use `nextPageToken` with `--page-token` for legacy-media quarantine.
+Continue until the relevant cursor is `null` for every collection and prefix.
+These are live writes and require separate migration authorization; every
+command without `--apply` is a read-only preview. Do not distribute the beta
+client until all migration and projection checks pass.
+
+Server-side image classification is intentionally excluded from this beta.
+User-generated content is instead covered by upload constraints, report/block
+flows, admin hold/removal controls, public-visibility status checks and a support
+contact. Verify those moderation flows in the signed build and describe them in
+the Beta App Review notes. Enable App Check only after valid iOS tokens are
+observed; it must not be enabled speculatively for the first build.
+
 ## Canonical data model
 
 The application has one database and media schema. There are no permanent
@@ -158,7 +357,7 @@ routes/{id}/likes/{uid}
 routes/{id}/comments/{commentId}
 
 trips/{id}
-countries/{countryId}/cities/{cityId}
+countries/{countryId}/destinations/{destinationId}
 
 users/{uid}/favorites/{sha256OfTargetPath}
 users/{uid}/notifications/{notificationId}

@@ -57,6 +57,19 @@ function isWithinAllowedPrefix(objectPath, allowedPrefixes) {
   );
 }
 
+function isMissingStorageObject(error) {
+  if (Array.isArray(error)) {
+    return error.length > 0 && error.every(isMissingStorageObject);
+  }
+  if (!error || typeof error !== 'object') return false;
+  if ([error.code, error.statusCode, error.response?.statusCode, error.response?.status]
+    .some((code) => Number(code) === 404)) return true;
+  if (Array.isArray(error.errors) && error.errors.length) {
+    return error.errors.every((entry) => entry?.reason === 'notFound' || Number(entry?.code) === 404);
+  }
+  return false;
+}
+
 async function removeManagedMediaPaths(admin, paths, { bucketName } = {}) {
   if (!paths.size) return;
   const bucket = admin.storage().bucket(bucketName);
@@ -65,7 +78,7 @@ async function removeManagedMediaPaths(admin, paths, { bucketName } = {}) {
       try {
         await bucket.file(objectPath).delete({ ignoreNotFound: true });
       } catch (error) {
-        if (error?.code === 404 || error?.code === '404') return;
+        if (isMissingStorageObject(error)) return;
         console.warn(`Failed to clean storage object ${objectPath}:`, error?.message || error);
         // Let the Firestore trigger retry transient Storage failures.
         throw error;
@@ -100,5 +113,6 @@ module.exports = {
   collectManagedMediaPaths,
   collectRetainedSourcePaths,
   isWithinAllowedPrefix,
+  isMissingStorageObject,
   removeManagedMediaPaths,
 };

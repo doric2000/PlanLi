@@ -52,7 +52,6 @@ export const useNotifications = () => {
     const unsubscribe = subscribeToNotifications(
       currentUser.uid,
       (fetchedNotifications) => {
-        console.log('Notifications received:', fetchedNotifications.length);
         setNotifications(fetchedNotifications.filter((item) => !isBlocked(item.actorId)));
         setLoading(false);
         setRefreshing(false);

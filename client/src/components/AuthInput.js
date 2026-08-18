@@ -15,6 +15,7 @@ export const AuthInput = ({
   keyboardType = 'default',
   autoCapitalize = 'none',
   testID,
+  editable = true,
 }) => {
   const [isSecure, setIsSecure] = useState(isPassword);
 
@@ -34,6 +35,7 @@ export const AuthInput = ({
           autoCapitalize={autoCapitalize}
           autoCorrect={false}
           testID={testID}
+          editable={editable}
         />
         {isPassword && (
           <TouchableOpacity onPress={() => setIsSecure(!isSecure)} style={forms.authEyeIcon}>

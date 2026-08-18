@@ -117,14 +117,8 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
         </View>
         {canManage ? (
           <ActionMenu
-              onEdit={() => {
-              handleEdit();
-            }}
-            onDelete={() => {
-              handleDelete();
-              console.log("DELETE CLICKED", item.id);
-              Alert.alert("DEBUG", "לחצת על מחיקה");
-            }}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
             title="ניהול המלצה"
           />
         ) : null}

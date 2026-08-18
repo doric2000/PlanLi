@@ -1,9 +1,19 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
-import { saveProfile, verifyPersistedSmartProfile } from '../src/services/ProfileService';
+import {
+  completeAccountSetup,
+  saveProfile,
+  verifyPersistedAccountSetup,
+  verifyPersistedSmartProfile,
+} from '../src/services/ProfileService';
 
 const mockCallable = jest.fn(() => Promise.resolve({ data: { ok: true } }));
+
+jest.mock('../src/services/ErrorReporting', () => ({
+  addDiagnosticBreadcrumb: jest.fn(),
+  captureDiagnosticException: jest.fn(),
+}));
 
 jest.mock('../src/config/firebase', () => ({
   auth: { currentUser: { uid: 'user-1' } },
@@ -87,5 +97,43 @@ describe('ProfileService smart-profile persistence', () => {
 
     await expect(saveProfile({ bio: 'חדש' }, { verifySmartProfile: false }))
       .rejects.toThrow('שירות הפרופיל אינו מעודכן');
+  });
+
+  it('accepts account setup only after the current legal versions are persisted', async () => {
+    const persisted = {
+      onboarding: {
+        profileDetailsVersion: 1,
+        profileDetailsCompletedAt: { seconds: 1 },
+      },
+      legal: {
+        termsVersion: '2026-08-15-community-safety',
+        privacyVersion: '2026-08-18-beta-observability',
+        acceptedAt: { seconds: 1 },
+      },
+    };
+    getDocFromServer.mockResolvedValue({ data: () => persisted });
+
+    await expect(completeAccountSetup({ displayName: 'Admin', acceptedLegal: true }))
+      .resolves.toEqual({ ok: true });
+    expect(verifyPersistedAccountSetup(persisted)).toBe(true);
+  });
+
+  it('stops the onboarding loop when an outdated callable writes old legal versions', async () => {
+    getDocFromServer.mockResolvedValue({
+      data: () => ({
+        onboarding: {
+          profileDetailsVersion: 1,
+          profileDetailsCompletedAt: { seconds: 1 },
+        },
+        legal: {
+          termsVersion: '2026-08-15-community-safety',
+          privacyVersion: '2026-08-15-community-safety',
+          acceptedAt: { seconds: 1 },
+        },
+      }),
+    });
+
+    await expect(completeAccountSetup({ displayName: 'Admin', acceptedLegal: true }))
+      .rejects.toMatchObject({ code: 'profile/account-setup-persistence-mismatch' });
   });
 });

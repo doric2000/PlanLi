@@ -68,6 +68,21 @@ function mappedCity(cityMap, countryId, cityId) {
     cityMap.get(legacyDestinationKey(countryId, cityId));
 }
 
+function canonicalDestinationId(collectionId, snapshotId, oldCountryId) {
+  if (collectionId === 'destinations') return snapshotId;
+  return snapshotId.startsWith('city_') && oldCountryId.startsWith('cty_')
+    ? snapshotId
+    : stableId('city', `${oldCountryId}/${snapshotId}`);
+}
+
+function canonicalCountryId(snapshotId, data = {}) {
+  const code = String(data.code || '').trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(code)) return code;
+  return snapshotId.startsWith('cty_')
+    ? snapshotId
+    : stableId('cty', snapshotId);
+}
+
 function canonicalAsset(asset) {
   if (!asset || typeof asset !== 'object') return null;
   if (asset.assetId && asset.large?.url && asset.feed?.url && asset.thumb?.url) return asset;
@@ -151,9 +166,10 @@ async function collectSource(db) {
     snapshotsForQuery(db.collection('trips')),
     snapshotsForQuery(db.collection('countries')),
   ]);
-  const cities = [];
+  const destinations = [];
   for (const country of countries) {
-    cities.push(...await snapshotsForQuery(country.ref.collection('cities')));
+    destinations.push(...await snapshotsForQuery(country.ref.collection('destinations')));
+    destinations.push(...await snapshotsForQuery(country.ref.collection('cities')));
   }
   const favorites = [];
   const notifications = [];
@@ -174,7 +190,7 @@ async function collectSource(db) {
     routes,
     trips,
     countries,
-    cities,
+    destinations,
     favorites,
     notifications,
     comments,
@@ -191,6 +207,7 @@ async function buildPlan(db, source) {
   const operations = [];
   const publicById = new Map(source.publicProfiles.map((entry) => [entry.id, entry.data()]));
   const countryMap = new Map();
+  const countryPriorityById = new Map();
   const cityMap = new Map();
   const countryDataById = new Map();
   const cityDataByPath = new Map();
@@ -198,25 +215,30 @@ async function buildPlan(db, source) {
 
   for (const countrySnapshot of source.countries) {
     const data = countrySnapshot.data() || {};
-    const countryId = countrySnapshot.id.startsWith('cty_')
-      ? countrySnapshot.id
-      : stableId('cty', data.code || countrySnapshot.id);
-    const next = compact({
-      name: data.name || countrySnapshot.id,
-      code: data.code || null,
-      region: data.region || null,
-      currencyCode: data.currencyCode ?? null,
-      travelFacts: data.travelFacts || undefined,
-      status: 'active',
-      updatedAt: data.updatedAt || data.createdAt || admin.firestore.Timestamp.now(),
-    });
+    const countryId = canonicalCountryId(countrySnapshot.id, data);
+    const isCanonical = countrySnapshot.id === countryId;
+    const next = isCanonical
+      ? compact({ ...data, code: data.code || countryId, status: data.status || 'active' })
+      : compact({
+        name: data.name || countrySnapshot.id,
+        code: data.code || null,
+        region: data.region || null,
+        currencyCode: data.currencyCode ?? null,
+        travelFacts: data.travelFacts || undefined,
+        status: 'active',
+        updatedAt: data.updatedAt || data.createdAt || admin.firestore.Timestamp.now(),
+      });
     countryMap.set(countrySnapshot.id, countryId);
     countryMap.set(String(countrySnapshot.id).trim(), countryId);
-    countryDataById.set(countryId, next);
-    operations.push(operation('set', `countries/${countryId}`, next, 'destinations'));
+    const priority = isCanonical ? 2 : countrySnapshot.id.startsWith('cty_') ? 1 : 0;
+    const previousPriority = countryPriorityById.get(countryId) ?? -1;
+    const selected = priority >= previousPriority ? next : countryDataById.get(countryId);
+    if (priority >= previousPriority) countryPriorityById.set(countryId, priority);
+    countryDataById.set(countryId, selected);
+    operations.push(operation('set', `countries/${countryId}`, selected, 'destinations'));
   }
 
-  for (const citySnapshot of source.cities) {
+  for (const citySnapshot of source.destinations) {
     const oldCountryId = citySnapshot.ref.parent.parent.id;
     const countryId = countryMap.get(oldCountryId) || countryMap.get(String(oldCountryId).trim());
     if (!countryId) {
@@ -224,33 +246,39 @@ async function buildPlan(db, source) {
       continue;
     }
     const data = citySnapshot.data() || {};
-    const cityId = citySnapshot.id.startsWith('city_') && oldCountryId.startsWith('cty_')
-      ? citySnapshot.id
-      : stableId('city', `${oldCountryId}/${citySnapshot.id}`);
+    const isCanonical = citySnapshot.ref.parent.id === 'destinations';
+    const cityId = canonicalDestinationId(
+      citySnapshot.ref.parent.id,
+      citySnapshot.id,
+      oldCountryId
+    );
     const googlePlaceIds = Array.from(new Set([
       ...(Array.isArray(data.providerIds?.googlePlaceIds) ? data.providerIds.googlePlaceIds : []),
       data.googlePlaceId,
     ].filter(Boolean)));
-    const next = compact({
-      name: data.name || citySnapshot.id,
-      description: data.description || '',
-      providerIds: { googlePlaceIds },
-      travelers: Number(data.travelers || 0),
-      imageUrl: data.imageUrl || null,
-      coordinates: data.coordinates || null,
-      closestAirport: data.closestAirport || null,
-      travelFacts: data.travelFacts || (data.closestAirport
-        ? { closestAirport: data.closestAirport }
-        : undefined),
-      countryName: countryDataById.get(countryId)?.name || '',
-      status: 'active',
-      stats: { recommendationCount: 0 },
-      updatedAt: data.updatedAt || data.createdAt || admin.firestore.Timestamp.now(),
-    });
+    const next = isCanonical
+      ? compact({ ...data, countryId, status: data.status || 'active' })
+      : compact({
+        name: data.name || citySnapshot.id,
+        description: data.description || '',
+        providerIds: { googlePlaceIds },
+        travelers: Number(data.travelers || 0),
+        imageUrl: data.imageUrl || null,
+        coordinates: data.coordinates || null,
+        closestAirport: data.closestAirport || null,
+        travelFacts: data.travelFacts || (data.closestAirport
+          ? { closestAirport: data.closestAirport }
+          : undefined),
+        countryId,
+        countryName: countryDataById.get(countryId)?.name || '',
+        status: 'active',
+        stats: { recommendationCount: 0 },
+        updatedAt: data.updatedAt || data.createdAt || admin.firestore.Timestamp.now(),
+      });
     cityMap.set(`${oldCountryId}/${citySnapshot.id}`, { countryId, cityId });
     cityMap.set(legacyDestinationKey(oldCountryId, citySnapshot.id), { countryId, cityId });
-    cityDataByPath.set(`countries/${countryId}/cities/${cityId}`, next);
-    operations.push(operation('set', `countries/${countryId}/cities/${cityId}`, next, 'destinations'));
+    cityDataByPath.set(`countries/${countryId}/destinations/${cityId}`, next);
+    operations.push(operation('set', `countries/${countryId}/destinations/${cityId}`, next, 'destinations'));
   }
 
   const commentsByParent = new Map();
@@ -293,7 +321,7 @@ async function buildPlan(db, source) {
       countryId: mapped.countryId,
       cityId: mapped.cityId,
       countryName: countryDataById.get(mapped.countryId)?.name || data.country || '',
-      cityName: cityDataByPath.get(`countries/${mapped.countryId}/cities/${mapped.cityId}`)?.name || data.location || '',
+      cityName: cityDataByPath.get(`countries/${mapped.countryId}/destinations/${mapped.cityId}`)?.name || data.location || '',
     } : null;
     const place = compact({
       ...(data.place || {}),
@@ -519,7 +547,7 @@ async function buildPlan(db, source) {
         type,
         id: mapped.cityId,
         countryId: mapped.countryId,
-        path: `countries/${mapped.countryId}/cities/${mapped.cityId}`,
+        path: `countries/${mapped.countryId}/destinations/${mapped.cityId}`,
       };
     } else if (type) {
       const id = data.target?.id || data.id;
@@ -596,7 +624,10 @@ async function buildPlan(db, source) {
         data.destination?.cityId === pathValue.split('/')[3]
     ).length;
     const existing = operations.find((entry) => entry.path === pathValue && entry.group === 'destinations');
-    if (existing) existing.data = { ...city, stats: { recommendationCount: count } };
+    if (existing) existing.data = {
+      ...city,
+      stats: { ...(city.stats || {}), recommendationCount: count },
+    };
   }
 
   const canonicalDestinationRoots = Array.from(countryDataById.keys()).map(
@@ -770,6 +801,8 @@ module.exports = {
   buildPlan,
   canonicalBio,
   canonicalAsset,
+  canonicalCountryId,
+  canonicalDestinationId,
   compact,
   legacyDestinationKey,
   mappedCity,

@@ -5,6 +5,7 @@ const {
   buildAllowedMediaPrefixes,
   cleanupRemovedMedia,
   collectManagedMediaPaths,
+  isMissingStorageObject,
 } = require('./mediaCleanup');
 
 const asset = (uid, id) => ({
@@ -100,4 +101,34 @@ test('cleanup surfaces transient Storage failures for trigger retry', async () =
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test('cleanup treats single and batched missing-object responses as idempotent success', async () => {
+  assert.equal(isMissingStorageObject({ code: 404 }), true);
+  assert.equal(isMissingStorageObject([
+    { code: 404 },
+    { response: { statusCode: 404 } },
+  ]), true);
+  assert.equal(isMissingStorageObject([{ code: 404 }, { code: 403 }]), false);
+
+  const admin = {
+    storage: () => ({
+      bucket: () => ({
+        file: () => ({
+          delete: async () => {
+            throw [{ code: 404 }, { response: { statusCode: 404 } }];
+          },
+        }),
+      }),
+    }),
+  };
+  await assert.doesNotReject(cleanupRemovedMedia(
+    admin,
+    { photoMedia: asset('u1', 'missing') },
+    null,
+    {
+      allowedPrefixes: buildAllowedMediaPrefixes('users', 'u1'),
+      bucketName: 'media-eu',
+    }
+  ));
 });

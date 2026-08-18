@@ -109,8 +109,6 @@ function CustomDrawerContent(props) {
         goToProfile({ openSupport: true });
         return;
       }
-
-      Alert.alert('בקרוב', 'הפיצ’ר הזה עדיין לא זמין');
       navigation.closeDrawer?.();
     },
     [navigation, rootStackNav, goToProfile, isGuest]

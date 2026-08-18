@@ -1,11 +1,20 @@
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
+import {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} from '../constants/authPolicy';
 import { TRAVEL_TAXONOMY_VERSION } from '../constants/travelTaxonomy';
 import {
   normalizeProfileBio,
   validateProfileBio,
 } from '../features/profile/utils/profileBio';
+import {
+  addDiagnosticBreadcrumb,
+  captureDiagnosticException,
+} from './ErrorReporting';
 
 let updateProfileCallable;
 let registerUserCallable;
@@ -14,6 +23,39 @@ let completeAccountSetupCallable;
 const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'needs'];
 const PROFILE_SCALAR_FIELDS = ['budget'];
 const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'];
+
+async function runProfileOperation(operation, callback) {
+  const startedAt = Date.now();
+  addDiagnosticBreadcrumb({
+    category: 'callable',
+    message: 'Profile operation started',
+    data: { operation, outcome: 'started' },
+  });
+  try {
+    const result = await callback();
+    addDiagnosticBreadcrumb({
+      category: 'callable',
+      message: 'Profile operation completed',
+      data: { operation, outcome: 'success', durationMs: Date.now() - startedAt },
+    });
+    return result;
+  } catch (error) {
+    addDiagnosticBreadcrumb({
+      category: 'callable',
+      message: 'Profile operation failed',
+      level: 'error',
+      data: {
+        operation,
+        outcome: 'error',
+        code: error?.code || 'unknown',
+        reason: error?.details?.reason || 'unknown',
+        durationMs: Date.now() - startedAt,
+      },
+    });
+    captureDiagnosticException(error, { operation, code: error?.code || 'unknown' });
+    throw error;
+  }
+}
 
 const sortedUnique = (values) => Array.from(new Set(Array.isArray(values) ? values : [])).sort();
 
@@ -52,6 +94,16 @@ export function verifyPersistedSmartProfile(requested, persisted, { complete = f
   return true;
 }
 
+export function verifyPersistedAccountSetup(userDocument) {
+  return Boolean(
+    userDocument?.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
+    && userDocument?.onboarding?.profileDetailsCompletedAt
+    && userDocument?.legal?.termsVersion === TERMS_VERSION
+    && userDocument?.legal?.privacyVersion === PRIVACY_VERSION
+    && userDocument?.legal?.acceptedAt
+  );
+}
+
 async function readBackSmartProfile(requested, { complete }) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('לא נמצא משתמש מחובר. התחברו מחדש ונסו שוב.');
@@ -68,7 +120,7 @@ async function readBackSmartProfile(requested, { complete }) {
 export const saveProfile = async (
   fields,
   { completeSmartProfile = false, verifySmartProfile = true } = {}
-) => {
+) => runProfileOperation('update_profile', async () => {
   updateProfileCallable ||= httpsCallable(cloudFunctions, 'updateProfile');
   const payload = Object.fromEntries(
     PROFILE_UPDATE_FIELDS
@@ -102,17 +154,28 @@ export const saveProfile = async (
     complete: completeSmartProfile,
   });
   return { ...(response.data || {}), smartProfile };
-};
+});
 
-export const registerUserDocument = async (fields = {}) => {
+export const registerUserDocument = async (fields = {}) => runProfileOperation('register_user', async () => {
   registerUserCallable ||= httpsCallable(cloudFunctions, 'registerUser');
   const response = await registerUserCallable(fields);
   return response.data;
-};
+});
 
-export const completeAccountSetup = async ({ displayName, acceptedLegal }) => {
+export const completeAccountSetup = async ({ displayName, acceptedLegal }) => runProfileOperation(
+  'complete_account_setup',
+  async () => {
   completeAccountSetupCallable ||= httpsCallable(cloudFunctions, 'completeAccountSetup');
   const response = await completeAccountSetupCallable({ displayName, acceptedLegal });
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('לא נמצא משתמש מחובר. התחברו מחדש ונסו שוב.');
+  const snapshot = await getDocFromServer(doc(db, 'users', uid));
+  if (!verifyPersistedAccountSetup(snapshot.data())) {
+    const error = new Error('שירות החשבון אינו מעודכן לגרסאות ההסכמה הנוכחיות.');
+    error.code = 'profile/account-setup-persistence-mismatch';
+    throw error;
+  }
   await auth.currentUser?.reload?.();
   return response.data;
-};
+  }
+);

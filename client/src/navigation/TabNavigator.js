@@ -57,8 +57,6 @@ export default function TabNavigator() {
     .map((name) => tabScreens.find((screen) => screen.name === name))
     .filter(Boolean);
 
-  console.log('Unread notification count in TabNavigator:', unreadCount);
-
   return (
     <Tab.Navigator
       initialRouteName="Home"

@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
 
 import AppText from '../../../components/AppText';
+import AppTextInput from '../../../components/AppTextInput';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
@@ -369,7 +370,7 @@ export default function AdminPanelScreen({ navigation }) {
         </View>)}
 
         {tab === 'users' ? <>
-          <TextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="חיפוש לפי שם מלא, אימייל או מזהה משתמש" autoCapitalize="none" onSubmitEditing={searchUsers} testID="admin-user-search-input" />
+          <AppTextInput style={styles.input} value={query} onChangeText={setQuery} placeholder="חיפוש לפי שם מלא, אימייל או מזהה משתמש" autoCapitalize="none" onSubmitEditing={searchUsers} testID="admin-user-search-input" />
           <View style={styles.actions}><Action label="חיפוש" testID="admin-user-search" busy={currentState.loading && users.length > 0} onPress={searchUsers} /><Action label="ניקוי" testID="admin-user-search-clear" onPress={() => { setQuery(''); activeQueryRef.current = ''; loadTab('users', { searchQuery: '' }); }} /></View>
           {users.map((item) => <View key={item.uid} style={styles.card} testID={`admin-user-${item.uid}`}>
             <AppText style={styles.cardTitle}>{item.displayName || 'ללא שם'}</AppText><AppText style={styles.body}>{item.email || item.uid}</AppText><AppText style={styles.body}>{item.disabled ? 'מושעה' : 'פעיל'} · {item.emailVerified ? 'אימייל מאומת' : 'אימייל לא מאומת'} · {item.admin ? 'מנהל' : 'משתמש'}</AppText>

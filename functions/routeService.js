@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { evaluateTextSafety } = require('./moderationService');
 const {
   isVerifiedCaller,
@@ -456,7 +457,7 @@ async function saveRoute({
       ? db.doc(`routes/${stableDocumentId('route', `${uid}:${publishRequestId}`)}`)
       : db.collection('routes').doc();
   const existingSnapshot = await routeRef.get();
-  const isAdmin = auth.token?.admin === true;
+  const isAdmin = routeId ? await hasActiveAdminAccess({ admin, auth }) : false;
   const existingRoute = routeId
     ? assertEditableRoute(existingSnapshot, uid, isAdmin)
     : null;

@@ -29,7 +29,7 @@ recommendations/{id}/{likes|comments}/{id}
 routes/{id}/days/{dayId}/stops/{stopId}
 routes/{id}/{likes|comments}/{id}
 trips/{id}
-countries/{countryId}/cities/{cityId}
+countries/{countryId}/destinations/{destinationId}
 users/{uid}/favorites/{sha256(target.path)}
 users/{uid}/notifications/{notificationId}
 users/{uid}/blockedUsers/{blockedUid}

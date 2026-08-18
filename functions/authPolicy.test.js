@@ -15,7 +15,7 @@ const activeUser = {
   onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
   legal: {
     termsVersion: '2026-08-15-community-safety',
-    privacyVersion: '2026-08-15-community-safety',
+    privacyVersion: '2026-08-18-beta-observability',
     acceptedAt: 'timestamp',
   },
   smartProfile: { setupRequired: false, completedAt: 'timestamp' },
@@ -39,13 +39,21 @@ const passwordAuth = (verified = true) => ({
   },
 });
 
-test('public and signed-in access do not require an active profile', async () => {
+test('public access does not require sign-in or an active profile', async () => {
   await assert.doesNotReject(authorizeRequest({
     admin: adminWithUser(null), auth: null, access: ACCESS_LEVELS.PUBLIC,
   }));
+});
+
+test('authenticated access is open to every signed-in account', async () => {
   await assert.doesNotReject(authorizeRequest({
     admin: adminWithUser(null), auth: passwordAuth(false), access: ACCESS_LEVELS.SIGNED_IN,
   }));
+  await assert.rejects(authorizeRequest({
+    admin: adminWithUser(null),
+    auth: null,
+    access: ACCESS_LEVELS.SIGNED_IN,
+  }), (error) => error?.details?.reason === AUTH_REASONS.SIGN_IN_REQUIRED);
 });
 
 test('active access returns structured reasons for every incomplete state', async () => {
@@ -121,5 +129,18 @@ test('every exported callable declares its access level', () => {
     const end = starts[index + 1]?.index || source.indexOf('exports.syncCountryMetadataScheduled');
     const block = source.slice(start, end);
     assert.match(block, /access:\s*'(public|signedIn|active)'/, `${starts[index][1]} is missing access`);
+  }
+});
+
+test('every public callable uses the bounded beta scaling policy', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  const starts = [...source.matchAll(/exports\.(\w+)\s*=\s*callable\(/g)];
+  for (let index = 0; index < starts.length; index += 1) {
+    const start = starts[index].index;
+    const end = starts[index + 1]?.index || source.indexOf('exports.syncCountryMetadataScheduled');
+    const block = source.slice(start, end);
+    if (/access:\s*'public'/.test(block)) {
+      assert.match(block, /\.\.\.PUBLIC_READ_OPTIONS/, `${starts[index][1]} is not scale-bounded`);
+    }
   }
 });

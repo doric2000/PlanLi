@@ -40,6 +40,23 @@ function profilePolicyError(code, message, reason) {
   throw new HttpsError(code, message, { reason });
 }
 
+function sanitizeProviderPhotoURL(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      parsed.protocol === 'https:'
+      && (hostname === 'googleusercontent.com' || hostname.endsWith('.googleusercontent.com'))
+    ) {
+      return parsed.toString().slice(0, 2000);
+    }
+  } catch {
+    // Reject malformed provider URLs.
+  }
+  return null;
+}
+
 function cleanOptionalBio(value) {
   if (value == null) return undefined;
   assert(typeof value === 'string', 'invalid-argument', 'bio must be a string.');
@@ -263,9 +280,7 @@ async function registerUser({ admin, auth, data }) {
   const requestedDisplayName = cleanOptionalName(
     data?.displayName || auth.token?.name || 'מטייל/ת PlanLi'
   );
-  const requestedPhotoURL = typeof data?.photoURL === 'string' && data.photoURL.startsWith('https://')
-    ? data.photoURL.slice(0, 2000)
-    : null;
+  const requestedPhotoURL = sanitizeProviderPhotoURL(data?.photoURL);
   const db = admin.firestore();
   const ref = db.doc(`users/${auth.uid}`);
   return db.runTransaction(async (transaction) => {
@@ -278,6 +293,7 @@ async function registerUser({ admin, auth, data }) {
         displayName: requestedDisplayName,
         photoURL: requestedPhotoURL,
         smartProfile: { setupRequired: true },
+        moderation: { status: 'active' },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
@@ -305,6 +321,9 @@ async function registerUser({ admin, auth, data }) {
       !existing.smartProfile.completedAt
     ) {
       patch.smartProfile = { ...existing.smartProfile, setupRequired: true };
+    }
+    if (!existing.moderation || typeof existing.moderation !== 'object') {
+      patch.moderation = { status: 'active' };
     }
     if (Object.keys(patch).length) {
       patch.updatedAt = admin.firestore.FieldValue.serverTimestamp();
@@ -336,13 +355,22 @@ async function completeAccountSetup({ admin, auth, data }) {
   const db = admin.firestore();
   const ref = db.doc(`users/${auth.uid}`);
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  await db.runTransaction(async (transaction) => {
+  const resolvedDisplayName = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const existing = snapshot.exists ? snapshot.data() || {} : {};
+    const existingDisplayName = typeof existing.displayName === 'string'
+      ? existing.displayName.trim()
+      : '';
+    const hasCompletedProfileDetails = Boolean(
+      existingDisplayName
+      && existing.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
+      && existing.onboarding?.profileDetailsCompletedAt
+    );
+    const storedDisplayName = hasCompletedProfileDetails ? existingDisplayName : displayName;
     transaction.set(ref, {
       uid: auth.uid,
       email: existing.email || auth.token?.email || '',
-      displayName,
+      displayName: storedDisplayName,
       photoURL: Object.prototype.hasOwnProperty.call(existing, 'photoURL')
         ? existing.photoURL
         : null,
@@ -359,13 +387,17 @@ async function completeAccountSetup({ admin, auth, data }) {
       smartProfile: existing.smartProfile && typeof existing.smartProfile === 'object'
         ? existing.smartProfile
         : { setupRequired: true },
+      moderation: existing.moderation && typeof existing.moderation === 'object'
+        ? existing.moderation
+        : { status: 'active' },
       ...(snapshot.exists ? {} : { createdAt: timestamp }),
       updatedAt: timestamp,
     }, { merge: true });
+    return storedDisplayName;
   });
-  await admin.auth().updateUser(auth.uid, { displayName });
+  await admin.auth().updateUser(auth.uid, { displayName: resolvedDisplayName });
   return {
-    displayName,
+    displayName: resolvedDisplayName,
     profileDetailsVersion: PROFILE_DETAILS_VERSION,
     termsVersion: TERMS_VERSION,
     privacyVersion: PRIVACY_VERSION,
@@ -377,6 +409,7 @@ module.exports = {
   cleanOptionalName,
   completeAccountSetup,
   registerUser,
+  sanitizeProviderPhotoURL,
   sanitizeSmartProfile,
   updateProfile,
 };

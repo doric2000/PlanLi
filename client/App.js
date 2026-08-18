@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
@@ -34,6 +35,7 @@ import { AuthProvider } from "./src/features/auth/AuthContext";
 import { BlockedUsersProvider } from "./src/features/moderation/BlockedUsersContext";
 import AuthGateModal from "./src/features/auth/components/AuthGateModal";
 import { CAPABILITIES } from "./src/constants/authPolicy";
+import { addDiagnosticBreadcrumb, setDiagnosticTag } from "./src/services/ErrorReporting";
 
 
 const Stack = createStackNavigator();
@@ -67,13 +69,29 @@ const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
  */
 export default function App() {
 	const initialRouteName = process.env.EXPO_PUBLIC_ADMIN_WEB === 'true' ? 'AdminPanel' : 'Main';
+	const previousRouteNameRef = useRef(null);
+	const recordCurrentRoute = () => {
+		const currentRouteName = navigationRef.getCurrentRoute()?.name;
+		if (!currentRouteName || previousRouteNameRef.current === currentRouteName) return;
+		setDiagnosticTag('screen', currentRouteName);
+		addDiagnosticBreadcrumb({
+			category: 'navigation',
+			message: 'Navigation route changed',
+			data: { from: previousRouteNameRef.current || 'initial', to: currentRouteName },
+		});
+		previousRouteNameRef.current = currentRouteName;
+	};
 	return (
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<AuthProvider navigationRef={navigationRef}>
 				 <BlockedUsersProvider>
 				 <ContentPublishProvider>
-				<NavigationContainer ref={navigationRef}>
+				<NavigationContainer
+					ref={navigationRef}
+					onReady={recordCurrentRoute}
+					onStateChange={recordCurrentRoute}
+				>
 				<Stack.Navigator
 					initialRouteName={initialRouteName}
 					screenOptions={rtlStackScreenOptions}

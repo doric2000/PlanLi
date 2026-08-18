@@ -1,8 +1,7 @@
-import { Animated, Easing, FlatList, Platform, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, Platform, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import EmptyState from '../../../components/EmptyState';
 import PageHeader from '../../../components/PageHeader';
 import SegmentedTabs from '../../../components/SegmentedTabs';
 import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
@@ -22,7 +21,6 @@ import { favoritesStyles as styles } from '../components/favoritesStyles';
 const TABS = [
   { key: 'destinations', label: 'יעדים', icon: 'place' },
   { key: 'recommendations', label: 'המלצות', icon: 'thumb-up' },
-  { key: 'trips', label: 'טיולים', icon: 'luggage' },
   { key: 'roadtrips', label: 'מסלולים', icon: 'map' },
 ];
 
@@ -39,7 +37,6 @@ export default function FavoritesScreen() {
   const citiesListRef = useRef(null);
   const recommendationsListRef = useRef(null);
   const roadTripsListRef = useRef(null);
-  const tripsListRef = useRef(null);
   const recsFull = useFavoriteRecommendationsFull({ enabled: activeTab === 'recommendations' });
   const roadFull = useFavoriteRoadTripsFull({ enabled: activeTab === 'roadtrips' });
 
@@ -47,7 +44,6 @@ export default function FavoritesScreen() {
     destinations: citiesListRef.current,
     recommendations: recommendationsListRef.current,
     roadtrips: roadTripsListRef.current,
-    trips: tripsListRef.current,
   })[activeTab], [activeTab]);
 
   const refresh = useCallback(() => {
@@ -169,15 +165,6 @@ export default function FavoritesScreen() {
           ) : null}
           {activeTab === 'roadtrips' ? (
             <FavoriteRoadTripsList favorites={roadFull.favorites} loading={roadFull.loading} flatListRef={roadTripsListRef} onScroll={onScroll} />
-          ) : null}
-          {activeTab === 'trips' ? (
-            <FlatList
-              ref={tripsListRef}
-              data={[]}
-              onScroll={onScroll}
-              contentContainerStyle={styles.listContent}
-              ListEmptyComponent={<EmptyState icon="map" title="טיולים חכמים — בקרוב" message="מתכנן הטיולים החכם יופיע כאן כשיהיה מוכן." />}
-            />
           ) : null}
         </Animated.View>
       </View>

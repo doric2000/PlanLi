@@ -371,7 +371,7 @@ function buildManifestEntry(snapshot, overrideRaw = {}) {
 function cityPath(data = {}) {
   const countryId = data.destination?.countryId;
   const cityId = data.destination?.cityId;
-  return countryId && cityId ? `countries/${countryId}/cities/${cityId}` : null;
+  return countryId && cityId ? `countries/${countryId}/destinations/${cityId}` : null;
 }
 
 function getCityCountDeltas(before = {}, after = {}) {

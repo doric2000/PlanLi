@@ -57,4 +57,17 @@ describe('PreferenceSetupGate auth state routing', () => {
     expect(screen.getByTestId('main-navigator')).toBeTruthy();
     expect(navigation.reset).not.toHaveBeenCalled();
   });
+
+  it('renders public navigation after an incomplete user chooses not now', () => {
+    mockStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+    const navigation = { reset: jest.fn() };
+    const screen = render(
+      <PreferenceSetupGate
+        navigation={navigation}
+        route={{ params: { allowIncomplete: true } }}
+      />
+    );
+    expect(screen.getByTestId('main-navigator')).toBeTruthy();
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
 });

@@ -14,19 +14,20 @@ service firebase.storage {
     }
 
     function activeAccount() {
-      let user = firestore.get(
-        /databases/(default)/documents/users/$(request.auth.uid)
-      ).data;
+      let userPath = /databases/(default)/documents/users/$(request.auth.uid);
+      let user = firestore.get(userPath);
       return verified()
-        && user.displayName is string
-        && user.displayName.size() >= 2
-        && user.onboarding.profileDetailsVersion == 1
-        && user.onboarding.profileDetailsCompletedAt != null
-        && user.legal.termsVersion == '2026-08-15-community-safety'
-        && user.legal.privacyVersion == '2026-08-15-community-safety'
-        && user.legal.acceptedAt != null
-        && user.smartProfile.setupRequired == false
-        && user.smartProfile.completedAt != null;
+        && firestore.exists(userPath)
+        && user.data.displayName is string
+        && user.data.displayName.size() >= 2
+        && user.data.onboarding.profileDetailsVersion == 1
+        && user.data.onboarding.profileDetailsCompletedAt != null
+        && user.data.legal.termsVersion == '2026-08-15-community-safety'
+        && user.data.legal.privacyVersion == '2026-08-18-beta-observability'
+        && user.data.legal.acceptedAt != null
+        && user.data.smartProfile.setupRequired == false
+        && user.data.smartProfile.completedAt != null
+        && user.data.moderation.status == 'active';
     }
 
     match /media-staging/{uid}/{fileName} {
@@ -46,7 +47,18 @@ service firebase.storage {
     }
 
     match /media/{uid}/{assetId}/{variantFile} {
-      allow get: if true;
+      allow get: if assetId.matches(
+          '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'
+        )
+        && variantFile in ['large.webp', 'feed.webp', 'thumb.webp']
+        && firestore.exists(
+          /databases/(default)/documents/system/media/assets/$(assetId)
+        ) && firestore.get(
+          /databases/(default)/documents/system/media/assets/$(assetId)
+        ).data.status == 'active'
+        && firestore.get(
+          /databases/(default)/documents/system/media/assets/$(assetId)
+        ).data.ownerUid == uid;
       allow list, write: if false;
     }
 
@@ -56,32 +68,6 @@ service firebase.storage {
     }
 
     match /countries/{path=**} {
-      allow get: if true;
-      allow list, write: if false;
-    }
-
-    // Existing public objects remain readable during the verified EU cutover.
-    match /optimized/{path=**} {
-      allow get: if true;
-      allow list, write: if false;
-    }
-
-    match /profilePicture/{path=**} {
-      allow get: if true;
-      allow list, write: if false;
-    }
-
-    match /recommendations/{path=**} {
-      allow get: if true;
-      allow list, write: if false;
-    }
-
-    match /routes/{path=**} {
-      allow get: if true;
-      allow list, write: if false;
-    }
-
-    match /trips/{path=**} {
       allow get: if true;
       allow list, write: if false;
     }

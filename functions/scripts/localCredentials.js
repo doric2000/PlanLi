@@ -38,12 +38,12 @@ function firebaseToolsLibDirectory() {
   throw new Error('Firebase CLI was not found. Install it and run `firebase login`.');
 }
 
-function firebaseCliAuthorizedUser() {
-  const directory = firebaseToolsLibDirectory();
+function firebaseCliAuthorizedUser(options = {}) {
+  const directory = options.directory || firebaseToolsLibDirectory();
   // eslint-disable-next-line import/no-dynamic-require, global-require
-  const auth = require(path.join(directory, 'auth.js'));
+  const auth = options.auth || require(path.join(directory, 'auth.js'));
   // eslint-disable-next-line import/no-dynamic-require, global-require
-  const api = require(path.join(directory, 'api.js'));
+  const api = options.api || require(path.join(directory, 'api.js'));
   const account = auth.getGlobalDefaultAccount();
   if (!account?.tokens?.refresh_token) {
     throw new Error('Run `firebase login` before running Admin maintenance scripts.');

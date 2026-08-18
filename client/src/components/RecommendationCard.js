@@ -247,13 +247,8 @@ const RecommendationCard = ({
         {canManage ? (
           <ActionMenu
             iconColor={overlay ? "#FFFFFF" : undefined}
-            onEdit={() => {
-              handleEdit();
-            }}
-            onDelete={() => {
-              handleDelete();
-              console.log("DELETE CLICKED", item.id);
-            }}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
             title="ניהול המלצה"
           />
         ) : null}
@@ -292,13 +287,8 @@ const RecommendationCard = ({
           />
           {canManage ? (
             <ActionMenu
-                onEdit={() => {
-                handleEdit();
-              }}
-              onDelete={() => {
-                handleDelete();
-                console.log("DELETE CLICKED", item.id);
-              }}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
               title="ניהול המלצה"
             />
           ) : null}

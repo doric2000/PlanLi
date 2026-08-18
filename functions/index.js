@@ -6,6 +6,7 @@ const { defineSecret, defineString } = require('firebase-functions/params');
 const {
   buildAllowedMediaPrefixes,
   cleanupRemovedMedia,
+  collectManagedMediaPaths,
 } = require('./mediaCleanup');
 const { publicProfileProjectionChanged, syncPublicProfile } = require('./publicProfiles');
 const {
@@ -100,6 +101,7 @@ const {
   markMediaClaimed,
   prepareMedia,
 } = require('./mediaProcessor');
+const { removedCanonicalMediaAssets, setMediaAvailability } = require('./mediaModeration');
 
 admin.initializeApp();
 
@@ -143,12 +145,25 @@ const CALLABLE_OPTIONS = {
   enforceAppCheck: ENFORCE_APP_CHECK,
   serviceAccount: CORE_SERVICE_ACCOUNT,
 };
+const PUBLIC_READ_OPTIONS = {
+  concurrency: 10,
+  maxInstances: 1,
+};
 
 function callable(options, handler) {
-  const { access, allowSuspended = false, ...firebaseOptions } = options;
+  const {
+    access,
+    allowSuspended = false,
+    ...firebaseOptions
+  } = options;
   if (!access) throw new Error('Every callable must declare an access level.');
   return onCall({ ...CALLABLE_OPTIONS, ...firebaseOptions }, async (request) => {
-    const accessContext = await authorizeRequest({ admin, auth: request.auth, access, allowSuspended });
+    const accessContext = await authorizeRequest({
+      admin,
+      auth: request.auth,
+      access,
+      allowSuspended,
+    });
     return handler(request, accessContext);
   });
 }
@@ -270,7 +285,7 @@ exports.saveRoute = callable(
 );
 
 exports.loadRouteDetails = callable(
-  { access: 'public', timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({
       admin,
@@ -336,7 +351,7 @@ exports.updateProfile = callable(
 );
 
 exports.getPersonalizedRecommendations = callable(
-  { access: 'public', timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return getPersonalizedRecommendations({ admin, auth: request.auth, data: request.data });
@@ -344,7 +359,7 @@ exports.getPersonalizedRecommendations = callable(
 );
 
 exports.getMapRecommendations = callable(
-  { access: 'public', timeoutSeconds: 30, memory: '512MiB', secrets: [publicRateLimitKey] },
+  { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, memory: '512MiB', secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'map', key: publicRateLimitKey.value() });
     return getMapRecommendations({ admin, auth: request.auth, data: request.data });
@@ -352,7 +367,7 @@ exports.getMapRecommendations = callable(
 );
 
 exports.getPersonalizedRoutes = callable(
-  { access: 'public', timeoutSeconds: 30, secrets: [publicRateLimitKey] },
+  { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return getPersonalizedRoutes({ admin, auth: request.auth, data: request.data });
@@ -360,7 +375,7 @@ exports.getPersonalizedRoutes = callable(
 );
 
 exports.getDestinationOverview = callable(
-  { access: 'public', timeoutSeconds: 30, secrets: [openWeatherKey, publicRateLimitKey] },
+  { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [openWeatherKey, publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'destinationOverview', key: publicRateLimitKey.value() });
     return getDestinationOverview({ admin, data: request.data, weatherApiKey: openWeatherKey.value() });
@@ -368,7 +383,7 @@ exports.getDestinationOverview = callable(
 );
 
 exports.searchDestinations = callable(
-  { access: 'public', timeoutSeconds: 20, secrets: [publicRateLimitKey] },
+  { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 20, secrets: [publicRateLimitKey] },
   async (request) => {
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return searchDestinations({ admin, data: request.data });
@@ -400,7 +415,12 @@ exports.deleteContent = callable(
 );
 
 exports.submitReport = callable({ access: 'active' }, (request) =>
-  submitReport({ admin, auth: request.auth, data: request.data })
+  submitReport({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    mediaBucket: mediaStorageBucket.value(),
+  })
 );
 
 exports.setBlockedUser = callable({ access: 'active' }, (request) =>
@@ -430,7 +450,12 @@ exports.getAdminUser = callable({ access: 'signedIn', serviceAccount: MEDIA_SERV
   getAdminUser({ admin, auth: request.auth, data: request.data })
 );
 exports.setUserSuspension = callable({ access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
-  setUserSuspension({ admin, auth: request.auth, data: request.data })
+  setUserSuspension({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    mediaBucket: mediaStorageBucket.value(),
+  })
 );
 exports.setUserEmailVerified = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   setUserEmailVerified({ admin, auth: request.auth, data: request.data })
@@ -509,6 +534,7 @@ exports.prepareMedia = callable(
     access: 'active',
     memory: '1GiB',
     concurrency: 1,
+    maxInstances: 1,
     timeoutSeconds: 120,
     serviceAccount: MEDIA_SERVICE_ACCOUNT,
   },
@@ -639,11 +665,48 @@ async function handleMediaCleanup(event, collectionName) {
       });
     }
   }
+  const removedAssets = removedCanonicalMediaAssets(before, after);
+  if (removedAssets.length) {
+    await setMediaAvailability({
+      admin,
+      data: { media: removedAssets },
+      mediaBucket: mediaStorageBucket.value(),
+      available: false,
+      reason: 'content_removed',
+    });
+  }
   await cleanupRemovedMedia(admin, before, after, {
     allowedPrefixes,
     bucketName: mediaStorageBucket.value(),
   });
-  if (after) await markMediaClaimed(admin, after, mediaStorageBucket.value());
+  if (removedAssets.length) {
+    await Promise.all(removedAssets.map((asset) => (
+      admin.firestore().doc(
+        `system/media/assets/${String(asset.assetId).toLowerCase()}`
+      ).delete()
+    )));
+  }
+  if (after) {
+    await markMediaClaimed(admin, after, mediaStorageBucket.value());
+    const beforePaths = JSON.stringify([...collectManagedMediaPaths(before)].sort());
+    const afterPaths = JSON.stringify([...collectManagedMediaPaths(after)].sort());
+    const beforeAvailability = collectionName === 'users'
+      ? before?.moderation?.status === 'active'
+      : before?.status === 'active';
+    const afterAvailability = collectionName === 'users'
+      ? after?.moderation?.status === 'active'
+      : after?.status === 'active';
+    const availabilityChanged = beforeAvailability !== afterAvailability || beforePaths !== afterPaths;
+    if (availabilityChanged) {
+      await setMediaAvailability({
+        admin,
+        data: after,
+        mediaBucket: mediaStorageBucket.value(),
+        available: afterAvailability,
+        reason: afterAvailability ? null : (after.status || after.moderation?.status || 'unavailable'),
+      });
+    }
+  }
 }
 
 exports.onDestinationImageCreated = firestoreCreated(
