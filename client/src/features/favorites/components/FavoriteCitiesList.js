@@ -31,7 +31,11 @@ export default function FavoriteCitiesList({ flatListRef, onScroll }) {
       renderItem={({ item }) => (
         <View style={[styles.destinationWrap, { width: tileWidth }]}>
           <CityCard
-            city={{ ...item, name: item.name || item.title || 'יעד' }}
+            city={{
+              ...item,
+              name: item.name || item.title || 'יעד',
+              country: item.countryName || item.country || item.countryId,
+            }}
             variant="home"
             showTravelers={false}
             onPress={() => navigation.navigate('LandingPage', { cityId: item.id, countryId: item.countryId })}

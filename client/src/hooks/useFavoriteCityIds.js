@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFavorites } from './useFavorites';
 
 export function favoriteCityPreviewIsCurrent(favorite, now = Date.now()) {
@@ -7,12 +7,71 @@ export function favoriteCityPreviewIsCurrent(favorite, now = Date.now()) {
     ? expiresAt.toMillis()
     : expiresAt instanceof Date
       ? expiresAt.getTime()
-      : Date.parse(expiresAt || '');
+    : Date.parse(expiresAt || '');
   return Number.isFinite(expiresAtMs) && expiresAtMs > now;
+}
+
+let countryNameCache = null;
+let countryNameLoadPromise = null;
+
+function getCountryNameFromCache(countryId) {
+  return countryNameCache?.[countryId];
+}
+
+function isCountryCode(value) {
+  return typeof value === 'string' && /^[A-Z]{2}$/i.test(value.trim());
+}
+
+async function loadCountryNames() {
+  if (countryNameCache) return countryNameCache;
+  if (countryNameLoadPromise) return countryNameLoadPromise;
+  const { collection, getDocs } = await import('firebase/firestore');
+  const { db } = await import('../config/firebase');
+
+  countryNameLoadPromise = getDocs(collection(db, 'countries'))
+    .then((snapshot) => {
+      countryNameCache = Object.fromEntries(snapshot.docs.map((entry) => [
+        entry.id,
+        entry.data()?.names?.he || entry.data()?.name || entry.id,
+      ]));
+      return countryNameCache;
+    })
+    .catch((error) => {
+      console.error('Failed to load country names for favorites', error);
+      countryNameCache = {};
+      return countryNameCache;
+    })
+    .finally(() => {
+      countryNameLoadPromise = null;
+    });
+
+  return countryNameLoadPromise;
 }
 
 export function useFavoriteCityIds({ enabled = true } = {}) {
   const result = useFavorites('city', { enabled });
+  const [countryNames, setCountryNames] = useState(countryNameCache || {});
+
+  const needsCountryNames = useMemo(() => result.favorites.some((favorite) => (
+    favorite?.target?.countryId
+      && !getCountryNameFromCache(favorite.target.countryId)
+      && (!favorite.preview?.countryName || isCountryCode(favorite.preview?.countryName))
+  )), [result.favorites]);
+
+  useEffect(() => {
+    if (!enabled || !needsCountryNames || countryNameCache) {
+      return undefined;
+    }
+    let active = true;
+    loadCountryNames()
+      .then((loaded) => { if (active) setCountryNames(loaded); })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [enabled, needsCountryNames]);
+
   const now = Date.now();
   const favorites = result.favorites.filter((favorite) =>
     favoriteCityPreviewIsCurrent(favorite, now)
@@ -20,6 +79,11 @@ export function useFavoriteCityIds({ enabled = true } = {}) {
     id: favorite.target.id,
     countryId: favorite.target.countryId,
     name: favorite.preview?.title || '',
+    countryName:
+      countryNames[favorite.target.countryId]
+      || (!isCountryCode(favorite.preview?.countryName) ? favorite.preview?.countryName : '')
+      || favorite.preview?.subtitle
+      || '',
     imageUrl: favorite.preview?.thumbUrl || null,
     destinationImage: favorite.preview?.destinationImage || null,
     placeholderColor: favorite.preview?.placeholderColor,
