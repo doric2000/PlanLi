@@ -3,6 +3,7 @@ import { render } from '@testing-library/react-native';
 
 import ReportButton from '../src/features/moderation/components/ReportButton';
 import { useAuth } from '../src/features/auth/AuthContext';
+import { AUTH_STATES } from '../src/constants/authPolicy';
 
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: () => null,
@@ -20,8 +21,9 @@ jest.mock('../src/services/SocialService', () => ({
 describe('ReportButton authorization boundary', () => {
   const authValue = (overrides = {}) => ({
     user: null,
+    status: AUTH_STATES.GUEST,
     isActive: false,
-    requireCapability: jest.fn(() => false),
+    ensureCapability: jest.fn(async () => false),
     handleCallableAuthError: jest.fn(() => false),
     ...overrides,
   });
@@ -34,6 +36,7 @@ describe('ReportButton authorization boundary', () => {
     ['guest', authValue()],
     ['unverified account', authValue({
       user: { uid: 'unverified-user' },
+      status: AUTH_STATES.EMAIL_VERIFICATION_REQUIRED,
     })],
   ])('does not expose reporting to a %s', (_label, value) => {
     useAuth.mockReturnValue(value);
@@ -50,8 +53,9 @@ describe('ReportButton authorization boundary', () => {
   it('keeps reporting available to an active non-owner', () => {
     useAuth.mockReturnValue(authValue({
       user: { uid: 'active-user' },
+      status: AUTH_STATES.READY,
       isActive: true,
-      requireCapability: jest.fn(() => true),
+      ensureCapability: jest.fn(async () => true),
     }));
     const screen = render(
       <ReportButton

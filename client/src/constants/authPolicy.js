@@ -3,6 +3,7 @@ export const AUTH_STATES = Object.freeze({
   GUEST: 'guest',
   EMAIL_VERIFICATION_REQUIRED: 'emailVerificationRequired',
   ACCOUNT_SETUP_REQUIRED: 'accountSetupRequired',
+  LEGAL_CONSENT_REQUIRED: 'legalConsentRequired',
   PREFERENCES_REQUIRED: 'preferencesRequired',
   READY: 'ready',
 });
@@ -31,19 +32,25 @@ export function isPasswordProviderUser(user) {
   return Boolean(user?.providerData?.some((provider) => provider?.providerId === 'password'));
 }
 
-export function hasCompletedAccountSetup(userDocument) {
-  const hasProfileDetails = (
+export function hasCompletedProfileDetails(userDocument) {
+  return Boolean(
     userDocument?.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
     && Boolean(userDocument?.onboarding?.profileDetailsCompletedAt)
     && typeof userDocument?.displayName === 'string'
     && userDocument.displayName.trim().length >= 2
   );
-  const hasLegalConsent = (
+}
+
+export function hasAcceptedCurrentLegal(userDocument) {
+  return Boolean(
     userDocument?.legal?.termsVersion === TERMS_VERSION
     && userDocument?.legal?.privacyVersion === PRIVACY_VERSION
     && Boolean(userDocument?.legal?.acceptedAt)
   );
-  return hasProfileDetails && hasLegalConsent;
+}
+
+export function hasCompletedAccountSetup(userDocument) {
+  return hasCompletedProfileDetails(userDocument) && hasAcceptedCurrentLegal(userDocument);
 }
 
 export function hasCompletedPreferences(userDocument) {
@@ -59,7 +66,8 @@ export function deriveAuthState(user, userDocument, loading = false) {
   if (isPasswordProviderUser(user) && !user.emailVerified) {
     return AUTH_STATES.EMAIL_VERIFICATION_REQUIRED;
   }
-  if (!hasCompletedAccountSetup(userDocument)) return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+  if (!hasCompletedProfileDetails(userDocument)) return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+  if (!hasAcceptedCurrentLegal(userDocument)) return AUTH_STATES.LEGAL_CONSENT_REQUIRED;
   if (!hasCompletedPreferences(userDocument)) {
     return AUTH_STATES.PREFERENCES_REQUIRED;
   }
@@ -68,9 +76,8 @@ export function deriveAuthState(user, userDocument, loading = false) {
 
 export function authStateForReason(reason) {
   if (reason === AUTH_REASONS.EMAIL_VERIFICATION_REQUIRED) return AUTH_STATES.EMAIL_VERIFICATION_REQUIRED;
-  if (reason === AUTH_REASONS.ACCOUNT_SETUP_REQUIRED || reason === AUTH_REASONS.LEGAL_CONSENT_REQUIRED) {
-    return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
-  }
+  if (reason === AUTH_REASONS.ACCOUNT_SETUP_REQUIRED) return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+  if (reason === AUTH_REASONS.LEGAL_CONSENT_REQUIRED) return AUTH_STATES.LEGAL_CONSENT_REQUIRED;
   if (reason === AUTH_REASONS.PREFERENCES_REQUIRED) return AUTH_STATES.PREFERENCES_REQUIRED;
   if (reason === AUTH_REASONS.SIGN_IN_REQUIRED) return AUTH_STATES.GUEST;
   return null;

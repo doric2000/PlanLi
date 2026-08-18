@@ -30,7 +30,7 @@ import { CAPABILITIES } from '../../../constants/authPolicy';
  */
 const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = true }) => {
   const navigation = useNavigation();
-  const { user, isActive, requireCapability } = useAuthUser();
+  const { user, isActive, ensureCapability } = useAuthUser();
   const imageUrl = getRecommendationImageUrls(item, 'feed')[0];
   
   // Use custom hooks
@@ -69,7 +69,7 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   };
 
   const handleDelete = async () => {
-    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+    if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
 
     const ok =
       Platform.OS === 'web'

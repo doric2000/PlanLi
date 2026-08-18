@@ -30,7 +30,7 @@ jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({
     user: null,
     isActive: false,
-    requireCapability: jest.fn(() => false),
+    ensureCapability: jest.fn(async () => false),
   }),
 }));
 

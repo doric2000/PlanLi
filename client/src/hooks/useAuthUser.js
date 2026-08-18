@@ -10,6 +10,7 @@ export function useAuthUser() {
     status,
     authFlowInProgress,
     requireCapability,
+    ensureCapability,
     handleCallableAuthError,
   } = useAuth();
   return {
@@ -21,6 +22,7 @@ export function useAuthUser() {
     status,
     authFlowInProgress,
     requireCapability,
+    ensureCapability,
     handleCallableAuthError,
   };
 }

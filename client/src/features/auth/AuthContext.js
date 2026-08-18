@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { onIdTokenChanged } from 'firebase/auth';
 
 import { auth, db } from '../../config/firebase';
@@ -22,29 +22,137 @@ const AuthContext = createContext(null);
 const STATE_ROUTES = {
   [AUTH_STATES.EMAIL_VERIFICATION_REQUIRED]: 'VerifyEmail',
   [AUTH_STATES.ACCOUNT_SETUP_REQUIRED]: 'CompleteAccount',
+  [AUTH_STATES.LEGAL_CONSENT_REQUIRED]: 'CompleteAccount',
   [AUTH_STATES.PREFERENCES_REQUIRED]: 'PreferenceSetup',
 };
+
+function timestampToMillis(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') {
+    return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+  }
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function capabilityAllowed(capability, status, user) {
+  if (capability === CAPABILITIES.PUBLIC) return true;
+  if (
+    [CAPABILITIES.SIGNED_IN, CAPABILITIES.ACCOUNT_MANAGEMENT].includes(capability)
+    && user?.uid
+  ) return true;
+  if (
+    capability === CAPABILITIES.PREFERENCES_SETUP
+    && [AUTH_STATES.PREFERENCES_REQUIRED, AUTH_STATES.READY].includes(status)
+  ) return true;
+  return capability === CAPABILITIES.ACTIVE && status === AUTH_STATES.READY;
+}
 
 export function AuthProvider({ children, navigationRef }) {
   const [user, setUser] = useState(auth.currentUser);
   const [userDocument, setUserDocument] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState(null);
+  const [profileConfirmedUid, setProfileConfirmedUid] = useState(null);
   const [gate, setGate] = useState(null);
   const [authFlowTransitionCount, setAuthFlowTransitionCount] = useState(0);
   const pendingReturnToRef = useRef(null);
   const previousStatusRef = useRef(null);
   const serverConfirmedProfileUidRef = useRef(null);
+  const activeUserRef = useRef(auth.currentUser);
+  const activeProfileUidRef = useRef(auth.currentUser?.uid || null);
+  const userDocumentRef = useRef(null);
+  const profileRevisionRef = useRef(null);
+  const profileRefreshRef = useRef(null);
+  const sessionSequenceRef = useRef(0);
+  const bootstrapUidRef = useRef(null);
+
+  const adoptUserDocument = useCallback((
+    uid,
+    nextDocument,
+    { authoritative = false, allowUnversioned = false } = {}
+  ) => {
+    if (!uid || activeProfileUidRef.current !== uid) return userDocumentRef.current;
+    const nextRevision = timestampToMillis(nextDocument?.updatedAt);
+    if (
+      profileRevisionRef.current !== null
+      && nextRevision !== null
+      && nextRevision < profileRevisionRef.current
+    ) {
+      return userDocumentRef.current;
+    }
+    if (
+      authoritative
+      && !allowUnversioned
+      && profileRevisionRef.current !== null
+      && nextRevision === null
+    ) {
+      return userDocumentRef.current;
+    }
+    if (!authoritative && serverConfirmedProfileUidRef.current === uid) {
+      return userDocumentRef.current;
+    }
+    userDocumentRef.current = nextDocument || null;
+    if (authoritative && nextRevision !== null) profileRevisionRef.current = nextRevision;
+    if (authoritative) {
+      serverConfirmedProfileUidRef.current = uid;
+      setProfileConfirmedUid(uid);
+    }
+    setUserDocument(nextDocument || null);
+    setProfileError(null);
+    return nextDocument || null;
+  }, []);
+
+  const refreshUserDocumentFromServer = useCallback(async () => {
+    const currentUser = activeUserRef.current;
+    const uid = currentUser?.uid;
+    if (!uid) return { document: null, status: AUTH_STATES.GUEST };
+    if (profileRefreshRef.current?.uid === uid) return profileRefreshRef.current.promise;
+
+    const sessionSequence = sessionSequenceRef.current;
+    const promise = (async () => {
+      try {
+        const snapshot = await getDocFromServer(doc(db, 'users', uid));
+        if (
+          activeProfileUidRef.current !== uid
+          || activeUserRef.current?.uid !== uid
+          || sessionSequenceRef.current !== sessionSequence
+        ) {
+          return { document: userDocumentRef.current, status: AUTH_STATES.LOADING, discarded: true };
+        }
+        const nextDocument = snapshot.exists() ? snapshot.data() : null;
+        const acceptedDocument = adoptUserDocument(uid, nextDocument, { authoritative: true });
+        return {
+          document: acceptedDocument,
+          status: deriveAuthState(activeUserRef.current, acceptedDocument, false),
+        };
+      } finally {
+        if (profileRefreshRef.current?.promise === promise) profileRefreshRef.current = null;
+      }
+    })();
+    profileRefreshRef.current = { uid, promise };
+    return promise;
+  }, [adoptUserDocument]);
 
   useEffect(() => {
     let unsubscribeProfile = null;
     const unsubscribeAuth = onIdTokenChanged(auth, (nextUser) => {
       unsubscribeProfile?.();
       unsubscribeProfile = null;
+      sessionSequenceRef.current += 1;
+      activeUserRef.current = nextUser;
+      activeProfileUidRef.current = nextUser?.uid || null;
+      userDocumentRef.current = null;
+      profileRevisionRef.current = null;
+      profileRefreshRef.current = null;
+      bootstrapUidRef.current = nextUser?.uid || null;
+      serverConfirmedProfileUidRef.current = null;
+      setProfileConfirmedUid(null);
       setUser(nextUser);
       setProfileError(null);
       if (!nextUser?.uid) {
-        serverConfirmedProfileUidRef.current = null;
         setUserDocument(null);
         setLoading(false);
         return;
@@ -54,22 +162,17 @@ export function AuthProvider({ children, navigationRef }) {
         doc(db, 'users', nextUser.uid),
         { includeMetadataChanges: true },
         (snapshot) => {
+          if (activeProfileUidRef.current !== nextUser.uid) return;
           const fromCache = snapshot.metadata?.fromCache === true;
-          if (fromCache && serverConfirmedProfileUidRef.current === nextUser.uid) {
-            setProfileError(null);
-            setLoading(false);
-            return;
-          }
-          setUserDocument(snapshot.exists() ? snapshot.data() : null);
-          setProfileError(null);
-          if (fromCache) {
-            setLoading(true);
-            return;
-          }
-          serverConfirmedProfileUidRef.current = nextUser.uid;
-          setLoading(false);
+          adoptUserDocument(
+            nextUser.uid,
+            snapshot.exists() ? snapshot.data() : null,
+            { authoritative: !fromCache }
+          );
+          if (!fromCache && bootstrapUidRef.current !== nextUser.uid) setLoading(false);
         },
         (error) => {
+          if (activeProfileUidRef.current !== nextUser.uid) return;
           addDiagnosticBreadcrumb({
             category: 'auth',
             message: 'Profile subscription failed',
@@ -81,9 +184,30 @@ export function AuthProvider({ children, navigationRef }) {
             code: error?.code || 'unknown',
           });
           setProfileError(error);
-          setLoading(false);
+          if (bootstrapUidRef.current !== nextUser.uid) setLoading(false);
         }
       );
+
+      refreshUserDocumentFromServer()
+        .catch((error) => {
+          if (activeProfileUidRef.current !== nextUser.uid) return;
+          addDiagnosticBreadcrumb({
+            category: 'auth',
+            message: 'Authoritative profile refresh failed',
+            level: 'error',
+            data: { operation: 'profile_server_read', outcome: 'error', code: error?.code || 'unknown' },
+          });
+          captureDiagnosticException(error, {
+            operation: 'profile_server_read',
+            code: error?.code || 'unknown',
+          });
+          setProfileError(error);
+        })
+        .finally(() => {
+          if (activeProfileUidRef.current !== nextUser.uid) return;
+          bootstrapUidRef.current = null;
+          setLoading(false);
+        });
     }, (error) => {
       addDiagnosticBreadcrumb({
         category: 'auth',
@@ -102,19 +226,21 @@ export function AuthProvider({ children, navigationRef }) {
       unsubscribeProfile?.();
       unsubscribeAuth();
     };
-  }, []);
+  }, [adoptUserDocument, refreshUserDocumentFromServer]);
 
-  const status = deriveAuthState(user, userDocument, loading);
+  const confirmedUserDocument = profileConfirmedUid === user?.uid ? userDocument : null;
+  const status = deriveAuthState(user, confirmedUserDocument, loading);
 
   const synchronizeUserDocument = useCallback((nextUserDocument) => {
-    const currentUser = auth.currentUser || user;
+    const currentUser = activeUserRef.current;
     if (!currentUser?.uid) return AUTH_STATES.GUEST;
-    serverConfirmedProfileUidRef.current = currentUser.uid;
-    setUserDocument(nextUserDocument || null);
-    setProfileError(null);
+    const acceptedDocument = adoptUserDocument(currentUser.uid, nextUserDocument, {
+      authoritative: true,
+      allowUnversioned: true,
+    });
     setLoading(false);
-    return deriveAuthState(currentUser, nextUserDocument || null, false);
-  }, [user]);
+    return deriveAuthState(currentUser, acceptedDocument, false);
+  }, [adoptUserDocument]);
 
   useEffect(() => {
     setErrorReportingUser(user?.uid || null);
@@ -187,30 +313,62 @@ export function AuthProvider({ children, navigationRef }) {
     }
   }, [navigationRef]);
 
-  const requireCapability = useCallback((capability, returnTo, options = {}) => {
-    if (capability === CAPABILITIES.PUBLIC) return true;
-    const signedInCapability = capability === CAPABILITIES.SIGNED_IN
-      || capability === CAPABILITIES.ACCOUNT_MANAGEMENT;
-    if (signedInCapability && user?.uid) return true;
-    if (
-      capability === CAPABILITIES.PREFERENCES_SETUP
-      && [AUTH_STATES.PREFERENCES_REQUIRED, AUTH_STATES.READY].includes(status)
-    ) return true;
-    if (capability === CAPABILITIES.ACTIVE && status === AUTH_STATES.READY) return true;
+  const openCapabilityGate = useCallback((capability, gateStatus, returnTo, options = {}) => {
     if (returnTo?.name) pendingReturnToRef.current = returnTo;
     addDiagnosticBreadcrumb({
       category: 'auth',
       message: 'Capability gate opened',
-      data: { operation: 'require_capability', status, to: returnTo?.name || 'unknown' },
+      data: { operation: 'require_capability', status: gateStatus, to: returnTo?.name || 'unknown' },
     });
     setGate({
       capability,
-      status,
+      status: gateStatus,
       returnTo: returnTo || null,
       blockedRoute: options.blockedRoute === true,
     });
+  }, []);
+
+  const requireCapability = useCallback((capability, returnTo, options = {}) => {
+    if (capabilityAllowed(capability, status, user)) return true;
+    openCapabilityGate(capability, status, returnTo, options);
     return false;
-  }, [status, user?.uid]);
+  }, [openCapabilityGate, status, user]);
+
+  const ensureCapability = useCallback(async (capability, returnTo, options = {}) => {
+    const currentUser = activeUserRef.current;
+    const currentDocument = serverConfirmedProfileUidRef.current === currentUser?.uid
+      ? userDocumentRef.current
+      : null;
+    const currentStatus = deriveAuthState(currentUser, currentDocument, loading);
+    if (capabilityAllowed(capability, currentStatus, currentUser)) return true;
+    if (!currentUser?.uid) {
+      openCapabilityGate(capability, AUTH_STATES.GUEST, returnTo, options);
+      return false;
+    }
+    if (currentStatus === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED) {
+      openCapabilityGate(capability, currentStatus, returnTo, options);
+      return false;
+    }
+
+    try {
+      const refreshed = await refreshUserDocumentFromServer();
+      if (refreshed.discarded) return false;
+      if (capabilityAllowed(capability, refreshed.status, activeUserRef.current)) {
+        setLoading(false);
+        setGate(null);
+        return true;
+      }
+      openCapabilityGate(capability, refreshed.status, returnTo, options);
+      return false;
+    } catch (_error) {
+      const fallbackDocument = serverConfirmedProfileUidRef.current === activeUserRef.current?.uid
+        ? userDocumentRef.current
+        : null;
+      const fallbackStatus = deriveAuthState(activeUserRef.current, fallbackDocument, false);
+      openCapabilityGate(capability, fallbackStatus, returnTo, options);
+      return false;
+    }
+  }, [loading, openCapabilityGate, refreshUserDocumentFromServer]);
 
   const handleCallableAuthError = useCallback((error, returnTo) => {
     const requiredStatus = getRequiredAuthState(error);
@@ -290,9 +448,11 @@ export function AuthProvider({ children, navigationRef }) {
     openRequiredStep,
     openRegistration,
     requireCapability,
+    ensureCapability,
     handleCallableAuthError,
     clearPendingReturn,
     synchronizeUserDocument,
+    refreshUserDocumentFromServer,
   }), [
     clearPendingReturn,
     dismissGate,
@@ -304,7 +464,9 @@ export function AuthProvider({ children, navigationRef }) {
     authFlowInProgress,
     runAuthTransition,
     requireCapability,
+    ensureCapability,
     handleCallableAuthError,
+    refreshUserDocumentFromServer,
     status,
     synchronizeUserDocument,
     user,

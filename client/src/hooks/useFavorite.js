@@ -54,7 +54,7 @@ export async function buildFavoriteKey(target) {
 }
 
 export function useFavorite(type, id, snapshotData = {}) {
-  const { user, requireCapability, handleCallableAuthError } = useAuth();
+  const { user, ensureCapability, handleCallableAuthError } = useAuth();
   const target = useMemo(
     () => buildFavoriteTarget(type, id, snapshotData?.countryId),
     [type, id, snapshotData?.countryId]
@@ -89,7 +89,7 @@ export function useFavorite(type, id, snapshotData = {}) {
   }, [user, favoriteKey]);
 
   const toggleFavorite = useCallback(async () => {
-    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+    if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
     if (!target || !favoriteKey) {
       Alert.alert('שגיאה', 'לא ניתן לזהות את הפריט שנבחר.');
       return;
@@ -109,7 +109,7 @@ export function useFavorite(type, id, snapshotData = {}) {
     } finally {
       setLoading(false);
     }
-  }, [favoriteKey, handleCallableAuthError, isFavorite, requireCapability, target]);
+  }, [ensureCapability, favoriteKey, handleCallableAuthError, isFavorite, target]);
 
   return { isFavorite, toggleFavorite, loading };
 }

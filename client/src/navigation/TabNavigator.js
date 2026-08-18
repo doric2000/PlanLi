@@ -1,6 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Easing, View, useWindowDimensions } from 'react-native';
+import { View } from 'react-native';
 import { useCallback } from 'react';
 import AppText from "../components/AppText";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,16 +12,9 @@ import CachedImage from '../components/CachedImage';
 import SwipeableTabBarButton from './SwipeableTabBarButton';
 import { navigateToAdjacentSwipeItem } from './horizontalSwipe';
 import { getVisibleMainTabNames } from './mainTabOrder';
+import { MAIN_TAB_TRANSITION_OPTIONS } from './mainTabTransition';
 
 const Tab = createBottomTabNavigator();
-const TAB_TRANSITION_SPEC = {
-  animation: 'timing',
-  config: {
-    duration: 240,
-    easing: Easing.out(Easing.cubic),
-  },
-};
-
 /**
  * Bottom Tab Navigator.
  * Manages the main navigation flow of the application.
@@ -36,17 +29,6 @@ export default function TabNavigator() {
   const { user, authFlowInProgress } = useAuthUser();
   const unreadCount = useUnreadCount();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const sceneStyleInterpolator = useCallback(({ current }) => ({
-    sceneStyle: {
-      transform: [{
-        translateX: current.progress.interpolate({
-          inputRange: [-1, 0, 1],
-          outputRange: [-Math.max(width, 1), 0, Math.max(width, 1)],
-        }),
-      }],
-    },
-  }), [width]);
   const handleTabBarSwipe = useCallback((navigation, gestureState) => {
     navigateToAdjacentSwipeItem({
       navigation,
@@ -135,8 +117,7 @@ export default function TabNavigator() {
           ],
           tabBarIconStyle: styles.iconSlot,
           tabBarHideOnKeyboard: true,
-          sceneStyleInterpolator,
-          transitionSpec: TAB_TRANSITION_SPEC,
+          ...MAIN_TAB_TRANSITION_OPTIONS,
           headerShown: false,
         });
       }}

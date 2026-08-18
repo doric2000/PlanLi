@@ -56,7 +56,7 @@ const text = {
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
-  const { requireCapability, user: currentUser } = useAuthUser();
+  const { ensureCapability, user: currentUser } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -158,8 +158,8 @@ export default function RoutesScreen({ navigation }) {
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
   const sortLabel = sortBy === 'personalized' ? 'בשבילך' : sortBy === 'newest' ? 'חדש' : 'פופולרי';
 
-  const openCreateRoute = () => {
-    if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'AddRoutesScreen' })) return;
+  const openCreateRoute = async () => {
+    if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'AddRoutesScreen' })) return;
     navigation.navigate('AddRoutesScreen');
   };
 

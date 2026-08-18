@@ -205,6 +205,7 @@ describe('authentication screens', () => {
   });
 
   it('locks the existing display name when only renewed legal consent is required', () => {
+    mockAuthStatus = AUTH_STATES.LEGAL_CONSENT_REQUIRED;
     mockUserDocument = {
       displayName: 'Admin',
       onboarding: {
@@ -215,7 +216,40 @@ describe('authentication screens', () => {
     const screen = render(<CompleteAccountScreen navigation={{ reset: jest.fn(), navigate: jest.fn() }} />);
 
     expect(screen.getByText(/מדיניות הפרטיות עודכנה/)).toBeTruthy();
-    expect(screen.getByPlaceholderText('הזינו את שמכם המלא').props.editable).toBe(false);
+    expect(screen.queryByPlaceholderText('הזינו את שמכם המלא')).toBeNull();
+    expect(screen.getByText('אישור והמשך')).toBeTruthy();
+  });
+
+  it('renews legal consent with the stored server-confirmed name', async () => {
+    mockAuthStatus = AUTH_STATES.LEGAL_CONSENT_REQUIRED;
+    mockUserDocument = {
+      displayName: 'Admin',
+      onboarding: {
+        profileDetailsVersion: 1,
+        profileDetailsCompletedAt: { seconds: 1 },
+      },
+    };
+    mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.READY);
+    const navigation = { reset: jest.fn(), navigate: jest.fn() };
+    const screen = render(<CompleteAccountScreen navigation={navigation} />);
+
+    fireEvent.press(screen.getByTestId('legal-consent-checkbox'));
+    fireEvent.press(screen.getByTestId('complete-account-submit'));
+
+    await waitFor(() => expect(mockCompleteAccountSetup).toHaveBeenCalledWith({
+      displayName: 'Admin',
+      acceptedLegal: true,
+    }));
+    expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+  });
+
+  it('leaves a stale account-setup route when the server confirms the account is ready', () => {
+    mockAuthStatus = AUTH_STATES.READY;
+    const navigation = { reset: jest.fn(), navigate: jest.fn() };
+
+    render(<CompleteAccountScreen navigation={navigation} />);
+
+    expect(navigation.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
   });
 
   it('keeps registration email-only and provides a working back action', () => {

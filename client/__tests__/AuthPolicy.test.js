@@ -31,7 +31,7 @@ describe('auth state machine', () => {
     const user = passwordUser(true);
     expect(deriveAuthState(user, null, false)).toBe(AUTH_STATES.ACCOUNT_SETUP_REQUIRED);
     expect(deriveAuthState(user, { ...activeDocument, legal: {} }, false))
-      .toBe(AUTH_STATES.ACCOUNT_SETUP_REQUIRED);
+      .toBe(AUTH_STATES.LEGAL_CONSENT_REQUIRED);
     expect(deriveAuthState(user, { ...activeDocument, smartProfile: { setupRequired: true } }, false))
       .toBe(AUTH_STATES.PREFERENCES_REQUIRED);
     expect(deriveAuthState(user, { ...activeDocument, smartProfile: { completedAt: { seconds: 1 } } }, false))
