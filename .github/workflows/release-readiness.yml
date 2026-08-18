@@ -68,6 +68,12 @@ jobs:
           cache: npm
           cache-dependency-path: functions/package-lock.json
 
+      - name: Use Java 21 for Firebase emulators
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Install locked dependencies
         run: npm ci
 
