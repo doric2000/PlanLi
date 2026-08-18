@@ -2529,6 +2529,69 @@ export const settingsScreenStyles = StyleSheet.create({
   modalCancelText: { color: '#374151', fontFamily: fontFamilies.semiBold },
   modalDeleteButton: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#B42318' },
   modalDeleteText: { color: '#FFFFFF', fontFamily: fontFamilies.semiBold },
+
+  emptyStateContainer: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+    padding: 18,
+    alignItems: 'center',
+  },
+  emptyStateTitle: {
+    color: '#111827',
+    fontSize: 16,
+    fontFamily: fontFamilies.semiBold,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    marginTop: 6,
+    color: '#6B7280',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  list: { gap: 10 },
+  blockedUserRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(17,24,39,0.08)',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    gap: 10,
+  },
+  blockedUserContent: { flex: 1 },
+  blockedUserName: {
+    color: '#111827',
+    fontSize: 16,
+    fontFamily: fontFamilies.semiBold,
+    textAlign: 'right',
+  },
+  blockedUserId: {
+    marginTop: 2,
+    color: '#6B7280',
+    fontSize: 12,
+    textAlign: 'right',
+  },
+  unblockButton: {
+    minWidth: 86,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 14,
+  },
+  unblockButtonText: {
+    color: '#B42318',
+    fontFamily: fontFamilies.semiBold,
+    fontSize: 13,
+  },
+  unblockButtonDisabled: {
+    opacity: 0.55,
+  },
 });
 
 // features/profile/screens/UserProfileScreen.js

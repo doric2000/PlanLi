@@ -717,6 +717,12 @@ exports.onDestinationImageCreated = firestoreCreated(
       countryId: event.params.countryId,
       cityId: event.params.cityId,
       unsplashKey: unsplashAccessKey.value(),
+    }).catch((error) => {
+      console.error('destination_image_sync_failed', {
+        countryId: event.params.countryId,
+        cityId: event.params.cityId,
+        reason: error?.code || error?.message || 'unknown',
+      });
     });
     return onDestinationCreated({ admin, countryId: event.params.countryId, cityId: event.params.cityId });
   },

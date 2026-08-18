@@ -9,6 +9,7 @@ export function safeAdminError(error, { operationMayContinue = false } = {}) {
   if (reason === 'invalid_airport') return 'שדה התעופה שנבחר אינו מועמד מאומת וקרוב לעיר.';
   if (reason === 'invalid_media') return 'קובץ התמונה אינו תקין או אינו שייך לחשבון המנהל.';
   if (reason === 'user_missing') return 'לא נמצא משתמש התואם לחיפוש.';
+  if (reason === 'invalid_input') return 'קלט לא תקין, ודא שסיפקת לפחות 3 תווים בתיעוד הפעולה.';
   if (reason === 'content_not_held') return 'התוכן כבר מפורסם ולכן אין צורך להחזיר אותו לפרסום.';
   if (reason === 'content_not_active') return 'מצב התוכן השתנה והוא כבר אינו מפורסם. יש לרענן ולבחור פעולה מתאימה.';
   if (reason === 'content_missing') return 'התוכן כבר אינו זמין. יש לרענן את רשימת הדיווחים.';

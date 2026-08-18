@@ -114,4 +114,11 @@ describe('Settings authentication behavior', () => {
     expect(mockRevokeGoogleAccess.mock.invocationCallOrder[0])
       .toBeLessThan(mockRequestAccountDeletion.mock.invocationCallOrder[0]);
   });
+
+  it('opens blocked users management from settings', () => {
+    const mockNavigate = jest.fn();
+    const screen = render(<SettingsScreen navigation={{ navigate: mockNavigate, goBack: jest.fn() }} />);
+    fireEvent.press(screen.getByTestId('settings-blocked-users-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
+  });
 });

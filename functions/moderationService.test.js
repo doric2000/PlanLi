@@ -103,3 +103,39 @@ test('blocking requires an active public target and enforces the per-user cap tr
   assert(fixture.writes.some((entry) => entry.path === 'users/user-1/blockedUsers/target-1'));
   assert(fixture.writes.some((entry) => entry.value?.blockedUserCount === 250));
 });
+
+test('unblocking deletes the blockedUser document and decrements the count', async () => {
+  const writes = [];
+  const db = {
+    doc(path) {
+      return { path };
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => {
+        if (ref.path === 'users/user-1/blockedUsers/target-1') {
+          return { exists: true, data: () => ({ blockedUid: 'target-1' }) };
+        }
+        if (ref.path.endsWith('/serverState/moderation')) {
+          return { exists: true, data: () => ({ blockedUserCount: 2 }) };
+        }
+        return { exists: false, data: () => null };
+      },
+      set: (ref, value, options) => writes.push({ type: 'set', path: ref.path, value, options }),
+      delete: (ref) => writes.push({ type: 'delete', path: ref.path }),
+    }),
+  };
+
+  await setBlockedUser({
+    admin: {
+      firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'time' } }),
+    },
+    auth: { uid: 'user-1' },
+    data: { blockedUid: 'target-1', blocked: false },
+  });
+
+  assert(
+    writes.some((entry) => entry.type === 'delete' && entry.path === 'users/user-1/blockedUsers/target-1')
+  );
+  const stateUpdate = writes.find((entry) => entry.path === 'users/user-1/serverState/moderation');
+  assert(stateUpdate?.value?.blockedUserCount === 1);
+});

@@ -8,6 +8,7 @@ const {
   listModerationAudit,
   listModerationCases,
   moderateContent,
+  sensitiveAdminActions,
   publicModerationCase,
   publicModerationReport,
   setUserEmailVerified,
@@ -39,6 +40,53 @@ test('destructive admin operations require recent authentication', () => {
   assert.throws(
     () => assertRecentAuth({ token: { auth_time: Math.floor(Date.now() / 1000) - 3600 } }),
     (error) => error.details?.reason === 'recent_sign_in_required'
+  );
+});
+
+test('sensitive-admin action list is explicit and contains only high-impact admin operations', () => {
+  const actions = sensitiveAdminActions();
+  assert.ok(actions.deactivateDestination?.recentSignIn);
+  assert.ok(actions.setUserAdmin?.recentSignIn);
+  assert.equal(typeof actions.deactivateDestination.reason, 'string');
+  assert.equal(actions.approveDestination, undefined);
+});
+
+test('non-sensitive destination/admin actions stay non-sensitive', () => {
+  const actions = sensitiveAdminActions();
+  for (const action of [
+    'getModerationDashboard',
+    'listModerationCases',
+    'getModerationCase',
+    'listHeldContent',
+    'listAdminUsers',
+    'getAdminUser',
+    'listModerationAudit',
+    'listDestinationReviews',
+    'getDestinationReview',
+    'recheckDestination',
+    'approveDestination',
+    'getDestinationImageCandidates',
+    'selectDestinationImageCandidate',
+    'setDestinationUploadedImage',
+    'getAirportCandidates',
+    'setDestinationAirport',
+  ]) {
+    assert.equal(actions[action], undefined, `${action} must remain non-sensitive`);
+  }
+});
+
+test('sensitive admin actions still enforce recent sign-in before mutation', async () => {
+  await assert.rejects(
+    moderateContent({
+      admin: {},
+      auth: { uid: 'admin-1', token: { admin: true, auth_time: Math.floor(Date.now() / 1000) - 3600 } },
+      data: {
+        reason: 'בדיקת תקינות',
+        action: 'dismiss',
+        target: { type: 'recommendation', id: 'rec-1' },
+      },
+    }),
+    (error) => error?.details?.reason === 'recent_sign_in_required'
   );
 });
 
