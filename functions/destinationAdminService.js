@@ -3,7 +3,11 @@ const { FieldPath } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 
 const { audit, prepareAdmin } = require('./adminService');
-const { downloadAirports, nearestScheduledAirports } = require('./airportFacts');
+const {
+  closestScheduledAirport,
+  downloadAirports,
+  nearestScheduledAirports,
+} = require('./airportFacts');
 const { syncDestinationCatalog } = require('./destinationCatalogService');
 const {
   consumeUnsplashBudget,
@@ -45,6 +49,26 @@ function serialize(value) {
   if (typeof value.toDate === 'function') return value.toDate().toISOString();
   if (typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, serialize(item)]));
   return value;
+}
+
+function normalizeAirportCode(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function withAirportCode(airport) {
+  return airport && normalizeAirportCode(airport.iataCode);
+}
+
+function selectAirportByIataCode(cityCoordinates, airports, rawIataCode, options = {}) {
+  const requestedCode = normalizeAirportCode(rawIataCode);
+  if (!requestedCode) return null;
+  const directMatch = nearestScheduledAirports(cityCoordinates, airports, options)
+    .find((airport) => withAirportCode(airport) === requestedCode);
+  if (directMatch) return directMatch;
+  const fallbackAirport = airports.find((airport) => withAirportCode(airport) === requestedCode);
+  if (!fallbackAirport) return null;
+  const withDistance = nearestScheduledAirports(cityCoordinates, [fallbackAirport], options);
+  return withDistance[0] || null;
 }
 
 function timestampMs(value) {
@@ -163,9 +187,45 @@ async function notifyAdminsOfDestination({ admin, countryId, cityId }) {
 }
 
 async function onDestinationCreated({ admin, countryId, cityId }) {
+  await syncDestinationAirport({
+    admin,
+    countryId,
+    cityId,
+    applyWhenMissingOnly: true,
+  });
   const result = await evaluateAndPersistDestination({ admin, countryId, cityId, created: true });
   await notifyAdminsOfDestination({ admin, countryId, cityId });
   return result;
+}
+
+async function syncDestinationAirport({
+  admin,
+  countryId,
+  cityId,
+  applyWhenMissingOnly = false,
+}) {
+  const bundle = await destinationBundle(admin, countryId, cityId);
+  if (applyWhenMissingOnly) {
+    const existing = bundle.city?.travelFacts?.closestAirport || bundle.city?.closestAirport;
+    if (existing?.iataCode) return { updated: false, updatedByAdmin: false };
+  }
+  const coordinates = destinationCoordinates(bundle.city);
+  if (!coordinates) return { updated: false, reason: 'missing_coordinates' };
+  const downloaded = await downloadAirports({});
+  const closest = closestScheduledAirport(coordinates, downloaded.airports);
+  if (!closest) return { updated: false, reason: 'missing_airport' };
+  await bundle.cityRef.update({
+    'travelFacts.closestAirport': {
+      name: closest.name,
+      iataCode: closest.iataCode,
+      distanceKm: Math.round((Number(closest.distanceKm) || 0) * 10) / 10,
+      source: 'OurAirports',
+      sourceUpdatedAt: downloaded.sourceUpdatedAt,
+      selectedByAdmin: false,
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { updated: true, iataCode: closest.iataCode };
 }
 
 async function scanDestinationQuality({ admin, limit = 50 }) {
@@ -444,8 +504,7 @@ async function setDestinationAirport({ admin, auth, data }) {
   const coordinates = destinationCoordinates(bundle.city);
   if (!coordinates) fail('failed-precondition', 'Destination has no coordinates.', 'missing_coordinates');
   const downloaded = await downloadAirports({});
-  const candidate = nearestScheduledAirports(coordinates, downloaded.airports, { limit: 20 })
-    .find((airport) => airport.iataCode === iataCode);
+  const candidate = selectAirportByIataCode(coordinates, downloaded.airports, iataCode, { limit: 20 });
   if (!candidate) fail('invalid-argument', 'Airport is not an eligible nearby candidate.', 'invalid_airport');
   await bundle.cityRef.update({
     'travelFacts.closestAirport': {
@@ -514,6 +573,7 @@ module.exports = {
   deactivateDestination,
   destinationCoordinates,
   evaluateAndPersistDestination,
+  selectAirportByIataCode,
   getAirportCandidates,
   getDestinationImageCandidates,
   getDestinationReview,
@@ -524,6 +584,7 @@ module.exports = {
   recheckDestination,
   scanDestinationQuality,
   selectDestinationImageCandidate,
+  syncDestinationAirport,
   setDestinationAirport,
   setDestinationUploadedImage,
 };

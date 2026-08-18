@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { listDestinationReviews, qualityIssues } = require('./destinationAdminService');
+const {
+  qualityIssues,
+  listDestinationReviews,
+  selectAirportByIataCode,
+  syncDestinationAirport,
+} = require('./destinationAdminService');
 const { nearestScheduledAirports } = require('./airportFacts');
 
 function validDestination() {
@@ -47,6 +52,46 @@ test('airport candidates are bounded, sorted and distance annotated', () => {
   ], { limit: 2, maxDistanceKm: 300 });
   assert.deepEqual(result.map((entry) => entry.iataCode), ['AAA', 'BBB']);
   assert.ok(result[0].distanceKm < result[1].distanceKm);
+});
+
+test('selectAirportByIataCode is stable against spacing, casing and list limit artifacts', () => {
+  const airports = [
+    { ident: 'A', iataCode: 'AAA', coordinates: { lat: 0.1, lng: 0 } },
+    { ident: 'B', iataCode: 'BBB', coordinates: { lat: 0.2, lng: 0 } },
+    { ident: 'C', iataCode: 'CCC', coordinates: { lat: 3, lng: 3 } },
+  ];
+  const coordinates = { lat: 0, lng: 0 };
+  const result = selectAirportByIataCode(coordinates, airports, ' bbb ', { limit: 1 });
+  assert.equal(result.iataCode, 'BBB');
+  assert.equal(result.ident, 'B');
+});
+
+test('syncDestinationAirport does not overwrite an existing closestAirport when forced', async () => {
+  const cityData = { travelFacts: { closestAirport: { iataCode: 'TLV' } } };
+  const db = {
+    doc(path) {
+      if (path === 'countries/c1/destinations/city-1') {
+        return {
+          get: async () => ({ exists: true, data: () => cityData }),
+        };
+      }
+      if (path === 'countries/c1') return { get: async () => ({ exists: true, data: () => ({ name: 'Israel' }) }) };
+      if (path === 'system/runtime/destinationJobs/c1_city-1') return { get: async () => ({ exists: false, data: () => ({}) }) };
+      if (path.startsWith('system/moderation/destinationReviews/')) return { get: async () => ({ exists: false, data: () => ({}) }) };
+      throw new Error(`Unexpected Firestore path: ${path}`);
+    },
+    FieldValue: { serverTimestamp: () => 'server-time' },
+  };
+  const admin = { firestore: () => db };
+  const result = await syncDestinationAirport({
+    admin,
+    countryId: 'c1',
+    cityId: 'city-1',
+    applyWhenMissingOnly: true,
+  });
+  assert.equal(result.updated, false);
+  assert.equal(result.updatedByAdmin, false);
+  assert.equal(cityData.travelFacts.closestAirport.iataCode, 'TLV');
 });
 
 test('listing destination reviews is a pure read and never starts a quality scan', async () => {
