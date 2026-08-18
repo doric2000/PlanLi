@@ -10,7 +10,7 @@ const SUPPORT_ITEMS = [
   { icon: 'mail-outline', text: 'planli.travel.il@gmail.com' },
   { icon: 'help-circle-outline', text: 'מענה לשאלות, ערעורים ודיווחי בטיחות' },
   { icon: 'bug-outline', text: 'דיווח על תקלה: planli.travel.il@gmail.com' },
-  { icon: 'call-outline', text: '+972 54-286-9666' },
+  { icon: 'call-outline', text: '+972 52-535-2725' },
 ];
 
 export default function SupportModal({ visible, onClose }) {
