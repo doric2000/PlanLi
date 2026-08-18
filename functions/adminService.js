@@ -13,6 +13,44 @@ const {
 
 const PAGE_SIZE = 30;
 const RECENT_AUTH_SECONDS = 10 * 60;
+// Only actions that can change account authority, account trust level, or
+// suspend/remove content are marked sensitive. CRUD-like content-enrichment and
+// destination maintenance actions stay non-sensitive to avoid unnecessary
+// re-auth flow in normal moderation work.
+const SENSITIVE_ADMIN_ACTIONS = Object.freeze({
+  moderateContent: {
+    recentSignIn: true,
+    reason: 'content moderation and deletion (reports, holds, restores, deletions).',
+  },
+  setUserSuspension: {
+    recentSignIn: true,
+    reason: 'suspending/unsuspending a user affects account availability.',
+  },
+  setUserEmailVerified: {
+    recentSignIn: true,
+    reason: 'changing a user’s email verification state alters account trust level.',
+  },
+  setUserAdmin: {
+    recentSignIn: true,
+    reason: 'granting/removing admin rights changes system privileges.',
+  },
+  deleteUserAsAdmin: {
+    recentSignIn: true,
+    reason: 'full account deletion removes data and media and is irreversible.',
+  },
+  deactivateDestination: {
+    recentSignIn: true,
+    reason: 'deactivating a city affects public catalog and linked public content.',
+  },
+});
+
+function isRecentSignInRequired(action) {
+  return !!SENSITIVE_ADMIN_ACTIONS[action]?.recentSignIn;
+}
+
+function sensitiveAdminActions() {
+  return Object.freeze({ ...SENSITIVE_ADMIN_ACTIONS });
+}
 
 function fail(code, message, reason) {
   throw new HttpsError(code, message, { reason });
@@ -103,8 +141,12 @@ async function prepareAdmin(admin, auth, { recent = false } = {}) {
   await assertActiveAdminRegistry({ admin, auth });
 }
 
+async function prepareAdminAction(admin, auth, action) {
+  await prepareAdmin(admin, auth, { recent: isRecentSignInRequired(action) });
+}
+
 async function getModerationDashboard({ admin, auth }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'getModerationDashboard');
   const db = admin.firestore();
   const cases = db.collection('system/moderation/cases');
   const [open, urgent, heldRecommendations, heldRoutes, heldTrips, pendingDestinations] = await Promise.all([
@@ -127,7 +169,7 @@ async function getModerationDashboard({ admin, auth }) {
 }
 
 async function listModerationCases({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'listModerationCases');
   const requestedStatus = typeof data?.status === 'string' ? data.status : null;
   let query = admin.firestore().collection('system/moderation/cases')
     .orderBy('updatedAt', 'desc')
@@ -155,7 +197,7 @@ async function listModerationCases({ admin, auth, data }) {
 }
 
 async function getModerationCase({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'getModerationCase');
   const caseId = cleanText(data?.caseId, 'caseId', 180);
   const ref = admin.firestore().doc(`system/moderation/cases/${caseId}`);
   const [snapshot, reports] = await Promise.all([
@@ -174,7 +216,7 @@ async function getModerationCase({ admin, auth, data }) {
 }
 
 async function listHeldContent({ admin, auth }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'listHeldContent');
   const db = admin.firestore();
   const groups = await Promise.all([
     ['recommendation', db.collection('recommendations').where('status', '==', 'moderation_hold').limit(PAGE_SIZE).get()],
@@ -199,7 +241,7 @@ async function listHeldContent({ admin, auth }) {
 }
 
 async function moderateContent({ admin, auth, data, mediaBucket }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'moderateContent');
   const reason = cleanText(data?.reason, 'reason');
   const action = String(data?.action || '');
   if (!['dismiss', 'hold', 'restore', 'delete'].includes(action)) fail('invalid-argument', 'Invalid moderation action.', 'invalid_action');
@@ -324,7 +366,7 @@ function publicAdminUser(user) {
 }
 
 async function listAdminUsers({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'listAdminUsers');
   if (data?.query) {
     const identifier = cleanText(data.query, 'query', 320);
     if (identifier.includes('@')) {
@@ -352,7 +394,7 @@ async function listAdminUsers({ admin, auth, data }) {
 }
 
 async function getAdminUser({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'getAdminUser');
   const user = await resolveUser(admin, data);
   const profile = await admin.firestore().doc(`users/${user.uid}`).get();
   return serialize({ ...publicAdminUser(user), profile: profile.exists ? profile.data() : null });
@@ -410,7 +452,7 @@ async function hideUserContent({ admin, uid, mediaBucket }) {
 }
 
 async function setUserSuspension({ admin, auth, data, mediaBucket }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'setUserSuspension');
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'You cannot suspend yourself.', 'self_admin_action');
   const suspended = data?.suspended === true;
@@ -446,7 +488,7 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
 }
 
 async function setUserEmailVerified({ admin, auth, data }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'setUserEmailVerified');
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'You cannot modify your own verification.', 'self_admin_action');
   const verified = data?.verified === true;
@@ -458,7 +500,7 @@ async function setUserEmailVerified({ admin, auth, data }) {
 }
 
 async function setUserAdmin({ admin, auth, data }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'setUserAdmin');
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'You cannot change your own admin access.', 'self_admin_action');
   const enabled = data?.admin === true;
@@ -477,7 +519,7 @@ async function setUserAdmin({ admin, auth, data }) {
 }
 
 async function deleteUserAsAdmin({ admin, auth, data, mediaBucket }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'deleteUserAsAdmin');
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'Use account settings to delete your own account.', 'self_admin_action');
   const reason = cleanText(data?.reason, 'reason');
@@ -515,7 +557,7 @@ async function deleteUserAsAdmin({ admin, auth, data, mediaBucket }) {
 }
 
 async function listModerationAudit({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'listModerationAudit');
   let query = admin.firestore().collection('system/moderation/audit').orderBy('createdAt', 'desc').limit(PAGE_SIZE);
   if (data?.cursor) {
     const cursor = await admin.firestore().doc(`system/moderation/audit/${cleanText(data.cursor, 'cursor', 180)}`).get();
@@ -546,6 +588,7 @@ module.exports = {
   audit,
   assertAdmin,
   assertRecentAuth,
+  sensitiveAdminActions,
   deleteUserAsAdmin,
   getAdminUser,
   getModerationCase,
@@ -560,5 +603,6 @@ module.exports = {
   publicModerationReport,
   setUserAdmin,
   setUserEmailVerified,
+  prepareAdminAction,
   setUserSuspension,
 };

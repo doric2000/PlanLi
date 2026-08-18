@@ -17,6 +17,7 @@ import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 import RouteMapScreen from "./src/features/roadtrip/screens/RouteMapScreen";
 import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
+import BlockedUsersScreen from "./src/features/profile/screens/BlockedUsersScreen";
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
 import PreferenceSetupScreen from "./src/features/profile/screens/PreferenceSetupScreen";
@@ -46,6 +47,7 @@ const NotificationsAuthed = withRequireAuth(NotificationScreen);
 const SettingsAuthed = withRequireAuth(SettingsScreen);
 const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
+const BlockedUsersAuthed = withRequireAuth(BlockedUsersScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
 const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen, CAPABILITIES.PREFERENCES_SETUP);
 const AddRecommendationActive = withRequireAuth(AddRecommendationScreen, CAPABILITIES.ACTIVE);
@@ -106,6 +108,7 @@ export default function App() {
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
 					<Stack.Screen name="Notifications" component={NotificationsAuthed} />
 					<Stack.Screen name='Settings' component={SettingsAuthed} />
+					<Stack.Screen name='BlockedUsers' component={BlockedUsersAuthed} />
 					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} />
 					<Stack.Screen name="ChangePassword" component={ChangePasswordAuthed} /> 
 					<Stack.Screen name='UserProfile' component={UserProfileScreen} />

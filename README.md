@@ -581,8 +581,18 @@ and as a Firebase Hosting web application at
 `https://planli-f0b12.web.app/admin`. Access requires the Firebase `admin`
 custom claim; the server checks the claim again for every operation. Sensitive
 actions require a sign-in from the last ten minutes, a written reason, and are
-recorded in the append-only moderation audit log. The web console signs out
-after 30 minutes without activity.
+recorded in the append-only moderation audit log. Current sensitive actions are:
+
+- `moderateContent` (dismiss / hold / restore / delete report targets)
+- `setUserSuspension` (suspend / unsuspend a user)
+- `setUserEmailVerified` (force email verification state)
+- `setUserAdmin` (grant / remove admin access)
+- `deleteUserAsAdmin` (full irreversible account deletion)
+- `deactivateDestination` (deactivate a city and place linked content on moderation hold)
+
+All other admin callables are defined as non-sensitive (no recent sign-in check)
+when they only read or apply non-destructive moderation workflows.
+The web console signs out after 30 minutes without activity.
 
 Build the generated, ignored Hosting bundle before a Hosting deployment:
 

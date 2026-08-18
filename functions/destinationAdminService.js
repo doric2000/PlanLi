@@ -2,8 +2,12 @@ const crypto = require('crypto');
 const { FieldPath } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 
-const { audit, prepareAdmin } = require('./adminService');
-const { downloadAirports, nearestScheduledAirports } = require('./airportFacts');
+const { audit, prepareAdminAction } = require('./adminService');
+const {
+  closestScheduledAirport,
+  downloadAirports,
+  nearestScheduledAirports,
+} = require('./airportFacts');
 const { syncDestinationCatalog } = require('./destinationCatalogService');
 const {
   consumeUnsplashBudget,
@@ -47,6 +51,35 @@ function serialize(value) {
   return value;
 }
 
+function normalizeAirportCode(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function withAirportCode(airport) {
+  return airport && normalizeAirportCode(airport.iataCode);
+}
+
+function selectAirportByIataCode(cityCoordinates, airports, rawIataCode, options = {}) {
+  const requestedCode = normalizeAirportCode(rawIataCode);
+  const maxDistanceKm = Number.isFinite(Number(options.maxDistanceKm))
+    ? Number(options.maxDistanceKm)
+    : null;
+  const enforceMaxDistance = options.enforceMaxDistance !== false;
+  if (!requestedCode) return null;
+  const directMatch = nearestScheduledAirports(cityCoordinates, airports, options)
+    .find((airport) => withAirportCode(airport) === requestedCode);
+  if (directMatch) return directMatch;
+  const fallbackAirport = airports.find((airport) => withAirportCode(airport) === requestedCode);
+  if (!fallbackAirport) return null;
+  const withDistance = nearestScheduledAirports(
+    cityCoordinates,
+    [fallbackAirport],
+    { ...options, maxDistanceKm: Number.MAX_SAFE_INTEGER }
+  );
+  if (!withDistance[0] && maxDistanceKm !== null && enforceMaxDistance) return null;
+  return withDistance[0] || null;
+}
+
 function timestampMs(value) {
   if (!value) return 0;
   if (typeof value.toMillis === 'function') return value.toMillis();
@@ -54,11 +87,80 @@ function timestampMs(value) {
   return Date.parse(value) || 0;
 }
 
+function normalizedCoordinates(value) {
+  const valueAsArray = Array.isArray(value) ? value : null;
+  const valueAsObject = value && typeof value === 'object' ? value : null;
+  const lat = Number(
+    valueAsObject?.lat ??
+    valueAsObject?.latitude ??
+    valueAsArray?.[1] ??
+    valueAsObject?.point?.lat ??
+    valueAsObject?.point?.latitude ??
+    valueAsObject?.point?.y ??
+    valueAsObject?.geometry?.coordinates?.[1] ??
+    valueAsObject?.geometry?.lat ??
+    valueAsObject?.geometry?.location?.lat ??
+    valueAsObject?.geometry?.location?.latitude ??
+    valueAsObject?.location?.lat ??
+    valueAsObject?.location?.latitude ??
+    valueAsObject?.position?.lat ??
+    valueAsObject?.position?.latitude ??
+    valueAsObject?.coordinates?.lat ??
+    valueAsObject?.coordinates?.latitude ??
+    valueAsObject?.geoPoint?.lat ??
+    valueAsObject?.googlePlace?.geometry?.location?.lat
+  );
+  const lng = Number(
+    valueAsObject?.lng ??
+    valueAsObject?.longitude ??
+    valueAsArray?.[0] ??
+    valueAsObject?.point?.lng ??
+    valueAsObject?.point?.longitude ??
+    valueAsObject?.point?.x ??
+    valueAsObject?.geometry?.coordinates?.[0] ??
+    valueAsObject?.geometry?.lng ??
+    valueAsObject?.geometry?.location?.lng ??
+    valueAsObject?.geometry?.location?.longitude ??
+    valueAsObject?.location?.lng ??
+    valueAsObject?.location?.longitude ??
+    valueAsObject?.position?.lng ??
+    valueAsObject?.position?.longitude ??
+    valueAsObject?.coordinates?.lng ??
+    valueAsObject?.coordinates?.longitude ??
+    valueAsObject?.geoPoint?.lng ??
+    valueAsObject?.googlePlace?.geometry?.location?.lng
+  );
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
 function destinationCoordinates(destination) {
-  const value = destination?.googleCache?.coordinates || destination?.identity?.coordinates || destination?.coordinates;
-  const lat = Number(value?.lat ?? value?.latitude);
-  const lng = Number(value?.lng ?? value?.longitude);
-  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  const candidates = [
+    destination?.googleCache?.coordinates,
+    destination?.googleCache?.geometry?.location,
+    destination?.identity?.coordinates,
+    destination?.identity?.geometry?.location,
+    destination?.mapLocation,
+    destination?.mapLocation?.location,
+    destination?.geometry,
+    destination?.geometry?.location,
+    destination?.coordinates,
+    destination?.coords,
+    destination?.location,
+    destination?.location?.location,
+    destination?.location?.coordinates,
+    destination?.place?.coordinates,
+    destination?.place?.geometry?.location,
+    destination?.providerRefs?.coords,
+    destination?.providerRefs?.geoPoint,
+    destination?.providerRefs?.coordinates,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizedCoordinates(candidate);
+    if (normalized) return normalized;
+  }
+  return null;
 }
 
 function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
@@ -163,9 +265,46 @@ async function notifyAdminsOfDestination({ admin, countryId, cityId }) {
 }
 
 async function onDestinationCreated({ admin, countryId, cityId }) {
+  await syncDestinationAirport({
+    admin,
+    countryId,
+    cityId,
+    applyWhenMissingOnly: true,
+  });
   const result = await evaluateAndPersistDestination({ admin, countryId, cityId, created: true });
   await notifyAdminsOfDestination({ admin, countryId, cityId });
   return result;
+}
+
+async function syncDestinationAirport({
+  admin,
+  countryId,
+  cityId,
+  applyWhenMissingOnly = false,
+}) {
+  const bundle = await destinationBundle(admin, countryId, cityId);
+  if (applyWhenMissingOnly) {
+    const existing = bundle.city?.travelFacts?.closestAirport || bundle.city?.closestAirport;
+    const existingIataCode = String(existing?.iataCode || '').trim().toUpperCase();
+    if (/^[A-Z0-9]{3}$/.test(existingIataCode)) return { updated: false, updatedByAdmin: false };
+  }
+  const coordinates = destinationCoordinates(bundle.city);
+  if (!coordinates) return { updated: false, reason: 'missing_coordinates' };
+  const downloaded = await downloadAirports({});
+  const closest = closestScheduledAirport(coordinates, downloaded.airports);
+  if (!closest) return { updated: false, reason: 'missing_airport' };
+  await bundle.cityRef.update({
+    'travelFacts.closestAirport': {
+      name: closest.name,
+      iataCode: closest.iataCode,
+      distanceKm: Math.round((Number(closest.distanceKm) || 0) * 10) / 10,
+      source: 'OurAirports',
+      sourceUpdatedAt: downloaded.sourceUpdatedAt,
+      selectedByAdmin: false,
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return { updated: true, iataCode: closest.iataCode };
 }
 
 async function scanDestinationQuality({ admin, limit = 50 }) {
@@ -201,7 +340,7 @@ async function scanDestinationQuality({ admin, limit = 50 }) {
 }
 
 async function listDestinationReviews({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'listDestinationReviews');
   const requestedStatus = typeof data?.status === 'string' ? data.status : 'all';
   const db = admin.firestore();
   const collection = db.collection('system/moderation/destinationReviews');
@@ -237,7 +376,7 @@ async function listDestinationReviews({ admin, auth, data }) {
 }
 
 async function getDestinationReview({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'getDestinationReview');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const bundle = await destinationBundle(admin, countryId, cityId);
@@ -253,7 +392,7 @@ async function getDestinationReview({ admin, auth, data }) {
 }
 
 async function recheckDestination({ admin, auth, data, unsplashKey, mediaBucket }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'recheckDestination');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const before = await destinationBundle(admin, countryId, cityId);
@@ -272,7 +411,7 @@ async function recheckDestination({ admin, auth, data, unsplashKey, mediaBucket 
 }
 
 async function approveDestination({ admin, auth, data }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'approveDestination');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const reason = cleanReason(data?.reason);
@@ -293,7 +432,7 @@ async function approveDestination({ admin, auth, data }) {
 }
 
 async function getDestinationImageCandidates({ admin, auth, data, unsplashKey }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'getDestinationImageCandidates');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const bundle = await destinationBundle(admin, countryId, cityId);
@@ -325,7 +464,7 @@ async function getDestinationImageCandidates({ admin, auth, data, unsplashKey })
 }
 
 async function selectDestinationImageCandidate({ admin, auth, data, unsplashKey, mediaBucket }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'selectDestinationImageCandidate');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const candidateId = cleanId(data?.candidateId, 'candidateId');
@@ -362,7 +501,7 @@ async function selectDestinationImageCandidate({ admin, auth, data, unsplashKey,
 }
 
 async function setDestinationUploadedImage({ admin, auth, data, mediaBucket }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'setDestinationUploadedImage');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const reason = cleanReason(data?.reason);
@@ -421,7 +560,7 @@ async function setDestinationUploadedImage({ admin, auth, data, mediaBucket }) {
 }
 
 async function getAirportCandidates({ admin, auth, data }) {
-  await prepareAdmin(admin, auth);
+  await prepareAdminAction(admin, auth, 'getAirportCandidates');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const bundle = await destinationBundle(admin, countryId, cityId);
@@ -435,7 +574,7 @@ async function getAirportCandidates({ admin, auth, data }) {
 }
 
 async function setDestinationAirport({ admin, auth, data }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'setDestinationAirport');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const iataCode = cleanId(data?.iataCode, 'iataCode').toUpperCase();
@@ -444,8 +583,7 @@ async function setDestinationAirport({ admin, auth, data }) {
   const coordinates = destinationCoordinates(bundle.city);
   if (!coordinates) fail('failed-precondition', 'Destination has no coordinates.', 'missing_coordinates');
   const downloaded = await downloadAirports({});
-  const candidate = nearestScheduledAirports(coordinates, downloaded.airports, { limit: 20 })
-    .find((airport) => airport.iataCode === iataCode);
+  const candidate = selectAirportByIataCode(coordinates, downloaded.airports, iataCode, { limit: 20, enforceMaxDistance: false });
   if (!candidate) fail('invalid-argument', 'Airport is not an eligible nearby candidate.', 'invalid_airport');
   await bundle.cityRef.update({
     'travelFacts.closestAirport': {
@@ -472,7 +610,7 @@ async function updateDocumentsInBatches(admin, documents, patch) {
 }
 
 async function deactivateDestination({ admin, auth, data }) {
-  await prepareAdmin(admin, auth, { recent: true });
+  await prepareAdminAction(admin, auth, 'deactivateDestination');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const reason = cleanReason(data?.reason);
@@ -514,6 +652,7 @@ module.exports = {
   deactivateDestination,
   destinationCoordinates,
   evaluateAndPersistDestination,
+  selectAirportByIataCode,
   getAirportCandidates,
   getDestinationImageCandidates,
   getDestinationReview,
@@ -524,6 +663,7 @@ module.exports = {
   recheckDestination,
   scanDestinationQuality,
   selectDestinationImageCandidate,
+  syncDestinationAirport,
   setDestinationAirport,
   setDestinationUploadedImage,
 };

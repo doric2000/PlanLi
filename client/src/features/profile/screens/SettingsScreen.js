@@ -203,7 +203,16 @@ export default function SettingsScreen({ navigation }) {
           onPress={() => navigation.navigate('ChangeName')}
           testID="settings-change-name-button"
         >
-          <AppText style={styles.primaryBtnText}>שינוי שם — פעם אחת בלבד</AppText>
+          <AppText style={styles.primaryBtnText}>שינוי שם</AppText>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('BlockedUsers')}
+          testID="settings-blocked-users-button"
+        >
+          <AppText style={styles.primaryBtnText}>משתמשים שחסמת</AppText>
         </TouchableOpacity>
 
         <TouchableOpacity

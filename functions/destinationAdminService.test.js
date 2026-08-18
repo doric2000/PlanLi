@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { listDestinationReviews, qualityIssues } = require('./destinationAdminService');
+const {
+  qualityIssues,
+  listDestinationReviews,
+  destinationCoordinates,
+  selectAirportByIataCode,
+  syncDestinationAirport,
+} = require('./destinationAdminService');
 const { nearestScheduledAirports } = require('./airportFacts');
 
 function validDestination() {
@@ -39,6 +45,25 @@ test('destination quality reports identity, image, airport and job problems', ()
   }
 });
 
+test('destinationCoordinates reads multiple coordinate shapes', () => {
+  assert.deepEqual(destinationCoordinates({
+    coords: { latitude: 32.08, longitude: 34.78 },
+  }), { lat: 32.08, lng: 34.78 });
+  assert.deepEqual(destinationCoordinates({
+    mapLocation: { geometry: { coordinates: [-80.1918, 25.7617] } },
+  }), { lat: 25.7617, lng: -80.1918 });
+  assert.deepEqual(destinationCoordinates({
+    location: { lat: 48.8566, lng: 2.3522 },
+  }), { lat: 48.8566, lng: 2.3522 });
+  assert.deepEqual(destinationCoordinates({
+    googleCache: { geometry: { location: { lat: 31.7767, lng: 35.2345 } } },
+  }), { lat: 31.7767, lng: 35.2345 });
+  assert.deepEqual(destinationCoordinates({
+    identity: { geometry: { location: { lat: 33.66, lng: -95.5555 } } },
+  }), { lat: 33.66, lng: -95.5555 });
+  assert.equal(destinationCoordinates({ place: {} }), null);
+});
+
 test('airport candidates are bounded, sorted and distance annotated', () => {
   const result = nearestScheduledAirports({ lat: 0, lng: 0 }, [
     { ident: 'B', iataCode: 'BBB', coordinates: { lat: 1, lng: 0 } },
@@ -47,6 +72,75 @@ test('airport candidates are bounded, sorted and distance annotated', () => {
   ], { limit: 2, maxDistanceKm: 300 });
   assert.deepEqual(result.map((entry) => entry.iataCode), ['AAA', 'BBB']);
   assert.ok(result[0].distanceKm < result[1].distanceKm);
+});
+
+test('selectAirportByIataCode is stable against spacing, casing and list limit artifacts', () => {
+  const airports = [
+    { ident: 'A', iataCode: 'AAA', coordinates: { lat: 0.1, lng: 0 } },
+    { ident: 'B', iataCode: 'BBB', coordinates: { lat: 0.2, lng: 0 } },
+    { ident: 'C', iataCode: 'CCC', coordinates: { lat: 3, lng: 3 } },
+  ];
+  const coordinates = { lat: 0, lng: 0 };
+  const result = selectAirportByIataCode(coordinates, airports, ' bbb ', { limit: 1 });
+  assert.equal(result.iataCode, 'BBB');
+  assert.equal(result.ident, 'B');
+});
+
+test('selectAirportByIataCode can skip nearby limit when admin sets override', () => {
+  const airports = [
+    { ident: 'MIA', iataCode: 'MIA', coordinates: { lat: 40.0, lng: 40.0 } },
+  ];
+  assert.equal(
+    selectAirportByIataCode({ lat: 0, lng: 0 }, airports, 'MIA', { limit: 1, enforceMaxDistance: false }).iataCode,
+    'MIA'
+  );
+});
+
+test('selectAirportByIataCode can bypass distance cap for explicit manual matches', () => {
+  const airports = [
+    { ident: 'NEAR', iataCode: 'AAA', coordinates: { lat: 1, lng: 1 } },
+    { ident: 'MIA', iataCode: 'MIA', coordinates: { lat: 40, lng: 40 } },
+    ...Array.from({ length: 18 }, (_, index) => ({
+      ident: `F${String(index).padStart(2, '0')}`,
+      iataCode: `F${String(index + 2).padStart(2, '0')}`,
+      coordinates: { lat: 20 + index * 0.1, lng: 20 + index * 0.1 },
+    })),
+  ];
+  const result = selectAirportByIataCode(
+    { lat: 0, lng: 0 },
+    airports,
+    'MIA',
+    { limit: 1, maxDistanceKm: 300, enforceMaxDistance: false }
+  );
+  assert.equal(result.iataCode, 'MIA');
+});
+
+test('syncDestinationAirport does not overwrite an existing closestAirport when forced', async () => {
+  const cityData = { travelFacts: { closestAirport: { iataCode: 'TLV' } } };
+  const db = {
+    doc(path) {
+      if (path === 'countries/c1/destinations/city-1') {
+        return {
+          get: async () => ({ exists: true, data: () => cityData }),
+        };
+      }
+      if (path === 'countries/c1') return { get: async () => ({ exists: true, data: () => ({ name: 'Israel' }) }) };
+      if (path === 'system/runtime/destinationJobs/c1_city-1') return { get: async () => ({ exists: false, data: () => ({}) }) };
+      if (path.startsWith('system/moderation/destinationReviews/')) return { get: async () => ({ exists: false, data: () => ({}) }) };
+      throw new Error(`Unexpected Firestore path: ${path}`);
+    },
+    FieldValue: { serverTimestamp: () => 'server-time' },
+  };
+  const admin = { firestore: () => db };
+  const result = await syncDestinationAirport({
+    admin,
+    countryId: 'c1',
+    cityId: 'city-1',
+    applyWhenMissingOnly: true,
+  });
+  assert.equal(result.updated, false);
+  assert.equal(result.updatedByAdmin, false);
+  assert.equal(cityData.travelFacts.closestAirport.iataCode, 'TLV');
 });
 
 test('listing destination reviews is a pure read and never starts a quality scan', async () => {
