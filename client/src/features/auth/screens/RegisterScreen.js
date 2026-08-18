@@ -12,7 +12,7 @@ import {
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import LegalConsent from '../components/LegalConsent';
-import { resetToRootRoute } from '../../../navigation/authNavigation';
+import { leaveAuthFlow, resetToRootRoute } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 import {
   normalizeDisplayName,
@@ -20,8 +20,8 @@ import {
   validateDisplayName,
 } from '../utils/displayName';
 
-export default function RegisterScreen({ navigation }) {
-  const { runAuthTransition } = useAuth();
+export default function RegisterScreen({ navigation, route }) {
+  const { clearPendingReturn, runAuthTransition } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +30,10 @@ export default function RegisterScreen({ navigation }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const strength = useMemo(() => Math.min(100, Math.round((password.length / 14) * 100)), [password]);
+  const handleBack = () => {
+    clearPendingReturn();
+    leaveAuthFlow(navigation, route?.params?.fallbackTab);
+  };
 
   const handleRegister = async () => {
     const displayName = normalizeDisplayName(fullName);
@@ -55,7 +59,7 @@ export default function RegisterScreen({ navigation }) {
   };
 
   return (
-    <AuthLayout testID="register-screen" showBack onBack={() => navigation.goBack()}>
+    <AuthLayout testID="register-screen" showBack onBack={handleBack}>
       <BrandWordmark compact />
       <AppText style={authStyles.title}>יוצאים לדרך</AppText>
       <AppText style={authStyles.subtitle}>כמה פרטים קצרים והחשבון מוכן.</AppText>

@@ -15,7 +15,7 @@ import {
   setDiagnosticTag,
   setErrorReportingUser,
 } from '../../services/ErrorReporting';
-import { openAuthFlow } from '../../navigation/authNavigation';
+import { getAuthFallbackTab, openAuthFlow } from '../../navigation/authNavigation';
 
 const AuthContext = createContext(null);
 
@@ -34,6 +34,7 @@ export function AuthProvider({ children, navigationRef }) {
   const [authFlowTransitionCount, setAuthFlowTransitionCount] = useState(0);
   const pendingReturnToRef = useRef(null);
   const previousStatusRef = useRef(null);
+  const serverConfirmedProfileUidRef = useRef(null);
 
   useEffect(() => {
     let unsubscribeProfile = null;
@@ -43,6 +44,7 @@ export function AuthProvider({ children, navigationRef }) {
       setUser(nextUser);
       setProfileError(null);
       if (!nextUser?.uid) {
+        serverConfirmedProfileUidRef.current = null;
         setUserDocument(null);
         setLoading(false);
         return;
@@ -50,9 +52,21 @@ export function AuthProvider({ children, navigationRef }) {
       setLoading(true);
       unsubscribeProfile = onSnapshot(
         doc(db, 'users', nextUser.uid),
+        { includeMetadataChanges: true },
         (snapshot) => {
+          const fromCache = snapshot.metadata?.fromCache === true;
+          if (fromCache && serverConfirmedProfileUidRef.current === nextUser.uid) {
+            setProfileError(null);
+            setLoading(false);
+            return;
+          }
           setUserDocument(snapshot.exists() ? snapshot.data() : null);
           setProfileError(null);
+          if (fromCache) {
+            setLoading(true);
+            return;
+          }
+          serverConfirmedProfileUidRef.current = nextUser.uid;
           setLoading(false);
         },
         (error) => {
@@ -91,6 +105,16 @@ export function AuthProvider({ children, navigationRef }) {
   }, []);
 
   const status = deriveAuthState(user, userDocument, loading);
+
+  const synchronizeUserDocument = useCallback((nextUserDocument) => {
+    const currentUser = auth.currentUser || user;
+    if (!currentUser?.uid) return AUTH_STATES.GUEST;
+    serverConfirmedProfileUidRef.current = currentUser.uid;
+    setUserDocument(nextUserDocument || null);
+    setProfileError(null);
+    setLoading(false);
+    return deriveAuthState(currentUser, nextUserDocument || null, false);
+  }, [user]);
 
   useEffect(() => {
     setErrorReportingUser(user?.uid || null);
@@ -146,7 +170,9 @@ export function AuthProvider({ children, navigationRef }) {
     setGate(null);
     if (!navigationRef?.isReady?.()) return;
     if (nextStatus === AUTH_STATES.GUEST) {
-      openAuthFlow(navigationRef, 'Login');
+      openAuthFlow(navigationRef, 'Login', {
+        fallbackTab: getAuthFallbackTab(navigationRef.getCurrentRoute?.()?.name),
+      });
       return;
     }
     if (routeName) navigationRef.navigate(routeName);
@@ -154,7 +180,11 @@ export function AuthProvider({ children, navigationRef }) {
 
   const openRegistration = useCallback(() => {
     setGate(null);
-    if (navigationRef?.isReady?.()) openAuthFlow(navigationRef, 'Register');
+    if (navigationRef?.isReady?.()) {
+      openAuthFlow(navigationRef, 'Register', {
+        fallbackTab: getAuthFallbackTab(navigationRef.getCurrentRoute?.()?.name),
+      });
+    }
   }, [navigationRef]);
 
   const requireCapability = useCallback((capability, returnTo, options = {}) => {
@@ -262,6 +292,7 @@ export function AuthProvider({ children, navigationRef }) {
     requireCapability,
     handleCallableAuthError,
     clearPendingReturn,
+    synchronizeUserDocument,
   }), [
     clearPendingReturn,
     dismissGate,
@@ -275,6 +306,7 @@ export function AuthProvider({ children, navigationRef }) {
     requireCapability,
     handleCallableAuthError,
     status,
+    synchronizeUserDocument,
     user,
     userDocument,
   ]);

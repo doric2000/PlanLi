@@ -1,4 +1,6 @@
 import {
+  getAuthFallbackTab,
+  leaveAuthFlow,
   openAuthFlow,
   openMainTab,
   resetToMain,
@@ -17,6 +19,38 @@ describe('authentication navigation helpers', () => {
         screen: 'Auth',
         params: { screen: 'Login' },
       },
+    });
+  });
+
+  it('passes a safe public fallback into a directly opened auth screen', () => {
+    const rootNavigation = { navigate: jest.fn() };
+    const nestedNavigation = { getParent: jest.fn(() => rootNavigation) };
+
+    openAuthFlow(nestedNavigation, 'Register', { fallbackTab: 'Community' });
+
+    expect(rootNavigation.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'Tabs',
+      params: {
+        screen: 'Auth',
+        params: { screen: 'Register', params: { fallbackTab: 'Community' } },
+      },
+    });
+  });
+
+  it('uses stack history when available and otherwise returns to a safe public tab', () => {
+    const withHistory = { canGoBack: jest.fn(() => true), goBack: jest.fn() };
+    leaveAuthFlow(withHistory, 'Community');
+    expect(withHistory.goBack).toHaveBeenCalled();
+
+    const rootNavigation = { navigate: jest.fn() };
+    const withoutHistory = {
+      canGoBack: jest.fn(() => false),
+      getParent: jest.fn(() => rootNavigation),
+    };
+    leaveAuthFlow(withoutHistory, 'Register');
+    expect(rootNavigation.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'Tabs',
+      params: { screen: getAuthFallbackTab('Register') },
     });
   });
 

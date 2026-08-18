@@ -101,6 +101,7 @@ describe('ProfileService smart-profile persistence', () => {
 
   it('accepts account setup only after the current legal versions are persisted', async () => {
     const persisted = {
+      displayName: 'Admin',
       onboarding: {
         profileDetailsVersion: 1,
         profileDetailsCompletedAt: { seconds: 1 },
@@ -114,7 +115,7 @@ describe('ProfileService smart-profile persistence', () => {
     getDocFromServer.mockResolvedValue({ data: () => persisted });
 
     await expect(completeAccountSetup({ displayName: 'Admin', acceptedLegal: true }))
-      .resolves.toEqual({ ok: true });
+      .resolves.toEqual({ ok: true, userDocument: persisted });
     expect(verifyPersistedAccountSetup(persisted)).toBe(true);
   });
 

@@ -25,7 +25,7 @@ jest.mock('firebase/auth', () => ({
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(() => ({ path: 'users/user-1' })),
-  onSnapshot: (_reference, callback) => {
+  onSnapshot: (_reference, _options, callback) => {
     profileListener = callback;
     return jest.fn();
   },
@@ -48,7 +48,15 @@ const activeDocument = {
 };
 
 function Harness() {
-  const { status, gate, dismissGate, requireCapability, handleCallableAuthError } = useAuth();
+  const {
+    status,
+    gate,
+    dismissGate,
+    requireCapability,
+    handleCallableAuthError,
+    openRegistration,
+    synchronizeUserDocument,
+  } = useAuth();
   return (
     <>
       <Text testID="auth-status">{status}</Text>
@@ -75,6 +83,11 @@ function Harness() {
         )}
       />
       <TouchableOpacity testID="dismiss-gate" onPress={dismissGate} />
+      <TouchableOpacity testID="open-registration" onPress={openRegistration} />
+      <TouchableOpacity
+        testID="synchronize-profile"
+        onPress={() => synchronizeUserDocument(activeDocument)}
+      />
     </>
   );
 }
@@ -125,6 +138,66 @@ describe('AuthProvider capability gate', () => {
     fireEvent.press(screen.getByTestId('handle-server-auth-error'));
     expect(screen.getByTestId('gate-status').props.children)
       .toBe(AUTH_STATES.ACCOUNT_SETUP_REQUIRED);
+  });
+
+  it('opens registration with the originating public tab as its safe back destination', () => {
+    const navigationRef = {
+      getCurrentRoute: jest.fn(() => ({ name: 'Community' })),
+      isReady: jest.fn(() => true),
+      navigate: jest.fn(),
+      resetRoot: jest.fn(),
+    };
+    const screen = render(
+      <AuthProvider navigationRef={navigationRef}><Harness /></AuthProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('require-active'));
+    fireEvent.press(screen.getByTestId('open-registration'));
+
+    expect(navigationRef.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'Tabs',
+      params: {
+        screen: 'Auth',
+        params: {
+          screen: 'Register',
+          params: { fallbackTab: 'Community' },
+        },
+      },
+    });
+  });
+
+  it('does not let a cached profile downgrade a server-confirmed account state', () => {
+    const navigationRef = {
+      isReady: jest.fn(() => true),
+      navigate: jest.fn(),
+      resetRoot: jest.fn(),
+    };
+    const screen = render(
+      <AuthProvider navigationRef={navigationRef}><Harness /></AuthProvider>
+    );
+    const user = { uid: 'user-1', emailVerified: true, providerData: [{ providerId: 'password' }] };
+
+    act(() => {
+      authListener(user);
+      profileListener({
+        exists: () => true,
+        data: () => ({ displayName: 'Admin' }),
+        metadata: { fromCache: true },
+      });
+    });
+    expect(screen.getByTestId('auth-status').props.children).toBe(AUTH_STATES.LOADING);
+
+    fireEvent.press(screen.getByTestId('synchronize-profile'));
+    expect(screen.getByTestId('auth-status').props.children).toBe(AUTH_STATES.READY);
+
+    act(() => {
+      profileListener({
+        exists: () => true,
+        data: () => ({ displayName: 'Admin' }),
+        metadata: { fromCache: true },
+      });
+    });
+    expect(screen.getByTestId('auth-status').props.children).toBe(AUTH_STATES.READY);
   });
 
   it('leaves a blocked route safely when the user chooses not now', async () => {

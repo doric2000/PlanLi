@@ -16,15 +16,19 @@ const mockEnsureAuthenticatedUserProfile = jest.fn();
 const mockSignInWithGoogle = jest.fn();
 const mockRunAuthTransition = jest.fn(async (operation) => operation());
 const mockCompleteAccountSetup = jest.fn();
+const mockSynchronizeUserDocument = jest.fn();
+const mockClearPendingReturn = jest.fn();
 let mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
 let mockUserDocument = { displayName: 'Admin' };
 
 jest.mock('../src/features/auth/AuthContext', () => ({
   useAuth: () => ({
     runAuthTransition: mockRunAuthTransition,
+    clearPendingReturn: mockClearPendingReturn,
     status: mockAuthStatus,
     user: { uid: 'user-1', email: 'a@b.com', displayName: 'Admin' },
     userDocument: mockUserDocument,
+    synchronizeUserDocument: mockSynchronizeUserDocument,
   }),
 }));
 
@@ -73,7 +77,8 @@ describe('authentication screens', () => {
     jest.clearAllMocks();
     mockValidateNewPassword.mockResolvedValue({ isValid: true });
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
-    mockCompleteAccountSetup.mockResolvedValue({ ok: true });
+    mockCompleteAccountSetup.mockResolvedValue({ ok: true, userDocument: { displayName: 'Admin' } });
+    mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.PREFERENCES_REQUIRED);
     mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
     mockUserDocument = { displayName: 'Admin' };
   });
@@ -103,11 +108,13 @@ describe('authentication screens', () => {
   it('keeps social providers on login and provides a working back action', () => {
     const navigation = {
       navigate: jest.fn(), reset: jest.fn(), replace: jest.fn(), goBack: jest.fn(),
+      canGoBack: jest.fn(() => true),
     };
     const screen = render(<LoginScreen navigation={navigation} />);
     expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-back-button'));
     expect(navigation.goBack).toHaveBeenCalled();
+    expect(mockClearPendingReturn).toHaveBeenCalled();
   });
 
   it('sends a new external-provider user to legal consent before preferences', async () => {
@@ -180,7 +187,7 @@ describe('authentication screens', () => {
     });
   });
 
-  it('waits for the persisted auth state before leaving account setup', async () => {
+  it('adopts the verified server profile before opening preference setup', async () => {
     const navigation = { reset: jest.fn(), navigate: jest.fn() };
     const screen = render(<CompleteAccountScreen navigation={navigation} />);
     fireEvent.press(screen.getByTestId('legal-consent-checkbox'));
@@ -190,14 +197,11 @@ describe('authentication screens', () => {
       displayName: 'Admin',
       acceptedLegal: true,
     }));
-    expect(navigation.reset).not.toHaveBeenCalled();
-
-    mockAuthStatus = AUTH_STATES.READY;
-    screen.rerender(<CompleteAccountScreen navigation={navigation} />);
-    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+    expect(mockSynchronizeUserDocument).toHaveBeenCalledWith({ displayName: 'Admin' });
+    expect(navigation.reset).toHaveBeenCalledWith({
       index: 0,
-      routes: [{ name: 'Main' }],
-    }));
+      routes: [{ name: 'PreferenceSetup' }],
+    });
   });
 
   it('locks the existing display name when only renewed legal consent is required', () => {
@@ -215,13 +219,24 @@ describe('authentication screens', () => {
   });
 
   it('keeps registration email-only and provides a working back action', () => {
+    const rootNavigation = { navigate: jest.fn() };
+    const tabNavigation = { getParent: jest.fn(() => rootNavigation) };
     const navigation = {
       reset: jest.fn(), replace: jest.fn(), navigate: jest.fn(), goBack: jest.fn(),
+      canGoBack: jest.fn(() => false),
+      getParent: jest.fn(() => tabNavigation),
     };
-    const screen = render(<RegisterScreen navigation={navigation} />);
+    const screen = render(
+      <RegisterScreen navigation={navigation} route={{ params: { fallbackTab: 'Community' } }} />
+    );
     expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
     fireEvent.press(screen.getByTestId('auth-back-button'));
-    expect(navigation.goBack).toHaveBeenCalled();
+    expect(navigation.goBack).not.toHaveBeenCalled();
+    expect(mockClearPendingReturn).toHaveBeenCalled();
+    expect(rootNavigation.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'Tabs',
+      params: { screen: 'Community' },
+    });
   });
 
   it('shows the selected horizontal PlanLi wordmark on login and registration', () => {

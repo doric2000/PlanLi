@@ -2,9 +2,8 @@ import { doc, getDocFromServer } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions, db } from '../config/firebase';
 import {
-  PRIVACY_VERSION,
-  PROFILE_DETAILS_VERSION,
-  TERMS_VERSION,
+  hasCompletedAccountSetup,
+  hasCompletedPreferences,
 } from '../constants/authPolicy';
 import { TRAVEL_TAXONOMY_VERSION } from '../constants/travelTaxonomy';
 import {
@@ -95,26 +94,26 @@ export function verifyPersistedSmartProfile(requested, persisted, { complete = f
 }
 
 export function verifyPersistedAccountSetup(userDocument) {
-  return Boolean(
-    userDocument?.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
-    && userDocument?.onboarding?.profileDetailsCompletedAt
-    && userDocument?.legal?.termsVersion === TERMS_VERSION
-    && userDocument?.legal?.privacyVersion === PRIVACY_VERSION
-    && userDocument?.legal?.acceptedAt
-  );
+  return hasCompletedAccountSetup(userDocument);
 }
 
 async function readBackSmartProfile(requested, { complete }) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('לא נמצא משתמש מחובר. התחברו מחדש ונסו שוב.');
   const snapshot = await getDocFromServer(doc(db, 'users', uid));
-  const persisted = snapshot.data()?.smartProfile;
+  const userDocument = snapshot.data() || null;
+  const persisted = userDocument?.smartProfile;
   if (!verifyPersistedSmartProfile(requested, persisted, { complete })) {
     const error = new Error('השרת לא שמר את כל ההעדפות. נסו שוב לאחר עדכון השירות.');
     error.code = 'profile/persistence-mismatch';
     throw error;
   }
-  return persisted;
+  if (complete && !hasCompletedPreferences(userDocument)) {
+    const error = new Error('השרת לא סימן את אשף ההעדפות כהושלם. נסו שוב לאחר עדכון השירות.');
+    error.code = 'profile/persistence-mismatch';
+    throw error;
+  }
+  return { smartProfile: persisted, userDocument };
 }
 
 export const saveProfile = async (
@@ -150,10 +149,10 @@ export const saveProfile = async (
     throw error;
   }
   if (!fields?.smartProfile || !verifySmartProfile) return response.data;
-  const smartProfile = await readBackSmartProfile(fields.smartProfile, {
+  const persisted = await readBackSmartProfile(fields.smartProfile, {
     complete: completeSmartProfile,
   });
-  return { ...(response.data || {}), smartProfile };
+  return { ...(response.data || {}), ...persisted };
 });
 
 export const registerUserDocument = async (fields = {}) => runProfileOperation('register_user', async () => {
@@ -170,12 +169,13 @@ export const completeAccountSetup = async ({ displayName, acceptedLegal }) => ru
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('לא נמצא משתמש מחובר. התחברו מחדש ונסו שוב.');
   const snapshot = await getDocFromServer(doc(db, 'users', uid));
-  if (!verifyPersistedAccountSetup(snapshot.data())) {
+  const userDocument = snapshot.data() || null;
+  if (!verifyPersistedAccountSetup(userDocument)) {
     const error = new Error('שירות החשבון אינו מעודכן לגרסאות ההסכמה הנוכחיות.');
     error.code = 'profile/account-setup-persistence-mismatch';
     throw error;
   }
   await auth.currentUser?.reload?.();
-  return response.data;
+  return { ...(response.data || {}), userDocument };
   }
 );
