@@ -23,7 +23,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('../src/hooks/useAuthUser', () => ({
-  useAuthUser: () => ({ user: mockUser, requireCapability: jest.fn() }),
+  useAuthUser: () => ({ user: mockUser, ensureCapability: jest.fn(async () => false) }),
 }));
 
 jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({

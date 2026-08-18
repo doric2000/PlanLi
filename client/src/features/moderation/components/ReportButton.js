@@ -4,23 +4,27 @@ import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
-import { CAPABILITIES } from '../../../constants/authPolicy';
+import { AUTH_STATES, CAPABILITIES } from '../../../constants/authPolicy';
 import { useAuth } from '../../auth/AuthContext';
 import { setBlockedUser, submitReport } from '../../../services/SocialService';
 import { colors, moderationStyles as styles } from '../../../styles';
 import { REPORT_CATEGORIES } from '../constants/reportCategories';
 
 export default function ReportButton({ target, ownerId, compact = false, color = colors.textSecondary }) {
-  const { user, isActive, requireCapability, handleCallableAuthError } = useAuth();
+  const { user, status, ensureCapability, handleCallableAuthError } = useAuth();
   const [visible, setVisible] = useState(false);
   const [category, setCategory] = useState(null);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const selected = useMemo(() => REPORT_CATEGORIES.find((item) => item.id === category), [category]);
-  if (!target?.id || ownerId === user?.uid || !isActive) return null;
+  if (
+    !target?.id
+    || ownerId === user?.uid
+    || [AUTH_STATES.GUEST, AUTH_STATES.EMAIL_VERIFICATION_REQUIRED].includes(status)
+  ) return null;
 
-  const open = () => {
-    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+  const open = async () => {
+    if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
     setVisible(true);
   };
   const close = () => {
@@ -32,7 +36,7 @@ export default function ReportButton({ target, ownerId, compact = false, color =
   const canSubmit = Boolean(category && (!selected?.detailsRequired || details.trim().length >= 5));
   const send = async () => {
     if (!canSubmit || submitting) return;
-    if (!requireCapability(CAPABILITIES.ACTIVE)) {
+    if (!await ensureCapability(CAPABILITIES.ACTIVE)) {
       close();
       return;
     }

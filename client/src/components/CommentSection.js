@@ -86,7 +86,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
     user: authUser,
     status,
     isActive,
-    requireCapability,
+    ensureCapability,
     handleCallableAuthError,
   } = useAuth();
   const [comments, setComments] = useState([]);
@@ -133,7 +133,7 @@ export const CommentsSection = ({ collectionName, postId }) => {
 
   const handleAddComment = async () => {
     if (newComment.trim() === '') return;
-    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+    if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
 
     setSubmitting(true);
     try {

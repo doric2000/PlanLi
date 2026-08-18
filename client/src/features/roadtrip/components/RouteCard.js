@@ -53,7 +53,7 @@ export const RouteCard = ({
 	variant = "default",
 }) => {
 	const navigation = useNavigation();
-	const { isActive, requireCapability } = useAuthUser();
+	const { isActive, ensureCapability } = useAuthUser();
 	const isFeed = variant === "feed";
 	const {
 		pageWidth,
@@ -109,8 +109,8 @@ export const RouteCard = ({
 
 	const { isAdmin } = useAdminClaim();
 	const canManage = isActive && (isOwner || isAdmin);
-	const guardedDelete = () => {
-		if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+	const guardedDelete = async () => {
+		if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
 		onDelete?.();
 	};
 	const destinationPreviews = useMemo(() => getRouteDestinationPreviews(item, 4), [item]);

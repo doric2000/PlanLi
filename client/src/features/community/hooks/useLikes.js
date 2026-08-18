@@ -12,7 +12,7 @@ const typeFromCollection = (collectionName) => {
   return 'recommendation';
 };
 export const useLikes = (collectionName, itemId, initialLikes = 0) => {
-  const { user, isActive, requireCapability, handleCallableAuthError } = useAuth();
+  const { user, isActive, ensureCapability, handleCallableAuthError } = useAuth();
   const currentUserId = user?.uid;
   const target = useMemo(
     () => ({ type: typeFromCollection(collectionName), id: itemId }),
@@ -40,7 +40,7 @@ export const useLikes = (collectionName, itemId, initialLikes = 0) => {
   }, [currentUserId, isActive, itemId, target]);
 
   const toggleLike = async () => {
-    if (!itemId || !requireCapability(CAPABILITIES.ACTIVE)) return;
+    if (!itemId || !await ensureCapability(CAPABILITIES.ACTIVE)) return;
     const nextLiked = !isLiked;
     const previousCount = likeCount;
     setIsLiked(nextLiked);

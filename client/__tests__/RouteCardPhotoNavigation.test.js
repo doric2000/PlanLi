@@ -20,7 +20,7 @@ jest.mock('../src/hooks/useAdminClaim', () => ({
 }));
 
 jest.mock('../src/hooks/useAuthUser', () => ({
-  useAuthUser: () => ({ isActive: false, requireCapability: jest.fn(() => false) }),
+  useAuthUser: () => ({ isActive: false, ensureCapability: jest.fn(async () => false) }),
 }));
 
 jest.mock('../src/hooks/useBoundedImageWindow', () => ({

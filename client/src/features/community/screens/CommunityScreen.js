@@ -48,7 +48,7 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { requireCapability } = useAuthUser();
+  const { ensureCapability } = useAuthUser();
   // --- State ---
   const [sortBy, setSortBy] = useState('popularity');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -310,8 +310,8 @@ export default function CommunityScreen({ navigation }) {
       {!mapOpen && (
         <FabButton
           style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
-          onPress={() => {
-            if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'AddRecommendation' })) return;
+          onPress={async () => {
+            if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'AddRecommendation' })) return;
             navigation.navigate('AddRecommendation');
           }}
         />

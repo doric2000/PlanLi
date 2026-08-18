@@ -83,7 +83,7 @@ export default function HomeScreen({ navigation }) {
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
-	const { requireCapability, handleCallableAuthError } = useAuth();
+	const { ensureCapability, handleCallableAuthError } = useAuth();
 	const { completed: preferencesCompleted, loading: preferencesLoading } = useSmartProfile();
 	const [destinations, setDestinations] = useState([]);
 	const [allDestinationsForSearch, setAllDestinationsForSearch] = useState([]);
@@ -268,7 +268,7 @@ export default function HomeScreen({ navigation }) {
 
 	const handleGoogleSelect = async (placeId) => {
 		try {
-			if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
+			if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
 			const result = await resolveDestinationForPlacePreview(placeId);
 			if (result?.persisted) {
 				rememberHomeDestination({
@@ -326,7 +326,7 @@ export default function HomeScreen({ navigation }) {
 	};
 
 	const toggleCityFavorite = async (city) => {
-		if (!requireCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
+		if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
 		try {
 			await favoriteCities.toggleFavorite(city);
 				} 

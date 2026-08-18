@@ -59,7 +59,7 @@ jest.mock('../src/features/community/components/CommunityInlineMap', () => {
 jest.mock('../src/components/RecommendationsFilterModal', () => () => null);
 jest.mock('../src/components/RecommendationCard', () => () => null);
 jest.mock('../src/hooks/useAuthUser', () => ({
-  useAuthUser: () => ({ requireCapability: jest.fn(() => false) }),
+  useAuthUser: () => ({ ensureCapability: jest.fn(async () => false) }),
 }));
 jest.mock('../src/components/FabButton', () => () => null);
 jest.mock('../src/components/ActiveFiltersList', () => () => null);

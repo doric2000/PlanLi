@@ -122,7 +122,7 @@ jest.mock('../src/hooks/useAuthUser', () => ({
 }));
 
 jest.mock('../src/features/auth/AuthContext', () => ({
-  useAuth: () => ({ requireCapability: jest.fn(() => false) }),
+  useAuth: () => ({ ensureCapability: jest.fn(async () => false) }),
 }));
 
 describe('HomeScreenSearchTest', () => {

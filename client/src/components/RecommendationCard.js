@@ -47,7 +47,7 @@ const RecommendationCard = ({
   topContentInset = 0,
 }) => {
   const navigation = useNavigation();
-  const { user, isActive, requireCapability } = useAuthUser();
+  const { user, isActive, ensureCapability } = useAuthUser();
 
   const isFeed = variant === 'feed';
   const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
@@ -174,7 +174,7 @@ const RecommendationCard = ({
 
 
   const handleDelete = async () => {
-    if (!requireCapability(CAPABILITIES.ACTIVE)) return;
+    if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
 
     const ok =
       Platform.OS === 'web'
