@@ -14,17 +14,21 @@ import {
 import AuthLayout from '../components/AuthLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
-import { resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
+import { leaveAuthFlow, resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 
-export default function LoginScreen({ navigation }) {
-  const { runAuthTransition } = useAuth();
+export default function LoginScreen({ navigation, route }) {
+  const { clearPendingReturn, runAuthTransition } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const complete = () => resetToMain(navigation);
+  const handleBack = () => {
+    clearPendingReturn();
+    leaveAuthFlow(navigation, route?.params?.fallbackTab);
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password) return setError('יש להזין אימייל וסיסמה.');
@@ -60,7 +64,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <AuthLayout testID="login-screen" showBack onBack={() => navigation.goBack()}>
+    <AuthLayout testID="login-screen" showBack onBack={handleBack}>
       <BrandWordmark compact />
       <AppText style={authStyles.title}>ברוכים השבים</AppText>
       <AppText style={authStyles.subtitle}>התחברו והמשיכו לתכנן את הטיול הבא.</AppText>

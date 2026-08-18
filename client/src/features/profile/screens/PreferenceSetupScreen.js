@@ -9,6 +9,8 @@ import { doc, getDoc } from 'firebase/firestore';
 
 import { auth, db } from '../../../config/firebase';
 import { saveProfile } from '../../../services/ProfileService';
+import { useAuth } from '../../auth/AuthContext';
+import { AUTH_STATES } from '../../../constants/authPolicy';
 import { preferenceSetupStyles as styles } from '../../../styles';
 import {
   BUDGETS,
@@ -58,6 +60,7 @@ function OptionGroup({ title, help, options, values, onToggle, prefix }) {
 }
 
 export default function PreferenceSetupScreen({ navigation }) {
+  const { synchronizeUserDocument } = useAuth();
   const uid = auth.currentUser?.uid;
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState(EMPTY_PROFILE);
@@ -100,14 +103,20 @@ export default function PreferenceSetupScreen({ navigation }) {
   const persist = async (complete = false) => {
     setSaving(true);
     try {
-      await saveProfile(
+      const result = await saveProfile(
         { smartProfile: profile },
         {
           completeSmartProfile: complete,
           verifySmartProfile: complete,
         }
       );
-      if (complete) navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      if (complete) {
+        const nextStatus = synchronizeUserDocument(result.userDocument);
+        if (nextStatus !== AUTH_STATES.READY) {
+          throw new Error('העדפות הטיול נשמרו, אך מצב החשבון לא התעדכן. נסו שוב.');
+        }
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      }
       return true;
     } catch (error) {
       Alert.alert('לא הצלחנו לשמור', error?.message || 'נסו שוב בעוד רגע.');

@@ -31,12 +31,7 @@ export function isPasswordProviderUser(user) {
   return Boolean(user?.providerData?.some((provider) => provider?.providerId === 'password'));
 }
 
-export function deriveAuthState(user, userDocument, loading = false) {
-  if (loading) return AUTH_STATES.LOADING;
-  if (!user?.uid) return AUTH_STATES.GUEST;
-  if (isPasswordProviderUser(user) && !user.emailVerified) {
-    return AUTH_STATES.EMAIL_VERIFICATION_REQUIRED;
-  }
+export function hasCompletedAccountSetup(userDocument) {
   const hasProfileDetails = (
     userDocument?.onboarding?.profileDetailsVersion === PROFILE_DETAILS_VERSION
     && Boolean(userDocument?.onboarding?.profileDetailsCompletedAt)
@@ -48,8 +43,24 @@ export function deriveAuthState(user, userDocument, loading = false) {
     && userDocument?.legal?.privacyVersion === PRIVACY_VERSION
     && Boolean(userDocument?.legal?.acceptedAt)
   );
-  if (!hasProfileDetails || !hasLegalConsent) return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
-  if (userDocument?.smartProfile?.setupRequired !== false || !userDocument?.smartProfile?.completedAt) {
+  return hasProfileDetails && hasLegalConsent;
+}
+
+export function hasCompletedPreferences(userDocument) {
+  return Boolean(
+    userDocument?.smartProfile?.setupRequired === false
+    && userDocument?.smartProfile?.completedAt
+  );
+}
+
+export function deriveAuthState(user, userDocument, loading = false) {
+  if (loading) return AUTH_STATES.LOADING;
+  if (!user?.uid) return AUTH_STATES.GUEST;
+  if (isPasswordProviderUser(user) && !user.emailVerified) {
+    return AUTH_STATES.EMAIL_VERIFICATION_REQUIRED;
+  }
+  if (!hasCompletedAccountSetup(userDocument)) return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
+  if (!hasCompletedPreferences(userDocument)) {
     return AUTH_STATES.PREFERENCES_REQUIRED;
   }
   return AUTH_STATES.READY;

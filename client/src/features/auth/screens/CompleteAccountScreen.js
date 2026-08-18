@@ -17,11 +17,10 @@ import {
 } from '../utils/displayName';
 
 export default function CompleteAccountScreen({ navigation }) {
-  const { status, user, userDocument } = useAuth();
+  const { user, userDocument, synchronizeUserDocument } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [setupSubmitted, setSetupSubmitted] = useState(false);
   const [error, setError] = useState('');
   const isLegalRenewal = Boolean(
     userDocument?.displayName
@@ -31,14 +30,6 @@ export default function CompleteAccountScreen({ navigation }) {
   useEffect(() => {
     setDisplayName(userDocument?.displayName || user?.displayName || '');
   }, [user?.displayName, userDocument?.displayName]);
-  useEffect(() => {
-    if (!setupSubmitted) return;
-    if (status === AUTH_STATES.PREFERENCES_REQUIRED) {
-      navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
-    } else if (status === AUTH_STATES.READY) {
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-    }
-  }, [navigation, setupSubmitted, status]);
   const submit = async () => {
     const name = normalizeDisplayName(displayName);
     const displayNameError = validateDisplayName(name);
@@ -46,8 +37,15 @@ export default function CompleteAccountScreen({ navigation }) {
     if (!acceptedLegal) return setError('יש לאשר את תנאי השימוש ומדיניות הפרטיות.');
     setLoading(true); setError('');
     try {
-      await completeAccountSetup({ displayName: name, acceptedLegal });
-      setSetupSubmitted(true);
+      const result = await completeAccountSetup({ displayName: name, acceptedLegal });
+      const nextStatus = synchronizeUserDocument(result.userDocument);
+      if (nextStatus === AUTH_STATES.PREFERENCES_REQUIRED) {
+        navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
+      } else if (nextStatus === AUTH_STATES.READY) {
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      } else {
+        throw new Error('מצב החשבון לא התעדכן. נסו להתנתק ולהתחבר מחדש.');
+      }
     } catch (submitError) {
       setError(formatAuthError(submitError));
     } finally { setLoading(false); }
@@ -71,8 +69,8 @@ export default function CompleteAccountScreen({ navigation }) {
       <AppText style={authStyles.email}>{user?.email || 'כתובת פרטית של Apple'}</AppText>
       <LegalConsent accepted={acceptedLegal} onChange={setAcceptedLegal} navigation={navigation} disabled={loading} />
       {error ? <AppText style={authStyles.error}>{error}</AppText> : null}
-      <TouchableOpacity style={authStyles.primaryButton} onPress={submit} disabled={loading || setupSubmitted} testID="complete-account-submit">
-        {loading || setupSubmitted ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>המשך להתאמה אישית</AppText>}
+      <TouchableOpacity style={authStyles.primaryButton} onPress={submit} disabled={loading} testID="complete-account-submit">
+        {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>המשך להתאמה אישית</AppText>}
       </TouchableOpacity>
       <View style={authStyles.utilityRow}>
         <TouchableOpacity style={authStyles.utilityLink} onPress={async () => { await signOutCentral(); navigation.reset({ index: 0, routes: [{ name: 'Main' }] }); }}><AppText style={authStyles.utilityText}>התנתקות</AppText></TouchableOpacity>

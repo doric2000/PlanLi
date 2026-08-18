@@ -6,6 +6,11 @@ import { getDoc } from 'firebase/firestore';
 import { Alert } from 'react-native';
 
 const mockSaveProfile = jest.fn(() => Promise.resolve());
+const mockSynchronizeUserDocument = jest.fn();
+
+jest.mock('../src/features/auth/AuthContext', () => ({
+  useAuth: () => ({ synchronizeUserDocument: mockSynchronizeUserDocument }),
+}));
 
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
@@ -43,6 +48,8 @@ describe('PreferenceSetupScreen', () => {
   beforeEach(() => {
     mockSaveProfile.mockReset();
     mockSaveProfile.mockResolvedValue();
+    mockSynchronizeUserDocument.mockReset();
+    mockSynchronizeUserDocument.mockReturnValue('ready');
   });
 
   it('does not let invisible legacy values consume visible selection slots', async () => {
@@ -111,5 +118,34 @@ describe('PreferenceSetupScreen', () => {
     await waitFor(() => expect(alert).toHaveBeenCalledWith('לא הצלחנו לשמור', error.message));
     expect(reset).not.toHaveBeenCalled();
     alert.mockRestore();
+  });
+
+  it('synchronizes the verified completed profile before returning to Main', async () => {
+    const persistedDocument = {
+      displayName: 'Admin',
+      smartProfile: {
+        setupRequired: false,
+        completedAt: { seconds: 1 },
+      },
+    };
+    getDoc.mockResolvedValueOnce({
+      data: () => ({
+        smartProfile: {
+          setupRequired: true,
+          interests: ['food', 'cafes', 'nature_scenery'],
+          budget: 'balanced',
+          travelParties: ['couple'],
+        },
+      }),
+    });
+    mockSaveProfile.mockResolvedValueOnce({ userDocument: persistedDocument });
+    const reset = jest.fn();
+    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset }} />);
+
+    await waitFor(() => expect(screen.getByTestId('preference-review')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('preference-next'));
+
+    await waitFor(() => expect(mockSynchronizeUserDocument).toHaveBeenCalledWith(persistedDocument));
+    expect(reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
   });
 });
