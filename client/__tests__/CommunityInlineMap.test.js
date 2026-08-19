@@ -5,6 +5,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import CommunityInlineMap from '../src/features/community/components/CommunityInlineMap';
 
 const mockStartTracking = jest.fn(() => Promise.resolve(null));
+const mockStopTracking = jest.fn();
 let mockLocationState;
 
 jest.mock('react-native-maps');
@@ -30,6 +31,19 @@ jest.mock('../src/hooks/useLiveUserLocation', () => ({
     stopTracking: jest.fn(),
   }),
 }));
+
+function MapUnderTest(props) {
+  return (
+    <CommunityInlineMap
+      {...props}
+      locationState={{
+        ...mockLocationState,
+        startTracking: mockStartTracking,
+        stopTracking: mockStopTracking,
+      }}
+    />
+  );
+}
 
 jest.mock('../src/features/community/components/RecommendationMapPreviewCard', () => (
   function MockPreview({ item, onClose, onOpenRecommendation }) {
@@ -67,7 +81,9 @@ const recommendations = [
 
 describe('CommunityInlineMap', () => {
   beforeEach(() => {
-    mockStartTracking.mockClear();
+    mockStartTracking.mockReset();
+    mockStartTracking.mockResolvedValue(null);
+    mockStopTracking.mockClear();
     mockLocationState = {
       location: { lat: 41.7151, lng: 44.8271, accuracy: 10 },
       status: 'granted',
@@ -78,7 +94,7 @@ describe('CommunityInlineMap', () => {
   it('opens directly on the first precise location at approximately zoom 15', async () => {
     const onSearchViewport = jest.fn();
     const screen = render(
-      <CommunityInlineMap recommendations={[]} onSearchViewport={onSearchViewport} />
+      <MapUnderTest recommendations={[]} onSearchViewport={onSearchViewport} />
     );
     await act(async () => {});
 
@@ -97,7 +113,7 @@ describe('CommunityInlineMap', () => {
 
   it('waits for the first location before mounting the native map', async () => {
     mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
-    const screen = render(<CommunityInlineMap recommendations={[]} />);
+    const screen = render(<MapUnderTest recommendations={[]} />);
     await act(async () => {});
     expect(screen.getByTestId('map-awaiting-location')).toBeTruthy();
     expect(screen.queryByTestId('community-inline-map')).toBeNull();
@@ -106,7 +122,7 @@ describe('CommunityInlineMap', () => {
   it('selects pins repeatedly, keeps the preview stable, and opens by postId', async () => {
     const onOpenRecommendation = jest.fn();
     const screen = render(
-      <CommunityInlineMap
+      <MapUnderTest
         recommendations={recommendations}
         overlayBottomInset={92}
         onOpenRecommendation={onOpenRecommendation}
@@ -138,7 +154,7 @@ describe('CommunityInlineMap', () => {
   it('offers viewport search after the user pans the map', async () => {
     const onSearchViewport = jest.fn();
     const screen = render(
-      <CommunityInlineMap recommendations={recommendations} onSearchViewport={onSearchViewport} />
+      <MapUnderTest recommendations={recommendations} onSearchViewport={onSearchViewport} />
     );
     await act(async () => {});
     onSearchViewport.mockClear();
@@ -156,21 +172,25 @@ describe('CommunityInlineMap', () => {
     const viewport = onSearchViewport.mock.calls[0][0];
     expect(viewport.north).toBeCloseTo(41.8);
     expect(viewport.south).toBeCloseTo(41.6);
+    expect(onSearchViewport).toHaveBeenCalledWith(
+      expect.objectContaining({ north: expect.any(Number), south: expect.any(Number) }),
+      { forceRefresh: true }
+    );
   });
 
   it('clears selection when a viewport refresh removes the selected recommendation', async () => {
-    const screen = render(<CommunityInlineMap recommendations={recommendations} />);
+    const screen = render(<MapUnderTest recommendations={recommendations} />);
     await act(async () => {});
     fireEvent.press(screen.getByTestId('recommendation-map-marker-rec-2'));
     expect(screen.getByTestId('mock-map-preview')).toBeTruthy();
 
-    screen.rerender(<CommunityInlineMap recommendations={[recommendations[0]]} />);
+    screen.rerender(<MapUnderTest recommendations={[recommendations[0]]} />);
     await waitFor(() => expect(screen.queryByTestId('mock-map-preview')).toBeNull());
   });
 
   it('falls back after denied permission and offers a non-blocking retry', async () => {
     mockLocationState = { location: null, status: 'denied', awaitingFirstFix: false };
-    const screen = render(<CommunityInlineMap recommendations={[]} />);
+    const screen = render(<MapUnderTest recommendations={[]} />);
     await act(async () => {});
     const region = screen.getByTestId('community-inline-map').props.initialRegion;
     expect(region.latitude).toBe(31.04);
@@ -178,5 +198,41 @@ describe('CommunityInlineMap', () => {
 
     fireEvent.press(screen.getByText('אפשר להפעיל מיקום כדי למצוא המלצות קרובות'));
     expect(mockStartTracking).toHaveBeenCalled();
+  });
+
+  it('centers when a pending location request resolves after pressing my location', async () => {
+    const recoveredLocation = { lat: 41.7151, lng: 44.8271, accuracy: 8 };
+    mockLocationState = { location: null, status: 'timeout', awaitingFirstFix: false };
+    mockStartTracking.mockResolvedValue(recoveredLocation);
+    const screen = render(<MapUnderTest recommendations={[]} />);
+    await act(async () => {});
+
+    fireEvent.press(screen.getByTestId('map-my-location'));
+
+    await waitFor(() => {
+      const region = screen.getByTestId('community-inline-map').props.initialRegion;
+      expect(region.latitude).toBe(recoveredLocation.lat);
+      expect(region.longitude).toBe(recoveredLocation.lng);
+    });
+  });
+
+  it('centers automatically when the first precise fix arrives after a timeout', async () => {
+    mockLocationState = { location: null, status: 'timeout', awaitingFirstFix: false };
+    const screen = render(<MapUnderTest recommendations={[]} />);
+    await act(async () => {});
+    expect(screen.getByTestId('community-inline-map').props.initialRegion.latitude).toBe(31.04);
+
+    mockLocationState = {
+      location: { lat: 41.7151, lng: 44.8271, accuracy: 8 },
+      status: 'granted',
+      awaitingFirstFix: false,
+    };
+    screen.rerender(<MapUnderTest recommendations={[]} />);
+
+    await waitFor(() => {
+      const region = screen.getByTestId('community-inline-map').props.initialRegion;
+      expect(region.latitude).toBe(41.7151);
+      expect(region.longitude).toBe(44.8271);
+    });
   });
 });

@@ -32,7 +32,11 @@ import { CommentsModal } from '../../../components/CommentsModal';
 import ActiveRouteFiltersList from '../components/ActiveRouteFiltersList';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
 import { deleteContent } from '../../../services/SocialService';
-import { discoverRoutes, loadRouteDetails } from '../../../services/RouteService';
+import {
+  clearRouteDiscoveryCache,
+  discoverRoutes,
+  loadRouteDetails,
+} from '../../../services/RouteService';
 import { SortMenuModal } from '../../community/components/SortMenuModal';
 import {
   applySmartProfileFilters,
@@ -43,6 +47,7 @@ import {
 } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
+import { isDiscoveryRateLimitError } from '../../../utils/discoveryErrors';
 import { useContentPublish } from '../../publishing/ContentPublishContext';
 
 const text = {
@@ -71,12 +76,21 @@ export default function RoutesScreen({ navigation }) {
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const personalizationInitialized = useRef(false);
   const requestSerial = useRef(0);
+  const principal = currentUser?.uid || 'guest';
   const routesListRef = useRef(null);
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
   const { completedVersionByType = {} } = useContentPublish();
   const routePublishVersion = Number(completedVersionByType.route || 0);
   const completedRouteVersionRef = useRef(routePublishVersion);
+
+  useEffect(() => {
+    requestSerial.current += 1;
+    setRoutes([]);
+    setError(null);
+    setLoading(true);
+    setRefreshing(false);
+  }, [principal]);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -90,26 +104,32 @@ export default function RoutesScreen({ navigation }) {
   }, [filters]);
 
   const requestKey = JSON.stringify(debouncedRequest);
-  const fetchRoutes = useCallback(async ({ showLoader = true } = {}) => {
+  const fetchRoutes = useCallback(async ({ forceRefresh = false, showLoader = true } = {}) => {
     const serial = requestSerial.current + 1;
     requestSerial.current = serial;
     if (showLoader) setLoading(true);
     setError(null);
     try {
-      const response = await discoverRoutes({ ...debouncedRequest, sort: serverSort(sortBy), limit: 30 });
+      const response = await discoverRoutes(
+        { ...debouncedRequest, sort: serverSort(sortBy), limit: 30 },
+        { forceRefresh }
+      );
       if (requestSerial.current !== serial) return;
       setRoutes(Array.isArray(response?.items) ? response.items : []);
     } catch (error) {
       if (requestSerial.current !== serial) return;
-      console.error('Failed to load routes', error);
-      setRoutes([]);
+      if (isDiscoveryRateLimitError(error)) {
+        console.info('discovery_request_throttled', { surface: 'routes' });
+      } else {
+        console.error('Failed to load routes', error);
+      }
       setError(error);
     } finally {
       if (requestSerial.current !== serial) return;
       setLoading(false);
       setRefreshing(false);
     }
-  }, [requestKey, sortBy]);
+  }, [requestKey, sortBy, principal]);
 
   useFocusEffect(useCallback(() => {
     fetchRoutes({ showLoader: routes.length === 0 });
@@ -118,13 +138,13 @@ export default function RoutesScreen({ navigation }) {
   useEffect(() => {
     if (completedRouteVersionRef.current === routePublishVersion) return;
     completedRouteVersionRef.current = routePublishVersion;
-    fetchRoutes({ showLoader: false });
+    fetchRoutes({ forceRefresh: true, showLoader: false });
   }, [routePublishVersion, fetchRoutes]);
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setRefreshing(true);
-    fetchRoutes({ showLoader: false });
-  };
+    return fetchRoutes({ forceRefresh: true, showLoader: false });
+  }, [fetchRoutes]);
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',
     scrollRef: routesListRef,
@@ -138,6 +158,10 @@ export default function RoutesScreen({ navigation }) {
       { text: 'מחק', style: 'destructive', onPress: async () => {
         try {
           await deleteContent({ type: 'route', id: routeId });
+          requestSerial.current += 1;
+          clearRouteDiscoveryCache();
+          setLoading(false);
+          setRefreshing(false);
           setRoutes((current) => current.filter((item) => item.id !== routeId));
         } catch (error) {
           console.error('Error deleting route:', error);

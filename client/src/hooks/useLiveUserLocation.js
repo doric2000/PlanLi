@@ -22,6 +22,7 @@ export function useLiveUserLocation() {
   const watcherRef = useRef(null);
   const firstFixTimerRef = useRef(null);
   const locationRef = useRef(null);
+  const startPromiseRef = useRef(null);
   const requestSerial = useRef(0);
 
   const clearFirstFixTimer = useCallback(() => {
@@ -31,17 +32,20 @@ export function useLiveUserLocation() {
 
   const stopTracking = useCallback(() => {
     requestSerial.current += 1;
+    startPromiseRef.current = null;
     clearFirstFixTimer();
     watcherRef.current?.remove?.();
     watcherRef.current = null;
   }, [clearFirstFixTimer]);
 
-  const startTracking = useCallback(async () => {
-    const serial = requestSerial.current + 1;
-    requestSerial.current = serial;
-    setStatus('requesting');
-    setError(null);
-    try {
+  const startTracking = useCallback(() => {
+    if (startPromiseRef.current) return startPromiseRef.current;
+    const request = (async () => {
+      const serial = requestSerial.current + 1;
+      requestSerial.current = serial;
+      setStatus('requesting');
+      setError(null);
+      try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (requestSerial.current !== serial) return null;
       if (permission.status !== 'granted') {
@@ -52,6 +56,7 @@ export function useLiveUserLocation() {
       clearFirstFixTimer();
       firstFixTimerRef.current = setTimeout(() => {
         if (requestSerial.current !== serial || locationRef.current) return;
+        if (startPromiseRef.current === request) startPromiseRef.current = null;
         setStatus('timeout');
         setError('לא התקבל מיקום מדויק בזמן. אפשר להמשיך במפה ולנסות שוב.');
       }, FIRST_LOCATION_TIMEOUT_MS);
@@ -98,14 +103,21 @@ export function useLiveUserLocation() {
         watcherRef.current = null;
         return null;
       }
-      return current;
-    } catch (caught) {
-      if (requestSerial.current !== serial) return null;
-      clearFirstFixTimer();
-      setStatus('error');
-      setError(caught?.message || String(caught));
-      return null;
-    }
+        return current;
+      } catch (caught) {
+        if (requestSerial.current !== serial) return null;
+        clearFirstFixTimer();
+        setStatus('error');
+        setError(caught?.message || String(caught));
+        return null;
+      }
+    })();
+    startPromiseRef.current = request;
+    request.then(
+      () => { if (startPromiseRef.current === request) startPromiseRef.current = null; },
+      () => { if (startPromiseRef.current === request) startPromiseRef.current = null; }
+    );
+    return request;
   }, [clearFirstFixTimer]);
 
   useEffect(() => stopTracking, [stopTracking]);

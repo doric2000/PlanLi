@@ -1,6 +1,10 @@
 import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
-import { getPersonalizedRoutes, recordRouteOpen } from './PersonalizationService';
+import {
+  clearPersonalizationDiscoveryCache,
+  getPersonalizedRoutes,
+  recordRouteOpen,
+} from './PersonalizationService';
 
 let saveRouteCallable;
 let loadRouteDetailsCallable;
@@ -12,6 +16,7 @@ export const saveRoute = async (route, routeId = null, publishRequestId = null) 
     ...(routeId ? { routeId } : {}),
     ...(publishRequestId ? { publishRequestId } : {}),
   });
+  clearPersonalizationDiscoveryCache('routes');
   return response.data;
 };
 
@@ -21,7 +26,9 @@ export const loadRouteDetails = async (routeId) => {
   return response.data?.route || null;
 };
 
-export const discoverRoutes = (payload = {}) => getPersonalizedRoutes(payload);
+export const discoverRoutes = (payload = {}, options = {}) => getPersonalizedRoutes(payload, options);
+
+export const clearRouteDiscoveryCache = () => clearPersonalizationDiscoveryCache('routes');
 
 export { recordRouteOpen };
 
