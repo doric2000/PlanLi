@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { ActivityIndicator, Alert, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import AppText from "./AppText";
 
 import GooglePlacesInput from "./GooglePlacesInput";
@@ -30,9 +30,7 @@ export default function ExactLocationPicker({
 		hydrateSelection(value);
 	}, [hydrateSelection, value?.cityId, value?.countryId, value?.place?.placeId]);
 
-	const selectPlace = (placeId) => handleSelectGooglePlace(placeId).catch((error) => {
-		Alert.alert("שגיאת מיקום", error?.userMessage || "לא הצלחנו לאמת את המיקום.");
-	});
+	const selectPlace = (placeId) => handleSelectGooglePlace(placeId).catch(() => {});
 
 	const selectedLabel = [selectedPlace?.name, selectedCity?.name, selectedCountry?.name]
 		.filter(Boolean)
@@ -65,7 +63,11 @@ export default function ExactLocationPicker({
 			)}
 
 			{!!locationResolveError && (
-				<View style={styles.errorWrap}>
+				<View
+					style={styles.errorWrap}
+					accessibilityRole="alert"
+					accessibilityLiveRegion="polite"
+				>
 					<AppText style={styles.errorText}>{locationResolveError}</AppText>
 				</View>
 			)}

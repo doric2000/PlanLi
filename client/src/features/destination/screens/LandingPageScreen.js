@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
+	Alert,
 	Linking,
 	Platform,
 	Pressable,
@@ -149,7 +150,12 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
                 disabled={!row.url}
                 accessibilityRole={row.url ? 'link' : undefined}
                 accessibilityLabel={`${row.label}: ${row.value}`}
-                onPress={() => row.url && Linking.openURL(row.url)}
+                onPress={() => row.url && Linking.openURL(row.url).catch(() => {
+                  Alert.alert(
+                    'לא ניתן לפתוח את הקישור',
+                    'אפשר לנסות שוב מאוחר יותר.'
+                  );
+                })}
                 style={({ pressed }) => [
                   styles.sourceRow,
                   pressed && { opacity: 0.7 },

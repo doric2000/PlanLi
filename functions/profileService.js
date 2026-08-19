@@ -263,11 +263,21 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   if (Object.keys(authFields).length) {
     await admin.auth().updateUser(uid, authFields);
   }
+  const persistedSnapshot = smartProfile !== undefined ? await userRef.get() : null;
+  const persistedUserDocument = persistedSnapshot?.exists ? persistedSnapshot.data() || null : null;
+  if (smartProfile !== undefined) {
+    assert(persistedUserDocument, 'internal', 'The updated profile could not be read back.');
+  }
   return {
     displayName: displayName ?? existingData.displayName ?? 'Traveler',
     ...(bio !== undefined ? { bio } : {}),
     ...(photoMedia !== undefined ? { photoMedia, photoURL: photoMedia?.feed?.url || null } : {}),
-    ...(smartProfile !== undefined ? { smartProfile } : {}),
+    ...(smartProfile !== undefined
+      ? {
+          smartProfile: persistedUserDocument.smartProfile,
+          userDocument: persistedUserDocument,
+        }
+      : {}),
   };
 }
 

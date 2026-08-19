@@ -35,6 +35,8 @@ const requested = {
   budget: 'balanced',
   travelParties: ['couple'],
   vibe: ['romantic'],
+  travelerStyles: ['city_break'],
+  pace: 'balanced',
   needs: ['vegetarian'],
 };
 
@@ -66,6 +68,40 @@ describe('ProfileService smart-profile persistence', () => {
     await expect(saveProfile({ smartProfile: requested }, { completeSmartProfile: true }))
       .resolves.toMatchObject({ smartProfile: persisted });
     expect(verifyPersistedSmartProfile(requested, persisted, { complete: true })).toBe(true);
+  });
+
+  it('uses the canonical post-write document returned by the callable instead of a racing client read', async () => {
+    const persisted = {
+      ...requested,
+      setupRequired: false,
+      completedAt: { seconds: 1 },
+    };
+    const userDocument = {
+      displayName: 'Dana Cohen',
+      smartProfile: persisted,
+    };
+    mockCallable.mockResolvedValueOnce({
+      data: { ok: true, smartProfile: persisted, userDocument },
+    });
+    getDocFromServer.mockResolvedValue({
+      data: () => ({ smartProfile: { ...requested, needs: [] } }),
+    });
+
+    await expect(saveProfile({ smartProfile: requested }, { completeSmartProfile: true }))
+      .resolves.toEqual({ ok: true, smartProfile: persisted, userDocument });
+    expect(getDocFromServer).not.toHaveBeenCalled();
+  });
+
+  it('verifies traveler style and pace as part of the persisted preferences', () => {
+    const persisted = {
+      ...requested,
+      travelerStyles: ['roadtrip'],
+      pace: 'relaxed',
+      setupRequired: false,
+      completedAt: { seconds: 1 },
+    };
+
+    expect(verifyPersistedSmartProfile(requested, persisted, { complete: true })).toBe(false);
   });
 
   it('can save an in-progress draft without requiring an immediate server read-back', async () => {

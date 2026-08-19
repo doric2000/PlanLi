@@ -919,17 +919,21 @@ const handleSubmit = async () => {
             mode="google"
             value={locationQuery}
             onChangeValue={onChangeQuery}
-            onSelect={async (placeId) => {
-              try {
-                await handleSelectGooglePlace(placeId);
-              } catch (error) {
-                Alert.alert('שגיאת מיקום', error?.userMessage || error?.message);
-              }
-            }}
+            onSelect={(placeId) => handleSelectGooglePlace(placeId).catch(() => {})}
             googleSearchFn={googleSearchFn}
             placeholder="חפש מקום / אטרקציה / מסעדה..."
             inputTestID="add-rec-location-input"
           />
+          {!!locationResolveError && (
+            <AppText
+              style={guidedStyles.fieldError}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              testID="add-rec-location-error"
+            >
+              {locationResolveError}
+            </AppText>
+          )}
           {!!validation.fields.location && (
             <AppText style={guidedStyles.fieldError} accessibilityLiveRegion="polite">
               {validation.fields.location}

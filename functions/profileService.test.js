@@ -207,6 +207,43 @@ test('travel preferences require verified email and current legal consent', asyn
   );
 });
 
+test('completed preferences return the canonical post-write user document', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    displayName: 'Dana Cohen',
+    onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
+    legal: {
+      termsVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-18-beta-observability',
+      acceptedAt: 'timestamp',
+    },
+    smartProfile: { setupRequired: true },
+  });
+  const smartProfile = {
+    interests: ['food', 'nature_scenery', 'hiking'],
+    budget: 'balanced',
+    travelParties: ['couple'],
+    vibe: ['romantic'],
+    travelerStyles: ['city_break'],
+    pace: 'balanced',
+    needs: ['vegetarian'],
+  };
+
+  const result = await updateProfile({
+    admin: fixture.admin,
+    auth: {
+      uid: 'user-1',
+      token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+    },
+    data: { smartProfile, completeSmartProfile: true, taxonomyVersion: 5 },
+  });
+
+  assert.deepEqual(result.smartProfile, fixture.getStored().smartProfile);
+  assert.deepEqual(result.userDocument, fixture.getStored());
+  assert.equal(result.userDocument.smartProfile.setupRequired, false);
+  assert.equal(result.userDocument.smartProfile.completedAt, 'timestamp');
+});
+
 test('smart budget writes require taxonomy v5 while unrelated profile writes do not', async () => {
   const admin = {
     firestore: Object.assign(() => ({

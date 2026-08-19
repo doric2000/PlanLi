@@ -326,6 +326,25 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockRememberRecentDestination).not.toHaveBeenCalled();
   }, 15000);
 
+  it('shows a place-resolution limit inline without opening a native alert', async () => {
+    mockResolveDestinationForPlacePreview.mockRejectedValueOnce(Object.assign(
+      new Error('Google request limit reached.'),
+      { code: 'functions/resource-exhausted' }
+    ));
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    fireEvent.press(screen.getByTestId('google-result-select'));
+
+    await waitFor(() => expect(screen.getByTestId('add-rec-location-error')).toBeTruthy());
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
   it('restores a failed queued recommendation for review', async () => {
     mockLoadJobForReview.mockResolvedValueOnce({
       draft: {
