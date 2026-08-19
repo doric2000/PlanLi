@@ -33,9 +33,9 @@ test('provider costs and budgets are explicit', () => {
   assert.equal(PROVIDER_COSTS.autocomplete, 1);
   assert.equal(PROVIDER_COSTS.bilingualResolution, 2);
   assert.equal(PROVIDER_COSTS.localityResolution, 3);
-  assert.equal(MINUTE_MAXIMUM, 10);
+  assert.equal(MINUTE_MAXIMUM, 15);
   assert.equal(DAY_MAXIMUM, 25);
-  assert.equal(PROVIDER_BUDGET_VERSION, 4);
+  assert.equal(PROVIDER_BUDGET_VERSION, 5);
   assert.deepEqual(PROVIDER_CALLABLE_LIMITS, { concurrency: 4, maxInstances: 1 });
   assert.deepEqual(PROVIDER_ROUTE_CALLABLE_LIMITS, { concurrency: 4, maxInstances: 1 });
 });
@@ -64,9 +64,16 @@ test('provider budget enforces the minute limit', async () => {
     admin,
     auth,
     action: 'bilingualResolution',
-    units: 5,
+    units: 7,
     key: 'test-key',
     now: 1_000,
+  });
+  await consumeProviderBudget({
+    admin,
+    auth,
+    action: 'autocomplete',
+    key: 'test-key',
+    now: 1_500,
   });
   await assert.rejects(
     consumeProviderBudget({
@@ -119,5 +126,11 @@ test('provider budget allows a normal place-selection session', async () => {
   });
   await consumeProviderBudget({
     admin, auth, action: 'localityResolution', key: 'test-key', now: 3_000,
+  });
+  await consumeProviderBudget({
+    admin, auth, action: 'bilingualResolution', key: 'test-key', now: 4_000,
+  });
+  await consumeProviderBudget({
+    admin, auth, action: 'localityResolution', key: 'test-key', now: 5_000,
   });
 });

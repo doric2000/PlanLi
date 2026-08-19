@@ -149,4 +149,23 @@ describe('error reporting privacy', () => {
     expect(mockSetTag).toHaveBeenCalledTimes(1);
     expect(mockSetTag).toHaveBeenCalledWith('screen', 'CompleteAccount');
   });
+
+  it('does not report expected provider cancellations as application errors', () => {
+    const { captureDiagnosticException } = require('../src/services/ErrorReporting');
+    const appleCancellation = Object.assign(new Error('cancelled'), {
+      code: 'ERR_REQUEST_CANCELED',
+    });
+    const googleCancellation = Object.assign(new Error('cancelled'), {
+      code: 'auth/provider-cancelled',
+    });
+
+    captureDiagnosticException(appleCancellation, { operation: 'sign_in_apple' });
+    captureDiagnosticException(googleCancellation, { operation: 'sign_in_google' });
+    captureDiagnosticException(new Error('network failed'), { operation: 'sign_in_google' });
+
+    expect(mockCaptureException).toHaveBeenCalledTimes(1);
+    expect(mockCaptureException).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'network failed',
+    }));
+  });
 });

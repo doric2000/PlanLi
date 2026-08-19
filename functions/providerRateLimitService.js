@@ -10,9 +10,11 @@ const PROVIDER_COSTS = Object.freeze({
 });
 const MINUTE_WINDOW_MS = 60 * 1000;
 const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
-const MINUTE_MAXIMUM = 10;
+// Five autocomplete calls plus two complete place-selection attempts. This
+// keeps retries usable while the daily ceiling remains the hard cost bound.
+const MINUTE_MAXIMUM = 15;
 const DAY_MAXIMUM = 25;
-const PROVIDER_BUDGET_VERSION = 4;
+const PROVIDER_BUDGET_VERSION = 5;
 const PROVIDER_CALLABLE_LIMITS = Object.freeze({ concurrency: 4, maxInstances: 1 });
 const PROVIDER_ROUTE_CALLABLE_LIMITS = Object.freeze({ concurrency: 4, maxInstances: 1 });
 

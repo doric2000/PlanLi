@@ -19,8 +19,8 @@ let updateProfileCallable;
 let registerUserCallable;
 let completeAccountSetupCallable;
 
-const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'needs'];
-const PROFILE_SCALAR_FIELDS = ['budget'];
+const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'travelerStyles', 'needs'];
+const PROFILE_SCALAR_FIELDS = ['budget', 'pace'];
 const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'];
 
 async function runProfileOperation(operation, callback) {
@@ -149,6 +149,21 @@ export const saveProfile = async (
     throw error;
   }
   if (!fields?.smartProfile || !verifySmartProfile) return response.data;
+  const returnedUserDocument = response.data?.userDocument;
+  if (returnedUserDocument && typeof returnedUserDocument === 'object') {
+    const persisted = returnedUserDocument.smartProfile;
+    if (
+      !verifyPersistedSmartProfile(fields.smartProfile, persisted, {
+        complete: completeSmartProfile,
+      })
+      || (completeSmartProfile && !hasCompletedPreferences(returnedUserDocument))
+    ) {
+      const error = new Error('×”×©×¨×ª ×œ× ×©×ž×¨ ××ª ×›×œ ×”×”×¢×“×¤×•×ª. × ×¡×• ×©×•×‘ ×œ××—×¨ ×¢×“×›×•×Ÿ ×”×©×™×¨×•×ª.');
+      error.code = 'profile/persistence-mismatch';
+      throw error;
+    }
+    return { ...(response.data || {}), smartProfile: persisted, userDocument: returnedUserDocument };
+  }
   const persisted = await readBackSmartProfile(fields.smartProfile, {
     complete: completeSmartProfile,
   });

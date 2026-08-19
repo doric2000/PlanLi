@@ -210,7 +210,13 @@ export function addDiagnosticBreadcrumb({ category, message, level = 'info', dat
   if (breadcrumb) Sentry.addBreadcrumb(breadcrumb);
 }
 
+export function isExpectedDiagnosticCancellation(error) {
+  const code = String(error?.code || '').toLowerCase();
+  return code === 'err_request_canceled' || code === 'auth/provider-cancelled';
+}
+
 export function captureDiagnosticException(error, { operation, code } = {}) {
+  if (isExpectedDiagnosticCancellation(error)) return;
   if (error && typeof error === 'object') {
     if (capturedErrors.has(error)) return;
     capturedErrors.add(error);

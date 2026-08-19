@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Alert, Linking, StyleSheet } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import LandingPageScreen from '../src/features/destination/screens/LandingPageScreen';
 
@@ -67,7 +67,11 @@ const overview = {
     callingCodes: ['+30'],
   },
   sources: {
-    weather: { name: 'OpenWeather', updatedAt: '2026-08-05' },
+    weather: {
+      name: 'OpenWeather',
+      updatedAt: '2026-08-05',
+      url: 'https://openweathermap.org/',
+    },
   },
 };
 
@@ -124,6 +128,29 @@ test('community filters work in place and source details are progressively discl
   expect(screen.queryByText('OpenWeather')).toBeNull();
   fireEvent.press(screen.getByLabelText('מקורות ועדכון'));
   expect(screen.getByText(/OpenWeather/)).toBeTruthy();
+});
+
+test('handles an unavailable external source without an unhandled rejection', async () => {
+  const openUrl = jest.spyOn(Linking, 'openURL').mockRejectedValueOnce(new Error('unavailable'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const screen = render(
+    <LandingPageScreen
+      navigation={{ goBack: jest.fn() }}
+      route={{ params: { countryId: 'gr', cityId: 'mykonos' } }}
+    />
+  );
+
+  fireEvent.press(screen.getByLabelText('מקורות ועדכון'));
+  fireEvent.press(screen.getByLabelText(/OpenWeather/));
+
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(
+    'לא ניתן לפתוח את הקישור',
+    'אפשר לנסות שוב מאוחר יותר.'
+  ));
+  expect(openUrl).toHaveBeenCalledWith('https://openweathermap.org/');
+
+  openUrl.mockRestore();
+  alert.mockRestore();
 });
 
 test('back control uses the RTL-facing action on the leading edge', () => {
