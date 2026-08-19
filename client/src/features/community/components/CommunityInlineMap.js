@@ -9,13 +9,14 @@ import {
   DEFAULT_MAP_ZOOM,
   USER_MAP_ZOOM,
 } from '../../../config/mapConfig';
-import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
 import { community } from '../../../styles';
 import RecommendationMapPreviewCard from './RecommendationMapPreviewCard';
 import { normalizeRecommendationMapItems } from '../utils/recommendationMap';
 
 const TERMINAL_LOCATION_STATUSES = new Set(['denied', 'timeout', 'error']);
 const MAX_NATIVE_MARKERS = 500;
+const noLocationAction = async () => null;
+const noLocationCleanup = () => {};
 
 function deltaForZoom(zoom) {
   return Math.max(0.002, 360 / (2 ** Number(zoom || DEFAULT_MAP_ZOOM)));
@@ -118,11 +119,14 @@ export default function CommunityInlineMap({
   onSearchViewport,
   onOpenRecommendation,
   overlayBottomInset = 16,
+  locationState = {},
 }) {
   const initialRegionRef = useRef(null);
   const currentRegionRef = useRef(null);
   const searchedRef = useRef(false);
   const userGestureRef = useRef(false);
+  const userMovedMapRef = useRef(false);
+  const centeredOnLocationRef = useRef(false);
   const [mapInstance, setMapInstance] = useState(0);
   const [selectedRecommendationId, setSelectedRecommendationId] = useState(null);
   const [iconFontReady, setIconFontReady] = useState(false);
@@ -131,13 +135,14 @@ export default function CommunityInlineMap({
     location,
     status,
     awaitingFirstFix,
-    startTracking,
-    stopTracking,
-  } = useLiveUserLocation();
+    startTracking = noLocationAction,
+    stopTracking = noLocationCleanup,
+  } = locationState;
 
   if (!initialRegionRef.current && location) {
     initialRegionRef.current = regionForLocation(location, USER_MAP_ZOOM);
     currentRegionRef.current = initialRegionRef.current;
+    centeredOnLocationRef.current = true;
   } else if (!initialRegionRef.current && TERMINAL_LOCATION_STATUSES.has(status)) {
     initialRegionRef.current = regionForLocation(null, DEFAULT_MAP_ZOOM);
     currentRegionRef.current = initialRegionRef.current;
@@ -173,13 +178,30 @@ export default function CommunityInlineMap({
     if (selectedRecommendationId && !selectedMapItem) setSelectedRecommendationId(null);
   }, [selectedMapItem, selectedRecommendationId]);
 
-  const searchRegion = useCallback((region) => {
+  const moveToLocation = useCallback((nextLocation) => {
+    const nextRegion = regionForLocation(nextLocation, USER_MAP_ZOOM);
+    initialRegionRef.current = nextRegion;
+    currentRegionRef.current = nextRegion;
+    centeredOnLocationRef.current = true;
+    searchedRef.current = false;
+    setSearchAreaVisible(false);
+    setSelectedRecommendationId(null);
+    setMapInstance((value) => value + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!location || centeredOnLocationRef.current || userMovedMapRef.current) return;
+    moveToLocation(location);
+  }, [location, moveToLocation]);
+
+  const searchRegion = useCallback((region, { forceRefresh = false } = {}) => {
     const viewport = viewportFromRegion(region);
     if (!viewport) return;
     searchedRef.current = true;
     setSearchAreaVisible(false);
     setSelectedRecommendationId(null);
-    onSearchViewport?.(viewport);
+    if (forceRefresh) onSearchViewport?.(viewport, { forceRefresh: true });
+    else onSearchViewport?.(viewport);
   }, [onSearchViewport]);
 
   const handleMapReady = useCallback(() => {
@@ -193,19 +215,11 @@ export default function CommunityInlineMap({
     if (wasGesture && searchedRef.current) setSearchAreaVisible(true);
   }, []);
 
-  const centerOnUser = useCallback(() => {
-    if (!location) {
-      startTracking();
-      return;
-    }
-    const nextRegion = regionForLocation(location, USER_MAP_ZOOM);
-    initialRegionRef.current = nextRegion;
-    currentRegionRef.current = nextRegion;
-    searchedRef.current = false;
-    setSearchAreaVisible(false);
-    setSelectedRecommendationId(null);
-    setMapInstance((value) => value + 1);
-  }, [location, startTracking]);
+  const centerOnUser = useCallback(async () => {
+    const nextLocation = location || await startTracking();
+    if (!nextLocation) return;
+    moveToLocation(nextLocation);
+  }, [location, moveToLocation, startTracking]);
 
   if (!initialRegionRef.current && awaitingFirstFix) {
     return (
@@ -234,7 +248,10 @@ export default function CommunityInlineMap({
         showsUserLocation
         showsMyLocationButton={false}
         onMapReady={handleMapReady}
-        onPanDrag={() => { userGestureRef.current = true; }}
+        onPanDrag={() => {
+          userGestureRef.current = true;
+          userMovedMapRef.current = true;
+        }}
         onRegionChangeComplete={handleRegionChangeComplete}
         onPress={() => setSelectedRecommendationId(null)}
         mapPadding={{
@@ -289,7 +306,7 @@ export default function CommunityInlineMap({
       {searchAreaVisible && (
         <TouchableOpacity
           style={community.mapSearchAreaButton}
-          onPress={() => searchRegion(currentRegionRef.current)}
+          onPress={() => searchRegion(currentRegionRef.current, { forceRefresh: true })}
           accessibilityRole="button"
           testID="map-search-this-area"
         >
@@ -319,7 +336,10 @@ export default function CommunityInlineMap({
       )}
 
       {!!error && !loading && (
-        <TouchableOpacity style={community.mapErrorPill} onPress={() => searchRegion(currentRegionRef.current)}>
+        <TouchableOpacity
+          style={community.mapErrorPill}
+          onPress={() => searchRegion(currentRegionRef.current, { forceRefresh: true })}
+        >
           <Ionicons name="refresh" size={17} color="#991B1B" />
           <AppText style={community.mapErrorText}>לא הצלחנו לטעון. לחצו לניסיון נוסף</AppText>
         </TouchableOpacity>

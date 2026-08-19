@@ -36,6 +36,15 @@ jest.mock('../src/hooks/useRecommendationFilter', () => ({
 jest.mock('../src/hooks/useUserLocation', () => ({
   useUserLocation: () => ({ location: null, requestLocation: jest.fn() }),
 }));
+jest.mock('../src/hooks/useLiveUserLocation', () => ({
+  useLiveUserLocation: () => ({
+    location: null,
+    status: 'idle',
+    awaitingFirstFix: true,
+    startTracking: jest.fn(),
+    stopTracking: jest.fn(),
+  }),
+}));
 jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({
   useTabPressScrollOrRefresh: () => ({ onScroll: jest.fn() }),
 }));

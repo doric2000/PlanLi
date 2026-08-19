@@ -21,6 +21,7 @@ import { useRecommendations } from '../../../hooks/useRecommendations';
 import { useMapRecommendations } from '../../../hooks/useMapRecommendations';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 import { useUserLocation } from '../../../hooks/useUserLocation';
+import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import { useSmartProfile } from '../../../hooks/useSmartProfile';
 
@@ -79,6 +80,7 @@ export default function CommunityScreen({ navigation }) {
     searchViewport,
   } = useMapRecommendations({ enabled: mapOpen, request: discoveryRequest });
   const { location: userLocation, requestLocation } = useUserLocation();
+  const mapLocationState = useLiveUserLocation();
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
   const { completedVersionByType = {} } = useRecommendationPublish();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
@@ -250,6 +252,7 @@ export default function CommunityScreen({ navigation }) {
             truncated={mapTruncated}
             zoomInRequired={zoomInRequired}
             onSearchViewport={searchViewport}
+            locationState={mapLocationState}
             overlayBottomInset={getTabOverlayBottomInset(insets)}
             onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}
           />

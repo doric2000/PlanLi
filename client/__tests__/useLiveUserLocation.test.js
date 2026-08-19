@@ -71,4 +71,68 @@ describe('useLiveUserLocation', () => {
     expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
     expect(Location.watchPositionAsync).not.toHaveBeenCalled();
   });
+
+  it('shares a pending precise-location request instead of restarting it', async () => {
+    let resolvePosition;
+    Location.getCurrentPositionAsync.mockImplementation(() => new Promise((resolve) => {
+      resolvePosition = resolve;
+    }));
+    const { result } = renderHook(() => useLiveUserLocation());
+
+    let first;
+    let second;
+    await act(async () => {
+      first = result.current.startTracking();
+      second = result.current.startTracking();
+      await Promise.resolve();
+    });
+    expect(first).toBe(second);
+    expect(Location.requestForegroundPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvePosition({
+        coords: { latitude: 41.7151, longitude: 44.8271, accuracy: 8 },
+        timestamp: 123,
+      });
+      await first;
+    });
+  });
+
+  it('starts a new native request when the user retries after a timeout', async () => {
+    const resolvers = [];
+    Location.getCurrentPositionAsync.mockImplementation(() => new Promise((resolve) => {
+      resolvers.push(resolve);
+    }));
+    const { result } = renderHook(() => useLiveUserLocation());
+
+    let first;
+    await act(async () => {
+      first = result.current.startTracking();
+      await Promise.resolve();
+    });
+    act(() => jest.advanceTimersByTime(FIRST_LOCATION_TIMEOUT_MS));
+
+    let retry;
+    await act(async () => {
+      retry = result.current.startTracking();
+      await Promise.resolve();
+    });
+    expect(retry).not.toBe(first);
+    expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolvers[1]({
+        coords: { latitude: 41.7151, longitude: 44.8271, accuracy: 8 },
+        timestamp: 456,
+      });
+      await retry;
+      resolvers[0]({
+        coords: { latitude: 0, longitude: 0, accuracy: 100 },
+        timestamp: 123,
+      });
+      await first;
+    });
+    expect(result.current.location).toMatchObject({ lat: 41.7151, lng: 44.8271 });
+  });
 });

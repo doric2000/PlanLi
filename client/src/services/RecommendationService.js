@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
+import { clearPersonalizationDiscoveryCache } from './PersonalizationService';
 
 let saveRecommendationCallable;
 let resolveRecommendationDestinationCallable;
@@ -16,6 +17,7 @@ const getSaveRecommendationCallable = () => {
 
 export const saveRecommendation = async (payload) => {
   const response = await getSaveRecommendationCallable()(payload);
+  clearPersonalizationDiscoveryCache('recommendations');
   return response?.data || null;
 };
 
