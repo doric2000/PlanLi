@@ -12,9 +12,11 @@ import {
 } from '../src/hooks/useImagePickerWithUpload';
 import {
   FirebaseUploadStrategy,
+  MEDIA_UPLOAD_STALLED_CODE,
   useImageUploader,
 } from '../src/hooks/useImageUploader';
 import { prepareMedia } from '../src/services/MediaService';
+import { TRAVEL_UPLOAD_STALL_TIMEOUT_MS } from '../src/constants/travelMedia';
 
 jest.mock('expo-image-picker', () => ({}));
 jest.mock('expo-image-manipulator', () => ({
@@ -130,6 +132,10 @@ describe('canonical image upload pipeline', () => {
       asset = await result.current.uploadImageAsset('file:source');
     });
     expect(strategy.upload).toHaveBeenCalledTimes(1);
+    expect(strategy.upload.mock.calls[0][4]).toEqual({
+      resolveDownloadUrl: false,
+      stallTimeoutMs: TRAVEL_UPLOAD_STALL_TIMEOUT_MS,
+    });
     expect(prepareMedia).toHaveBeenCalledWith({
       stagingPath:
         'media-staging/user-1/123e4567-e89b-42d3-a456-426614174000.jpg',
@@ -190,6 +196,47 @@ describe('canonical image upload pipeline', () => {
     expect(getDownloadURL).toHaveBeenCalled();
   });
 
+  it('skips the unused download URL lookup for staging uploads', async () => {
+    const blob = { type: 'image/jpeg', size: 3 };
+    await expect(
+      FirebaseUploadStrategy.upload(
+        blob,
+        'media-staging/user-1/123e4567-e89b-42d3-a456-426614174000.jpg',
+        {},
+        undefined,
+        { resolveDownloadUrl: false }
+      )
+    ).resolves.toBeNull();
+    expect(getDownloadURL).not.toHaveBeenCalled();
+  });
+
+  it('cancels an upload that makes no progress for thirty seconds', async () => {
+    jest.useFakeTimers();
+    let failUpload;
+    const cancel = jest.fn(() => failUpload?.({ code: 'storage/canceled' }));
+    uploadBytesResumable.mockImplementationOnce((storageRef) => ({
+      snapshot: { ref: storageRef },
+      cancel,
+      on: (_event, _progress, error) => { failUpload = error; },
+    }));
+
+    const upload = FirebaseUploadStrategy.upload(
+      { type: 'image/jpeg', size: 3 },
+      'media-staging/user-1/123e4567-e89b-42d3-a456-426614174000.jpg',
+      {},
+      undefined,
+      { resolveDownloadUrl: false, stallTimeoutMs: TRAVEL_UPLOAD_STALL_TIMEOUT_MS }
+    );
+    const rejection = expect(upload).rejects.toMatchObject({
+      code: MEDIA_UPLOAD_STALLED_CODE,
+      details: { retryable: true, publishStage: 'uploading' },
+    });
+    jest.advanceTimersByTime(TRAVEL_UPLOAD_STALL_TIMEOUT_MS);
+    await rejection;
+    expect(cancel).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
   it('keeps upload state until the resumable upload completes', async () => {
     const originalFetch = global.fetch;
     global.fetch = jest.fn(async () => ({
@@ -220,6 +267,38 @@ describe('canonical image upload pipeline', () => {
       await promise;
     });
     expect(result.current.uploading).toBe(false);
+    global.fetch = originalFetch;
+  });
+
+  it('surfaces a stalled upload without waiting for remote rollback', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => ({
+      blob: async () => ({ type: 'image/jpeg', size: 1, close: jest.fn() }),
+    }));
+    let finishCleanup;
+    const strategy = {
+      getUserId: () => 'user-1',
+      generatePath: () =>
+        'media-staging/user-1/123e4567-e89b-42d3-a456-426614174000.jpg',
+      upload: jest.fn(async () => {
+        const error = new Error('stalled');
+        error.code = MEDIA_UPLOAD_STALLED_CODE;
+        throw error;
+      }),
+      remove: jest.fn(() => new Promise((resolve) => { finishCleanup = resolve; })),
+    };
+    const { result } = renderHook(() =>
+      useImageUploader({ strategy, storagePath: 'media-staging' })
+    );
+
+    await act(async () => {
+      await expect(result.current.uploadImageDetailed('file:source')).rejects.toMatchObject({
+        code: MEDIA_UPLOAD_STALLED_CODE,
+      });
+    });
+    expect(strategy.remove).toHaveBeenCalledTimes(1);
+    expect(result.current.uploading).toBe(false);
+    finishCleanup();
     global.fetch = originalFetch;
   });
 });

@@ -78,4 +78,24 @@ describe('RecommendationPublishBanner', () => {
     expect(screen.getByText('מגבלת החיפוש הזמנית הושגה. נסו שוב בעוד זמן קצר.')).toBeTruthy();
     expect(screen.queryByText(/Google request limit reached/)).toBeNull();
   });
+
+  it('explains that stalled upload media remains saved for retry', () => {
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', status: 'failed', stage: 'failed', progress: 0.2,
+        error: {
+          code: 'media/upload-stalled',
+          details: { publishStage: 'uploading', retryable: true },
+        },
+      },
+    };
+
+    const screen = render(<RecommendationPublishBanner />);
+
+    expect(screen.getByText(
+      'החיבור נקטע בזמן העלאת התמונות. הפרסום והתמונות נשמרו, ואפשר לנסות שוב.'
+    )).toBeTruthy();
+    expect(screen.getByTestId('publish-retry')).toBeTruthy();
+  });
 });

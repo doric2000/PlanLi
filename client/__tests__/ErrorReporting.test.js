@@ -134,17 +134,28 @@ describe('error reporting privacy', () => {
       message: 'Opened user@example.com',
       data: { from: 'Main', to: 'Profile', email: 'user@example.com' },
     });
+    addDiagnosticBreadcrumb({
+      category: 'network',
+      message: 'Publish failed',
+      data: { operation: 'publish_route', status: 'uploading', attempt: 2, imagePath: 'private.jpg' },
+    });
     addDiagnosticBreadcrumb({ category: 'console', message: 'private log' });
     setDiagnosticTag('screen', 'CompleteAccount');
     setDiagnosticTag('email', 'user@example.com');
 
     expect(mockSetUser).toHaveBeenCalledWith({ id: 'firebase-uid' });
-    expect(mockAddBreadcrumb).toHaveBeenCalledTimes(1);
+    expect(mockAddBreadcrumb).toHaveBeenCalledTimes(2);
     expect(mockAddBreadcrumb).toHaveBeenCalledWith({
       category: 'navigation',
       message: 'Opened [redacted-email]',
       level: 'info',
       data: { from: 'Main', to: 'Profile' },
+    });
+    expect(mockAddBreadcrumb).toHaveBeenCalledWith({
+      category: 'network',
+      message: 'Publish failed',
+      level: 'info',
+      data: { operation: 'publish_route', status: 'uploading', attempt: 2 },
     });
     expect(mockSetTag).toHaveBeenCalledTimes(1);
     expect(mockSetTag).toHaveBeenCalledWith('screen', 'CompleteAccount');

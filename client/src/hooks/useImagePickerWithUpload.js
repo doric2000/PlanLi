@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 
 import { prepareMedia } from '../services/MediaService';
+import { TRAVEL_UPLOAD_STALL_TIMEOUT_MS } from '../constants/travelMedia';
 import { useImagePicker } from './useImagePicker';
 import {
   FirebaseUploadStrategy,
@@ -22,6 +23,14 @@ const DEFAULT_OPTIONS = {
   storagePath: 'media-staging',
   strategy: FirebaseUploadStrategy,
 };
+
+function withPublishStage(error, publishStage) {
+  const stagedError = new Error(String(error?.message || error || 'Media upload failed.'));
+  stagedError.name = error?.name || 'MediaUploadError';
+  stagedError.code = error?.code || 'media/unknown';
+  stagedError.details = { ...(error?.details || {}), publishStage };
+  return stagedError;
+}
 
 /**
  * Run at most two complete image pipelines concurrently while preserving the
@@ -58,6 +67,7 @@ export const uploadUrisWithConcurrency = async (
 
 export const useImagePickerWithUpload = (options = {}) => {
   const config = { ...DEFAULT_OPTIONS, ...options };
+  const travelUpload = ['recommendation', 'route'].includes(config.kind);
   const picker = useImagePicker({
     aspect: config.aspect,
     quality: config.quality,
@@ -79,11 +89,14 @@ export const useImagePickerWithUpload = (options = {}) => {
     async (uri, { onProgress } = {}) => {
       if (!uri) return null;
       let staging = null;
+      let publishStage = 'uploading';
       try {
         onProgress?.(0.02);
         const stagingStartedAt = Date.now();
         staging = await uploader.uploadImageDetailed(uri, {
           variant: 'staging',
+          resolveDownloadUrl: false,
+          stallTimeoutMs: travelUpload ? TRAVEL_UPLOAD_STALL_TIMEOUT_MS : 0,
           onProgress: (ratio) => onProgress?.(ratio * 0.65),
         });
         console.info('media_staging_upload_timing', {
@@ -94,6 +107,7 @@ export const useImagePickerWithUpload = (options = {}) => {
           throw new Error('Staging upload did not return a Storage path.');
         }
         onProgress?.(0.68);
+        publishStage = 'processing';
         const preparationStartedAt = Date.now();
         const asset = await prepareMedia({
           stagingPath: staging.path,
@@ -117,10 +131,10 @@ export const useImagePickerWithUpload = (options = {}) => {
         if (staging?.path) {
           await uploader.removeUploadedImage(staging.path).catch(() => {});
         }
-        throw error;
+        throw withPublishStage(error, error?.details?.publishStage || publishStage);
       }
     },
-    [config.kind, uploader]
+    [config.kind, travelUpload, uploader]
   );
 
   const uploadImageAssets = useCallback(

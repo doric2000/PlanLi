@@ -21,6 +21,10 @@ import {
 } from "../../../constants/travelTaxonomy";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
+import {
+	ROUTE_IMAGE_LONG_EDGE,
+	TRAVEL_IMAGE_COMPRESSION,
+} from "../../../constants/travelMedia";
 import useDurableDraftMedia from "../../../hooks/useDurableDraftMedia";
 import { useContentPublish } from "../../publishing/ContentPublishContext";
 import DayEditorModal from "../components/DayEditorModal";
@@ -33,6 +37,7 @@ import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { useBackButton } from "../../../hooks/useBackButton";
 import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
 import { locationErrorKind, locationErrorMessage } from "../../../utils/locationErrors";
+import { travelMediaErrorMessage } from "../../../utils/travelMediaErrors";
 import {
 	ensureRouteDraftIds,
 	extractRoutePublishMedia,
@@ -207,8 +212,8 @@ export default function AddRoutesScreen({ navigation, route }) {
 	const { uploadImageAssets } = useImagePickerWithUpload({
 		kind: "route",
 		quality: 1,
-		maxLongEdge: 2560,
-		normalizeCompress: 0.94,
+		maxLongEdge: ROUTE_IMAGE_LONG_EDGE,
+		normalizeCompress: TRAVEL_IMAGE_COMPRESSION,
 	});
 	const toggle = (setter, value, maximum = 20) => setter((current) => current.includes(value)
 		? current.filter((item) => item !== value)
@@ -606,7 +611,7 @@ export default function AddRoutesScreen({ navigation, route }) {
 					? "מגבלת המיקום היומית"
 					: locationKind === "temporaryQuota" ? "מגבלת חיפוש זמנית" : "שגיאה",
 				locationKind === "unknown"
-					? "לא הצלחנו לשמור את המסלול."
+					? travelMediaErrorMessage(error) || "לא הצלחנו לשמור את המסלול. אפשר לנסות שוב."
 					: locationErrorMessage(error)
 			);
 		} finally {

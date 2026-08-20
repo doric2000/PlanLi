@@ -1,4 +1,20 @@
-import { calculateCropRect, fitCropViewport } from '../src/components/ImageCropReviewModal';
+import * as ImageManipulator from 'expo-image-manipulator';
+
+import {
+  calculateCropRect,
+  cropImageForReview,
+  fitCropViewport,
+} from '../src/components/ImageCropReviewModal';
+import {
+  RECOMMENDATION_IMAGE_LONG_EDGE,
+  ROUTE_IMAGE_LONG_EDGE,
+  TRAVEL_IMAGE_COMPRESSION,
+} from '../src/constants/travelMedia';
+
+jest.mock('expo-image-manipulator', () => ({
+  SaveFormat: { JPEG: 'jpeg' },
+  manipulateAsync: jest.fn(),
+}));
 
 describe('calculateCropRect', () => {
   it('fits crop frames inside both compact portrait and landscape stages', () => {
@@ -46,5 +62,26 @@ describe('calculateCropRect', () => {
     expect(crop).toEqual({ originX: 500, originY: 667, width: 1333, height: 1000 });
     expect(crop.originX + crop.width).toBeLessThanOrEqual(3000);
     expect(crop.originY + crop.height).toBeLessThanOrEqual(2000);
+  });
+
+  it('encodes bounded travel staging JPEGs at the shared quality target', async () => {
+    ImageManipulator.manipulateAsync.mockResolvedValue({ uri: 'file:travel-stage.jpg' });
+    await expect(cropImageForReview(
+      'file:source.jpg',
+      { originX: 0, originY: 0, width: 3000, height: 3000 },
+      {
+        maxLongEdge: RECOMMENDATION_IMAGE_LONG_EDGE,
+        compress: TRAVEL_IMAGE_COMPRESSION,
+      }
+    )).resolves.toBe('file:travel-stage.jpg');
+    expect(ImageManipulator.manipulateAsync).toHaveBeenCalledWith(
+      'file:source.jpg',
+      [
+        { crop: { originX: 0, originY: 0, width: 3000, height: 3000 } },
+        { resize: { width: 1600, height: 1600 } },
+      ],
+      { compress: 0.85, format: 'jpeg' }
+    );
+    expect(ROUTE_IMAGE_LONG_EDGE).toBe(2048);
   });
 });

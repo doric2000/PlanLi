@@ -15,6 +15,10 @@ import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
 import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
+import {
+  RECOMMENDATION_IMAGE_LONG_EDGE,
+  TRAVEL_IMAGE_COMPRESSION,
+} from '../../../constants/travelMedia';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from '../../../components/GuidedForm';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
@@ -32,6 +36,7 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 // --- Constants ---
 import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
+import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -893,7 +898,10 @@ const handleSubmit = async () => {
     } catch (error) {
       console.error("Error saving document: ", error);
       // Unclaimed prepared media is removed by the scheduled server cleanup.
-      Alert.alert("אוי לא!", "לא הצלחנו לשמור את ההמלצה.");
+      Alert.alert(
+        "אוי לא!",
+        travelMediaErrorMessage(error) || "לא הצלחנו לשמור את ההמלצה. אפשר לנסות שוב."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -1244,8 +1252,8 @@ const handleSubmit = async () => {
         visible={reviewUris.length > 0}
         uris={reviewUris}
         aspect={[1, 1]}
-        maxLongEdge={1600}
-        compress={0.9}
+        maxLongEdge={RECOMMENDATION_IMAGE_LONG_EDGE}
+        compress={TRAVEL_IMAGE_COMPRESSION}
         onCancel={cancelReview}
         onComplete={completeReview}
       />

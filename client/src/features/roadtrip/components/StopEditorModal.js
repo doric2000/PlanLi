@@ -6,6 +6,10 @@ import ExactLocationPicker from "../../../components/ExactLocationPicker";
 import { FormInput } from "../../../components/FormInput";
 import { ImagePickerBox } from "../../../components/ImagePickerBox";
 import ImageCropReviewModal from "../../../components/ImageCropReviewModal";
+import {
+	ROUTE_IMAGE_LONG_EDGE,
+	TRAVEL_IMAGE_COMPRESSION,
+} from "../../../constants/travelMedia";
 import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import useReviewedImagePicker from "../../../hooks/useReviewedImagePicker";
@@ -57,7 +61,8 @@ export default function StopEditorModal({
 	} = useReviewedImagePicker({
 		kind: "route",
 		quality: 1,
-		maxLongEdge: 2048,
+		maxLongEdge: ROUTE_IMAGE_LONG_EDGE,
+		normalizeCompress: TRAVEL_IMAGE_COMPRESSION,
 		processOnSelect: false,
 	});
 
@@ -237,8 +242,8 @@ export default function StopEditorModal({
 					visible={reviewUris.length > 0}
 					uris={reviewUris}
 					aspect={[4, 3]}
-					maxLongEdge={2048}
-					compress={0.94}
+					maxLongEdge={ROUTE_IMAGE_LONG_EDGE}
+					compress={TRAVEL_IMAGE_COMPRESSION}
 					onCancel={cancelReview}
 					onComplete={completeReview}
 				/>
