@@ -17,6 +17,7 @@ const ALLOWED_BREADCRUMB_CATEGORIES = new Set([
 ]);
 const ALLOWED_BREADCRUMB_DATA = new Set([
   'code',
+  'attempt',
   'durationMs',
   'from',
   'online',

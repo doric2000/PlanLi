@@ -605,8 +605,9 @@ exports.prepareMedia = callable(
     access: 'active',
     memory: '1GiB',
     concurrency: 1,
-    maxInstances: 1,
-    timeoutSeconds: 120,
+    minInstances: 0,
+    maxInstances: 5,
+    timeoutSeconds: 60,
     serviceAccount: MEDIA_SERVICE_ACCOUNT,
   },
   (request) => prepareMedia({

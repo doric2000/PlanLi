@@ -351,10 +351,10 @@ async function prepareMedia({
     await removeFiles(candidateFiles);
     if (error instanceof HttpsError) throw error;
     console.error('Media preparation failed.', {
-      uid: auth.uid,
-      stagingPath,
       kind,
-      error: error?.message || String(error),
+      sourceBytes,
+      durationMs: Date.now() - preparationStartedAt,
+      code: String(error?.code || 'unknown'),
     });
     throw new HttpsError('internal', 'Could not prepare this image.');
   }

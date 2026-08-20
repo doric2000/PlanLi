@@ -13,10 +13,19 @@ const STAGING_IMAGE_METADATA = {
   cacheControl: 'private,max-age=0,no-store',
 };
 
+export const MEDIA_UPLOAD_STALLED_CODE = 'media/upload-stalled';
+
+function stalledUploadError() {
+  const error = new Error('The image upload stopped making progress.');
+  error.code = MEDIA_UPLOAD_STALLED_CODE;
+  error.details = { retryable: true, publishStage: 'uploading' };
+  return error;
+}
+
 /**
  * Upload Strategy Interface
  * @typedef {Object} UploadStrategy
- * @property {Function} upload - Upload function (blob, path) => Promise<string>
+ * @property {Function} upload - Upload function (blob, path, metadata, onProgress, options) => Promise<string|null>
  * @property {Function} generatePath - Path generator (storagePath, userId) => string
  */
 
@@ -29,9 +38,9 @@ export const FirebaseUploadStrategy = {
    * Upload a blob to Firebase Storage
    * @param {Blob} blob - The image blob to upload
    * @param {string} path - The storage path
-   * @returns {Promise<string>} The download URL
+   * @returns {Promise<string|null>} The download URL when requested
    */
-  upload: async (blob, path, metadata = {}, onProgress) => {
+  upload: async (blob, path, metadata = {}, onProgress, options = {}) => {
     const storageRef = ref(storage, path);
     const uploadTask = uploadBytesResumable(storageRef, blob, {
       ...STAGING_IMAGE_METADATA,
@@ -39,20 +48,49 @@ export const FirebaseUploadStrategy = {
       contentType:
         metadata.contentType || blob?.type || STAGING_IMAGE_METADATA.contentType,
     });
+    const stallTimeoutMs = Number(options.stallTimeoutMs || 0);
+    let stallTimer = null;
+    let uploadStalled = false;
+    let transferred = 0;
+    const clearStallTimer = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = null;
+    };
+    const armStallTimer = () => {
+      clearStallTimer();
+      if (stallTimeoutMs > 0) {
+        stallTimer = setTimeout(() => {
+          uploadStalled = true;
+          uploadTask.cancel();
+        }, stallTimeoutMs);
+      }
+    };
     const snapshot = await new Promise((resolve, reject) => {
+      armStallTimer();
       uploadTask.on(
         'state_changed',
         (nextSnapshot) => {
           const total = Number(nextSnapshot.totalBytes || 0);
+          const nextTransferred = Number(nextSnapshot.bytesTransferred || 0);
+          if (nextTransferred > transferred) {
+            transferred = nextTransferred;
+            armStallTimer();
+          }
           if (total > 0 && typeof onProgress === 'function') {
-            onProgress(nextSnapshot.bytesTransferred / total);
+            onProgress(nextTransferred / total);
           }
         },
-        reject,
-        () => resolve(uploadTask.snapshot)
+        (error) => {
+          clearStallTimer();
+          reject(uploadStalled ? stalledUploadError() : error);
+        },
+        () => {
+          clearStallTimer();
+          resolve(uploadTask.snapshot);
+        }
       );
     });
-    return getDownloadURL(snapshot.ref);
+    return options.resolveDownloadUrl === false ? null : getDownloadURL(snapshot.ref);
   },
 
   /**
@@ -171,8 +209,14 @@ export const useImageUploader = (options = {}) => {
       }, (ratio) => {
         setUploadProgress(50 + Math.round(ratio * 45));
         details.onProgress?.(0.5 + ratio * 0.45);
+      }, {
+        resolveDownloadUrl: details.resolveDownloadUrl !== false,
+        stallTimeoutMs: details.stallTimeoutMs,
       });
-      if (typeof downloadUrl !== 'string' || !downloadUrl) {
+      if (
+        details.resolveDownloadUrl !== false &&
+        (typeof downloadUrl !== 'string' || !downloadUrl)
+      ) {
         throw new Error('Image upload did not return a download URL.');
       }
       setUploadProgress(100);
@@ -187,17 +231,24 @@ export const useImageUploader = (options = {}) => {
         contentType: 'image/jpeg',
       };
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.info('media_upload_failed', { code: String(error?.code || 'unknown') });
       setUploadError(error);
       if (
         path &&
         shouldRollbackGeneratedPath &&
         typeof config.strategy.remove === 'function'
       ) {
-        try {
-          await config.strategy.remove(path);
-        } catch (cleanupError) {
-          console.warn('Failed to roll back generated upload path:', cleanupError);
+        const cleanup = config.strategy.remove(path).catch((cleanupError) => {
+          console.warn('media_upload_rollback_failed', {
+            code: String(cleanupError?.code || 'unknown'),
+          });
+        });
+        if (![
+          MEDIA_UPLOAD_STALLED_CODE,
+          'storage/retry-limit-exceeded',
+          'storage/unknown',
+        ].includes(String(error?.code || ''))) {
+          await cleanup;
         }
       }
       throw error;

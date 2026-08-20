@@ -6,6 +6,7 @@ import {
   recommendationPublishProgress,
   isTransientPublishError,
   normalizedPublishError,
+  publishRetryPolicy,
   upgradeRestoredPublishJob,
   useRecommendationPublish,
 } from '../src/features/community/publishing/RecommendationPublishContext';
@@ -24,6 +25,8 @@ const mockSaveJobs = jest.fn();
 const mockPersistMedia = jest.fn();
 const mockMaterializeMedia = jest.fn();
 const mockDeleteJobMedia = jest.fn();
+const mockAddDiagnosticBreadcrumb = jest.fn();
+const mockCaptureDiagnosticException = jest.fn();
 
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ user: mockUser, loading: false }),
@@ -37,6 +40,10 @@ jest.mock('../src/services/RecommendationService', () => ({
 }));
 jest.mock('../src/services/RouteService', () => ({
   saveRoute: (...args) => mockSaveRoute(...args),
+}));
+jest.mock('../src/services/ErrorReporting', () => ({
+  addDiagnosticBreadcrumb: (...args) => mockAddDiagnosticBreadcrumb(...args),
+  captureDiagnosticException: (...args) => mockCaptureDiagnosticException(...args),
 }));
 jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   rememberDiscoveryDestinations: jest.fn(async () => []),
@@ -228,6 +235,18 @@ describe('RecommendationPublishProvider', () => {
       });
     });
     await waitFor(() => expect(api.activeJob.status).toBe('failed'));
+    expect(mockAddDiagnosticBreadcrumb).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'network',
+      data: expect.objectContaining({
+        operation: 'publish_recommendation',
+        status: 'saving',
+        attempt: 1,
+      }),
+    }));
+    expect(mockCaptureDiagnosticException).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'ContentPublishError' }),
+      { operation: 'publish_recommendation_saving', code: 'functions/invalid-argument' }
+    );
     const jobId = api.activeJob.id;
     await act(async () => { await api.retry(jobId); });
     await waitFor(() => expect(api.activeJob.status).toBe('success'));
@@ -246,10 +265,36 @@ describe('publish status helpers', () => {
       code: 'functions/resource-exhausted',
       details: { reason: 'daily_limit_reached', retryable: false },
     })).toBe(false);
+    expect(isTransientPublishError({ code: 'functions/resource-exhausted' })).toBe(false);
     expect(recommendationPublishProgress({
       status: 'uploading', stage: 'uploading', media: [{ progress: 1 }, { progress: 0.5 }],
     })).toBeCloseTo(0.645);
     expect(recommendationPublishProgress({ status: 'success' })).toBe(1);
+  });
+
+  it('uses bounded automatic retries and leaves stalled uploads for manual retry', () => {
+    expect(publishRetryPolicy({ code: 'functions/unavailable' }, 1)).toEqual({
+      automaticRetry: true,
+      retryable: true,
+      shouldRetry: true,
+      delayMs: 1000,
+    });
+    expect(publishRetryPolicy({ code: 'functions/unavailable' }, 3)).toEqual({
+      automaticRetry: true,
+      retryable: true,
+      shouldRetry: false,
+      delayMs: 0,
+    });
+    expect(publishRetryPolicy({
+      code: 'media/upload-stalled',
+      details: { retryable: true },
+    }, 1)).toEqual({
+      automaticRetry: false,
+      retryable: true,
+      shouldRetry: false,
+      delayMs: 0,
+    });
+    expect(isTransientPublishError({ code: 'functions/deadline-exceeded' })).toBe(false);
   });
 
   it('preserves only safe location diagnostics in persisted publish errors', () => {
@@ -260,6 +305,7 @@ describe('publish status helpers', () => {
         reason: 'daily_limit_reached',
         incidentId: 'loc_1234567890ab',
         retryable: false,
+        publishStage: 'processing',
         query: 'private query',
       },
     })).toEqual({
@@ -269,6 +315,7 @@ describe('publish status helpers', () => {
         reason: 'daily_limit_reached',
         incidentId: 'loc_1234567890ab',
         retryable: false,
+        publishStage: 'processing',
       },
     });
   });

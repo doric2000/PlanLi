@@ -15,6 +15,18 @@ test('canonical media uses a bounded cache so moderation takedowns can converge'
   assert.equal(CACHE_CONTROL, 'public,max-age=300,must-revalidate');
 });
 
+test('media callable scales parallel images on demand with a bounded deadline', () => {
+  const source = require('node:fs').readFileSync(require.resolve('./index'), 'utf8');
+  const start = source.indexOf('exports.prepareMedia = callable(');
+  const end = source.indexOf('exports.syncCountryMetadataScheduled', start);
+  const declaration = source.slice(start, end);
+  assert.match(declaration, /memory:\s*'1GiB'/);
+  assert.match(declaration, /concurrency:\s*1/);
+  assert.match(declaration, /minInstances:\s*0/);
+  assert.match(declaration, /maxInstances:\s*5/);
+  assert.match(declaration, /timeoutSeconds:\s*60/);
+});
+
 test('media processing enforces aggregate per-user job and byte budgets', async () => {
   let stored = null;
   const db = {

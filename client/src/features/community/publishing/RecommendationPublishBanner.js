@@ -6,12 +6,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from '../../../components/AppText';
 import { colors, contentPublishBannerStyles as styles } from '../../../styles';
 import { locationErrorKind, locationErrorMessage } from '../../../utils/locationErrors';
+import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import { useContentPublish } from './RecommendationPublishContext';
 
-function publishErrorMessage(error) {
-  return locationErrorKind(error) === 'unknown'
-    ? error?.message || 'בדקו את החיבור ונסו שוב.'
-    : locationErrorMessage(error);
+export function publishErrorMessage(job) {
+  const error = job?.error;
+  if (locationErrorKind(error) !== 'unknown') return locationErrorMessage(error);
+  return travelMediaErrorMessage(error) ||
+    error?.message ||
+    'הפרסום נשמר במכשיר. בדקו את החיבור ונסו שוב.';
 }
 
 function statusCopy(job, queuedCount) {
@@ -62,8 +65,8 @@ export default function RecommendationPublishBanner({ onReview }) {
         <View style={styles.copy}>
           <AppText style={styles.title}>{statusCopy(activeJob, jobs.length)}</AppText>
           {failed ? (
-            <AppText style={styles.errorText} numberOfLines={1}>
-              {publishErrorMessage(activeJob.error)}
+            <AppText style={styles.errorText} numberOfLines={2}>
+              {publishErrorMessage(activeJob)}
             </AppText>
           ) : !success ? (
             <View

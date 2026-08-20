@@ -16,6 +16,10 @@ import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { saveRecommendation } from '../../../services/RecommendationService';
 import { saveRoute } from '../../../services/RouteService';
+import {
+  addDiagnosticBreadcrumb,
+  captureDiagnosticException,
+} from '../../../services/ErrorReporting';
 import { applyRoutePublishMedia } from '../../roadtrip/utils/routeMedia';
 import { rememberDiscoveryDestinations } from '../../../utils/recentDiscoveryDestinations';
 import {
@@ -27,19 +31,21 @@ import {
   saveRecommendationPublishJobs,
 } from './recommendationPublishStorage';
 
-const MAX_AUTOMATIC_RETRIES = 3;
-const RETRY_DELAYS_MS = [1000, 5000, 15000];
+const MAX_AUTOMATIC_RETRIES = 2;
+const RETRY_DELAYS_MS = [1000, 5000];
 const SUCCESS_VISIBLE_MS = 4000;
-const TRANSIENT_CODES = new Set([
+const AUTOMATIC_TRANSIENT_CODES = new Set([
   'functions/aborted',
   'functions/cancelled',
-  'functions/deadline-exceeded',
   'functions/internal',
-  'functions/resource-exhausted',
   'functions/unavailable',
-  'storage/retry-limit-exceeded',
   'storage/server-file-wrong-size',
   'storage/unknown',
+]);
+const MANUAL_RETRY_CODES = new Set([
+  'functions/deadline-exceeded',
+  'media/upload-stalled',
+  'storage/retry-limit-exceeded',
 ]);
 
 const defaultValue = {
@@ -61,6 +67,9 @@ export function normalizedPublishError(error) {
     ...(typeof rawDetails.reason === 'string' ? { reason: rawDetails.reason.slice(0, 80) } : {}),
     ...(typeof rawDetails.incidentId === 'string' ? { incidentId: rawDetails.incidentId.slice(0, 64) } : {}),
     ...(typeof rawDetails.retryable === 'boolean' ? { retryable: rawDetails.retryable } : {}),
+    ...(['uploading', 'processing', 'saving'].includes(rawDetails.publishStage)
+      ? { publishStage: rawDetails.publishStage }
+      : {}),
   };
   return {
     code: String(error?.code || 'unknown'),
@@ -70,12 +79,29 @@ export function normalizedPublishError(error) {
 }
 
 export function isTransientPublishError(error) {
+  const code = String(error?.code || '');
+  if (MANUAL_RETRY_CODES.has(code)) return false;
   if (error?.details?.retryable === false) return false;
   if (error?.details?.retryable === true) return true;
-  const code = String(error?.code || '');
-  if (TRANSIENT_CODES.has(code)) return true;
+  if (AUTOMATIC_TRANSIENT_CODES.has(code)) return true;
   const message = String(error?.message || '').toLowerCase();
   return /network|offline|timed? out|temporar|connection|fetch failed/.test(message);
+}
+
+export function publishRetryPolicy(error, attempts) {
+  const code = String(error?.code || '');
+  const manualRetry = MANUAL_RETRY_CODES.has(code);
+  const automaticRetry = !manualRetry && isTransientPublishError(error);
+  const retryable = error?.details?.retryable === false
+    ? false
+    : manualRetry || automaticRetry;
+  const shouldRetry = automaticRetry && attempts <= MAX_AUTOMATIC_RETRIES;
+  return {
+    automaticRetry,
+    retryable,
+    shouldRetry,
+    delayMs: shouldRetry ? RETRY_DELAYS_MS[attempts - 1] : 0,
+  };
 }
 
 function isExpiredPlaceTokenError(error) {
@@ -616,23 +642,52 @@ export function ContentPublishProvider({ children }) {
       const current = jobsRef.current.find((entry) => entry.id === jobId);
       if (!current) return;
       const attempts = Number(current.attempts || 0) + 1;
-      const transient = isTransientPublishError(error);
-      const shouldRetry = transient && attempts <= MAX_AUTOMATIC_RETRIES;
-      if (shouldRetry) {
+      const failedStage = ['uploading', 'processing', 'saving'].includes(error?.details?.publishStage)
+        ? error.details.publishStage
+        : current.stage;
+      const retryPolicy = publishRetryPolicy(error, attempts);
+      addDiagnosticBreadcrumb({
+        category: 'network',
+        message: 'Content publication attempt failed',
+        level: 'error',
+        data: {
+          operation: `publish_${current.contentType || 'recommendation'}`,
+          status: failedStage,
+          code: String(error?.code || 'unknown'),
+          attempt: attempts,
+          durationMs: Date.now() - startedAt,
+        },
+      });
+      if (retryPolicy.shouldRetry) {
         console.info('content_publish_retry', {
           contentType: current.contentType || 'recommendation',
           retryNumber: attempts,
-          delayMs: RETRY_DELAYS_MS[attempts - 1],
-          failedStage: current.stage,
+          delayMs: retryPolicy.delayMs,
+          failedStage,
+        });
+      } else {
+        const diagnosticError = new Error(`Content publication failed during ${failedStage}.`);
+        diagnosticError.name = 'ContentPublishError';
+        captureDiagnosticException(diagnosticError, {
+          operation: `publish_${current.contentType || 'recommendation'}_${failedStage}`,
+          code: String(error?.code || 'unknown'),
         });
       }
       await updateJob(jobId, (job) => ({
         ...job,
-        status: shouldRetry ? 'queued' : 'failed',
-        stage: shouldRetry ? 'retrying' : 'failed',
+        status: retryPolicy.shouldRetry ? 'queued' : 'failed',
+        stage: retryPolicy.shouldRetry ? 'retrying' : 'failed',
         attempts,
-        retryAt: shouldRetry ? Date.now() + RETRY_DELAYS_MS[attempts - 1] : 0,
-        error: normalizedPublishError(error),
+        retryAt: retryPolicy.shouldRetry ? Date.now() + retryPolicy.delayMs : 0,
+        error: normalizedPublishError({
+          code: error?.code,
+          message: error?.message,
+          details: {
+            ...(error?.details || {}),
+            publishStage: failedStage,
+            retryable: retryPolicy.retryable,
+          },
+        }),
         updatedAt: Date.now(),
       }));
     }
