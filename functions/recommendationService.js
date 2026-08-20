@@ -738,6 +738,29 @@ async function resolveExistingDestination(db, destinationRef) {
   };
 }
 
+function destinationContainsCoordinates(destination, coordinates) {
+  const viewport = destination?.googleCache?.viewport ||
+    destination?.identity?.viewport || destination?.viewport;
+  const south = Number(viewport?.southwest?.lat);
+  const west = Number(viewport?.southwest?.lng);
+  const north = Number(viewport?.northeast?.lat);
+  const east = Number(viewport?.northeast?.lng);
+  const lat = Number(coordinates?.lat);
+  const lng = Number(coordinates?.lng);
+  if (![south, west, north, east, lat, lng].every(Number.isFinite)) return false;
+  const insideLatitude = lat >= Math.min(south, north) && lat <= Math.max(south, north);
+  const insideLongitude = west <= east
+    ? lng >= west && lng <= east
+    : lng >= west || lng <= east;
+  return insideLatitude && insideLongitude;
+}
+
+function isCityDestination(destination) {
+  if (destination?.destinationType === 'city') return true;
+  const types = destination?.googleCache?.types || destination?.identity?.types || [];
+  return Array.isArray(types) && types.includes('locality');
+}
+
 async function findExistingDestinationByAlias({
   db,
   countryCode,
@@ -798,10 +821,21 @@ async function findExistingDestinationByAlias({
       cityId: entry.cityId,
       cityData,
       distanceKm: distanceKm(coordinates, cityCoordinates),
+      containsCoordinates: destinationContainsCoordinates(cityData, coordinates),
+      isCity: isCityDestination(cityData),
     };
   }).filter((entry) => entry && entry.distanceKm <= 50)
     .sort((left, right) => left.distanceKm - right.distanceKm || left.cityId.localeCompare(right.cityId));
   if (!matches.length) return null;
+
+  const containingCities = matches.filter((entry) => entry.isCity && entry.containsCoordinates);
+  if (containingCities.length === 1) return containingCities[0];
+  if (containingCities.length > 1) {
+    if (containingCities[1].distanceKm - containingCities[0].distanceKm < 5) {
+      return { ambiguity: containingCities.slice(0, 3) };
+    }
+    return containingCities[0];
+  }
   if (matches.length > 1 && matches[1].distanceKm - matches[0].distanceKm < 5) {
     return { ambiguity: matches.slice(0, 3) };
   }

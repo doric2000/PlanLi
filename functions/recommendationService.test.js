@@ -97,6 +97,65 @@ test('administrative aliases reuse a nearby known Chiang Rai destination before 
   assert.equal(result.cityId, 'chiang-rai');
 });
 
+test('a containing PlanLi city outranks a closer same-name administrative region', async () => {
+  const countryDocument = {
+    id: 'PE',
+    data: () => ({ code: 'PE', status: 'active', name: 'Peru' }),
+  };
+  const catalogDocuments = ['city', 'region'].map((cityId) => ({
+    id: `PE_${cityId}`,
+    data: () => ({
+      countryId: 'PE', cityId, status: 'active', names: { en: 'Cusco', he: 'Cusco' },
+    }),
+  }));
+  const city = {
+    status: 'active',
+    destinationType: 'city',
+    googleCache: {
+      names: { en: 'Cusco', he: 'Cusco' },
+      coordinates: { lat: -13.53, lng: -71.97 },
+      viewport: {
+        southwest: { lat: -13.60, lng: -72.05 },
+        northeast: { lat: -13.45, lng: -71.90 },
+      },
+      types: ['locality'],
+    },
+  };
+  const region = {
+    status: 'active',
+    destinationType: 'region',
+    googleCache: {
+      names: { en: 'Cusco', he: 'Cusco' },
+      coordinates: { lat: -13.5165, lng: -71.9781 },
+      types: ['administrative_area_level_1'],
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : catalogDocuments),
+    doc: (path) => ({
+      get: async () => ({
+        exists: true,
+        data: () => path.endsWith('/city') ? city : region,
+      }),
+    }),
+  };
+
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'PE',
+    localityCandidates: ['Cusco'],
+    coordinates: { lat: -13.5167, lng: -71.9783 },
+  });
+
+  assert.equal(result.cityId, 'city');
+  assert.equal(result.cityData.destinationType, 'city');
+});
+
 test('an ambiguous destination choice finalizes from transient trusted data without Google work', async () => {
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -697,6 +756,107 @@ test('Google destination resolution falls back from a district to its containing
     assert.equal(destination.countryId, 'TH');
     assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-mai-city');
     assert.deepEqual(searches, ['Chiang Mai Thailand']);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('Google destination resolution accepts the reported Chiang Rai tambon reverse result', async () => {
+  const admin = createFakeAdmin({
+    'countries/TH': {
+      name: 'Thailand',
+      names: { he: 'Thailand', en: 'Thailand' },
+      code: 'TH',
+      region: 'Asia',
+      currencyCode: 'THB',
+      status: 'active',
+    },
+  });
+  const coordinates = { lat: 19.9, lng: 99.9 };
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'one-budget-chiangrai-bypass-east',
+      displayName: 'One Budget Hotel Chiangrai Bypass-East',
+      countryName: 'Thailand',
+      countryCode: 'TH',
+      localityName: 'Tambon Wiang Chai',
+      localityCandidates: [
+        'Tambon Wiang Chai',
+        'Amphoe Mueang Chiang Rai',
+        'Chang Wat Chiang Rai',
+      ],
+      coordinates,
+      types: ['lodging'],
+    },
+    en: {
+      placeId: 'one-budget-chiangrai-bypass-east',
+      displayName: 'One Budget Hotel Chiangrai Bypass-East',
+      countryName: 'Thailand',
+      countryCode: 'TH',
+      localityName: 'Tambon Wiang Chai',
+      localityCandidates: [
+        'Tambon Wiang Chai',
+        'Amphoe Mueang Chiang Rai',
+        'Chang Wat Chiang Rai',
+      ],
+      coordinates,
+      types: ['lodging'],
+    },
+  };
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (urlValue) => {
+    const url = new URL(String(urlValue));
+    if (url.pathname.endsWith('/geocode/json')) {
+      calls.push('geocode');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 'OK',
+          results: [{
+            place_id: 'wiang-chai-town',
+            types: ['administrative_area_level_3', 'political'],
+            address_components: [
+              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            ],
+            geometry: { location: coordinates },
+          }],
+        }),
+      };
+    }
+    calls.push(`details:${url.searchParams.get('languageCode')}`);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'wiang-chai-town',
+        displayName: { text: 'Wiang Chai' },
+        addressComponents: [
+          { longText: 'Wiang Chai', types: ['administrative_area_level_3', 'political'] },
+          { longText: 'Thailand', shortText: 'TH', types: ['country', 'political'] },
+        ],
+        location: { latitude: coordinates.lat, longitude: coordinates.lng },
+        types: ['administrative_area_level_3', 'political'],
+      }),
+    };
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin,
+      placeId: selectedPlace.en.placeId,
+      resolvedPlace: selectedPlace,
+      mapsKey: 'maps-key',
+      newPlacesKey: 'new-key',
+      placesProvider: 'new',
+    });
+
+    assert.equal(destination.countryId, 'TH');
+    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'wiang-chai-town');
+    assert.equal(destination.cityData.destinationType, 'town');
+    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'geocode']);
   } finally {
     global.fetch = originalFetch;
   }

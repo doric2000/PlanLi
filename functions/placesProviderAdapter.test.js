@@ -10,11 +10,16 @@ const {
   fetchNewBilingualPlace,
   fetchNewSelectionPlace,
   fetchLocalityPlaceId,
+  localityAliases,
   newAutocomplete,
   parseNewLocalizedPlace,
   providerEndpointFor,
   providerRequestContext,
 } = require('./placesProviderAdapter');
+
+test('Thai tambon prefixes normalize to the same locality alias as Google locality details', () => {
+  assert.deepEqual(localityAliases('Tambon Wiang Chai'), ['wiang chai', 'tambon wiang chai']);
+});
 
 function details(language) {
   return {

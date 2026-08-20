@@ -449,6 +449,7 @@ async function fetchPlaceSelection(options) {
 }
 
 const ADMINISTRATIVE_NAME_PREFIXES = [
+  'tambon',
   'amphoe',
   'mueang',
   'muang',
