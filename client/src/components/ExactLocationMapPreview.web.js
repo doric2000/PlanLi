@@ -4,7 +4,12 @@ import { StyleSheet } from 'react-native';
 import { exactLocationPickerStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
 
-export default function ExactLocationMapPreview({ place, title = 'תצוגה מקדימה של המיקום' }) {
+export default function ExactLocationMapPreview({
+  place,
+  title = 'תצוגה מקדימה של המיקום',
+  style,
+  testID = 'exact-location-map-preview',
+}) {
   const coordinates = getPlaceCoordinates(place);
   const lat = Number(coordinates?.lat);
   const lng = Number(coordinates?.lng);
@@ -21,9 +26,9 @@ export default function ExactLocationMapPreview({ place, title = 'תצוגה מ�
   return React.createElement('iframe', {
     title: place?.name || title,
     src,
-    style: StyleSheet.flatten(styles.previewMap),
+    style: StyleSheet.flatten([styles.previewMap, style, { pointerEvents: 'none' }]),
     loading: 'lazy',
     referrerPolicy: 'no-referrer-when-downgrade',
-    'data-testid': 'exact-location-map-preview',
+    'data-testid': testID,
   });
 }

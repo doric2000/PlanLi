@@ -19,6 +19,9 @@ const mockFilters = {
 
 let mockRecommendationState;
 let mockFilteredData;
+let mockMapItems;
+let mockFocusedRecommendation;
+let mockCommunityMapProps;
 
 jest.mock('../src/hooks/useRecommendations', () => ({
   useRecommendations: () => mockRecommendationState,
@@ -28,8 +31,16 @@ jest.mock('../src/services/PersonalizationService', () => ({
 }));
 jest.mock('../src/hooks/useMapRecommendations', () => ({
   useMapRecommendations: () => ({
-    items: [], loading: false, error: null, truncated: false, zoomInRequired: false,
+    items: mockMapItems, loading: false, error: null, truncated: false, zoomInRequired: false,
     searchViewport: jest.fn(),
+  }),
+}));
+jest.mock('../src/hooks/useRecommendationById', () => ({
+  useRecommendationById: () => ({
+    data: mockFocusedRecommendation,
+    loading: false,
+    error: null,
+    refresh: jest.fn(),
   }),
 }));
 jest.mock('../src/hooks/useRecommendationFilter', () => ({
@@ -75,7 +86,10 @@ jest.mock('../src/components/PageHeader', () => {
 jest.mock('../src/features/community/components/CommunityInlineMap', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return () => ReactModule.createElement(View, { testID: 'mock-community-map' });
+  return (props) => {
+    mockCommunityMapProps = props;
+    return ReactModule.createElement(View, { testID: 'mock-community-map' });
+  };
 });
 jest.mock('../src/components/RecommendationsFilterModal', () => () => null);
 jest.mock('../src/components/RecommendationCard', () => {
@@ -113,6 +127,9 @@ jest.mock('@expo/vector-icons', () => {
 describe('CommunityScreen map mode', () => {
   beforeEach(() => {
     mockFilteredData = [];
+    mockMapItems = [];
+    mockFocusedRecommendation = null;
+    mockCommunityMapProps = null;
     mockRecommendationState = {
       data: [], error: null, loading: false, refreshing: false,
       refresh: jest.fn(), removeRecommendation: jest.fn(), setDiscoveryRequest: jest.fn(),
@@ -209,5 +226,40 @@ describe('CommunityScreen map mode', () => {
     mockRecommendationState.refreshing = false;
     screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
     expect(screen.getByTestId('recommendation-refreshed-recommendation').props.topContentInset).toBe(28);
+  });
+
+  it('consumes a focused-map command and keeps the canonical target ahead of filtered results', async () => {
+    mockMapItems = [
+      { id: 'rec-nearby', title: 'Nearby' },
+      { id: 'rec-focus', title: 'Stale duplicate' },
+    ];
+    mockFocusedRecommendation = {
+      id: 'rec-focus',
+      title: 'Focused recommendation',
+      place: { name: 'Exact hotel' },
+    };
+    const mapFocus = {
+      requestId: 'rec-focus:1',
+      recommendationId: 'rec-focus',
+      coordinates: { lat: 40.4012, lng: 19.4811 },
+    };
+    const navigation = { navigate: jest.fn(), setParams: jest.fn() };
+    const screen = render(
+      <CommunityScreen navigation={navigation} route={{ params: { mapFocus } }} />
+    );
+
+    expect(await screen.findByTestId('mock-community-map')).toBeTruthy();
+    expect(mockCommunityMapProps.focusRequest).toEqual(mapFocus);
+    expect(mockCommunityMapProps.recommendations.map((item) => item.id)).toEqual([
+      'rec-focus',
+      'rec-nearby',
+    ]);
+    expect(mockCommunityMapProps.recommendations[0].place.coordinates).toEqual(mapFocus.coordinates);
+    expect(navigation.setParams).toHaveBeenCalledWith({ mapFocus: undefined });
+
+    screen.rerender(
+      <CommunityScreen navigation={navigation} route={{ params: { mapFocus } }} />
+    );
+    expect(navigation.setParams).toHaveBeenCalledTimes(1);
   });
 });
