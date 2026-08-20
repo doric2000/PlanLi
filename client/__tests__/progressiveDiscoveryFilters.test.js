@@ -104,5 +104,6 @@ describe('progressive discovery filter helpers', () => {
     };
     expect(countDiscoveryFilters(filters)).toBe(4);
     expect(countDiscoveryFilters(filters, { includeQuery: false })).toBe(3);
+    expect(countDiscoveryFilters({ ...createEmptyDiscoveryFilters(), query: " !–' " })).toBe(0);
   });
 });

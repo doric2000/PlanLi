@@ -23,6 +23,9 @@ import {
   colors,
   routesScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
+  tabHeroStyles,
+  TAB_HERO_OVERLAP,
+  TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
 import FabButton from '../../../components/FabButton';
 import { RouteCard } from '../components/RouteCard';
@@ -200,29 +203,32 @@ export default function RoutesScreen({ navigation }) {
   };
 
   const renderTopArea = () => (
-    <PageHeader variant="hero" testID="routes-tab-header">
-      <View style={styles.topActionsRow}>
-        <View style={styles.headerSideSpacer} />
-        <View style={styles.headerTitleWrap}>
-          <AppText style={styles.headerTitle}>{text.title}</AppText>
-        </View>
-        <TouchableOpacity style={styles.sortGlassButton} onPress={() => setSortVisible(true)} accessibilityLabel="מיון מסלולים">
+    <PageHeader
+      variant="hero"
+      title={text.title}
+      overlapNext
+      style={tabHeroStyles.fixedHeader}
+      testID="routes-tab-header"
+      renderEnd={() => (
+        <TouchableOpacity style={tabHeroStyles.labelAction} onPress={() => setSortVisible(true)} accessibilityLabel="מיון מסלולים" testID="routes-sort-button">
           <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
-          <AppText style={styles.sortGlassText}>{sortLabel}</AppText>
+          <AppText style={tabHeroStyles.labelText}>{sortLabel}</AppText>
         </TouchableOpacity>
-      </View>
+      )}
+    >
       <SearchFilterRow
-        style={styles.searchRow}
+        style={tabHeroStyles.searchRow}
         onFilterPress={() => setFilterVisible(true)}
         activeFilterCount={activeFilterCount}
         accessibilityLabel="סינון מסלולים"
+        testID="routes-search-row"
         filterTestID="routes-filter-button"
       >
-        <View style={styles.searchPill}>
-          <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
+        <View style={tabHeroStyles.searchField} testID="routes-search-field">
+          <Ionicons name="search" size={TAB_HERO_SEARCH_ICON_SIZE} color="rgba(255,255,255,0.62)" />
           <AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))}
             placeholder={text.searchPlaceholder} placeholderTextColor="rgba(255,255,255,0.48)"
-            style={styles.searchInput} textAlign="right" autoCorrect={false} autoCapitalize="none"
+            style={tabHeroStyles.searchInput} textAlign="right" autoCorrect={false} autoCapitalize="none"
             testID="routes-search-input" />
           {!!filters.query && (
             <TouchableOpacity onPress={() => setFilters((current) => ({ ...current, query: '' }))}
@@ -246,6 +252,7 @@ export default function RoutesScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {renderTopArea()}
       <FlatList style={styles.scroll} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.feedContent,
@@ -253,13 +260,14 @@ export default function RoutesScreen({ navigation }) {
             { paddingBottom: getTabSceneListPaddingBottom(insets) },
           ]}
           initialNumToRender={3} maxToRenderPerBatch={3} windowSize={5} onScroll={onScroll} scrollEventThrottle={16}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <RouteCard item={item} onPress={() => openRoute(item)} isOwner={currentUser && item.ownerId === currentUser.uid}
               onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)}
-              onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed" />
+              onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed"
+              topContentInset={!isFiltered && index === 0 ? TAB_HERO_OVERLAP : 0} />
           )}
           refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
-          ListHeaderComponent={<>{renderTopArea()}{renderActiveFilters()}</>}
+          ListHeaderComponent={renderActiveFilters()}
           ListEmptyComponent={loading || refreshing || confirming ? <CenteredRefreshState
             accessibilityLabel={confirming ? 'המסלולים מעודכנים' : refreshing ? 'מרענן מסלולים' : 'טוען מסלולים'}
             confirming={confirming}

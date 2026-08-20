@@ -1,9 +1,10 @@
 import React from 'react';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, render, waitFor, within } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 
 import RoutesScreen from '../src/features/roadtrip/screens/RoutesScreen';
 import { requestRoutes } from '../src/services/RouteService';
+import { routesScreenStyles } from '../src/styles';
 
 let mockUser = null;
 let mockFocusEffect = null;
@@ -72,14 +73,15 @@ jest.mock('../src/services/SocialService', () => ({
 
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
-  const { View } = require('react-native');
-  return ({ children, ...props }) => ReactModule.createElement(View, props, children);
-});
-
-jest.mock('../src/components/SearchFilterRow', () => {
-  const ReactModule = require('react');
-  const { View } = require('react-native');
-  return ({ children }) => ReactModule.createElement(View, null, children);
+  const { Text, View } = require('react-native');
+  return ({ children, title, renderStart, renderEnd, ...props }) => ReactModule.createElement(
+    View,
+    props,
+    renderStart?.(),
+    title ? ReactModule.createElement(Text, null, title) : null,
+    renderEnd?.(),
+    children
+  );
 });
 
 jest.mock('../src/components/RoutesFilterModal', () => () => null);
@@ -88,9 +90,9 @@ jest.mock('../src/features/roadtrip/components/RouteCard', () => {
   const ReactModule = require('react');
   const { Text } = require('react-native');
   return {
-    RouteCard: ({ item }) => ReactModule.createElement(
+    RouteCard: ({ item, topContentInset }) => ReactModule.createElement(
       Text,
-      { testID: `route-${item.id}` },
+      { testID: `route-${item.id}`, topContentInset },
       item.id
     ),
   };
@@ -191,8 +193,42 @@ describe('RoutesScreen authentication state', () => {
     expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
     expect(list.props.ListHeaderComponent).toBeTruthy();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
-    expect(screen.getByTestId('routes-tab-header').props.overlapNext).toBeUndefined();
+    expect(screen.getByTestId('routes-tab-header').props.overlapNext).toBe(true);
+    expect(within(list).queryByTestId('routes-tab-header')).toBeNull();
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
+  });
+
+  it('matches the Community labeled-action geometry', () => {
+    const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
+    expect(StyleSheet.flatten(routesScreenStyles.filtersAfterOverlappingHeader).paddingTop).toBe(36);
+    expect(StyleSheet.flatten(screen.getByTestId('routes-sort-button').props.style)).toMatchObject({
+      width: 80,
+      height: 44,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('routes-filter-button').props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('routes-search-row').props.style)).toMatchObject({
+      width: '100%',
+      marginTop: 12,
+      gap: 8,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('routes-search-field').props.style)).toMatchObject({
+      width: '100%',
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      flexDirection: 'row-reverse',
+      gap: 9,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('routes-search-input').props.style)).toMatchObject({
+      height: '100%',
+      fontSize: 15,
+      paddingLeft: 0,
+      paddingRight: 0,
+      textAlign: 'right',
+    });
   });
 
   it('replaces retained routes with a centered state only while refresh is pending', async () => {
@@ -218,5 +254,6 @@ describe('RoutesScreen authentication state', () => {
       await refreshPromise;
     });
     expect(screen.getByTestId('route-route-2')).toBeTruthy();
+    expect(screen.getByTestId('route-route-2').props.topContentInset).toBe(28);
   });
 });

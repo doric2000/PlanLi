@@ -8,9 +8,13 @@ import {
 jest.mock('firebase/functions', () => ({ httpsCallable: jest.fn() }));
 jest.mock('../src/config/firebase', () => ({ cloudFunctions: {} }));
 
+const destinationCallable = jest.fn();
+
 describe('DestinationService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    destinationCallable.mockReset();
+    httpsCallable.mockReturnValue(destinationCallable);
     clearDestinationSearchCache();
   });
 
@@ -38,25 +42,31 @@ describe('DestinationService', () => {
   });
 
   it('coalesces in-flight formatting variants under one bounded cache key', async () => {
-    const callable = jest.fn(async () => ({ data: { items: [{ cityId: 'st-johns' }] } }));
-    httpsCallable.mockReturnValue(callable);
+    destinationCallable.mockResolvedValue({ data: { items: [{ cityId: 'st-johns' }] } });
 
     const [first, second] = await Promise.all([
       searchDestinations({ query: 'St. John’s', sort: 'popular', limit: 30 }),
       searchDestinations({ query: '  st johns ', sort: 'popular', limit: 30 }),
     ]);
 
-    expect(callable).toHaveBeenCalledTimes(1);
+    expect(destinationCallable).toHaveBeenCalledTimes(1);
     expect(first).toEqual(second);
   });
 
   it('caches the default Home destination request', async () => {
-    const callable = jest.fn(async () => ({ data: { items: [{ cityId: 'paris' }] } }));
-    httpsCallable.mockReturnValue(callable);
+    destinationCallable.mockResolvedValue({ data: { items: [{ cityId: 'paris' }] } });
 
     const first = await searchDestinations({ sort: 'popular', limit: 10 });
     const second = await searchDestinations({ sort: 'popular', limit: 10 });
 
     expect(second).toBe(first);
+  });
+
+  it('removes punctuation-only text before sending a destination search', async () => {
+    destinationCallable.mockResolvedValue({ data: { items: [] } });
+
+    await searchDestinations({ query: " !–' ", sort: 'popular', limit: 10 });
+
+    expect(destinationCallable).toHaveBeenCalledWith({ query: '', sort: 'popular', limit: 10 });
   });
 });

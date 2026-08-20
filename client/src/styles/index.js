@@ -16,5 +16,13 @@ export { preferenceSetupStyles } from "./preferences";
 export { moderationStyles } from "./moderation";
 export { adminStyles } from "./admin";
 export { rtlHorizontalStyles } from "./rtlHorizontal";
-export { pageHeaderStyles, TAB_HERO_BASE_HEIGHT } from "./pageHeader";
+export {
+  pageHeaderStyles,
+  tabHeroStyles,
+  TAB_HERO_ACTION_HEIGHT,
+  TAB_HERO_BASE_HEIGHT,
+  TAB_HERO_OVERLAP,
+  TAB_HERO_SEARCH_ICON_SIZE,
+  TAB_HERO_SIDE_WIDTH,
+} from "./pageHeader";
 export * from "./appStyles";

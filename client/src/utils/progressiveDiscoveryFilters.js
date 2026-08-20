@@ -5,6 +5,7 @@ import {
   TRAVELER_STYLES,
 } from '../constants/travelTaxonomy';
 import {
+  compactDestinationText,
   destinationSearchRank,
   normalizeDestinationText,
 } from './destinationSearch';
@@ -170,7 +171,7 @@ export function summarizeSelections(options, selectedIds, maximum = 2) {
 export function countDiscoveryFilters(filters, { includeQuery = true } = {}) {
   if (!filters) return 0;
   return Object.entries(filters).reduce((count, [field, value]) => {
-    if (field === 'query') return count + (includeQuery && value?.trim() ? 1 : 0);
+    if (field === 'query') return count + (includeQuery && compactDestinationText(value) ? 1 : 0);
     if (Array.isArray(value)) return count + value.length;
     if (value && typeof value === 'object') {
       const active = (value.min !== '' && value.min != null) || (value.max !== '' && value.max != null);

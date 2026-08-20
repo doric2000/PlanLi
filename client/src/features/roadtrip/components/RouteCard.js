@@ -51,15 +51,17 @@ export const RouteCard = ({
 	showActionBar = true,
 	showActionMenu = true,
 	variant = "default",
+	topContentInset = 0,
 }) => {
 	const navigation = useNavigation();
 	const { isActive, ensureCapability } = useAuthUser();
 	const isFeed = variant === "feed";
+	const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
 	const {
 		pageWidth,
 		frameHeight,
 		onLayout: onCarouselLayout,
-	} = useStableCarouselLayout({ aspectRatio: 1.25 });
+	} = useStableCarouselLayout({ aspectRatio: 1.25, extraHeight: feedTopInset });
 	const routeImages = useMemo(
 		() => getRouteImageUrls(item, "feed"),
 		[item]
@@ -156,7 +158,7 @@ export const RouteCard = ({
 	};
 
 	const renderOverlayHeader = () => (
-		<View style={styles.feedHeaderOverlay}>
+		<View style={[styles.feedHeaderOverlay, feedTopInset > 0 && { top: 12 + feedTopInset }]}>
 			<TouchableOpacity
 				style={[cards.recAuthorInfo, styles.feedAuthorInfo]}
 				activeOpacity={0.75}
@@ -250,7 +252,7 @@ export const RouteCard = ({
 			<LinearGradient
 				pointerEvents="none"
 				colors={["rgba(0,0,0,0.72)", "rgba(0,0,0,0.18)", "transparent"]}
-				style={styles.feedTopGradient}
+				style={[styles.feedTopGradient, feedTopInset > 0 && { height: 118 + feedTopInset }]}
 			/>
 			{renderOverlayHeader()}
 
