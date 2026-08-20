@@ -177,6 +177,14 @@ const LOCALITY_TYPES = [
   'administrative_area_level_1',
 ];
 
+function localityTypesForCountry(countryCode) {
+  if (String(countryCode || '').toUpperCase() !== 'TH') return LOCALITY_TYPES;
+  return [
+    'administrative_area_level_1',
+    ...LOCALITY_TYPES.filter((type) => type !== 'administrative_area_level_1'),
+  ];
+}
+
 function newLocalityCandidatesFor(details) {
   const components = Array.isArray(details?.addressComponents) ? details.addressComponents : [];
   return Array.from(new Set(LOCALITY_TYPES.flatMap((type) =>
@@ -387,7 +395,7 @@ function legacyPolicyFetch(options) {
 }
 
 async function fetchNewLocalityPlaceId(options) {
-  const wantedAliases = localityAliases(options.localityName);
+  const wantedAliases = localityAliases(options.localityName, options.countryCode);
   const wanted = wantedAliases[0];
   assert(wanted, 'failed-precondition', 'The selected place has no trustworthy containing locality.');
   const predictions = await newAutocomplete({
@@ -402,7 +410,8 @@ async function fetchNewLocalityPlaceId(options) {
     requestContext: options.requestContext,
   });
   const matches = predictions.filter((prediction) =>
-    localityAliases(prediction.text).some((alias) => wantedAliases.includes(alias))
+    localityAliases(prediction.text, options.countryCode)
+      .some((alias) => wantedAliases.includes(alias))
   );
   const ids = [...new Set(matches.map((entry) => entry.placeId))];
   if (!ids.length) return null;
@@ -415,13 +424,17 @@ async function fetchNewLocalityPlaceId(options) {
       fetchImpl: options.fetchImpl,
       requestContext: options.requestContext,
     }));
-    const candidateNames = localityAliases(details.localityName || details.displayName);
+    const candidateNames = localityAliases(
+      details.localityName || details.displayName,
+      options.countryCode
+    );
     const expectedCountry = String(options.countryCode || '').toUpperCase();
     if (!candidateNames.some((alias) => wantedAliases.includes(alias)) ||
         (expectedCountry && details.countryCode !== expectedCountry) ||
         !details.coordinates || !options.coordinates) return null;
-    const typeIndex = LOCALITY_TYPES.indexOf(details.localityType);
-    const priority = typeIndex < 0 ? LOCALITY_TYPES.length : typeIndex;
+    const localityTypes = localityTypesForCountry(options.countryCode);
+    const typeIndex = localityTypes.indexOf(details.localityType);
+    const priority = typeIndex < 0 ? localityTypes.length : typeIndex;
     return {
       placeId,
       priority,
@@ -471,8 +484,11 @@ const ADMINISTRATIVE_NAME_SUFFIXES = [
   'prefecture',
   'governorate',
 ];
+const ALBANIAN_LOCALITY_EQUIVALENTS = [
+  ['vlora', 'vlore'],
+];
 
-function localityAliases(value) {
+function localityAliases(value, countryCode) {
   const original = normalize(value);
   if (!original) return [];
   const aliases = new Set([original]);
@@ -492,6 +508,18 @@ function localityAliases(value) {
   for (const suffix of ADMINISTRATIVE_NAME_SUFFIXES) {
     if (stripped.endsWith(` ${suffix}`)) aliases.add(stripped.slice(0, -(suffix.length + 1)).trim());
   }
+  if (String(countryCode || '').toUpperCase() === 'AL') {
+    const albanianForms = new Set(aliases);
+    for (const alias of albanianForms) {
+      if (alias.endsWith('es')) albanianForms.add(alias.slice(0, -1));
+    }
+    for (const equivalents of ALBANIAN_LOCALITY_EQUIVALENTS) {
+      if (equivalents.some((alias) => albanianForms.has(alias))) {
+        equivalents.forEach((alias) => aliases.add(alias));
+      }
+    }
+    albanianForms.forEach((alias) => aliases.add(alias));
+  }
   return [...aliases].filter(Boolean).sort((left, right) => left.length - right.length);
 }
 
@@ -504,7 +532,7 @@ function localitySearchNames(options) {
   const seen = new Set();
   for (const value of values) {
     const raw = String(value || '').trim();
-    const aliases = localityAliases(raw);
+    const aliases = localityAliases(raw, options.countryCode);
     for (const alias of aliases) {
       if (!alias || seen.has(alias)) continue;
       seen.add(alias);
@@ -555,11 +583,12 @@ async function fetchReverseLocalityPlaceId(options) {
   }
   if (payload?.status !== 'OK' || !Array.isArray(payload.results)) return null;
   const expectedCountry = String(options.countryCode || '').toUpperCase();
+  const localityTypes = localityTypesForCountry(expectedCountry);
   const candidates = payload.results.map((result) => {
     const placeId = String(result?.place_id || '').trim();
     const country = legacyComponent(result, 'country');
     const countryCode = String(country?.short_name || '').toUpperCase();
-    const typeIndex = LOCALITY_TYPES.findIndex((type) => result?.types?.includes(type));
+    const typeIndex = localityTypes.findIndex((type) => result?.types?.includes(type));
     const lat = Number(result?.geometry?.location?.lat);
     const lng = Number(result?.geometry?.location?.lng);
     const coordinates = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;

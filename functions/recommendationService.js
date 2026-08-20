@@ -761,6 +761,14 @@ function isCityDestination(destination) {
   return Array.isArray(types) && types.includes('locality');
 }
 
+function isThaiProvinceDestination(destination) {
+  const types = destination?.googleCache?.types || destination?.identity?.types || [];
+  if (Array.isArray(types) && types.length) {
+    return types.includes('administrative_area_level_1');
+  }
+  return destination?.destinationType === 'region';
+}
+
 async function findExistingDestinationByAlias({
   db,
   countryCode,
@@ -769,7 +777,7 @@ async function findExistingDestinationByAlias({
   countryOverrideId,
 }) {
   const aliases = Array.from(new Set((localityCandidates || [])
-    .flatMap(localityAliases)
+    .flatMap((value) => localityAliases(value, countryCode))
     .map(compactDestinationSearchText)
     .filter((value) => value.length >= 2)))
     .sort((left, right) => left.length - right.length)
@@ -794,7 +802,8 @@ async function findExistingDestinationByAlias({
       .get();
     snapshot.docs.forEach((document) => {
       const data = document.data() || {};
-      const names = [data.names?.he, data.names?.en].flatMap(localityAliases)
+      const names = [data.names?.he, data.names?.en]
+        .flatMap((value) => localityAliases(value, countryCode))
         .map(compactDestinationSearchText);
       if (data.status === 'active' && countries.has(data.countryId) &&
           aliases.some((candidate) => names.includes(candidate))) {
@@ -823,6 +832,7 @@ async function findExistingDestinationByAlias({
       distanceKm: distanceKm(coordinates, cityCoordinates),
       containsCoordinates: destinationContainsCoordinates(cityData, coordinates),
       isCity: isCityDestination(cityData),
+      isThaiProvince: isThaiProvinceDestination(cityData),
     };
   }).filter((entry) => entry && entry.distanceKm <= 50)
     .sort((left, right) => left.distanceKm - right.distanceKm || left.cityId.localeCompare(right.cityId));
@@ -835,6 +845,16 @@ async function findExistingDestinationByAlias({
       return { ambiguity: containingCities.slice(0, 3) };
     }
     return containingCities[0];
+  }
+  if (String(countryCode).toUpperCase() === 'TH') {
+    const provinces = matches.filter((entry) => entry.isThaiProvince);
+    if (provinces.length === 1) return provinces[0];
+    if (provinces.length > 1) {
+      if (provinces[1].distanceKm - provinces[0].distanceKm < 5) {
+        return { ambiguity: provinces.slice(0, 3) };
+      }
+      return provinces[0];
+    }
   }
   if (matches.length > 1 && matches[1].distanceKm - matches[0].distanceKm < 5) {
     return { ambiguity: matches.slice(0, 3) };
@@ -940,13 +960,18 @@ async function resolveGoogleDestination({
       nameEn: destinationBilingual.en?.localityName || destinationBilingual.en?.displayName,
       coordinates: destinationBilingual.en?.coordinates || destinationBilingual.he?.coordinates,
     };
-    const candidateAliases = localityAliases(localityCandidate.nameEn);
+    const selectedCountryCode = selectedEn.countryCode || bilingual.he?.countryCode;
+    const candidateAliases = localityAliases(
+      localityCandidate.nameEn,
+      selectedCountryCode
+    );
     const validatedLocality = localityCandidates.some((localityName) => (
-      localityAliases(localityName).some((alias) => candidateAliases.includes(alias)) ||
+      localityAliases(localityName, selectedCountryCode)
+        .some((alias) => candidateAliases.includes(alias)) ||
       candidateMatchesLocality(
         localityCandidate,
         {
-          countryCode: selectedEn.countryCode || bilingual.he?.countryCode,
+          countryCode: selectedCountryCode,
           localityName,
           coordinates: selectedEn.coordinates || bilingual.he?.coordinates,
         }

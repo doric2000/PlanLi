@@ -21,6 +21,12 @@ test('Thai tambon prefixes normalize to the same locality alias as Google locali
   assert.deepEqual(localityAliases('Tambon Wiang Chai'), ['wiang chai', 'tambon wiang chai']);
 });
 
+test('Albanian definite and official locality forms share bounded aliases', () => {
+  assert.ok(localityAliases('Vlora', 'AL').includes('vlore'));
+  assert.ok(localityAliases('Vlorë', 'AL').includes('vlora'));
+  assert.ok(localityAliases('Qarku i Vlorës', 'AL').includes('vlore'));
+});
+
 function details(language) {
   return {
     id: 'place-paris',
@@ -301,6 +307,50 @@ test('Chiang Rai district aliases resolve through one exact-coordinate reverse l
   assert.equal(requestContext.count, 1);
   assert.equal(urls.length, 1);
   assert.match(urls[0], /geocode\/json/);
+});
+
+test('Thailand reverse resolution prefers the province over a smaller locality', async () => {
+  const placeId = await fetchLocalityPlaceId({
+    provider: 'new',
+    localityName: 'Tambon Wiang Chai',
+    localityCandidates: [
+      'Tambon Wiang Chai',
+      'Amphoe Mueang Chiang Rai',
+      'Chang Wat Chiang Rai',
+    ],
+    countryName: 'Thailand',
+    countryCode: 'TH',
+    coordinates: { lat: 19.9, lng: 99.9 },
+    mapsKey: 'maps-key',
+    newPlacesKey: 'new-key',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: 'OK',
+        results: [
+          {
+            place_id: 'wiang-chai-town',
+            types: ['locality', 'political'],
+            address_components: [
+              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            ],
+            geometry: { location: { lat: 19.88, lng: 99.92 } },
+          },
+          {
+            place_id: 'chiang-rai-province',
+            types: ['administrative_area_level_1', 'political'],
+            address_components: [
+              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            ],
+            geometry: { location: { lat: 19.91, lng: 99.84 } },
+          },
+        ],
+      }),
+    }),
+  });
+
+  assert.equal(placeId, 'chiang-rai-province');
 });
 
 test('provider retry cannot exceed the ten-request ceiling', async () => {

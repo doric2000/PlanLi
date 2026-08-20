@@ -156,6 +156,63 @@ test('a containing PlanLi city outranks a closer same-name administrative region
   assert.equal(result.cityData.destinationType, 'city');
 });
 
+test('a Thai province outranks a non-containing same-name city', async () => {
+  const countryDocument = {
+    id: 'TH',
+    data: () => ({ code: 'TH', status: 'active', name: 'Thailand' }),
+  };
+  const catalogDocuments = ['city', 'province'].map((cityId) => ({
+    id: `TH_${cityId}`,
+    data: () => ({
+      countryId: 'TH', cityId, status: 'active', names: { en: 'Chiang Rai', he: 'Chiang Rai' },
+    }),
+  }));
+  const city = {
+    status: 'active',
+    destinationType: 'city',
+    googleCache: {
+      coordinates: { lat: 19.89, lng: 99.89 },
+      viewport: {
+        southwest: { lat: 19.80, lng: 99.70 },
+        northeast: { lat: 19.95, lng: 99.85 },
+      },
+      types: ['locality'],
+    },
+  };
+  const province = {
+    status: 'active',
+    destinationType: 'region',
+    googleCache: {
+      coordinates: { lat: 19.91, lng: 99.84 },
+      types: ['administrative_area_level_1'],
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : catalogDocuments),
+    doc: (path) => ({
+      get: async () => ({
+        exists: true,
+        data: () => path.endsWith('/city') ? city : province,
+      }),
+    }),
+  };
+
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'TH',
+    localityCandidates: ['Chiang Rai'],
+    coordinates: { lat: 19.90, lng: 99.90 },
+  });
+
+  assert.equal(result.cityId, 'province');
+  assert.equal(result.cityData.destinationType, 'region');
+});
+
 test('an ambiguous destination choice finalizes from transient trusted data without Google work', async () => {
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -761,7 +818,7 @@ test('Google destination resolution falls back from a district to its containing
   }
 });
 
-test('Google destination resolution accepts the reported Chiang Rai tambon reverse result', async () => {
+test('Google destination resolution maps the reported Chiang Rai hotel to its Thai province', async () => {
   const admin = createFakeAdmin({
     'countries/TH': {
       name: 'Thailand',
@@ -815,14 +872,24 @@ test('Google destination resolution accepts the reported Chiang Rai tambon rever
         status: 200,
         json: async () => ({
           status: 'OK',
-          results: [{
-            place_id: 'wiang-chai-town',
-            types: ['administrative_area_level_3', 'political'],
-            address_components: [
-              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
-            ],
-            geometry: { location: coordinates },
-          }],
+          results: [
+            {
+              place_id: 'wiang-chai-town',
+              types: ['administrative_area_level_3', 'political'],
+              address_components: [
+                { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+              ],
+              geometry: { location: coordinates },
+            },
+            {
+              place_id: 'chiang-rai-province',
+              types: ['administrative_area_level_1', 'political'],
+              address_components: [
+                { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+              ],
+              geometry: { location: { lat: 19.91, lng: 99.84 } },
+            },
+          ],
         }),
       };
     }
@@ -831,14 +898,14 @@ test('Google destination resolution accepts the reported Chiang Rai tambon rever
       ok: true,
       status: 200,
       json: async () => ({
-        id: 'wiang-chai-town',
-        displayName: { text: 'Wiang Chai' },
+        id: 'chiang-rai-province',
+        displayName: { text: 'Chiang Rai' },
         addressComponents: [
-          { longText: 'Wiang Chai', types: ['administrative_area_level_3', 'political'] },
+          { longText: 'Chiang Rai', types: ['administrative_area_level_1', 'political'] },
           { longText: 'Thailand', shortText: 'TH', types: ['country', 'political'] },
         ],
-        location: { latitude: coordinates.lat, longitude: coordinates.lng },
-        types: ['administrative_area_level_3', 'political'],
+        location: { latitude: 19.91, longitude: 99.84 },
+        types: ['administrative_area_level_1', 'political'],
       }),
     };
   };
@@ -854,8 +921,101 @@ test('Google destination resolution accepts the reported Chiang Rai tambon rever
     });
 
     assert.equal(destination.countryId, 'TH');
-    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'wiang-chai-town');
-    assert.equal(destination.cityData.destinationType, 'town');
+    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-rai-province');
+    assert.equal(destination.cityData.destinationType, 'region');
+    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'geocode']);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('Google destination resolution treats Vlora and Vlorë as the same Albanian destination', async () => {
+  const admin = createFakeAdmin({
+    'countries/AL': {
+      name: 'Albania',
+      names: { he: 'Albania', en: 'Albania' },
+      code: 'AL',
+      region: 'Europe',
+      currencyCode: 'ALL',
+      status: 'active',
+    },
+  });
+  const coordinates = { lat: 40.4146218, lng: 19.4811959 };
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'hotel-liro',
+      displayName: 'Hotel Liro',
+      countryName: 'Albania',
+      countryCode: 'AL',
+      localityName: 'Vlora',
+      localityCandidates: ['Vlora', 'Qarku i Vlorës'],
+      coordinates,
+      types: ['hotel', 'lodging'],
+    },
+    en: {
+      placeId: 'hotel-liro',
+      displayName: 'Hotel Liro',
+      countryName: 'Albania',
+      countryCode: 'AL',
+      localityName: 'Vlora',
+      localityCandidates: ['Vlora', 'Qarku i Vlorës'],
+      coordinates,
+      types: ['hotel', 'lodging'],
+    },
+  };
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (urlValue) => {
+    const url = new URL(String(urlValue));
+    if (url.pathname.endsWith('/geocode/json')) {
+      calls.push('geocode');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 'OK',
+          results: [{
+            place_id: 'vlore-municipality',
+            types: ['administrative_area_level_2', 'political'],
+            address_components: [
+              { long_name: 'Albania', short_name: 'AL', types: ['country'] },
+            ],
+            geometry: { location: { lat: 40.4659588, lng: 19.4907121 } },
+          }],
+        }),
+      };
+    }
+    calls.push(`details:${url.searchParams.get('languageCode')}`);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'vlore-municipality',
+        displayName: { text: 'Vlorë' },
+        addressComponents: [
+          { longText: 'Vlorë', types: ['administrative_area_level_2', 'political'] },
+          { longText: 'Albania', shortText: 'AL', types: ['country', 'political'] },
+        ],
+        location: { latitude: 40.4659588, longitude: 19.4907121 },
+        types: ['administrative_area_level_2', 'political'],
+      }),
+    };
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin,
+      placeId: selectedPlace.en.placeId,
+      resolvedPlace: selectedPlace,
+      mapsKey: 'maps-key',
+      newPlacesKey: 'new-key',
+      placesProvider: 'new',
+    });
+
+    assert.equal(destination.countryId, 'AL');
+    assert.equal(destination.cityData.googleCache.names.en, 'Vlorë');
+    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'vlore-municipality');
     assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'geocode']);
   } finally {
     global.fetch = originalFetch;
