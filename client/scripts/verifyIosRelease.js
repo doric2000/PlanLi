@@ -59,6 +59,7 @@ const eas = readJson('eas.json');
 const packageJson = readJson('package.json');
 const preview = eas.build?.preview || {};
 const production = eas.build?.production || {};
+const productionSubmit = eas.submit?.production?.ios || {};
 const requiredPlugins = [
   'expo-apple-authentication',
   '@react-native-google-signin/google-signin',
@@ -107,6 +108,9 @@ if (production.autoIncrement !== true) fail('The production profile must auto-in
 if (!String(production.node || '').startsWith('22.')) fail('The EAS production build must use Node 22.');
 if (production.ios?.image !== 'macos-sequoia-15.6-xcode-26.0') {
   fail('The SDK 54 production build must use the pinned Xcode 26.0 image.');
+}
+if (productionSubmit.ascAppId !== '6801453067') {
+  fail('The production submit profile must target the PlanLi App Store Connect app.');
 }
 
 if (!String(packageJson.dependencies?.['@sentry/react-native'] || '').trim()) {
