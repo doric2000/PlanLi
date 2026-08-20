@@ -32,7 +32,13 @@ import {
 	requestDestinations,
 	searchDestinations,
 } from "../../../services/DestinationService";
-import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
+import {
+	colors,
+	homeScreenStyles as styles,
+	preferenceSetupStyles as preferenceStyles,
+	tabHeroStyles,
+	TAB_HERO_SEARCH_ICON_SIZE,
+} from "../../../styles";
 import {
 	compactDestinationText,
 	filterAndSortDestinations,
@@ -216,7 +222,9 @@ export default function HomeScreen({ navigation }) {
 		onRefresh,
 	});
 
-	const searchableDestinations = searchQuery.trim() || destinationSort !== "popular" || savedOnly
+	const normalizedSearchQuery = compactDestinationText(searchQuery);
+	const hasSearchQuery = normalizedSearchQuery.length > 0;
+	const searchableDestinations = hasSearchQuery || destinationSort !== "popular" || savedOnly
 		? hasLoadedAllDestinationsForSearch
 			? allDestinationsForSearch
 			: destinations
@@ -239,19 +247,19 @@ export default function HomeScreen({ navigation }) {
 		});
 	}, [destinationPool, searchQuery, destinationSort, savedOnly, favoriteKeys]);
 
-	const localAutocompleteResults = searchQuery.trim()
+	const localAutocompleteResults = hasSearchQuery
 		? filteredDestinations.slice(0, 20)
 		: [];
 
 	const localResultsLoading =
-		compactDestinationText(searchQuery).length >= 2 && !hasLoadedAllDestinationsForSearch;
+		normalizedSearchQuery.length >= 2 && !hasLoadedAllDestinationsForSearch;
 
 	const featuredDestinations = useMemo(
 		() => destinations.slice(0, 3),
 		[destinations]
 	);
 	const visibleDestinations = useMemo(() => {
-		const isDefaultHomeView = !searchQuery.trim() && destinationSort === "popular" && !savedOnly;
+		const isDefaultHomeView = !hasSearchQuery && destinationSort === "popular" && !savedOnly;
 		if (!isDefaultHomeView) return filteredDestinations;
 		const featuredKeys = new Set(
 			featuredDestinations.map((city) => `${city.countryId}:${city.id}`)
@@ -259,7 +267,8 @@ export default function HomeScreen({ navigation }) {
 		return filteredDestinations.filter(
 			(city) => !featuredKeys.has(`${city.countryId}:${city.id}`)
 		);
-	}, [filteredDestinations, featuredDestinations, searchQuery, destinationSort, savedOnly]);
+	}, [filteredDestinations, featuredDestinations, hasSearchQuery, destinationSort, savedOnly]);
+	const isResultsView = hasSearchQuery || destinationSort !== "popular" || savedOnly;
 
 	const rememberHomeDestination = (city) => {
 		const entry = cityToRecentDestination(city);
@@ -349,19 +358,18 @@ export default function HomeScreen({ navigation }) {
 	const renderHeader = () => (
 		<PageHeader
 			variant="hero"
+			title="לאן נוסעים?"
+			overlapNext
 			allowOverflow
-			style={styles.headerLayer}
+			style={tabHeroStyles.fixedHeader}
 			testID="home-tab-header"
 		>
-			<View style={styles.headerTitleRow} testID="home-header-title-row">
-				<AppText style={styles.headline}>לאן נוסעים?</AppText>
-			</View>
-
 			<SearchFilterRow
-				style={styles.searchWrap}
+				style={tabHeroStyles.searchRow}
 				onFilterPress={openDestinationFilters}
 				activeFilterCount={(savedOnly ? 1 : 0) + (destinationSort !== "popular" ? 1 : 0)}
 				accessibilityLabel="סינון יעדים"
+				testID="home-search-row"
 				filterTestID="home-filter-button"
 			>
 				<GooglePlacesInput
@@ -378,13 +386,15 @@ export default function HomeScreen({ navigation }) {
 					onSelectLocal={selectLocalDestination}
 					onSelect={handleGoogleSelect}
 					googleFallbackDelayMs={2000}
-					searchIconColor="rgba(255,255,255,0.55)"
-					searchIconStyle={styles.searchIcon}
+					searchIconColor="rgba(255,255,255,0.62)"
+					searchIconSize={TAB_HERO_SEARCH_ICON_SIZE}
+					searchIconStyle={tabHeroStyles.searchIcon}
 					placeholderTextColor="rgba(255,255,255,0.48)"
 					loaderColor="#FFFFFF"
 					loaderStyle={styles.searchLoader}
-					inputWrapperStyle={styles.searchInputWrapper}
-					inputStyle={styles.searchInput}
+					inputWrapperStyle={tabHeroStyles.searchField}
+					inputWrapperTestID="home-search-field"
+					inputStyle={tabHeroStyles.searchInput}
 					listContainerStyle={styles.searchDropdown}
 				/>
 			</SearchFilterRow>
@@ -482,13 +492,17 @@ export default function HomeScreen({ navigation }) {
 		</View>
 	);
 
-	const renderDestinations = () => (
+	const renderDestinations = ({ resultsMode = false } = {}) => (
 		<View style={styles.section}>
 			<View style={styles.sectionHeader}>
-				<TouchableOpacity activeOpacity={0.7}>
-					<AppText style={styles.sectionLink}>הצג הכל</AppText>
-				</TouchableOpacity>
-				<AppText style={styles.sectionTitle}>יעדים פופולריים</AppText>
+				{resultsMode ? <View /> : (
+					<TouchableOpacity activeOpacity={0.7}>
+						<AppText style={styles.sectionLink}>הצג הכל</AppText>
+					</TouchableOpacity>
+				)}
+				<AppText style={styles.sectionTitle} testID={resultsMode ? "home-results-title" : undefined}>
+					{resultsMode ? (hasSearchQuery ? "תוצאות חיפוש" : "תוצאות") : "יעדים פופולריים"}
+				</AppText>
 			</View>
 
 			<View style={styles.destinationGrid}>
@@ -524,6 +538,7 @@ export default function HomeScreen({ navigation }) {
 			{isFocused ? (
 				<StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 			) : null}
+			{renderHeader()}
 			<ScrollView
 				ref={mainScrollRef}
 				testID="home-scroll"
@@ -536,13 +551,13 @@ export default function HomeScreen({ navigation }) {
 				contentOffset={ZERO_SCROLL_OFFSET}
 				contentContainerStyle={[
 					styles.scrollContent,
+					tabHeroStyles.bodyContentInset,
 					{ paddingBottom: 116 + insets.bottom },
 				]}
 				onScroll={onScroll}
 				scrollEventThrottle={16}
 				refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={onRefresh} />}
 			>
-				{renderHeader()}
 				{refreshing || confirming ? (
 					<CenteredRefreshState
 						accessibilityLabel={confirming ? "היעדים מעודכנים" : "מרענן יעדים"}
@@ -550,13 +565,17 @@ export default function HomeScreen({ navigation }) {
 						testID={confirming ? "home-refresh-confirmation" : "home-refresh-state"}
 					/>
 				) : (
-					<>
-						{renderPreferencePrompt()}
-						<View style={styles.body}>
-							{renderFeatured()}
-							{renderDestinations()}
-						</View>
-					</>
+					isResultsView ? (
+						<View style={styles.body}>{renderDestinations({ resultsMode: true })}</View>
+					) : (
+						<>
+							{renderPreferencePrompt()}
+							<View style={styles.body}>
+								{renderFeatured()}
+								{renderDestinations()}
+							</View>
+						</>
+					)
 				)}
 			</ScrollView>
 			<DestinationFilterModal

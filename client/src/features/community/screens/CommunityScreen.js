@@ -32,6 +32,9 @@ import {
   community,
   communityScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
+  tabHeroStyles,
+  TAB_HERO_OVERLAP,
+  TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { CAPABILITIES } from '../../../constants/authPolicy';
@@ -172,10 +175,15 @@ export default function CommunityScreen({ navigation }) {
   );
 
   const renderTopArea = () => (
-    <PageHeader variant="hero" testID="community-tab-header">
-      <View style={styles.topActionsRow}>
+    <PageHeader
+      variant="hero"
+      title="קהילה"
+      overlapNext
+      style={tabHeroStyles.fixedHeader}
+      testID="community-tab-header"
+      renderStart={() => (
         <TouchableOpacity
-          style={styles.glassIconButton}
+          style={tabHeroStyles.iconAction}
           onPress={() => setMapOpen((previous) => {
             if (!previous) setSortMenuVisible(false);
             return !previous;
@@ -186,43 +194,49 @@ export default function CommunityScreen({ navigation }) {
         >
           <Ionicons name={mapOpen ? "map" : "map-outline"} size={20} color="#FFFFFF" />
         </TouchableOpacity>
-
-        <View style={styles.headerTitleWrap}>
-          <AppText style={styles.headerTitle}>קהילה</AppText>
-        </View>
-
-        {mapOpen ? (
-          <View style={[styles.sortGlassButton, styles.mapModeSummary]} testID="map-all-recommendations-label">
+      )}
+      renderEnd={() => (
+        mapOpen ? (
+          <View style={[tabHeroStyles.labelAction, tabHeroStyles.mapLabelAction]} testID="map-all-recommendations-label">
             <Ionicons name="location" size={16} color="#FFFFFF" />
-            <AppText style={styles.sortGlassText}>כל ההמלצות באזור</AppText>
+            <AppText
+              style={[tabHeroStyles.labelText, tabHeroStyles.mapLabelText]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              כל ההמלצות באזור
+            </AppText>
           </View>
         ) : (
           <TouchableOpacity
-            style={styles.sortGlassButton}
+            style={tabHeroStyles.labelAction}
             onPress={() => setSortMenuVisible(true)}
             testID="community-sort-button"
           >
             <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
-            <AppText style={styles.sortGlassText}>{sortLabel}</AppText>
+            <AppText style={tabHeroStyles.labelText}>{sortLabel}</AppText>
           </TouchableOpacity>
-        )}
-      </View>
+        )
+      )}
+    >
 
       <SearchFilterRow
-        style={styles.searchRow}
+        style={tabHeroStyles.searchRow}
         onFilterPress={() => setFilterModalVisible(true)}
         activeFilterCount={activeFilterCount}
         accessibilityLabel="סינון המלצות"
+        testID="community-search-row"
         filterTestID="community-filter-button"
       >
-        <View style={styles.searchPill}>
-          <Ionicons name="search" size={19} color="rgba(255,255,255,0.62)" />
+        <View style={tabHeroStyles.searchField} testID="community-search-field">
+          <Ionicons name="search" size={TAB_HERO_SEARCH_ICON_SIZE} color="rgba(255,255,255,0.62)" />
           <AppTextInput
             value={filters.query}
             onChangeText={(text) => updateFilters({ query: text })}
             placeholder="חפש המלצה"
             placeholderTextColor="rgba(255,255,255,0.48)"
-            style={styles.searchInput}
+            style={tabHeroStyles.searchInput}
             textAlign="right"
             autoCorrect={false}
             autoCapitalize="none"
@@ -246,9 +260,9 @@ export default function CommunityScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.screen} edges={["left", "right"]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      {renderTopArea()}
       {mapOpen && (
         <>
-          {renderTopArea()}
           {renderActiveFilters()}
           <View style={community.inlineMapSection}>
             <CommunityInlineMap
@@ -284,7 +298,7 @@ export default function CommunityScreen({ navigation }) {
                   onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
                   variant="feed"
-                  topContentInset={0}
+                  topContentInset={!isFiltered && index === 0 ? TAB_HERO_OVERLAP : 0}
               />
             )}
             contentContainerStyle={[
@@ -294,12 +308,7 @@ export default function CommunityScreen({ navigation }) {
             ]}
             showsVerticalScrollIndicator={false}
             refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
-            ListHeaderComponent={(
-              <>
-                {renderTopArea()}
-                {renderActiveFilters()}
-              </>
-            )}
+            ListHeaderComponent={renderActiveFilters()}
             ListEmptyComponent={
               loading || refreshing || confirming ? (
                 <CenteredRefreshState

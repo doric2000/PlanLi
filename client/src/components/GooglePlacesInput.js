@@ -37,7 +37,9 @@ export default function GooglePlacesInput({
   inputWrapperStyle,
   inputStyle,
   searchIconColor,
+  searchIconSize = 20,
   searchIconStyle,
+  inputWrapperTestID,
   placeholderTextColor,
   loaderColor,
   loaderStyle,
@@ -327,14 +329,16 @@ export default function GooglePlacesInput({
   const showIdleLocalResults =
     showList &&
     inputFocused &&
-    query.trim().length === 0 &&
+    compactDestinationText(query).length === 0 &&
     normalizedIdleLocalResults.length > 0;
+
+  const normalizedQueryLength = compactDestinationText(query).length;
 
   const shouldShowAnyDropdown = explicitSearch
     ? showList && (loading || !!searchError || predictions.length > 0 || hasSearched)
     : showIdleLocalResults || (
     showList &&
-    query.trim().length >= (
+    normalizedQueryLength >= (
       localResultsLoading
         ? LOCAL_MIN_QUERY_LENGTH
         : (normalizedLocalResults.length > 0 ? LOCAL_MIN_QUERY_LENGTH : MIN_QUERY_LENGTH)
@@ -346,7 +350,7 @@ export default function GooglePlacesInput({
   const shouldShowGoogleFallbackButton =
     !isGoogleMode &&
     typeof onRequestGoogleSearch === 'function' &&
-    settledQuery.length >= MIN_QUERY_LENGTH &&
+    compactDestinationText(settledQuery).length >= MIN_QUERY_LENGTH &&
     hasLocalResults === false;
 
   // On web, zIndex often fails due to stacking contexts in ScrollView.
@@ -409,6 +413,7 @@ export default function GooglePlacesInput({
       {/* Input Field */}
       <View
         ref={inputWrapperRef}
+        testID={inputWrapperTestID}
         style={[
           common.homeSearchBar,
           googlePlacesInput.inputWrapper,
@@ -438,7 +443,7 @@ export default function GooglePlacesInput({
         ) : (
           <Ionicons
             name="search"
-            size={20}
+            size={searchIconSize}
             color={searchIconColor || colors.textSecondary}
             style={[googlePlacesInput.searchIcon, searchIconStyle]}
           />

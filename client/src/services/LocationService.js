@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 
 import { cloudFunctions } from '../config/firebase';
 import { resolveRecommendationDestination } from './RecommendationService';
+import { compactDestinationText } from '../utils/destinationSearch';
 
 let searchPlacesCallable;
 let resolvePlaceSelectionCallable;
@@ -44,8 +45,9 @@ function mapPrediction(prediction, sessionId, expiresAt, incidentId) {
 }
 
 async function gatewaySearch(searchText, mode) {
-  if (!searchText || searchText.trim().length < 2) return [];
-  const response = await getSearchPlacesCallable()({ query: searchText.trim(), mode });
+  const query = searchText?.trim() || '';
+  if (compactDestinationText(query).length < 2) return [];
+  const response = await getSearchPlacesCallable()({ query, mode });
   const result = response?.data || {};
   const predictions = (result.predictions || []).map((prediction) =>
     mapPrediction(prediction, result.sessionId, result.expiresAt, result.incidentId)

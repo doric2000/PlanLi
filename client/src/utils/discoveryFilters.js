@@ -1,3 +1,5 @@
+import { compactDestinationText } from './destinationSearch';
+
 export const EMPTY_DISCOVERY_FILTERS = Object.freeze({
   query: '',
   destinations: [],
@@ -38,7 +40,7 @@ export const createEmptyDiscoveryFilters = () => ({
 
 export function hasDiscoveryFilters(filters, { includeQuery = true } = {}) {
   if (!filters) return false;
-  if (includeQuery && filters.query?.trim()) return true;
+  if (includeQuery && compactDestinationText(filters.query)) return true;
   return Object.entries(filters).some(([key, value]) => {
     if (key === 'query') return false;
     if (Array.isArray(value)) return value.length > 0;
@@ -84,8 +86,9 @@ export function discoveryRequestFromFilters(filters, { surface = 'recommendation
 		delete serverFilters.durationDays;
 		delete serverFilters.distanceKm;
 	}
+  const trimmedQuery = query?.trim() || '';
   return {
-    query: query?.trim() || '',
+    query: compactDestinationText(trimmedQuery) ? trimmedQuery : '',
     destinations: (destinations || []).map(({ countryId, cityId }) => ({ countryId, cityId: cityId || '' })),
     filters: serverFilters,
   };

@@ -104,6 +104,10 @@ describe('AdminPanelScreen request and action isolation', () => {
       const matching = AdminService.listAdminUsers.mock.calls.filter(([payload]) => payload?.query === 'user@example.com');
       expect(matching).toHaveLength(2);
     });
+
+    fireEvent.changeText(screen.getByTestId('admin-user-search-input'), " !–' ");
+    fireEvent.press(screen.getByTestId('admin-user-search'));
+    await waitFor(() => expect(AdminService.listAdminUsers).toHaveBeenLastCalledWith({}));
   });
 
   it('keeps a slow user action local and patches the row without reloading the tab', async () => {

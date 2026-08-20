@@ -1,8 +1,9 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 
 import CommunityScreen from '../src/features/community/screens/CommunityScreen';
+import { communityScreenStyles } from '../src/styles';
 
 const mockFilters = {
   query: '',
@@ -17,6 +18,7 @@ const mockFilters = {
 };
 
 let mockRecommendationState;
+let mockFilteredData;
 
 jest.mock('../src/hooks/useRecommendations', () => ({
   useRecommendations: () => mockRecommendationState,
@@ -32,7 +34,7 @@ jest.mock('../src/hooks/useMapRecommendations', () => ({
 }));
 jest.mock('../src/hooks/useRecommendationFilter', () => ({
   useRecommendationFilter: () => ({
-    filteredData: [], filters: mockFilters, isFiltered: false,
+    filteredData: mockFilteredData, filters: mockFilters, isFiltered: false,
     updateFilters: jest.fn(), replaceFilters: jest.fn(), clearFilters: jest.fn(),
   }),
 }));
@@ -60,8 +62,15 @@ jest.mock('../src/features/community/publishing/RecommendationPublishContext', (
 
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
-  const { View } = require('react-native');
-  return ({ children, ...props }) => ReactModule.createElement(View, props, children);
+  const { Text, View } = require('react-native');
+  return ({ children, title, renderStart, renderEnd, ...props }) => ReactModule.createElement(
+    View,
+    props,
+    renderStart?.(),
+    title ? ReactModule.createElement(Text, null, title) : null,
+    renderEnd?.(),
+    children
+  );
 });
 jest.mock('../src/features/community/components/CommunityInlineMap', () => {
   const ReactModule = require('react');
@@ -69,7 +78,14 @@ jest.mock('../src/features/community/components/CommunityInlineMap', () => {
   return () => ReactModule.createElement(View, { testID: 'mock-community-map' });
 });
 jest.mock('../src/components/RecommendationsFilterModal', () => () => null);
-jest.mock('../src/components/RecommendationCard', () => () => null);
+jest.mock('../src/components/RecommendationCard', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return ({ item, topContentInset }) => ReactModule.createElement(View, {
+    testID: `recommendation-${item.id}`,
+    topContentInset,
+  });
+});
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ ensureCapability: jest.fn(async () => false) }),
 }));
@@ -96,6 +112,7 @@ jest.mock('@expo/vector-icons', () => {
 
 describe('CommunityScreen map mode', () => {
   beforeEach(() => {
+    mockFilteredData = [];
     mockRecommendationState = {
       data: [], error: null, loading: false, refreshing: false,
       refresh: jest.fn(), removeRecommendation: jest.fn(), setDiscoveryRequest: jest.fn(),
@@ -111,6 +128,10 @@ describe('CommunityScreen map mode', () => {
 
     expect(screen.queryByTestId('community-sort-button')).toBeNull();
     expect(screen.getByText('כל ההמלצות באזור')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('map-all-recommendations-label').props.style)).toMatchObject({
+      width: 136,
+      height: 44,
+    });
     expect(screen.getByTestId('mock-community-map')).toBeTruthy();
   });
 
@@ -125,8 +146,46 @@ describe('CommunityScreen map mode', () => {
     expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
     expect(list.props.ListHeaderComponent).toBeTruthy();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
-    expect(screen.getByTestId('community-tab-header').props.overlapNext).toBeUndefined();
+    expect(screen.getByTestId('community-tab-header').props.overlapNext).toBe(true);
+    expect(within(list).queryByTestId('community-tab-header')).toBeNull();
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
+  });
+
+  it('uses the shared hero action geometry', () => {
+    const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
+    expect(StyleSheet.flatten(communityScreenStyles.filtersAfterOverlappingHeader).paddingTop).toBe(36);
+    expect(StyleSheet.flatten(screen.getByTestId('community-sort-button').props.style)).toMatchObject({
+      width: 80,
+      height: 44,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-map-toggle').props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-filter-button').props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-search-row').props.style)).toMatchObject({
+      width: '100%',
+      marginTop: 12,
+      gap: 8,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-search-field').props.style)).toMatchObject({
+      width: '100%',
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      flexDirection: 'row-reverse',
+      gap: 9,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-search-input').props.style)).toMatchObject({
+      height: '100%',
+      fontSize: 15,
+      paddingLeft: 0,
+      paddingRight: 0,
+      textAlign: 'right',
+    });
   });
 
   it('replaces the feed with a centered state while refreshing', () => {
@@ -135,5 +194,20 @@ describe('CommunityScreen map mode', () => {
 
     expect(screen.getByTestId('community-refresh-state')).toBeTruthy();
     expect(screen.queryByTestId('community-empty-state')).toBeNull();
+  });
+
+  it('restores the curved-header content inset after refresh remounts the first card', () => {
+    mockFilteredData = [{ id: 'cached-recommendation' }];
+    const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
+    expect(screen.getByTestId('recommendation-cached-recommendation').props.topContentInset).toBe(28);
+
+    mockRecommendationState.refreshing = true;
+    screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
+    expect(screen.queryByTestId('recommendation-cached-recommendation')).toBeNull();
+
+    mockFilteredData = [{ id: 'refreshed-recommendation' }];
+    mockRecommendationState.refreshing = false;
+    screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
+    expect(screen.getByTestId('recommendation-refreshed-recommendation').props.topContentInset).toBe(28);
   });
 });

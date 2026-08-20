@@ -21,6 +21,7 @@ import { auth } from '../../../config/firebase';
 import { safeAdminError } from '../adminErrors';
 import ModerationTargetPreview from '../components/ModerationTargetPreview';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
+import { compactDestinationText } from '../../../utils/destinationSearch';
 
 const TABS = [
   { id: 'overview', label: 'סקירה' }, { id: 'reports', label: 'דיווחים' },
@@ -305,7 +306,11 @@ export default function AdminPanelScreen({ navigation }) {
   });
 
   const patchUser = (uid, patch) => setUsers((current) => current.map((item) => item.uid === uid ? { ...item, ...patch } : item));
-  const searchUsers = () => { activeQueryRef.current = query.trim(); loadTab('users', { searchQuery: activeQueryRef.current }); };
+  const searchUsers = () => {
+    const trimmedQuery = query.trim();
+    activeQueryRef.current = compactDestinationText(trimmedQuery) ? trimmedQuery : '';
+    loadTab('users', { searchQuery: activeQueryRef.current });
+  };
   const currentState = tabState[tab];
   const currentCases = tab === 'reports' ? reportCases : heldCases;
   const currentItems = tab === 'reports' ? reportCases : tab === 'content' ? heldCases : tab === 'destinations' ? destinations : tab === 'users' ? users : tab === 'audit' ? audit : dashboard ? [dashboard] : [];

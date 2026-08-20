@@ -16,6 +16,7 @@ import {
   filterDestinationOptions,
   removeDestinationSelection,
 } from '../utils/progressiveDiscoveryFilters';
+import { compactDestinationText } from '../utils/destinationSearch';
 import { loadRecentDiscoveryDestinations } from '../utils/recentDiscoveryDestinations';
 
 function uniqueOptions(options, used, selectedKeys, maximum) {
@@ -64,7 +65,8 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
   const { favorites } = useFavoriteCityIds({ enabled });
   const selected = Array.isArray(destinations) ? destinations : [];
   const trimmedQuery = query.trim();
-  const searchSettled = debouncedQuery === trimmedQuery;
+  const normalizedQuery = compactDestinationText(trimmedQuery);
+  const searchSettled = compactDestinationText(debouncedQuery) === normalizedQuery;
   const selectedKeys = useMemo(() => new Set(selected.map(destinationKey)), [selected]);
 
   useEffect(() => {
@@ -164,7 +166,7 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
       {!!notice && <AppText style={styles.inlineNotice}>{notice}</AppText>}
       {showSuggestions && (
         <View style={styles.destinationSuggestionsPanel}>
-          {trimmedQuery.length >= 2 ? (
+          {normalizedQuery.length >= 2 ? (
             !searchSettled || (searchLoading && !searchResults.length) ? (
               <View style={styles.destinationLoadingRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -175,7 +177,7 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
             )) : (
               <AppText style={styles.destinationEmptyText}>לא נמצא יעד פעיל ב־PlanLi</AppText>
             )
-          ) : trimmedQuery.length === 1 ? (
+          ) : normalizedQuery.length === 1 ? (
             <AppText style={styles.destinationEmptyText}>הקלידו לפחות שני תווים</AppText>
           ) : suggestionGroups.length ? suggestionGroups.map((group) => (
             <View key={group.title} style={styles.destinationSuggestionGroup}>

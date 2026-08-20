@@ -23,14 +23,9 @@ export default function PageHeader({
   const hero = variant === 'hero';
   const detail = variant === 'detail';
   const hasTop = Boolean(title || subtitle || renderStart || renderEnd);
-  const Container = hero ? LinearGradient : View;
-  const containerProps = hero
-    ? { colors: colors.heroBlueGradient, start: { x: 0.15, y: 0 }, end: { x: 0.9, y: 1 } }
-    : {};
 
   return (
-    <Container
-      {...containerProps}
+    <View
       testID={testID}
       style={[
         styles.shell,
@@ -45,6 +40,15 @@ export default function PageHeader({
         style,
       ]}
     >
+      {hero ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={colors.heroBlueGradient}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={styles.heroBackground}
+        />
+      ) : null}
       <View style={[styles.content, contentStyle]}>
         {hasTop ? <View style={[styles.topRow, detail && styles.topRowDetail]}>
           <View style={styles.side}>{renderStart?.() || null}</View>
@@ -58,6 +62,6 @@ export default function PageHeader({
         </View> : null}
         {children ? <View style={styles.body}>{children}</View> : null}
       </View>
-    </Container>
+    </View>
   );
 }

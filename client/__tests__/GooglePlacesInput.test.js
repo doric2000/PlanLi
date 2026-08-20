@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
-import { Platform, StyleSheet } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import GooglePlacesInput from '../src/components/GooglePlacesInput';
 import PageHeader from '../src/components/PageHeader';
 import { searchCities } from '../src/services/LocationService';
+import { tabHeroStyles, TAB_HERO_SEARCH_ICON_SIZE } from '../src/styles';
 
 jest.mock('@expo/vector-icons', () => ({
-  Ionicons: () => null,
+  Ionicons: ({ name, ...props }) => {
+    const ReactModule = require('react');
+    const { View } = require('react-native');
+    return ReactModule.createElement(View, { ...props, testID: `icon-${name}` });
+  },
 }));
 
 jest.mock('../src/services/LocationService', () => ({
@@ -124,6 +130,7 @@ describe('GooglePlacesInput recent destinations', () => {
       <ControlledInput
         googleFallbackDelayMs={0}
         googleSearchFn={googleSearchFn}
+        idleLocalResults={recent}
         localResults={[{ id: 'st-johns', countryId: 'CA', name: 'St. John’s' }]}
         onSelect={jest.fn()}
       />
@@ -137,6 +144,7 @@ describe('GooglePlacesInput recent destinations', () => {
     fireEvent.changeText(screen.getByTestId('places-input'), "!–' ");
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(googleSearchFn).not.toHaveBeenCalled();
+    expect(screen.getByText('חיפושים אחרונים')).toBeTruthy();
   });
 
   it('waits for explicit Search and returns the selected result session', async () => {
@@ -196,6 +204,41 @@ describe('GooglePlacesInput recent destinations', () => {
     expect(screen.getByText('Search')).toBeTruthy();
     expect(screen.getByLabelText('Search locations')).toBeTruthy();
   });
+
+  it('allows Home autocomplete to use the exact shared tab-header field geometry', () => {
+    const screen = render(
+      <ControlledInput
+        inputWrapperStyle={tabHeroStyles.searchField}
+        inputWrapperTestID="shared-header-search-field"
+        inputStyle={tabHeroStyles.searchInput}
+        searchIconSize={TAB_HERO_SEARCH_ICON_SIZE}
+        searchIconStyle={tabHeroStyles.searchIcon}
+      />
+    );
+
+    expect(StyleSheet.flatten(screen.getByTestId('shared-header-search-field').props.style)).toMatchObject({
+      width: '100%',
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      flexDirection: 'row-reverse',
+      gap: 9,
+    });
+    expect(screen.getByTestId('icon-search').props.size).toBe(19);
+    expect(StyleSheet.flatten(screen.getByTestId('icon-search').props.style)).toMatchObject({
+      position: 'relative',
+      top: 0,
+      right: 0,
+      marginLeft: 0,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('places-input').props.style)).toMatchObject({
+      height: '100%',
+      fontSize: 15,
+      paddingLeft: 0,
+      paddingRight: 0,
+      textAlign: 'right',
+    });
+  });
 });
 
 describe('PageHeader overflow', () => {
@@ -208,13 +251,18 @@ describe('PageHeader overflow', () => {
           insets: { top: 44, left: 0, right: 0, bottom: 34 },
         }}
       >
-        <PageHeader variant="hero" allowOverflow testID="overflow-header" />
+        <PageHeader variant="hero" allowOverflow testID="overflow-header">
+          <View testID="overflow-content" />
+        </PageHeader>
         <PageHeader variant="hero" testID="clipped-header" />
       </SafeAreaProvider>
     );
 
     expect(StyleSheet.flatten(screen.getByTestId('overflow-header').props.style).overflow).toBe('visible');
     expect(StyleSheet.flatten(screen.getByTestId('clipped-header').props.style).overflow).toBe('hidden');
+    const gradient = screen.UNSAFE_getAllByType(LinearGradient)[0];
+    expect(within(screen.getByTestId('overflow-header')).getByTestId('overflow-content')).toBeTruthy();
+    expect(within(gradient).queryByTestId('overflow-content')).toBeNull();
     expect(Platform.OS).toBe(originalPlatform);
   });
 });

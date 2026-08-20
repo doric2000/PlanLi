@@ -36,6 +36,12 @@ describe('shared community and route filters', () => {
     expect(request.filters.durationDays).toEqual({ min: '2', max: '5' });
   });
 
+  it('does not activate or send punctuation-only discovery queries', () => {
+    const filters = { ...createEmptyDiscoveryFilters(), query: " !–' " };
+    expect(hasDiscoveryFilters(filters)).toBe(false);
+    expect(discoveryRequestFromFilters(filters).query).toBe('');
+  });
+
   it('removes array, destination, text and range filters deterministically', () => {
     const filters = {
       ...createEmptyDiscoveryFilters(),

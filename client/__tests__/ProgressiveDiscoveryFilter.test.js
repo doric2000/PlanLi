@@ -46,6 +46,14 @@ function Harness({ surface = 'recommendations', withProfile = false }) {
 }
 
 describe('progressive discovery filter UI', () => {
+  it('keeps punctuation-only destination input in the idle suggestion state', () => {
+    const screen = render(<Harness />);
+    fireEvent.changeText(screen.getByTestId('discovery-destination-search'), " !–' ");
+    expect(screen.getByText('התחילו להקליד כדי למצוא יעד')).toBeTruthy();
+    expect(screen.queryByText('הקלידו לפחות שני תווים')).toBeNull();
+    expect(screen.queryByText('לא נמצא יעד פעיל ב־PlanLi')).toBeNull();
+  });
+
   it('keeps optional values hidden until their independent section is expanded', () => {
     const screen = render(<Harness />);
     expect(screen.getByText('לאן?')).toBeTruthy();

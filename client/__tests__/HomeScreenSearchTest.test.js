@@ -9,7 +9,7 @@
  */
 import React from 'react';
 import { RefreshControl, StyleSheet } from 'react-native';
-import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
@@ -73,17 +73,22 @@ jest.mock('../src/components/GooglePlacesInput', () => {
   const { View, TextInput, TouchableOpacity, Text } = require('react-native');
   return ({
     value, onChangeValue, rightAccessory, idleLocalResults = [], onSelectLocal,
-    onSelect, returnSelection,
+    onSelect, returnSelection, inputWrapperStyle, inputWrapperTestID,
+    inputStyle, searchIconSize, searchIconStyle,
   }) => {
     const [focused, setFocused] = React.useState(false);
     return (
       <View>
-        <TextInput
-          testID="home-search-input"
-          value={value}
-          onChangeText={onChangeValue}
-          onFocus={() => setFocused(true)}
-        />
+        <View testID={inputWrapperTestID} style={inputWrapperStyle}>
+          <View testID="home-search-icon" size={searchIconSize} style={searchIconStyle} />
+          <TextInput
+            testID="home-search-input"
+            style={inputStyle}
+            value={value}
+            onChangeText={onChangeValue}
+            onFocus={() => setFocused(true)}
+          />
+        </View>
         {focused && !value && idleLocalResults.map((city) => (
           <TouchableOpacity
             key={`${city.countryId}:${city.id}`}
@@ -116,8 +121,15 @@ jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
 
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
-  const { View } = require('react-native');
-  return ({ children, ...props }) => ReactModule.createElement(View, props, children);
+  const { Text, View } = require('react-native');
+  return ({ children, title, renderStart, renderEnd, ...props }) => ReactModule.createElement(
+    View,
+    props,
+    renderStart?.(),
+    title ? ReactModule.createElement(Text, null, title) : null,
+    renderEnd?.(),
+    children
+  );
 });
 
 jest.mock('../src/components/CityCard', () => {
@@ -274,7 +286,7 @@ describe('HomeScreenSearchTest', () => {
 
   it('filters destinations when searching by text', async () => {
     const navigationMock = { navigate: jest.fn() };
-    const { getByTestId, queryAllByTestId, queryByTestId } = render(
+    const { getByTestId, queryAllByTestId, queryByTestId, queryByText } = render(
       <SafeAreaProvider
         initialMetrics={{
           frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -297,6 +309,10 @@ describe('HomeScreenSearchTest', () => {
       expect(getByTestId('city-card-athens')).toBeTruthy();
       expect(queryByTestId('city-card-paris')).toBeNull();
     });
+    expect(getByTestId('home-results-title')).toHaveTextContent('תוצאות חיפוש');
+    expect(queryByTestId('home-preferences-prompt')).toBeNull();
+    expect(queryByText('מומלצים עכשיו')).toBeNull();
+    expect(queryByText('יעדים פופולריים')).toBeNull();
 
     fireEvent.press(getByTestId('city-card-athens'));
     expect(navigationMock.navigate).toHaveBeenCalledWith('LandingPage', {
@@ -307,11 +323,10 @@ describe('HomeScreenSearchTest', () => {
     const callsBeforePunctuation = mockSearchDestinations.mock.calls.length;
     // Punctuation-only input is not a searchable query and must not trigger another catalog request.
     fireEvent.changeText(getByTestId('home-search-input'), '!@#');
-    await waitFor(() => {
-      expect(queryAllByTestId('city-card')).toHaveLength(2);
-      expect(queryByTestId('home-empty-state')).toBeNull();
-    });
+    await waitFor(() => expect(queryByTestId('home-results-title')).toBeNull());
     expect(mockSearchDestinations).toHaveBeenCalledTimes(callsBeforePunctuation);
+    expect(queryByText('מומלצים עכשיו')).toBeTruthy();
+    expect(queryByText('יעדים פופולריים')).toBeTruthy();
   });
 
   it('shows a remote catalog destination when punctuation and spacing differ', async () => {
@@ -370,7 +385,7 @@ describe('HomeScreenSearchTest', () => {
     await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(2));
   });
 
-  it('uses only a title row and search row in the Home header', async () => {
+  it('keeps the shared Home hero outside the scrolling body', async () => {
     const screen = render(
       <SafeAreaProvider
         initialMetrics={{
@@ -384,10 +399,42 @@ describe('HomeScreenSearchTest', () => {
 
     await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
     const header = screen.getByTestId('home-tab-header');
-    expect(React.Children.count(header.props.children)).toBe(2);
-    expect(screen.getByTestId('home-header-title-row')).toBeTruthy();
-    expect(screen.getByText('לאן נוסעים?')).toBeTruthy();
-    expect(screen.getByTestId('home-search-input')).toBeTruthy();
+    const scroll = screen.getByTestId('home-scroll');
+    expect(header.props.overlapNext).toBe(true);
+    expect(within(header).getByText('לאן נוסעים?')).toBeTruthy();
+    expect(within(header).getByTestId('home-search-input')).toBeTruthy();
+    expect(StyleSheet.flatten(within(header).getByTestId('home-search-row').props.style)).toMatchObject({
+      width: '100%',
+      marginTop: 12,
+      gap: 8,
+    });
+    expect(StyleSheet.flatten(within(header).getByTestId('home-search-field').props.style)).toMatchObject({
+      width: '100%',
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      flexDirection: 'row-reverse',
+      gap: 9,
+    });
+    expect(within(header).getByTestId('home-search-icon').props.size).toBe(19);
+    expect(StyleSheet.flatten(within(header).getByTestId('home-search-icon').props.style)).toMatchObject({
+      position: 'relative',
+      top: 0,
+      right: 0,
+    });
+    expect(StyleSheet.flatten(within(header).getByTestId('home-search-input').props.style)).toMatchObject({
+      height: '100%',
+      fontSize: 15,
+      paddingLeft: 0,
+      paddingRight: 0,
+      textAlign: 'right',
+    });
+    expect(StyleSheet.flatten(within(header).getByTestId('home-filter-button').props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+    });
+    expect(within(scroll).queryByTestId('home-tab-header')).toBeNull();
+    expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toMatchObject({ paddingTop: 28 });
   });
 
   it('does not refresh or displace Home when entering it from another tab', async () => {

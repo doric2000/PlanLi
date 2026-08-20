@@ -43,8 +43,12 @@ export function requestDestinations(payload = {}) {
   if (!destinationSearchCallable) {
     destinationSearchCallable = httpsCallable(cloudFunctions, 'searchDestinations');
   }
-  const cacheKey = destinationSearchCacheKey(payload);
-  const loader = () => destinationSearchCallable(payload)
+  const trimmedQuery = String(payload?.query || '').trim();
+  const requestPayload = payload?.query === undefined
+    ? payload
+    : { ...payload, query: compactDestinationText(trimmedQuery) ? trimmedQuery : '' };
+  const cacheKey = destinationSearchCacheKey(requestPayload);
+  const loader = () => destinationSearchCallable(requestPayload)
     .then((response) => response?.data || { items: [], nextCursor: null });
   if (!cacheKey) return { requested: true, source: 'network', promise: loader() };
   return destinationSearchCoordinator.request(cacheKey, loader);
