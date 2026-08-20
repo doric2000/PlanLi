@@ -17,6 +17,27 @@ jest.mock('../src/components/Avatar', () => {
   return { Avatar: () => ReactModule.createElement(View, { testID: 'detail-author-avatar' }) };
 });
 
+jest.mock('../src/components/ExactLocationMapPreview', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return function MockExactLocationMapPreview(props) {
+    return ReactModule.createElement(View, {
+      testID: props.testID,
+      style: props.style,
+    });
+  };
+});
+
+jest.mock('../src/components/OpenWithLocationSheet', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return function MockOpenWithLocationSheet({ visible }) {
+    return visible
+      ? ReactModule.createElement(View, { testID: 'mock-open-with-location-sheet' })
+      : null;
+  };
+});
+
 describe('RecommendationDetailContent', () => {
   const item = {
     id: 'rec-1',
@@ -31,7 +52,12 @@ describe('RecommendationDetailContent', () => {
       cityName: 'מונאר',
       countryName: 'הודו',
     },
-    place: { name: 'השוק המרכזי', address: 'Main Road' },
+    place: {
+      placeId: 'google-place-1',
+      name: 'השוק המרכזי',
+      address: 'Main Road',
+      coordinates: { lat: 10.0889, lng: 77.0595 },
+    },
     facets: { audienceScope: 'all', audiences: [] },
     tags: ['shopping_markets'],
   };
@@ -64,6 +90,34 @@ describe('RecommendationDetailContent', () => {
     const tagsMetadataStyle = StyleSheet.flatten(tagsMetadata.props.style);
     expect(tagsMetadataStyle.backgroundColor).toBeUndefined();
     expect(tagsMetadataStyle.borderWidth).toBeUndefined();
+    expect(screen.getByText('פתיחה באמצעות')).toBeTruthy();
+    expect(screen.queryByText('פתיחה ב-Waze')).toBeNull();
+    expect(screen.queryByText('פתח בגוגל מפות')).toBeNull();
+    expect(StyleSheet.flatten(screen.getByTestId('recommendation-exact-map').props.style)).toMatchObject({
+      width: '100%',
+      height: 150,
+      borderRadius: 16,
+    });
+
+    fireEvent.press(screen.getByTestId('recommendation-open-with'));
+    expect(screen.getByTestId('mock-open-with-location-sheet')).toBeTruthy();
+
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(123456);
+    fireEvent.press(screen.getByTestId('recommendation-exact-map'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'Tabs',
+      params: {
+        screen: 'Community',
+        params: {
+          mapFocus: {
+            requestId: 'rec-1:123456',
+            recommendationId: 'rec-1',
+            coordinates: { lat: 10.0889, lng: 77.0595 },
+          },
+        },
+      },
+    }, { pop: true });
+    nowSpy.mockRestore();
 
     fireEvent.press(screen.getByTestId('recommendation-detail-edit'));
     expect(onEdit).toHaveBeenCalledTimes(1);
@@ -86,5 +140,19 @@ describe('RecommendationDetailContent', () => {
     );
 
     expect(screen.queryByTestId('recommendation-detail-edit')).toBeNull();
+  });
+
+  it('does not render an exact map when the saved place has no coordinates', () => {
+    const screen = render(
+      <RecommendationDetailContent
+        item={{ ...item, place: { name: 'Legacy place', address: 'Old Road' } }}
+        author={{ displayName: 'Bot' }}
+        canEdit={false}
+        navigation={{ navigate: jest.fn() }}
+      />
+    );
+
+    expect(screen.queryByTestId('recommendation-exact-map')).toBeNull();
+    expect(screen.getByTestId('recommendation-open-with')).toBeTruthy();
   });
 });

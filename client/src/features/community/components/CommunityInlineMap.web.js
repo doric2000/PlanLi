@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Linking, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -16,31 +16,50 @@ function googleMapsUrl(item) {
   });
 }
 
-export default function CommunityInlineMap({ recommendations = [], onOpenRecommendation }) {
+export default function CommunityInlineMap({
+  recommendations = [],
+  onOpenRecommendation,
+  focusRequest = null,
+}) {
+  const focusedRecommendationId = String(focusRequest?.recommendationId || '').trim();
+  const orderedRecommendations = useMemo(() => {
+    if (!focusedRecommendationId) return recommendations;
+    return [...recommendations].sort((left, right) => {
+      const leftFocused = (left?.id || left?.postId) === focusedRecommendationId;
+      const rightFocused = (right?.id || right?.postId) === focusedRecommendationId;
+      return Number(rightFocused) - Number(leftFocused);
+    });
+  }, [focusedRecommendationId, recommendations]);
+
   return (
     <View style={community.inlineMapEmpty} testID="community-map-web-list">
       <Ionicons name="map-outline" size={40} color="#6B7280" />
       <AppText style={community.inlineMapEmptyTitle}>Explore recommendations</AppText>
       <AppText style={community.inlineMapEmptyText}>Open an exact place in Google Maps. The interactive map is available in the native apps.</AppText>
-      {recommendations.slice(0, 20).map((item) => (
-        <TouchableOpacity
-          key={item.id}
-          style={community.mapLocationNotice}
-          onPress={() => onOpenRecommendation?.(item.postId || item.id)}
-          testID={`community-map-web-item-${item.id}`}
-        >
-          <AppText style={community.mapLocationNoticeText}>{item.title}</AppText>
+      {orderedRecommendations.slice(0, 20).map((item) => {
+        const itemId = item?.id || item?.postId;
+        const focused = itemId === focusedRecommendationId;
+        return (
           <TouchableOpacity
-            onPress={(event) => {
-              event?.stopPropagation?.();
-              Linking.openURL(googleMapsUrl(item)).catch(() => {});
-            }}
-            disabled={!googleMapsUrl(item)}
+            key={itemId}
+            style={[community.mapLocationNotice, focused && community.mapWebFocusedItem]}
+            onPress={() => onOpenRecommendation?.(item.postId || item.id)}
+            testID={`community-map-web-item-${itemId}`}
+            accessibilityState={{ selected: focused }}
           >
-            <Ionicons name="navigate-outline" size={18} color="#1E3A5F" />
+            <AppText style={community.mapLocationNoticeText}>{item.title}</AppText>
+            <TouchableOpacity
+              onPress={(event) => {
+                event?.stopPropagation?.();
+                Linking.openURL(googleMapsUrl(item)).catch(() => {});
+              }}
+              disabled={!googleMapsUrl(item)}
+            >
+              <Ionicons name="navigate-outline" size={18} color="#1E3A5F" />
+            </TouchableOpacity>
           </TouchableOpacity>
-        </TouchableOpacity>
-      ))}
+        );
+      })}
     </View>
   );
 }

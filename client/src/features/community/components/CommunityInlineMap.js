@@ -15,6 +15,7 @@ import { normalizeRecommendationMapItems } from '../utils/recommendationMap';
 
 const TERMINAL_LOCATION_STATUSES = new Set(['denied', 'timeout', 'error']);
 const MAX_NATIVE_MARKERS = 500;
+const FOCUSED_RECOMMENDATION_ZOOM = 16;
 const noLocationAction = async () => null;
 const noLocationCleanup = () => {};
 
@@ -120,6 +121,7 @@ export default function CommunityInlineMap({
   onOpenRecommendation,
   overlayBottomInset = 16,
   locationState = {},
+  focusRequest = null,
 }) {
   const initialRegionRef = useRef(null);
   const currentRegionRef = useRef(null);
@@ -127,6 +129,8 @@ export default function CommunityInlineMap({
   const userGestureRef = useRef(false);
   const userMovedMapRef = useRef(false);
   const centeredOnLocationRef = useRef(false);
+  const handledFocusRequestRef = useRef(null);
+  const pendingFocusIdRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(0);
   const [selectedRecommendationId, setSelectedRecommendationId] = useState(null);
   const [iconFontReady, setIconFontReady] = useState(false);
@@ -138,8 +142,26 @@ export default function CommunityInlineMap({
     startTracking = noLocationAction,
     stopTracking = noLocationCleanup,
   } = locationState;
+  const focusRequestId = String(focusRequest?.requestId || '').trim();
+  const focusRecommendationId = String(focusRequest?.recommendationId || '').trim();
+  const focusLat = Number(focusRequest?.coordinates?.lat);
+  const focusLng = Number(focusRequest?.coordinates?.lng);
+  const focusCoordinates = useMemo(() => (
+    focusRequestId
+      && focusRecommendationId
+      && Number.isFinite(focusLat)
+      && Number.isFinite(focusLng)
+      ? { lat: focusLat, lng: focusLng }
+      : null
+  ), [focusLat, focusLng, focusRecommendationId, focusRequestId]);
 
-  if (!initialRegionRef.current && location) {
+  if (!initialRegionRef.current && focusCoordinates) {
+    initialRegionRef.current = regionForLocation(focusCoordinates, FOCUSED_RECOMMENDATION_ZOOM);
+    currentRegionRef.current = initialRegionRef.current;
+    centeredOnLocationRef.current = true;
+    handledFocusRequestRef.current = focusRequestId;
+    pendingFocusIdRef.current = focusRecommendationId;
+  } else if (!initialRegionRef.current && location) {
     initialRegionRef.current = regionForLocation(location, USER_MAP_ZOOM);
     currentRegionRef.current = initialRegionRef.current;
     centeredOnLocationRef.current = true;
@@ -178,35 +200,72 @@ export default function CommunityInlineMap({
     if (selectedRecommendationId && !selectedMapItem) setSelectedRecommendationId(null);
   }, [selectedMapItem, selectedRecommendationId]);
 
-  const moveToLocation = useCallback((nextLocation) => {
-    const nextRegion = regionForLocation(nextLocation, USER_MAP_ZOOM);
+  const moveToLocation = useCallback((nextLocation, {
+    zoom = USER_MAP_ZOOM,
+    pendingRecommendationId = null,
+  } = {}) => {
+    const nextRegion = regionForLocation(nextLocation, zoom);
     initialRegionRef.current = nextRegion;
     currentRegionRef.current = nextRegion;
     centeredOnLocationRef.current = true;
+    userMovedMapRef.current = false;
     searchedRef.current = false;
     setSearchAreaVisible(false);
     setSelectedRecommendationId(null);
+    pendingFocusIdRef.current = pendingRecommendationId;
     setMapInstance((value) => value + 1);
   }, []);
+
+  useEffect(() => {
+    if (
+      !focusCoordinates
+      || handledFocusRequestRef.current === focusRequestId
+    ) return;
+    handledFocusRequestRef.current = focusRequestId;
+    moveToLocation(focusCoordinates, {
+      zoom: FOCUSED_RECOMMENDATION_ZOOM,
+      pendingRecommendationId: focusRecommendationId,
+    });
+  }, [focusCoordinates, focusRecommendationId, focusRequestId, moveToLocation]);
+
+  useEffect(() => {
+    const pendingId = pendingFocusIdRef.current;
+    if (!pendingId || !mapItems.some((item) => item.id === pendingId)) return;
+    pendingFocusIdRef.current = null;
+    setSelectedRecommendationId(pendingId);
+  }, [mapItems]);
 
   useEffect(() => {
     if (!location || centeredOnLocationRef.current || userMovedMapRef.current) return;
     moveToLocation(location);
   }, [location, moveToLocation]);
 
-  const searchRegion = useCallback((region, { forceRefresh = false } = {}) => {
+  const searchRegion = useCallback((region, {
+    forceRefresh = false,
+    preserveFocus = false,
+  } = {}) => {
     const viewport = viewportFromRegion(region);
     if (!viewport) return;
     searchedRef.current = true;
     setSearchAreaVisible(false);
-    setSelectedRecommendationId(null);
+    if (!preserveFocus) {
+      pendingFocusIdRef.current = null;
+      setSelectedRecommendationId(null);
+    }
     if (forceRefresh) onSearchViewport?.(viewport, { forceRefresh: true });
     else onSearchViewport?.(viewport);
   }, [onSearchViewport]);
 
   const handleMapReady = useCallback(() => {
-    if (!searchedRef.current) searchRegion(currentRegionRef.current || initialRegionRef.current);
-  }, [searchRegion]);
+    if (!searchedRef.current) {
+      searchRegion(currentRegionRef.current || initialRegionRef.current, {
+        preserveFocus: Boolean(
+          pendingFocusIdRef.current
+          || selectedRecommendationId === focusRecommendationId
+        ),
+      });
+    }
+  }, [focusRecommendationId, searchRegion, selectedRecommendationId]);
 
   const handleRegionChangeComplete = useCallback((region, details) => {
     currentRegionRef.current = region;
@@ -251,9 +310,14 @@ export default function CommunityInlineMap({
         onPanDrag={() => {
           userGestureRef.current = true;
           userMovedMapRef.current = true;
+          pendingFocusIdRef.current = null;
+          setSelectedRecommendationId(null);
         }}
         onRegionChangeComplete={handleRegionChangeComplete}
-        onPress={() => setSelectedRecommendationId(null)}
+        onPress={() => {
+          pendingFocusIdRef.current = null;
+          setSelectedRecommendationId(null);
+        }}
         mapPadding={{
           top: 8,
           right: 8,
@@ -277,7 +341,10 @@ export default function CommunityInlineMap({
             mapItem={mapItem}
             selected={mapItem.id === selectedRecommendationId}
             iconFontReady={iconFontReady}
-            onPress={() => setSelectedRecommendationId(mapItem.id)}
+            onPress={() => {
+              pendingFocusIdRef.current = null;
+              setSelectedRecommendationId(mapItem.id);
+            }}
           />
         ))}
       </MapView>
@@ -355,7 +422,10 @@ export default function CommunityInlineMap({
         <RecommendationMapPreviewCard
           item={selectedMapItem.recommendation}
           bottomInset={overlayBottomInset}
-          onClose={() => setSelectedRecommendationId(null)}
+          onClose={() => {
+            pendingFocusIdRef.current = null;
+            setSelectedRecommendationId(null);
+          }}
           onOpenRecommendation={onOpenRecommendation}
         />
       )}

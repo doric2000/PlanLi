@@ -4,7 +4,11 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { exactLocationPickerStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
 
-export default function ExactLocationMapPreview({ place }) {
+export default function ExactLocationMapPreview({
+  place,
+  style,
+  testID = 'exact-location-map-preview',
+}) {
   const coordinates = getPlaceCoordinates(place);
   const lat = Number(coordinates?.lat);
   const lng = Number(coordinates?.lng);
@@ -13,7 +17,7 @@ export default function ExactLocationMapPreview({ place }) {
   return (
     <MapView
       key={`${lat}:${lng}`}
-      style={styles.previewMap}
+      style={[styles.previewMap, style]}
       initialRegion={{ ...coordinate, latitudeDelta: 0.012, longitudeDelta: 0.012 }}
       provider={PROVIDER_GOOGLE}
       scrollEnabled={false}
@@ -22,7 +26,7 @@ export default function ExactLocationMapPreview({ place }) {
       pitchEnabled={false}
       toolbarEnabled={false}
       pointerEvents="none"
-      testID="exact-location-map-preview"
+      testID={testID}
     >
       <Marker coordinate={coordinate} title={place?.name || undefined} />
     </MapView>

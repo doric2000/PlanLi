@@ -180,6 +180,11 @@ export const community = {
 	mapControlsSelected: {
 		top: 68,
 	},
+	mapWebFocusedItem: {
+		borderWidth: 2,
+		borderColor: colors.primary,
+		backgroundColor: colors.accentLight,
+	},
 	mapControlButton: {
 		width: 48,
 		height: 48,

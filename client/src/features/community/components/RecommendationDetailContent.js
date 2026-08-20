@@ -1,7 +1,9 @@
-import React, { useMemo } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import AppText from "../../../components/AppText";
+import ExactLocationMapPreview from '../../../components/ExactLocationMapPreview';
 import MetadataLine from '../../../components/MetadataLine';
+import OpenWithLocationSheet from '../../../components/OpenWithLocationSheet';
 import UsefulFactItem from '../../../components/UsefulFactItem';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -9,6 +11,7 @@ import ContentDetailAuthorRow from '../../../components/ContentDetailAuthorRow';
 import NavigationChevron from '../../../components/NavigationChevron';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
+import { getPlaceCoordinates } from '../../../utils/distance';
 import { buildGoogleMapsUrl, buildWazeUrl } from '../../../utils/placeNavigation';
 import { getRecommendationDetailSections } from '../utils/recommendationDetailPresentation';
 import { recommendationDetailStyles as styles } from './recommendationDetailStyles';
@@ -43,6 +46,9 @@ export default function RecommendationDetailContent({
   const mapsUrl = buildMapsUrl(item);
   const wazeUrl = buildWazeUrl(item?.place);
   const placeLabel = item?.place?.name || item?.place?.address || '';
+  const placeCoordinates = getPlaceCoordinates(item?.place);
+  const recommendationId = item?.postId || item?.id || '';
+  const [openWithVisible, setOpenWithVisible] = useState(false);
 
   const openDestination = () => {
     const destination = item?.destination || {};
@@ -51,6 +57,23 @@ export default function RecommendationDetailContent({
       cityId: destination.cityId,
       countryId: destination.countryId,
     });
+  };
+
+  const openOnCommunityMap = () => {
+    if (!recommendationId || !placeCoordinates) return;
+    navigation.navigate('Main', {
+      screen: 'Tabs',
+      params: {
+        screen: 'Community',
+        params: {
+          mapFocus: {
+            requestId: `${recommendationId}:${Date.now()}`,
+            recommendationId,
+            coordinates: placeCoordinates,
+          },
+        },
+      },
+    }, { pop: true });
   };
 
   return (
@@ -62,7 +85,7 @@ export default function RecommendationDetailContent({
 
       <AppText style={styles.title}>{item.title}</AppText>
 
-      {(destinationLabel || placeLabel) ? (
+      {(destinationLabel || placeLabel || placeCoordinates) ? (
         <View style={styles.locationStack}>
           {!!destinationLabel && (
             <Pressable
@@ -80,34 +103,58 @@ export default function RecommendationDetailContent({
             </Pressable>
           )}
           {!!placeLabel && (
-            <Pressable
+            <View
               style={styles.locationRow}
-              onPress={() => mapsUrl && Linking.openURL(mapsUrl).catch(() => {})}
-              disabled={!mapsUrl}
-              accessibilityRole="button"
-              accessibilityLabel={`פתיחת ${placeLabel} במפה`}
             >
-              {!!mapsUrl && <NavigationChevron size={18} color={colors.textMuted} />}
               <Ionicons name="map-outline" size={19} color={colors.textMuted} />
               <AppText style={[styles.locationText, styles.placeText]} numberOfLines={2}>
                 {[placeLabel, item?.place?.address].filter((value, index, all) => value && all.indexOf(value) === index).join(' · ')}
               </AppText>
+            </View>
+          )}
+          {!!(mapsUrl || wazeUrl) && (
+            <Pressable
+              style={styles.openWithButton}
+              onPress={() => setOpenWithVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`פתיחת ${placeLabel || 'המיקום'} באמצעות אפליקציית ניווט`}
+              testID="recommendation-open-with"
+            >
+              <Ionicons name="navigate-outline" size={19} color={colors.white} />
+              <AppText style={styles.openWithText}>פתיחה באמצעות</AppText>
             </Pressable>
           )}
-          {!!wazeUrl && (
+          {!!placeCoordinates && (
             <Pressable
-              style={styles.locationRow}
-              onPress={() => Linking.openURL(wazeUrl).catch(() => {})}
+              style={styles.exactMapPreview}
+              onPress={openOnCommunityMap}
+              disabled={!recommendationId}
               accessibilityRole="button"
-              accessibilityLabel={`פתיחת ${placeLabel || 'המיקום'} ב-Waze`}
+              accessibilityLabel={`הצגת ${placeLabel || 'המיקום'} במפת ההמלצות`}
+              testID="recommendation-exact-map"
             >
-              <NavigationChevron size={18} color={colors.textMuted} />
-              <Ionicons name="navigate-outline" size={19} color={colors.textMuted} />
-              <AppText style={[styles.locationText, styles.placeText]}>פתיחה ב-Waze</AppText>
+              <ExactLocationMapPreview
+                place={item?.place}
+                style={styles.exactMap}
+                testID="recommendation-exact-map-view"
+              />
+              {!!recommendationId && (
+                <View style={styles.exactMapAction} pointerEvents="none">
+                  <Ionicons name="map-outline" size={17} color={colors.primary} />
+                  <AppText style={styles.exactMapActionText}>הצג במפה</AppText>
+                </View>
+              )}
             </Pressable>
           )}
         </View>
       ) : null}
+
+      <OpenWithLocationSheet
+        visible={openWithVisible}
+        onClose={() => setOpenWithVisible(false)}
+        place={item?.place}
+        destination={item?.destination}
+      />
 
       <ContentDetailAuthorRow
         author={{ ...author, contentCreatedAt: item?.createdAt }}

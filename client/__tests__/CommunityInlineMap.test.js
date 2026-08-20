@@ -111,6 +111,46 @@ describe('CommunityInlineMap', () => {
     expect(screen.queryByTestId('map-url-tile')).toBeNull();
   });
 
+  it('prioritizes a focused recommendation over user-location startup and opens its preview', async () => {
+    mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
+    const onSearchViewport = jest.fn();
+    const focusRequest = {
+      requestId: 'rec-2:1',
+      recommendationId: 'rec-2',
+      coordinates: { lat: 32.2, lng: 34.9 },
+    };
+    const screen = render(
+      <MapUnderTest
+        recommendations={recommendations}
+        focusRequest={focusRequest}
+        onSearchViewport={onSearchViewport}
+      />
+    );
+    await act(async () => {});
+
+    const region = screen.getByTestId('community-inline-map').props.initialRegion;
+    expect(region.latitude).toBe(32.2);
+    expect(region.longitude).toBe(34.9);
+    expect(region.latitudeDelta).toBeCloseTo(360 / (2 ** 16));
+    expect(onSearchViewport).toHaveBeenCalledWith(expect.objectContaining({
+      north: expect.any(Number),
+      south: expect.any(Number),
+      zoom: expect.any(Number),
+    }));
+    await waitFor(() => expect(screen.getByText('Nature reserve')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('mock-map-preview-close'));
+    expect(screen.queryByTestId('mock-map-preview')).toBeNull();
+    screen.rerender(
+      <MapUnderTest
+        recommendations={recommendations}
+        focusRequest={focusRequest}
+        onSearchViewport={onSearchViewport}
+      />
+    );
+    expect(screen.queryByTestId('mock-map-preview')).toBeNull();
+  });
+
   it('waits for the first location before mounting the native map', async () => {
     mockLocationState = { location: null, status: 'locating', awaitingFirstFix: true };
     const screen = render(<MapUnderTest recommendations={[]} />);

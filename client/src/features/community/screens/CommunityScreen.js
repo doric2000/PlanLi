@@ -19,6 +19,7 @@ import CommunityInlineMap from '../components/CommunityInlineMap';
 // --- Hooks ---
 import { useRecommendations } from '../../../hooks/useRecommendations';
 import { useMapRecommendations } from '../../../hooks/useMapRecommendations';
+import { useRecommendationById } from '../../../hooks/useRecommendationById';
 import { useRecommendationFilter } from '../../../hooks/useRecommendationFilter';
 import { useUserLocation } from '../../../hooks/useUserLocation';
 import { useLiveUserLocation } from '../../../hooks/useLiveUserLocation';
@@ -51,7 +52,37 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { clearPersonalizationDiscoveryCache } from '../../../services/PersonalizationService';
 
-export default function CommunityScreen({ navigation }) {
+function normalizeMapFocus(input) {
+  const recommendationId = String(input?.recommendationId || '').trim();
+  const requestId = String(input?.requestId || '').trim();
+  const lat = Number(input?.coordinates?.lat);
+  const lng = Number(input?.coordinates?.lng);
+  if (!recommendationId || !requestId || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { recommendationId, requestId, coordinates: { lat, lng } };
+}
+
+function mergeFocusedRecommendation(recommendations, focusedRecommendation, mapFocus) {
+  const items = Array.isArray(recommendations) ? recommendations : [];
+  if (!focusedRecommendation || !mapFocus) return items;
+  const focusedId = focusedRecommendation.id || focusedRecommendation.postId;
+  if (focusedId !== mapFocus.recommendationId) return items;
+  const placeCoordinates = getPlaceCoordinates(focusedRecommendation.place);
+  const focusedItem = {
+    ...focusedRecommendation,
+    id: mapFocus.recommendationId,
+    postId: focusedRecommendation.postId || mapFocus.recommendationId,
+    place: {
+      ...(focusedRecommendation.place || {}),
+      coordinates: placeCoordinates || mapFocus.coordinates,
+    },
+  };
+  return [
+    focusedItem,
+    ...items.filter((item) => (item?.id || item?.postId) !== mapFocus.recommendationId),
+  ];
+}
+
+export default function CommunityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { ensureCapability } = useAuthUser();
   // --- State ---
@@ -61,7 +92,9 @@ export default function CommunityScreen({ navigation }) {
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [mapFocus, setMapFocus] = useState(null);
   const personalizationInitialized = useRef(false);
+  const handledMapFocusRequest = useRef(null);
 
   // --- Hooks ---
   const {
@@ -84,6 +117,9 @@ export default function CommunityScreen({ navigation }) {
     zoomInRequired,
     searchViewport,
   } = useMapRecommendations({ enabled: mapOpen, request: discoveryRequest });
+  const {
+    data: focusedRecommendation,
+  } = useRecommendationById(mapFocus?.recommendationId || '');
   const { location: userLocation, requestLocation } = useUserLocation();
   const mapLocationState = useLiveUserLocation();
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
@@ -92,6 +128,21 @@ export default function CommunityScreen({ navigation }) {
   const feedListRef = useRef(null);
   const recommendationPublishVersion = Number(completedVersionByType.recommendation || 0);
   const publishVersionRef = useRef(recommendationPublishVersion);
+
+  const mapRecommendationsWithFocus = useMemo(
+    () => mergeFocusedRecommendation(mapRecommendations, focusedRecommendation, mapFocus),
+    [focusedRecommendation, mapFocus, mapRecommendations]
+  );
+
+  useEffect(() => {
+    const nextFocus = normalizeMapFocus(route?.params?.mapFocus);
+    if (!nextFocus || handledMapFocusRequest.current === nextFocus.requestId) return;
+    handledMapFocusRequest.current = nextFocus.requestId;
+    setMapFocus(nextFocus);
+    setMapOpen(true);
+    setSortMenuVisible(false);
+    navigation.setParams?.({ mapFocus: undefined });
+  }, [navigation, route?.params?.mapFocus]);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -186,6 +237,7 @@ export default function CommunityScreen({ navigation }) {
           style={tabHeroStyles.iconAction}
           onPress={() => setMapOpen((previous) => {
             if (!previous) setSortMenuVisible(false);
+            else setMapFocus(null);
             return !previous;
           })}
           accessibilityRole="button"
@@ -266,13 +318,14 @@ export default function CommunityScreen({ navigation }) {
           {renderActiveFilters()}
           <View style={community.inlineMapSection}>
             <CommunityInlineMap
-              recommendations={mapRecommendations}
+              recommendations={mapRecommendationsWithFocus}
               loading={mapLoading}
               error={mapError}
               truncated={mapTruncated}
               zoomInRequired={zoomInRequired}
               onSearchViewport={searchViewport}
               locationState={mapLocationState}
+              focusRequest={mapFocus}
               overlayBottomInset={getTabOverlayBottomInset(insets)}
               onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}
             />
