@@ -121,4 +121,11 @@ describe('Settings authentication behavior', () => {
     fireEvent.press(screen.getByTestId('settings-blocked-users-button'));
     expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
   });
+
+  it('uses an RTL-facing back arrow in the right-side header slot', () => {
+    const screen = render(<SettingsScreen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} />);
+    const backButton = screen.getByTestId('settings-back-button');
+
+    expect(backButton.findByProps({ name: 'arrow-forward' })).toBeTruthy();
+  });
 });

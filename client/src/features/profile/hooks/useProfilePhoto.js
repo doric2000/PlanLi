@@ -16,7 +16,7 @@ const IMAGE_PICKER_CONFIG = {
   normalizeCompress: 0.94,
 };
 
-export function useProfilePhoto({ uid, user, userData, updateLocalUserData }) {
+export function useProfilePhoto({ uid, user, userData, updateLocalUserData, onSaved }) {
   const {
     pickImage,
     uploadImageAsset,
@@ -47,6 +47,7 @@ export function useProfilePhoto({ uid, user, userData, updateLocalUserData }) {
           photoURL: downloadURL,
           photoMedia: uploadedAsset,
         });
+        onSaved?.();
 
         Alert.alert('Success', 'Profile picture updated!');
       } catch (error) {
@@ -61,6 +62,7 @@ export function useProfilePhoto({ uid, user, userData, updateLocalUserData }) {
       user,
       uploadImageAsset,
       updateLocalUserData,
+      onSaved,
     ]
   );
 

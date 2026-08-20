@@ -1,76 +1,66 @@
-import { useCallback, useEffect, useState } from 'react';
-import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { db } from '../../../config/firebase';
+import {
+  peekProfileResource,
+  requestProfileResource,
+} from '../services/ProfileResourceService';
 
-export async function getProfileContentSnapshot(collectionName, uid) {
-  try {
-    return await getDocs(
-      query(
-        collection(db, collectionName),
-        where('ownerId', '==', uid),
-        where('status', '==', 'active'),
-        orderBy('createdAt', 'desc'),
-        limit(30)
-      )
-    );
-  } catch (error) {
-    console.log(`Ordered ${collectionName} query failed, fallback:`, error?.message);
-    return getDocs(
-      query(
-        collection(db, collectionName),
-        where('ownerId', '==', uid),
-        where('status', '==', 'active'),
-        limit(30)
-      )
-    );
-  }
-}
+export function useProfileContent({ uid, user, isOwnProfile = false }) {
+  const profileUser = useMemo(() => user, [
+    user?.uid,
+    user?.displayName,
+    user?.photoURL,
+    user?.photoMedia,
+    user?.email,
+    user?.bio,
+    user?.isExpert,
+    user?.smartProfile,
+  ]);
+  const cached = peekProfileResource(uid, isOwnProfile);
+  const [recommendations, setRecommendations] = useState(cached?.recommendations || []);
+  const [routes, setRoutes] = useState(cached?.routes || []);
+  const [loading, setLoading] = useState(Boolean(uid) && !cached);
+  const [error, setError] = useState(null);
 
-export function useProfileContent({ uid }) {
-  const [recommendations, setRecommendations] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [loading, setLoading] = useState(Boolean(uid));
+  useEffect(() => {
+    const next = peekProfileResource(uid, isOwnProfile);
+    setRecommendations(next?.recommendations || []);
+    setRoutes(next?.routes || []);
+    setLoading(Boolean(uid) && !next);
+    setError(null);
+  }, [uid, isOwnProfile]);
 
-  const refresh = useCallback(async (isSilent = false) => {
+  const refresh = useCallback(({ silent = false } = {}) => {
     if (!uid) {
       setRecommendations([]);
       setRoutes([]);
       setLoading(false);
-      return;
+      return { requested: false, source: 'empty', promise: Promise.resolve() };
     }
-    if (!isSilent) setLoading(true);
-
-    try {
-      const [recommendationSnapshot, routeSnapshot] = await Promise.all([
-        getProfileContentSnapshot('recommendations', uid),
-        getProfileContentSnapshot('routes', uid),
-      ]);
-      setRecommendations(recommendationSnapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      })));
-      setRoutes(routeSnapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      })));
-    } catch (error) {
-      console.log('loadProfileContent error:', error?.message || error);
-    } finally {
-      if (!isSilent) setLoading(false);
-    }
-  }, [uid]);
+    const attempt = requestProfileResource({ uid, user: profileUser, isOwnProfile });
+    if (!silent && attempt.requested) setLoading(true);
+    if (attempt.requested) setError(null);
+    const promise = attempt.promise.then((resource) => {
+        setRecommendations(resource.recommendations);
+        setRoutes(resource.routes);
+        setError(null);
+        return resource;
+      })
+      .catch((requestError) => {
+        setError(requestError);
+        throw requestError;
+      })
+      .finally(() => setLoading(false));
+    return { requested: attempt.requested, source: attempt.source, promise };
+  }, [uid, profileUser, isOwnProfile]);
 
   useEffect(() => {
-    refresh();
+    refresh({ silent: Boolean(cached) }).promise.catch((error) => {
+      console.error('Error fetching profile content:', error);
+    });
   }, [refresh]);
 
-  return {
-    recommendations,
-    routes,
-    loading,
-    refresh,
-  };
+  return { recommendations, routes, loading, error, refresh };
 }
 
 export default useProfileContent;

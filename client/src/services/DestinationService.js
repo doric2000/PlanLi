@@ -2,28 +2,30 @@ import { httpsCallable } from 'firebase/functions';
 
 import { cloudFunctions } from '../config/firebase';
 import { compactDestinationText } from '../utils/destinationSearch';
+import { createRequestCoordinator } from '../utils/requestCoordinator';
 
 let destinationOverviewCallable = null;
 let destinationSearchCallable = null;
-const DESTINATION_SEARCH_CACHE_TTL_MS = 5 * 60 * 1000;
+const DESTINATION_SEARCH_FRESH_MS = 30 * 1000;
+const DESTINATION_SEARCH_STALE_MS = 5 * 60 * 1000;
+const DESTINATION_SEARCH_RETRY_MS = 15 * 1000;
 const MAX_DESTINATION_SEARCH_CACHE_ENTRIES = 50;
-const destinationSearchCache = new Map();
+const destinationSearchCoordinator = createRequestCoordinator({
+  freshMs: DESTINATION_SEARCH_FRESH_MS,
+  staleMs: DESTINATION_SEARCH_STALE_MS,
+  retryMs: DESTINATION_SEARCH_RETRY_MS,
+  maxEntries: MAX_DESTINATION_SEARCH_CACHE_ENTRIES,
+});
 
 function destinationSearchCacheKey(payload) {
   const query = compactDestinationText(payload?.query);
-  if (query.length < 2 || payload?.cursor) return '';
+  if ((query.length > 0 && query.length < 2) || payload?.cursor) return '';
   return JSON.stringify({
     query,
     sort: payload?.sort || 'popular',
     limit: payload?.limit || 20,
     countryId: String(payload?.countryId || '').trim(),
   });
-}
-
-function trimDestinationSearchCache() {
-  while (destinationSearchCache.size > MAX_DESTINATION_SEARCH_CACHE_ENTRIES) {
-    destinationSearchCache.delete(destinationSearchCache.keys().next().value);
-  }
 }
 
 export async function getDestinationOverview(payload) {
@@ -37,34 +39,23 @@ export async function getDestinationOverview(payload) {
   return response?.data || null;
 }
 
-export async function searchDestinations(payload = {}, { forceRefresh = false } = {}) {
+export function requestDestinations(payload = {}) {
   if (!destinationSearchCallable) {
     destinationSearchCallable = httpsCallable(cloudFunctions, 'searchDestinations');
   }
   const cacheKey = destinationSearchCacheKey(payload);
-  const now = Date.now();
-  const cached = cacheKey ? destinationSearchCache.get(cacheKey) : null;
-  if (!forceRefresh && cached && cached.expiresAt > now) return cached.promise;
-  if (cacheKey) destinationSearchCache.delete(cacheKey);
+  const loader = () => destinationSearchCallable(payload)
+    .then((response) => response?.data || { items: [], nextCursor: null });
+  if (!cacheKey) return { requested: true, source: 'network', promise: loader() };
+  return destinationSearchCoordinator.request(cacheKey, loader);
+}
 
-  const promise = destinationSearchCallable(payload)
-    .then((response) => response?.data || { items: [], nextCursor: null })
-    .catch((error) => {
-      if (cacheKey) destinationSearchCache.delete(cacheKey);
-      throw error;
-    });
-  if (cacheKey) {
-    destinationSearchCache.set(cacheKey, {
-      expiresAt: now + DESTINATION_SEARCH_CACHE_TTL_MS,
-      promise,
-    });
-    trimDestinationSearchCache();
-  }
-  return promise;
+export function searchDestinations(payload = {}) {
+  return requestDestinations(payload).promise;
 }
 
 export function clearDestinationSearchCache() {
-  destinationSearchCache.clear();
+  destinationSearchCoordinator.clear();
 }
 
 export function destinationCatalogItemToCity(item, placeholderColor) {

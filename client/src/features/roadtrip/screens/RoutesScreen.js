@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-	ActivityIndicator,
 	Alert,
 	FlatList,
-	RefreshControl,
 	StatusBar,
 	TouchableOpacity,
 	View,
@@ -34,8 +32,8 @@ import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../naviga
 import { deleteContent } from '../../../services/SocialService';
 import {
   clearRouteDiscoveryCache,
-  discoverRoutes,
   loadRouteDetails,
+  requestRoutes,
 } from '../../../services/RouteService';
 import { SortMenuModal } from '../../community/components/SortMenuModal';
 import {
@@ -49,6 +47,9 @@ import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
 import { isDiscoveryRateLimitError } from '../../../utils/discoveryErrors';
 import { useContentPublish } from '../../publishing/ContentPublishContext';
+import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
+import { waitForRefreshConfirmation } from '../../../utils/refreshFeedback';
+import { invalidateProfileResources } from '../../../utils/profileResourceInvalidation';
 
 const text = {
   title: 'מסלולים',
@@ -66,6 +67,7 @@ export default function RoutesScreen({ navigation }) {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(createEmptyDiscoveryFilters);
   const [debouncedRequest, setDebouncedRequest] = useState(discoveryRequestFromFilters(filters, { surface: 'routes' }));
@@ -90,6 +92,7 @@ export default function RoutesScreen({ navigation }) {
     setError(null);
     setLoading(true);
     setRefreshing(false);
+    setConfirming(false);
   }, [principal]);
 
   useEffect(() => {
@@ -104,16 +107,22 @@ export default function RoutesScreen({ navigation }) {
   }, [filters]);
 
   const requestKey = JSON.stringify(debouncedRequest);
-  const fetchRoutes = useCallback(async ({ forceRefresh = false, showLoader = true } = {}) => {
+  const fetchRoutes = useCallback(async ({ showLoader = true, refreshFeedback = false } = {}) => {
     const serial = requestSerial.current + 1;
     requestSerial.current = serial;
     if (showLoader) setLoading(true);
     setError(null);
     try {
-      const response = await discoverRoutes(
-        { ...debouncedRequest, sort: serverSort(sortBy), limit: 30 },
-        { forceRefresh }
-      );
+      const attempt = requestRoutes({ ...debouncedRequest, sort: serverSort(sortBy), limit: 30 });
+      if (refreshFeedback) {
+        const networkPending = attempt.requested || attempt.source === 'in-flight';
+        setRefreshing(networkPending);
+        setConfirming(!networkPending);
+      }
+      const response = await attempt.promise;
+      if (refreshFeedback && !attempt.requested && attempt.source !== 'in-flight') {
+        await waitForRefreshConfirmation();
+      }
       if (requestSerial.current !== serial) return;
       setRoutes(Array.isArray(response?.items) ? response.items : []);
     } catch (error) {
@@ -128,6 +137,7 @@ export default function RoutesScreen({ navigation }) {
       if (requestSerial.current !== serial) return;
       setLoading(false);
       setRefreshing(false);
+      setConfirming(false);
     }
   }, [requestKey, sortBy, principal]);
 
@@ -138,12 +148,12 @@ export default function RoutesScreen({ navigation }) {
   useEffect(() => {
     if (completedRouteVersionRef.current === routePublishVersion) return;
     completedRouteVersionRef.current = routePublishVersion;
-    fetchRoutes({ forceRefresh: true, showLoader: false });
+    clearRouteDiscoveryCache();
+    fetchRoutes({ showLoader: false });
   }, [routePublishVersion, fetchRoutes]);
 
   const refresh = useCallback(() => {
-    setRefreshing(true);
-    return fetchRoutes({ forceRefresh: true, showLoader: false });
+    return fetchRoutes({ showLoader: false, refreshFeedback: true });
   }, [fetchRoutes]);
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist',
@@ -160,8 +170,10 @@ export default function RoutesScreen({ navigation }) {
           await deleteContent({ type: 'route', id: routeId });
           requestSerial.current += 1;
           clearRouteDiscoveryCache();
+          if (currentUser?.uid) invalidateProfileResources(currentUser.uid);
           setLoading(false);
           setRefreshing(false);
+          setConfirming(false);
           setRoutes((current) => current.filter((item) => item.id !== routeId));
         } catch (error) {
           console.error('Error deleting route:', error);
@@ -188,7 +200,7 @@ export default function RoutesScreen({ navigation }) {
   };
 
   const renderTopArea = () => (
-    <PageHeader variant="hero" overlapNext>
+    <PageHeader variant="hero" testID="routes-tab-header">
       <View style={styles.topActionsRow}>
         <View style={styles.headerSideSpacer} />
         <View style={styles.headerTitleWrap}>
@@ -223,26 +235,37 @@ export default function RoutesScreen({ navigation }) {
     </PageHeader>
   );
 
+  const renderActiveFilters = () => (
+    <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
+      <ActiveRouteFiltersList filters={filters}
+        onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
+        onClear={() => setFilters(createEmptyDiscoveryFilters())} />
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      {renderTopArea()}
-      <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
-        <ActiveRouteFiltersList filters={filters}
-          onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
-          onClear={() => setFilters(createEmptyDiscoveryFilters())} />
-      </View>
-      {loading ? <View style={common.center}><ActivityIndicator size="large" color={colors.primary} /></View> : (
-        <FlatList ref={routesListRef} data={routes} keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.feedContent, { paddingBottom: getTabSceneListPaddingBottom(insets) }]}
+      <FlatList style={styles.scroll} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.feedContent,
+            (loading || refreshing || confirming || routes.length === 0) && styles.feedContentEmpty,
+            { paddingBottom: getTabSceneListPaddingBottom(insets) },
+          ]}
           initialNumToRender={3} maxToRenderPerBatch={3} windowSize={5} onScroll={onScroll} scrollEventThrottle={16}
           renderItem={({ item }) => (
             <RouteCard item={item} onPress={() => openRoute(item)} isOwner={currentUser && item.ownerId === currentUser.uid}
               onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)}
               onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed" />
           )}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[colors.primary]} tintColor={colors.primary} />}
-          ListEmptyComponent={<View style={common.emptyState}><Ionicons name="trail-sign-outline" size={50} color={colors.textMuted} />
+          refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
+          ListHeaderComponent={<>{renderTopArea()}{renderActiveFilters()}</>}
+          ListEmptyComponent={loading || refreshing || confirming ? <CenteredRefreshState
+            accessibilityLabel={confirming ? 'המסלולים מעודכנים' : refreshing ? 'מרענן מסלולים' : 'טוען מסלולים'}
+            confirming={confirming}
+            style={styles.feedBodyState}
+            testID={confirming ? 'routes-refresh-confirmation' : refreshing ? 'routes-refresh-state' : 'routes-loading-state'}
+          /> : <View style={[common.emptyState, styles.feedEmptyState, styles.feedBodyState]} testID="routes-empty-state"><Ionicons name="trail-sign-outline" size={50} color={colors.textMuted} />
             <AppText style={common.emptyText}>{error
               ? 'לא הצלחנו לטעון מסלולים. משכו מטה כדי לנסות שוב.'
               : isFiltered ? text.noFiltered : text.noRoutes}</AppText>
@@ -260,7 +283,6 @@ export default function RoutesScreen({ navigation }) {
               </View>
             )}
           </View>} showsVerticalScrollIndicator={false} />
-      )}
       <FabButton style={{ bottom: getFabBottomInset(insets), zIndex: 10 }} onPress={openCreateRoute} />
       <RoutesFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={filters}
         onApply={(next) => { setFilters({ ...createEmptyDiscoveryFilters(), ...next }); setFilterVisible(false); }}

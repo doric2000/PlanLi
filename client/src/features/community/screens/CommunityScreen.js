@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Alert, ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Alert, FlatList, TouchableOpacity, StatusBar } from 'react-native';
 import AppText from "../../../components/AppText";
 import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,7 +30,6 @@ import {
   colors,
   common,
   community,
-  radii,
   communityScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
 } from '../../../styles';
@@ -46,6 +45,8 @@ import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryF
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
+import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
+import { clearPersonalizationDiscoveryCache } from '../../../services/PersonalizationService';
 
 export default function CommunityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -65,6 +66,7 @@ export default function CommunityScreen({ navigation }) {
     error,
     loading,
     refreshing,
+    confirming,
     refresh,
     removeRecommendation,
     setDiscoveryRequest,
@@ -101,6 +103,7 @@ export default function CommunityScreen({ navigation }) {
   useEffect(() => {
     if (publishVersionRef.current === recommendationPublishVersion) return;
     publishVersionRef.current = recommendationPublishVersion;
+    clearPersonalizationDiscoveryCache('recommendations');
     refresh();
   }, [recommendationPublishVersion, refresh]);
 
@@ -162,8 +165,14 @@ export default function CommunityScreen({ navigation }) {
 
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
 
+  const renderActiveFilters = () => (
+    <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
+      <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
+    </View>
+  );
+
   const renderTopArea = () => (
-    <PageHeader variant="hero" overlapNext>
+    <PageHeader variant="hero" testID="community-tab-header">
       <View style={styles.topActionsRow}>
         <TouchableOpacity
           style={styles.glassIconButton}
@@ -237,38 +246,32 @@ export default function CommunityScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.screen} edges={["left", "right"]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      {renderTopArea()}
-      {/* --- ACTIVE FILTERS BAR --- */}
-      <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
-        <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
-      </View>
-
       {mapOpen && (
-        <View style={community.inlineMapSection}>
-          <CommunityInlineMap
-            recommendations={mapRecommendations}
-            loading={mapLoading}
-            error={mapError}
-            truncated={mapTruncated}
-            zoomInRequired={zoomInRequired}
-            onSearchViewport={searchViewport}
-            locationState={mapLocationState}
-            overlayBottomInset={getTabOverlayBottomInset(insets)}
-            onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}
-          />
-        </View>
+        <>
+          {renderTopArea()}
+          {renderActiveFilters()}
+          <View style={community.inlineMapSection}>
+            <CommunityInlineMap
+              recommendations={mapRecommendations}
+              loading={mapLoading}
+              error={mapError}
+              truncated={mapTruncated}
+              zoomInRequired={zoomInRequired}
+              onSearchViewport={searchViewport}
+              locationState={mapLocationState}
+              overlayBottomInset={getTabOverlayBottomInset(insets)}
+              onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}
+            />
+          </View>
+        </>
       )}
 
       {/* --- RECOMMENDATIONS LIST --- */}
       {!mapOpen && (
-        loading ? (
-          <View style={common.center}>
-              <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : (
           <FlatList
+            style={styles.scroll}
             ref={feedListRef}
-            data={displayData}
+            data={loading || refreshing || confirming ? [] : displayData}
             keyExtractor={(item) => item.id}
             initialNumToRender={3}
             maxToRenderPerBatch={3}
@@ -281,14 +284,31 @@ export default function CommunityScreen({ navigation }) {
                   onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
                   variant="feed"
-                  topContentInset={!isFiltered && index === 0 ? radii.xl : 0}
+                  topContentInset={0}
               />
             )}
-            contentContainerStyle={[styles.feedContent, { paddingBottom: getTabSceneListPaddingBottom(insets) }]}
+            contentContainerStyle={[
+              styles.feedContent,
+              (loading || refreshing || confirming || displayData.length === 0) && styles.feedContentEmpty,
+              { paddingBottom: getTabSceneListPaddingBottom(insets) },
+            ]}
             showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+            refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
+            ListHeaderComponent={(
+              <>
+                {renderTopArea()}
+                {renderActiveFilters()}
+              </>
+            )}
             ListEmptyComponent={
-              <View style={common.emptyState}>
+              loading || refreshing || confirming ? (
+                <CenteredRefreshState
+                  accessibilityLabel={confirming ? 'ההמלצות מעודכנות' : refreshing ? 'מרענן המלצות' : 'טוען המלצות'}
+                  confirming={confirming}
+                  style={styles.feedBodyState}
+                  testID={confirming ? 'community-refresh-confirmation' : refreshing ? 'community-refresh-state' : 'community-loading-state'}
+                />
+              ) : <View style={[common.emptyState, styles.feedEmptyState, styles.feedBodyState]} testID="community-empty-state">
                 <Ionicons name="images-outline" size={50} color={colors.textMuted} />
                 <AppText style={common.emptyText}>{error
                   ? 'לא הצלחנו לטעון תוצאות. משכו מטה כדי לנסות שוב.'
@@ -307,7 +327,6 @@ export default function CommunityScreen({ navigation }) {
               </View>
             }
           />
-        )
       )}
 
       {!mapOpen && (

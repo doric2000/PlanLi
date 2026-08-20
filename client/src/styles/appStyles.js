@@ -1426,10 +1426,14 @@ export const addRecommendationScreenStyles = StyleSheet.create({
 export const communityScreenStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.appSurface,
+    backgroundColor: colors.heroBlueGradient[1],
+  },
+  scroll: {
+    flex: 1,
+    backgroundColor: colors.heroBlueGradient[1],
   },
   filtersAfterOverlappingHeader: {
-    paddingTop: 28,
+    paddingTop: 8,
     position: 'relative',
     zIndex: 2,
   },
@@ -1522,9 +1526,22 @@ export const communityScreenStyles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   feedContent: {
+    flexGrow: 1,
     paddingTop: 0,
     paddingHorizontal: 0,
     backgroundColor: colors.appSurface,
+  },
+  feedContentEmpty: {
+    flexGrow: 1,
+  },
+  feedBodyState: {
+    flex: 1,
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedEmptyState: {
+    marginTop: 0,
   },
 });
 
@@ -1643,6 +1660,7 @@ export const homeScreenStyles = StyleSheet.create({
 		backgroundColor: colors.appSurface,
 	},
 	scrollContent: {
+		flexGrow: 1,
 		backgroundColor: colors.appSurface,
 	},
 	header: {
@@ -4382,10 +4400,14 @@ export const routeMapStyles = StyleSheet.create({
 export const routesScreenStyles = StyleSheet.create({
 	screen: {
 		flex: 1,
-		backgroundColor: colors.appSurface,
+		backgroundColor: colors.heroBlueGradient[1],
+	},
+	scroll: {
+		flex: 1,
+		backgroundColor: colors.heroBlueGradient[1],
 	},
 	filtersAfterOverlappingHeader: {
-		paddingTop: 28,
+		paddingTop: 8,
 		position: 'relative',
 		zIndex: 2,
 	},
@@ -4471,7 +4493,21 @@ export const routesScreenStyles = StyleSheet.create({
 		justifyContent: "center",
 	},
 	feedContent: {
+		flexGrow: 1,
 		paddingBottom: 118,
+		backgroundColor: colors.appSurface,
+	},
+	feedContentEmpty: {
+		flexGrow: 1,
+	},
+	feedBodyState: {
+		flex: 1,
+		minHeight: 220,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	feedEmptyState: {
+		marginTop: 0,
 	},
 	generateCardWrap: {
 		paddingHorizontal: 16,
@@ -4485,6 +4521,7 @@ export const favoritesSwipeStyles = StyleSheet.create({
   content: {
     flex: 1,
     overflow: 'hidden',
+    backgroundColor: colors.appSurface,
   },
   page: {
     flex: 1,

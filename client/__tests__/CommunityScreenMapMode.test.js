@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
+import { FlatList, StyleSheet } from 'react-native';
 
 import CommunityScreen from '../src/features/community/screens/CommunityScreen';
 
@@ -15,11 +16,13 @@ const mockFilters = {
   environments: [],
 };
 
+let mockRecommendationState;
+
 jest.mock('../src/hooks/useRecommendations', () => ({
-  useRecommendations: () => ({
-    data: [], error: null, loading: false, refreshing: false,
-    refresh: jest.fn(), removeRecommendation: jest.fn(), setDiscoveryRequest: jest.fn(),
-  }),
+  useRecommendations: () => mockRecommendationState,
+}));
+jest.mock('../src/services/PersonalizationService', () => ({
+  clearPersonalizationDiscoveryCache: jest.fn(),
 }));
 jest.mock('../src/hooks/useMapRecommendations', () => ({
   useMapRecommendations: () => ({
@@ -58,7 +61,7 @@ jest.mock('../src/features/community/publishing/RecommendationPublishContext', (
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return ({ children }) => ReactModule.createElement(View, null, children);
+  return ({ children, ...props }) => ReactModule.createElement(View, props, children);
 });
 jest.mock('../src/features/community/components/CommunityInlineMap', () => {
   const ReactModule = require('react');
@@ -92,6 +95,13 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 describe('CommunityScreen map mode', () => {
+  beforeEach(() => {
+    mockRecommendationState = {
+      data: [], error: null, loading: false, refreshing: false,
+      refresh: jest.fn(), removeRecommendation: jest.fn(), setDiscoveryRequest: jest.fn(),
+    };
+  });
+
   it('hides feed sorting and labels the map as all recommendations in the area', () => {
     const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
     expect(screen.getByTestId('community-sort-button')).toBeTruthy();
@@ -102,5 +112,28 @@ describe('CommunityScreen map mode', () => {
     expect(screen.queryByTestId('community-sort-button')).toBeNull();
     expect(screen.getByText('כל ההמלצות באזור')).toBeTruthy();
     expect(screen.getByTestId('mock-community-map')).toBeTruthy();
+  });
+
+  it('centers empty and error copy in the available feed body', () => {
+    mockRecommendationState.error = new Error('load failed');
+    const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
+    const list = screen.UNSAFE_getByType(FlatList);
+    const contentStyle = StyleSheet.flatten(list.props.contentContainerStyle);
+    const emptyStyle = StyleSheet.flatten(screen.getByTestId('community-empty-state').props.style);
+
+    expect(contentStyle).toMatchObject({ flexGrow: 1 });
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
+    expect(list.props.ListHeaderComponent).toBeTruthy();
+    expect(list.props.stickyHeaderIndices).toBeUndefined();
+    expect(screen.getByTestId('community-tab-header').props.overlapNext).toBeUndefined();
+    expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
+  });
+
+  it('replaces the feed with a centered state while refreshing', () => {
+    mockRecommendationState.refreshing = true;
+    const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
+
+    expect(screen.getByTestId('community-refresh-state')).toBeTruthy();
+    expect(screen.queryByTestId('community-empty-state')).toBeNull();
   });
 });

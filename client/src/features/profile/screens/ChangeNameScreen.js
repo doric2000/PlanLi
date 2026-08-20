@@ -106,18 +106,18 @@ export default function ChangeNameScreen({ navigation }) {
       />
       {/* Header: back left + title center */}
       <View style={styles.header}>
+        <View style={styles.rightSpacer} />
+
+        <AppText style={styles.headerTitle}>שינוי שם</AppText>
+
         <TouchableOpacity
           onPress={handleHeaderBackPress}
           style={styles.backBtn}
           activeOpacity={0.8}
           testID="change-name-back"
         >
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-forward" size={22} color="#111" />
         </TouchableOpacity>
-
-        <AppText style={styles.headerTitle}>שינוי שם</AppText>
-
-        <View style={styles.rightSpacer} />
       </View>
 
       <View style={styles.container}>

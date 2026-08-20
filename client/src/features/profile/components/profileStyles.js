@@ -15,12 +15,23 @@ export function createProfileStyles(insets = {}, width = 390, gridColumns = 3) {
   return StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: colors.appSurface,
+      backgroundColor: colors.heroBlueGradient[1],
+    },
+    list: {
+      flex: 1,
+      backgroundColor: colors.heroBlueGradient[1],
     },
     listContent: {
+      flexGrow: 1,
       width: '100%',
       alignItems: 'center',
       paddingBottom: (insets.bottom || 0) + 112,
+      backgroundColor: colors.appSurface,
+    },
+    refreshBody: {
+      flex: 1,
+      width: '100%',
+      minHeight: 220,
     },
     headerBlock: {
       width: Math.min(viewportWidth, 1120),

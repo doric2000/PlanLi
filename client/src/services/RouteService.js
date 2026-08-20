@@ -3,6 +3,7 @@ import { cloudFunctions } from '../config/firebase';
 import {
   clearPersonalizationDiscoveryCache,
   getPersonalizedRoutes,
+  requestPersonalizedRoutes,
   recordRouteOpen,
 } from './PersonalizationService';
 
@@ -31,6 +32,8 @@ export const loadRouteDetails = async (routeId) => {
 };
 
 export const discoverRoutes = (payload = {}, options = {}) => getPersonalizedRoutes(payload, options);
+
+export const requestRoutes = (payload = {}) => requestPersonalizedRoutes(payload);
 
 export const clearRouteDiscoveryCache = () => clearPersonalizationDiscoveryCache('routes');
 

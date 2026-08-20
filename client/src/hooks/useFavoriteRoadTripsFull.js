@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useFavorites } from './useFavorites';
 
 const asRoutePreview = (favorite) => {
@@ -32,6 +32,5 @@ export function useFavoriteRoadTripsFull({ enabled = true } = {}) {
     () => result.favorites.map(asRoutePreview),
     [result.favorites]
   );
-  const reload = useCallback(() => {}, []);
-  return { favorites, loading: result.loading, reload };
+  return { ...result, favorites };
 }

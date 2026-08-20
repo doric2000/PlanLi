@@ -4,6 +4,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
+import NavigationChevron from '../../../components/NavigationChevron';
 import { colors, routeMapPreviewStyles as styles } from '../../../styles';
 import { getRouteInitialRegion } from '../utils/routeStops';
 import RouteStopMarker, { COMPACT_ROUTE_STOP_MARKER_ANCHOR } from './RouteStopMarker';
@@ -45,6 +46,7 @@ export default function RouteMapPreview({ stops, onPress }) {
         </MapView>
         <View style={styles.mapShade} />
         <View style={styles.cta}>
+          <NavigationChevron size={19} color={colors.textSecondary} />
           <View style={styles.ctaIcon}>
             <Ionicons name="map-outline" size={19} color={colors.primary} />
           </View>
@@ -52,7 +54,6 @@ export default function RouteMapPreview({ stops, onPress }) {
             <AppText style={styles.ctaTitle}>פתיחת מפת המסלול</AppText>
             <AppText style={styles.ctaSubtitle}>{routeStops.length} תחנות על המפה</AppText>
           </View>
-          <Ionicons name="chevron-back" size={19} color={colors.textSecondary} />
         </View>
       </View>
     </TouchableOpacity>

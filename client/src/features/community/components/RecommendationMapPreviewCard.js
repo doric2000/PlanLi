@@ -4,6 +4,7 @@ import AppText from "../../../components/AppText";
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import CachedImage from '../../../components/CachedImage';
+import NavigationChevron from '../../../components/NavigationChevron';
 import { getBudgetLabel } from '../../../constants/travelTaxonomy';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { colors, community } from '../../../styles';
@@ -117,8 +118,8 @@ export default function RecommendationMapPreviewCard({
             accessibilityLabel={`לפרטי ההמלצה ${item.title || ''}`.trim()}
             testID="recommendation-map-preview-open"
           >
+            <NavigationChevron size={17} color={colors.white} />
             <AppText style={community.mapPreviewPrimaryButtonText}>לפרטי ההמלצה</AppText>
-            <Ionicons name="chevron-back" size={17} color={colors.white} />
           </TouchableOpacity>
         </View>
       </View>

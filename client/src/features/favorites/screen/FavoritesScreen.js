@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import PageHeader from '../../../components/PageHeader';
 import SegmentedTabs from '../../../components/SegmentedTabs';
+import { useFavoriteCityIds } from '../../../hooks/useFavoriteCityIds';
 import { useFavoriteRecommendationsFull } from '../../../hooks/useFavoriteRecommendationsFull';
 import { useFavoriteRoadTripsFull } from '../../../hooks/useFavoriteRoadTripsFull';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
+import { waitForRefreshConfirmation } from '../../../utils/refreshFeedback';
 import {
   getAdjacentSwipeIndex,
   resolveAdjacentSwipe,
@@ -37,8 +39,21 @@ export default function FavoritesScreen() {
   const citiesListRef = useRef(null);
   const recommendationsListRef = useRef(null);
   const roadTripsListRef = useRef(null);
-  const recsFull = useFavoriteRecommendationsFull({ enabled: activeTab === 'recommendations' });
-  const roadFull = useFavoriteRoadTripsFull({ enabled: activeTab === 'roadtrips' });
+  const [visitedTabs, setVisitedTabs] = useState(() => new Set(['destinations']));
+  const [refreshing, setRefreshing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const citiesFull = useFavoriteCityIds({ enabled: visitedTabs.has('destinations') });
+  const recsFull = useFavoriteRecommendationsFull({ enabled: visitedTabs.has('recommendations') });
+  const roadFull = useFavoriteRoadTripsFull({ enabled: visitedTabs.has('roadtrips') });
+
+  useEffect(() => {
+    setVisitedTabs((current) => {
+      if (current.has(activeTab)) return current;
+      const next = new Set(current);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
 
   const getScrollRef = useCallback(() => ({
     destinations: citiesListRef.current,
@@ -47,9 +62,22 @@ export default function FavoritesScreen() {
   })[activeTab], [activeTab]);
 
   const refresh = useCallback(() => {
-    if (activeTab === 'recommendations') recsFull.reload();
-    if (activeTab === 'roadtrips') roadFull.reload();
-  }, [activeTab, recsFull.reload, roadFull.reload]);
+    const attempt = activeTab === 'destinations'
+      ? citiesFull.reload()
+      : activeTab === 'recommendations'
+        ? recsFull.reload()
+        : roadFull.reload();
+    const networkRefresh = attempt.requested || attempt.source === 'in-flight';
+    setRefreshing(networkRefresh);
+    setConfirming(!networkRefresh);
+    return Promise.resolve(attempt.promise)
+      .catch(() => undefined)
+      .then(() => (networkRefresh ? undefined : waitForRefreshConfirmation()))
+      .finally(() => {
+        setRefreshing(false);
+        setConfirming(false);
+      });
+  }, [activeTab, citiesFull.reload, recsFull.reload, roadFull.reload]);
 
   const { onScroll } = useTabPressScrollOrRefresh({
     variant: 'flatlist', getScrollRef, onRefresh: refresh, scrollYResetKey: activeTab,
@@ -159,12 +187,41 @@ export default function FavoritesScreen() {
           testID="favorites-swipe-surface"
           {...swipeResponder.panHandlers}
         >
-          {activeTab === 'destinations' ? <FavoriteCitiesList flatListRef={citiesListRef} onScroll={onScroll} /> : null}
+          {activeTab === 'destinations' ? (
+            <FavoriteCitiesList
+              favorites={citiesFull.favorites}
+              loading={citiesFull.loading}
+              error={citiesFull.error}
+              refreshing={refreshing}
+              confirming={confirming}
+              onRefresh={refresh}
+              flatListRef={citiesListRef}
+              onScroll={onScroll}
+            />
+          ) : null}
           {activeTab === 'recommendations' ? (
-            <FavoriteRecommendationsList favorites={recsFull.favorites} loading={recsFull.loading} flatListRef={recommendationsListRef} onScroll={onScroll} />
+            <FavoriteRecommendationsList
+              favorites={recsFull.favorites}
+              loading={recsFull.loading}
+              error={recsFull.error}
+              refreshing={refreshing}
+              confirming={confirming}
+              onRefresh={refresh}
+              flatListRef={recommendationsListRef}
+              onScroll={onScroll}
+            />
           ) : null}
           {activeTab === 'roadtrips' ? (
-            <FavoriteRoadTripsList favorites={roadFull.favorites} loading={roadFull.loading} flatListRef={roadTripsListRef} onScroll={onScroll} />
+            <FavoriteRoadTripsList
+              favorites={roadFull.favorites}
+              loading={roadFull.loading}
+              error={roadFull.error}
+              refreshing={refreshing}
+              confirming={confirming}
+              onRefresh={refresh}
+              flatListRef={roadTripsListRef}
+              onScroll={onScroll}
+            />
           ) : null}
         </Animated.View>
       </View>

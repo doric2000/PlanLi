@@ -184,16 +184,16 @@ export default function SettingsScreen({ navigation }) {
       </Modal>
 
       <View style={styles.header}>
+        <View style={styles.rightSpacer} />
+        <AppText style={styles.headerTitle}>הגדרות</AppText>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           activeOpacity={0.8}
           testID="settings-back-button"
         >
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-forward" size={22} color="#111" />
         </TouchableOpacity>
-        <AppText style={styles.headerTitle}>הגדרות</AppText>
-        <View style={styles.rightSpacer} />
       </View>
 
       <View style={styles.container}>

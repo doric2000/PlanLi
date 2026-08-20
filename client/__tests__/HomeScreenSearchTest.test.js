@@ -8,19 +8,27 @@
  * - Types a non-matching query and checks the empty-state message.
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { RefreshControl, StyleSheet } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
 
 const mockSearchDestinations = jest.fn();
+const mockRequestDestinations = jest.fn();
 const mockLoadRecentDestinations = jest.fn();
 const mockRememberRecentDestinations = jest.fn();
 const mockResolveDestinationForPlacePreview = jest.fn();
 const mockEnsureCapability = jest.fn();
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+};
 jest.mock('../src/services/DestinationService', () => ({
   searchDestinations: (...args) => mockSearchDestinations(...args),
+  requestDestinations: (...args) => mockRequestDestinations(...args),
   destinationCatalogItemToCity: (item, placeholderColor) => {
     const data = item.data?.() || item;
     const countryId = item.countryId || item.ref?.parent?.parent?.id;
@@ -164,6 +172,11 @@ describe('HomeScreenSearchTest', () => {
         }),
       ],
     });
+    mockRequestDestinations.mockImplementation((...args) => ({
+      requested: true,
+      source: 'network',
+      promise: mockSearchDestinations(...args),
+    }));
   });
 
   it('preserves the resolved exact venue and save token when Home prefills a recommendation', async () => {
@@ -425,5 +438,68 @@ describe('HomeScreenSearchTest', () => {
     expect(scroll.props.scrollIndicatorInsets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     expect(scroll.props.contentOffset).toEqual({ x: 0, y: 0 });
     expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#28486D');
+  });
+
+  it('keeps the Home header and replaces discovery content while refresh is pending', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+    await waitFor(() => expect(screen.getByText('מומלצים עכשיו')).toBeTruthy());
+
+    const pendingRefresh = deferred();
+    mockSearchDestinations.mockReturnValueOnce(pendingRefresh.promise);
+    const control = screen.UNSAFE_getByType(RefreshControl);
+    let refreshPromise;
+    act(() => {
+      refreshPromise = control.props.onRefresh();
+    });
+
+    expect(screen.getByTestId('home-tab-header')).toBeTruthy();
+    expect(screen.getByTestId('home-refresh-state')).toBeTruthy();
+    expect(screen.queryByText('מומלצים עכשיו')).toBeNull();
+
+    await act(async () => {
+      pendingRefresh.resolve({ items: [] });
+      await refreshPromise;
+    });
+    expect(screen.queryByTestId('home-refresh-state')).toBeNull();
+  });
+
+  it('shows an up-to-date confirmation without another server call inside the fresh window', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    const cached = await mockSearchDestinations.mock.results[0].value;
+    mockRequestDestinations.mockImplementation(() => ({
+      requested: false,
+      source: 'fresh-cache',
+      promise: Promise.resolve(cached),
+    }));
+
+    let refreshPromise;
+    act(() => {
+      refreshPromise = screen.UNSAFE_getByType(RefreshControl).props.onRefresh();
+    });
+    expect(screen.getByTestId('home-refresh-confirmation')).toBeTruthy();
+    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
+
+    await act(async () => refreshPromise);
+    expect(screen.queryByTestId('home-refresh-confirmation')).toBeNull();
+    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
   });
 });

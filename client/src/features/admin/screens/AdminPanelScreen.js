@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signOut } from 'firebase/auth';
@@ -20,6 +20,7 @@ import { adminStyles as styles, colors } from '../../../styles';
 import { auth } from '../../../config/firebase';
 import { safeAdminError } from '../adminErrors';
 import ModerationTargetPreview from '../components/ModerationTargetPreview';
+import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 
 const TABS = [
   { id: 'overview', label: 'סקירה' }, { id: 'reports', label: 'דיווחים' },
@@ -314,13 +315,15 @@ export default function AdminPanelScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right', 'bottom']} testID="admin-panel-screen">
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={currentState.loading} onRefresh={() => loadTab(tab)} />}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<CenteredRefreshControl refreshing={currentState.loading} onRefresh={() => loadTab(tab)} />}>
         <View style={styles.header}><View><AppText style={styles.title}>מרכז הבקרה</AppText><AppText style={styles.subtitle}>דיווחים, תוכן, ערים ומשתמשים במקום אחד</AppText></View></View>
         <View style={styles.tabs} accessibilityRole="tablist">
           {TABS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: tab === item.id }} testID={`admin-tab-${item.id}`} style={[styles.tab, tab === item.id && styles.tabActive]} onPress={() => setTab(item.id)}><AppText style={[styles.tabText, tab === item.id && styles.tabTextActive]}>{item.label}</AppText></Pressable>)}
         </View>
+        {currentState.loading ? (
+          <CenteredRefreshState accessibilityLabel="מרענן את נתוני הניהול" testID={`admin-${tab}-loading`} />
+        ) : <>
         {currentState.error ? <View style={styles.error} testID={`admin-${tab}-error`}><AppText style={styles.errorText}>{currentState.error}</AppText><Action label="ניסיון נוסף" testID={`admin-${tab}-retry`} onPress={() => loadTab(tab)} /></View> : null}
-        {currentState.loading && !currentItems.length ? <View style={styles.stateBlock} testID={`admin-${tab}-loading`}><ActivityIndicator color={colors.primary} /><AppText style={styles.stateText}>טוען נתונים…</AppText></View> : null}
 
         {tab === 'overview' && dashboard ? <View style={styles.metrics}>{[['דיווחים פתוחים', dashboard.openCases], ['דחופים', dashboard.urgentCases], ['תוכן בהמתנה', dashboard.heldContent], ['ערים ממתינות לאישור', dashboard.pendingDestinations]].map(([label, value]) => <View key={label} style={styles.metric}><AppText style={styles.metricValue}>{value ?? 0}</AppText><AppText style={styles.metricLabel}>{label}</AppText></View>)}</View> : null}
 
@@ -387,6 +390,7 @@ export default function AdminPanelScreen({ navigation }) {
         {tab === 'audit' && audit.map((item) => <View key={item.id} style={styles.card}><AppText style={styles.cardTitle}>{item.action}</AppText><AppText style={styles.body}>{item.reason}</AppText><AppText style={styles.body}>מנהל: {item.actorName || 'מנהל מערכת'}</AppText></View>)}
         {currentState.nextCursor ? <Action label="טעינת פריטים נוספים" testID={`admin-${tab}-load-more`} busy={currentState.loadingMore} onPress={() => loadTab(tab, { append: true })} /> : null}
         {!currentState.loading && !currentState.error && !currentItems.length ? <View style={styles.empty} testID={`admin-${tab}-empty`}><AppText style={styles.emptyText}>אין פריטים להצגה כרגע.</AppText></View> : null}
+        </>}
       </ScrollView>
     </SafeAreaView>
   );

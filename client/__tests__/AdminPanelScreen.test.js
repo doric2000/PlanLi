@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, RefreshControl } from 'react-native';
 
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
@@ -65,6 +65,29 @@ describe('AdminPanelScreen request and action isolation', () => {
     fireEvent.press(screen.getByTestId('admin-overview-retry'));
     expect(await screen.findByText('4')).toBeTruthy();
     expect(AdminService.getModerationDashboard).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps admin chrome and replaces the active tab body while refreshing', async () => {
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByText('1');
+
+    const pendingRefresh = deferred();
+    AdminService.getModerationDashboard.mockReturnValueOnce(pendingRefresh.promise);
+    const control = screen.UNSAFE_getByType(RefreshControl);
+    let refreshPromise;
+    act(() => {
+      refreshPromise = control.props.onRefresh();
+    });
+
+    expect(screen.getByTestId('admin-tab-overview')).toBeTruthy();
+    expect(screen.getByTestId('admin-overview-loading')).toBeTruthy();
+    expect(screen.queryByText('1')).toBeNull();
+
+    await act(async () => {
+      pendingRefresh.resolve({ openCases: 3, urgentCases: 0, heldContent: 0, pendingDestinations: 0 });
+      await refreshPromise;
+    });
+    expect(screen.getByText('3')).toBeTruthy();
   });
 
   it('executes the same user search every time it is submitted', async () => {

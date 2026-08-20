@@ -94,16 +94,16 @@ export default function BlockedUsersScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} testID="blocked-users-screen">
       <View style={styles.header}>
+        <View style={styles.rightSpacer} />
+        <AppText style={styles.headerTitle}>משתמשים שחסמת</AppText>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
           activeOpacity={0.8}
           testID="blocked-users-back-button"
         >
-          <Ionicons name="arrow-back" size={22} color="#111" />
+          <Ionicons name="arrow-forward" size={22} color="#111" />
         </TouchableOpacity>
-        <AppText style={styles.headerTitle}>משתמשים שחסמת</AppText>
-        <View style={styles.rightSpacer} />
       </View>
 
       <View style={styles.container}>

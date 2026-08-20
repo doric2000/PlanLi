@@ -18,6 +18,7 @@ import CachedImage from '../../../components/CachedImage';
 import FavoriteButton from '../../../components/FavoriteButton';
 import PhotoAttribution from '../../../components/PhotoAttribution';
 import PreferenceContextLine from '../../../components/PreferenceContextLine';
+import NavigationChevron from '../../../components/NavigationChevron';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
@@ -195,6 +196,9 @@ function RecommendationPreview({ item, navigation, styles }) {
         pressed && { opacity: 0.78 },
       ]}
     >
+      <View style={styles.recommendationChevron}>
+        <NavigationChevron size={18} color={colors.primary} />
+      </View>
       {imageUrl ? (
         <CachedImage
           source={{ uri: imageUrl }}
@@ -219,9 +223,6 @@ function RecommendationPreview({ item, navigation, styles }) {
             {item.description}
           </AppText>
         )}
-      </View>
-      <View style={styles.recommendationChevron}>
-        <Ionicons name="chevron-back" size={18} color={colors.primary} />
       </View>
     </Pressable>
   );

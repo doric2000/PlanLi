@@ -1,7 +1,7 @@
 /**
  * Shared self/public profile entry point for authenticated users.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,9 @@ import { useProfilePhoto } from '../hooks/useProfilePhoto';
 import { isSmartProfileComplete } from '../../../hooks/useSmartProfile';
 import ProfileView from '../components/ProfileView';
 import SupportModal from '../components/SupportModal';
+import { invalidateProfileResource } from '../services/ProfileResourceService';
+import { waitForRefreshConfirmation } from '../../../utils/refreshFeedback';
+import { useContentPublish } from '../../publishing/ContentPublishContext';
 
 function getRootNavigation(navigation) {
   let current = navigation;
@@ -60,11 +63,14 @@ function AuthedProfileScreen({ navigation, route }) {
   const profileUid = route?.params?.uid || user?.uid;
   const isMyProfile = profileUid === user?.uid;
   const [supportOpen, setSupportOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const {
     userData,
     stats,
     loading,
     statsLoading,
+    error: profileError,
     refresh,
     setUserData,
   } = useProfileData({ uid: profileUid, user });
@@ -72,14 +78,19 @@ function AuthedProfileScreen({ navigation, route }) {
     recommendations,
     routes,
     loading: contentLoading,
+    error: contentError,
     refresh: refreshContent,
-  } = useProfileContent({ uid: profileUid });
+  } = useProfileContent({ uid: profileUid, user, isOwnProfile: isMyProfile });
+  const { completedVersionByType = {} } = useContentPublish();
+  const publishVersion = `${Number(completedVersionByType.recommendation || 0)}:${Number(completedVersionByType.route || 0)}`;
+  const publishVersionRef = useRef(publishVersion);
 
   const { onPickImage, uploading } = useProfilePhoto({
     uid: profileUid,
     user,
     userData,
     updateLocalUserData: setUserData,
+    onSaved: () => invalidateProfileResource(profileUid),
   });
 
   useEffect(() => {
@@ -89,18 +100,37 @@ function AuthedProfileScreen({ navigation, route }) {
     }
   }, [route?.params?.openSupport, navigation]);
 
+  const refreshProfile = useCallback(() => {
+    const profileAttempt = refresh({ silent: true });
+    const contentAttempt = refreshContent({ silent: true });
+    const attempts = [profileAttempt, contentAttempt];
+    const networkPending = attempts.some((attempt) => (
+      attempt.requested || attempt.source === 'in-flight'
+    ));
+    setRefreshing(networkPending);
+    setConfirming(!networkPending);
+    const promise = Promise.all(attempts.map((attempt) => attempt.promise));
+    return (networkPending ? promise : Promise.all([promise, waitForRefreshConfirmation()]))
+      .catch(() => undefined)
+      .finally(() => {
+        setRefreshing(false);
+        setConfirming(false);
+      });
+  }, [refresh, refreshContent]);
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      refresh(true);
-      refreshContent(true);
-    });
-    return unsubscribe;
-  }, [navigation, refresh, refreshContent]);
+    if (publishVersionRef.current === publishVersion) return;
+    publishVersionRef.current = publishVersion;
+    invalidateProfileResource(profileUid);
+    refresh({ silent: true }).promise.catch(() => {});
+    refreshContent({ silent: true }).promise.catch(() => {});
+  }, [profileUid, publishVersion, refresh, refreshContent]);
 
   const handleSaveBio = useCallback(async (bio) => {
     const result = await saveProfile({ bio }, { verifySmartProfile: false });
+    invalidateProfileResource(profileUid);
     setUserData({ bio: result?.bio ?? bio });
-  }, [setUserData]);
+  }, [profileUid, setUserData]);
 
   const preferencesCompleted = isSmartProfileComplete(userData?.smartProfile);
   const openPreferences = useCallback(() => {
@@ -129,6 +159,7 @@ function AuthedProfileScreen({ navigation, route }) {
         recommendations={recommendations}
         routes={routes}
         contentLoading={contentLoading}
+        contentError={contentError || profileError}
         isOwner={isMyProfile}
         onPickImage={isMyProfile ? onPickImage : undefined}
         uploading={isMyProfile ? uploading : false}
@@ -138,10 +169,9 @@ function AuthedProfileScreen({ navigation, route }) {
           ? () => navigation.dispatch(DrawerActions.openDrawer())
           : undefined}
         onBackPress={!isMyProfile ? () => navigation.goBack() : undefined}
-        onRefresh={() => {
-          refresh();
-          refreshContent();
-        }}
+        refreshing={refreshing}
+        confirming={confirming}
+        onRefresh={refreshProfile}
       />
       <SupportModal visible={supportOpen} onClose={() => setSupportOpen(false)} />
     </>
