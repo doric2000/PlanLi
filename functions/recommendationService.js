@@ -819,7 +819,6 @@ async function resolveGoogleDestination({
   restCountriesKey,
   requestContext = providerRequestContext(),
 }) {
-  const resolutionStartedAt = Date.now();
   const db = admin.firestore();
   const bilingual = resolvedPlace || await fetchBilingualPlace({
     provider: placesProvider, placeId, mapsKey, newPlacesKey,
@@ -883,12 +882,6 @@ async function resolveGoogleDestination({
         resolutionSource: preliminaryCountry.resolutionSource,
         providerCallCount: requestContext.count,
       };
-      console.info('Recommendation destination country resolved.', {
-        resolutionSource: destination.resolutionSource,
-        durationMs: Date.now() - resolutionStartedAt,
-        providerCalls: requestContext.count,
-        fallbackPath: 'existing-destination-alias',
-      });
       return destination;
     }
     const localityPlaceId = await fetchLocalityPlaceId({
@@ -1120,11 +1113,6 @@ async function resolveGoogleDestination({
     resolutionSource: resolvedCountry.resolutionSource,
     providerCallCount: requestContext.count,
   };
-  console.info('Recommendation destination country resolved.', {
-    resolutionSource: destination.resolutionSource,
-    durationMs: Date.now() - resolutionStartedAt,
-    providerCalls: requestContext.count,
-  });
   return destination;
 }
 
@@ -1411,6 +1399,7 @@ async function resolveSubmittedPlaceDestination({
   providerBudgetConsumed = false,
   incidentId,
 }) {
+  const effectiveIncidentId = createIncidentId(incidentId);
   if (resolvedPlaceToken) {
     try {
       return await resolveDestinationFromToken({
@@ -1419,7 +1408,13 @@ async function resolveSubmittedPlaceDestination({
       });
     } catch (error) {
       if (!placeId || !isExpiredResolvedPlaceError(error)) throw error;
-      console.info('place_resolution_token_fallback', { reason: 'expired' });
+      locationLog('destination', {
+        incidentId: effectiveIncidentId,
+        outcome: 'fallback',
+        durationMs: 0,
+        reason: 'selection_expired',
+        fallbackPath: 'raw_place_id',
+      });
     }
   }
   if (!providerBudgetConsumed) {
@@ -1430,14 +1425,14 @@ async function resolveSubmittedPlaceDestination({
       key: providerRateLimitKey,
     });
   }
-  const requestContext = providerRequestContext({ incidentId: createIncidentId(incidentId) });
+  const requestContext = providerRequestContext({ incidentId: effectiveIncidentId });
   const destination = await resolveGoogleDestination({
     admin, placeId, countryOverrideId, mapsKey, newPlacesKey, placesProvider,
     restCountriesKey, requestContext,
   });
   return {
     ...destination,
-    incidentId: createIncidentId(incidentId),
+    incidentId: effectiveIncidentId,
     providerCallCount: requestContext.count,
   };
 }
