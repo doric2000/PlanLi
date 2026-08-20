@@ -30,6 +30,12 @@ const {
 } = require('./travelTaxonomy');
 const { buildSearchIndex } = require('./discoverySearch');
 const { compactDestinationSearchText } = require('./destinationCatalogService');
+const {
+  DESTINATION_NAMING_POLICY_VERSION,
+  destinationHebrewName,
+  hasHebrewName,
+  normalizeDestinationHebrewData,
+} = require('./destinationLocalizationService');
 const { distanceKm } = require('./destinationIdentityService');
 const { buildMapLocation } = require('./mapLocation');
 const { consumeProviderBudget } = require('./providerRateLimitService');
@@ -66,6 +72,28 @@ const GOOGLE_REVERSE_GEOCODE_TIMEOUT_MS = 6000;
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
+}
+
+function normalizeDestinationForUse(destination, countryCode) {
+  const normalized = normalizeDestinationHebrewData(destination?.cityData, {
+    countryCode: countryCode || destination?.countryData?.code || destination?.countryId,
+  });
+  assert(hasHebrewName(normalized.name), 'failed-precondition',
+    'The destination has no trustworthy Hebrew name.');
+  return {
+    ...destination,
+    cityData: normalized.destination,
+    namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
+    repairCityName: destination?.repairCityName === true || normalized.changed,
+  };
+}
+
+function destinationHebrewWritePatch(cityData) {
+  return {
+    namingPolicyVersion: Number(cityData?.namingPolicyVersion || DESTINATION_NAMING_POLICY_VERSION),
+    'googleCache.names.he': destinationHebrewName(cityData),
+    'googleCache.nameSources.he': cityData?.googleCache?.nameSources?.he || 'existing',
+  };
 }
 
 function cleanString(value, { field, min = 0, max }) {
@@ -725,7 +753,7 @@ async function resolveExistingDestination(db, destinationRef) {
     'failed-precondition',
     'Destination is not active.'
   );
-  return {
+  return normalizeDestinationForUse({
     countryRef,
     cityRef,
     countryId,
@@ -735,7 +763,7 @@ async function resolveExistingDestination(db, destinationRef) {
     createCountry: false,
     createCity: false,
     place: null,
-  };
+  }, countrySnap.data()?.code || countryId);
 }
 
 function destinationContainsCoordinates(destination, coordinates) {
@@ -1004,7 +1032,7 @@ async function resolveGoogleDestination({
         resolutionSource: preliminaryCountry.resolutionSource,
         providerCallCount: requestContext.count,
       };
-      return destination;
+      return normalizeDestinationForUse(destination, preliminaryCountry.countryCode);
     }
     const localityPlaceId = await fetchLocalityPlaceId({
       provider: placesProvider,
@@ -1218,7 +1246,7 @@ async function resolveGoogleDestination({
     cityData = builtDestination.data;
   }
 
-  const destination = {
+  const destination = normalizeDestinationForUse({
     countryRef: db.doc(`countries/${countryId}`),
     cityRef: db.doc(`countries/${countryId}/destinations/${cityId}`),
     countryId,
@@ -1239,7 +1267,7 @@ async function resolveGoogleDestination({
     ),
     resolutionSource: resolvedCountry.resolutionSource,
     providerCallCount: requestContext.count,
-  };
+  }, resolvedCountry.countryCode);
   return destination;
 }
 
@@ -1259,17 +1287,19 @@ function exactPlaceFromBilingual(bilingual, fetchedAt = new Date()) {
 }
 
 function serializeDestinationResolution(destination) {
+  const normalized = normalizeDestinationForUse(destination);
   return {
-    countryId: destination.countryId,
-    cityId: destination.cityId,
-    countryData: destination.countryData,
-    cityData: destination.cityData,
-    claimId: destination.claimId || null,
-    claimData: destination.claimData || null,
-    createCountry: destination.createCountry === true,
-    createCity: destination.createCity === true,
-    place: destination.place || null,
-    resolutionSource: destination.resolutionSource || null,
+    namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
+    countryId: normalized.countryId,
+    cityId: normalized.cityId,
+    countryData: normalized.countryData,
+    cityData: normalized.cityData,
+    claimId: normalized.claimId || null,
+    claimData: normalized.claimData || null,
+    createCountry: normalized.createCountry === true,
+    createCity: normalized.createCity === true,
+    place: normalized.place || null,
+    resolutionSource: normalized.resolutionSource || null,
   };
 }
 
@@ -1286,8 +1316,7 @@ function destinationClientResponse(destination, incidentId) {
       },
       city: {
         id: destination.cityId,
-        name: destination.cityData.googleCache?.names?.he ||
-          destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
+        name: destinationHebrewName(destination.cityData) || destination.cityId,
         googlePlaceId: destination.cityData.providerRefs?.googlePlaceId ||
           destination.cityData.providerIds?.googlePlaceIds?.[0] || null,
         destinationType: destination.cityData.destinationType || null,
@@ -1341,8 +1370,7 @@ async function createDestinationChoiceResolution({
         countryId: stored.countryId,
         countryName: stored.countryData?.name || stored.countryId,
         cityId: stored.cityId,
-        cityName: stored.cityData?.googleCache?.names?.he ||
-          stored.cityData?.identity?.names?.he || stored.cityData?.name || stored.cityId,
+        cityName: destinationHebrewName(stored.cityData) || stored.cityId,
         destinationType: stored.cityData?.destinationType || null,
       };
     }),
@@ -1435,7 +1463,7 @@ async function materializeDestinationResolution(db, stored) {
       'The resolved destination identity changed. Search again.'
     );
   }
-  return {
+  return normalizeDestinationForUse({
     countryRef,
     cityRef,
     countryId: stored.countryId,
@@ -1449,7 +1477,7 @@ async function materializeDestinationResolution(db, stored) {
     createCity: !citySnapshot.exists,
     place: stored.place || null,
     resolutionSource: stored.resolutionSource || 'resolved-token-cache',
-  };
+  }, countryData.code || stored.countryId);
 }
 
 async function resolveDestinationFromToken({
@@ -1790,7 +1818,7 @@ async function saveRecommendation({
       countryId: destination.countryId,
       cityId: destination.cityId,
       countryName: destination.countryData.name || destination.countryId,
-      cityName: destination.cityData.googleCache?.names?.he || destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
+      cityName: destinationHebrewName(destination.cityData) || destination.cityId,
     },
     media,
     place: destination.place,
@@ -1836,6 +1864,36 @@ async function saveRecommendation({
         ? transaction.get(destination.claimRef)
         : Promise.resolve(null),
     ]);
+    const canonicalCity = citySnapshot.exists
+      ? normalizeDestinationHebrewData(citySnapshot.data(), {
+        countryCode: countrySnapshot.data()?.code || destination.countryId,
+      })
+      : {
+        destination: destination.cityData,
+        name: destinationHebrewName(destination.cityData),
+        changed: false,
+      };
+    assert(hasHebrewName(canonicalCity.name), 'failed-precondition',
+      'The destination has no trustworthy Hebrew name.');
+    const transactionDestination = {
+      ...payload.destination,
+      cityName: canonicalCity.name,
+    };
+    const transactionPayload = canonicalCity.name === payload.destination.cityName
+      ? payload
+      : {
+        ...payload,
+        destination: transactionDestination,
+        search: buildSearchIndex({
+          title: content.title,
+          description: content.description,
+          destination: transactionDestination,
+          place: payload.place,
+          categoryIds: [content.categoryId],
+          subcategoryIds: content.tags,
+          interestIds: facets.interests,
+        }),
+      };
     if (recommendationId) {
       assert(current.exists, 'not-found', 'Recommendation no longer exists.');
       assert(
@@ -1893,6 +1951,12 @@ async function saveRecommendation({
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
+      if (canonicalCity.changed) {
+        transaction.update(destination.cityRef, {
+          ...destinationHebrewWritePatch(canonicalCity.destination),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     }
     if (destination.claimRef) {
       if (claimSnapshot?.exists) {
@@ -1941,7 +2005,7 @@ async function saveRecommendation({
 
     if (recommendationId) {
       transaction.update(recommendationRef, {
-        ...payload,
+        ...transactionPayload,
         status: currentData.status === 'active' && !textSafety.safe
           ? 'moderation_hold'
           : (currentData.status || (textSafety.safe ? 'active' : 'moderation_hold')),
@@ -1950,7 +2014,7 @@ async function saveRecommendation({
       });
     } else {
       transaction.create(recommendationRef, {
-        ...payload,
+        ...transactionPayload,
         status: textSafety.safe ? 'active' : 'moderation_hold',
         ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
         ownerId: uid,
@@ -1959,7 +2023,7 @@ async function saveRecommendation({
         stats: { likeCount: 0, commentCount: 0 },
       });
     }
-    return { replay: false };
+    return { replay: false, destination: transactionPayload.destination };
   });
 
   console.info('recommendation_save_timing', {
@@ -1967,11 +2031,11 @@ async function saveRecommendation({
     imageCount: media.length,
     replay: transactionOutcome?.replay === true,
   });
-  const responseDestination = transactionOutcome?.data?.destination || {
+  const responseDestination = transactionOutcome?.data?.destination || transactionOutcome?.destination || {
     countryId: destination.countryId,
     countryName: destination.countryData.name || destination.countryId,
     cityId: destination.cityId,
-    cityName: destination.cityData.googleCache?.names?.he || destination.cityData.identity?.names?.he || destination.cityData.name || destination.cityId,
+    cityName: destinationHebrewName(destination.cityData) || destination.cityId,
   };
   return {
     recommendationId: recommendationRef.id,
@@ -2014,4 +2078,6 @@ module.exports = {
   stableDocumentId,
   normalizePublishRequestId,
   validateMediaAssets,
+  destinationHebrewWritePatch,
+  normalizeDestinationForUse,
 };

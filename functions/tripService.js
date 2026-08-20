@@ -2,6 +2,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { isVerifiedCaller, validateMediaAssets } = require('./recommendationService');
 const { evaluateTextSafety } = require('./moderationService');
+const { destinationHebrewName } = require('./destinationLocalizationService');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -39,7 +40,8 @@ async function resolveDestination(db, destination) {
     countryId,
     cityId,
     countryName: country.data().name || countryId,
-    cityName: city.data().name || cityId,
+    cityName: destinationHebrewName(city.data()) || cityId,
+    cityRef: city.ref || db.doc(`countries/${countryId}/destinations/${cityId}`),
   };
 }
 
@@ -73,21 +75,42 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
   });
   const destination = await resolveDestination(db, input.destination);
   const now = admin.firestore.FieldValue.serverTimestamp();
-  await tripRef.set({
-    ownerId: existing.exists ? existing.data().ownerId : auth.uid,
-    title,
-    description,
-    status: existing.exists && existing.data()?.status !== 'active'
-      ? existing.data().status
-      : (textSafety.safe ? 'active' : 'moderation_hold'),
-    ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
-    destination,
-    media,
-    stats: existing.exists
-      ? existing.data().stats || { likeCount: 0, commentCount: 0 }
-      : { likeCount: 0, commentCount: 0 },
-    createdAt: existing.exists ? existing.data().createdAt : now,
-    updatedAt: now,
+  await db.runTransaction(async (transaction) => {
+    const [current, city] = await Promise.all([
+      transaction.get(tripRef),
+      destination ? transaction.get(destination.cityRef) : Promise.resolve(null),
+    ]);
+    if (tripId) {
+      assert(current.exists, 'not-found', 'Trip no longer exists.');
+      assert(current.data()?.ownerId === auth.uid || isAdmin, 'permission-denied',
+        'Trip ownership changed.');
+    } else {
+      assert(!current.exists, 'already-exists', 'Trip already exists.');
+    }
+    const canonicalDestination = destination ? {
+      countryId: destination.countryId,
+      cityId: destination.cityId,
+      countryName: destination.countryName,
+      cityName: destinationHebrewName(city.data()) || destination.cityId,
+    } : null;
+    assert(!destination || (city.exists && city.data()?.status === 'active' && canonicalDestination.cityName),
+      'failed-precondition', 'Destination is no longer available.');
+    transaction.set(tripRef, {
+      ownerId: current.exists ? current.data().ownerId : auth.uid,
+      title,
+      description,
+      status: current.exists && current.data()?.status !== 'active'
+        ? current.data().status
+        : (textSafety.safe ? 'active' : 'moderation_hold'),
+      ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
+      destination: canonicalDestination,
+      media,
+      stats: current.exists
+        ? current.data().stats || { likeCount: 0, commentCount: 0 }
+        : { likeCount: 0, commentCount: 0 },
+      createdAt: current.exists ? current.data().createdAt : now,
+      updatedAt: now,
+    });
   });
   return { tripId: tripRef.id };
 }

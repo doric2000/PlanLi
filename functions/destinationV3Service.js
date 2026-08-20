@@ -2,7 +2,10 @@ const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { distanceKm, normalize } = require('./destinationIdentityService');
 const { destinationTypeFor, googleCacheFor, normalizeName } = require('./legacyPlacesAdapter');
-const { resolveHebrewDestinationName } = require('./destinationLocalizationService');
+const {
+  DESTINATION_NAMING_POLICY_VERSION,
+  resolveHebrewDestinationName,
+} = require('./destinationLocalizationService');
 
 const MAX_LOCALITY_DISTANCE_KM = 50;
 
@@ -50,6 +53,7 @@ function buildDestinationV3({ countryId, he, en, fetchedAt = new Date() }) {
     id: stableDestinationId(countryId, he.placeId),
     data: {
       schemaVersion: 3,
+      namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
       countryId: countryId.trim(),
       destinationType: type,
       providerRefs: { googlePlaceId: he.placeId },

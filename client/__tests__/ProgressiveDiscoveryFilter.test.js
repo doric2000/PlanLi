@@ -27,6 +27,7 @@ jest.mock('../src/hooks/useFavoriteCityIds', () => ({
 }));
 jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   loadRecentDiscoveryDestinations: () => Promise.resolve([]),
+  reconcileStoredRecentDiscoveryDestinations: () => Promise.resolve([]),
 }));
 
 function Harness({ surface = 'recommendations', withProfile = false }) {

@@ -1,5 +1,6 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { hasUsableDestinationCache } = require('./destinationCacheService');
+const { destinationHebrewName } = require('./destinationLocalizationService');
 
 const WEATHER_CACHE_MS = 30 * 60 * 1000;
 const CURRENCY_CACHE_MS = 24 * 60 * 60 * 1000;
@@ -308,7 +309,7 @@ async function getDestinationOverview({
     destination: {
       cityId,
       countryId,
-      name: String(city.googleCache?.names?.he || city.identity?.names?.he || city.name || '').trim(),
+      name: destinationHebrewName(city),
       names: city.googleCache?.names || city.identity?.names || null,
       identity: city.identity || null,
       countryName: String(country.names?.he || country.name || '').trim(),

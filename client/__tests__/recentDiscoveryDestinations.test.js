@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   loadRecentDiscoveryDestinations,
   mergeRecentDiscoveryDestinations,
+  reconcileRecentDiscoveryDestinations,
+  reconcileStoredRecentDiscoveryDestinations,
   rememberDiscoveryDestinations,
 } from '../src/utils/recentDiscoveryDestinations';
 
@@ -65,5 +67,24 @@ describe('recent discovery destinations', () => {
 
     expect(result.map((item) => item.cityId)).toEqual(['D2', 'D1']);
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconciles a stale local destination label with the canonical catalog', async () => {
+    const recent = [destination(1, { countryId: 'VN', cityId: 'sa-pa', name: 'Sa Pa', label: 'Sa Pa · Vietnam' })];
+    const catalog = [{ countryId: 'VN', cityId: 'sa-pa', name: 'סאפה', countryName: 'וייטנאם' }];
+    expect(reconcileRecentDiscoveryDestinations(recent, catalog)[0]).toEqual(expect.objectContaining({
+      name: 'סאפה',
+      countryName: 'וייטנאם',
+      label: 'סאפה · וייטנאם',
+    }));
+
+    AsyncStorage.getItem.mockResolvedValue(JSON.stringify(recent));
+    await expect(reconcileStoredRecentDiscoveryDestinations(catalog)).resolves.toEqual([
+      expect.objectContaining({ name: 'סאפה', label: 'סאפה · וייטנאם' }),
+    ]);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('סאפה')
+    );
   });
 });

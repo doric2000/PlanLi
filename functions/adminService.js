@@ -42,6 +42,10 @@ const SENSITIVE_ADMIN_ACTIONS = Object.freeze({
     recentSignIn: true,
     reason: 'deactivating a city affects public catalog and linked public content.',
   },
+  setDestinationHebrewName: {
+    recentSignIn: true,
+    reason: 'renaming a destination updates public catalog and linked public content.',
+  },
 });
 
 function isRecentSignInRequired(action) {

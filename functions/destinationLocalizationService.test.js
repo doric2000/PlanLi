@@ -30,6 +30,14 @@ test('Chiang Rai uses the canonical PlanLi label without the administrative pref
   }), { name: "צ'יאנג ראי", source: 'override' });
 });
 
+test('Sa Pa uses the approved compact Hebrew spelling', () => {
+  assert.deepEqual(resolveHebrewDestinationName({
+    countryCode: 'VN',
+    googleHebrewName: 'Sa Pa',
+    englishName: 'Sa Pa',
+  }), { name: 'סאפה', source: 'override' });
+});
+
 test('Latin-only destinations receive a deterministic local transliteration', () => {
   const name = transliterateDestinationName('Bergen');
   assert.equal(hasHebrewName(name), true);

@@ -11,10 +11,10 @@ import { useBackButton } from '../../../hooks/useBackButton';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import {
   approveDestination, deactivateDestination, deleteUserAsAdmin, getAirportCandidates,
-  getDestinationImageCandidates, getDestinationReview, getModerationCase, getModerationDashboard,
+  getDestinationImageCandidates, getDestinationRenameJob, getDestinationReview, getModerationCase, getModerationDashboard,
   listAdminUsers, listDestinationReviews, listHeldContent, listModerationAudit, listModerationCases,
   moderateContent, recheckDestination, selectDestinationImageCandidate, setDestinationAirport,
-  setDestinationUploadedImage, setUserAdmin, setUserEmailVerified, setUserSuspension,
+  setDestinationHebrewName, setDestinationUploadedImage, setUserAdmin, setUserEmailVerified, setUserSuspension,
 } from '../../../services/AdminService';
 import { adminStyles as styles, colors } from '../../../styles';
 import { auth } from '../../../config/firebase';
@@ -97,6 +97,8 @@ export default function AdminPanelScreen({ navigation }) {
   const [expandedReports, setExpandedReports] = useState({});
   const [imageCandidates, setImageCandidates] = useState({});
   const [airportCandidates, setAirportCandidates] = useState({});
+  const [renameForms, setRenameForms] = useState({});
+  const [renameJobs, setRenameJobs] = useState({});
   const [query, setQuery] = useState('');
   const [tabState, setTabState] = useState(INITIAL_TAB_STATE);
   const [pendingActions, setPendingActions] = useState({});
@@ -235,6 +237,64 @@ export default function AdminPanelScreen({ navigation }) {
       current.map((entry) => entry.id === item.id ? destinationFromDetails(entry, details) : entry)
     ));
   };
+
+  useEffect(() => {
+    const pending = Object.entries(renameJobs)
+      .filter(([, job]) => ['queued', 'running'].includes(job?.status));
+    if (!pending.length) return undefined;
+    let active = true;
+    const timer = setTimeout(async () => {
+      for (const [destinationId, job] of pending) {
+        try {
+          const latest = await getDestinationRenameJob(job.jobId);
+          if (!active) return;
+          setRenameJobs((current) => ({ ...current, [destinationId]: { ...job, ...latest } }));
+          if (latest.status === 'complete') {
+            const details = await getDestinationReview(job.item.countryId, job.item.cityId);
+            if (!active) return;
+            setDestinations((current) => sortDestinationReviews(
+              current.map((entry) => entry.id === job.item.id ? destinationFromDetails(entry, details) : entry)
+            ));
+          }
+        } catch (pollError) {
+          if (!active) return;
+          setRenameJobs((current) => ({
+            ...current,
+            [destinationId]: { ...job, status: 'poll_error', error: safeAdminError(pollError) },
+          }));
+        }
+      }
+    }, 1200);
+    return () => { active = false; clearTimeout(timer); };
+  }, [renameJobs]);
+
+  const openRenameForm = (item) => setRenameForms((current) => ({
+    ...current,
+    [item.id]: { nameHe: item.names?.he || '', reason: '' },
+  }));
+
+  const updateRenameForm = (itemId, patch) => setRenameForms((current) => ({
+    ...current,
+    [itemId]: { ...(current[itemId] || {}), ...patch },
+  }));
+
+  const submitDestinationRename = (item) => {
+    const form = renameForms[item.id] || {};
+    return runAction({
+      key: `rename:${item.id}`,
+      scope: `destination:${item.id}`,
+      operation: () => setDestinationHebrewName(
+        item.countryId,
+        item.cityId,
+        form.nameHe,
+        form.reason
+      ),
+      onSuccess: (result) => setRenameJobs((current) => ({
+        ...current,
+        [item.id]: { ...result, item, nameHe: form.nameHe, reason: form.reason },
+      })),
+    });
+  };
   const runDestinationMutation = (item, actionName, operation) => runAction({
     key: `${actionName}:${item.id}`, scope: `destination:${item.id}`, operation, onSuccess: () => refreshDestination(item),
   });
@@ -365,7 +425,63 @@ export default function AdminPanelScreen({ navigation }) {
           <AppText style={styles.body}>המלצות: {item.recommendationCount || 0} · שדה תעופה: {item.closestAirport?.iataCode || 'חסר'}</AppText>
           {(item.issues || []).map((issue) => <View key={issue.code} style={[styles.issue, issue.severity === 'error' && styles.issueError]}><AppText style={styles.body}>{issue.severity === 'error' ? 'שגיאה: ' : issue.severity === 'warning' ? 'אזהרה: ' : ''}{issue.label}</AppText></View>)}
           {actionErrors[`destination:${item.id}`] ? <AppText style={styles.inlineError}>{actionErrors[`destination:${item.id}`]}</AppText> : null}
+          {renameForms[item.id] ? <View style={styles.renameEditor} testID={`admin-destination-rename-form-${item.id}`}>
+            <AppText style={styles.cardTitle}>עריכת שם בעברית</AppText>
+            <AppTextInput
+              style={styles.input}
+              value={renameForms[item.id].nameHe}
+              onChangeText={(nameHe) => updateRenameForm(item.id, { nameHe })}
+              placeholder="שם היעד בעברית"
+              accessibilityLabel="שם היעד בעברית"
+              testID={`admin-destination-rename-name-${item.id}`}
+            />
+            <AppTextInput
+              style={styles.input}
+              value={renameForms[item.id].reason}
+              onChangeText={(reason) => updateRenameForm(item.id, { reason })}
+              placeholder="סיבה לשינוי"
+              accessibilityLabel="סיבה לשינוי שם היעד"
+              testID={`admin-destination-rename-reason-${item.id}`}
+            />
+            {renameJobs[item.id] ? <AppText style={styles.body} testID={`admin-destination-rename-progress-${item.id}`}>
+              {renameJobs[item.id].status === 'complete'
+                ? 'השם עודכן בכל התוכן המקושר.'
+                : renameJobs[item.id].status === 'failed'
+                  ? 'העדכון נעצר. אפשר לנסות שוב מאותה נקודה.'
+                  : renameJobs[item.id].status === 'poll_error'
+                    ? renameJobs[item.id].error || 'לא ניתן לבדוק את מצב העדכון.'
+                    : `מעדכן תוכן מקושר… המלצות: ${renameJobs[item.id].updatedCounts?.recommendations || renameJobs[item.id].progress?.recommendations || 0}, מסלולים ותחנות: ${renameJobs[item.id].updatedCounts?.routesAndStops || renameJobs[item.id].progress?.routesAndStops || 0}, טיולים: ${renameJobs[item.id].updatedCounts?.trips || renameJobs[item.id].progress?.trips || 0}`}
+            </AppText> : null}
+            <View style={styles.actions}>
+              <Action
+                label={renameJobs[item.id]?.status === 'failed' ? 'ניסיון חוזר' : 'שמירת השם'}
+                testID={`admin-destination-rename-save-${item.id}`}
+                busy={pendingActions[`rename:${item.id}`]}
+                disabled={pendingScopes[`destination:${item.id}`] || ['queued', 'running'].includes(renameJobs[item.id]?.status)}
+                onPress={() => submitDestinationRename(item)}
+              />
+              {renameJobs[item.id]?.status === 'poll_error' ? <Action
+                label="בדיקת מצב מחדש"
+                testID={`admin-destination-rename-poll-${item.id}`}
+                onPress={() => setRenameJobs((current) => ({
+                  ...current,
+                  [item.id]: { ...current[item.id], status: 'queued', error: '' },
+                }))}
+              /> : null}
+              <Action
+                label="סגירה"
+                testID={`admin-destination-rename-close-${item.id}`}
+                disabled={['queued', 'running'].includes(renameJobs[item.id]?.status)}
+                onPress={() => setRenameForms((current) => {
+                  const next = { ...current };
+                  delete next[item.id];
+                  return next;
+                })}
+              />
+            </View>
+          </View> : null}
           <View style={styles.actions}>
+            <Action label="עריכת שם בעברית" testID={`admin-destination-rename-${item.id}`} disabled={pendingScopes[`destination:${item.id}`]} onPress={() => openRenameForm(item)} />
             <Action label="בדיקה חוזרת" testID={`admin-destination-recheck-${item.id}`} busy={pendingActions[`recheck:${item.id}`]} disabled={pendingScopes[`destination:${item.id}`]} onPress={() => runDestinationMutation(item, 'recheck', () => recheckDestination(item.countryId, item.cityId))} />
             <Action label="אישור העיר" testID={`admin-destination-approve-${item.id}`} busy={pendingActions[`approve:${item.id}`]} disabled={pendingScopes[`destination:${item.id}`] || item.status === 'blocked'} onPress={() => askReason('אישור עיר', 'כתבו את סיבת האישור.', (reason) => runDestinationMutation(item, 'approve', () => approveDestination(item.countryId, item.cityId, reason)), false, `destination:${item.id}`)} />
             <Action label="הצעות לתמונה" testID={`admin-destination-image-candidates-${item.id}`} busy={pendingActions[`image-candidates:${item.id}`]} disabled={pendingScopes[`destination:${item.id}`]} onPress={() => loadImageCandidates(item)} />

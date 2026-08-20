@@ -622,6 +622,8 @@ recorded in the append-only moderation audit log. Current sensitive actions are:
 - `setUserAdmin` (grant / remove admin access)
 - `deleteUserAsAdmin` (full irreversible account deletion)
 - `deactivateDestination` (deactivate a city and place linked content on moderation hold)
+- `setDestinationHebrewName` (rename a destination and propagate the canonical
+  Hebrew name through current content and projections)
 
 All other admin callables are defined as non-sensitive (no recent sign-in check)
 when they only read or apply non-destructive moderation workflows.
@@ -676,9 +678,11 @@ and failed provider jobs.
 Administrators can request verified Unsplash/Wikimedia suggestions, upload a
 manually reviewed JPEG through the normal EXIF-stripping media pipeline, select
 only nearby scheduled airports returned by OurAirports, recheck a destination,
-approve it with a recorded reason, or deactivate it. Deactivation removes the
-public catalog entry and places linked recommendations, trips, and routes on
-moderation hold; it never silently republishes them later.
+set its canonical Hebrew name with an audited resumable propagation job,
+approve it with a recorded reason, or deactivate it. Renaming never approves a
+destination. Deactivation removes the public catalog entry and places linked
+recommendations, trips, and routes on moderation hold; it never silently
+republishes them later.
 
 The Storage deployment applies the normal rules to the EU bucket and the
 read-only rollback rules to the US bucket. `storage.cors.json` restricts web

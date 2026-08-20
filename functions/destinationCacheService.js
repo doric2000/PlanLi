@@ -1,7 +1,11 @@
 const { exactPlaceGoogleCacheFor, googleCacheFor } = require('./legacyPlacesAdapter');
 const { fetchBilingualPlace } = require('./placesProviderAdapter');
 const { buildMapLocation } = require('./mapLocation');
-const { hasHebrewName, resolveHebrewDestinationName } = require('./destinationLocalizationService');
+const {
+  DESTINATION_NAMING_POLICY_VERSION,
+  hasHebrewName,
+  resolveHebrewDestinationName,
+} = require('./destinationLocalizationService');
 
 const CACHE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
@@ -68,7 +72,9 @@ async function refreshDestinationCaches({
         englishName: providerCache.names.en,
         existingHebrewName: destination.googleCache?.names?.he,
         existingSource: destination.googleCache?.nameSources?.he,
-        existingAdminName: destination.identity?.names?.he,
+        existingAdminName: destination.googleCache?.nameSources?.he === 'admin'
+          ? destination.googleCache?.names?.he
+          : '',
       });
       const cache = {
         ...providerCache,
@@ -81,6 +87,7 @@ async function refreshDestinationCaches({
       };
       await document.ref.update({
         googleCache: cache,
+        namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       results.push({ path: document.ref.path, state: 'ready' });

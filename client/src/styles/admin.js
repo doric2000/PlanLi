@@ -40,6 +40,7 @@ export const adminStyles = StyleSheet.create({
   issue: { borderRadius: 10, backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 7, marginTop: 7 },
   issueError: { backgroundColor: '#FEF2F2' },
   candidate: { borderRadius: 14, borderWidth: 1, borderColor: '#E2E8F0', padding: 12, marginTop: 12, backgroundColor: '#F8FAFC' },
+  renameEditor: { borderRadius: 14, borderWidth: 1, borderColor: '#C7D2FE', padding: 12, marginTop: 12, backgroundColor: '#F8FAFF' },
   candidateImage: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#E8ECF2' },
   badge: { borderRadius: 999, backgroundColor: '#FFF7ED', paddingHorizontal: 10, paddingVertical: 5 },
   badgeText: { fontFamily: fontFamilies.semiBold, color: '#C2410C', fontSize: 12 },

@@ -1,10 +1,12 @@
 const HEBREW_LETTER = /[\u05D0-\u05EA]/;
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
+const DESTINATION_NAMING_POLICY_VERSION = 1;
 
 const HEBREW_DESTINATION_OVERRIDES = Object.freeze({
   'AL:vlore': 'ולורה',
   'AL:vlora': 'ולורה',
   'TH:chiangrai': "צ'יאנג ראי",
+  'VN:sapa': 'סאפה',
 });
 
 const DIGRAPHS = Object.freeze([
@@ -107,9 +109,71 @@ function resolveHebrewDestinationName({
   return { name: '', source: 'unavailable' };
 }
 
+function destinationEnglishName(destination) {
+  return String(
+    destination?.googleCache?.names?.en ||
+    destination?.identity?.names?.en ||
+    destination?.names?.en ||
+    destination?.name ||
+    ''
+  ).trim();
+}
+
+function destinationHebrewName(destination) {
+  const candidates = [
+    destination?.googleCache?.names?.he,
+    destination?.identity?.names?.he,
+    destination?.names?.he,
+    destination?.name,
+  ];
+  return String(candidates.find(hasHebrewName) || '').trim();
+}
+
+function normalizeDestinationHebrewData(destination, options = {}) {
+  const source = destination && typeof destination === 'object' ? destination : {};
+  const googleCache = source.googleCache || {};
+  const names = googleCache.names || {};
+  const existingSource = String(googleCache.nameSources?.he || '').trim();
+  const localized = resolveHebrewDestinationName({
+    countryCode: options.countryCode || googleCache.countryCode || source.countryId,
+    googleHebrewName: names.he,
+    englishName: destinationEnglishName(source),
+    existingHebrewName: names.he || source.identity?.names?.he || source.names?.he,
+    existingSource,
+    existingAdminName: existingSource === 'admin' ? names.he : '',
+  });
+  if (!hasHebrewName(localized.name)) {
+    return { destination: source, name: '', source: 'unavailable', changed: false };
+  }
+  const changed = names.he !== localized.name || existingSource !== localized.source ||
+    Number(source.namingPolicyVersion || 0) !== DESTINATION_NAMING_POLICY_VERSION;
+  return {
+    destination: {
+      ...source,
+      namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
+      googleCache: {
+        ...googleCache,
+        names: { ...names, he: localized.name },
+        nameSources: {
+          ...(googleCache.nameSources || {}),
+          he: localized.source,
+          ...(destinationEnglishName(source) ? { en: googleCache.nameSources?.en || 'google' } : {}),
+        },
+      },
+    },
+    name: localized.name,
+    source: localized.source,
+    changed,
+  };
+}
+
 module.exports = {
+  DESTINATION_NAMING_POLICY_VERSION,
   HEBREW_DESTINATION_OVERRIDES,
+  destinationEnglishName,
+  destinationHebrewName,
   hasHebrewName,
+  normalizeDestinationHebrewData,
   overrideKey,
   resolveHebrewDestinationName,
   transliterateDestinationName,

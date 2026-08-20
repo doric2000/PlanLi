@@ -22,7 +22,11 @@ const {
 const { resolveWikimediaDestinationImage } = require('./wikimediaDestinationImageService');
 const { buildDownloadUrl, getMediaBucket } = require('./mediaProcessor');
 const { destinationKey } = require('./discoverySearch');
-const { hasHebrewName } = require('./destinationLocalizationService');
+const { destinationHebrewName, hasHebrewName } = require('./destinationLocalizationService');
+const {
+  getDestinationRenameJobRef,
+  startDestinationRename,
+} = require('./destinationRenameService');
 
 const PAGE_SIZE = 30;
 const IMAGE_VARIANTS = ['large', 'feed', 'thumb'];
@@ -230,10 +234,11 @@ async function evaluateAndPersistDestination({ admin, countryId, cityId, created
   const issues = qualityIssues(bundle.city, bundle.job, created ? {} : bundle.review);
   const blocking = issues.filter((issue) => issue.severity === 'error').length;
   const status = bundle.city.status === 'inactive' ? 'inactive' : blocking ? 'blocked' : issues.length ? 'open' : 'ready';
+  const storedNames = bundle.city.googleCache?.names || bundle.city.identity?.names || {};
   const payload = {
     countryId,
     cityId,
-    names: bundle.city.googleCache?.names || bundle.city.identity?.names || { he: bundle.city.name || cityId },
+    names: { ...storedNames, he: destinationHebrewName(bundle.city) || storedNames.he || cityId },
     countryNames: bundle.country.names || { he: bundle.country.name || countryId },
     destinationStatus: bundle.city.status || 'active',
     status,
@@ -269,15 +274,21 @@ async function notifyAdminsOfDestination({ admin, countryId, cityId }) {
 }
 
 async function onDestinationCreated({ admin, countryId, cityId }) {
+  const initial = await evaluateAndPersistDestination({ admin, countryId, cityId, created: true });
+  await notifyAdminsOfDestination({ admin, countryId, cityId });
   await syncDestinationAirport({
     admin,
     countryId,
     cityId,
     applyWhenMissingOnly: true,
+  }).catch((error) => {
+    console.error('destination_airport_sync_failed', {
+      countryId,
+      cityId,
+      reason: error?.code || error?.message || 'unknown',
+    });
   });
-  const result = await evaluateAndPersistDestination({ admin, countryId, cityId, created: true });
-  await notifyAdminsOfDestination({ admin, countryId, cityId });
-  return result;
+  return evaluateAndPersistDestination({ admin, countryId, cityId }).catch(() => initial);
 }
 
 async function syncDestinationAirport({
@@ -393,6 +404,38 @@ async function getDestinationReview({ admin, auth, data }) {
     review: bundle.review,
     issues: qualityIssues(bundle.city, bundle.job, bundle.review),
   });
+}
+
+async function setDestinationHebrewName({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'setDestinationHebrewName');
+  const countryId = cleanId(data?.countryId, 'countryId');
+  const cityId = cleanId(data?.cityId, 'cityId');
+  const reason = cleanReason(data?.reason);
+  const result = await startDestinationRename({
+    admin,
+    countryId,
+    cityId,
+    nameHe: data?.nameHe,
+    reason,
+    requestedBy: auth.uid,
+  });
+  await audit({
+    admin,
+    auth,
+    action: 'destination_hebrew_name_set',
+    target: { countryId, cityId },
+    reason,
+    metadata: { jobId: result.jobId },
+  });
+  return result;
+}
+
+async function getDestinationRenameJob({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'getDestinationRenameJob');
+  const jobId = cleanId(data?.jobId, 'jobId');
+  const snapshot = await getDestinationRenameJobRef(admin.firestore(), jobId).get();
+  if (!snapshot.exists) fail('not-found', 'Destination rename job was not found.', 'rename_job_missing');
+  return serialize({ jobId: snapshot.id, ...snapshot.data() });
 }
 
 async function recheckDestination({ admin, auth, data, unsplashKey, mediaBucket }) {
@@ -545,7 +588,7 @@ async function setDestinationUploadedImage({ admin, auth, data, mediaBucket }) {
       width: descriptors.large.width,
       height: descriptors.large.height,
       color: asset.placeholder?.color || null,
-      alt: String(data?.alt || bundle.city.googleCache?.names?.he || bundle.city.name || '').trim().slice(0, 180) || null,
+      alt: String(data?.alt || destinationHebrewName(bundle.city) || '').trim().slice(0, 180) || null,
       selection: { strategy: 'admin_upload', validation: { version: IMAGE_VALIDATION_VERSION, status: 'admin_verified', method: 'manual_review' } },
       storage: descriptors,
     };
@@ -659,6 +702,7 @@ module.exports = {
   selectAirportByIataCode,
   getAirportCandidates,
   getDestinationImageCandidates,
+  getDestinationRenameJob,
   getDestinationReview,
   listDestinationReviews,
   notifyAdminsOfDestination,
@@ -669,5 +713,6 @@ module.exports = {
   selectDestinationImageCandidate,
   syncDestinationAirport,
   setDestinationAirport,
+  setDestinationHebrewName,
   setDestinationUploadedImage,
 };
