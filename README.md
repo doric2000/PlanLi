@@ -7,10 +7,11 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 PlanLi has an external TestFlight beta; it has not been publicly released to the
 App Store, Google Play, or a public web domain. Native development is performed
 with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. TestFlight build `1.0.0 (10)` was built without EAS Update and
-cannot receive OTA updates. EAS Update is configured for the next native build,
-but no OTA release is active until that build is distributed and its channel is
-published. The deployed Firebase backend is not evidence of a client release.
+not supported. TestFlight build `1.0.0 (12)` includes EAS Update on the
+`production` channel with runtime `1.0.0`; it was uploaded to App Store Connect
+on 2026-08-20 and is processing with Apple. Build `1.0.0 (10)` cannot receive
+OTA updates. No OTA bundle has been published yet. The deployed Firebase backend
+is not evidence of a client release.
 
 ## Run the client
 
@@ -141,6 +142,16 @@ distributing a client build that exposes Apple sign-in. Build and submission
 remain explicit release operations; merging source code does not perform them.
 
 ## Open-registration TestFlight beta release
+
+Current release record:
+
+- Source commit: `2da44e417c7ee7c5a380d140a6054508c8e05d48`.
+- EAS build: `f6e3ad31-a680-4501-a69a-6f038ce62336`, iOS `1.0.0 (12)`.
+- EAS Update: `production` channel, runtime `1.0.0`; no published update group.
+- EAS submission: `a40cbf40-b49a-476a-b223-97b377dfce22`.
+- App Store Connect app: `6801453067`; upload succeeded on 2026-08-20 and
+  Apple processing remains pending. External-group assignment and beta review
+  state have not been re-verified for build 12.
 
 The current release target is an **external TestFlight beta with open PlanLi
 registration**, not an App Store listing. PlanLi does not maintain a Firebase
