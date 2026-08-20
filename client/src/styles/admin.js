@@ -4,7 +4,7 @@ import { fontFamilies } from './typography';
 
 export const adminStyles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#F4F5F9' },
-  content: { width: '100%', maxWidth: 1180, alignSelf: 'center', padding: 16, paddingBottom: 48 },
+  content: { flexGrow: 1, width: '100%', maxWidth: 1180, alignSelf: 'center', padding: 16, paddingBottom: 48 },
   header: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
   title: { fontFamily: fontFamilies.bold, fontSize: 26, color: colors.primary, textAlign: 'right' },
   subtitle: { fontFamily: fontFamilies.regular, color: colors.textSecondary, textAlign: 'right' },

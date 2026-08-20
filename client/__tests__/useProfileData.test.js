@@ -15,6 +15,7 @@ const mockDoc = jest.fn((database, collectionName, uid) => ({
 const mockQuery = jest.fn((...parts) => ({ parts }));
 const mockWhere = jest.fn((...parts) => ({ parts }));
 const mockLimit = jest.fn((...parts) => ({ parts }));
+const mockOrderBy = jest.fn((...parts) => ({ parts }));
 
 jest.mock('firebase/firestore', () => ({
   collection: (...args) => mockCollection(...args),
@@ -23,6 +24,7 @@ jest.mock('firebase/firestore', () => ({
   getDoc: (...args) => mockGetDoc(...args),
   getDocs: (...args) => mockGetDocs(...args),
   limit: (...args) => mockLimit(...args),
+  orderBy: (...args) => mockOrderBy(...args),
   query: (...args) => mockQuery(...args),
   where: (...args) => mockWhere(...args),
 }));
@@ -33,7 +35,9 @@ jest.mock('../src/config/firebase', () => ({
 }));
 
 import { clearUserDataCache } from '../src/hooks/useUserData';
+import { useProfileContent } from '../src/features/profile/hooks/useProfileContent';
 import { useProfileData } from '../src/features/profile/hooks/useProfileData';
+import { invalidateProfileResource } from '../src/features/profile/services/ProfileResourceService';
 
 const deferred = () => {
   let resolve;
@@ -48,83 +52,70 @@ const deferred = () => {
 describe('useProfileData loading', () => {
   beforeEach(() => {
     clearUserDataCache();
+    invalidateProfileResource();
     jest.clearAllMocks();
   });
 
-  it('reveals identity before stats finish and loads both stat sources concurrently', async () => {
-    const identityRequest = deferred();
+  it('uses the live owner identity and shares recommendation content with derived stats', async () => {
     const tripsRequest = deferred();
     const recommendationsRequest = deferred();
+    const routesRequest = deferred();
 
-    mockGetDoc.mockReturnValue(identityRequest.promise);
     mockGetCountFromServer.mockReturnValue(tripsRequest.promise);
-    mockGetDocs.mockReturnValue(recommendationsRequest.promise);
+    mockGetDocs.mockImplementation((request) => (
+      request.parts?.[0]?.collectionName === 'recommendations'
+        ? recommendationsRequest.promise
+        : routesRequest.promise
+    ));
 
-    const { result } = renderHook(() =>
-      useProfileData({
+    const owner = {
+      uid: 'profile-1',
+      displayName: 'Auth Name',
+      photoURL: 'https://example.com/auth.jpg',
+      email: 'auth@example.com',
+    };
+    const { result } = renderHook(() => ({
+      data: useProfileData({
         uid: 'profile-1',
-        user: {
-          uid: 'profile-1',
-          displayName: 'Auth Name',
-          photoURL: 'https://example.com/auth.jpg',
-          email: 'auth@example.com',
-        },
-      })
-    );
+        user: owner,
+      }),
+      content: useProfileContent({ uid: 'profile-1', user: owner, isOwnProfile: true }),
+    }));
 
     await waitFor(() => {
-      expect(mockGetDoc).toHaveBeenCalledTimes(1);
+      expect(mockGetDoc).not.toHaveBeenCalled();
       expect(mockGetCountFromServer).toHaveBeenCalledTimes(1);
-      expect(mockGetDocs).toHaveBeenCalledTimes(1);
+      expect(mockGetDocs).toHaveBeenCalledTimes(2);
     });
 
-    expect(result.current.loading).toBe(true);
-    expect(result.current.statsLoading).toBe(true);
-
-    act(() => {
-      identityRequest.resolve({
-        exists: () => true,
-        data: () => ({
-          displayName: 'Firestore Name',
-          photoURL: 'https://example.com/firestore.jpg',
-          email: 'firestore@example.com',
-          isExpert: true,
-        }),
-      });
-    });
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    expect(result.current.userData).toEqual({
-      displayName: 'Firestore Name',
-      photoURL: 'https://example.com/firestore.jpg',
+    expect(result.current.data.loading).toBe(false);
+    expect(result.current.data.statsLoading).toBe(true);
+    expect(result.current.data.userData).toEqual({
+      displayName: 'Auth Name',
+      photoURL: 'https://example.com/auth.jpg',
       photoMedia: null,
-      email: 'firestore@example.com',
+      email: 'auth@example.com',
       bio: '',
-      isExpert: true,
+      isExpert: false,
       smartProfile: null,
     });
-    expect(result.current.statsLoading).toBe(true);
-    expect(result.current.stats.routes).toBe(0);
 
     act(() => {
       tripsRequest.resolve({
         data: () => ({ count: 4 }),
       });
       recommendationsRequest.resolve({
-        size: 2,
-        forEach: (callback) => {
-          callback({ data: () => ({ stats: { likeCount: 3 } }) });
-          callback({ data: () => ({ stats: { likeCount: 4 } }) });
-        },
+        docs: [
+          { id: 'rec-1', data: () => ({ stats: { likeCount: 3 } }) },
+          { id: 'rec-2', data: () => ({ stats: { likeCount: 4 } }) },
+        ],
       });
+      routesRequest.resolve({ docs: [{ id: 'route-1', data: () => ({}) }] });
     });
 
     await waitFor(() => {
-      expect(result.current.statsLoading).toBe(false);
-      expect(result.current.stats).toEqual({
+      expect(result.current.data.statsLoading).toBe(false);
+      expect(result.current.data.stats).toEqual({
         routes: 4,
         recommendations: 2,
         likesReceived: 7,
@@ -138,6 +129,9 @@ describe('useProfileData loading', () => {
         },
         dominantCategory: null,
       });
+      expect(result.current.content.recommendations.map((item) => item.id))
+        .toEqual(['rec-1', 'rec-2']);
+      expect(result.current.content.routes.map((item) => item.id)).toEqual(['route-1']);
     });
   });
 });

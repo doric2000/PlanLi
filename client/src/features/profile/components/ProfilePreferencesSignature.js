@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import AppText from "../../../components/AppText";
 import { MaterialIcons } from '@expo/vector-icons';
 import CompactChip from '../../../components/CompactChip';
+import NavigationChevron from '../../../components/NavigationChevron';
 
 import { colors } from '../../../styles';
 import { getPreferencePresentation } from '../../../constants/travelPresentation';
@@ -119,8 +120,8 @@ export default function ProfilePreferencesSignature({
             accessibilityRole="button"
             accessibilityLabel="הגדרת העדפות הטיול"
           >
+            <NavigationChevron size={17} color={colors.white} />
             <AppText style={styles.preferenceEmptyButtonText}>להגדרת העדפות</AppText>
-            <MaterialIcons name="arrow-back" size={17} color={colors.white} />
           </Pressable>
         </View>
       )}

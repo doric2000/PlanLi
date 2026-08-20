@@ -4,7 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { useRecommendations } from '../src/hooks/useRecommendations';
 import {
   clearPersonalizationDiscoveryCache,
-  getPersonalizedRecommendations,
+  requestPersonalizedRecommendations,
 } from '../src/services/PersonalizationService';
 
 let focusEffect;
@@ -18,7 +18,7 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('../src/services/PersonalizationService', () => ({
   clearPersonalizationDiscoveryCache: jest.fn(),
-  getPersonalizedRecommendations: jest.fn(),
+  requestPersonalizedRecommendations: jest.fn(),
 }));
 
 jest.mock('../src/features/moderation/BlockedUsersContext', () => ({
@@ -33,41 +33,49 @@ describe('useRecommendations request behavior', () => {
   beforeEach(() => {
     focusEffect = null;
     mockUser = { uid: 'traveler-1' };
-    getPersonalizedRecommendations.mockReset();
+    requestPersonalizedRecommendations.mockReset();
     clearPersonalizationDiscoveryCache.mockReset();
   });
 
-  it('uses cache on focus and bypasses it only for explicit refresh', async () => {
-    getPersonalizedRecommendations.mockResolvedValue({
-      items: [{ id: 'rec-1', ownerId: 'visible-user' }],
-    });
+  it('uses the same coordinated request path on focus and explicit refresh', async () => {
+    requestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ items: [{ id: 'rec-1', ownerId: 'visible-user' }] }),
+    }));
     const { result } = renderHook(() => useRecommendations());
 
     await act(async () => {
       await focusEffect();
     });
-    expect(getPersonalizedRecommendations).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sort: 'popular', limit: 30 }),
-      { forceRefresh: false }
+    expect(requestPersonalizedRecommendations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'popular', limit: 30 })
     );
     await waitFor(() => expect(result.current.data).toHaveLength(1));
 
     await act(async () => {
       await result.current.refresh();
     });
-    expect(getPersonalizedRecommendations).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sort: 'popular', limit: 30 }),
-      { forceRefresh: true }
+    expect(requestPersonalizedRecommendations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'popular', limit: 30 })
     );
   });
 
   it('preserves rendered data when an explicit refresh fails', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {});
-    getPersonalizedRecommendations
-      .mockResolvedValueOnce({ items: [{ id: 'rec-1', ownerId: 'visible-user' }] })
-      .mockRejectedValueOnce(Object.assign(new Error('resource-exhausted'), {
+    requestPersonalizedRecommendations
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.resolve({ items: [{ id: 'rec-1', ownerId: 'visible-user' }] }),
+      }))
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.reject(Object.assign(new Error('resource-exhausted'), {
         code: 'functions/resource-exhausted',
+        })),
       }));
     const { result } = renderHook(() => useRecommendations());
     await act(async () => {
@@ -92,9 +100,17 @@ describe('useRecommendations request behavior', () => {
 
   it('invalidates discovery and cancels an in-flight refresh after a local deletion', async () => {
     let resolveRefresh;
-    getPersonalizedRecommendations
-      .mockResolvedValueOnce({ items: [{ id: 'rec-1', ownerId: 'visible-user' }] })
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+    requestPersonalizedRecommendations
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.resolve({ items: [{ id: 'rec-1', ownerId: 'visible-user' }] }),
+      }))
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: new Promise((resolve) => { resolveRefresh = resolve; }),
+      }));
     const { result } = renderHook(() => useRecommendations());
     await act(async () => {
       await focusEffect();
@@ -119,9 +135,17 @@ describe('useRecommendations request behavior', () => {
   });
 
   it('clears retained recommendations when the authenticated user changes', async () => {
-    getPersonalizedRecommendations
-      .mockResolvedValueOnce({ items: [{ id: 'user-1-rec', ownerId: 'visible-user' }] })
-      .mockRejectedValueOnce(new Error('load failed'));
+    requestPersonalizedRecommendations
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.resolve({ items: [{ id: 'user-1-rec', ownerId: 'visible-user' }] }),
+      }))
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.reject(new Error('load failed')),
+      }));
     const { result, rerender } = renderHook(() => useRecommendations());
     await act(async () => {
       await focusEffect();

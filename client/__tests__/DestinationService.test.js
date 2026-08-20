@@ -49,4 +49,14 @@ describe('DestinationService', () => {
     expect(callable).toHaveBeenCalledTimes(1);
     expect(first).toEqual(second);
   });
+
+  it('caches the default Home destination request', async () => {
+    const callable = jest.fn(async () => ({ data: { items: [{ cityId: 'paris' }] } }));
+    httpsCallable.mockReturnValue(callable);
+
+    const first = await searchDestinations({ sort: 'popular', limit: 10 });
+    const second = await searchDestinations({ sort: 'popular', limit: 10 });
+
+    expect(second).toBe(first);
+  });
 });

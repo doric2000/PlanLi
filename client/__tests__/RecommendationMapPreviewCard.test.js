@@ -8,7 +8,7 @@ import { colors } from '../src/styles';
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
   const { Text: NativeText } = require('react-native');
-  const Icon = ({ name }) => ReactModule.createElement(NativeText, null, `icon:${name}`);
+  const Icon = ({ name, testID }) => ReactModule.createElement(NativeText, { testID }, `icon:${name}`);
   return { Ionicons: Icon, MaterialIcons: Icon };
 });
 
@@ -56,6 +56,7 @@ describe('RecommendationMapPreviewCard', () => {
       .toBe('transparent');
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-map-preview-open').props.style).backgroundColor)
       .toBe(colors.primary);
+    expect(screen.getByText('icon:chevron-forward', { includeHiddenElements: true })).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('recommendation-map-preview-close'));
     fireEvent.press(screen.getByTestId('recommendation-map-preview-open'));

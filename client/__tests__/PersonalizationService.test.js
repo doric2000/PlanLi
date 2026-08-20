@@ -84,7 +84,7 @@ describe('PersonalizationService discovery cache', () => {
     expect(mockCallable).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves each caller refresh policy when sharing an in-flight request', async () => {
+  it('deduplicates focus and pull callers while sharing stale fallback behavior', async () => {
     const cached = { items: [{ id: 'route-1' }] };
     mockCallable.mockResolvedValueOnce({ data: cached });
     await getPersonalizedRoutes({ sort: 'popular' });
@@ -97,18 +97,15 @@ describe('PersonalizationService discovery cache', () => {
     }));
 
     const focusRequest = getPersonalizedRoutes({ sort: 'popular' });
-    const forcedRequest = getPersonalizedRoutes(
-      { sort: 'popular' },
-      { forceRefresh: true }
-    );
+    const pullRequest = getPersonalizedRoutes({ sort: 'popular' });
     expect(mockCallable).toHaveBeenCalledTimes(2);
 
     rejectRequest(error);
     await expect(focusRequest).resolves.toBe(cached);
-    await expect(forcedRequest).rejects.toBe(error);
+    await expect(pullRequest).resolves.toBe(cached);
   });
 
-  it('lets explicit refresh bypass a settled cache entry', async () => {
+  it('does not let an explicit refresh bypass the fresh window', async () => {
     mockCallable
       .mockResolvedValueOnce({ data: { items: [{ id: 'rec-1' }] } })
       .mockResolvedValueOnce({ data: { items: [{ id: 'rec-2' }] } });
@@ -119,8 +116,8 @@ describe('PersonalizationService discovery cache', () => {
       { forceRefresh: true }
     );
 
-    expect(refreshed).toEqual({ items: [{ id: 'rec-2' }] });
-    expect(mockCallable).toHaveBeenCalledTimes(2);
+    expect(refreshed).toEqual({ items: [{ id: 'rec-1' }] });
+    expect(mockCallable).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to a stale response when a focus refresh fails', async () => {
@@ -136,7 +133,7 @@ describe('PersonalizationService discovery cache', () => {
     expect(mockCallable).toHaveBeenCalledTimes(2);
   });
 
-  it('does not hide an explicit refresh error behind stale data', async () => {
+  it('suppresses an explicit refresh request while cached data is fresh', async () => {
     mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'route-1' }] } });
     await getPersonalizedRoutes({ sort: 'popular' });
     mockCallable.mockRejectedValueOnce(new Error('resource-exhausted'));
@@ -144,7 +141,8 @@ describe('PersonalizationService discovery cache', () => {
     await expect(getPersonalizedRoutes(
       { sort: 'popular' },
       { forceRefresh: true }
-    )).rejects.toThrow('resource-exhausted');
+    )).resolves.toEqual({ items: [{ id: 'route-1' }] });
+    expect(mockCallable).toHaveBeenCalledTimes(1);
   });
 
   it('backs off repeated focus calls after an uncached error', async () => {

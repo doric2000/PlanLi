@@ -1,12 +1,25 @@
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
+import { FlatList, StyleSheet } from 'react-native';
 
 import RoutesScreen from '../src/features/roadtrip/screens/RoutesScreen';
-import { discoverRoutes } from '../src/services/RouteService';
+import { requestRoutes } from '../src/services/RouteService';
 
 let mockUser = null;
 let mockFocusEffect = null;
 let mockTabRefresh = null;
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+};
+const routeAttempt = (promise) => ({
+  requested: true,
+  source: 'network',
+  promise: Promise.resolve(promise),
+});
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback) => {
@@ -49,6 +62,7 @@ jest.mock('../src/features/publishing/ContentPublishContext', () => ({
 jest.mock('../src/services/RouteService', () => ({
   clearRouteDiscoveryCache: jest.fn(),
   discoverRoutes: jest.fn(),
+  requestRoutes: jest.fn(),
   loadRouteDetails: jest.fn(),
 }));
 
@@ -59,7 +73,7 @@ jest.mock('../src/services/SocialService', () => ({
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return ({ children }) => ReactModule.createElement(View, null, children);
+  return ({ children, ...props }) => ReactModule.createElement(View, props, children);
 });
 
 jest.mock('../src/components/SearchFilterRow', () => {
@@ -90,8 +104,12 @@ describe('RoutesScreen authentication state', () => {
     mockUser = null;
     mockFocusEffect = null;
     mockTabRefresh = null;
-    discoverRoutes.mockReset();
-    discoverRoutes.mockResolvedValue({ items: [] });
+    requestRoutes.mockReset();
+    requestRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ items: [] }),
+    }));
   });
 
   it.each([
@@ -102,31 +120,29 @@ describe('RoutesScreen authentication state', () => {
     expect(() => render(<RoutesScreen navigation={{ navigate: jest.fn() }} />)).not.toThrow();
   });
 
-  it('uses cached discovery on focus, forces explicit refresh, and preserves rendered routes on error', async () => {
+  it('uses the shared request path on focus and refresh, and preserves rendered routes on error', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {});
-    discoverRoutes
-      .mockResolvedValueOnce({ items: [{ id: 'route-1' }] })
-      .mockRejectedValueOnce(Object.assign(new Error('resource-exhausted'), {
+    requestRoutes
+      .mockImplementationOnce(() => routeAttempt({ items: [{ id: 'route-1' }] }))
+      .mockImplementationOnce(() => routeAttempt(Promise.reject(Object.assign(new Error('resource-exhausted'), {
         code: 'functions/resource-exhausted',
-      }));
+      }))));
     const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
 
     await act(async () => {
       await mockFocusEffect();
     });
-    expect(discoverRoutes).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sort: 'popular', limit: 30 }),
-      { forceRefresh: false }
+    expect(requestRoutes).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'popular', limit: 30 })
     );
     await waitFor(() => expect(screen.getByTestId('route-route-1')).toBeTruthy());
 
     await act(async () => {
       await mockTabRefresh();
     });
-    expect(discoverRoutes).toHaveBeenLastCalledWith(
-      expect.objectContaining({ sort: 'popular', limit: 30 }),
-      { forceRefresh: true }
+    expect(requestRoutes).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'popular', limit: 30 })
     );
     expect(screen.getByTestId('route-route-1')).toBeTruthy();
     expect(consoleError).not.toHaveBeenCalled();
@@ -140,9 +156,9 @@ describe('RoutesScreen authentication state', () => {
 
   it('clears retained routes when the authenticated user changes', async () => {
     mockUser = { uid: 'traveler-1' };
-    discoverRoutes
-      .mockResolvedValueOnce({ items: [{ id: 'user-1-route' }] })
-      .mockRejectedValueOnce(new Error('load failed'));
+    requestRoutes
+      .mockImplementationOnce(() => routeAttempt({ items: [{ id: 'user-1-route' }] }))
+      .mockImplementationOnce(() => routeAttempt(Promise.reject(new Error('load failed'))));
     const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
     await act(async () => {
       await mockFocusEffect();
@@ -159,5 +175,48 @@ describe('RoutesScreen authentication state', () => {
     });
     expect(screen.queryByTestId('route-user-1-route')).toBeNull();
     consoleError.mockRestore();
+  });
+
+  it('centers the empty state in the available feed body', async () => {
+    const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
+    await act(async () => {
+      await mockFocusEffect();
+    });
+
+    const list = screen.UNSAFE_getByType(FlatList);
+    const contentStyle = StyleSheet.flatten(list.props.contentContainerStyle);
+    const emptyStyle = StyleSheet.flatten(screen.getByTestId('routes-empty-state').props.style);
+
+    expect(contentStyle).toMatchObject({ flexGrow: 1 });
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
+    expect(list.props.ListHeaderComponent).toBeTruthy();
+    expect(list.props.stickyHeaderIndices).toBeUndefined();
+    expect(screen.getByTestId('routes-tab-header').props.overlapNext).toBeUndefined();
+    expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
+  });
+
+  it('replaces retained routes with a centered state only while refresh is pending', async () => {
+    const pendingRefresh = deferred();
+    requestRoutes
+      .mockImplementationOnce(() => routeAttempt({ items: [{ id: 'route-1' }] }))
+      .mockImplementationOnce(() => routeAttempt(pendingRefresh.promise));
+    const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
+    await act(async () => {
+      await mockFocusEffect();
+    });
+    await waitFor(() => expect(screen.getByTestId('route-route-1')).toBeTruthy());
+
+    let refreshPromise;
+    act(() => {
+      refreshPromise = mockTabRefresh();
+    });
+    expect(screen.getByTestId('routes-refresh-state')).toBeTruthy();
+    expect(screen.queryByTestId('route-route-1')).toBeNull();
+
+    await act(async () => {
+      pendingRefresh.resolve({ items: [{ id: 'route-2' }] });
+      await refreshPromise;
+    });
+    expect(screen.getByTestId('route-route-2')).toBeTruthy();
   });
 });

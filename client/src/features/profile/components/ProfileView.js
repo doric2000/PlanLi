@@ -21,6 +21,8 @@ import ProfileHeader from './ProfileHeader';
 import { createProfileStyles } from './profileStyles';
 import { selectProfileHeroMedia } from '../utils/profileMetrics';
 import ReportButton from '../../moderation/components/ReportButton';
+import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
+import EmptyState from '../../../components/EmptyState';
 
 export default function ProfileView({
   navigation,
@@ -30,6 +32,7 @@ export default function ProfileView({
   recommendations = [],
   routes = [],
   contentLoading,
+  contentError,
   isOwner,
   onPickImage,
   uploading,
@@ -38,6 +41,8 @@ export default function ProfileView({
   onMenuPress,
   onBackPress,
   onRefresh,
+  refreshing = false,
+  confirming = false,
   profileUid,
 }) {
   const insets = useSafeAreaInsets();
@@ -83,24 +88,25 @@ export default function ProfileView({
       ) : null}
       {!isOwner && typeof onBackPress === 'function' ? (
         <Pressable
-          style={[styles.topAction, styles.topActionStart]}
+          style={[styles.topAction, styles.topActionEnd]}
           onPress={onBackPress}
           accessibilityRole="button"
           accessibilityLabel="חזרה"
         >
-          <MaterialIcons name="arrow-back" size={23} color={colors.textPrimary} />
+          <MaterialIcons name="arrow-forward" size={23} color={colors.textPrimary} />
         </Pressable>
       ) : null}
       {!isOwner && profileUid ? (
-        <View style={[styles.topAction, styles.topActionEnd]}>
+        <View style={[styles.topAction, styles.topActionStart]}>
           <ReportButton target={{ type: 'profile', id: profileUid }} ownerId={profileUid} compact />
         </View>
       ) : null}
 
       <FlatList
+        style={styles.list}
         key={`profile-${contentTab}-${gridColumns}`}
         ref={profileListRef}
-        data={activeData}
+        data={contentLoading || refreshing || confirming ? [] : activeData}
         keyExtractor={(item, index) => String(item?.id || `${contentTab}-${index}`)}
         extraData={contentTab}
         numColumns={gridColumns}
@@ -112,6 +118,10 @@ export default function ProfileView({
         ListHeaderComponentStyle={styles.headerBlock}
         onScroll={onScroll}
         scrollEventThrottle={16}
+        refreshControl={<CenteredRefreshControl
+          refreshing={refreshing || confirming}
+          onRefresh={onRefresh}
+        />}
         ListHeaderComponent={(
           <View style={styles.headerBlock}>
             <ProfileHeader
@@ -149,13 +159,28 @@ export default function ProfileView({
             styles={styles}
           />
         )}
-        ListEmptyComponent={!contentLoading ? (
+        ListEmptyComponent={contentLoading || refreshing || confirming ? (
+          <CenteredRefreshState
+            accessibilityLabel={confirming ? 'הפרופיל מעודכן' : refreshing ? 'מרענן פרופיל' : 'טוען תוכן פרופיל'}
+            confirming={confirming}
+            style={styles.refreshBody}
+            testID={confirming ? 'profile-refresh-confirmation' : refreshing ? 'profile-refresh-state' : 'profile-content-loading-state'}
+          />
+        ) : contentError ? (
+          <View style={styles.refreshBody} testID="profile-content-error-state">
+            <EmptyState
+              icon="cloud-off"
+              title="לא הצלחנו לעדכן את הפרופיל"
+              message="אפשר למשוך שוב מטה ולנסות מחדש."
+            />
+          </View>
+        ) : (
           <ProfileContentEmpty
             contentTab={contentTab}
             styles={styles}
             ownerLabel={userData?.displayName || 'הפרופיל'}
           />
-        ) : null}
+        )}
       />
 
       {isOwner && typeof onSaveBio === 'function' ? (

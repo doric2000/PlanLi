@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
+import NavigationChevron from '../../../components/NavigationChevron';
 
 import { cards, typography, colors, profileMenuListStyles as styles } from '../../../styles';
 
@@ -19,6 +20,11 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
             onPress={() => onPressItem?.(item.key ?? item.label)}
             activeOpacity={0.85}
           >
+            <NavigationChevron
+              size={20}
+              color={colors.textMuted}
+              testID={`profile-menu-chevron-${item.key || index}`}
+            />
             <View style={cards.profileMenuItemLeft}>
               <View style={styles.iconContainer}>
                 <Ionicons name={item.icon} size={22} color={colors.textSecondary} />
@@ -32,8 +38,6 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
               </View>
               <AppText style={typography.profileMenuItemText}>{item.label}</AppText>
             </View>
-
-            <Ionicons name="chevron-back" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         );
       })}

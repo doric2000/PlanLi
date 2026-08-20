@@ -104,6 +104,10 @@ export function useFavoriteCityIds({ enabled = true } = {}) {
     favorites,
     ids: favorites.map((favorite) => favorite.id),
     loading: result.loading,
+    status: result.status,
+    error: result.error,
+    lastServerSyncAt: result.lastServerSyncAt,
+    reload: result.reload,
     toggleFavorite,
   };
 }

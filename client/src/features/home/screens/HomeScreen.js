@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
-	RefreshControl,
 	ScrollView,
 	StatusBar,
 	TouchableOpacity,
@@ -10,6 +9,7 @@ import {
 } from "react-native";
 import AppText from "../../../components/AppText";
 import RtlHorizontalScrollView from "../../../components/RtlHorizontalScrollView";
+import { CenteredRefreshControl, CenteredRefreshState } from "../../../components/CenteredRefresh";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useIsFocused } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -29,6 +29,7 @@ import { useTabPressScrollOrRefresh } from "../../../hooks/useTabPressScrollOrRe
 import { resolveDestinationForPlacePreview } from "../../../services/LocationService";
 import {
 	destinationCatalogItemToCity,
+	requestDestinations,
 	searchDestinations,
 } from "../../../services/DestinationService";
 import { colors, homeScreenStyles as styles, preferenceSetupStyles as preferenceStyles } from "../../../styles";
@@ -42,6 +43,7 @@ import {
 	loadRecentDiscoveryDestinations,
 	rememberDiscoveryDestinations,
 } from "../../../utils/recentDiscoveryDestinations";
+import { waitForRefreshConfirmation } from "../../../utils/refreshFeedback";
 
 const DESTINATION_GRADIENTS = [
 	["#78909C", "#546E7A"],
@@ -93,6 +95,7 @@ export default function HomeScreen({ navigation }) {
 	] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
+	const [confirming, setConfirming] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [recentDestinations, setRecentDestinations] = useState([]);
 	const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
@@ -103,9 +106,18 @@ export default function HomeScreen({ navigation }) {
 	const mainScrollRef = useRef(null);
 	const favoriteCities = useFavoriteCityIds({ enabled: Boolean(user) && !isGuest });
 
-	const fetchDestinations = async () => {
+	const fetchDestinations = async ({ refreshFeedback = false } = {}) => {
 		try {
-			const catalog = await searchDestinations({ sort: "popular", limit: 10 });
+			const attempt = requestDestinations({ sort: "popular", limit: 10 });
+			if (refreshFeedback) {
+				const networkPending = attempt.requested || attempt.source === "in-flight";
+				setRefreshing(networkPending);
+				setConfirming(!networkPending);
+			}
+			const catalog = await attempt.promise;
+			if (refreshFeedback && !attempt.requested && attempt.source !== "in-flight") {
+				await waitForRefreshConfirmation();
+			}
 			const citiesList = (catalog?.items || []).map((item, index) => {
 				const gradient = DESTINATION_GRADIENTS[index % DESTINATION_GRADIENTS.length];
 				return destinationCatalogItemToCity(item, gradient[0]);
@@ -117,6 +129,7 @@ export default function HomeScreen({ navigation }) {
 		} finally {
 			setLoading(false);
 			setRefreshing(false);
+			setConfirming(false);
 		}
 	};
 
@@ -191,11 +204,10 @@ export default function HomeScreen({ navigation }) {
 	}, [searchQuery]);
 
 	const onRefresh = () => {
-		setRefreshing(true);
 		setHasLoadedAllDestinationsForSearch(false);
 		setAllDestinationsForSearch([]);
 		destinationSearchRequestRef.current += 1;
-		fetchDestinations();
+		return fetchDestinations({ refreshFeedback: true });
 	};
 
 	const { onScroll } = useTabPressScrollOrRefresh({
@@ -528,21 +540,24 @@ export default function HomeScreen({ navigation }) {
 				]}
 				onScroll={onScroll}
 				scrollEventThrottle={16}
-				refreshControl={
-					<RefreshControl
-						refreshing={refreshing}
-						onRefresh={onRefresh}
-						colors={[colors.primary]}
-						tintColor={colors.primary}
-					/>
-				}
+				refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={onRefresh} />}
 			>
 				{renderHeader()}
-				{renderPreferencePrompt()}
-				<View style={styles.body}>
-					{renderFeatured()}
-					{renderDestinations()}
-				</View>
+				{refreshing || confirming ? (
+					<CenteredRefreshState
+						accessibilityLabel={confirming ? "היעדים מעודכנים" : "מרענן יעדים"}
+						confirming={confirming}
+						testID={confirming ? "home-refresh-confirmation" : "home-refresh-state"}
+					/>
+				) : (
+					<>
+						{renderPreferencePrompt()}
+						<View style={styles.body}>
+							{renderFeatured()}
+							{renderDestinations()}
+						</View>
+					</>
+				)}
 			</ScrollView>
 			<DestinationFilterModal
 				visible={destinationFilterVisible}

@@ -6,6 +6,7 @@ import UsefulFactItem from '../../../components/UsefulFactItem';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import ContentDetailAuthorRow from '../../../components/ContentDetailAuthorRow';
+import NavigationChevron from '../../../components/NavigationChevron';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
 import { buildGoogleMapsUrl, buildWazeUrl } from '../../../utils/placeNavigation';
@@ -71,11 +72,11 @@ export default function RecommendationDetailContent({
               accessibilityRole="button"
               accessibilityLabel={`פתיחת היעד ${destinationLabel}`}
             >
+              {!!(item?.destination?.cityId && item?.destination?.countryId) && (
+                <NavigationChevron size={18} color={colors.textMuted} />
+              )}
               <Ionicons name="location-outline" size={19} color={colors.textMuted} />
               <AppText style={styles.locationText}>{destinationLabel}</AppText>
-              {!!(item?.destination?.cityId && item?.destination?.countryId) && (
-                <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
-              )}
             </Pressable>
           )}
           {!!placeLabel && (
@@ -86,11 +87,11 @@ export default function RecommendationDetailContent({
               accessibilityRole="button"
               accessibilityLabel={`פתיחת ${placeLabel} במפה`}
             >
+              {!!mapsUrl && <NavigationChevron size={18} color={colors.textMuted} />}
               <Ionicons name="map-outline" size={19} color={colors.textMuted} />
               <AppText style={[styles.locationText, styles.placeText]} numberOfLines={2}>
                 {[placeLabel, item?.place?.address].filter((value, index, all) => value && all.indexOf(value) === index).join(' · ')}
               </AppText>
-              {!!mapsUrl && <Ionicons name="chevron-back" size={18} color={colors.textMuted} />}
             </Pressable>
           )}
           {!!wazeUrl && (
@@ -100,9 +101,9 @@ export default function RecommendationDetailContent({
               accessibilityRole="button"
               accessibilityLabel={`פתיחת ${placeLabel || 'המיקום'} ב-Waze`}
             >
+              <NavigationChevron size={18} color={colors.textMuted} />
               <Ionicons name="navigate-outline" size={19} color={colors.textMuted} />
               <AppText style={[styles.locationText, styles.placeText]}>פתיחה ב-Waze</AppText>
-              <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
             </Pressable>
           )}
         </View>

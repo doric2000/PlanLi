@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { TouchableOpacity } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 /**
@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
  * This hook automatically configures the navigation header with a back arrow
  * that matches the app's design. Use this in any screen that needs a back button.
  * 
- * The back button appears as a chevron arrow (<) in the header's left side.
+ * The back button appears as an RTL-facing chevron in the header's right side.
  * 
  * HOW TO USE:
  * 1. Import the hook in your screen
@@ -42,12 +42,14 @@ import { Ionicons } from "@expo/vector-icons";
  *   }
  * });
  */
+const DEFAULT_BUTTON_STYLE = {};
+
 export const useBackButton = (navigation, options = {}) => {
 	const {
 		title = "",
 		color = "#1E3A5F",
 		onPress = null,
-		style = {},
+		style = DEFAULT_BUTTON_STYLE,
 	} = options;
 
 	const onPressRef = useRef(onPress);
@@ -57,16 +59,28 @@ export const useBackButton = (navigation, options = {}) => {
 		navigation.setOptions({
 			headerShown: true,
 			title: title,
-			headerLeft: () => (
+			headerTitleAlign: "center",
+			headerBackVisible: false,
+			headerLeft: () => <View style={{ width: 54, height: 44 }} />,
+			headerRight: () => (
 				<TouchableOpacity
 					onPress={() => {
 						const fn = onPressRef.current;
 						if (fn) fn();
 						else navigation.goBack();
 					}}
-					style={{ paddingLeft: 10, ...style }}
+					style={{
+						width: 54,
+						height: 44,
+						paddingRight: 10,
+						alignItems: "center",
+						justifyContent: "center",
+						...style,
+					}}
+					accessibilityRole="button"
+					accessibilityLabel="חזרה"
 				>
-					<Ionicons name="chevron-back" size={24} color={color} />
+					<Ionicons name="chevron-forward" size={24} color={color} />
 				</TouchableOpacity>
 			),
 		});

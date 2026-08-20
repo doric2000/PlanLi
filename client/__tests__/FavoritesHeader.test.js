@@ -6,10 +6,17 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import FavoritesScreen from '../src/features/favorites/screen/FavoritesScreen';
 
 const mockFavoriteRecommendationsFull = jest.fn(() => ({
-  favorites: [], loading: false, reload: jest.fn(),
+  favorites: [], loading: false, reload: jest.fn(() => ({ requested: false, source: 'live', promise: Promise.resolve() })),
 }));
 const mockFavoriteRoadTripsFull = jest.fn(() => ({
-  favorites: [], loading: false, reload: jest.fn(),
+  favorites: [], loading: false, reload: jest.fn(() => ({ requested: false, source: 'live', promise: Promise.resolve() })),
+}));
+const mockFavoriteCityIds = jest.fn(() => ({
+  favorites: [], loading: false, reload: jest.fn(() => ({ requested: false, source: 'live', promise: Promise.resolve() })),
+}));
+
+jest.mock('../src/hooks/useFavoriteCityIds', () => ({
+  useFavoriteCityIds: (options) => mockFavoriteCityIds(options),
 }));
 
 jest.mock('../src/hooks/useFavoriteRecommendationsFull', () => ({
@@ -48,6 +55,7 @@ describe('Favorites blue header', () => {
   beforeEach(() => {
     mockFavoriteRecommendationsFull.mockClear();
     mockFavoriteRoadTripsFull.mockClear();
+    mockFavoriteCityIds.mockClear();
     jest.spyOn(Animated, 'timing').mockImplementation((value, config) => ({
       start: (callback) => {
         value.setValue(config.toValue);
@@ -74,7 +82,9 @@ describe('Favorites blue header', () => {
     );
 
     const header = screen.getByTestId('favorites-tab-header');
+    const swipeSurface = screen.getByTestId('favorites-swipe-surface');
     expect(within(header).getByTestId('favorites-header-tabs')).toBeTruthy();
+    expect(within(swipeSurface).queryByTestId('favorites-tab-header')).toBeNull();
     expect(within(header).queryByText('טיולים')).toBeNull();
     expect(within(header).getByText('מסלולים')).toBeTruthy();
     expect(screen.getByTestId('favorite-destinations-list')).toBeTruthy();
@@ -86,6 +96,11 @@ describe('Favorites blue header', () => {
     expect(screen.getByTestId('favorites-swipe-surface')).toBeTruthy();
     expect(mockFavoriteRecommendationsFull).toHaveBeenLastCalledWith({ enabled: true });
     expect(mockFavoriteRoadTripsFull).toHaveBeenLastCalledWith({ enabled: false });
+    expect(within(screen.getByTestId('favorites-swipe-surface')).queryByTestId('favorites-tab-header')).toBeNull();
+
+    fireEvent.press(within(screen.getByTestId('favorites-tab-header')).getByText('יעדים'));
+    expect(screen.getByTestId('favorite-destinations-list')).toBeTruthy();
+    expect(mockFavoriteRecommendationsFull).toHaveBeenLastCalledWith({ enabled: true });
   });
 
   it('keeps accepting horizontal swipes after a completed transition', () => {

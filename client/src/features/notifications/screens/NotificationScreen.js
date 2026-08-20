@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { View, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import AppText from "../../../components/AppText";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ import { loadRouteDetails } from '../../../services/RouteService';
 
 // Components
 import BackButton from '../../../components/BackButton';
+import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { NotificationCard } from '../components/';
 
 // Hooks
@@ -149,6 +150,7 @@ export default function NotificationScreen() {
       <BackButton
         color="dark"
         variant="ghost"
+        iconDirection="rtl"
         style={styles.backButtonContainer}
       />
     );
@@ -168,10 +170,10 @@ export default function NotificationScreen() {
           {subtitle ? <AppText style={styles.headerSubtitle}>{subtitle}</AppText> : null}
         </View>
 
-        <View style={styles.headerSideLeft}>{renderHeaderLeft()}</View>
+        <View style={styles.headerSideRight} testID="notifications-header-back-slot">{renderHeaderLeft()}</View>
 
         {notifications.length > 0 && (
-          <View style={styles.headerSideRight}>{renderHeaderRight()}</View>
+          <View style={styles.headerSideLeft} testID="notifications-header-action-slot">{renderHeaderRight()}</View>
         )}
       </View>
     );
@@ -204,24 +206,21 @@ export default function NotificationScreen() {
       {renderHeader()}
 
       {/* Notifications List */}
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        renderItem={renderNotificationItem}
-        contentContainerStyle={
-          notifications.length === 0 ? notificationStyles.emptyListContainer : notificationStyles.listContainer
-        }
-        ListEmptyComponent={renderEmptyState}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refresh}
-            colors={['#1E3A5F']}
-            tintColor="#1E3A5F"
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      />
+      {refreshing ? (
+        <CenteredRefreshState accessibilityLabel="מרענן התראות" testID="notifications-refresh-state" />
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id}
+          renderItem={renderNotificationItem}
+          contentContainerStyle={
+            notifications.length === 0 ? notificationStyles.emptyListContainer : notificationStyles.listContainer
+          }
+          ListEmptyComponent={renderEmptyState}
+          refreshControl={<CenteredRefreshControl refreshing={refreshing} onRefresh={refresh} />}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   );
 }

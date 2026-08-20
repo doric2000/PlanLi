@@ -9,7 +9,7 @@ import { colors, backButtonStyles as styles } from '../styles';
  * 
  * Features:
  * - Semi-transparent circular background
- * - Chevron-back icon
+ * - RTL-facing chevron-forward icon by default
  * - Works with any background (light or dark)
  * 
  * @param {Object} props
@@ -18,7 +18,7 @@ import { colors, backButtonStyles as styles } from '../styles';
  * @param {number} [props.size=24] - Icon size
  * @param {Function} [props.onPress] - Custom onPress handler (defaults to navigation.goBack)
  * @param {Object} [props.style] - Additional styles for the button container
- * @param {'back'|'rtl'} [props.iconDirection='back'] - Explicit chevron direction
+ * @param {'back'|'rtl'} [props.iconDirection='rtl'] - Explicit chevron direction
  * 
  * @example
  * // Basic usage (white icon with overlay background)
@@ -38,7 +38,7 @@ export const BackButton = ({
   size = 24, 
   onPress, 
   style,
-  iconDirection = 'back',
+  iconDirection = 'rtl',
   accessibilityLabel = 'חזרה',
 }) => {
   const navigation = useNavigation();

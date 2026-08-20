@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   clearPersonalizationDiscoveryCache,
-  getPersonalizedRecommendations,
+  requestPersonalizedRecommendations,
 } from '../services/PersonalizationService';
 import { useBlockedUsers } from '../features/moderation/BlockedUsersContext';
 import { useAuthUser } from './useAuthUser';
 import { isDiscoveryRateLimitError } from '../utils/discoveryErrors';
+import { waitForRefreshConfirmation } from '../utils/refreshFeedback';
+import { invalidateProfileResources } from '../utils/profileResourceInvalidation';
 
 const serverSort = (sortBy) => sortBy === 'personalized'
   ? 'forYou'
@@ -19,6 +21,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState(null);
   const [discoveryRequest, setDiscoveryRequest] = useState({});
   const [debouncedRequest, setDebouncedRequest] = useState({});
@@ -30,6 +33,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
     setError(null);
     setLoading(true);
     setRefreshing(false);
+    setConfirming(false);
   }, [principal]);
 
   useEffect(() => {
@@ -38,17 +42,26 @@ export const useRecommendations = (sortBy = 'popularity') => {
   }, [JSON.stringify(discoveryRequest)]);
 
   const requestKey = JSON.stringify(debouncedRequest);
-  const fetchRecommendations = useCallback(async ({ forceRefresh = false, showLoader = true } = {}) => {
+  const fetchRecommendations = useCallback(async ({ showLoader = true, refreshFeedback = false } = {}) => {
     const serial = requestSerial.current + 1;
     requestSerial.current = serial;
     if (showLoader) setLoading(true);
     setError(null);
     try {
-      const response = await getPersonalizedRecommendations({
+      const attempt = requestPersonalizedRecommendations({
         ...debouncedRequest,
         sort: serverSort(sortBy),
         limit: 30,
-      }, { forceRefresh });
+      });
+      if (refreshFeedback) {
+        const networkPending = attempt.requested || attempt.source === 'in-flight';
+        setRefreshing(networkPending);
+        setConfirming(!networkPending);
+      }
+      const response = await attempt.promise;
+      if (refreshFeedback && !attempt.requested && attempt.source !== 'in-flight') {
+        await waitForRefreshConfirmation();
+      }
       if (requestSerial.current !== serial) return;
       setData(Array.isArray(response?.items) ? response.items.filter((item) => !isBlocked(item.ownerId)) : []);
     } catch (error) {
@@ -63,6 +76,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
       if (requestSerial.current !== serial) return;
       setLoading(false);
       setRefreshing(false);
+      setConfirming(false);
     }
   }, [requestKey, sortBy, isBlocked, principal]);
 
@@ -71,15 +85,16 @@ export const useRecommendations = (sortBy = 'popularity') => {
   }, [fetchRecommendations]));
 
   const refresh = useCallback(() => {
-    setRefreshing(true);
-    return fetchRecommendations({ forceRefresh: true, showLoader: false });
+    return fetchRecommendations({ showLoader: false, refreshFeedback: true });
   }, [fetchRecommendations]);
   const removeRecommendation = (id) => {
     requestSerial.current += 1;
     clearPersonalizationDiscoveryCache('recommendations');
+    if (user?.uid) invalidateProfileResources(user.uid);
     setLoading(false);
     setRefreshing(false);
+    setConfirming(false);
     setData((previous) => previous.filter((item) => item.id !== id));
   };
-  return { data, error, loading, refreshing, refresh, removeRecommendation, setDiscoveryRequest };
+  return { data, error, loading, refreshing, confirming, refresh, removeRecommendation, setDiscoveryRequest };
 };

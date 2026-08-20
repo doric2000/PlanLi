@@ -15,6 +15,11 @@ jest.mock('@expo/vector-icons', () => ({
     const ReactNative = jest.requireActual('react-native');
     return ReactRuntime.createElement(ReactNative.Text, null, name);
   },
+  Ionicons: ({ name }) => {
+    const ReactRuntime = jest.requireActual('react');
+    const ReactNative = jest.requireActual('react-native');
+    return ReactRuntime.createElement(ReactNative.Text, null, name);
+  },
 }));
 
 const styles = createProfileStyles({}, 390);

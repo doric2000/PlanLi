@@ -15,6 +15,7 @@ import { formatNotificationMessage } from '../models/NotificationModel';
 import { formatNotificationTime } from '../../../utils/formatNotificationTime';
 import { colors, notifications } from '../../../styles';
 import { NotificationType, PostType } from '../models/NotificationModel';
+import NavigationChevron from '../../../components/NavigationChevron';
 
 export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
   const {
@@ -65,6 +66,7 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
       activeOpacity={0.7}
     >
       {!isRead && <View style={notifications.cardUnreadDot} />}
+      <NavigationChevron size={20} color={colors.textSecondary} style={notifications.cardArrowIcon} />
       <View style={notifications.cardContent}>
         <View style={notifications.cardHeader}>
           <Avatar photoURL={actorAvatar} displayName={actorName} size={44} />
@@ -83,7 +85,6 @@ export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
           </View>
         </View>
       </View>
-      <Ionicons name="chevron-back" size={20} color={colors.textSecondary} style={notifications.cardArrowIcon} />
     </TouchableOpacity>
   );
 };
