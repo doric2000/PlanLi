@@ -17,7 +17,7 @@ import {
   removeDestinationSelection,
 } from '../utils/progressiveDiscoveryFilters';
 import { compactDestinationText } from '../utils/destinationSearch';
-import { loadRecentDiscoveryDestinations } from '../utils/recentDiscoveryDestinations';
+import { reconcileStoredRecentDiscoveryDestinations } from '../utils/recentDiscoveryDestinations';
 
 function uniqueOptions(options, used, selectedKeys, maximum) {
   const output = [];
@@ -64,6 +64,12 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
   } = useDestinationFilterOptions(enabled, debouncedQuery);
   const { favorites } = useFavoriteCityIds({ enabled });
   const selected = Array.isArray(destinations) ? destinations : [];
+  const canonicalOptionsKey = JSON.stringify(options.map((option) => ({
+    countryId: option.countryId,
+    cityId: option.cityId,
+    name: option.name,
+    countryName: option.countryName,
+  })));
   const trimmedQuery = query.trim();
   const normalizedQuery = compactDestinationText(trimmedQuery);
   const searchSettled = compactDestinationText(debouncedQuery) === normalizedQuery;
@@ -72,11 +78,11 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
   useEffect(() => {
     if (!enabled) return undefined;
     let active = true;
-    loadRecentDiscoveryDestinations().then((items) => {
+    reconcileStoredRecentDiscoveryDestinations(JSON.parse(canonicalOptionsKey)).then((items) => {
       if (active && items.length) setRecent(items);
     });
     return () => { active = false; };
-  }, [enabled]);
+  }, [enabled, canonicalOptionsKey]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);

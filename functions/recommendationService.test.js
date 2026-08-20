@@ -6,6 +6,7 @@ const {
   findExistingDestinationByAlias,
   finalizeDestinationChoice,
   isVerifiedCaller,
+  normalizeDestinationForUse,
   parsePlaceDetails,
   resolveGoogleDestination,
   resolvePlaceCountry,
@@ -48,6 +49,19 @@ test('verified caller accepts verified password users, social users and admins',
     true
   );
   assert.equal(isVerifiedCaller({ uid: 'u1', token: { admin: true } }), true);
+});
+
+test('old Latin-only Sa Pa destination snapshots are revalidated locally without provider work', () => {
+  const normalized = normalizeDestinationForUse({
+    countryId: 'VN',
+    countryData: { code: 'VN', name: 'וייטנאם' },
+    cityData: {
+      googleCache: { names: { he: 'Sa Pa', en: 'Sa Pa' }, countryCode: 'VN' },
+    },
+  });
+  assert.equal(normalized.cityData.googleCache.names.he, 'סאפה');
+  assert.equal(normalized.cityData.googleCache.nameSources.he, 'override');
+  assert.equal(normalized.repairCityName, true);
 });
 
 test('administrative aliases reuse a nearby known Chiang Rai destination before Google fallback', async () => {
@@ -640,6 +654,23 @@ function createFakeAdmin(seed = {}) {
     },
   });
   const readField = (data, field) => field.split('.').reduce((value, key) => value?.[key], data);
+  const applyUpdate = (current, patch) => {
+    const next = { ...current };
+    Object.entries(patch).forEach(([field, value]) => {
+      if (!field.includes('.')) {
+        next[field] = value;
+        return;
+      }
+      const segments = field.split('.');
+      let target = next;
+      segments.slice(0, -1).forEach((segment) => {
+        target[segment] = { ...(target[segment] || {}) };
+        target = target[segment];
+      });
+      target[segments.at(-1)] = value;
+    });
+    return next;
+  };
   const makeQuery = (collectionPath, field, operation, expected) => ({
     limit: () => makeQuery(collectionPath, field, operation, expected),
     get: async () => {
@@ -677,7 +708,7 @@ function createFakeAdmin(seed = {}) {
         },
         update: (ref, data) => {
           if (!documents.has(ref.path)) throw new Error('missing');
-          documents.set(ref.path, { ...documents.get(ref.path), ...data });
+          documents.set(ref.path, applyUpdate(documents.get(ref.path), data));
         },
         set: (ref, data) => {
           documents.set(ref.path, { ...(documents.get(ref.path) || {}), ...data });
@@ -1065,6 +1096,39 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
 });
 
+test('saveRecommendation repairs an existing Latin-only Sa Pa destination without Google calls', async () => {
+  const admin = createFakeAdmin({
+    'countries/VN': { name: 'וייטנאם', code: 'VN', status: 'active' },
+    'countries/VN/destinations/SA_PA': {
+      status: 'active',
+      googleCache: { names: { he: 'Sa Pa', en: 'Sa Pa' }, countryCode: 'VN' },
+      stats: { recommendationCount: 0 },
+    },
+  });
+  const originalFetch = global.fetch;
+  let providerCalls = 0;
+  global.fetch = async () => { providerCalls += 1; throw new Error('provider must not be called'); };
+  try {
+    const result = await saveRecommendation({
+      admin,
+      auth: verifiedAuth,
+      mapsKey: 'unused',
+      data: {
+        destinationRef: { countryId: 'VN', cityId: 'SA_PA' },
+        recommendation: validContent,
+      },
+    });
+    const saved = admin.documents.get(`recommendations/${result.recommendationId}`);
+    const destination = admin.documents.get('countries/VN/destinations/SA_PA');
+    assert.equal(saved.destination.cityName, 'סאפה');
+    assert.equal(destination.googleCache.names.he, 'סאפה');
+    assert.equal(destination.googleCache.nameSources.he, 'override');
+    assert.equal(providerCalls, 0);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('publishRequestId makes create retries idempotent without incrementing destination stats twice', async () => {
   const admin = createFakeAdmin({
     'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
@@ -1085,7 +1149,7 @@ test('publishRequestId makes create retries idempotent without incrementing dest
   assert.equal(replay.idempotentReplay, true);
   assert.equal(Object.hasOwn(admin.documents.get(`recommendations/${first.recommendationId}`), 'publishRequestId'), false);
   assert.equal(
-    admin.documents.get('countries/IL/destinations/TLV')['stats.recommendationCount'],
+    admin.documents.get('countries/IL/destinations/TLV').stats.recommendationCount,
     1
   );
   assert.equal(

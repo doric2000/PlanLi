@@ -72,8 +72,10 @@ const {
 const {
   approveDestination,
   deactivateDestination,
+  evaluateAndPersistDestination,
   getAirportCandidates,
   getDestinationImageCandidates,
+  getDestinationRenameJob,
   getDestinationReview,
   listDestinationReviews,
   onDestinationCreated,
@@ -81,8 +83,10 @@ const {
   scanDestinationQuality,
   selectDestinationImageCandidate,
   setDestinationAirport,
+  setDestinationHebrewName,
   setDestinationUploadedImage,
 } = require('./destinationAdminService');
+const { processDestinationRenameJob } = require('./destinationRenameService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
@@ -572,6 +576,12 @@ exports.getAirportCandidates = callable({ access: 'signedIn', timeoutSeconds: 12
 exports.setDestinationAirport = callable({ access: 'signedIn', timeoutSeconds: 120 }, (request) =>
   setDestinationAirport({ admin, auth: request.auth, data: request.data })
 );
+exports.setDestinationHebrewName = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
+  setDestinationHebrewName({ admin, auth: request.auth, data: request.data })
+);
+exports.getDestinationRenameJob = callable({ access: 'signedIn' }, (request) =>
+  getDestinationRenameJob({ admin, auth: request.auth, data: request.data })
+);
 exports.deactivateDestination = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
   deactivateDestination({ admin, auth: request.auth, data: request.data })
 );
@@ -784,6 +794,7 @@ async function handleMediaCleanup(event, collectionName) {
 exports.onDestinationImageCreated = firestoreCreated(
   'countries/{countryId}/destinations/{cityId}',
   async (event) => {
+    await onDestinationCreated({ admin, countryId: event.params.countryId, cityId: event.params.cityId });
     await resolveAndPersistDestinationImage({
       admin,
       countryId: event.params.countryId,
@@ -796,7 +807,11 @@ exports.onDestinationImageCreated = firestoreCreated(
         reason: error?.code || error?.message || 'unknown',
       });
     });
-    return onDestinationCreated({ admin, countryId: event.params.countryId, cityId: event.params.cityId });
+    return evaluateAndPersistDestination({
+      admin,
+      countryId: event.params.countryId,
+      cityId: event.params.cityId,
+    });
   },
   { secrets: [unsplashAccessKey], timeoutSeconds: 120 }
 );
@@ -952,6 +967,24 @@ exports.onDestinationCatalogSync = firestoreWritten(
     cityId: event.params.cityId,
     city: event.data?.after.exists ? event.data.after.data() : null,
   })
+);
+
+exports.onDestinationRenameJobWritten = firestoreWritten(
+  'system/runtime/destinationRenameJobs/{jobId}',
+  async (event) => {
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+    if (after?.status !== 'queued') return null;
+    const result = await processDestinationRenameJob({ admin, jobId: event.params.jobId });
+    if (result.status === 'complete') {
+      await evaluateAndPersistDestination({
+        admin,
+        countryId: after.countryId,
+        cityId: after.cityId,
+      });
+    }
+    return result;
+  },
+  { timeoutSeconds: 300 }
 );
 
 exports.onCountryDestinationCatalogSync = firestoreWritten(

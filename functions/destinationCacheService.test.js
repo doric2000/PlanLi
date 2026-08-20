@@ -110,3 +110,52 @@ test('destination refresh cannot restore a Latin value into the Hebrew name fiel
   assert.equal(update.googleCache.names.he, 'ולורה');
   assert.equal(update.googleCache.nameSources.he, 'override');
 });
+
+test('destination refresh preserves an admin Hebrew name', async () => {
+  let update = null;
+  const destination = {
+    countryId: 'VN',
+    status: 'active',
+    providerRefs: { googlePlaceId: 'sa-pa-city' },
+    googleCache: {
+      names: { he: 'סאפה', en: 'Sa Pa' },
+      nameSources: { he: 'admin', en: 'google' },
+    },
+  };
+  const document = {
+    data: () => destination,
+    ref: { path: 'countries/VN/destinations/sa-pa', update: async (value) => { update = value; } },
+  };
+  const query = {
+    where() { return this; }, orderBy() { return this; }, limit() { return this; },
+    get: async () => ({ docs: [document] }),
+  };
+  const firestore = () => ({ collectionGroup: () => query });
+  firestore.FieldValue = { serverTimestamp: () => 'NOW' };
+  const admin = { firestore };
+  const details = (language) => ({
+    id: 'sa-pa-city',
+    displayName: { text: language === 'he' ? 'סה פה' : 'Sa Pa' },
+    addressComponents: [
+      { longText: language === 'he' ? 'סה פה' : 'Sa Pa', types: ['locality'] },
+      { longText: language === 'he' ? 'וייטנאם' : 'Vietnam', shortText: 'VN', types: ['country'] },
+    ],
+    location: { latitude: 22.3364, longitude: 103.8438 },
+    types: ['locality'],
+  });
+
+  await refreshDestinationCaches({
+    admin,
+    newPlacesKey: 'new-key',
+    placesProvider: 'new',
+    fetchImpl: async (url) => ({
+      ok: true,
+      status: 200,
+      json: async () => details(new URL(url).searchParams.get('languageCode')),
+    }),
+    now: new Date('2026-08-20T00:00:00Z'),
+  });
+
+  assert.equal(update.googleCache.names.he, 'סאפה');
+  assert.equal(update.googleCache.nameSources.he, 'admin');
+});

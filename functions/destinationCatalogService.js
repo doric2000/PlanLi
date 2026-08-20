@@ -1,5 +1,6 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { hasUsableDestinationCache } = require('./destinationCacheService');
+const { destinationEnglishName, destinationHebrewName } = require('./destinationLocalizationService');
 
 const COMBINING_MARKS = /[\u0300-\u036f\u0591-\u05C7]/g;
 const NON_ALPHANUMERIC = /[^a-z0-9\u05D0-\u05EA]+/gi;
@@ -77,7 +78,10 @@ function destinationClassFor(city) {
 }
 
 function catalogData({ countryId, cityId, city, country, timestamp }) {
-  const names = city?.googleCache?.names || city?.identity?.names || { he: city?.name || cityId, en: city?.name || cityId };
+  const names = {
+    he: destinationHebrewName(city) || cityId,
+    en: destinationEnglishName(city) || cityId,
+  };
   const countryNames = country?.names || { he: country?.name || countryId, en: country?.name || countryId };
   const googleTypes = Array.from(new Set([
     ...(Array.isArray(city?.googleCache?.types) ? city.googleCache.types : []),

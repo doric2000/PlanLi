@@ -3,12 +3,18 @@ const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { evaluateTextSafety } = require('./moderationService');
 const {
   isVerifiedCaller,
+  destinationHebrewWritePatch,
   normalizePublishRequestId,
   resolveExistingDestination,
   resolveSubmittedPlaceDestination,
   stableDocumentId,
   validateMediaAssets,
 } = require('./recommendationService');
+const {
+  destinationHebrewName,
+  hasHebrewName,
+  normalizeDestinationHebrewData,
+} = require('./destinationLocalizationService');
 const {
   buildTravelContentFacets,
   CATEGORY_IDS,
@@ -390,7 +396,7 @@ async function resolveRoutePlaces({
           countryId: destination.countryId,
           cityId: destination.cityId,
           countryName: destination.countryData.name || destination.countryId,
-          cityName: destination.cityData.googleCache?.names?.he || destination.cityData.name || destination.cityId,
+          cityName: destinationHebrewName(destination.cityData) || destination.cityId,
         },
       };
     }),
@@ -407,7 +413,7 @@ async function resolveRoutePlaces({
       countryId: destination.countryId,
       cityId: destination.cityId,
       countryName: destination.countryData.name || destination.countryId,
-      cityName: destination.cityData.googleCache?.names?.he || destination.cityData.name || destination.cityId,
+      cityName: destinationHebrewName(destination.cityData) || destination.cityId,
     })),
   };
 }
@@ -585,14 +591,6 @@ async function saveRoute({
     destinationKey(destination.countryId),
     destinationKey(destination.countryId, destination.cityId),
   ])));
-  const search = buildSearchIndex({
-    title: route.title,
-    description: `${route.description} ${summaryPlaces.join(' ')}`,
-    destinations: resolved.destinations,
-    categoryIds: route.categoryIds,
-    subcategoryIds: route.subcategoryIds,
-    interestIds: route.facets.interests,
-  });
   const now = admin.firestore.FieldValue.serverTimestamp();
   const revisionId = routeRevisionId(routeRef);
   const revisionRef = routeRef.collection('revisions').doc(revisionId);
@@ -690,6 +688,7 @@ async function saveRoute({
       Promise.all(destinationEntries.map((entry) => transaction.get(entry.ref))),
       Promise.all(claimEntries.map((entry) => transaction.get(entry.ref))),
     ]);
+    const canonicalDestinationNames = new Map();
 
     destinationEntries.forEach((entry, index) => {
       const snapshot = destinationSnapshots[index];
@@ -704,6 +703,9 @@ async function saveRoute({
           createdAt: now,
           updatedAt: now,
         });
+        if (entry.kind === 'destination') {
+          canonicalDestinationNames.set(entry.ref.path, destinationHebrewName(entry.data));
+        }
         return;
       }
       assert(
@@ -711,6 +713,19 @@ async function saveRoute({
         'failed-precondition',
         `The selected ${entry.kind} is no longer active.`
       );
+      if (entry.kind === 'destination') {
+        const countryId = entry.ref.path.split('/')[1];
+        const canonical = normalizeDestinationHebrewData(snapshot.data(), { countryCode: countryId });
+        assert(hasHebrewName(canonical.name), 'failed-precondition',
+          'The destination has no trustworthy Hebrew name.');
+        canonicalDestinationNames.set(entry.ref.path, canonical.name);
+        if (canonical.changed) {
+          transaction.update(entry.ref, {
+            ...destinationHebrewWritePatch(canonical.destination),
+            updatedAt: now,
+          });
+        }
+      }
     });
 
     claimEntries.forEach((entry, index) => {
@@ -747,6 +762,30 @@ async function saveRoute({
       }, { merge: true });
     });
 
+    const canonicalDestinations = resolved.destinations.map((destination) => ({
+      ...destination,
+      cityName: canonicalDestinationNames.get(
+        `countries/${destination.countryId}/destinations/${destination.cityId}`
+      ) || destination.cityName,
+    }));
+    const canonicalSearch = buildSearchIndex({
+      title: route.title,
+      description: `${route.description} ${summaryPlaces.join(' ')}`,
+      destinations: canonicalDestinations,
+      categoryIds: route.categoryIds,
+      subcategoryIds: route.subcategoryIds,
+      interestIds: route.facets.interests,
+    });
+    days.forEach((day) => day.stops.forEach((stop) => {
+      const canonicalName = canonicalDestinationNames.get(
+        `countries/${stop.destination.countryId}/destinations/${stop.destination.cityId}`
+      );
+      if (canonicalName && canonicalName !== stop.destination.cityName) {
+        transaction.update(revisionRef.collection('days').doc(day.id).collection('stops').doc(stop.id), {
+          destination: { ...stop.destination, cityName: canonicalName },
+        });
+      }
+    }));
     const routeDocument = {
       taxonomyVersion: taxonomy.version,
       ownerId: currentRoute?.ownerId || uid,
@@ -765,10 +804,10 @@ async function saveRoute({
       experienceLevel: route.experienceLevel,
       transportModes: route.transportModes,
       pace: route.pace,
-      destinations: resolved.destinations,
+      destinations: canonicalDestinations,
       destinationKeys,
       summaryPlaces,
-      search,
+      search: canonicalSearch,
       media: validatedMedia,
       stats: currentRoute?.stats || { likeCount: 0, commentCount: 0 },
       activeRevisionId: revisionId,

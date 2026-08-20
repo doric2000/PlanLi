@@ -3,6 +3,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { applyAffinitySignalInTransaction } = require('./personalizationService');
 const { evaluateTextSafety } = require('./moderationService');
+const { destinationHebrewName } = require('./destinationLocalizationService');
 
 const TARGETS = Object.freeze({
   recommendation: { collection: 'recommendations' },
@@ -111,7 +112,7 @@ function buildFavoritePreview({ target, data, publicProfile }) {
     ? (data?.countryName || '')
     : description.slice(0, 140);
   return compactObject({
-    title: data?.title || data?.googleCache?.names?.he || data?.name || '',
+    title: data?.title || (target.type === 'city' ? destinationHebrewName(data) : '') || data?.name || '',
     subtitle,
     thumbUrl: mediaThumb(data),
     placeholderColor: mediaPlaceholder(data),

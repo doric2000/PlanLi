@@ -13,6 +13,7 @@ export const ADMIN_CALLABLE_TIMEOUTS = Object.freeze({
   setDestinationUploadedImage: 320000,
   getAirportCandidates: 140000,
   setDestinationAirport: 140000,
+  setDestinationHebrewName: 320000,
   deactivateDestination: 320000,
 });
 const call = async (name, payload = {}) => {
@@ -46,4 +47,6 @@ export const selectDestinationImageCandidate = (countryId, cityId, candidateId, 
 export const setDestinationUploadedImage = (countryId, cityId, asset, reason, alt = '') => call('setDestinationUploadedImage', { countryId, cityId, asset, reason, alt });
 export const getAirportCandidates = (countryId, cityId) => call('getAirportCandidates', { countryId, cityId });
 export const setDestinationAirport = (countryId, cityId, iataCode, reason) => call('setDestinationAirport', { countryId, cityId, iataCode, reason });
+export const setDestinationHebrewName = (countryId, cityId, nameHe, reason) => call('setDestinationHebrewName', { countryId, cityId, nameHe, reason });
+export const getDestinationRenameJob = (jobId) => call('getDestinationRenameJob', { jobId });
 export const deactivateDestination = (countryId, cityId, reason) => call('deactivateDestination', { countryId, cityId, reason });

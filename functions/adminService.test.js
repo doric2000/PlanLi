@@ -46,6 +46,7 @@ test('destructive admin operations require recent authentication', () => {
 test('sensitive-admin action list is explicit and contains only high-impact admin operations', () => {
   const actions = sensitiveAdminActions();
   assert.ok(actions.deactivateDestination?.recentSignIn);
+  assert.ok(actions.setDestinationHebrewName?.recentSignIn);
   assert.ok(actions.setUserAdmin?.recentSignIn);
   assert.equal(typeof actions.deactivateDestination.reason, 'string');
   assert.equal(actions.approveDestination, undefined);

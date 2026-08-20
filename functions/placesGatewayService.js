@@ -6,6 +6,7 @@ const {
   providerRequestContext,
 } = require('./placesProviderAdapter');
 const { consumeProviderBudget } = require('./providerRateLimitService');
+const { DESTINATION_NAMING_POLICY_VERSION } = require('./destinationLocalizationService');
 const {
   createIncidentId,
   decorateLocationError,
@@ -302,6 +303,7 @@ async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken, provide
     he: value.he,
     en: value.en,
     destinationResolution: value.destinationResolution || null,
+    destinationNamingPolicyVersion: Number(value.destinationNamingPolicyVersion || 0),
     incidentId: createIncidentId(value.incidentId),
     providerCallCount: Number(value.providerCallCount || 0),
   };
@@ -318,6 +320,7 @@ async function storeResolvedPlaceDestination({
   assert(destinationResolution && typeof destinationResolution === 'object', 'invalid-argument', 'Destination resolution is invalid.');
   await resolvedTokenRef(admin.firestore(), token).set({
     destinationResolution,
+    destinationNamingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
     ...(Number.isFinite(providerCallCount) ? { providerCallCount } : {}),
   }, { merge: true });
 }

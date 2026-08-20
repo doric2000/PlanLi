@@ -35,6 +35,38 @@ export function mergeRecentDiscoveryDestinations(selected, existing) {
   return unique;
 }
 
+export function reconcileRecentDiscoveryDestinations(recent, catalog) {
+  const canonical = new Map((Array.isArray(catalog) ? catalog : [])
+    .filter((item) => item?.countryId && item?.cityId)
+    .map((item) => [destinationKey(item), item]));
+  return (Array.isArray(recent) ? recent : []).map(cleanDestination).filter(Boolean)
+    .map((item) => {
+      const match = canonical.get(destinationKey(item));
+      if (!match) return item;
+      const name = String(match.name || match.names?.he || match.label || item.name || item.label).slice(0, 100);
+      const countryName = String(match.countryName || match.countryNames?.he || item.countryName || '').slice(0, 100);
+      return cleanDestination({
+        ...item,
+        name,
+        countryName,
+        label: [name, countryName].filter(Boolean).join(' · '),
+      });
+    });
+}
+
+export async function reconcileStoredRecentDiscoveryDestinations(catalog) {
+  const current = await loadRecentDiscoveryDestinations();
+  const reconciled = reconcileRecentDiscoveryDestinations(current, catalog);
+  if (JSON.stringify(reconciled) !== JSON.stringify(current)) {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(reconciled));
+    } catch {
+      // Canonical labels still render for this session even if local persistence fails.
+    }
+  }
+  return reconciled;
+}
+
 export async function loadRecentDiscoveryDestinations() {
   try {
     const value = await AsyncStorage.getItem(STORAGE_KEY);

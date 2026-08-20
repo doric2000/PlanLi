@@ -7,11 +7,11 @@ import * as AdminService from '../src/services/AdminService';
 
 jest.mock('../src/services/AdminService', () => ({
   approveDestination: jest.fn(), deactivateDestination: jest.fn(), deleteUserAsAdmin: jest.fn(),
-  getAirportCandidates: jest.fn(), getDestinationImageCandidates: jest.fn(), getDestinationReview: jest.fn(),
+  getAirportCandidates: jest.fn(), getDestinationImageCandidates: jest.fn(), getDestinationRenameJob: jest.fn(), getDestinationReview: jest.fn(),
   getModerationCase: jest.fn(), getModerationDashboard: jest.fn(), listAdminUsers: jest.fn(),
   listDestinationReviews: jest.fn(), listHeldContent: jest.fn(), listModerationAudit: jest.fn(),
   listModerationCases: jest.fn(), moderateContent: jest.fn(), recheckDestination: jest.fn(),
-  selectDestinationImageCandidate: jest.fn(), setDestinationAirport: jest.fn(), setDestinationUploadedImage: jest.fn(),
+  selectDestinationImageCandidate: jest.fn(), setDestinationAirport: jest.fn(), setDestinationHebrewName: jest.fn(), setDestinationUploadedImage: jest.fn(),
   setUserAdmin: jest.fn(), setUserEmailVerified: jest.fn(), setUserSuspension: jest.fn(),
 }));
 jest.mock('../src/hooks/useAdminClaim', () => ({ useAdminClaim: () => ({ isAdmin: true, loading: false }) }));
@@ -52,6 +52,7 @@ describe('AdminPanelScreen request and action isolation', () => {
     AdminService.listDestinationReviews.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.listAdminUsers.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.listModerationAudit.mockResolvedValue({ items: [], nextCursor: null });
+    AdminService.getDestinationRenameJob.mockResolvedValue({ status: 'complete', updatedCounts: {} });
     Alert.prompt = jest.fn((_title, _message, callback) => callback('סיבה תקינה'));
   });
 
@@ -266,6 +267,34 @@ describe('AdminPanelScreen request and action isolation', () => {
     await waitFor(() => expect(AdminService.getDestinationReview).toHaveBeenCalled());
     rows = screen.getAllByTestId(/^admin-destination-(pending|approved)$/);
     expect(rows.map((row) => row.props.testID)).toEqual(['admin-destination-approved', 'admin-destination-pending']);
+  });
+
+  it('renames a destination in Hebrew without approving it', async () => {
+    AdminService.listDestinationReviews.mockResolvedValue({
+      items: [{
+        id: 'sapa', countryId: 'VN', cityId: 'sa-pa', status: 'blocked',
+        names: { he: 'Sa Pa', en: 'Sa Pa' }, issues: [{ code: 'missing_hebrew_name', severity: 'error', label: 'חסר שם בעברית' }],
+      }],
+      nextCursor: null,
+    });
+    AdminService.setDestinationHebrewName.mockResolvedValue({
+      jobId: 'job-1', status: 'complete', progress: { recommendations: 1, routesAndStops: 0, trips: 0 },
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByText('1');
+    fireEvent.press(screen.getByTestId('admin-tab-destinations'));
+    await screen.findByTestId('admin-destination-sapa');
+
+    fireEvent.press(screen.getByTestId('admin-destination-rename-sapa'));
+    fireEvent.changeText(screen.getByTestId('admin-destination-rename-name-sapa'), 'סאפה');
+    fireEvent.changeText(screen.getByTestId('admin-destination-rename-reason-sapa'), 'תיקון שם היעד');
+    fireEvent.press(screen.getByTestId('admin-destination-rename-save-sapa'));
+
+    await waitFor(() => expect(AdminService.setDestinationHebrewName).toHaveBeenCalledWith(
+      'VN', 'sa-pa', 'סאפה', 'תיקון שם היעד'
+    ));
+    expect(await screen.findByText('השם עודכן בכל התוכן המקושר.')).toBeTruthy();
+    expect(AdminService.approveDestination).not.toHaveBeenCalled();
   });
 
   it('shows the admin name in the activity log and the pending-city metric in overview', async () => {
