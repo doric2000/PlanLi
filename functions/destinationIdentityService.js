@@ -39,6 +39,7 @@ async function wikidataRequest(url, fetchImpl) {
 function normalize(value) {
   return String(value || '')
     .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[\u0591-\u05C7]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9\u05d0-\u05ea]+/gi, ' ')
@@ -53,11 +54,16 @@ function coordinates(value) {
 }
 
 function cityCoordinates(city) {
-  return coordinates(city?.identity?.coordinates) || coordinates(city?.coordinates);
+  return coordinates(city?.googleCache?.coordinates) ||
+    coordinates(city?.identity?.coordinates) ||
+    coordinates(city?.coordinates);
 }
 
 function cityName(city) {
-  return String(city?.identity?.names?.he || city?.identity?.names?.en || city?.name || '').trim();
+  return String(
+    city?.googleCache?.names?.he || city?.googleCache?.names?.en ||
+    city?.identity?.names?.he || city?.identity?.names?.en || city?.name || ''
+  ).trim();
 }
 
 function distanceKm(a, b) {

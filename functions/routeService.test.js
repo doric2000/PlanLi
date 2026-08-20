@@ -7,6 +7,7 @@ const {
   assertRouteRevisionVersion,
   cleanupRouteRevisions,
   loadRouteDetails,
+  loadTrustedRoutePlaces,
   preservedRouteStatus,
   revisionVersion,
   sanitizeRouteInput,
@@ -52,6 +53,41 @@ test('canonical route input validates required route facets and exact stops', ()
   assert.deepEqual(route.transportModes, ['car']);
   assert.equal(Object.prototype.hasOwnProperty.call(route, 'search'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(route, 'destinations'), false);
+});
+
+test('route edits can request reuse of a server-trusted unchanged stop', async () => {
+  const route = sanitizeRouteInput(canonicalRoute({
+    days: [{
+      stops: [{
+        id: 'saved-stop',
+        title: 'Renamed stop',
+        reuseSavedLocation: true,
+        place: { placeId: 'google-place', coordinates: { lat: 32.1, lng: 34.8 } },
+      }],
+    }],
+  }));
+  assert.equal(route.days[0].stops[0].reuseSavedLocation, true);
+
+  const savedStop = {
+    place: { placeId: 'google-place', name: 'Trusted name', coordinates: { lat: 32.1, lng: 34.8 } },
+    destination: { countryId: 'IL', cityId: 'TLV' },
+  };
+  const db = {
+    doc: (path) => ({
+      get: async () => ({ exists: path.endsWith('/stops/saved-stop'), data: () => savedStop }),
+    }),
+  };
+  const trusted = await loadTrustedRoutePlaces({
+    db,
+    routeRef: { id: 'route-1' },
+    existingRoute: { activeRevisionId: 'revision-1' },
+    days: route.days,
+  });
+
+  assert.deepEqual(trusted.get('google-place'), {
+    destination: { countryId: 'IL', cityId: 'TLV' },
+    place: savedStop.place,
+  });
 });
 
 test('route metadata rejects missing required facets, invalid subcategories and missing Place IDs', () => {

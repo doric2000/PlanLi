@@ -14,6 +14,7 @@ import { searchCities } from '../services/LocationService';
 import WebPortal from './WebPortal';
 import { compactDestinationText } from '../utils/destinationSearch';
 import { locationErrorMessage } from '../utils/locationErrors';
+import { locationCopy } from '../utils/locationCopy';
 
 export default function GooglePlacesInput({
   onSelect,
@@ -42,7 +43,11 @@ export default function GooglePlacesInput({
   loaderStyle,
   rightAccessory,
   listContainerStyle,
+  explicitSearch = false,
+  returnSelection = false,
+  locale = 'he',
 }) {
+  const copy = locationCopy(locale);
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
 
@@ -57,6 +62,7 @@ export default function GooglePlacesInput({
   const [inputFocused, setInputFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const [settledQuery, setSettledQuery] = useState('');
 
@@ -66,6 +72,8 @@ export default function GooglePlacesInput({
   // - no local matches
   const googleFallbackTimerRef = useRef(null);
   const [googleTriggerQuery, setGoogleTriggerQuery] = useState('');
+  const [googleSearchGeneration, setGoogleSearchGeneration] = useState(0);
+  const latestSearchGenerationRef = useRef(0);
 
   // Aggressive call reduction:
   // - Debounce (wait for user to pause typing)
@@ -126,6 +134,12 @@ export default function GooglePlacesInput({
 
   const handleTextChange = (text) => {
     setSearchError(null);
+    if (explicitSearch) {
+      latestSearchGenerationRef.current += 1;
+      setHasSearched(false);
+      setPredictions([]);
+      setGoogleTriggerQuery('');
+    }
     if (isControlled) {
       onChangeValue(text);
     } else {
@@ -149,6 +163,7 @@ export default function GooglePlacesInput({
   };
 
   const settleSearchAfterSelection = () => {
+    latestSearchGenerationRef.current += 1;
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
@@ -165,6 +180,24 @@ export default function GooglePlacesInput({
     setSearchError(null);
     setPredictions([]);
     setGoogleTriggerQuery('');
+    setHasSearched(false);
+  };
+
+  const requestGoogleSearch = () => {
+    const text = query.trim();
+    if (compactDestinationText(text).length < MIN_QUERY_LENGTH || loading) return;
+    const generation = latestSearchGenerationRef.current + 1;
+    latestSearchGenerationRef.current = generation;
+    setSearchError(null);
+    setHasSearched(true);
+    // Enter the pending state in the same render as the submit action so the
+    // dropdown cannot briefly claim there are no results before the effect
+    // starts the callable.
+    setLoading(true);
+    setShowList(true);
+    setInputFocused(true);
+    setGoogleTriggerQuery(text);
+    setGoogleSearchGeneration(generation);
   };
 
   // For developer filter mode: decide when "search ended" (debounced) so we can show the fallback button.
@@ -184,6 +217,7 @@ export default function GooglePlacesInput({
   // Local-first: automatically enable Google fallback only after user stops typing for a while
   // and there are no local matches.
   useEffect(() => {
+    if (explicitSearch) return undefined;
     const text = query.trim();
     const searchKey = compactDestinationText(text);
 
@@ -204,7 +238,10 @@ export default function GooglePlacesInput({
     if (typeof onSelect !== 'function') return;
 
     googleFallbackTimerRef.current = setTimeout(() => {
+      const generation = latestSearchGenerationRef.current + 1;
+      latestSearchGenerationRef.current = generation;
       setGoogleTriggerQuery(text);
+      setGoogleSearchGeneration(generation);
     }, googleFallbackDelayMs);
 
     return () => {
@@ -213,7 +250,7 @@ export default function GooglePlacesInput({
         googleFallbackTimerRef.current = null;
       }
     };
-  }, [query, showList, normalizedLocalResults.length, localResultsLoading, googleFallbackDelayMs, onSelect]);
+  }, [explicitSearch, query, showList, normalizedLocalResults.length, localResultsLoading, googleFallbackDelayMs, onSelect]);
 
   useEffect(() => {
     if (!isGoogleMode) {
@@ -234,7 +271,7 @@ export default function GooglePlacesInput({
       return;
     }
 
-    if (text === lastRequestedQuery.current) {
+    if (text === lastRequestedQuery.current && predictions.length > 0) {
       return;
     }
 
@@ -253,9 +290,12 @@ export default function GooglePlacesInput({
 
     const now = Date.now();
     const timeSinceLast = now - lastRequestAt.current;
-    const delay = Math.max(DEBOUNCE_MS, timeSinceLast < COOLDOWN_MS ? COOLDOWN_MS - timeSinceLast : 0);
+    const delay = explicitSearch
+      ? 0
+      : Math.max(DEBOUNCE_MS, timeSinceLast < COOLDOWN_MS ? COOLDOWN_MS - timeSinceLast : 0);
 
     debounceTimer.current = setTimeout(async () => {
+      const requestGeneration = googleSearchGeneration;
       try {
         if (abortRef.current) abortRef.current.abort();
         abortRef.current = new AbortController();
@@ -264,6 +304,7 @@ export default function GooglePlacesInput({
         lastRequestedQuery.current = text;
 
         const results = await resolvedGoogleSearchFn(text, { signal: abortRef.current.signal });
+        if (requestGeneration !== latestSearchGenerationRef.current) return;
         const providerExpiry = Date.parse(results?.[0]?.expiresAt || '');
         const expiresAt = Number.isFinite(providerExpiry)
           ? providerExpiry
@@ -272,16 +313,16 @@ export default function GooglePlacesInput({
         setSearchError(null);
         setPredictions(results);
       } catch (e) {
-        if (e?.name !== 'AbortError') {
+        if (requestGeneration === latestSearchGenerationRef.current && e?.name !== 'AbortError') {
           lastRequestedQuery.current = '';
           setPredictions([]);
-          setSearchError(locationErrorMessage(e));
+          setSearchError(locationErrorMessage(e, locale));
         }
       } finally {
-        setLoading(false);
+        if (requestGeneration === latestSearchGenerationRef.current) setLoading(false);
       }
     }, delay);
-  }, [isGoogleMode, googleTriggerQuery, showList]);
+  }, [explicitSearch, googleSearchGeneration, isGoogleMode, googleTriggerQuery, locale, showList]);
 
   const showIdleLocalResults =
     showList &&
@@ -289,14 +330,16 @@ export default function GooglePlacesInput({
     query.trim().length === 0 &&
     normalizedIdleLocalResults.length > 0;
 
-  const shouldShowAnyDropdown = showIdleLocalResults || (
+  const shouldShowAnyDropdown = explicitSearch
+    ? showList && (loading || !!searchError || predictions.length > 0 || hasSearched)
+    : showIdleLocalResults || (
     showList &&
     query.trim().length >= (
       localResultsLoading
         ? LOCAL_MIN_QUERY_LENGTH
         : (normalizedLocalResults.length > 0 ? LOCAL_MIN_QUERY_LENGTH : MIN_QUERY_LENGTH)
     )
-  );
+    );
 
   const showDropdown = isGoogleMode && shouldShowAnyDropdown;
 
@@ -333,7 +376,7 @@ export default function GooglePlacesInput({
     }
     setInputFocused(false);
     setShowList(false);
-    onSelect(place.place_id); // Pass the ID back to HomeScreen
+    onSelect(returnSelection ? place : place.place_id);
   };
 
   const handleSelectLocal = (city) => {
@@ -366,16 +409,47 @@ export default function GooglePlacesInput({
       {/* Input Field */}
       <View
         ref={inputWrapperRef}
-        style={[common.homeSearchBar, googlePlacesInput.inputWrapper, inputWrapperStyle]}
+        style={[
+          common.homeSearchBar,
+          googlePlacesInput.inputWrapper,
+          explicitSearch && googlePlacesInput.explicitInputWrapper,
+          inputWrapperStyle,
+        ]}
       >
-        <Ionicons
-          name="search"
-          size={20}
-          color={searchIconColor || colors.textSecondary}
-          style={[googlePlacesInput.searchIcon, searchIconStyle]}
-        />
+        {explicitSearch ? (
+          <TouchableOpacity
+            style={[
+              googlePlacesInput.explicitSearchButton,
+              (loading || compactDestinationText(query).length < MIN_QUERY_LENGTH) &&
+                googlePlacesInput.explicitSearchButtonDisabled,
+            ]}
+            onPress={requestGoogleSearch}
+            disabled={loading || compactDestinationText(query).length < MIN_QUERY_LENGTH}
+            accessibilityRole="button"
+            accessibilityState={{
+              disabled: loading || compactDestinationText(query).length < MIN_QUERY_LENGTH,
+            }}
+            accessibilityLabel={copy.searchLocation}
+            testID={inputTestID ? `${inputTestID}-search` : 'google-places-search'}
+          >
+            <Ionicons name="search" size={17} color={colors.white} />
+            <AppText style={googlePlacesInput.explicitSearchButtonText}>{copy.search}</AppText>
+          </TouchableOpacity>
+        ) : (
+          <Ionicons
+            name="search"
+            size={20}
+            color={searchIconColor || colors.textSecondary}
+            style={[googlePlacesInput.searchIcon, searchIconStyle]}
+          />
+        )}
         <AppTextInput
-          style={[common.homeSearchInput, googlePlacesInput.input, inputStyle]}
+          style={[
+            common.homeSearchInput,
+            googlePlacesInput.input,
+            explicitSearch && googlePlacesInput.explicitInput,
+            inputStyle,
+          ]}
           placeholder={placeholder}
           value={query}
           onChangeText={handleTextChange}
@@ -385,6 +459,8 @@ export default function GooglePlacesInput({
           autoCapitalize="none"
           placeholderTextColor={placeholderTextColor || colors.placeholder}
           testID={inputTestID}
+          returnKeyType={explicitSearch ? 'search' : undefined}
+          onSubmitEditing={explicitSearch ? requestGoogleSearch : undefined}
         />
         {rightAccessory}
         {loading && (
@@ -392,7 +468,11 @@ export default function GooglePlacesInput({
             testID="google-places-loading"
             size="small"
             color={loaderColor || colors.primary}
-            style={[googlePlacesInput.loader, loaderStyle]}
+            style={[
+              googlePlacesInput.loader,
+              explicitSearch && googlePlacesInput.explicitLoader,
+              loaderStyle,
+            ]}
           />
         )}
       </View>
@@ -404,7 +484,7 @@ export default function GooglePlacesInput({
             onPress={() => onRequestGoogleSearch(settledQuery)}
           >
             <AppText style={[buttons.primarySmallText, googlePlacesInput.fallbackButtonText]}>
-              חפש ב-Google
+              {copy.searchGoogle}
             </AppText>
           </TouchableOpacity>
         </View>
@@ -412,7 +492,13 @@ export default function GooglePlacesInput({
 
       {/* Suggestions List */}
       {Platform.OS !== 'web' && shouldShowAnyDropdown && (
-        <View style={[googlePlacesInput.listContainer, listContainerStyle]}>
+          <View
+            style={[
+              googlePlacesInput.listContainer,
+              explicitSearch && googlePlacesInput.explicitListContainer,
+              listContainerStyle,
+            ]}
+          >
           {showIdleLocalResults ? (
             <ScrollView keyboardShouldPersistTaps="handled">
               <AppText style={googlePlacesInput.groupTitle}>{idleLocalTitle}</AppText>
@@ -472,12 +558,12 @@ export default function GooglePlacesInput({
           ) : localResultsLoading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
             </View>
           ) : loading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
             </View>
           ) : searchError ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
@@ -507,7 +593,7 @@ export default function GooglePlacesInput({
           ) : (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <Ionicons name="search" size={16} color={colors.textSecondary} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{copy.noResults}</AppText>
             </View>
           )}
         </View>
@@ -588,12 +674,12 @@ export default function GooglePlacesInput({
             ) : localResultsLoading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
               </View>
             ) : loading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
               </View>
             ) : searchError ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
@@ -623,7 +709,7 @@ export default function GooglePlacesInput({
             ) : (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <Ionicons name="search" size={16} color={colors.textSecondary} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{copy.noResults}</AppText>
               </View>
             )}
           </View>

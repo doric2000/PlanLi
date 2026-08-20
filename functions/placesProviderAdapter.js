@@ -1,9 +1,16 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { locationLog } = require('./locationDiagnostics');
 const {
   fetchLegacyBilingualPlace,
   fetchLegacyLocalityPlaceId,
 } = require('./legacyPlacesAdapter');
 const { distanceKm, normalize } = require('./destinationIdentityService');
+
+const PROVIDER_REQUEST_TIMEOUT_MS = 6000;
+const MAX_PROVIDER_REQUESTS_PER_ATTEMPT = 10;
+const MAX_PROVIDER_ATTEMPTS = 2;
+const MAX_LOCALITY_QUERIES = 2;
+const MAX_LOCALITY_CANDIDATES_PER_QUERY = 3;
 
 const NEW_AUTOCOMPLETE_FIELD_MASK = [
   'suggestions.placePrediction.placeId',
@@ -19,8 +26,15 @@ const NEW_DETAILS_FIELD_MASK = [
   'location',
   'viewport',
   'types',
-  'primaryType',
-  'businessStatus',
+  'movedPlaceId',
+].join(',');
+
+const NEW_SELECTION_DETAILS_FIELD_MASK = [
+  'id',
+  'addressComponents',
+  'formattedAddress',
+  'location',
+  'types',
   'movedPlaceId',
 ].join(',');
 
@@ -39,6 +53,98 @@ function providerKey({ provider, mapsKey, newPlacesKey }) {
       ? 'GOOGLE_PLACES_NEW_KEY is not configured.'
       : 'GOOGLE_MAPS_KEY is not configured.');
   return key.trim();
+}
+
+function providerRequestContext(value = {}) {
+  const context = value && typeof value === 'object' ? value : {};
+  if (!Number.isFinite(context.count)) context.count = 0;
+  if (!Number.isFinite(context.maximum)) context.maximum = MAX_PROVIDER_REQUESTS_PER_ATTEMPT;
+  return context;
+}
+
+function consumeProviderRequest(context) {
+  const tracker = providerRequestContext(context);
+  if (tracker.count >= tracker.maximum) {
+    throw new HttpsError(
+      'resource-exhausted',
+      'Location resolution reached its safe Google request limit.'
+    );
+  }
+  tracker.count += 1;
+  return tracker;
+}
+
+function retryableResponse(response) {
+  return response?.status === 429 || Number(response?.status || 0) >= 500;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function providerEndpointFor(value) {
+  const url = String(value || '');
+  if (url.includes('/v1/places:autocomplete')) return 'places_autocomplete';
+  if (url.includes('/v1/places/')) return 'places_details';
+  if (url.includes('/place/autocomplete/')) return 'legacy_autocomplete';
+  if (url.includes('/place/details/')) return 'legacy_details';
+  if (url.includes('/geocode/')) return 'geocode';
+  return 'google_provider';
+}
+
+function logProviderAttempt(requestContext, url, startedAt, providerStatus, outcome) {
+  if (!requestContext?.incidentId) return;
+  locationLog('provider', {
+    incidentId: requestContext.incidentId,
+    outcome,
+    durationMs: Date.now() - startedAt,
+    providerCalls: requestContext.count,
+    providerEndpoint: providerEndpointFor(url),
+    providerStatus,
+  });
+}
+
+async function fetchWithProviderPolicy(url, options = {}, {
+  fetchImpl = global.fetch,
+  requestContext,
+  timeoutMs = PROVIDER_REQUEST_TIMEOUT_MS,
+} = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt < MAX_PROVIDER_ATTEMPTS; attempt += 1) {
+    consumeProviderRequest(requestContext);
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(url, { ...options, signal: controller.signal });
+      logProviderAttempt(
+        requestContext,
+        url,
+        startedAt,
+        Number(response?.status || 0) || 'unknown',
+        response?.ok ? 'succeeded' : 'failed'
+      );
+      if (!retryableResponse(response) || attempt === MAX_PROVIDER_ATTEMPTS - 1) return response;
+      lastError = new Error(`Google provider returned HTTP ${response.status}.`);
+    } catch (error) {
+      lastError = error;
+      logProviderAttempt(
+        requestContext,
+        url,
+        startedAt,
+        error?.name === 'AbortError' ? 'timeout' : 'network_error',
+        'failed'
+      );
+      if (attempt === MAX_PROVIDER_ATTEMPTS - 1) break;
+    } finally {
+      clearTimeout(timeout);
+    }
+    await wait(250 + Math.floor(Math.random() * 250));
+  }
+  if (lastError?.name === 'AbortError') {
+    throw new HttpsError('deadline-exceeded', 'Google Places took too long to respond.');
+  }
+  throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
 }
 
 async function parseGoogleResponse(response, { notFoundMessage = 'The selected place no longer exists.' } = {}) {
@@ -70,6 +176,14 @@ const LOCALITY_TYPES = [
   'administrative_area_level_2',
   'administrative_area_level_1',
 ];
+
+function localityTypesForCountry(countryCode) {
+  if (String(countryCode || '').toUpperCase() !== 'TH') return LOCALITY_TYPES;
+  return [
+    'administrative_area_level_1',
+    ...LOCALITY_TYPES.filter((type) => type !== 'administrative_area_level_1'),
+  ];
+}
 
 function newLocalityCandidatesFor(details) {
   const components = Array.isArray(details?.addressComponents) ? details.addressComponents : [];
@@ -123,23 +237,20 @@ async function fetchNewPlaceDetails({
   language,
   sessionToken,
   fetchImpl = global.fetch,
+  requestContext,
+  fieldMask = NEW_DETAILS_FIELD_MASK,
 }) {
   assert(typeof placeId === 'string' && placeId.trim().length >= 3, 'invalid-argument', 'placeId is invalid.');
   providerKey({ provider: 'new', newPlacesKey });
   const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId.trim())}`);
   url.searchParams.set('languageCode', language);
   if (sessionToken) url.searchParams.set('sessionToken', sessionToken);
-  let response;
-  try {
-    response = await fetchImpl(url, {
-      headers: {
-        'X-Goog-Api-Key': newPlacesKey.trim(),
-        'X-Goog-FieldMask': NEW_DETAILS_FIELD_MASK,
-      },
-    });
-  } catch {
-    throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
-  }
+  const response = await fetchWithProviderPolicy(url, {
+    headers: {
+      'X-Goog-Api-Key': newPlacesKey.trim(),
+      'X-Goog-FieldMask': fieldMask,
+    },
+  }, { fetchImpl, requestContext });
   return parseGoogleResponse(response);
 }
 
@@ -148,10 +259,11 @@ async function fetchNewBilingualPlace({
   newPlacesKey,
   sessionToken,
   fetchImpl = global.fetch,
+  requestContext,
 }) {
   const [heDetails, enDetails] = await Promise.all([
-    fetchNewPlaceDetails({ placeId, newPlacesKey, language: 'he', sessionToken, fetchImpl }),
-    fetchNewPlaceDetails({ placeId, newPlacesKey, language: 'en', sessionToken, fetchImpl }),
+    fetchNewPlaceDetails({ placeId, newPlacesKey, language: 'he', sessionToken, fetchImpl, requestContext }),
+    fetchNewPlaceDetails({ placeId, newPlacesKey, language: 'en', sessionToken, fetchImpl, requestContext }),
   ]);
   const he = parseNewLocalizedPlace(heDetails);
   const en = parseNewLocalizedPlace(enDetails);
@@ -165,6 +277,36 @@ async function fetchNewBilingualPlace({
     throw new HttpsError('failed-precondition', 'This place has moved. Search for it again to use its current Google Place ID.');
   }
   return { he, en, fetchedAt: new Date() };
+}
+
+async function fetchNewSelectionPlace({ prediction, ...options }) {
+  const predictionTypes = new Set(prediction?.types || []);
+  const selectedIsDestination = [
+    'locality',
+    'postal_town',
+    'administrative_area_level_3',
+    'administrative_area_level_2',
+    'administrative_area_level_1',
+    'natural_feature',
+    'island',
+  ].some((type) => predictionTypes.has(type));
+  if (selectedIsDestination) {
+    return fetchNewBilingualPlace({ ...options, placeId: prediction.placeId });
+  }
+  const details = await fetchNewPlaceDetails({
+    ...options,
+    placeId: prediction.placeId,
+    language: 'en',
+    fieldMask: NEW_SELECTION_DETAILS_FIELD_MASK,
+  });
+  const parsed = parseNewLocalizedPlace(details);
+  if (parsed.movedPlaceId && parsed.movedPlaceId !== parsed.placeId) {
+    throw new HttpsError('failed-precondition',
+      'This place has moved. Search for it again to use its current Google Place ID.');
+  }
+  const exactName = String(prediction?.text || '').trim() || parsed.displayName;
+  const exact = { ...parsed, displayName: exactName };
+  return { he: exact, en: exact, fetchedAt: new Date() };
 }
 
 function normalizeNewPrediction(suggestion, randomSelectionId) {
@@ -191,11 +333,13 @@ async function newAutocomplete({
   sessionToken,
   fetchImpl = global.fetch,
   randomSelectionId,
+  coordinates,
+  requestContext,
 }) {
   providerKey({ provider: 'new', newPlacesKey });
-  let response;
-  try {
-    response = await fetchImpl('https://places.googleapis.com/v1/places:autocomplete', {
+  const response = await fetchWithProviderPolicy(
+    'https://places.googleapis.com/v1/places:autocomplete',
+    {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -207,12 +351,19 @@ async function newAutocomplete({
         languageCode: language,
         ...(sessionToken ? { sessionToken } : {}),
         ...(mode === 'destinations' ? { includedPrimaryTypes: ['(cities)'] } : {}),
+        ...(coordinates ? {
+          locationBias: {
+            circle: {
+              center: { latitude: coordinates.lat, longitude: coordinates.lng },
+              radius: 50000,
+            },
+          },
+        } : {}),
         includePureServiceAreaBusinesses: false,
       }),
-    });
-  } catch {
-    throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
-  }
+    },
+    { fetchImpl, requestContext }
+  );
   const payload = await parseGoogleResponse(response, { notFoundMessage: 'No matching places were found.' });
   return (Array.isArray(payload?.suggestions) ? payload.suggestions : [])
     .map((suggestion) => normalizeNewPrediction(suggestion, randomSelectionId))
@@ -221,16 +372,31 @@ async function newAutocomplete({
 
 async function autocompletePlaces(options) {
   if (selectedProvider(options.provider) === 'new') return newAutocomplete(options);
-  return options.legacyAutocomplete(options);
+  return options.legacyAutocomplete({
+    ...options,
+    fetchImpl: legacyPolicyFetch(options),
+  });
 }
 
 async function fetchBilingualPlace(options) {
   if (selectedProvider(options.provider) === 'new') return fetchNewBilingualPlace(options);
-  return fetchLegacyBilingualPlace(options);
+  return fetchLegacyBilingualPlace({
+    ...options,
+    fetchImpl: legacyPolicyFetch(options),
+  });
+}
+
+function legacyPolicyFetch(options) {
+  const fetchImpl = options.fetchImpl || global.fetch;
+  return (url, requestOptions = {}) => fetchWithProviderPolicy(url, requestOptions, {
+    fetchImpl,
+    requestContext: options.requestContext,
+  });
 }
 
 async function fetchNewLocalityPlaceId(options) {
-  const wanted = normalize(options.localityName);
+  const wantedAliases = localityAliases(options.localityName, options.countryCode);
+  const wanted = wantedAliases[0];
   assert(wanted, 'failed-precondition', 'The selected place has no trustworthy containing locality.');
   const predictions = await newAutocomplete({
     query: [options.localityName, options.countryName].filter(Boolean).join(' '),
@@ -240,25 +406,35 @@ async function fetchNewLocalityPlaceId(options) {
     sessionToken: options.sessionToken,
     fetchImpl: options.fetchImpl,
     randomSelectionId: () => '',
+    coordinates: options.coordinates,
+    requestContext: options.requestContext,
   });
-  const matches = predictions.filter((prediction) => normalize(prediction.text) === wanted);
+  const matches = predictions.filter((prediction) =>
+    localityAliases(prediction.text, options.countryCode)
+      .some((alias) => wantedAliases.includes(alias))
+  );
   const ids = [...new Set(matches.map((entry) => entry.placeId))];
   if (!ids.length) return null;
-  const candidates = (await Promise.all(ids.slice(0, 5).map(async (placeId) => {
+  const candidates = (await Promise.all(ids.slice(0, MAX_LOCALITY_CANDIDATES_PER_QUERY).map(async (placeId) => {
     const details = parseNewLocalizedPlace(await fetchNewPlaceDetails({
       placeId,
       newPlacesKey: options.newPlacesKey,
       language: 'en',
       sessionToken: options.sessionToken,
       fetchImpl: options.fetchImpl,
+      requestContext: options.requestContext,
     }));
-    const candidateName = normalize(details.localityName || details.displayName);
+    const candidateNames = localityAliases(
+      details.localityName || details.displayName,
+      options.countryCode
+    );
     const expectedCountry = String(options.countryCode || '').toUpperCase();
-    if (candidateName !== wanted ||
+    if (!candidateNames.some((alias) => wantedAliases.includes(alias)) ||
         (expectedCountry && details.countryCode !== expectedCountry) ||
         !details.coordinates || !options.coordinates) return null;
-    const typeIndex = LOCALITY_TYPES.indexOf(details.localityType);
-    const priority = typeIndex < 0 ? LOCALITY_TYPES.length : typeIndex;
+    const localityTypes = localityTypesForCountry(options.countryCode);
+    const typeIndex = localityTypes.indexOf(details.localityType);
+    const priority = typeIndex < 0 ? localityTypes.length : typeIndex;
     return {
       placeId,
       priority,
@@ -276,33 +452,257 @@ async function fetchNewLocalityPlaceId(options) {
   return candidates[0].placeId;
 }
 
-async function fetchLocalityPlaceId(options) {
-  const localityNames = Array.from(new Set([
+async function fetchPlaceSelection(options) {
+  if (selectedProvider(options.provider) === 'new') return fetchNewSelectionPlace(options);
+  return fetchLegacyBilingualPlace({
+    ...options,
+    placeId: options.prediction.placeId,
+    fetchImpl: legacyPolicyFetch(options),
+  });
+}
+
+const ADMINISTRATIVE_NAME_PREFIXES = [
+  'tambon',
+  'amphoe',
+  'mueang',
+  'muang',
+  'chang wat',
+  'province of',
+  'province',
+  'district of',
+  'district',
+  'county of',
+  'county',
+  'prefecture',
+  'governorate',
+  'qarku i',
+];
+const ADMINISTRATIVE_NAME_SUFFIXES = [
+  'district',
+  'province',
+  'county',
+  'prefecture',
+  'governorate',
+];
+const ALBANIAN_LOCALITY_EQUIVALENTS = [
+  ['vlora', 'vlore'],
+];
+
+function localityAliases(value, countryCode) {
+  const original = normalize(value);
+  if (!original) return [];
+  const aliases = new Set([original]);
+  let stripped = original;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prefix of ADMINISTRATIVE_NAME_PREFIXES) {
+      if (stripped.startsWith(`${prefix} `)) {
+        stripped = stripped.slice(prefix.length + 1).trim();
+        aliases.add(stripped);
+        changed = true;
+        break;
+      }
+    }
+  }
+  for (const suffix of ADMINISTRATIVE_NAME_SUFFIXES) {
+    if (stripped.endsWith(` ${suffix}`)) aliases.add(stripped.slice(0, -(suffix.length + 1)).trim());
+  }
+  if (String(countryCode || '').toUpperCase() === 'AL') {
+    const albanianForms = new Set(aliases);
+    for (const alias of albanianForms) {
+      if (alias.endsWith('es')) albanianForms.add(alias.slice(0, -1));
+    }
+    for (const equivalents of ALBANIAN_LOCALITY_EQUIVALENTS) {
+      if (equivalents.some((alias) => albanianForms.has(alias))) {
+        equivalents.forEach((alias) => aliases.add(alias));
+      }
+    }
+    albanianForms.forEach((alias) => aliases.add(alias));
+  }
+  return [...aliases].filter(Boolean).sort((left, right) => left.length - right.length);
+}
+
+function localitySearchNames(options) {
+  const values = [
     ...(Array.isArray(options.localityCandidates) ? options.localityCandidates : []),
     options.localityName,
-  ].map((value) => String(value || '').trim()).filter(Boolean))).slice(0, LOCALITY_TYPES.length);
+  ];
+  const result = [];
+  const seen = new Set();
+  for (const value of values) {
+    const raw = String(value || '').trim();
+    const aliases = localityAliases(raw, options.countryCode);
+    for (const alias of aliases) {
+      if (!alias || seen.has(alias)) continue;
+      seen.add(alias);
+      result.push({
+        query: alias === normalize(raw)
+          ? raw
+          : alias.replace(/\b[a-z]/g, (character) => character.toUpperCase()),
+        normalized: alias,
+      });
+    }
+  }
+  return result
+    .sort((left, right) => left.normalized.length - right.normalized.length || left.normalized.localeCompare(right.normalized))
+    .slice(0, MAX_LOCALITY_QUERIES)
+    .map((entry) => entry.query);
+}
+
+function legacyComponent(result, type) {
+  return (Array.isArray(result?.address_components) ? result.address_components : [])
+    .find((entry) => entry?.types?.includes(type));
+}
+
+async function fetchReverseLocalityCandidates(options) {
+  if (!options.mapsKey || !options.coordinates) return null;
+  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+  url.searchParams.set('latlng', `${options.coordinates.lat},${options.coordinates.lng}`);
+  url.searchParams.set(
+    'result_type',
+    'locality|postal_town|administrative_area_level_3|administrative_area_level_2|administrative_area_level_1'
+  );
+  url.searchParams.set('language', 'en');
+  url.searchParams.set('key', options.mapsKey);
+  let response;
+  try {
+    response = await fetchWithProviderPolicy(url, {}, {
+      fetchImpl: options.fetchImpl,
+      requestContext: options.requestContext,
+    });
+  } catch (error) {
+    if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted') throw error;
+    return null;
+  }
+  if (!response?.ok) return null;
+  const payload = await response.json();
+  if (payload?.status === 'ZERO_RESULTS') return null;
+  if (payload?.status === 'OVER_QUERY_LIMIT') {
+    throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
+  }
+  if (payload?.status !== 'OK' || !Array.isArray(payload.results)) return null;
+  const expectedCountry = String(options.countryCode || '').toUpperCase();
+  const candidates = payload.results.map((result) => {
+    const placeId = String(result?.place_id || '').trim();
+    const country = legacyComponent(result, 'country');
+    const countryCode = String(country?.short_name || '').toUpperCase();
+    const types = Array.isArray(result?.types) ? result.types : [];
+    const lat = Number(result?.geometry?.location?.lat);
+    const lng = Number(result?.geometry?.location?.lng);
+    const coordinates = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    if (!placeId || !coordinates || (expectedCountry && countryCode !== expectedCountry)) return null;
+    return { placeId, types, distanceKm: distanceKm(options.coordinates, coordinates) };
+  }).filter((entry) => entry && entry.distanceKm <= 50);
+
+  function choose(typePriority) {
+    const ranked = candidates.map((candidate) => {
+      const priority = typePriority.findIndex((type) => candidate.types.includes(type));
+      return priority < 0 ? null : { ...candidate, priority };
+    }).filter(Boolean).sort((left, right) =>
+      left.priority - right.priority || left.distanceKm - right.distanceKm ||
+      left.placeId.localeCompare(right.placeId)
+    );
+    if (!ranked.length) return null;
+    return {
+      placeId: ranked[0].placeId,
+      ambiguous: ranked.length > 1 && ranked[0].priority === ranked[1].priority &&
+        ranked[1].distanceKm - ranked[0].distanceKm < 5,
+    };
+  }
+
+  const settlement = choose(['locality', 'postal_town', 'administrative_area_level_3']);
+  const administrative = choose(expectedCountry === 'TH'
+    ? ['administrative_area_level_1', 'administrative_area_level_2']
+    : ['administrative_area_level_2', 'administrative_area_level_1']);
+  return {
+    settlement: settlement?.placeId || null,
+    settlementAmbiguous: settlement?.ambiguous || false,
+    administrative: administrative?.placeId || null,
+    administrativeAmbiguous: administrative?.ambiguous || false,
+  };
+}
+
+function rejectAmbiguousReverseCandidate(ambiguous) {
+  if (ambiguous) {
+    throw new HttpsError('failed-precondition',
+      'The destination locality is ambiguous. Please select a more specific place.');
+  }
+}
+
+async function fetchReverseLocalityPlaceId(options) {
+  const candidates = await fetchReverseLocalityCandidates(options);
+  if (!candidates) return null;
+  if (String(options.countryCode || '').toUpperCase() === 'TH') {
+    if (candidates.administrative) {
+      rejectAmbiguousReverseCandidate(candidates.administrativeAmbiguous);
+      return candidates.administrative;
+    }
+    rejectAmbiguousReverseCandidate(candidates.settlementAmbiguous);
+    return candidates.settlement;
+  }
+  if (candidates.settlement) {
+    rejectAmbiguousReverseCandidate(candidates.settlementAmbiguous);
+    return candidates.settlement;
+  }
+  rejectAmbiguousReverseCandidate(candidates.administrativeAmbiguous);
+  return candidates.administrative;
+}
+
+async function fetchLocalityPlaceId(options) {
+  const localityNames = localitySearchNames(options);
   assert(localityNames.length, 'failed-precondition',
     'The selected place has no trustworthy containing locality.');
+  const reverseCandidates = await fetchReverseLocalityCandidates(options);
+  if (String(options.countryCode || '').toUpperCase() === 'TH') {
+    const thaiCandidate = reverseCandidates?.administrative || reverseCandidates?.settlement;
+    if (thaiCandidate) {
+      rejectAmbiguousReverseCandidate(reverseCandidates.administrative
+        ? reverseCandidates.administrativeAmbiguous
+        : reverseCandidates.settlementAmbiguous);
+      return thaiCandidate;
+    }
+  }
+  if (reverseCandidates?.settlement) {
+    rejectAmbiguousReverseCandidate(reverseCandidates.settlementAmbiguous);
+    return reverseCandidates.settlement;
+  }
   for (const localityName of localityNames) {
     const request = { ...options, localityName };
     const placeId = selectedProvider(options.provider) === 'new'
       ? await fetchNewLocalityPlaceId(request)
-      : await fetchLegacyLocalityPlaceId(request);
+      : await fetchLegacyLocalityPlaceId({
+          ...request,
+          fetchImpl: legacyPolicyFetch(request),
+        });
     if (placeId) return placeId;
   }
-  return null;
+  if (String(options.countryCode || '').toUpperCase() === 'TH') return null;
+  rejectAmbiguousReverseCandidate(reverseCandidates?.administrativeAmbiguous);
+  return reverseCandidates?.administrative || null;
 }
 
 module.exports = {
   NEW_AUTOCOMPLETE_FIELD_MASK,
   NEW_DETAILS_FIELD_MASK,
+  NEW_SELECTION_DETAILS_FIELD_MASK,
+  MAX_PROVIDER_REQUESTS_PER_ATTEMPT,
   autocompletePlaces,
   fetchBilingualPlace,
   fetchLocalityPlaceId,
   fetchNewBilingualPlace,
   fetchNewPlaceDetails,
+  fetchNewSelectionPlace,
+  fetchPlaceSelection,
+  fetchReverseLocalityCandidates,
+  fetchReverseLocalityPlaceId,
+  fetchWithProviderPolicy,
+  localityAliases,
+  localitySearchNames,
   newAutocomplete,
   normalizeNewPrediction,
   parseNewLocalizedPlace,
+  providerEndpointFor,
+  providerRequestContext,
   selectedProvider,
 };

@@ -45,6 +45,17 @@ test('destination quality reports identity, image, airport and job problems', ()
   }
 });
 
+test('destination quality rejects Latin-only Hebrew names and flags transliteration for review', () => {
+  const latin = validDestination();
+  latin.googleCache.names.he = 'Vlore';
+  assert.ok(qualityIssues(latin).some((issue) => issue.code === 'missing_hebrew_name'));
+
+  const fallback = validDestination();
+  fallback.googleCache.nameSources = { he: 'transliteration_fallback', en: 'google' };
+  const issue = qualityIssues(fallback).find((entry) => entry.code === 'fallback_hebrew_name');
+  assert.equal(issue?.severity, 'warning');
+});
+
 test('destinationCoordinates reads multiple coordinate shapes', () => {
   assert.deepEqual(destinationCoordinates({
     coords: { latitude: 32.08, longitude: 34.78 },

@@ -41,6 +41,7 @@ export default function StopEditorModal({
 	const [title, setTitle] = useState("");
 	const [description, setDescription] = useState("");
 	const [locationValue, setLocationValue] = useState(null);
+	const [locationBusy, setLocationBusy] = useState(false);
 	const [stopBaseline, setStopBaseline] = useState(null);
 	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 	const pendingDiscardRef = useRef(null);
@@ -122,6 +123,10 @@ export default function StopEditorModal({
 			Alert.alert("רק רגע", "התמונה עדיין בהעלאה.");
 			return;
 		}
+		if (locationBusy) {
+			Alert.alert("רק רגע", "אשרו את המיקום במפה לפני שמירת התחנה.");
+			return;
+		}
 
 		const nextStop = {
 			...(initialData || {}),
@@ -170,7 +175,7 @@ export default function StopEditorModal({
 					<AppText style={styles.headerTitle}>
 						יום {dayIndex + 1} · תחנה {stopIndex + 1}
 					</AppText>
-					<TouchableOpacity onPress={handleSave} disabled={uploading}>
+					<TouchableOpacity onPress={handleSave} disabled={uploading || locationBusy}>
 						<AppText style={[styles.headerButton, styles.headerButtonStrong]}>
 							שמור
 						</AppText>
@@ -195,6 +200,7 @@ export default function StopEditorModal({
 						<ExactLocationPicker
 							value={locationValue}
 							onChange={setLocationValue}
+							onResolvingChange={setLocationBusy}
 							inputTestID="route-stop-location-input"
 						/>
 					</View>

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   catalogData,
   compactDestinationSearchText,
+  destinationClassFor,
   destinationSearchForms,
   filterCatalogByActiveCountries,
   getCatalogSnapshot,
@@ -47,6 +48,34 @@ test('catalog data stores bounded prefixes for full names and punctuation-separa
   assert.ok(data.search.prefixes.includes('stjohns'));
   assert.ok(data.search.prefixes.includes('johns'));
   assert.ok(data.search.prefixes.length <= 160);
+});
+
+test('catalog projects destination class and geometry for containment queries', () => {
+  const data = catalogData({
+    countryId: 'AL',
+    cityId: 'vlore',
+    city: {
+      status: 'active',
+      destinationType: 'city',
+      googleCache: {
+        names: { he: 'ולורה', en: 'Vlorë' },
+        coordinates: { lat: 40.466, lng: 19.489 },
+        viewport: {
+          southwest: { lat: 40.38, lng: 19.4 },
+          northeast: { lat: 40.55, lng: 19.6 },
+        },
+        types: ['locality', 'political'],
+      },
+    },
+    country: { status: 'active', names: { he: 'אלבניה', en: 'Albania' } },
+    timestamp: 'NOW',
+  });
+  assert.equal(data.destinationClass, 'settlement');
+  assert.equal(data.destinationType, 'city');
+  assert.deepEqual(data.coordinates, { lat: 40.466, lng: 19.489 });
+  assert.deepEqual(data.viewport.southwest, { lat: 40.38, lng: 19.4 });
+  assert.deepEqual(data.googleTypes, ['locality', 'political']);
+  assert.equal(destinationClassFor({ destinationType: 'region' }), 'administrative');
 });
 
 test('destination search uses one indexed query with a compact bounded prefix', async () => {

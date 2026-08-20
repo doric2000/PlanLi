@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { distanceKm, normalize } = require('./destinationIdentityService');
 const { destinationTypeFor, googleCacheFor, normalizeName } = require('./legacyPlacesAdapter');
+const { resolveHebrewDestinationName } = require('./destinationLocalizationService');
 
 const MAX_LOCALITY_DISTANCE_KM = 50;
 
@@ -39,6 +40,12 @@ function buildDestinationV3({ countryId, he, en, fetchedAt = new Date() }) {
   const nameEn = destinationName(en);
   assert(nameHe && nameEn, 'failed-precondition', 'The destination has no trustworthy localized name.');
   const type = destinationType(en);
+  const localized = resolveHebrewDestinationName({
+    countryCode: he.countryCode || en.countryCode,
+    googleHebrewName: nameHe,
+    englishName: nameEn,
+  });
+  assert(localized.name, 'failed-precondition', 'The destination has no trustworthy Hebrew name.');
   return {
     id: stableDestinationId(countryId, he.placeId),
     data: {
@@ -47,8 +54,13 @@ function buildDestinationV3({ countryId, he, en, fetchedAt = new Date() }) {
       destinationType: type,
       providerRefs: { googlePlaceId: he.placeId },
       googleCache: {
-        ...googleCacheFor({ he: { ...he, displayName: nameHe }, en: { ...en, displayName: nameEn }, fetchedAt }),
-        names: { he: nameHe, en: nameEn },
+        ...googleCacheFor({
+          he: { ...he, displayName: localized.name },
+          en: { ...en, displayName: nameEn },
+          fetchedAt,
+        }),
+        names: { he: localized.name, en: nameEn },
+        nameSources: { he: localized.source, en: 'google' },
       },
       stats: { recommendationCount: 0 },
       status: 'active',

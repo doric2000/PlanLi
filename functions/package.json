@@ -33,6 +33,8 @@
     "backfill-map-locations": "node scripts/backfillRecommendationMapLocations.js",
     "backfill-destination-images": "node scripts/backfillDestinationImages.js",
     "backfill-destination-catalog": "node scripts/backfillDestinationCatalog.js",
+    "repair-destination-hebrew-names": "node scripts/repairDestinationHebrewNames.js",
+    "repair-canonical-destination": "node scripts/repairCanonicalDestination.js",
     "repair-destination-image-queries": "node scripts/repairDestinationImageQueries.js",
     "repair-missing-destination-images": "node scripts/repairMissingDestinationImages.js",
     "repair-destination-identities": "node scripts/repairDestinationIdentities.js",

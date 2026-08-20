@@ -1,7 +1,17 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
-const { autocompletePlaces, fetchBilingualPlace } = require('./placesProviderAdapter');
+const {
+  autocompletePlaces,
+  fetchPlaceSelection,
+  providerRequestContext,
+} = require('./placesProviderAdapter');
 const { consumeProviderBudget } = require('./providerRateLimitService');
+const {
+  createIncidentId,
+  decorateLocationError,
+  locationLog,
+  reasonForLocationError,
+} = require('./locationDiagnostics');
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const RESOLVED_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -83,7 +93,7 @@ async function legacyAutocomplete({ query, mapsKey, fetchImpl = global.fetch, mo
   return payload.predictions.map(normalizePrediction).filter(Boolean).slice(0, MAX_PREDICTIONS);
 }
 
-async function searchPlaces({
+async function searchPlacesInternal({
   admin,
   auth,
   data,
@@ -94,6 +104,8 @@ async function searchPlaces({
   fetchImpl = global.fetch,
   consumeBudget = consumeProviderBudget,
 }) {
+  const incidentId = createIncidentId(data?.incidentId);
+  const requestContext = providerRequestContext({ incidentId });
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const query = String(data?.query || '').trim();
   const mode = data?.mode === 'destinations' ? 'destinations' : data?.mode === 'places' ? 'places' : null;
@@ -111,7 +123,9 @@ async function searchPlaces({
     sessionToken: providerSessionToken,
     randomSelectionId: () => randomId('sel'),
     legacyAutocomplete,
+    requestContext,
   })).slice(0, MAX_PREDICTIONS);
+  if (requestContext.count === 0) requestContext.count = 1;
   const sessionId = randomId('ps');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await sessionRef(admin.firestore(), sessionId).create({
@@ -120,6 +134,8 @@ async function searchPlaces({
     predictions,
     provider: placesProvider,
     providerSessionToken,
+    incidentId,
+    providerCallCount: requestContext.count,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     expiresAt,
   });
@@ -127,16 +143,49 @@ async function searchPlaces({
     predictions: predictions.map(({ selectionId, placeId, text, secondaryText, types }) => ({
       selectionId,
       placeId,
+      provider: 'google',
+      providerPlaceId: placeId,
+      primaryText: text,
       text,
       secondaryText,
       types,
     })),
     sessionId,
     expiresAt,
+    incidentId,
+    providerCallCount: requestContext.count,
   };
 }
 
-async function resolvePlaceSelection({
+async function searchPlaces(options) {
+  const incidentId = createIncidentId(options?.data?.incidentId);
+  const startedAt = Date.now();
+  try {
+    const result = await searchPlacesInternal({
+      ...options,
+      data: { ...(options?.data || {}), incidentId },
+    });
+    locationLog('search', {
+      incidentId,
+      outcome: 'succeeded',
+      durationMs: Date.now() - startedAt,
+      providerCalls: result.providerCallCount,
+    });
+    const { providerCallCount, ...clientResult } = result;
+    return clientResult;
+  } catch (error) {
+    const reason = reasonForLocationError(error, 'search_failed');
+    locationLog('search', {
+      incidentId,
+      outcome: 'failed',
+      durationMs: Date.now() - startedAt,
+      reason,
+    });
+    throw decorateLocationError(error, incidentId, 'search_failed');
+  }
+}
+
+async function resolvePlaceSelectionInternal({
   admin,
   auth,
   data,
@@ -145,6 +194,7 @@ async function resolvePlaceSelection({
   placesProvider = 'legacy',
   providerRateLimitKey,
   fetchImpl = global.fetch,
+  diagnosticContext,
 }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const sessionId = String(data?.sessionId || '').trim();
@@ -153,19 +203,30 @@ async function resolvePlaceSelection({
   const snapshot = await sessionRef(admin.firestore(), sessionId).get();
   assert(snapshot.exists, 'not-found', 'The place search has expired. Search again.');
   const session = snapshot.data() || {};
+  const incidentId = createIncidentId(session.incidentId || data?.incidentId);
+  if (diagnosticContext) diagnosticContext.incidentId = incidentId;
+  const requestContext = providerRequestContext({
+    count: Number(session.providerCallCount || 1),
+    incidentId,
+  });
   assert(session.uid === auth.uid, 'permission-denied', 'This place selection belongs to another user.');
   assert(session.expiresAt?.toDate?.().getTime() > Date.now(), 'deadline-exceeded', 'The place search has expired. Search again.');
   const prediction = (session.predictions || []).find((entry) => entry.selectionId === selectionId);
   assert(prediction?.placeId, 'not-found', 'The selected place is no longer available. Search again.');
   await consumeProviderBudget({ admin, auth, action: 'bilingualResolution', key: providerRateLimitKey });
-  const bilingual = await fetchBilingualPlace({
+  const providerCallsBefore = requestContext.count;
+  const bilingual = await fetchPlaceSelection({
     provider: session.provider || placesProvider,
-    placeId: prediction.placeId,
+    prediction,
     mapsKey,
     newPlacesKey,
     sessionToken: session.providerSessionToken,
     fetchImpl,
+    requestContext,
   });
+  if (requestContext.count === providerCallsBefore) requestContext.count += 2;
+  assert(requestContext.count <= requestContext.maximum, 'resource-exhausted',
+    'Location resolution reached its safe Google request limit.');
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
   const expiresAt = new Date(Date.now() + RESOLVED_TOKEN_TTL_MS);
   await resolvedTokenRef(admin.firestore(), resolvedPlaceToken).create({
@@ -173,20 +234,58 @@ async function resolvePlaceSelection({
     placeId: bilingual.he.placeId,
     he: bilingual.he,
     en: bilingual.en,
+    incidentId,
+    providerCallCount: requestContext.count,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     expiresAt,
   });
   return {
+    status: 'place_resolved',
     resolvedPlaceToken,
+    incidentId,
     place: {
       placeId: bilingual.he.placeId,
+      name: bilingual.he.displayName || bilingual.en.displayName,
       names: { he: bilingual.he.displayName, en: bilingual.en.displayName },
       address: bilingual.he.address,
       coordinates: bilingual.he.coordinates || bilingual.en.coordinates || null,
       types: bilingual.he.types,
     },
     expiresAt,
+    providerCallCount: requestContext.count,
   };
+}
+
+async function resolvePlaceSelection(options) {
+  const startedAt = Date.now();
+  const diagnosticContext = {
+    incidentId: createIncidentId(options?.data?.incidentId),
+  };
+  try {
+    const result = await resolvePlaceSelectionInternal({
+      ...options,
+      data: { ...(options?.data || {}), incidentId: diagnosticContext.incidentId },
+      diagnosticContext,
+    });
+    diagnosticContext.incidentId = result.incidentId;
+    locationLog('selection', {
+      incidentId: diagnosticContext.incidentId,
+      outcome: 'succeeded',
+      durationMs: Date.now() - startedAt,
+      providerCalls: result.providerCallCount,
+    });
+    const { providerCallCount, ...clientResult } = result;
+    return clientResult;
+  } catch (error) {
+    const reason = reasonForLocationError(error, 'selection_failed');
+    locationLog('selection', {
+      incidentId: diagnosticContext.incidentId,
+      outcome: 'failed',
+      durationMs: Date.now() - startedAt,
+      reason,
+    });
+    throw decorateLocationError(error, diagnosticContext.incidentId, 'selection_failed');
+  }
 }
 
 async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken, providerRateLimitKey }) {
@@ -203,18 +302,24 @@ async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken, provide
     he: value.he,
     en: value.en,
     destinationResolution: value.destinationResolution || null,
+    incidentId: createIncidentId(value.incidentId),
+    providerCallCount: Number(value.providerCallCount || 0),
   };
 }
 
 async function storeResolvedPlaceDestination({
   admin, auth, resolvedPlaceToken, destinationResolution, providerRateLimitKey,
+  providerCallCount,
 }) {
   const token = String(resolvedPlaceToken || '').trim();
   await readResolvedPlaceToken({
     admin, auth, resolvedPlaceToken: token, providerRateLimitKey,
   });
   assert(destinationResolution && typeof destinationResolution === 'object', 'invalid-argument', 'Destination resolution is invalid.');
-  await resolvedTokenRef(admin.firestore(), token).set({ destinationResolution }, { merge: true });
+  await resolvedTokenRef(admin.firestore(), token).set({
+    destinationResolution,
+    ...(Number.isFinite(providerCallCount) ? { providerCallCount } : {}),
+  }, { merge: true });
 }
 
 module.exports = {

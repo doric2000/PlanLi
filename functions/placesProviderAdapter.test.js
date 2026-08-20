@@ -4,11 +4,28 @@ const assert = require('node:assert/strict');
 const {
   NEW_AUTOCOMPLETE_FIELD_MASK,
   NEW_DETAILS_FIELD_MASK,
+  NEW_SELECTION_DETAILS_FIELD_MASK,
+  autocompletePlaces,
+  fetchWithProviderPolicy,
   fetchNewBilingualPlace,
+  fetchNewSelectionPlace,
   fetchLocalityPlaceId,
+  localityAliases,
   newAutocomplete,
   parseNewLocalizedPlace,
+  providerEndpointFor,
+  providerRequestContext,
 } = require('./placesProviderAdapter');
+
+test('Thai tambon prefixes normalize to the same locality alias as Google locality details', () => {
+  assert.deepEqual(localityAliases('Tambon Wiang Chai'), ['wiang chai', 'tambon wiang chai']);
+});
+
+test('Albanian definite and official locality forms share bounded aliases', () => {
+  assert.ok(localityAliases('Vlora', 'AL').includes('vlore'));
+  assert.ok(localityAliases('Vlorë', 'AL').includes('vlora'));
+  assert.ok(localityAliases('Qarku i Vlorës', 'AL').includes('vlore'));
+});
 
 function details(language) {
   return {
@@ -210,8 +227,234 @@ test('locality resolution falls back from a district to its containing city', as
   });
 
   assert.equal(placeId, 'chiang-mai-city');
-  assert.deepEqual(searched, [
-    'Mueang Chiang Mai District Thailand',
-    'Chiang Mai Thailand',
-  ]);
+  assert.deepEqual(searched, ['Chiang Mai Thailand']);
+});
+
+test('ordinary exact-place selection uses one Essentials details request', async () => {
+  const calls = [];
+  const selected = await fetchNewSelectionPlace({
+    prediction: {
+      placeId: 'hotel-chiang-rai',
+      text: 'One Budget Hotel Chiangrai Soi Sawan',
+      types: ['lodging'],
+    },
+    newPlacesKey: 'new-key',
+    sessionToken: 'session-1',
+    fetchImpl: async (url, options) => {
+      calls.push({ url: String(url), fieldMask: options.headers['X-Goog-FieldMask'] });
+      return { ok: true, status: 200, json: async () => ({
+        id: 'hotel-chiang-rai',
+        formattedAddress: 'Chiang Rai, Thailand',
+        addressComponents: [
+          { longText: 'Amphoe Mueang Chiang Rai', types: ['administrative_area_level_2'] },
+          { longText: 'Chang Wat Chiang Rai', types: ['administrative_area_level_1'] },
+          { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+        ],
+        location: { latitude: 19.8587, longitude: 99.8416 },
+        types: ['lodging'],
+      }) };
+    },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].fieldMask, NEW_SELECTION_DETAILS_FIELD_MASK);
+  assert.equal(new URL(calls[0].url).searchParams.get('languageCode'), 'en');
+  assert.equal(selected.he.displayName, 'One Budget Hotel Chiangrai Soi Sawan');
+  assert.equal(selected.en.countryCode, 'TH');
+});
+
+test('Chiang Rai district aliases resolve through one exact-coordinate reverse lookup', async () => {
+  const venue = parseNewLocalizedPlace({
+    id: 'one-budget-hotel-chiangrai',
+    displayName: { text: 'One Budget Hotel Chiangrai Soi Sawan' },
+    addressComponents: [
+      { longText: 'Amphoe Mueang Chiang Rai', types: ['administrative_area_level_2'] },
+      { longText: 'Chang Wat Chiang Rai', types: ['administrative_area_level_1'] },
+      { longText: 'Thailand', shortText: 'TH', types: ['country'] },
+    ],
+    location: { latitude: 19.8587, longitude: 99.8416 },
+    types: ['lodging'],
+  });
+  const requestContext = providerRequestContext();
+  const urls = [];
+  const placeId = await fetchLocalityPlaceId({
+    provider: 'new',
+    localityName: venue.localityName,
+    localityCandidates: venue.localityCandidates,
+    countryName: venue.countryName,
+    countryCode: venue.countryCode,
+    coordinates: venue.coordinates,
+    mapsKey: 'maps-key',
+    newPlacesKey: 'new-key',
+    requestContext,
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      return { ok: true, status: 200, json: async () => ({
+        status: 'OK',
+        results: [{
+          place_id: 'chiang-rai-city',
+          types: ['locality', 'political'],
+          address_components: [
+            { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+          ],
+          geometry: { location: { lat: 19.9105, lng: 99.8406 } },
+        }],
+      }) };
+    },
+  });
+
+  assert.equal(placeId, 'chiang-rai-city');
+  assert.equal(requestContext.count, 1);
+  assert.equal(urls.length, 1);
+  assert.match(urls[0], /geocode\/json/);
+});
+
+test('Thailand reverse resolution prefers the province over a smaller locality', async () => {
+  const placeId = await fetchLocalityPlaceId({
+    provider: 'new',
+    localityName: 'Tambon Wiang Chai',
+    localityCandidates: [
+      'Tambon Wiang Chai',
+      'Amphoe Mueang Chiang Rai',
+      'Chang Wat Chiang Rai',
+    ],
+    countryName: 'Thailand',
+    countryCode: 'TH',
+    coordinates: { lat: 19.9, lng: 99.9 },
+    mapsKey: 'maps-key',
+    newPlacesKey: 'new-key',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        status: 'OK',
+        results: [
+          {
+            place_id: 'wiang-chai-town',
+            types: ['locality', 'political'],
+            address_components: [
+              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            ],
+            geometry: { location: { lat: 19.88, lng: 99.92 } },
+          },
+          {
+            place_id: 'chiang-rai-province',
+            types: ['administrative_area_level_1', 'political'],
+            address_components: [
+              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            ],
+            geometry: { location: { lat: 19.91, lng: 99.84 } },
+          },
+        ],
+      }),
+    }),
+  });
+
+  assert.equal(placeId, 'chiang-rai-province');
+});
+
+test('non-Thai locality search runs before accepting a reverse-geocoded county', async () => {
+  const calls = [];
+  const placeId = await fetchLocalityPlaceId({
+    provider: 'new',
+    localityName: 'Vlorë County',
+    localityCandidates: ['Vlorë County', 'Vlorë'],
+    countryName: 'Albania',
+    countryCode: 'AL',
+    coordinates: { lat: 40.4146, lng: 19.4812 },
+    mapsKey: 'maps-key',
+    newPlacesKey: 'new-key',
+    fetchImpl: async (url, options) => {
+      const target = String(url);
+      calls.push(target);
+      if (target.includes('/geocode/')) {
+        return { ok: true, status: 200, json: async () => ({
+          status: 'OK',
+          results: [{
+            place_id: 'vlore-county',
+            types: ['administrative_area_level_2', 'political'],
+            address_components: [
+              { long_name: 'Albania', short_name: 'AL', types: ['country'] },
+            ],
+            geometry: { location: { lat: 40.466, lng: 19.49 } },
+          }],
+        }) };
+      }
+      if (target.includes('places:autocomplete')) {
+        const input = JSON.parse(options.body).input;
+        return { ok: true, status: 200, json: async () => ({ suggestions:
+          /^Vlor[eë] Albania/.test(input) ? [{ placePrediction: {
+            placeId: 'vlore-city',
+            structuredFormat: { mainText: { text: 'Vlorë' } },
+            types: ['locality'],
+          } }] : [],
+        }) };
+      }
+      return { ok: true, status: 200, json: async () => ({
+        id: 'vlore-city',
+        displayName: { text: 'Vlorë' },
+        addressComponents: [
+          { longText: 'Vlorë', types: ['locality'] },
+          { longText: 'Albania', shortText: 'AL', types: ['country'] },
+        ],
+        location: { latitude: 40.466, longitude: 19.489 },
+        types: ['locality', 'political'],
+      }) };
+    },
+  });
+
+  assert.equal(placeId, 'vlore-city');
+  assert.match(calls[0], /geocode/);
+  assert.ok(calls.some((url) => url.includes('places:autocomplete')));
+});
+
+test('provider retry cannot exceed the ten-request ceiling', async () => {
+  const requestContext = providerRequestContext({ count: 9, maximum: 10 });
+  let calls = 0;
+  await assert.rejects(fetchWithProviderPolicy(
+    'https://places.googleapis.com/v1/places:test',
+    {},
+    {
+      requestContext,
+      fetchImpl: async () => {
+        calls += 1;
+        return { ok: false, status: 503, json: async () => ({}) };
+      },
+    }
+  ), (error) => error.code === 'resource-exhausted');
+  assert.equal(calls, 1);
+  assert.equal(requestContext.count, 10);
+});
+
+test('legacy rollback requests use the same timeout, retry, and request counter', async () => {
+  const requestContext = providerRequestContext();
+  let calls = 0;
+  const predictions = await autocompletePlaces({
+    provider: 'legacy',
+    requestContext,
+    fetchImpl: async () => {
+      calls += 1;
+      return { ok: true, status: 200 };
+    },
+    legacyAutocomplete: async ({ fetchImpl }) => {
+      const response = await fetchImpl('https://maps.googleapis.com/maps/api/place/autocomplete/json');
+      assert.equal(response.ok, true);
+      return [{ placeId: 'legacy-place' }];
+    },
+  });
+
+  assert.deepEqual(predictions, [{ placeId: 'legacy-place' }]);
+  assert.equal(calls, 1);
+  assert.equal(requestContext.count, 1);
+});
+
+test('provider endpoint diagnostics never include a Place ID or query', () => {
+  assert.equal(
+    providerEndpointFor('https://places.googleapis.com/v1/places/private-place-id?languageCode=en'),
+    'places_details'
+  );
+  assert.equal(
+    providerEndpointFor('https://maps.googleapis.com/maps/api/geocode/json?latlng=1,2&key=secret'),
+    'geocode'
+  );
 });

@@ -11,8 +11,12 @@ let loadRouteDetailsCallable;
 
 export const saveRoute = async (route, routeId = null, publishRequestId = null) => {
   saveRouteCallable ||= httpsCallable(cloudFunctions, 'saveRoute');
+  const incidentId = (route?.days || []).flatMap((day) => day?.stops || [])
+    .map((stop) => stop?.place?.incidentId)
+    .find(Boolean);
   const response = await saveRouteCallable({
     route,
+    ...(incidentId ? { incidentId } : {}),
     ...(routeId ? { routeId } : {}),
     ...(publishRequestId ? { publishRequestId } : {}),
   });

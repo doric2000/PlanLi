@@ -2,12 +2,18 @@ import { fontFamilies } from "../../../styles/typography";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import AppText from "../../../components/AppText";
-import { colors, spacing, common } from '../../../styles';
+import {
+  colors,
+  spacing,
+  common,
+  exactLocationPickerStyles as locationStyles,
+} from '../../../styles';
 
 // --- Custom Components ---
 import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
+import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
 import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from '../../../components/GuidedForm';
@@ -36,6 +42,7 @@ import {
   TRAVEL_PARTIES,
   VIBES,
 } from '../../profile/constants/smartProfileOptions';
+import { locationCopy } from '../../../utils/locationCopy';
 import {
   ENVIRONMENTS,
   TRAVEL_TAXONOMY_VERSION,
@@ -50,7 +57,7 @@ import {
   validateRecommendationForm,
 } from '../../../utils/guidedFormValidation';
 
-
+const EXACT_LOCATION_COPY = locationCopy('he');
 
 const RECOMMENDATION_SECTION_ORDER = ['place', 'story', 'category', 'fit'];
 const RECOMMENDATION_SECTION_FIELDS = {
@@ -265,13 +272,20 @@ export default function AddRecommendationScreen({ navigation , route }) {
 
   // --- Exact Google place handling ---
   const {
+    chooseDestination,
+    chooseAnotherLocation,
+    confirmPendingLocation,
     googleSearchFn,
     handleSelectGooglePlace,
     hydrateSelection,
     locationQuery,
     locationResolveError,
+    locationResolveRetryable,
+    destinationChoice,
+    pendingLocation,
     clearSelectionForTyping: onChangeQuery,
     resolvingLocation,
+    retryLocationResolution,
     selectedCity,
     selectedCountry,
     selectedPlace,
@@ -614,7 +628,10 @@ export default function AddRecommendationScreen({ navigation , route }) {
     needsConfirmed,
     selectedCountry,
     selectedCity,
+    selectedPlace,
     locationResolveError,
+    destinationChoice,
+    pendingLocation,
     resolvingLocation,
     attributeRequirements,
   }), [
@@ -631,7 +648,10 @@ export default function AddRecommendationScreen({ navigation , route }) {
     needsConfirmed,
     selectedCountry,
     selectedCity,
+    selectedPlace,
     locationResolveError,
+    destinationChoice,
+    pendingLocation,
     resolvingLocation,
     attributeRequirements,
   ]);
@@ -732,6 +752,7 @@ const handleSubmit = async () => {
           ? {
               resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
               ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
+              ...(selectedPlace.incidentId ? { incidentId: selectedPlace.incidentId } : {}),
             }
           : selectedPlace?.placeId
           ? { placeId: selectedPlace.placeId }
@@ -810,6 +831,14 @@ const handleSubmit = async () => {
         ? {
             resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
             ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
+            ...(selectedPlace.incidentId ? { incidentId: selectedPlace.incidentId } : {}),
+          }
+        : isEdit && selectedCountry?.id && selectedCity?.id
+        ? {
+            destinationRef: {
+              countryId: selectedCountry.id,
+              cityId: selectedCity.id,
+            },
           }
         : selectedPlace?.placeId
         ? {
@@ -913,17 +942,29 @@ const handleSubmit = async () => {
         />
 
         <View style={guidedStyles.fieldGroup}>
-          <AppText style={guidedStyles.fieldLabel}>מיקום מדויק (חובה)</AppText>
-          <AppText style={guidedStyles.fieldHelper}>חפשו ובחרו תוצאה כדי שנוכל לשייך את ההמלצה לעיר הנכונה</AppText>
+          <AppText style={guidedStyles.fieldLabel}>{EXACT_LOCATION_COPY.exactLocationLabel} (חובה)</AppText>
+          <AppText style={guidedStyles.fieldHelper}>{EXACT_LOCATION_COPY.exactLocationHelper}</AppText>
           <GooglePlacesInput
             mode="google"
             value={locationQuery}
             onChangeValue={onChangeQuery}
-            onSelect={(placeId) => handleSelectGooglePlace(placeId).catch(() => {})}
+            onSelect={(selection) => handleSelectGooglePlace(selection).catch(() => {})}
             googleSearchFn={googleSearchFn}
-            placeholder="חפש מקום / אטרקציה / מסעדה..."
+            explicitSearch
+            returnSelection
+            placeholder={EXACT_LOCATION_COPY.exactLocationPlaceholder}
             inputTestID="add-rec-location-input"
           />
+          <ExactLocationConfirmation
+            pendingLocation={pendingLocation}
+            destinationChoice={destinationChoice}
+            onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
+            onConfirm={confirmPendingLocation}
+            onChooseAnother={chooseAnotherLocation}
+          />
+          {resolvingLocation && (
+            <AppText style={guidedStyles.fieldHelper}>{EXACT_LOCATION_COPY.resolving}</AppText>
+          )}
           {!!locationResolveError && (
             <AppText
               style={guidedStyles.fieldError}
@@ -933,6 +974,26 @@ const handleSubmit = async () => {
             >
               {locationResolveError}
             </AppText>
+          )}
+          {!!locationResolveError && locationResolveRetryable && (
+            <TouchableOpacity
+              style={locationStyles.retryButton}
+              onPress={() => retryLocationResolution().catch(() => {})}
+              accessibilityRole="button"
+              testID="add-rec-location-retry"
+            >
+              <AppText style={locationStyles.retryText}>{EXACT_LOCATION_COPY.retry}</AppText>
+            </TouchableOpacity>
+          )}
+          {!!locationResolveError && !locationResolveRetryable && (
+            <TouchableOpacity
+              style={locationStyles.retryButton}
+              onPress={chooseAnotherLocation}
+              accessibilityRole="button"
+              testID="add-rec-location-change-result"
+            >
+              <AppText style={locationStyles.retryText}>{EXACT_LOCATION_COPY.chooseAnother}</AppText>
+            </TouchableOpacity>
           )}
           {!!validation.fields.location && (
             <AppText style={guidedStyles.fieldError} accessibilityLiveRegion="polite">
@@ -1167,7 +1228,7 @@ const handleSubmit = async () => {
         label={isEdit ? 'שמור שינויים' : 'פרסם המלצה'}
         onPress={handleSubmit}
         loading={submitting}
-        disabled={submitting}
+        disabled={submitting || resolvingLocation || !!pendingLocation || !!destinationChoice}
         testID="add-rec-submit"
       />
 

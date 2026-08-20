@@ -22,6 +22,7 @@ const {
 const { resolveWikimediaDestinationImage } = require('./wikimediaDestinationImageService');
 const { buildDownloadUrl, getMediaBucket } = require('./mediaProcessor');
 const { destinationKey } = require('./discoverySearch');
+const { hasHebrewName } = require('./destinationLocalizationService');
 
 const PAGE_SIZE = 30;
 const IMAGE_VARIANTS = ['large', 'feed', 'thumb'];
@@ -176,7 +177,10 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
   const imageType = image?.source?.type;
   const validation = image?.selection?.validation;
 
-  if (!names.he) add('missing_hebrew_name', 'error', 'חסר שם בעברית');
+  if (!hasHebrewName(names.he)) add('missing_hebrew_name', 'error', 'חסר שם בעברית');
+  if (destination?.googleCache?.nameSources?.he === 'transliteration_fallback') {
+    add('fallback_hebrew_name', 'warning', 'שם היעד תועתק אוטומטית וממתין לבדיקה');
+  }
   if (!names.en) add('missing_english_name', 'error', 'חסר שם באנגלית');
   if (!placeId) add('missing_google_place', 'error', 'חסר מזהה מקום מאומת של גוגל');
   if (!googleCountry && !identityCountry) add('missing_country_code', 'error', 'חסר קוד מדינה');

@@ -4,6 +4,15 @@
       "collectionGroup": "destinationCatalog",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "destinationClass", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "recommendationCount", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }

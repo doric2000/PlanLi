@@ -4,15 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import { community } from '../../../styles';
+import { buildGoogleMapsUrl } from '../../../utils/placeNavigation';
 
 function googleMapsUrl(item) {
   const place = item?.place || {};
   const coordinates = place.coordinates || item?.coordinates;
-  const query = place.name || place.address || (coordinates ? `${coordinates.lat},${coordinates.lng}` : '');
-  if (!query) return null;
-  let url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-  if (place.placeId) url += `&query_place_id=${encodeURIComponent(place.placeId)}`;
-  return url;
+  return buildGoogleMapsUrl({
+    place: { ...place, ...(place.coordinates ? {} : { coordinates }) },
+    destination: item?.destination,
+    fallback: item?.title,
+  });
 }
 
 export default function CommunityInlineMap({ recommendations = [], onOpenRecommendation }) {

@@ -4,6 +4,7 @@ const { evaluateTextSafety } = require('./moderationService');
 const {
   isVerifiedCaller,
   normalizePublishRequestId,
+  resolveExistingDestination,
   resolveSubmittedPlaceDestination,
   stableDocumentId,
   validateMediaAssets,
@@ -89,7 +90,6 @@ function sanitizePlace(value, fallbackCoordinates, { requirePlaceId = false } = 
     ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
     name: cleanOptionalString(place.name, 'place.name', 200),
     address: cleanOptionalString(place.address, 'place.address', 500),
-    url: cleanOptionalString(place.url, 'place.url', 2000),
     coordinates: cleanCoordinates(place.coordinates || fallbackCoordinates),
   };
 }
@@ -248,6 +248,7 @@ function sanitizeRouteInput(input) {
       location: cleanOptionalString(stop?.location, `days[${dayIndex}].stops[${stopIndex}].location`, 200),
       country: cleanOptionalString(stop?.country, `days[${dayIndex}].stops[${stopIndex}].country`, 200),
       place: sanitizePlace(stop?.place, stop?.coordinates, { requirePlaceId: strict }),
+      reuseSavedLocation: stop?.reuseSavedLocation === true,
       media: stop?.media || null,
     }));
     return {
@@ -317,6 +318,7 @@ async function resolveRoutePlaces({
   placesProvider = 'legacy',
   restCountriesKey,
   providerRateLimitKey,
+  trustedPlaces = new Map(),
 }) {
   const placeEntries = new Map();
   days.forEach((day) => day.stops.forEach((stop) => {
@@ -324,13 +326,17 @@ async function resolveRoutePlaces({
     if (!placeId) return;
     const current = placeEntries.get(placeId);
     if (!current || (!current.resolvedPlaceToken && stop.place.resolvedPlaceToken)) {
-      placeEntries.set(placeId, { placeId, resolvedPlaceToken: stop.place.resolvedPlaceToken || null });
+      placeEntries.set(placeId, {
+        placeId,
+        resolvedPlaceToken: stop.place.resolvedPlaceToken || null,
+        trusted: trustedPlaces.get(placeId) || null,
+      });
     }
   }));
   const entries = Array.from(placeEntries.values());
   assert(entries.length >= 1 && entries.length <= MAX_ROUTE_PLACES,
     'invalid-argument', 'Route contains too many distinct places.');
-  const rawEntries = entries.filter((entry) => !entry.resolvedPlaceToken);
+  const rawEntries = entries.filter((entry) => !entry.resolvedPlaceToken && !entry.trusted);
   assert(
     rawEntries.length <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
     'resource-exhausted',
@@ -340,12 +346,20 @@ async function resolveRoutePlaces({
     await consumeProviderBudget({
       admin,
       auth,
-      action: 'bilingualResolution',
+      action: 'fullResolution',
       units: rawEntries.length,
       key: providerRateLimitKey,
     });
   }
   const resolved = await mapWithConcurrency(entries, 5, async (entry) => {
+    if (entry.trusted && !entry.resolvedPlaceToken) {
+      const destination = await resolveExistingDestination(
+        admin.firestore(),
+        entry.trusted.destination
+      );
+      destination.place = entry.trusted.place;
+      return destination;
+    }
     const destination = await resolveSubmittedPlaceDestination({
       admin,
       auth,
@@ -396,6 +410,40 @@ async function resolveRoutePlaces({
       cityName: destination.cityData.googleCache?.names?.he || destination.cityData.name || destination.cityId,
     })),
   };
+}
+
+async function loadTrustedRoutePlaces({ db, routeRef, existingRoute, days }) {
+  const trustedStops = days.flatMap((day) => day.stops
+    .filter((stop) => stop.reuseSavedLocation)
+    .map((stop) => ({ dayId: day.id, stop }))
+  );
+  if (!trustedStops.length) return new Map();
+  assert(existingRoute?.activeRevisionId, 'failed-precondition',
+    'The active route revision is unavailable. Reload the route and try again.');
+  const snapshots = await Promise.all(trustedStops.map(({ dayId, stop }) =>
+    db.doc(
+      `routes/${routeRef.id}/revisions/${existingRoute.activeRevisionId}/days/${dayId}/stops/${stop.id}`
+    ).get()
+  ));
+  const trustedPlaces = new Map();
+  snapshots.forEach((snapshot, index) => {
+    const submitted = trustedStops[index].stop;
+    const saved = snapshot.exists ? snapshot.data() || {} : null;
+    assert(
+      saved?.place?.placeId === submitted.place.placeId &&
+        saved?.destination?.countryId && saved?.destination?.cityId,
+      'failed-precondition',
+      'A saved route stop changed. Search for its location again.'
+    );
+    trustedPlaces.set(saved.place.placeId, {
+      destination: {
+        countryId: saved.destination.countryId,
+        cityId: saved.destination.cityId,
+      },
+      place: saved.place,
+    });
+  });
+  return trustedPlaces;
 }
 
 function revisionVersion(routeData) {
@@ -504,6 +552,14 @@ async function saveRoute({
     existingMedia: existingRoute?.media,
   });
   const mediaDays = replaceValidatedMedia(route.days, validatedMedia);
+  const trustedPlaces = routeId
+    ? await loadTrustedRoutePlaces({
+        db,
+        routeRef,
+        existingRoute,
+        days: mediaDays,
+      })
+    : new Map();
   const locationStartedAt = Date.now();
   const resolved = await resolveRoutePlaces({
     admin,
@@ -514,6 +570,7 @@ async function saveRoute({
     placesProvider,
     restCountriesKey,
     providerRateLimitKey,
+    trustedPlaces,
   });
   const days = resolved.days;
 
@@ -837,6 +894,7 @@ module.exports = {
   cleanupRouteRevisions,
   collectMedia,
   loadRouteDetails,
+  loadTrustedRoutePlaces,
   mapWithConcurrency,
   resolveRoutePlaces,
   revisionVersion,

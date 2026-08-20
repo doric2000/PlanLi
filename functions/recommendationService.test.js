@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
   fetchGoogleReverseCountry,
+  findExistingDestinationByAlias,
+  finalizeDestinationChoice,
   isVerifiedCaller,
   parsePlaceDetails,
   resolveGoogleDestination,
@@ -15,6 +17,7 @@ const {
   validateMediaAssets,
 } = require('./recommendationService');
 const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
+const { createResolvedPlaceToken } = require('./placesGatewayService');
 
 test('verified caller accepts verified password users, social users and admins', () => {
   assert.equal(
@@ -45,6 +48,237 @@ test('verified caller accepts verified password users, social users and admins',
     true
   );
   assert.equal(isVerifiedCaller({ uid: 'u1', token: { admin: true } }), true);
+});
+
+test('administrative aliases reuse a nearby known Chiang Rai destination before Google fallback', async () => {
+  const countryDocument = {
+    id: 'TH',
+    data: () => ({ code: 'TH', status: 'active', name: 'Thailand' }),
+  };
+  const catalogDocument = {
+    id: 'TH_chiang-rai',
+    data: () => ({
+      countryId: 'TH',
+      cityId: 'chiang-rai',
+      status: 'active',
+      names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' },
+    }),
+  };
+  const cityData = {
+    status: 'active',
+    googleCache: {
+      names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' },
+      coordinates: { lat: 19.9105, lng: 99.8406 },
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : [catalogDocument]),
+    doc: (path) => ({
+      get: async () => ({
+        exists: path === 'countries/TH/destinations/chiang-rai',
+        data: () => cityData,
+      }),
+    }),
+  };
+
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'TH',
+    localityCandidates: ['Amphoe Mueang Chiang Rai', 'Chang Wat Chiang Rai'],
+    coordinates: { lat: 19.8587, lng: 99.8416 },
+  });
+
+  assert.equal(result.countryId, 'TH');
+  assert.equal(result.cityId, 'chiang-rai');
+});
+
+test('a containing PlanLi city outranks a closer administrative region without an alias match', async () => {
+  const countryDocument = {
+    id: 'PE',
+    data: () => ({ code: 'PE', status: 'active', name: 'Peru' }),
+  };
+  const catalogDocuments = ['city', 'region'].map((cityId) => ({
+    id: `PE_${cityId}`,
+    data: () => ({
+      countryId: 'PE', cityId, status: 'active',
+      destinationClass: cityId === 'city' ? 'settlement' : 'administrative',
+      names: cityId === 'city'
+        ? { en: 'Historic Centre', he: 'המרכז ההיסטורי' }
+        : { en: 'Cusco', he: 'קוסקו' },
+    }),
+  }));
+  const city = {
+    status: 'active',
+    destinationType: 'city',
+    googleCache: {
+      names: { en: 'Historic Centre', he: 'המרכז ההיסטורי' },
+      coordinates: { lat: -13.53, lng: -71.97 },
+      viewport: {
+        southwest: { lat: -13.60, lng: -72.05 },
+        northeast: { lat: -13.45, lng: -71.90 },
+      },
+      types: ['locality'],
+    },
+  };
+  const region = {
+    status: 'active',
+    destinationType: 'region',
+    googleCache: {
+      names: { en: 'Cusco', he: 'Cusco' },
+      coordinates: { lat: -13.5165, lng: -71.9781 },
+      types: ['administrative_area_level_1'],
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : catalogDocuments),
+    doc: (path) => ({
+      get: async () => ({
+        exists: true,
+        data: () => path.endsWith('/city') ? city : region,
+      }),
+    }),
+  };
+
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'PE',
+    localityCandidates: ['Cusco'],
+    coordinates: { lat: -13.5167, lng: -71.9783 },
+  });
+
+  assert.equal(result.cityId, 'city');
+  assert.equal(result.cityData.destinationType, 'city');
+});
+
+test('a Thai province outranks a non-containing same-name city', async () => {
+  const countryDocument = {
+    id: 'TH',
+    data: () => ({ code: 'TH', status: 'active', name: 'Thailand' }),
+  };
+  const catalogDocuments = ['city', 'province'].map((cityId) => ({
+    id: `TH_${cityId}`,
+    data: () => ({
+      countryId: 'TH', cityId, status: 'active', names: { en: 'Chiang Rai', he: 'Chiang Rai' },
+    }),
+  }));
+  const city = {
+    status: 'active',
+    destinationType: 'city',
+    googleCache: {
+      coordinates: { lat: 19.89, lng: 99.89 },
+      viewport: {
+        southwest: { lat: 19.80, lng: 99.70 },
+        northeast: { lat: 19.95, lng: 99.85 },
+      },
+      types: ['locality'],
+    },
+  };
+  const province = {
+    status: 'active',
+    destinationType: 'region',
+    googleCache: {
+      coordinates: { lat: 19.91, lng: 99.84 },
+      types: ['administrative_area_level_1'],
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : catalogDocuments),
+    doc: (path) => ({
+      get: async () => ({
+        exists: true,
+        data: () => path.endsWith('/city') ? city : province,
+      }),
+    }),
+  };
+
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'TH',
+    localityCandidates: ['Chiang Rai'],
+    coordinates: { lat: 19.90, lng: 99.90 },
+  });
+
+  assert.equal(result.cityId, 'province');
+  assert.equal(result.cityData.destinationType, 'region');
+});
+
+test('an ambiguous destination choice finalizes from transient trusted data without Google work', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  let choiceDeleted = false;
+  let tokenUpdate = null;
+  const storedResolution = {
+    countryId: 'TH',
+    cityId: 'chiang-rai',
+    countryData: { code: 'TH', name: 'Thailand', status: 'active' },
+    cityData: {
+      status: 'active',
+      destinationType: 'city',
+      googleCache: { names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' } },
+    },
+    createCountry: false,
+    createCity: false,
+    place: { placeId: 'hotel', name: 'Hotel', coordinates: { lat: 19.8, lng: 99.8 } },
+  };
+  const future = { toDate: () => new Date(Date.now() + 60_000) };
+  const db = {
+    doc: (path) => ({
+      get: async () => {
+        if (path === 'system/runtime/destinationResolutionChoices/dcr_12345678') {
+          return { exists: true, data: () => ({
+            uid: 'owner', resolvedPlaceToken, incidentId: 'loc_1234567890ab',
+            providerCallCount: 2, expiresAt: future,
+            choices: [{ choiceId: 'dc_12345678', destinationResolution: storedResolution }],
+          }) };
+        }
+        if (path === `system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`) {
+          return { exists: true, data: () => ({
+            uid: 'owner', expiresAt: future,
+            he: { placeId: 'hotel' }, en: { placeId: 'hotel' },
+          }) };
+        }
+        if (path === 'countries/TH') {
+          return { exists: true, data: () => storedResolution.countryData };
+        }
+        if (path === 'countries/TH/destinations/chiang-rai') {
+          return { exists: true, data: () => storedResolution.cityData };
+        }
+        return { exists: false, data: () => null };
+      },
+      set: async (value) => { tokenUpdate = value; },
+      delete: async () => { choiceDeleted = true; },
+    }),
+  };
+  const result = await finalizeDestinationChoice({
+    admin: { firestore: () => db },
+    auth: {
+      uid: 'owner',
+      token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+    },
+    data: { resolutionId: 'dcr_12345678', destinationChoiceId: 'dc_12345678' },
+    providerRateLimitKey,
+  });
+
+  assert.equal(result.status, 'resolved');
+  assert.equal(result.destination.city.id, 'chiang-rai');
+  assert.equal(result.resolvedPlaceToken, resolvedPlaceToken);
+  assert.equal(tokenUpdate.destinationResolution.cityId, 'chiang-rai');
+  assert.equal(choiceDeleted, true);
 });
 
 test('recommendation content ignores client-controlled ownership and location fields', () => {
@@ -582,10 +816,213 @@ test('Google destination resolution falls back from a district to its containing
 
     assert.equal(destination.countryId, 'TH');
     assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-mai-city');
-    assert.deepEqual(searches, [
-      'Mueang Chiang Mai District Thailand',
-      'Chiang Mai Thailand',
-    ]);
+    assert.deepEqual(searches, ['Chiang Mai Thailand']);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('Google destination resolution maps the reported Chiang Rai hotel to its Thai province', async () => {
+  const admin = createFakeAdmin({
+    'countries/TH': {
+      name: 'Thailand',
+      names: { he: 'Thailand', en: 'Thailand' },
+      code: 'TH',
+      region: 'Asia',
+      currencyCode: 'THB',
+      status: 'active',
+    },
+  });
+  const coordinates = { lat: 19.9, lng: 99.9 };
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'one-budget-chiangrai-bypass-east',
+      displayName: 'One Budget Hotel Chiangrai Bypass-East',
+      countryName: 'Thailand',
+      countryCode: 'TH',
+      localityName: 'Tambon Wiang Chai',
+      localityCandidates: [
+        'Tambon Wiang Chai',
+        'Amphoe Mueang Chiang Rai',
+        'Chang Wat Chiang Rai',
+      ],
+      coordinates,
+      types: ['lodging'],
+    },
+    en: {
+      placeId: 'one-budget-chiangrai-bypass-east',
+      displayName: 'One Budget Hotel Chiangrai Bypass-East',
+      countryName: 'Thailand',
+      countryCode: 'TH',
+      localityName: 'Tambon Wiang Chai',
+      localityCandidates: [
+        'Tambon Wiang Chai',
+        'Amphoe Mueang Chiang Rai',
+        'Chang Wat Chiang Rai',
+      ],
+      coordinates,
+      types: ['lodging'],
+    },
+  };
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (urlValue) => {
+    const url = new URL(String(urlValue));
+    if (url.pathname.endsWith('/geocode/json')) {
+      calls.push('geocode');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 'OK',
+          results: [
+            {
+              place_id: 'wiang-chai-town',
+              types: ['administrative_area_level_3', 'political'],
+              address_components: [
+                { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+              ],
+              geometry: { location: coordinates },
+            },
+            {
+              place_id: 'chiang-rai-province',
+              types: ['administrative_area_level_1', 'political'],
+              address_components: [
+                { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+              ],
+              geometry: { location: { lat: 19.91, lng: 99.84 } },
+            },
+          ],
+        }),
+      };
+    }
+    calls.push(`details:${url.searchParams.get('languageCode')}`);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'chiang-rai-province',
+        displayName: { text: 'Chiang Rai' },
+        addressComponents: [
+          { longText: 'Chiang Rai', types: ['administrative_area_level_1', 'political'] },
+          { longText: 'Thailand', shortText: 'TH', types: ['country', 'political'] },
+        ],
+        location: { latitude: 19.91, longitude: 99.84 },
+        types: ['administrative_area_level_1', 'political'],
+      }),
+    };
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin,
+      placeId: selectedPlace.en.placeId,
+      resolvedPlace: selectedPlace,
+      mapsKey: 'maps-key',
+      newPlacesKey: 'new-key',
+      placesProvider: 'new',
+    });
+
+    assert.equal(destination.countryId, 'TH');
+    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-rai-province');
+    assert.equal(destination.cityData.destinationType, 'region');
+    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'geocode']);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('Google destination resolution treats Vlora and Vlorë as the same Albanian destination', async () => {
+  const admin = createFakeAdmin({
+    'countries/AL': {
+      name: 'Albania',
+      names: { he: 'Albania', en: 'Albania' },
+      code: 'AL',
+      region: 'Europe',
+      currencyCode: 'ALL',
+      status: 'active',
+    },
+  });
+  const coordinates = { lat: 40.4146218, lng: 19.4811959 };
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'hotel-liro',
+      displayName: 'Hotel Liro',
+      countryName: 'Albania',
+      countryCode: 'AL',
+      localityName: 'Vlora',
+      localityCandidates: ['Vlora', 'Qarku i Vlorës'],
+      coordinates,
+      types: ['hotel', 'lodging'],
+    },
+    en: {
+      placeId: 'hotel-liro',
+      displayName: 'Hotel Liro',
+      countryName: 'Albania',
+      countryCode: 'AL',
+      localityName: 'Vlora',
+      localityCandidates: ['Vlora', 'Qarku i Vlorës'],
+      coordinates,
+      types: ['hotel', 'lodging'],
+    },
+  };
+  const calls = [];
+  const originalFetch = global.fetch;
+  global.fetch = async (urlValue) => {
+    const url = new URL(String(urlValue));
+    if (url.pathname.endsWith('/geocode/json')) {
+      calls.push('geocode');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: 'OK',
+          results: [{
+            place_id: 'vlore-municipality',
+            types: ['administrative_area_level_2', 'political'],
+            address_components: [
+              { long_name: 'Albania', short_name: 'AL', types: ['country'] },
+            ],
+            geometry: { location: { lat: 40.4659588, lng: 19.4907121 } },
+          }],
+        }),
+      };
+    }
+    calls.push(`details:${url.searchParams.get('languageCode')}`);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 'vlore-municipality',
+        displayName: { text: 'Vlorë' },
+        addressComponents: [
+          { longText: 'Vlorë', types: ['administrative_area_level_2', 'political'] },
+          { longText: 'Albania', shortText: 'AL', types: ['country', 'political'] },
+        ],
+        location: { latitude: 40.4659588, longitude: 19.4907121 },
+        types: ['administrative_area_level_2', 'political'],
+      }),
+    };
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin,
+      placeId: selectedPlace.en.placeId,
+      resolvedPlace: selectedPlace,
+      mapsKey: 'maps-key',
+      newPlacesKey: 'new-key',
+      placesProvider: 'new',
+    });
+
+    assert.equal(destination.countryId, 'AL');
+    assert.equal(destination.cityData.googleCache.names.en, 'Vlorë');
+    assert.equal(destination.cityData.googleCache.names.he, 'ולורה');
+    assert.equal(destination.cityData.googleCache.nameSources.he, 'override');
+    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'vlore-municipality');
+    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'details:null', 'details:null', 'geocode']);
   } finally {
     global.fetch = originalFetch;
   }

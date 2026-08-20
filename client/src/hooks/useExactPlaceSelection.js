@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  finalizeDestinationChoice,
   resolveDestinationForPlacePreview,
   searchPlaces,
 } from '../services/LocationService';
-import { locationErrorMessage } from '../utils/locationErrors';
+import { locationErrorMessage, locationErrorRetryable } from '../utils/locationErrors';
 
 const queryForValue = (value) =>
   value?.query || value?.place?.name || value?.place?.address || value?.location || '';
@@ -34,12 +35,16 @@ export const buildExactPlaceValue = (country, city, place) => {
   };
 };
 
-export default function useExactPlaceSelection({ value = null, onChange } = {}) {
+export default function useExactPlaceSelection({ value = null, onChange, locale = 'he' } = {}) {
   const [locationQuery, setLocationQuery] = useState(() => queryForValue(value));
   const [selectedCountry, setSelectedCountry] = useState(() => countryForValue(value));
   const [selectedCity, setSelectedCity] = useState(() => cityForValue(value));
   const [selectedPlace, setSelectedPlace] = useState(() => value?.place || null);
+  const [pendingLocation, setPendingLocation] = useState(null);
+  const [destinationChoice, setDestinationChoice] = useState(null);
+  const [lastSelection, setLastSelection] = useState(null);
   const [locationResolveError, setLocationResolveError] = useState(null);
+  const [locationResolveRetryable, setLocationResolveRetryable] = useState(false);
   const [resolvingLocation, setResolvingLocation] = useState(false);
   const resolutionGenerationRef = useRef(0);
   const mountedRef = useRef(true);
@@ -61,7 +66,11 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
     setSelectedCountry(country);
     setSelectedCity(city);
     setSelectedPlace(place);
+    setPendingLocation(null);
+    setDestinationChoice(null);
+    setLastSelection(null);
     setLocationResolveError(null);
+    setLocationResolveRetryable(false);
     setResolvingLocation(false);
     if (emit) onChange?.(buildExactPlaceValue(country, city, place));
   }, [onChange]);
@@ -69,40 +78,44 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
   const clearSelectionForTyping = useCallback((text) => {
     resolutionGenerationRef.current += 1;
     setLocationQuery(text);
-    setSelectedCountry(null);
-    setSelectedCity(null);
-    setSelectedPlace(null);
+    setPendingLocation(null);
+    setDestinationChoice(null);
+    setLastSelection(null);
     setLocationResolveError(null);
+    setLocationResolveRetryable(false);
     setResolvingLocation(false);
-    onChange?.(null);
-  }, [onChange]);
+  }, []);
 
-  const handleSelectGooglePlace = useCallback(async (placeId) => {
+  const handleSelectGooglePlace = useCallback(async (selection) => {
     const generation = ++resolutionGenerationRef.current;
+    setLastSelection(selection);
     setResolvingLocation(true);
     setLocationResolveError(null);
+    setLocationResolveRetryable(false);
     try {
-      const result = await resolveDestinationForPlacePreview(placeId);
+      const result = await resolveDestinationForPlacePreview(selection);
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
-      setSelectedCountry(result.destination.country);
-      setSelectedCity(result.destination.city);
-      setSelectedPlace(result.place);
-      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      if (result?.status === 'destination_choice_required') {
+        setDestinationChoice(result);
+        setPendingLocation(null);
+        return null;
+      }
       const nextValue = buildExactPlaceValue(
         result.destination.country,
         result.destination.city,
         result.place
       );
-      onChange?.(nextValue);
+      setPendingLocation(nextValue);
+      setDestinationChoice(null);
+      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
       return nextValue;
     } catch (error) {
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
-      setSelectedCountry(null);
-      setSelectedCity(null);
-      setSelectedPlace(null);
-      onChange?.(null);
-      const message = locationErrorMessage(error);
+      setPendingLocation(null);
+      setDestinationChoice(null);
+      const message = locationErrorMessage(error, locale);
       setLocationResolveError(message);
+      setLocationResolveRetryable(locationErrorRetryable(error));
       throw Object.assign(error instanceof Error ? error : new Error(message), {
         userMessage: message,
       });
@@ -111,7 +124,77 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
         setResolvingLocation(false);
       }
     }
-  }, [locationQuery, onChange]);
+  }, [locale, locationQuery]);
+
+  const confirmPendingLocation = useCallback(() => {
+    if (!pendingLocation) return null;
+    const country = countryForValue(pendingLocation);
+    const city = cityForValue(pendingLocation);
+    const place = pendingLocation.place || null;
+    setSelectedCountry(country);
+    setSelectedCity(city);
+    setSelectedPlace(place);
+    setPendingLocation(null);
+    setLastSelection(null);
+    setLocationResolveError(null);
+    setLocationResolveRetryable(false);
+    setLocationQuery(place?.name || place?.address || city?.name || locationQuery);
+    const confirmed = buildExactPlaceValue(country, city, place);
+    onChange?.(confirmed);
+    return confirmed;
+  }, [locationQuery, onChange, pendingLocation]);
+
+  const chooseAnotherLocation = useCallback(() => {
+    resolutionGenerationRef.current += 1;
+    setPendingLocation(null);
+    setDestinationChoice(null);
+    setLastSelection(null);
+    setLocationResolveError(null);
+    setLocationResolveRetryable(false);
+    setResolvingLocation(false);
+  }, []);
+
+  const chooseDestination = useCallback(async (destinationChoiceId) => {
+    if (!destinationChoice?.resolutionId || !destinationChoiceId) return null;
+    const generation = ++resolutionGenerationRef.current;
+    setResolvingLocation(true);
+    setLocationResolveError(null);
+    setLocationResolveRetryable(false);
+    try {
+      const result = await finalizeDestinationChoice({
+        resolutionId: destinationChoice.resolutionId,
+        destinationChoiceId,
+        incidentId: destinationChoice.incidentId,
+      });
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      const nextValue = buildExactPlaceValue(
+        result.destination.country,
+        result.destination.city,
+        result.place
+      );
+      setPendingLocation(nextValue);
+      setDestinationChoice(null);
+      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      return nextValue;
+    } catch (error) {
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      const message = locationErrorMessage(error, locale);
+      setLocationResolveError(message);
+      setLocationResolveRetryable(locationErrorRetryable(error));
+      throw Object.assign(error instanceof Error ? error : new Error(message), {
+        userMessage: message,
+      });
+    } finally {
+      if (mountedRef.current && generation === resolutionGenerationRef.current) {
+        setResolvingLocation(false);
+      }
+    }
+  }, [destinationChoice, locale, locationQuery]);
+
+  const retryLocationResolution = useCallback(() => {
+    if (!lastSelection) return Promise.resolve(null);
+    return handleSelectGooglePlace(lastSelection);
+  }, [handleSelectGooglePlace, lastSelection]);
 
   const googleSearchFn = useCallback(
     (text, options) => searchPlaces(text, { ...options, types: 'all' }),
@@ -120,13 +203,20 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
 
   return {
     clearSelectionForTyping,
+    chooseDestination,
+    chooseAnotherLocation,
+    confirmPendingLocation,
     googleSearchFn,
     handleSelectGooglePlace,
     hydrateSelection,
     locationQuery,
     locationResolveError,
+    locationResolveRetryable,
+    destinationChoice,
+    pendingLocation,
     resolutionGenerationRef,
     resolvingLocation,
+    retryLocationResolution,
     selectedCity,
     selectedCountry,
     selectedPlace,

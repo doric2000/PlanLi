@@ -5,6 +5,7 @@ import {
   RecommendationPublishProvider,
   recommendationPublishProgress,
   isTransientPublishError,
+  normalizedPublishError,
   upgradeRestoredPublishJob,
   useRecommendationPublish,
 } from '../src/features/community/publishing/RecommendationPublishContext';
@@ -241,10 +242,35 @@ describe('publish status helpers', () => {
   it('classifies retryable failures and bounds aggregate progress', () => {
     expect(isTransientPublishError({ code: 'functions/unavailable' })).toBe(true);
     expect(isTransientPublishError({ code: 'functions/invalid-argument' })).toBe(false);
+    expect(isTransientPublishError({
+      code: 'functions/resource-exhausted',
+      details: { reason: 'daily_limit_reached', retryable: false },
+    })).toBe(false);
     expect(recommendationPublishProgress({
       status: 'uploading', stage: 'uploading', media: [{ progress: 1 }, { progress: 0.5 }],
     })).toBeCloseTo(0.645);
     expect(recommendationPublishProgress({ status: 'success' })).toBe(1);
+  });
+
+  it('preserves only safe location diagnostics in persisted publish errors', () => {
+    expect(normalizedPublishError({
+      code: 'functions/resource-exhausted',
+      message: 'Daily limit reached',
+      details: {
+        reason: 'daily_limit_reached',
+        incidentId: 'loc_1234567890ab',
+        retryable: false,
+        query: 'private query',
+      },
+    })).toEqual({
+      code: 'functions/resource-exhausted',
+      message: 'Daily limit reached',
+      details: {
+        reason: 'daily_limit_reached',
+        incidentId: 'loc_1234567890ab',
+        retryable: false,
+      },
+    });
   });
 
   it('pauses ambiguous pre-v5 queue jobs for review and clears only their budget', () => {

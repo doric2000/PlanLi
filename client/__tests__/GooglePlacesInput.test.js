@@ -138,6 +138,64 @@ describe('GooglePlacesInput recent destinations', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(googleSearchFn).not.toHaveBeenCalled();
   });
+
+  it('waits for explicit Search and returns the selected result session', async () => {
+    const prediction = {
+      place_id: 'place-1',
+      selectionId: 'selection-1',
+      sessionId: 'session-1',
+      incidentId: 'loc_1234567890ab',
+      description: 'One Budget Hotel Chiangrai, Thailand',
+    };
+    const googleSearchFn = jest.fn(async () => [prediction]);
+    const onSelect = jest.fn();
+    const screen = render(
+      <ControlledInput
+        explicitSearch
+        returnSelection
+        googleSearchFn={googleSearchFn}
+        onSelect={onSelect}
+      />
+    );
+
+    fireEvent.changeText(screen.getByTestId('places-input'), 'One Budget Hotel Chiangrai');
+    await act(async () => { await Promise.resolve(); });
+    expect(googleSearchFn).not.toHaveBeenCalled();
+    expect(screen.queryByText('לא נמצאו תוצאות')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('places-input-search'));
+    expect(screen.queryByText('לא נמצאו תוצאות')).toBeNull();
+    expect(screen.getByTestId('google-places-loading')).toBeTruthy();
+    await waitFor(() => expect(googleSearchFn).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('google-place-result-place-1')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('google-place-result-place-1'));
+
+    expect(onSelect).toHaveBeenCalledWith(prediction);
+  });
+
+  it('ignores an explicit-search response after the query changes', async () => {
+    let resolveSearch;
+    const googleSearchFn = jest.fn(() => new Promise((resolve) => { resolveSearch = resolve; }));
+    const screen = render(
+      <ControlledInput explicitSearch googleSearchFn={googleSearchFn} onSelect={jest.fn()} />
+    );
+
+    fireEvent.changeText(screen.getByTestId('places-input'), 'Chiang Rai hotel');
+    fireEvent.press(screen.getByTestId('places-input-search'));
+    await waitFor(() => expect(googleSearchFn).toHaveBeenCalledTimes(1));
+    fireEvent.changeText(screen.getByTestId('places-input'), 'Chiang Mai hotel');
+    await act(async () => resolveSearch([{ place_id: 'stale', description: 'Stale result' }]));
+
+    expect(screen.queryByTestId('google-place-result-stale')).toBeNull();
+  });
+
+  it('uses the prepared English exact-search copy only when requested', () => {
+    const screen = render(
+      <ControlledInput explicitSearch locale="en" googleSearchFn={jest.fn()} onSelect={jest.fn()} />
+    );
+    expect(screen.getByText('Search')).toBeTruthy();
+    expect(screen.getByLabelText('Search locations')).toBeTruthy();
+  });
 });
 
 describe('PageHeader overflow', () => {
