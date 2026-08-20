@@ -22,6 +22,14 @@ test('Vlorë receives the vetted Hebrew destination name when Google returns Lat
   }), { name: 'ולורה', source: 'override' });
 });
 
+test('Chiang Rai uses the canonical PlanLi label without the administrative prefix', () => {
+  assert.deepEqual(resolveHebrewDestinationName({
+    countryCode: 'TH',
+    googleHebrewName: "מחוז צ'יאנג ראי",
+    englishName: 'Chiang Rai',
+  }), { name: "צ'יאנג ראי", source: 'override' });
+});
+
 test('Latin-only destinations receive a deterministic local transliteration', () => {
   const name = transliterateDestinationName('Bergen');
   assert.equal(hasHebrewName(name), true);

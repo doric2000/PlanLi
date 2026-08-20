@@ -4,6 +4,7 @@ const COMBINING_MARKS = /[\u0300-\u036f]/g;
 const HEBREW_DESTINATION_OVERRIDES = Object.freeze({
   'AL:vlore': 'ולורה',
   'AL:vlora': 'ולורה',
+  'TH:chiangrai': "צ'יאנג ראי",
 });
 
 const DIGRAPHS = Object.freeze([
@@ -90,13 +91,12 @@ function resolveHebrewDestinationName({
     return { name: existing, source: 'admin' };
   }
   const google = String(googleHebrewName || '').trim();
-  if (hasHebrewName(google)) return { name: google, source: 'google' };
-
   const english = String(englishName || google || '').trim();
   const override = HEBREW_DESTINATION_OVERRIDES[
     overrideKey(countryCode, english)
   ];
   if (override) return { name: override, source: 'override' };
+  if (hasHebrewName(google)) return { name: google, source: 'google' };
   if (hasHebrewName(existing)) {
     return { name: existing, source: existingSource || 'existing' };
   }
