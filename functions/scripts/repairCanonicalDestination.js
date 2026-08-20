@@ -118,6 +118,26 @@ function updatedRoute(route, countryId, sourceCityId, target) {
   };
 }
 
+function destinationStatsUpdate(city, recommendationCount, updatedAt) {
+  return {
+    stats: {
+      ...(city?.stats || {}),
+      recommendationCount,
+    },
+    updatedAt,
+  };
+}
+
+async function removeLegacyDottedCountField(ref, snapshot, adminImpl) {
+  if (!Object.prototype.hasOwnProperty.call(snapshot.data() || {}, 'stats.recommendationCount')) {
+    return;
+  }
+  await ref.update(
+    new adminImpl.firestore.FieldPath('stats.recommendationCount'),
+    adminImpl.firestore.FieldValue.delete()
+  );
+}
+
 async function commitUpdates(db, writes) {
   for (let offset = 0; offset < writes.length; offset += 400) {
     const batch = db.batch();
@@ -301,15 +321,22 @@ async function run({
   const remainingSourceRecommendations = sourceActiveRecommendations.docs.filter(sameCountry).length;
   const targetRecommendationCount = targetActiveRecommendations.docs.filter(sameCountry).length;
   const retireSource = plan.canRetireSource && remainingSourceRecommendations === 0;
-  await db.doc(targetPath).set({
-    'stats.recommendationCount': targetRecommendationCount,
-    updatedAt: now,
-  }, { merge: true });
-  await db.doc(sourcePath).set({
-    'stats.recommendationCount': remainingSourceRecommendations,
+  const targetRef = db.doc(targetPath);
+  const sourceRef = db.doc(sourcePath);
+  await targetRef.set(
+    destinationStatsUpdate(targetCity, targetRecommendationCount, now),
+    { merge: true }
+  );
+  await sourceRef.set({
+    ...destinationStatsUpdate(
+      sourceSnapshot.data(),
+      remainingSourceRecommendations,
+      now
+    ),
     ...(retireSource ? { status: 'inactive' } : {}),
-    updatedAt: now,
   }, { merge: true });
+  await removeLegacyDottedCountField(targetRef, targetSnapshot, adminImpl);
+  await removeLegacyDottedCountField(sourceRef, sourceSnapshot, adminImpl);
   await syncCatalog({
     admin: adminImpl, countryId, cityId: built.id,
     city: { ...targetCity, stats: { ...(targetCity.stats || {}), recommendationCount: targetRecommendationCount } },
@@ -336,6 +363,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  destinationStatsUpdate,
   parseArguments,
   pointInsideViewport,
   referencePlan,

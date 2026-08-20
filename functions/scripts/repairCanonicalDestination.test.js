@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  destinationStatsUpdate,
   parseArguments,
   pointInsideViewport,
   referencePlan,
@@ -59,4 +60,14 @@ test('route aggregate replacement is idempotent and deduplicated', () => {
   const result = updatedRoute(route, 'AL', 'old', target);
   assert.deepEqual(result.destinationKeys, ['AL:*', 'AL:new']);
   assert.deepEqual(result.destinations, [target]);
+});
+
+test('destination count repair writes the nested stats map', () => {
+  const updatedAt = { seconds: 123 };
+  const result = destinationStatsUpdate({ stats: { routeCount: 2 } }, 7, updatedAt);
+  assert.deepEqual(result, {
+    stats: { routeCount: 2, recommendationCount: 7 },
+    updatedAt,
+  });
+  assert.equal(Object.hasOwn(result, 'stats.recommendationCount'), false);
 });
