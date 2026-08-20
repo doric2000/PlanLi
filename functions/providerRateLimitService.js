@@ -7,14 +7,19 @@ const PROVIDER_COSTS = Object.freeze({
   // hierarchy work is charged separately through localityResolution.
   bilingualResolution: 2,
   localityResolution: 3,
+  // Legacy/raw Place-ID submissions perform both stages in one server call.
+  // Charge them atomically so a failed second budget transaction cannot leave
+  // a user partially charged.
+  fullResolution: 5,
 });
 const MINUTE_WINDOW_MS = 60 * 1000;
 const DAY_WINDOW_MS = 24 * 60 * 60 * 1000;
-// Five autocomplete calls plus two complete place-selection attempts. This
-// keeps retries usable while the daily ceiling remains the hard cost bound.
-const MINUTE_MAXIMUM = 15;
-const DAY_MAXIMUM = 25;
-const PROVIDER_BUDGET_VERSION = 5;
+// Beta users are expected to publish at least ten recommendations per day.
+// A normal exact-place flow costs six logical units, so these limits leave
+// room for retries and road-trip stops while retaining an abuse boundary.
+const MINUTE_MAXIMUM = 30;
+const DAY_MAXIMUM = 120;
+const PROVIDER_BUDGET_VERSION = 6;
 const PROVIDER_CALLABLE_LIMITS = Object.freeze({ concurrency: 4, maxInstances: 1 });
 const PROVIDER_ROUTE_CALLABLE_LIMITS = Object.freeze({ concurrency: 4, maxInstances: 1 });
 

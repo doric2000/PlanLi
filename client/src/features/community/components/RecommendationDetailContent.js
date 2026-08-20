@@ -8,7 +8,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ContentDetailAuthorRow from '../../../components/ContentDetailAuthorRow';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
-import { getPlaceCoordinates } from '../../../utils/distance';
+import { buildGoogleMapsUrl, buildWazeUrl } from '../../../utils/placeNavigation';
 import { getRecommendationDetailSections } from '../utils/recommendationDetailPresentation';
 import { recommendationDetailStyles as styles } from './recommendationDetailStyles';
 
@@ -17,23 +17,7 @@ function getDestinationLabel(destination = {}) {
 }
 
 function buildMapsUrl(item) {
-  const place = item?.place || {};
-  if (place.url) return place.url;
-
-  const coordinates = getPlaceCoordinates(place);
-  const fallback = [
-    place.name,
-    place.address,
-    item?.destination?.cityName,
-    item?.destination?.countryName,
-  ].filter(Boolean).join(' ');
-  const query = coordinates ? `${coordinates.lat},${coordinates.lng}` : fallback;
-  if (!query) return '';
-
-  const placeId = place.placeId
-    ? `&query_place_id=${encodeURIComponent(place.placeId)}`
-    : '';
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}${placeId}`;
+  return buildGoogleMapsUrl({ place: item?.place, destination: item?.destination }) || '';
 }
 
 const EXTRA_METADATA_ICONS = {
@@ -56,6 +40,7 @@ export default function RecommendationDetailContent({
   const sections = useMemo(() => getRecommendationDetailSections(item), [item]);
   const destinationLabel = getDestinationLabel(item?.destination);
   const mapsUrl = buildMapsUrl(item);
+  const wazeUrl = buildWazeUrl(item?.place);
   const placeLabel = item?.place?.name || item?.place?.address || '';
 
   const openDestination = () => {
@@ -106,6 +91,18 @@ export default function RecommendationDetailContent({
                 {[placeLabel, item?.place?.address].filter((value, index, all) => value && all.indexOf(value) === index).join(' · ')}
               </AppText>
               {!!mapsUrl && <Ionicons name="chevron-back" size={18} color={colors.textMuted} />}
+            </Pressable>
+          )}
+          {!!wazeUrl && (
+            <Pressable
+              style={styles.locationRow}
+              onPress={() => Linking.openURL(wazeUrl).catch(() => {})}
+              accessibilityRole="button"
+              accessibilityLabel={`פתיחת ${placeLabel || 'המיקום'} ב-Waze`}
+            >
+              <Ionicons name="navigate-outline" size={19} color={colors.textMuted} />
+              <AppText style={[styles.locationText, styles.placeText]}>פתיחה ב-Waze</AppText>
+              <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
             </Pressable>
           )}
         </View>

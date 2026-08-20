@@ -20,7 +20,11 @@ export function validateRecommendationForm(values, onlySection = null) {
     if (!values.title?.trim()) addError(errors, 'title', 'place', 'כתבו כותרת קצרה וברורה.');
     if (values.locationResolveError) addError(errors, 'location', 'place', 'בחרו מיקום תקין מהרשימה.');
     else if (values.resolvingLocation) addError(errors, 'location', 'place', 'המתינו לסיום טעינת המיקום.');
-    else if (!values.selectedCountry?.id || !values.selectedCity?.id) addError(errors, 'location', 'place', 'בחרו מקום או עיר מהרשימה.');
+    else if (values.destinationChoice) addError(errors, 'location', 'place', 'בחרו את היעד המתאים למיקום.');
+    else if (values.pendingLocation) addError(errors, 'location', 'place', 'אשרו את המיקום במפה לפני שממשיכים.');
+    else if (!values.selectedCountry?.id || !values.selectedCity?.id || !values.selectedPlace?.placeId) {
+      addError(errors, 'location', 'place', 'בחרו מיקום מדויק מהרשימה.');
+    }
   }
 
   if (include('story') && !values.description?.trim()) {

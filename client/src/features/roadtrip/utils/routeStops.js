@@ -1,4 +1,5 @@
 import { getPlaceCoordinates } from "../../../utils/distance";
+import { buildGoogleMapsUrl, buildWazeUrl } from "../../../utils/placeNavigation";
 
 const encode = (value) => encodeURIComponent(String(value || "").trim());
 
@@ -67,24 +68,40 @@ export const derivePlacesFromStops = (routeOrDays) => {
 
 export const buildGoogleMapsPlaceUrl = (stop) => {
 	const place = stop?.place || {};
-	const coords = getStopCoordinates(stop);
-
-	if (place.url) return place.url;
-
-	const fallbackQuery = coords
-		? `${coords.lat},${coords.lng}`
-		: [place.name, place.address, stop?.location, stop?.country, stop?.title]
+	return buildGoogleMapsUrl({
+		place,
+		fallback: [place.name, place.address, stop?.location, stop?.country, stop?.title, place.placeId]
 			.filter(Boolean)
-			.join(" ") || place.placeId;
-
-	if (!fallbackQuery) return null;
-
-	let url = `https://www.google.com/maps/search/?api=1&query=${encode(fallbackQuery)}`;
-	if (place.placeId) {
-		url += `&query_place_id=${encode(place.placeId)}`;
-	}
-	return url;
+			.join(" "),
+	});
 };
+
+export const markUnchangedRouteLocations = (days = [], originalDays = []) => {
+	const originalDaysById = new Map((originalDays || []).map((day) => [day?.id, day]));
+	return (days || []).map((day, dayIndex) => {
+		const originalDay = originalDaysById.get(day?.id) || originalDays?.[dayIndex];
+		const originalStops = originalDay?.stops || [];
+		const originalById = new Map(originalStops.map((stop) => [stop?.id, stop]));
+		return {
+			...day,
+			stops: (day?.stops || []).map((stop) => {
+				const original = originalById.get(stop?.id);
+				const unchanged = Boolean(
+					original &&
+					!stop?.place?.resolvedPlaceToken &&
+					original?.place?.placeId &&
+					original.place.placeId === stop?.place?.placeId
+				);
+				return unchanged ? { ...stop, reuseSavedLocation: true } : stop;
+			}),
+		};
+	});
+};
+
+export const buildWazePlaceUrl = (stop) => buildWazeUrl({
+	...(stop?.place || {}),
+	coordinates: getStopCoordinates(stop),
+});
 
 const stopDirectionsToken = (stop) => {
 	const coords = getStopCoordinates(stop);

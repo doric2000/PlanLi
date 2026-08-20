@@ -25,10 +25,10 @@ test('v3 destination stores bilingual Google cache with bounded lifetime', () =>
   assert.equal(result.data.googleCache.expiresAt.toISOString(), '2026-09-08T00:00:00.000Z');
 });
 
-test('locality candidate requires an exact country, exact English name and 50km radius', () => {
+test('locality candidate requires an exact normalized name, country and 50km radius', () => {
   const selected = chooseLocalityCandidate([
     { id: 'wrong-country', nameEn: 'Paris', countryCode: 'US', coordinates: { lat: 33.66, lng: -95.55 } },
-    { id: 'wrong-name', nameEn: 'París', countryCode: 'FR', coordinates: { lat: 48.85, lng: 2.35 } },
+    { id: 'wrong-name', nameEn: 'Parish', countryCode: 'FR', coordinates: { lat: 48.85, lng: 2.35 } },
     { id: 'far', nameEn: 'Paris', countryCode: 'FR', coordinates: { lat: 43.29, lng: 5.37 } },
     { id: 'valid', nameEn: 'Paris', countryCode: 'FR', coordinates: { lat: 48.86, lng: 2.34 } },
   ], { countryCode: 'FR', localityName: 'Paris', coordinates: { lat: 48.8566, lng: 2.3522 } });

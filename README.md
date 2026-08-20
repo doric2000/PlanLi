@@ -255,8 +255,10 @@ not use auto-submit for the first beta.
 ### Beta operations and cost controls
 
 Provider-backed callables are limited to one instance each, four concurrent
-requests per instance, 10 weighted units per user/minute and 25 per user/day. This allows
-normal place selection while limiting accidental spend. Public discovery
+requests per instance, 30 weighted units per user/minute and 120 per user/day.
+The location budget is versioned so the beta increase immediately releases
+users previously blocked by an older bucket while retaining per-user spend
+protection. Public discovery
 callables are also limited to one instance and ten concurrent requests each, in
 addition to their per-user/network request budgets. Configure a US$10
 Google Cloud billing budget and alerts, but remember that budget alerts do not
@@ -655,12 +657,16 @@ The server secrets are configured from the repository root:
 
 ```powershell
 firebase functions:secrets:set GOOGLE_MAPS_KEY --project planli-f0b12
+firebase functions:secrets:set GOOGLE_PLACES_NEW_KEY --project planli-f0b12
 firebase functions:secrets:set REST_COUNTRIES_KEY --project planli-f0b12
 firebase functions:secrets:set OPENWEATHER_API_KEY --project planli-f0b12
 firebase functions:secrets:set UNSPLASH_ACCESS_KEY --project planli-f0b12
 ```
 
-`GOOGLE_MAPS_KEY` must be restricted to Places and Geocoding APIs.
+`GOOGLE_PLACES_NEW_KEY` is the server-only key for Places API (New), selected by
+the `PLACES_PROVIDER=new` Functions parameter. `GOOGLE_MAPS_KEY` remains the
+server-only Geocoding/legacy rollback key. Restrict each key to its required
+Google API set; never expose either key to clients.
 `OPENWEATHER_API_KEY` is used only by the server-side destination overview;
 the client does not call the weather provider directly.
 `UNSPLASH_ACCESS_KEY` is used by the asynchronous destination-image selector.

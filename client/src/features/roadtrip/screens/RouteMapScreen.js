@@ -13,6 +13,7 @@ import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import {
   buildGoogleMapsDirectionsUrl,
   buildGoogleMapsPlaceUrl,
+  buildWazePlaceUrl,
   flattenValidRouteStops,
   getRouteInitialRegion,
 } from '../utils/routeStops';
@@ -225,6 +226,13 @@ export default function RouteMapScreen({ route, navigation }) {
           >
             <Ionicons name="map-outline" size={18} color={colors.white} />
             <AppText style={styles.primaryButtonText}>פתח בגוגל מפות</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => openUrl(buildWazePlaceUrl(selectedStop))}
+          >
+            <Ionicons name="navigate-outline" size={18} color={colors.white} />
+            <AppText style={styles.primaryButtonText}>פתח ב-Waze</AppText>
           </TouchableOpacity>
         </View>
       )}

@@ -10,6 +10,7 @@ const {
 } = require('./mediaCleanup');
 const { publicProfileProjectionChanged, syncPublicProfile } = require('./publicProfiles');
 const {
+  finalizeDestinationChoice,
   resolveRecommendationDestination,
   saveRecommendation,
 } = require('./recommendationService');
@@ -102,6 +103,12 @@ const {
   prepareMedia,
 } = require('./mediaProcessor');
 const { removedCanonicalMediaAssets, setMediaAvailability } = require('./mediaModeration');
+const {
+  createIncidentId,
+  decorateLocationError,
+  locationLog,
+  reasonForLocationError,
+} = require('./locationDiagnostics');
 
 admin.initializeApp();
 
@@ -188,6 +195,29 @@ function firestoreCreated(document, handler, options = {}) {
   }, handler);
 }
 
+async function locationSave(stage, request, task) {
+  const incidentId = createIncidentId(request?.data?.incidentId);
+  const startedAt = Date.now();
+  try {
+    const result = await task(incidentId);
+    locationLog(stage, {
+      incidentId,
+      outcome: 'succeeded',
+      durationMs: Date.now() - startedAt,
+    });
+    return { ...result, incidentId };
+  } catch (error) {
+    const reason = reasonForLocationError(error, `${stage}_failed`);
+    locationLog(stage, {
+      incidentId,
+      outcome: 'failed',
+      durationMs: Date.now() - startedAt,
+      reason,
+    });
+    throw decorateLocationError(error, incidentId, `${stage}_failed`);
+  }
+}
+
 exports.saveRecommendation = callable(
   {
     access: 'active',
@@ -195,24 +225,24 @@ exports.saveRecommendation = callable(
     timeoutSeconds: 120,
     ...PROVIDER_CALLABLE_LIMITS,
   },
-  (request) => saveRecommendation({
+  (request) => locationSave('recommendation_save', request, (incidentId) => saveRecommendation({
     admin,
     auth: request.auth,
-    data: request.data,
+    data: { ...(request.data || {}), incidentId },
     mapsKey: googleMapsKey.value(),
     newPlacesKey: googlePlacesNewKey.value(),
     placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     mediaBucket: mediaStorageBucket.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
-  })
+  }))
 );
 
 exports.resolveRecommendationDestination = callable(
   {
     access: 'active',
     secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
-    timeoutSeconds: 30,
+    timeoutSeconds: 60,
     ...PROVIDER_CALLABLE_LIMITS,
   },
   (request) => resolveRecommendationDestination({
@@ -248,19 +278,60 @@ exports.searchPlaces = callable(
 exports.resolvePlaceSelection = callable(
   {
     access: 'active',
-    secrets: [googleMapsKey, googlePlacesNewKey, publicRateLimitKey],
-    timeoutSeconds: 30,
+    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    timeoutSeconds: 60,
     ...PROVIDER_CALLABLE_LIMITS,
   },
-  (request) => resolvePlaceSelection({
-    admin,
-    auth: request.auth,
-    data: request.data,
-    mapsKey: googleMapsKey.value(),
-    newPlacesKey: googlePlacesNewKey.value(),
-    placesProvider: placesProvider.value(),
-    providerRateLimitKey: publicRateLimitKey.value(),
-  })
+  async (request) => {
+    if (request.data?.resolutionId && request.data?.destinationChoiceId) {
+      return locationSave('destination_choice', request, () => finalizeDestinationChoice({
+        admin,
+        auth: request.auth,
+        data: request.data,
+        providerRateLimitKey: publicRateLimitKey.value(),
+      }));
+    }
+    const selection = await resolvePlaceSelection({
+      admin,
+      auth: request.auth,
+      data: request.data,
+      mapsKey: googleMapsKey.value(),
+      newPlacesKey: googlePlacesNewKey.value(),
+      placesProvider: placesProvider.value(),
+      providerRateLimitKey: publicRateLimitKey.value(),
+    });
+    const destination = await resolveRecommendationDestination({
+      admin,
+      auth: request.auth,
+      data: {
+        resolvedPlaceToken: selection.resolvedPlaceToken,
+        incidentId: selection.incidentId,
+        supportsDestinationChoice: request.data?.supportsDestinationChoice === true,
+      },
+      mapsKey: googleMapsKey.value(),
+      newPlacesKey: googlePlacesNewKey.value(),
+      placesProvider: placesProvider.value(),
+      restCountriesKey: restCountriesKey.value(),
+      providerRateLimitKey: publicRateLimitKey.value(),
+    });
+    if (destination.status === 'destination_choice_required') {
+      return {
+        ...selection,
+        ...destination,
+        resolvedPlaceToken: selection.resolvedPlaceToken,
+        expiresAt: destination.expiresAt,
+        incidentId: destination.incidentId || selection.incidentId,
+      };
+    }
+    return {
+      ...selection,
+      ...destination,
+      status: 'resolved',
+      resolvedPlaceToken: selection.resolvedPlaceToken,
+      expiresAt: selection.expiresAt,
+      incidentId: destination.incidentId || selection.incidentId,
+    };
+  }
 );
 
 exports.saveRoute = callable(
@@ -271,17 +342,17 @@ exports.saveRoute = callable(
     secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
     ...PROVIDER_ROUTE_CALLABLE_LIMITS,
   },
-  (request) => saveRoute({
+  (request) => locationSave('route_save', request, (incidentId) => saveRoute({
     admin,
     auth: request.auth,
-    data: request.data,
+    data: { ...(request.data || {}), incidentId },
     mediaBucket: mediaStorageBucket.value(),
     mapsKey: googleMapsKey.value(),
     newPlacesKey: googlePlacesNewKey.value(),
     placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
-  })
+  }))
 );
 
 exports.loadRouteDetails = callable(

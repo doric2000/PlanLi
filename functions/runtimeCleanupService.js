@@ -4,11 +4,13 @@ const RUNTIME_COLLECTIONS = Object.freeze([
   'system/runtime/providerGlobalLimits',
   'system/runtime/placeSearchSessions',
   'system/runtime/resolvedPlaceTokens',
+  'system/runtime/destinationResolutionChoices',
 ]);
 
 const EXPIRY_FIELDS = Object.freeze({
   'system/runtime/placeSearchSessions': 'expiresAt',
   'system/runtime/resolvedPlaceTokens': 'expiresAt',
+  'system/runtime/destinationResolutionChoices': 'expiresAt',
 });
 
 async function cleanupExpiredCollection(db, collectionPath, now, limit) {

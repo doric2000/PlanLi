@@ -33,9 +33,10 @@ test('provider costs and budgets are explicit', () => {
   assert.equal(PROVIDER_COSTS.autocomplete, 1);
   assert.equal(PROVIDER_COSTS.bilingualResolution, 2);
   assert.equal(PROVIDER_COSTS.localityResolution, 3);
-  assert.equal(MINUTE_MAXIMUM, 15);
-  assert.equal(DAY_MAXIMUM, 25);
-  assert.equal(PROVIDER_BUDGET_VERSION, 5);
+  assert.equal(PROVIDER_COSTS.fullResolution, 5);
+  assert.equal(MINUTE_MAXIMUM, 30);
+  assert.equal(DAY_MAXIMUM, 120);
+  assert.equal(PROVIDER_BUDGET_VERSION, 6);
   assert.deepEqual(PROVIDER_CALLABLE_LIMITS, { concurrency: 4, maxInstances: 1 });
   assert.deepEqual(PROVIDER_ROUTE_CALLABLE_LIMITS, { concurrency: 4, maxInstances: 1 });
 });
@@ -64,16 +65,9 @@ test('provider budget enforces the minute limit', async () => {
     admin,
     auth,
     action: 'bilingualResolution',
-    units: 7,
+    units: 15,
     key: 'test-key',
     now: 1_000,
-  });
-  await consumeProviderBudget({
-    admin,
-    auth,
-    action: 'autocomplete',
-    key: 'test-key',
-    now: 1_500,
   });
   await assert.rejects(
     consumeProviderBudget({
@@ -90,12 +84,12 @@ test('provider budget enforces the minute limit', async () => {
 test('provider budget enforces the daily limit across minute windows', async () => {
   const admin = fakeAdmin();
   const auth = { uid: 'user-one' };
-  for (let minute = 0; minute < 2; minute += 1) {
+  for (let minute = 0; minute < 4; minute += 1) {
     await consumeProviderBudget({
       admin,
       auth,
       action: 'bilingualResolution',
-      units: 5,
+      units: 15,
       key: 'test-key',
       now: 1_000 + minute * 60_000,
     });
@@ -105,9 +99,9 @@ test('provider budget enforces the daily limit across minute windows', async () 
       admin,
       auth,
       action: 'localityResolution',
-      units: 2,
+      units: 1,
       key: 'test-key',
-      now: 1_000 + 2 * 60_000,
+      now: 1_000 + 4 * 60_000,
     }),
     /Daily Google request limit reached/
   );
@@ -133,4 +127,15 @@ test('provider budget allows a normal place-selection session', async () => {
   await consumeProviderBudget({
     admin, auth, action: 'localityResolution', key: 'test-key', now: 5_000,
   });
+});
+
+test('provider budget supports at least ten complete exact-place sessions per day', async () => {
+  const admin = fakeAdmin();
+  const auth = { uid: 'beta-user' };
+  for (let session = 0; session < 10; session += 1) {
+    const now = 1_000 + session * 61_000;
+    await consumeProviderBudget({ admin, auth, action: 'autocomplete', key: 'test-key', now });
+    await consumeProviderBudget({ admin, auth, action: 'bilingualResolution', key: 'test-key', now });
+    await consumeProviderBudget({ admin, auth, action: 'localityResolution', key: 'test-key', now });
+  }
 });

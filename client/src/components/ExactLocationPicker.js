@@ -1,8 +1,9 @@
 import React, { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, TouchableOpacity, View } from "react-native";
 import AppText from "./AppText";
 
 import GooglePlacesInput from "./GooglePlacesInput";
+import ExactLocationConfirmation from "./ExactLocationConfirmation";
 import useExactPlaceSelection from "../hooks/useExactPlaceSelection";
 import { colors, exactLocationPickerStyles as styles } from "../styles";
 
@@ -12,15 +13,23 @@ export default function ExactLocationPicker({
 	label = "מיקום מדויק",
 	placeholder = "חפש מקום / אטרקציה / מסעדה...",
 	inputTestID,
+	onResolvingChange,
 }) {
 	const {
 		clearSelectionForTyping,
+		chooseDestination,
+		chooseAnotherLocation,
+		confirmPendingLocation,
 		googleSearchFn,
 		handleSelectGooglePlace,
 		hydrateSelection,
 		locationQuery,
 		locationResolveError,
+		locationResolveRetryable,
+		destinationChoice,
+		pendingLocation,
 		resolvingLocation,
+		retryLocationResolution,
 		selectedCity,
 		selectedCountry,
 		selectedPlace,
@@ -30,7 +39,11 @@ export default function ExactLocationPicker({
 		hydrateSelection(value);
 	}, [hydrateSelection, value?.cityId, value?.countryId, value?.place?.placeId]);
 
-	const selectPlace = (placeId) => handleSelectGooglePlace(placeId).catch(() => {});
+	useEffect(() => {
+		onResolvingChange?.(resolvingLocation || !!pendingLocation || !!destinationChoice);
+	}, [destinationChoice, onResolvingChange, pendingLocation, resolvingLocation]);
+
+	const selectPlace = (selection) => handleSelectGooglePlace(selection).catch(() => {});
 
 	const selectedLabel = [selectedPlace?.name, selectedCity?.name, selectedCountry?.name]
 		.filter(Boolean)
@@ -45,8 +58,18 @@ export default function ExactLocationPicker({
 				onChangeValue={clearSelectionForTyping}
 				onSelect={selectPlace}
 				googleSearchFn={googleSearchFn}
+				explicitSearch
+				returnSelection
 				placeholder={placeholder}
 				inputTestID={inputTestID}
+			/>
+
+			<ExactLocationConfirmation
+				pendingLocation={pendingLocation}
+				destinationChoice={destinationChoice}
+				onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
+				onConfirm={confirmPendingLocation}
+				onChooseAnother={chooseAnotherLocation}
 			/>
 
 			{resolvingLocation && (
@@ -69,6 +92,25 @@ export default function ExactLocationPicker({
 					accessibilityLiveRegion="polite"
 				>
 					<AppText style={styles.errorText}>{locationResolveError}</AppText>
+					{locationResolveRetryable ? (
+						<TouchableOpacity
+							style={styles.retryButton}
+							onPress={() => retryLocationResolution().catch(() => {})}
+							accessibilityRole="button"
+							testID="exact-location-retry"
+						>
+							<AppText style={styles.retryText}>נסו שוב</AppText>
+						</TouchableOpacity>
+					) : (
+						<TouchableOpacity
+							style={styles.retryButton}
+							onPress={chooseAnotherLocation}
+							accessibilityRole="button"
+							testID="exact-location-change-result"
+						>
+							<AppText style={styles.retryText}>בחירת תוצאה אחרת</AppText>
+						</TouchableOpacity>
+					)}
 				</View>
 			)}
 		</View>

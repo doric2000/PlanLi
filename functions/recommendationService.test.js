@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
   fetchGoogleReverseCountry,
+  findExistingDestinationByAlias,
+  finalizeDestinationChoice,
   isVerifiedCaller,
   parsePlaceDetails,
   resolveGoogleDestination,
@@ -15,6 +17,7 @@ const {
   validateMediaAssets,
 } = require('./recommendationService');
 const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
+const { createResolvedPlaceToken } = require('./placesGatewayService');
 
 test('verified caller accepts verified password users, social users and admins', () => {
   assert.equal(
@@ -45,6 +48,117 @@ test('verified caller accepts verified password users, social users and admins',
     true
   );
   assert.equal(isVerifiedCaller({ uid: 'u1', token: { admin: true } }), true);
+});
+
+test('administrative aliases reuse a nearby known Chiang Rai destination before Google fallback', async () => {
+  const countryDocument = {
+    id: 'TH',
+    data: () => ({ code: 'TH', status: 'active', name: 'Thailand' }),
+  };
+  const catalogDocument = {
+    id: 'TH_chiang-rai',
+    data: () => ({
+      countryId: 'TH',
+      cityId: 'chiang-rai',
+      status: 'active',
+      names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' },
+    }),
+  };
+  const cityData = {
+    status: 'active',
+    googleCache: {
+      names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' },
+      coordinates: { lat: 19.9105, lng: 99.8406 },
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : [catalogDocument]),
+    doc: (path) => ({
+      get: async () => ({
+        exists: path === 'countries/TH/destinations/chiang-rai',
+        data: () => cityData,
+      }),
+    }),
+  };
+
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'TH',
+    localityCandidates: ['Amphoe Mueang Chiang Rai', 'Chang Wat Chiang Rai'],
+    coordinates: { lat: 19.8587, lng: 99.8416 },
+  });
+
+  assert.equal(result.countryId, 'TH');
+  assert.equal(result.cityId, 'chiang-rai');
+});
+
+test('an ambiguous destination choice finalizes from transient trusted data without Google work', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  let choiceDeleted = false;
+  let tokenUpdate = null;
+  const storedResolution = {
+    countryId: 'TH',
+    cityId: 'chiang-rai',
+    countryData: { code: 'TH', name: 'Thailand', status: 'active' },
+    cityData: {
+      status: 'active',
+      destinationType: 'city',
+      googleCache: { names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' } },
+    },
+    createCountry: false,
+    createCity: false,
+    place: { placeId: 'hotel', name: 'Hotel', coordinates: { lat: 19.8, lng: 99.8 } },
+  };
+  const future = { toDate: () => new Date(Date.now() + 60_000) };
+  const db = {
+    doc: (path) => ({
+      get: async () => {
+        if (path === 'system/runtime/destinationResolutionChoices/dcr_12345678') {
+          return { exists: true, data: () => ({
+            uid: 'owner', resolvedPlaceToken, incidentId: 'loc_1234567890ab',
+            providerCallCount: 2, expiresAt: future,
+            choices: [{ choiceId: 'dc_12345678', destinationResolution: storedResolution }],
+          }) };
+        }
+        if (path === `system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`) {
+          return { exists: true, data: () => ({
+            uid: 'owner', expiresAt: future,
+            he: { placeId: 'hotel' }, en: { placeId: 'hotel' },
+          }) };
+        }
+        if (path === 'countries/TH') {
+          return { exists: true, data: () => storedResolution.countryData };
+        }
+        if (path === 'countries/TH/destinations/chiang-rai') {
+          return { exists: true, data: () => storedResolution.cityData };
+        }
+        return { exists: false, data: () => null };
+      },
+      set: async (value) => { tokenUpdate = value; },
+      delete: async () => { choiceDeleted = true; },
+    }),
+  };
+  const result = await finalizeDestinationChoice({
+    admin: { firestore: () => db },
+    auth: {
+      uid: 'owner',
+      token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+    },
+    data: { resolutionId: 'dcr_12345678', destinationChoiceId: 'dc_12345678' },
+    providerRateLimitKey,
+  });
+
+  assert.equal(result.status, 'resolved');
+  assert.equal(result.destination.city.id, 'chiang-rai');
+  assert.equal(result.resolvedPlaceToken, resolvedPlaceToken);
+  assert.equal(tokenUpdate.destinationResolution.cityId, 'chiang-rai');
+  assert.equal(choiceDeleted, true);
 });
 
 test('recommendation content ignores client-controlled ownership and location fields', () => {
@@ -582,10 +696,7 @@ test('Google destination resolution falls back from a district to its containing
 
     assert.equal(destination.countryId, 'TH');
     assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-mai-city');
-    assert.deepEqual(searches, [
-      'Mueang Chiang Mai District Thailand',
-      'Chiang Mai Thailand',
-    ]);
+    assert.deepEqual(searches, ['Chiang Mai Thailand']);
   } finally {
     global.fetch = originalFetch;
   }

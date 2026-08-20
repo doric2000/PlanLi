@@ -35,7 +35,9 @@ const PALESTINIAN_DESTINATIONS = Object.freeze({
 
 function resolveDestinationCountryPolicy({ placeId, names = {} } = {}) {
   const normalizedPlaceId = String(placeId || '').trim();
-  const normalizedNames = [names.he, names.en].map(normalize).filter(Boolean);
+  const normalizedNames = Object.values(names || {}).flat()
+    .map(normalize)
+    .filter(Boolean);
   if (ISRAEL_OVERRIDES.placeIds.has(normalizedPlaceId) ||
       normalizedNames.some((name) => ISRAEL_OVERRIDES.names.has(name))) {
     return { countryCode: 'IL', resolutionSource: 'independent-policy-registry' };

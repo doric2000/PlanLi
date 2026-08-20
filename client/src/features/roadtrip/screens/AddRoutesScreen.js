@@ -39,7 +39,7 @@ import {
 	prepareRouteMedia,
 	revokeRouteObjectUrls,
 } from "../utils/routeMedia";
-import { flattenValidRouteStops } from "../utils/routeStops";
+import { flattenValidRouteStops, markUnchangedRouteLocations } from "../utils/routeStops";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { saveRoute } from "../../../services/RouteService";
 import {
@@ -583,7 +583,10 @@ export default function AddRoutesScreen({ navigation, route }) {
 			}
 
 			const preparedMedia = await prepareRouteMedia(tripDays, uploadImageAssets);
-			routeData.days = preparedMedia.days;
+			routeData.days = markUnchangedRouteLocations(
+				preparedMedia.days,
+				routeToEdit?.days || []
+			);
 
 			await saveRoute(routeData, routeToEdit?.id || null);
 			Alert.alert("הצלחה", "המסלול עודכן.");

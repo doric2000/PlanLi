@@ -1,6 +1,8 @@
-const { googleCacheFor } = require('./legacyPlacesAdapter');
+const { exactPlaceGoogleCacheFor, googleCacheFor } = require('./legacyPlacesAdapter');
 const { fetchBilingualPlace } = require('./placesProviderAdapter');
 const { buildMapLocation } = require('./mapLocation');
+
+const CACHE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
 function millis(value) {
   if (!value) return 0;
@@ -17,6 +19,15 @@ function hasUsableDestinationCache(destination, nowMs = Date.now()) {
     destination?.googleCache?.names?.en &&
     millis(destination?.googleCache?.expiresAt) > nowMs
   );
+}
+
+function cachedProviderLoad(cache, placeId, loader) {
+  if (!cache.has(placeId)) cache.set(placeId, Promise.resolve().then(loader));
+  return cache.get(placeId);
+}
+
+function retryAt(now) {
+  return new Date(now.getTime() + CACHE_RETRY_DELAY_MS);
 }
 
 async function refreshDestinationCaches({
@@ -36,13 +47,16 @@ async function refreshDestinationCaches({
     .limit(limit)
     .get();
   const results = [];
+  const providerLoads = new Map();
   for (const document of snapshot.docs) {
     const destination = document.data() || {};
     const placeId = destination.providerRefs?.googlePlaceId;
     try {
-      const bilingual = await fetchBilingualPlace({
-        provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
-      });
+      const bilingual = await cachedProviderLoad(providerLoads, placeId, () =>
+        fetchBilingualPlace({
+          provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
+        })
+      );
       if (bilingual.he.placeId !== placeId || bilingual.en.placeId !== placeId) {
         throw new Error('Google returned a different destination Place ID.');
       }
@@ -53,20 +67,13 @@ async function refreshDestinationCaches({
       });
       results.push({ path: document.ref.path, state: 'ready' });
     } catch (error) {
-      if (millis(destination.googleCache?.expiresAt) <= now.getTime()) {
-        const segments = document.ref.path.split('/');
-        const countryId = segments[1];
-        const batch = db.batch();
-        batch.update(document.ref, {
-          googleCache: admin.firestore.FieldValue.delete(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        batch.delete(db.doc(`destinationCatalog/${countryId}_${document.id}`));
-        await batch.commit();
-        results.push({ path: document.ref.path, state: 'expired', error: error?.message });
-      } else {
-        results.push({ path: document.ref.path, state: 'retry', error: error?.message });
-      }
+      // Provider outages must never erase the last known-good normalized location.
+      // Push refreshAfter forward so the scheduler retries without hammering Google.
+      await document.ref.update({
+        'googleCache.refreshAfter': retryAt(now),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      results.push({ path: document.ref.path, state: 'retry', error: error?.message });
     }
   }
   return results;
@@ -80,9 +87,8 @@ function exactPlaceFromBilingual(bilingual, fetchedAt) {
     name: he.displayName || en.displayName || null,
     address: he.address || en.address || null,
     coordinates: he.coordinates || en.coordinates || null,
-    types: Array.from(new Set([...(he.types || []), ...(en.types || [])])),
     googleCache: {
-      ...googleCacheFor({ he, en, fetchedAt }),
+      ...exactPlaceGoogleCacheFor({ he, en, fetchedAt }),
       addresses: { he: he.address || '', en: en.address || '' },
     },
   };
@@ -113,6 +119,7 @@ async function refreshExactPlaceCaches({
       .get()
     : { docs: [] };
   const results = [];
+  const providerLoads = new Map();
   for (const document of [...recommendations.docs, ...stops.docs]) {
     const data = document.data() || {};
     const placeId = data.place?.placeId;
@@ -127,9 +134,11 @@ async function refreshExactPlaceCaches({
       }
     }
     try {
-      const bilingual = await fetchBilingualPlace({
-        provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
-      });
+      const bilingual = await cachedProviderLoad(providerLoads, placeId, () =>
+        fetchBilingualPlace({
+          provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
+        })
+      );
       const place = exactPlaceFromBilingual(bilingual, now);
       await document.ref.update({
         place,
@@ -138,22 +147,18 @@ async function refreshExactPlaceCaches({
       });
       results.push({ path: document.ref.path, state: 'ready' });
     } catch (error) {
-      if (millis(data.place?.googleCache?.expiresAt) <= now.getTime()) {
-        await document.ref.update({
-          place: { placeId },
-          ...(isRecommendation ? { mapLocation: admin.firestore.FieldValue.delete() } : {}),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        results.push({ path: document.ref.path, state: 'expired', error: error?.message });
-      } else {
-        results.push({ path: document.ref.path, state: 'retry', error: error?.message });
-      }
+      await document.ref.update({
+        'place.googleCache.refreshAfter': retryAt(now),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      results.push({ path: document.ref.path, state: 'retry', error: error?.message });
     }
   }
   return results;
 }
 
 module.exports = {
+  cachedProviderLoad,
   hasUsableDestinationCache,
   millis,
   refreshDestinationCaches,

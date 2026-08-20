@@ -10,6 +10,7 @@ test('runtime cleanup covers public/provider limiters and private place sessions
     'system/runtime/providerGlobalLimits',
     'system/runtime/placeSearchSessions',
     'system/runtime/resolvedPlaceTokens',
+    'system/runtime/destinationResolutionChoices',
   ]);
 });
 
@@ -17,6 +18,7 @@ test('place sessions and resolved tokens use their actual expiresAt field', asyn
   for (const path of [
     'system/runtime/placeSearchSessions',
     'system/runtime/resolvedPlaceTokens',
+    'system/runtime/destinationResolutionChoices',
   ]) {
     let field;
     const query = {

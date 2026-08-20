@@ -197,10 +197,16 @@ function googleCacheFor({ he, en, fetchedAt = new Date() }) {
   };
 }
 
+function exactPlaceGoogleCacheFor(options) {
+  const { coordinates, viewport, types, ...cache } = googleCacheFor(options);
+  return cache;
+}
+
 module.exports = {
   LEGACY_DETAILS_FIELDS,
   LOCALITY_COMPONENT_TYPES,
   destinationTypeFor,
+  exactPlaceGoogleCacheFor,
   fetchLegacyBilingualPlace,
   fetchLegacyPlaceDetails,
   fetchLegacyLocalityPlaceId,

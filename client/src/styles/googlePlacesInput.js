@@ -18,6 +18,9 @@ export const googlePlacesInput = StyleSheet.create({
 		height: SEARCH_BAR_HEIGHT,
 		backgroundColor: 'transparent',
 	},
+	explicitInputWrapper: {
+		height: 48,
+	},
 	searchIcon: {
 		position: 'absolute',
 		right: spacing.lg,
@@ -33,10 +36,39 @@ export const googlePlacesInput = StyleSheet.create({
 		writingDirection: 'rtl',
 		paddingRight: spacing.xxxl + spacing.md,
 	},
+	explicitInput: {
+		paddingRight: 92,
+	},
+	explicitSearchButton: {
+		position: 'absolute',
+		right: spacing.sm,
+		top: 3,
+		bottom: 3,
+		zIndex: 2,
+		minWidth: 76,
+		paddingHorizontal: spacing.sm,
+		borderRadius: spacing.radiusSmall,
+		backgroundColor: colors.primary,
+		flexDirection: 'row-reverse',
+		alignItems: 'center',
+		justifyContent: 'center',
+		gap: 4,
+	},
+	explicitSearchButtonText: {
+		color: colors.white,
+		fontSize: 12,
+		fontFamily: fontFamilies.semiBold,
+	},
+	explicitSearchButtonDisabled: {
+		opacity: 0.5,
+	},
 	loader: {
 		position: 'absolute',
 		left: spacing.lg,
 		top: (SEARCH_BAR_HEIGHT - 14) / 2,
+	},
+	explicitLoader: {
+		top: 17,
 	},
 	listContainer: {
 		position: 'absolute',
@@ -51,6 +83,9 @@ export const googlePlacesInput = StyleSheet.create({
 		borderColor: colors.borderLight,
 		...shadows.small,
 		maxHeight: 200,
+	},
+	explicitListContainer: {
+		top: 48 + spacing.sm,
 	},
 	dropdownStatusRow: {
 		flexDirection: 'row-reverse',

@@ -2,10 +2,12 @@ import {
 	buildGoogleMapsDirectionsUrl,
 	buildGoogleMapsDirectionsUrls,
 	buildGoogleMapsPlaceUrl,
+	buildWazePlaceUrl,
 	derivePlacesFromStops,
 	flattenRouteStops,
 	flattenValidRouteStops,
 	hasValidStopLocation,
+	markUnchangedRouteLocations,
 } from "../src/features/roadtrip/utils/routeStops";
 
 const route = {
@@ -76,6 +78,45 @@ describe("roadtrip route stop helpers", () => {
 		expect(url).toContain("https://www.google.com/maps/search/?api=1");
 		expect(url).toContain("48.8584%2C2.2945");
 		expect(url).toContain("query_place_id=place-a");
+	});
+
+	it("builds a Waze navigation URL from exact coordinates", () => {
+		expect(buildWazePlaceUrl(route.days[0].stops[0])).toBe(
+			"https://waze.com/ul?ll=48.8584%2C2.2945&navigate=yes&utm_source=planli"
+		);
+	});
+
+	it("marks only trusted unchanged edit locations for server reuse", () => {
+		const edited = [{ stops: [
+			{ id: "a", title: "Renamed", place: { placeId: "place-a", coordinates: { lat: 1, lng: 2 } } },
+			{ id: "b", place: { placeId: "new-place", coordinates: { lat: 3, lng: 4 } } },
+			{ id: "c", place: { placeId: "place-c", resolvedPlaceToken: "new-token", coordinates: { lat: 5, lng: 6 } } },
+		] }];
+		const original = [{ stops: [
+			{ id: "a", place: { placeId: "place-a" } },
+			{ id: "b", place: { placeId: "place-b" } },
+			{ id: "c", place: { placeId: "place-c" } },
+		] }];
+
+		const [day] = markUnchangedRouteLocations(edited, original);
+		expect(day.stops[0].reuseSavedLocation).toBe(true);
+		expect(day.stops[1].reuseSavedLocation).toBeUndefined();
+		expect(day.stops[2].reuseSavedLocation).toBeUndefined();
+	});
+
+	it("matches unchanged locations by day ID after route days are reordered", () => {
+		const original = [
+			{ id: "day-a", stops: [{ id: "stop-a", place: { placeId: "place-a" } }] },
+			{ id: "day-b", stops: [{ id: "stop-b", place: { placeId: "place-b" } }] },
+		];
+		const edited = [
+			{ id: "day-b", stops: [{ id: "stop-b", place: { placeId: "place-b" } }] },
+			{ id: "day-a", stops: [{ id: "stop-a", place: { placeId: "place-a" } }] },
+		];
+
+		const result = markUnchangedRouteLocations(edited, original);
+		expect(result[0].stops[0].reuseSavedLocation).toBe(true);
+		expect(result[1].stops[0].reuseSavedLocation).toBe(true);
 	});
 
 	it("builds whole trip Google Maps directions URL", () => {

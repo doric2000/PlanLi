@@ -17,6 +17,8 @@ import HomeScreen from '../src/features/home/screens/HomeScreen';
 const mockSearchDestinations = jest.fn();
 const mockLoadRecentDestinations = jest.fn();
 const mockRememberRecentDestinations = jest.fn();
+const mockResolveDestinationForPlacePreview = jest.fn();
+const mockEnsureCapability = jest.fn();
 jest.mock('../src/services/DestinationService', () => ({
   searchDestinations: (...args) => mockSearchDestinations(...args),
   destinationCatalogItemToCity: (item, placeholderColor) => {
@@ -63,6 +65,7 @@ jest.mock('../src/components/GooglePlacesInput', () => {
   const { View, TextInput, TouchableOpacity, Text } = require('react-native');
   return ({
     value, onChangeValue, rightAccessory, idleLocalResults = [], onSelectLocal,
+    onSelect, returnSelection,
   }) => {
     const [focused, setFocused] = React.useState(false);
     return (
@@ -82,6 +85,16 @@ jest.mock('../src/components/GooglePlacesInput', () => {
             <Text>{city.name}</Text>
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          testID="mock-google-result"
+          onPress={() => onSelect?.(returnSelection ? {
+            selectionId: 'selection-1',
+            sessionId: 'session-1',
+            providerPlaceId: 'google-place-1',
+          } : 'google-place-1')}
+        >
+          <Text>Google result</Text>
+        </TouchableOpacity>
         {rightAccessory}
       </View>
     );
@@ -110,7 +123,7 @@ jest.mock('../src/components/CityCard', () => {
 });
 
 jest.mock('../src/services/LocationService', () => ({
-  resolveDestinationForPlacePreview: jest.fn(),
+  resolveDestinationForPlacePreview: (...args) => mockResolveDestinationForPlacePreview(...args),
 }));
 
 jest.mock('../src/hooks/useAuthUser', () => ({
@@ -122,7 +135,7 @@ jest.mock('../src/hooks/useAuthUser', () => ({
 }));
 
 jest.mock('../src/features/auth/AuthContext', () => ({
-  useAuth: () => ({ ensureCapability: jest.fn(async () => false) }),
+  useAuth: () => ({ ensureCapability: (...args) => mockEnsureCapability(...args) }),
 }));
 
 describe('HomeScreenSearchTest', () => {
@@ -136,6 +149,7 @@ describe('HomeScreenSearchTest', () => {
     jest.clearAllMocks();
     mockLoadRecentDestinations.mockResolvedValue([]);
     mockRememberRecentDestinations.mockImplementation(async (items) => items);
+    mockEnsureCapability.mockResolvedValue(false);
     mockSearchDestinations.mockResolvedValue({
       items: [
         makeDoc('athens', 'gr', {
@@ -149,6 +163,60 @@ describe('HomeScreenSearchTest', () => {
           recommendationsCount: 8,
         }),
       ],
+    });
+  });
+
+  it('preserves the resolved exact venue and save token when Home prefills a recommendation', async () => {
+    mockEnsureCapability.mockResolvedValue(true);
+    const exactPlace = {
+      placeId: 'google-place-1',
+      name: 'One Budget Hotel Chiangrai Soi Sawan',
+      address: 'Chiang Rai, Thailand',
+      coordinates: { latitude: 19.887, longitude: 99.832 },
+      resolvedPlaceToken: 'resolved-token',
+      incidentId: 'loc_incident',
+    };
+    mockResolveDestinationForPlacePreview.mockResolvedValue({
+      persisted: false,
+      place: exactPlace,
+      destination: {
+        country: { id: 'TH', name: 'Thailand' },
+        city: {
+          id: 'chiang-rai',
+          name: 'Chiang Rai',
+          coordinates: { latitude: 19.91, longitude: 99.84 },
+        },
+      },
+    });
+    const navigationMock = { navigate: jest.fn() };
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={navigationMock} />
+      </SafeAreaProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('mock-google-result'));
+
+    await waitFor(() => {
+      expect(mockResolveDestinationForPlacePreview).toHaveBeenCalledWith({
+        selectionId: 'selection-1',
+        sessionId: 'session-1',
+        providerPlaceId: 'google-place-1',
+      });
+      expect(navigationMock.navigate).toHaveBeenCalledWith('AddRecommendation', {
+        prefillLocation: {
+          destination: {
+            country: { id: 'TH', name: 'Thailand' },
+            city: expect.objectContaining({ id: 'chiang-rai' }),
+          },
+          place: exactPlace,
+        },
+      });
     });
   });
 

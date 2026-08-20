@@ -252,6 +252,10 @@ describe('AddRecommendationScreen Integration Test', () => {
     );
     expect(mockUploadImages).not.toHaveBeenCalled();
 
+    // Resolution opens the exact-place preview; the form value is committed only
+    // after the user verifies the marker and confirms it.
+    fireEvent.press(getByTestId('exact-location-confirm'));
+
     fireEvent.press(getByTestId('add-rec-section-place-continue'));
 
     // 3. Enter Description

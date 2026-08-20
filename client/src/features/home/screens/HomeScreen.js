@@ -266,10 +266,10 @@ export default function HomeScreen({ navigation }) {
 		}).catch(() => {});
 	};
 
-	const handleGoogleSelect = async (placeId) => {
+	const handleGoogleSelect = async (selection) => {
 		try {
 			if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
-			const result = await resolveDestinationForPlacePreview(placeId);
+			const result = await resolveDestinationForPlacePreview(selection);
 			if (result?.persisted) {
 				rememberHomeDestination({
 					...result.destination.city,
@@ -290,14 +290,10 @@ export default function HomeScreen({ navigation }) {
 						country: result.destination.country,
 						city: result.destination.city,
 					},
-					place: {
-						placeId,
-						name: result.place?.name || result.destination.city?.name || null,
-						address: result.place?.address || result.destination.city?.description || null,
-						...(result.destination.city?.coordinates
-							? { coordinates: result.destination.city.coordinates }
-							: {}),
-					},
+					// Preserve the exact resolved venue and its transient save token. Using
+					// destination coordinates here used to move the map marker to the city
+					// centre and forced the recommendation flow to resolve Google again.
+					place: result.place,
 				},
 			});
 		} catch (error) {
@@ -364,6 +360,7 @@ export default function HomeScreen({ navigation }) {
 					idleLocalResults={recentDestinations}
 					idleLocalTitle="חיפושים אחרונים"
 					localResultsLoading={localResultsLoading}
+					returnSelection
 					inputTestID="home-search-input"
 					placeholder="חפש עיר או יעד..."
 					onSelectLocal={selectLocalDestination}

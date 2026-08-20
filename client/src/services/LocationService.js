@@ -5,7 +5,6 @@ import { resolveRecommendationDestination } from './RecommendationService';
 
 let searchPlacesCallable;
 let resolvePlaceSelectionCallable;
-const pendingSelectionsByPlaceId = new Map();
 
 function getSearchPlacesCallable() {
   if (!searchPlacesCallable) {
@@ -21,18 +20,23 @@ function getResolvePlaceSelectionCallable() {
   return resolvePlaceSelectionCallable;
 }
 
-function mapPrediction(prediction, sessionId, expiresAt) {
+function mapPrediction(prediction, sessionId, expiresAt, incidentId) {
+  const primaryText = prediction.primaryText || prediction.text || '';
+  const providerPlaceId = prediction.providerPlaceId || prediction.placeId;
   return {
     // Existing picker components use place_id. This remains a permanent Google
     // identifier, while the server owns all mutable Place details.
     id: prediction.selectionId,
-    place_id: prediction.placeId,
+    place_id: providerPlaceId,
+    provider: prediction.provider || 'google',
+    providerPlaceId,
     selectionId: prediction.selectionId,
     sessionId,
     expiresAt,
-    description: [prediction.text, prediction.secondaryText].filter(Boolean).join(', '),
+    incidentId,
+    description: [primaryText, prediction.secondaryText].filter(Boolean).join(', '),
     structured_formatting: {
-      main_text: prediction.text,
+      main_text: primaryText,
       secondary_text: prediction.secondaryText || '',
     },
     types: prediction.types || [],
@@ -44,9 +48,8 @@ async function gatewaySearch(searchText, mode) {
   const response = await getSearchPlacesCallable()({ query: searchText.trim(), mode });
   const result = response?.data || {};
   const predictions = (result.predictions || []).map((prediction) =>
-    mapPrediction(prediction, result.sessionId, result.expiresAt)
+    mapPrediction(prediction, result.sessionId, result.expiresAt, result.incidentId)
   );
-  predictions.forEach((prediction) => pendingSelectionsByPlaceId.set(prediction.place_id, prediction));
   return predictions;
 }
 
@@ -74,21 +77,65 @@ export const searchPlaces = async (searchText, { signal } = {}) => {
 
 // Destination ownership and geopolitical resolution are server-only. Preview and
 // save use the same resolver, so a client cannot present one destination and save another.
-export const resolveDestinationForPlacePreview = async (placeId) => {
-  const selection = pendingSelectionsByPlaceId.get(placeId);
+export const resolveDestinationForPlacePreview = async (selectionOrPlaceId) => {
+  const selection = selectionOrPlaceId && typeof selectionOrPlaceId === 'object'
+    ? selectionOrPlaceId
+    : null;
+  const placeId = selection?.providerPlaceId || selection?.place_id || selectionOrPlaceId;
   if (!selection?.sessionId || !selection?.selectionId) {
     return resolveRecommendationDestination(placeId);
   }
   const response = await getResolvePlaceSelectionCallable()({
     sessionId: selection.sessionId,
     selectionId: selection.selectionId,
+    incidentId: selection.incidentId,
+    supportsDestinationChoice: true,
   });
-  pendingSelectionsByPlaceId.delete(placeId);
+  const resolved = response?.data || {};
   const resolvedPlaceToken = response?.data?.resolvedPlaceToken;
-  const result = await resolveRecommendationDestination({ resolvedPlaceToken });
+  if (resolved.status === 'destination_choice_required') {
+    return { ...resolved, resolvedPlaceToken };
+  }
+  const result = resolved.destination
+    ? resolved
+    : await resolveRecommendationDestination({
+        resolvedPlaceToken,
+        incidentId: resolved.incidentId || selection.incidentId,
+      });
   return {
     ...result,
     resolvedPlaceToken,
-    place: result?.place ? { ...result.place, resolvedPlaceToken } : result?.place,
+    incidentId: result?.incidentId || resolved.incidentId || selection.incidentId,
+    place: result?.place
+      ? {
+          ...result.place,
+          resolvedPlaceToken,
+          incidentId: result?.incidentId || resolved.incidentId || selection.incidentId,
+        }
+      : result?.place,
+  };
+};
+
+export const finalizeDestinationChoice = async ({
+  resolutionId,
+  destinationChoiceId,
+  incidentId,
+}) => {
+  const response = await getResolvePlaceSelectionCallable()({
+    resolutionId,
+    destinationChoiceId,
+    incidentId,
+    supportsDestinationChoice: true,
+  });
+  const result = response?.data || {};
+  return {
+    ...result,
+    place: result.place
+      ? {
+          ...result.place,
+          resolvedPlaceToken: result.resolvedPlaceToken,
+          incidentId: result.incidentId || incidentId,
+        }
+      : result.place,
   };
 };
