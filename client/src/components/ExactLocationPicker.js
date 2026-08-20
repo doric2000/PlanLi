@@ -6,15 +6,20 @@ import GooglePlacesInput from "./GooglePlacesInput";
 import ExactLocationConfirmation from "./ExactLocationConfirmation";
 import useExactPlaceSelection from "../hooks/useExactPlaceSelection";
 import { colors, exactLocationPickerStyles as styles } from "../styles";
+import { locationCopy } from '../utils/locationCopy';
 
 export default function ExactLocationPicker({
 	value,
 	onChange,
-	label = "מיקום מדויק",
-	placeholder = "חפש מקום / אטרקציה / מסעדה...",
+	label,
+	placeholder,
 	inputTestID,
 	onResolvingChange,
+	locale = 'he',
 }) {
+	const copy = locationCopy(locale);
+	const resolvedLabel = label === undefined ? copy.exactLocationLabel : label;
+	const resolvedPlaceholder = placeholder || copy.exactLocationPlaceholder;
 	const {
 		clearSelectionForTyping,
 		chooseDestination,
@@ -33,7 +38,7 @@ export default function ExactLocationPicker({
 		selectedCity,
 		selectedCountry,
 		selectedPlace,
-	} = useExactPlaceSelection({ value, onChange });
+	} = useExactPlaceSelection({ value, onChange, locale });
 
 	useEffect(() => {
 		hydrateSelection(value);
@@ -51,7 +56,7 @@ export default function ExactLocationPicker({
 
 	return (
 		<View style={styles.wrap}>
-			{!!label && <AppText style={styles.label}>{label}</AppText>}
+			{!!resolvedLabel && <AppText style={styles.label}>{resolvedLabel}</AppText>}
 			<GooglePlacesInput
 				mode="google"
 				value={locationQuery}
@@ -60,8 +65,9 @@ export default function ExactLocationPicker({
 				googleSearchFn={googleSearchFn}
 				explicitSearch
 				returnSelection
-				placeholder={placeholder}
+				placeholder={resolvedPlaceholder}
 				inputTestID={inputTestID}
+				locale={locale}
 			/>
 
 			<ExactLocationConfirmation
@@ -69,13 +75,14 @@ export default function ExactLocationPicker({
 				destinationChoice={destinationChoice}
 				onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
 				onConfirm={confirmPendingLocation}
-				onChooseAnother={chooseAnotherLocation}
+					onChooseAnother={chooseAnotherLocation}
+				locale={locale}
 			/>
 
 			{resolvingLocation && (
 				<View style={styles.statusRow}>
 					<ActivityIndicator size="small" color={colors.primary} />
-					<AppText style={styles.statusText}>טוען פרטי מיקום...</AppText>
+					<AppText style={styles.statusText}>{copy.resolving}</AppText>
 				</View>
 			)}
 
@@ -99,7 +106,7 @@ export default function ExactLocationPicker({
 							accessibilityRole="button"
 							testID="exact-location-retry"
 						>
-							<AppText style={styles.retryText}>נסו שוב</AppText>
+							<AppText style={styles.retryText}>{copy.retry}</AppText>
 						</TouchableOpacity>
 					) : (
 						<TouchableOpacity
@@ -108,7 +115,7 @@ export default function ExactLocationPicker({
 							accessibilityRole="button"
 							testID="exact-location-change-result"
 						>
-							<AppText style={styles.retryText}>בחירת תוצאה אחרת</AppText>
+							<AppText style={styles.retryText}>{copy.chooseAnother}</AppText>
 						</TouchableOpacity>
 					)}
 				</View>

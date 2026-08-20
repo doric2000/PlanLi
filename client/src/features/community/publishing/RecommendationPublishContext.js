@@ -55,14 +55,23 @@ const defaultValue = {
 
 const ContentPublishContext = createContext(defaultValue);
 
-function normalizedError(error) {
+export function normalizedPublishError(error) {
+  const rawDetails = error?.details || {};
+  const details = {
+    ...(typeof rawDetails.reason === 'string' ? { reason: rawDetails.reason.slice(0, 80) } : {}),
+    ...(typeof rawDetails.incidentId === 'string' ? { incidentId: rawDetails.incidentId.slice(0, 64) } : {}),
+    ...(typeof rawDetails.retryable === 'boolean' ? { retryable: rawDetails.retryable } : {}),
+  };
   return {
     code: String(error?.code || 'unknown'),
     message: String(error?.message || 'Could not publish this content.').slice(0, 500),
+    ...(Object.keys(details).length ? { details } : {}),
   };
 }
 
 export function isTransientPublishError(error) {
+  if (error?.details?.retryable === false) return false;
+  if (error?.details?.retryable === true) return true;
   const code = String(error?.code || '');
   if (TRANSIENT_CODES.has(code)) return true;
   const message = String(error?.message || '').toLowerCase();
@@ -623,7 +632,7 @@ export function ContentPublishProvider({ children }) {
         stage: shouldRetry ? 'retrying' : 'failed',
         attempts,
         retryAt: shouldRetry ? Date.now() + RETRY_DELAYS_MS[attempts - 1] : 0,
-        error: normalizedError(error),
+        error: normalizedPublishError(error),
         updatedAt: Date.now(),
       }));
     }

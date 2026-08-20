@@ -1,6 +1,7 @@
 const { exactPlaceGoogleCacheFor, googleCacheFor } = require('./legacyPlacesAdapter');
 const { fetchBilingualPlace } = require('./placesProviderAdapter');
 const { buildMapLocation } = require('./mapLocation');
+const { hasHebrewName, resolveHebrewDestinationName } = require('./destinationLocalizationService');
 
 const CACHE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
 
@@ -15,7 +16,7 @@ function millis(value) {
 function hasUsableDestinationCache(destination, nowMs = Date.now()) {
   if (Number(destination?.schemaVersion || 0) < 3) return true;
   return Boolean(
-    destination?.googleCache?.names?.he &&
+    hasHebrewName(destination?.googleCache?.names?.he) &&
     destination?.googleCache?.names?.en &&
     millis(destination?.googleCache?.expiresAt) > nowMs
   );
@@ -60,7 +61,24 @@ async function refreshDestinationCaches({
       if (bilingual.he.placeId !== placeId || bilingual.en.placeId !== placeId) {
         throw new Error('Google returned a different destination Place ID.');
       }
-      const cache = googleCacheFor({ ...bilingual, fetchedAt: now });
+      const providerCache = googleCacheFor({ ...bilingual, fetchedAt: now });
+      const localized = resolveHebrewDestinationName({
+        countryCode: providerCache.countryCode || destination.countryId,
+        googleHebrewName: providerCache.names.he,
+        englishName: providerCache.names.en,
+        existingHebrewName: destination.googleCache?.names?.he,
+        existingSource: destination.googleCache?.nameSources?.he,
+        existingAdminName: destination.identity?.names?.he,
+      });
+      const cache = {
+        ...providerCache,
+        names: { ...providerCache.names, he: localized.name },
+        nameSources: {
+          ...(destination.googleCache?.nameSources || {}),
+          he: localized.source,
+          en: 'google',
+        },
+      };
       await document.ref.update({
         googleCache: cache,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),

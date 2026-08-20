@@ -4,6 +4,7 @@ import { TouchableOpacity, View } from 'react-native';
 import AppText from './AppText';
 import ExactLocationMapPreview from './ExactLocationMapPreview';
 import { exactLocationPickerStyles as styles } from '../styles';
+import { locationCopy } from '../utils/locationCopy';
 
 export default function ExactLocationConfirmation({
   pendingLocation,
@@ -11,13 +12,15 @@ export default function ExactLocationConfirmation({
   onChooseDestination,
   onConfirm,
   onChooseAnother,
+  locale = 'he',
 }) {
+  const copy = locationCopy(locale);
   if (destinationChoice?.alternatives?.length) {
     return (
       <View style={styles.choiceCard} testID="exact-location-destination-choices">
-        <AppText style={styles.choiceHeading}>לאיזה יעד לשייך את המקום?</AppText>
+        <AppText style={styles.choiceHeading}>{copy.destinationChoiceHeading}</AppText>
         <AppText style={styles.choiceHelper}>
-          מצאנו כמה יעדים מתאימים. הבחירה לא מפעילה חיפוש נוסף.
+          {copy.destinationChoiceHelper}
         </AppText>
         {destinationChoice.alternatives.map((alternative) => (
           <TouchableOpacity
@@ -39,7 +42,7 @@ export default function ExactLocationConfirmation({
           accessibilityRole="button"
           testID="exact-location-choice-cancel"
         >
-          <AppText style={styles.chooseAnotherText}>בחירת תוצאת חיפוש אחרת</AppText>
+          <AppText style={styles.chooseAnotherText}>{copy.chooseAnotherSearchResult}</AppText>
         </TouchableOpacity>
       </View>
     );
@@ -50,7 +53,7 @@ export default function ExactLocationConfirmation({
     .join(' · ');
   return (
     <View style={styles.previewCard} testID="exact-location-preview">
-      <ExactLocationMapPreview place={pendingLocation.place} />
+      <ExactLocationMapPreview place={pendingLocation.place} title={copy.mapPreview} />
       <View style={styles.previewCopy}>
         <AppText style={styles.previewTitle} numberOfLines={2}>
           {pendingLocation.place.name || pendingLocation.place.address}
@@ -69,19 +72,19 @@ export default function ExactLocationConfirmation({
           style={styles.confirmButton}
           onPress={onConfirm}
           accessibilityRole="button"
-          accessibilityLabel="אישור המיקום"
+          accessibilityLabel={copy.confirmLocation}
           testID="exact-location-confirm"
         >
-          <AppText style={styles.confirmButtonText}>אישור המיקום</AppText>
+          <AppText style={styles.confirmButtonText}>{copy.confirmLocation}</AppText>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.chooseAnotherButton}
           onPress={onChooseAnother}
           accessibilityRole="button"
-          accessibilityLabel="בחירת תוצאה אחרת"
+          accessibilityLabel={copy.chooseAnother}
           testID="exact-location-choose-another"
         >
-          <AppText style={styles.chooseAnotherText}>בחירת תוצאה אחרת</AppText>
+          <AppText style={styles.chooseAnotherText}>{copy.chooseAnother}</AppText>
         </TouchableOpacity>
       </View>
     </View>

@@ -42,6 +42,7 @@ import {
   TRAVEL_PARTIES,
   VIBES,
 } from '../../profile/constants/smartProfileOptions';
+import { locationCopy } from '../../../utils/locationCopy';
 import {
   ENVIRONMENTS,
   TRAVEL_TAXONOMY_VERSION,
@@ -56,7 +57,7 @@ import {
   validateRecommendationForm,
 } from '../../../utils/guidedFormValidation';
 
-
+const EXACT_LOCATION_COPY = locationCopy('he');
 
 const RECOMMENDATION_SECTION_ORDER = ['place', 'story', 'category', 'fit'];
 const RECOMMENDATION_SECTION_FIELDS = {
@@ -941,8 +942,8 @@ const handleSubmit = async () => {
         />
 
         <View style={guidedStyles.fieldGroup}>
-          <AppText style={guidedStyles.fieldLabel}>מיקום מדויק (חובה)</AppText>
-          <AppText style={guidedStyles.fieldHelper}>חפשו ובחרו תוצאה כדי שנוכל לשייך את ההמלצה לעיר הנכונה</AppText>
+          <AppText style={guidedStyles.fieldLabel}>{EXACT_LOCATION_COPY.exactLocationLabel} (חובה)</AppText>
+          <AppText style={guidedStyles.fieldHelper}>{EXACT_LOCATION_COPY.exactLocationHelper}</AppText>
           <GooglePlacesInput
             mode="google"
             value={locationQuery}
@@ -951,7 +952,7 @@ const handleSubmit = async () => {
             googleSearchFn={googleSearchFn}
             explicitSearch
             returnSelection
-            placeholder="חפש מקום / אטרקציה / מסעדה..."
+            placeholder={EXACT_LOCATION_COPY.exactLocationPlaceholder}
             inputTestID="add-rec-location-input"
           />
           <ExactLocationConfirmation
@@ -962,7 +963,7 @@ const handleSubmit = async () => {
             onChooseAnother={chooseAnotherLocation}
           />
           {resolvingLocation && (
-            <AppText style={guidedStyles.fieldHelper}>טוען את פרטי המיקום...</AppText>
+            <AppText style={guidedStyles.fieldHelper}>{EXACT_LOCATION_COPY.resolving}</AppText>
           )}
           {!!locationResolveError && (
             <AppText
@@ -981,7 +982,7 @@ const handleSubmit = async () => {
               accessibilityRole="button"
               testID="add-rec-location-retry"
             >
-              <AppText style={locationStyles.retryText}>נסו שוב</AppText>
+              <AppText style={locationStyles.retryText}>{EXACT_LOCATION_COPY.retry}</AppText>
             </TouchableOpacity>
           )}
           {!!locationResolveError && !locationResolveRetryable && (
@@ -991,7 +992,7 @@ const handleSubmit = async () => {
               accessibilityRole="button"
               testID="add-rec-location-change-result"
             >
-              <AppText style={locationStyles.retryText}>בחירת תוצאה אחרת</AppText>
+              <AppText style={locationStyles.retryText}>{EXACT_LOCATION_COPY.chooseAnother}</AppText>
             </TouchableOpacity>
           )}
           {!!validation.fields.location && (

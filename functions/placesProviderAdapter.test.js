@@ -353,6 +353,61 @@ test('Thailand reverse resolution prefers the province over a smaller locality',
   assert.equal(placeId, 'chiang-rai-province');
 });
 
+test('non-Thai locality search runs before accepting a reverse-geocoded county', async () => {
+  const calls = [];
+  const placeId = await fetchLocalityPlaceId({
+    provider: 'new',
+    localityName: 'Vlorë County',
+    localityCandidates: ['Vlorë County', 'Vlorë'],
+    countryName: 'Albania',
+    countryCode: 'AL',
+    coordinates: { lat: 40.4146, lng: 19.4812 },
+    mapsKey: 'maps-key',
+    newPlacesKey: 'new-key',
+    fetchImpl: async (url, options) => {
+      const target = String(url);
+      calls.push(target);
+      if (target.includes('/geocode/')) {
+        return { ok: true, status: 200, json: async () => ({
+          status: 'OK',
+          results: [{
+            place_id: 'vlore-county',
+            types: ['administrative_area_level_2', 'political'],
+            address_components: [
+              { long_name: 'Albania', short_name: 'AL', types: ['country'] },
+            ],
+            geometry: { location: { lat: 40.466, lng: 19.49 } },
+          }],
+        }) };
+      }
+      if (target.includes('places:autocomplete')) {
+        const input = JSON.parse(options.body).input;
+        return { ok: true, status: 200, json: async () => ({ suggestions:
+          /^Vlor[eë] Albania/.test(input) ? [{ placePrediction: {
+            placeId: 'vlore-city',
+            structuredFormat: { mainText: { text: 'Vlorë' } },
+            types: ['locality'],
+          } }] : [],
+        }) };
+      }
+      return { ok: true, status: 200, json: async () => ({
+        id: 'vlore-city',
+        displayName: { text: 'Vlorë' },
+        addressComponents: [
+          { longText: 'Vlorë', types: ['locality'] },
+          { longText: 'Albania', shortText: 'AL', types: ['country'] },
+        ],
+        location: { latitude: 40.466, longitude: 19.489 },
+        types: ['locality', 'political'],
+      }) };
+    },
+  });
+
+  assert.equal(placeId, 'vlore-city');
+  assert.match(calls[0], /geocode/);
+  assert.ok(calls.some((url) => url.includes('places:autocomplete')));
+});
+
 test('provider retry cannot exceed the ten-request ceiling', async () => {
   const requestContext = providerRequestContext({ count: 9, maximum: 10 });
   let calls = 0;

@@ -5,7 +5,7 @@ import {
   resolveDestinationForPlacePreview,
   searchPlaces,
 } from '../services/LocationService';
-import { locationErrorKind, locationErrorMessage } from '../utils/locationErrors';
+import { locationErrorMessage, locationErrorRetryable } from '../utils/locationErrors';
 
 const queryForValue = (value) =>
   value?.query || value?.place?.name || value?.place?.address || value?.location || '';
@@ -35,7 +35,7 @@ export const buildExactPlaceValue = (country, city, place) => {
   };
 };
 
-export default function useExactPlaceSelection({ value = null, onChange } = {}) {
+export default function useExactPlaceSelection({ value = null, onChange, locale = 'he' } = {}) {
   const [locationQuery, setLocationQuery] = useState(() => queryForValue(value));
   const [selectedCountry, setSelectedCountry] = useState(() => countryForValue(value));
   const [selectedCity, setSelectedCity] = useState(() => cityForValue(value));
@@ -113,11 +113,9 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
       setPendingLocation(null);
       setDestinationChoice(null);
-      const message = locationErrorMessage(error);
+      const message = locationErrorMessage(error, locale);
       setLocationResolveError(message);
-      setLocationResolveRetryable(
-        error?.details?.retryable !== false && locationErrorKind(error) !== 'expired'
-      );
+      setLocationResolveRetryable(locationErrorRetryable(error));
       throw Object.assign(error instanceof Error ? error : new Error(message), {
         userMessage: message,
       });
@@ -126,7 +124,7 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
         setResolvingLocation(false);
       }
     }
-  }, [locationQuery, onChange]);
+  }, [locale, locationQuery]);
 
   const confirmPendingLocation = useCallback(() => {
     if (!pendingLocation) return null;
@@ -180,11 +178,9 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
       return nextValue;
     } catch (error) {
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
-      const message = locationErrorMessage(error);
+      const message = locationErrorMessage(error, locale);
       setLocationResolveError(message);
-      setLocationResolveRetryable(
-        error?.details?.retryable !== false && locationErrorKind(error) !== 'expired'
-      );
+      setLocationResolveRetryable(locationErrorRetryable(error));
       throw Object.assign(error instanceof Error ? error : new Error(message), {
         userMessage: message,
       });
@@ -193,7 +189,7 @@ export default function useExactPlaceSelection({ value = null, onChange } = {}) 
         setResolvingLocation(false);
       }
     }
-  }, [destinationChoice, locationQuery]);
+  }, [destinationChoice, locale, locationQuery]);
 
   const retryLocationResolution = useCallback(() => {
     if (!lastSelection) return Promise.resolve(null);

@@ -97,7 +97,7 @@ test('administrative aliases reuse a nearby known Chiang Rai destination before 
   assert.equal(result.cityId, 'chiang-rai');
 });
 
-test('a containing PlanLi city outranks a closer same-name administrative region', async () => {
+test('a containing PlanLi city outranks a closer administrative region without an alias match', async () => {
   const countryDocument = {
     id: 'PE',
     data: () => ({ code: 'PE', status: 'active', name: 'Peru' }),
@@ -105,14 +105,18 @@ test('a containing PlanLi city outranks a closer same-name administrative region
   const catalogDocuments = ['city', 'region'].map((cityId) => ({
     id: `PE_${cityId}`,
     data: () => ({
-      countryId: 'PE', cityId, status: 'active', names: { en: 'Cusco', he: 'Cusco' },
+      countryId: 'PE', cityId, status: 'active',
+      destinationClass: cityId === 'city' ? 'settlement' : 'administrative',
+      names: cityId === 'city'
+        ? { en: 'Historic Centre', he: 'המרכז ההיסטורי' }
+        : { en: 'Cusco', he: 'קוסקו' },
     }),
   }));
   const city = {
     status: 'active',
     destinationType: 'city',
     googleCache: {
-      names: { en: 'Cusco', he: 'Cusco' },
+      names: { en: 'Historic Centre', he: 'המרכז ההיסטורי' },
       coordinates: { lat: -13.53, lng: -71.97 },
       viewport: {
         southwest: { lat: -13.60, lng: -72.05 },
@@ -1015,8 +1019,10 @@ test('Google destination resolution treats Vlora and Vlorë as the same Albanian
 
     assert.equal(destination.countryId, 'AL');
     assert.equal(destination.cityData.googleCache.names.en, 'Vlorë');
+    assert.equal(destination.cityData.googleCache.names.he, 'ולורה');
+    assert.equal(destination.cityData.googleCache.nameSources.he, 'override');
     assert.equal(destination.cityData.providerRefs.googlePlaceId, 'vlore-municipality');
-    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'geocode']);
+    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'details:null', 'details:null', 'geocode']);
   } finally {
     global.fetch = originalFetch;
   }

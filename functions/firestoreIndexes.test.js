@@ -47,6 +47,7 @@ test('destination catalog indexes match every popular search query and stable ID
     'status:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
     'countryId:ASCENDING|status:ASCENDING|recommendationCount:DESCENDING|__name__:ASCENDING',
     'countryId:ASCENDING|status:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'countryId:ASCENDING|status:ASCENDING|destinationClass:ASCENDING',
   ]) assert.ok(catalogIndexes.includes(signature), `Missing destination catalog index: ${signature}`);
 });
 

@@ -39,9 +39,8 @@ function reasonForLocationError(error, fallback = 'location_resolution_failed') 
 }
 
 function retryableLocationError(error) {
-  const code = normalizedCode(error);
-  if (String(error?.message || '').toLowerCase().includes('expired')) return false;
-  return ['unavailable', 'deadline-exceeded', 'resource-exhausted', 'internal'].includes(code);
+  const reason = String(error?.details?.reason || reasonForLocationError(error));
+  return ['temporary_limit_reached', 'provider_timeout', 'provider_unavailable'].includes(reason);
 }
 
 function decorateLocationError(error, incidentId, fallbackReason) {
@@ -54,10 +53,11 @@ function decorateLocationError(error, incidentId, fallbackReason) {
   const message = error instanceof HttpsError
     ? error.message
     : 'The location request could not be completed.';
+  const reason = reasonForLocationError(error, fallbackReason);
   return new HttpsError(safeCode, message, {
-    reason: reasonForLocationError(error, fallbackReason),
+    reason,
     incidentId,
-    retryable: retryableLocationError(error),
+    retryable: retryableLocationError({ ...error, details: { reason } }),
   });
 }
 

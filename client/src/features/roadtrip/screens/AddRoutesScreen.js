@@ -602,7 +602,9 @@ export default function AddRoutesScreen({ navigation, route }) {
 			}
 			// Unclaimed prepared media is removed by the scheduled server cleanup.
 			Alert.alert(
-				locationKind === "quota" ? "מגבלת חיפוש זמנית" : "שגיאה",
+				locationKind === "dailyQuota"
+					? "מגבלת המיקום היומית"
+					: locationKind === "temporaryQuota" ? "מגבלת חיפוש זמנית" : "שגיאה",
 				locationKind === "unknown"
 					? "לא הצלחנו לשמור את המסלול."
 					: locationErrorMessage(error)

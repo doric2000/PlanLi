@@ -50,15 +50,54 @@ function catalogId(countryId, cityId) {
   return `${countryId}_${cityId}`;
 }
 
+function normalizedCoordinates(value) {
+  const lat = Number(value?.lat ?? value?.latitude);
+  const lng = Number(value?.lng ?? value?.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+function normalizedViewport(value) {
+  const southwest = normalizedCoordinates(value?.southwest);
+  const northeast = normalizedCoordinates(value?.northeast);
+  return southwest && northeast ? { southwest, northeast } : null;
+}
+
+function destinationClassFor(city) {
+  const destinationType = String(city?.destinationType || '').toLowerCase();
+  const googleTypes = city?.googleCache?.types || city?.identity?.types || [];
+  if (['city', 'town', 'village'].includes(destinationType) ||
+      googleTypes.some((type) => ['locality', 'postal_town', 'administrative_area_level_3'].includes(type))) {
+    return 'settlement';
+  }
+  if (destinationType === 'region' ||
+      googleTypes.some((type) => ['administrative_area_level_1', 'administrative_area_level_2'].includes(type))) {
+    return 'administrative';
+  }
+  return 'feature';
+}
+
 function catalogData({ countryId, cityId, city, country, timestamp }) {
   const names = city?.googleCache?.names || city?.identity?.names || { he: city?.name || cityId, en: city?.name || cityId };
   const countryNames = country?.names || { he: country?.name || countryId, en: country?.name || countryId };
+  const googleTypes = Array.from(new Set([
+    ...(Array.isArray(city?.googleCache?.types) ? city.googleCache.types : []),
+    ...(Array.isArray(city?.identity?.types) ? city.identity.types : []),
+  ].filter((type) => typeof type === 'string'))).slice(0, 12);
   return {
     countryId,
     cityId,
     status: city?.status === 'active' && country?.status === 'active' ? 'active' : 'inactive',
+    destinationType: city?.destinationType || null,
+    destinationClass: destinationClassFor(city),
     names,
     countryNames,
+    coordinates: normalizedCoordinates(
+      city?.googleCache?.coordinates || city?.identity?.coordinates || city?.coordinates
+    ),
+    viewport: normalizedViewport(
+      city?.googleCache?.viewport || city?.identity?.viewport || city?.viewport
+    ),
+    googleTypes,
     search: { prefixes: prefixes(names.he, names.en, countryNames.he, countryNames.en) },
     recommendationCount: Math.max(0, Number(city?.stats?.recommendationCount || 0)),
     destinationImage: city?.destinationImage || null,
@@ -198,6 +237,7 @@ module.exports = {
   catalogData,
   catalogId,
   compactDestinationSearchText,
+  destinationClassFor,
   destinationSearchForms,
   filterCatalogByActiveCountries,
   getCatalogSnapshot,

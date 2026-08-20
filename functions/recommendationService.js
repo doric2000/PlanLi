@@ -755,10 +755,12 @@ function destinationContainsCoordinates(destination, coordinates) {
   return insideLatitude && insideLongitude;
 }
 
-function isCityDestination(destination) {
-  if (destination?.destinationType === 'city') return true;
+function isSettlementDestination(destination) {
+  if (['city', 'town', 'village'].includes(destination?.destinationType)) return true;
   const types = destination?.googleCache?.types || destination?.identity?.types || [];
-  return Array.isArray(types) && types.includes('locality');
+  return Array.isArray(types) && types.some((type) =>
+    ['locality', 'postal_town', 'administrative_area_level_3'].includes(type)
+  );
 }
 
 function isThaiProvinceDestination(destination) {
@@ -767,6 +769,14 @@ function isThaiProvinceDestination(destination) {
     return types.includes('administrative_area_level_1');
   }
   return destination?.destinationType === 'region';
+}
+
+function isAdministrativeDestination(destination) {
+  const types = destination?.googleCache?.types || destination?.identity?.types || [];
+  return destination?.destinationType === 'region' ||
+    (Array.isArray(types) && types.some((type) =>
+      ['administrative_area_level_1', 'administrative_area_level_2'].includes(type)
+    ));
 }
 
 async function findExistingDestinationByAlias({
@@ -782,7 +792,7 @@ async function findExistingDestinationByAlias({
     .filter((value) => value.length >= 2)))
     .sort((left, right) => left.length - right.length)
     .slice(0, 3);
-  if (!aliases.length || !coordinates || !/^[A-Z]{2}$/.test(String(countryCode || ''))) return null;
+  if (!coordinates || !/^[A-Z]{2}$/.test(String(countryCode || ''))) return null;
 
   const countrySnapshot = await db.collection('countries')
     .where('code', '==', String(countryCode).toUpperCase())
@@ -795,6 +805,25 @@ async function findExistingDestinationByAlias({
   if (!countries.size) return null;
 
   const catalogDocuments = new Map();
+  for (const countryId of countries.keys()) {
+    let snapshot = { docs: [] };
+    try {
+      let query = db.collection('destinationCatalog').where('countryId', '==', countryId);
+      query = query.where('status', '==', 'active');
+      query = query.where('destinationClass', '==', 'settlement');
+      snapshot = await query.get();
+    } catch (error) {
+      // Older test doubles and a catalog during the staged index rollout cannot
+      // serve the spatial projection yet. Alias resolution remains available.
+      if (!(error instanceof TypeError) && error?.code !== 9 && error?.code !== 'failed-precondition') throw error;
+    }
+    snapshot.docs.forEach((document) => {
+      const data = document.data() || {};
+      if (data.status === 'active' && data.countryId === countryId) {
+        catalogDocuments.set(`${data.countryId}:${data.cityId}`, data);
+      }
+    });
+  }
   for (const alias of aliases) {
     const snapshot = await db.collection('destinationCatalog')
       .where('search.prefixes', 'array-contains', alias.slice(0, 16))
@@ -810,7 +839,6 @@ async function findExistingDestinationByAlias({
         catalogDocuments.set(`${data.countryId}:${data.cityId}`, data);
       }
     });
-    if (catalogDocuments.size) break;
   }
   if (!catalogDocuments.size) return null;
 
@@ -821,33 +849,53 @@ async function findExistingDestinationByAlias({
   const matches = citySnapshots.map((snapshot, index) => {
     const entry = entries[index];
     const cityData = snapshot.exists ? snapshot.data() || {} : null;
-    const cityCoordinates = cityData?.googleCache?.coordinates ||
+    const projectedDestination = {
+      ...cityData,
+      destinationType: cityData?.destinationType || entry.destinationType,
+      googleCache: {
+        ...(cityData?.googleCache || {}),
+        coordinates: cityData?.googleCache?.coordinates || entry.coordinates,
+        viewport: cityData?.googleCache?.viewport || entry.viewport,
+        types: cityData?.googleCache?.types || entry.googleTypes,
+      },
+    };
+    const cityCoordinates = projectedDestination.googleCache.coordinates ||
       cityData?.identity?.coordinates || cityData?.coordinates;
     if (!cityData || cityData.status !== 'active' || !cityCoordinates) return null;
+    const names = [entry.names?.he, entry.names?.en,
+      cityData?.googleCache?.names?.he, cityData?.googleCache?.names?.en,
+      cityData?.identity?.names?.he, cityData?.identity?.names?.en]
+      .flatMap((value) => localityAliases(value, countryCode))
+      .map(compactDestinationSearchText);
     return {
       countryId: entry.countryId,
       countryData: countries.get(entry.countryId),
       cityId: entry.cityId,
       cityData,
       distanceKm: distanceKm(coordinates, cityCoordinates),
-      containsCoordinates: destinationContainsCoordinates(cityData, coordinates),
-      isCity: isCityDestination(cityData),
-      isThaiProvince: isThaiProvinceDestination(cityData),
+      containsCoordinates: destinationContainsCoordinates(projectedDestination, coordinates),
+      aliasMatched: aliases.some((alias) => names.includes(alias)),
+      isSettlement: isSettlementDestination(projectedDestination),
+      isThaiProvince: isThaiProvinceDestination(projectedDestination),
     };
-  }).filter((entry) => entry && entry.distanceKm <= 50)
+  }).filter(Boolean)
     .sort((left, right) => left.distanceKm - right.distanceKm || left.cityId.localeCompare(right.cityId));
   if (!matches.length) return null;
 
-  const containingCities = matches.filter((entry) => entry.isCity && entry.containsCoordinates);
-  if (containingCities.length === 1) return containingCities[0];
-  if (containingCities.length > 1) {
-    if (containingCities[1].distanceKm - containingCities[0].distanceKm < 5) {
-      return { ambiguity: containingCities.slice(0, 3) };
+  // A confidently containing settlement always wins over an administrative area.
+  // Ambiguity is considered only within the best eligible settlement class.
+  const containingSettlements = matches.filter((entry) => entry.isSettlement && entry.containsCoordinates);
+  if (containingSettlements.length === 1) return containingSettlements[0];
+  if (containingSettlements.length > 1) {
+    if (containingSettlements[1].distanceKm - containingSettlements[0].distanceKm < 5) {
+      return { ambiguity: containingSettlements.slice(0, 3) };
     }
-    return containingCities[0];
+    return containingSettlements[0];
   }
   if (String(countryCode).toUpperCase() === 'TH') {
-    const provinces = matches.filter((entry) => entry.isThaiProvince);
+    const provinces = matches.filter((entry) =>
+      entry.isThaiProvince && entry.aliasMatched && entry.distanceKm <= 50
+    );
     if (provinces.length === 1) return provinces[0];
     if (provinces.length > 1) {
       if (provinces[1].distanceKm - provinces[0].distanceKm < 5) {
@@ -856,10 +904,24 @@ async function findExistingDestinationByAlias({
       return provinces[0];
     }
   }
-  if (matches.length > 1 && matches[1].distanceKm - matches[0].distanceKm < 5) {
-    return { ambiguity: matches.slice(0, 3) };
+  const aliasedSettlements = String(countryCode).toUpperCase() === 'TH' ? [] : matches.filter((entry) =>
+    entry.isSettlement && entry.aliasMatched && entry.distanceKm <= 50
+  );
+  if (aliasedSettlements.length === 1) return aliasedSettlements[0];
+  if (aliasedSettlements.length > 1) {
+    if (aliasedSettlements[1].distanceKm - aliasedSettlements[0].distanceKm < 5) {
+      return { ambiguity: aliasedSettlements.slice(0, 3) };
+    }
+    return aliasedSettlements[0];
   }
-  return matches[0];
+  const aliasedAreas = matches.filter((entry) =>
+    !entry.isSettlement && entry.aliasMatched && entry.distanceKm <= 50
+  );
+  if (!aliasedAreas.length) return null;
+  if (aliasedAreas.length > 1 && aliasedAreas[1].distanceKm - aliasedAreas[0].distanceKm < 5) {
+    return { ambiguity: aliasedAreas.slice(0, 3) };
+  }
+  return aliasedAreas[0];
 }
 
 async function resolveGoogleDestination({
@@ -898,7 +960,10 @@ async function resolveGoogleDestination({
       coordinates: selectedEn.coordinates || bilingual.he?.coordinates,
       countryOverrideId,
     });
-    if (existingDestination?.ambiguity?.length) {
+    const deferAdministrativeAmbiguity = existingDestination?.ambiguity?.length &&
+      preliminaryCountry.countryCode !== 'TH' &&
+      existingDestination.ambiguity.every((candidate) => isAdministrativeDestination(candidate.cityData));
+    if (existingDestination?.ambiguity?.length && !deferAdministrativeAmbiguity) {
       const error = new HttpsError('failed-precondition',
         'The destination locality is ambiguous. Please choose the correct destination.');
       error.destinationChoices = existingDestination.ambiguity.map((candidate) => ({
@@ -917,7 +982,10 @@ async function resolveGoogleDestination({
       error.providerCallCount = requestContext.count;
       throw error;
     }
-    if (existingDestination) {
+    const deferAdministrativeFallback = existingDestination && !existingDestination.ambiguity &&
+      preliminaryCountry.countryCode !== 'TH' &&
+      isAdministrativeDestination(existingDestination.cityData);
+    if (existingDestination && !deferAdministrativeFallback) {
       const destination = {
         countryRef: db.doc(`countries/${existingDestination.countryId}`),
         cityRef: db.doc(

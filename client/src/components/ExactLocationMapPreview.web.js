@@ -4,7 +4,7 @@ import { StyleSheet } from 'react-native';
 import { exactLocationPickerStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
 
-export default function ExactLocationMapPreview({ place }) {
+export default function ExactLocationMapPreview({ place, title = 'תצוגה מקדימה של המיקום' }) {
   const coordinates = getPlaceCoordinates(place);
   const lat = Number(coordinates?.lat);
   const lng = Number(coordinates?.lng);
@@ -19,7 +19,7 @@ export default function ExactLocationMapPreview({ place }) {
     ? `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(embedKey)}&q=${encodeURIComponent(query)}`
     : `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}&z=15&output=embed`;
   return React.createElement('iframe', {
-    title: place?.name || 'תצוגה מקדימה של המיקום',
+    title: place?.name || title,
     src,
     style: StyleSheet.flatten(styles.previewMap),
     loading: 'lazy',

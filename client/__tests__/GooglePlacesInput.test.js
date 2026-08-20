@@ -188,6 +188,14 @@ describe('GooglePlacesInput recent destinations', () => {
 
     expect(screen.queryByTestId('google-place-result-stale')).toBeNull();
   });
+
+  it('uses the prepared English exact-search copy only when requested', () => {
+    const screen = render(
+      <ControlledInput explicitSearch locale="en" googleSearchFn={jest.fn()} onSelect={jest.fn()} />
+    );
+    expect(screen.getByText('Search')).toBeTruthy();
+    expect(screen.getByLabelText('Search locations')).toBeTruthy();
+  });
 });
 
 describe('PageHeader overflow', () => {

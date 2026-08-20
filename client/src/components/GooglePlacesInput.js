@@ -14,6 +14,7 @@ import { searchCities } from '../services/LocationService';
 import WebPortal from './WebPortal';
 import { compactDestinationText } from '../utils/destinationSearch';
 import { locationErrorMessage } from '../utils/locationErrors';
+import { locationCopy } from '../utils/locationCopy';
 
 export default function GooglePlacesInput({
   onSelect,
@@ -44,7 +45,9 @@ export default function GooglePlacesInput({
   listContainerStyle,
   explicitSearch = false,
   returnSelection = false,
+  locale = 'he',
 }) {
+  const copy = locationCopy(locale);
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
 
@@ -313,13 +316,13 @@ export default function GooglePlacesInput({
         if (requestGeneration === latestSearchGenerationRef.current && e?.name !== 'AbortError') {
           lastRequestedQuery.current = '';
           setPredictions([]);
-          setSearchError(locationErrorMessage(e));
+          setSearchError(locationErrorMessage(e, locale));
         }
       } finally {
         if (requestGeneration === latestSearchGenerationRef.current) setLoading(false);
       }
     }, delay);
-  }, [explicitSearch, googleSearchGeneration, isGoogleMode, googleTriggerQuery, showList]);
+  }, [explicitSearch, googleSearchGeneration, isGoogleMode, googleTriggerQuery, locale, showList]);
 
   const showIdleLocalResults =
     showList &&
@@ -426,11 +429,11 @@ export default function GooglePlacesInput({
             accessibilityState={{
               disabled: loading || compactDestinationText(query).length < MIN_QUERY_LENGTH,
             }}
-            accessibilityLabel="חיפוש מיקום"
+            accessibilityLabel={copy.searchLocation}
             testID={inputTestID ? `${inputTestID}-search` : 'google-places-search'}
           >
             <Ionicons name="search" size={17} color={colors.white} />
-            <AppText style={googlePlacesInput.explicitSearchButtonText}>חיפוש</AppText>
+            <AppText style={googlePlacesInput.explicitSearchButtonText}>{copy.search}</AppText>
           </TouchableOpacity>
         ) : (
           <Ionicons
@@ -481,7 +484,7 @@ export default function GooglePlacesInput({
             onPress={() => onRequestGoogleSearch(settledQuery)}
           >
             <AppText style={[buttons.primarySmallText, googlePlacesInput.fallbackButtonText]}>
-              חפש ב-Google
+              {copy.searchGoogle}
             </AppText>
           </TouchableOpacity>
         </View>
@@ -555,12 +558,12 @@ export default function GooglePlacesInput({
           ) : localResultsLoading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
             </View>
           ) : loading ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <ActivityIndicator size="small" color={colors.primary} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
             </View>
           ) : searchError ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
@@ -590,7 +593,7 @@ export default function GooglePlacesInput({
           ) : (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <Ionicons name="search" size={16} color={colors.textSecondary} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{copy.noResults}</AppText>
             </View>
           )}
         </View>
@@ -671,12 +674,12 @@ export default function GooglePlacesInput({
             ) : localResultsLoading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
               </View>
             ) : loading ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>טוען...</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
               </View>
             ) : searchError ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
@@ -706,7 +709,7 @@ export default function GooglePlacesInput({
             ) : (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <Ionicons name="search" size={16} color={colors.textSecondary} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>לא נמצאו תוצאות</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{copy.noResults}</AppText>
               </View>
             )}
           </View>

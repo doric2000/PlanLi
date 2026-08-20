@@ -34,6 +34,34 @@ test('expired sessions remain distinct from provider timeouts', () => {
   assert.equal(decorated.details.retryable, false);
 });
 
+test('daily quota and provider request ceilings are non-retryable', () => {
+  const daily = decorateLocationError(
+    new HttpsError('resource-exhausted', 'The daily location limit has been reached.'),
+    'loc_1234567890ab',
+    'selection_failed'
+  );
+  const ceiling = decorateLocationError(
+    new HttpsError('resource-exhausted', 'Location resolution reached its safe Google request limit.'),
+    'loc_1234567890ab',
+    'selection_failed'
+  );
+  assert.deepEqual(daily.details, {
+    reason: 'daily_limit_reached', incidentId: 'loc_1234567890ab', retryable: false,
+  });
+  assert.equal(ceiling.details.reason, 'provider_call_limit_reached');
+  assert.equal(ceiling.details.retryable, false);
+});
+
+test('temporary minute quota remains retryable', () => {
+  const decorated = decorateLocationError(
+    new HttpsError('resource-exhausted', 'The minute location limit has been reached.'),
+    'loc_1234567890ab',
+    'selection_failed'
+  );
+  assert.equal(decorated.details.reason, 'temporary_limit_reached');
+  assert.equal(decorated.details.retryable, true);
+});
+
 test('location logs discard query, identity and coordinate fields', () => {
   const originalInfo = console.info;
   let captured;

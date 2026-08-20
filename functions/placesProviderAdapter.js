@@ -555,7 +555,7 @@ function legacyComponent(result, type) {
     .find((entry) => entry?.types?.includes(type));
 }
 
-async function fetchReverseLocalityPlaceId(options) {
+async function fetchReverseLocalityCandidates(options) {
   if (!options.mapsKey || !options.coordinates) return null;
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.searchParams.set('latlng', `${options.coordinates.lat},${options.coordinates.lng}`);
@@ -583,34 +583,90 @@ async function fetchReverseLocalityPlaceId(options) {
   }
   if (payload?.status !== 'OK' || !Array.isArray(payload.results)) return null;
   const expectedCountry = String(options.countryCode || '').toUpperCase();
-  const localityTypes = localityTypesForCountry(expectedCountry);
   const candidates = payload.results.map((result) => {
     const placeId = String(result?.place_id || '').trim();
     const country = legacyComponent(result, 'country');
     const countryCode = String(country?.short_name || '').toUpperCase();
-    const typeIndex = localityTypes.findIndex((type) => result?.types?.includes(type));
+    const types = Array.isArray(result?.types) ? result.types : [];
     const lat = Number(result?.geometry?.location?.lat);
     const lng = Number(result?.geometry?.location?.lng);
     const coordinates = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-    if (!placeId || typeIndex < 0 || !coordinates || (expectedCountry && countryCode !== expectedCountry)) return null;
-    return { placeId, priority: typeIndex, distanceKm: distanceKm(options.coordinates, coordinates) };
-  }).filter((entry) => entry && entry.distanceKm <= 50)
-    .sort((left, right) => left.priority - right.priority || left.distanceKm - right.distanceKm);
-  if (!candidates.length) return null;
-  if (candidates.length > 1 && candidates[0].priority === candidates[1].priority &&
-      candidates[1].distanceKm - candidates[0].distanceKm < 5) {
+    if (!placeId || !coordinates || (expectedCountry && countryCode !== expectedCountry)) return null;
+    return { placeId, types, distanceKm: distanceKm(options.coordinates, coordinates) };
+  }).filter((entry) => entry && entry.distanceKm <= 50);
+
+  function choose(typePriority) {
+    const ranked = candidates.map((candidate) => {
+      const priority = typePriority.findIndex((type) => candidate.types.includes(type));
+      return priority < 0 ? null : { ...candidate, priority };
+    }).filter(Boolean).sort((left, right) =>
+      left.priority - right.priority || left.distanceKm - right.distanceKm ||
+      left.placeId.localeCompare(right.placeId)
+    );
+    if (!ranked.length) return null;
+    return {
+      placeId: ranked[0].placeId,
+      ambiguous: ranked.length > 1 && ranked[0].priority === ranked[1].priority &&
+        ranked[1].distanceKm - ranked[0].distanceKm < 5,
+    };
+  }
+
+  const settlement = choose(['locality', 'postal_town', 'administrative_area_level_3']);
+  const administrative = choose(expectedCountry === 'TH'
+    ? ['administrative_area_level_1', 'administrative_area_level_2']
+    : ['administrative_area_level_2', 'administrative_area_level_1']);
+  return {
+    settlement: settlement?.placeId || null,
+    settlementAmbiguous: settlement?.ambiguous || false,
+    administrative: administrative?.placeId || null,
+    administrativeAmbiguous: administrative?.ambiguous || false,
+  };
+}
+
+function rejectAmbiguousReverseCandidate(ambiguous) {
+  if (ambiguous) {
     throw new HttpsError('failed-precondition',
       'The destination locality is ambiguous. Please select a more specific place.');
   }
-  return candidates[0].placeId;
+}
+
+async function fetchReverseLocalityPlaceId(options) {
+  const candidates = await fetchReverseLocalityCandidates(options);
+  if (!candidates) return null;
+  if (String(options.countryCode || '').toUpperCase() === 'TH') {
+    if (candidates.administrative) {
+      rejectAmbiguousReverseCandidate(candidates.administrativeAmbiguous);
+      return candidates.administrative;
+    }
+    rejectAmbiguousReverseCandidate(candidates.settlementAmbiguous);
+    return candidates.settlement;
+  }
+  if (candidates.settlement) {
+    rejectAmbiguousReverseCandidate(candidates.settlementAmbiguous);
+    return candidates.settlement;
+  }
+  rejectAmbiguousReverseCandidate(candidates.administrativeAmbiguous);
+  return candidates.administrative;
 }
 
 async function fetchLocalityPlaceId(options) {
   const localityNames = localitySearchNames(options);
   assert(localityNames.length, 'failed-precondition',
     'The selected place has no trustworthy containing locality.');
-  const reversePlaceId = await fetchReverseLocalityPlaceId(options);
-  if (reversePlaceId) return reversePlaceId;
+  const reverseCandidates = await fetchReverseLocalityCandidates(options);
+  if (String(options.countryCode || '').toUpperCase() === 'TH') {
+    const thaiCandidate = reverseCandidates?.administrative || reverseCandidates?.settlement;
+    if (thaiCandidate) {
+      rejectAmbiguousReverseCandidate(reverseCandidates.administrative
+        ? reverseCandidates.administrativeAmbiguous
+        : reverseCandidates.settlementAmbiguous);
+      return thaiCandidate;
+    }
+  }
+  if (reverseCandidates?.settlement) {
+    rejectAmbiguousReverseCandidate(reverseCandidates.settlementAmbiguous);
+    return reverseCandidates.settlement;
+  }
   for (const localityName of localityNames) {
     const request = { ...options, localityName };
     const placeId = selectedProvider(options.provider) === 'new'
@@ -621,7 +677,9 @@ async function fetchLocalityPlaceId(options) {
         });
     if (placeId) return placeId;
   }
-  return null;
+  if (String(options.countryCode || '').toUpperCase() === 'TH') return null;
+  rejectAmbiguousReverseCandidate(reverseCandidates?.administrativeAmbiguous);
+  return reverseCandidates?.administrative || null;
 }
 
 module.exports = {
@@ -636,6 +694,7 @@ module.exports = {
   fetchNewPlaceDetails,
   fetchNewSelectionPlace,
   fetchPlaceSelection,
+  fetchReverseLocalityCandidates,
   fetchReverseLocalityPlaceId,
   fetchWithProviderPolicy,
   localityAliases,
