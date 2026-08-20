@@ -4,12 +4,13 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 
 ## Current environment status
 
-The PlanLi client has **not** been publicly released to the App Store, Google
-Play, TestFlight, or a public web domain. Native development is performed with
-an installed, signed EAS Development Build connected to Metro. Expo Go is not
-supported. No production, preview/internal-distribution, TestFlight, store, or
-EAS Update/OTA release channel is active.
-The deployed Firebase backend is not evidence of a public client release.
+PlanLi has an external TestFlight beta; it has not been publicly released to the
+App Store, Google Play, or a public web domain. Native development is performed
+with an installed, signed EAS Development Build connected to Metro. Expo Go is
+not supported. TestFlight build `1.0.0 (10)` was built without EAS Update and
+cannot receive OTA updates. EAS Update is configured for the next native build,
+but no OTA release is active until that build is distributed and its channel is
+published. The deployed Firebase backend is not evidence of a client release.
 
 ## Run the client
 
@@ -251,6 +252,25 @@ then submit the build and beta metadata for Apple's external Beta App Review.
 After approval, enable the external group and public link. Record the branch,
 commit, EAS build ID, iOS build number, review status and processing result. Do
 not use auto-submit for the first beta.
+
+The next production build is the first build that can receive EAS Updates. It
+uses the `production` channel and derives its runtime version from the app
+version. Test an update on the `preview` channel before publishing the same
+commit to production. Publish only JavaScript, styling, and bundled-asset
+changes that are compatible with the installed native runtime:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+eas update --channel preview --environment production --message '<summary>'
+eas update --channel production --environment production --message '<summary>'
+```
+
+An EAS Update is a release action and requires explicit authorization. Native
+dependency, plugin, entitlement, permission, or incompatible app-config changes
+require an incremented app version and a new store build. After publishing an
+update, force-close and reopen the release app up to twice so it can download
+and apply the compatible update. Record the source commit, update group ID,
+channel, runtime version, environment, verification result, and rollback plan.
 
 ### Beta operations and cost controls
 

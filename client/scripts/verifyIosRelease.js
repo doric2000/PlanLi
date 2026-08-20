@@ -57,6 +57,7 @@ if (!configOnly && Number(process.versions.node.split('.')[0]) !== 22) {
 const app = readJson('app.json').expo;
 const eas = readJson('eas.json');
 const packageJson = readJson('package.json');
+const preview = eas.build?.preview || {};
 const production = eas.build?.production || {};
 const requiredPlugins = [
   'expo-apple-authentication',
@@ -92,7 +93,15 @@ if (imagePickerOptions?.microphonePermission !== false) {
   fail('The unused microphone permission must remain disabled.');
 }
 
+if (preview.distribution !== 'internal') fail('The preview profile must use internal distribution.');
+if (preview.channel !== 'preview') fail('The preview profile must use the preview EAS Update channel.');
+if (preview.environment !== 'production') fail('The preview profile must use the production EAS environment.');
+if (!String(preview.node || '').startsWith('22.')) fail('The preview EAS build must use Node 22.');
+if (preview.ios?.image !== 'macos-sequoia-15.6-xcode-26.0') {
+  fail('The SDK 54 preview build must use the pinned Xcode 26.0 image.');
+}
 if (production.distribution !== 'store') fail('The production profile must use store distribution.');
+if (production.channel !== 'production') fail('The production profile must use the production EAS Update channel.');
 if (production.environment !== 'production') fail('The production profile must use the EAS production environment.');
 if (production.autoIncrement !== true) fail('The production profile must auto-increment build numbers.');
 if (!String(production.node || '').startsWith('22.')) fail('The EAS production build must use Node 22.');
@@ -102,6 +111,16 @@ if (production.ios?.image !== 'macos-sequoia-15.6-xcode-26.0') {
 
 if (!String(packageJson.dependencies?.['@sentry/react-native'] || '').trim()) {
   fail('@sentry/react-native is missing from dependencies.');
+}
+if (!String(packageJson.dependencies?.['expo-updates'] || '').trim()) {
+  fail('expo-updates is missing from dependencies.');
+}
+if (app.runtimeVersion?.policy !== 'appVersion') {
+  fail('The EAS Update runtime version must use the appVersion policy.');
+}
+const expectedUpdatesUrl = `https://u.expo.dev/${app.extra?.eas?.projectId || ''}`;
+if (app.updates?.url !== expectedUpdatesUrl) {
+  fail(`The EAS Update URL must match the configured EAS project: ${expectedUpdatesUrl}.`);
 }
 const metroConfig = fs.readFileSync(path.join(clientRoot, 'metro.config.js'), 'utf8');
 if (!metroConfig.includes('getSentryExpoConfig')) fail('Metro is not configured for Sentry source maps.');
@@ -155,6 +174,6 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log(configOnly
-    ? 'iOS release configuration verified (runtime version check skipped).'
+    ? 'iOS release configuration verified (Node version check skipped).'
     : 'iOS release configuration verified on Node 22.');
 }

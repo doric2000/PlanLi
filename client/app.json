@@ -4,6 +4,12 @@
     "slug": "client",
     "scheme": "client",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/04731493-708f-4c82-b417-6ea815ea912e"
+    },
     "owner": "doric2000",
     "orientation": "portrait",
     "icon": "./assets/brand-app-icon.png",
