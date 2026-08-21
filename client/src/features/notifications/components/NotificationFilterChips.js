@@ -1,23 +1,15 @@
-import React, { useEffect, useRef } from 'react';
-import { Pressable, ScrollView } from 'react-native';
+import React from 'react';
+import { Pressable } from 'react-native';
 
 import AppText from '../../../components/AppText';
+import RtlHorizontalScrollView from '../../../components/RtlHorizontalScrollView';
 import { notificationCenterStyles as styles } from '../styles/notificationCenterStyles';
 
 export default function NotificationFilterChips({ options, value, onChange }) {
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo?.({ x: 0, animated: false });
-  }, [options]);
-
   return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
+    <RtlHorizontalScrollView
       bounces={false}
       contentContainerStyle={styles.chipContent}
-      showsHorizontalScrollIndicator={false}
       style={styles.chipScroller}
       accessibilityRole="tablist"
       testID="notification-filter-chips"
@@ -47,6 +39,6 @@ export default function NotificationFilterChips({ options, value, onChange }) {
           </Pressable>
         );
       })}
-    </ScrollView>
+    </RtlHorizontalScrollView>
   );
 }
