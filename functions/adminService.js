@@ -8,8 +8,21 @@ const { setMediaAvailability } = require('./mediaModeration');
 const {
   deleteAccountInternal,
   deleteContentInternal,
-  deleteQueryInBatches,
 } = require('./deletionService');
+const {
+  buildNotificationTarget,
+  completeOwnerNotificationOutbox,
+  detachGroupedLikeContribution,
+  navigationForTarget,
+  notificationRecipientEligible,
+  ownerNotificationOutboxId,
+  prepareOwnerNotificationOutbox,
+  purgeAdminNotificationsForUser,
+  purgeNotificationsForActor,
+  purgeNotificationsForTarget,
+  stageNotificationActivity,
+  systemNotificationId,
+} = require('./notificationService');
 
 const PAGE_SIZE = 30;
 const RECENT_AUTH_SECONDS = 10 * 60;
@@ -267,13 +280,58 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
   }
   const targetSnapshot = await db.doc(target.path).get();
   if (!targetSnapshot.exists) {
+    if (action === 'delete') {
+      const outboxId = ownerNotificationOutboxId('content_deleted', target.path);
+      const outbox = await db.doc(
+        `system/moderation/ownerNotifications/${outboxId}`
+      ).get();
+      let recovered = null;
+      if (outbox.exists) {
+        await purgeNotificationsForTarget({
+          admin,
+          targetPath: target.path,
+          includeDescendants: true,
+        });
+        recovered = await completeOwnerNotificationOutbox({
+          admin,
+          subtype: 'content_deleted',
+          targetPath: target.path,
+        });
+      }
+      if (recovered) {
+        if (caseId) {
+          await db.doc(`system/moderation/cases/${caseId}`).set({
+            status: 'resolved_deleted',
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+            resolvedBy: auth.uid,
+            resolutionReason: reason,
+          }, { merge: true });
+        }
+        await audit({ admin, auth, action: 'content_delete', target, reason });
+        return { success: true, action, target, recovered: true };
+      }
+    }
     fail('not-found', 'Moderated content is no longer available.', 'content_missing');
   }
+  const targetData = targetSnapshot.data() || {};
+  const targetOwnerId = target.type === 'comment' ? targetData.authorId : targetData.ownerId;
+  const casePreview = caseSnapshot?.data()?.targetPreview || null;
+  const notificationTarget = buildNotificationTarget({
+    target: {
+      ...target,
+      title: casePreview?.title,
+      thumbUrls: [casePreview?.thumbUrl, casePreview?.imageUrl].filter(Boolean),
+    },
+    data: targetData,
+    parentData: target.type === 'comment' ? casePreview : null,
+  });
   if (action === 'dismiss' && targetSnapshot.data()?.status !== 'active') {
     fail('failed-precondition', 'Only published content can remain published.', 'content_not_active');
   }
   if (action === 'restore') {
-    if (targetSnapshot.data()?.status !== 'moderation_hold') {
+    const restoredRetry = targetData.status === 'active'
+      && targetData.moderation?.lastAction === 'restore';
+    if (targetData.status !== 'moderation_hold' && !restoredRetry) {
       fail('failed-precondition', 'Only held content can be restored.', 'content_not_held');
     }
     const snapshot = targetSnapshot;
@@ -288,6 +346,14 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
   if (action === 'dismiss') {
     // Dismissing a report deliberately leaves the already-published target unchanged.
   } else if (action === 'delete') {
+    const deletionOutbox = targetOwnerId
+      ? await prepareOwnerNotificationOutbox({
+        admin,
+        uid: targetOwnerId,
+        subtype: 'content_deleted',
+        target: notificationTarget,
+      })
+      : null;
     if (target.type === 'comment') {
       await deleteComment({
         admin,
@@ -297,16 +363,80 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
     } else {
       await deleteContentInternal({ admin, target, actorUid: auth.uid, isAdmin: true, mediaBucket });
     }
+    if (deletionOutbox) {
+      await completeOwnerNotificationOutbox({
+        admin,
+        subtype: 'content_deleted',
+        targetPath: target.path,
+        version: deletionOutbox.version,
+      });
+    }
   } else {
-    await db.doc(target.path).update({
-      status: action === 'restore' ? 'active' : 'moderation_hold',
-      moderation: {
-        lastAction: action,
-        reason,
-        actorUid: auth.uid,
-        at: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    await db.runTransaction(async (transaction) => {
+      const current = await transaction.get(db.doc(target.path));
+      if (!current.exists) fail('not-found', 'Moderated content is no longer available.', 'content_missing');
+      const currentData = current.data() || {};
+      const desiredStatus = action === 'restore' ? 'active' : 'moderation_hold';
+      const alreadyApplied = currentData.status === desiredStatus;
+      if (action === 'restore'
+        && alreadyApplied
+        && currentData.moderation?.lastAction !== 'restore') {
+        fail('failed-precondition', 'Only held content can be restored.', 'content_not_held');
+      }
+      if (action === 'restore'
+        && !alreadyApplied
+        && currentData.status !== 'moderation_hold') {
+        fail('failed-precondition', 'Only held content can be restored.', 'content_not_held');
+      }
+      if (action === 'hold'
+        && !alreadyApplied
+        && currentData.status !== 'active') {
+        fail('failed-precondition', 'Only published content can be held.', 'content_not_active');
+      }
+      const currentOwnerId = target.type === 'comment'
+        ? currentData.authorId
+        : currentData.ownerId;
+      const subtype = action === 'restore' ? 'content_restored' : 'content_held';
+      const notificationRef = !alreadyApplied && currentOwnerId
+        ? db.doc(
+          `users/${currentOwnerId}/notifications/${systemNotificationId(subtype, target.path)}`
+        )
+        : null;
+      const [notificationSnapshot, ownerSnapshot] = notificationRef
+        ? await Promise.all([
+          transaction.get(notificationRef),
+          transaction.get(db.doc(`users/${currentOwnerId}`)),
+        ])
+        : [null, null];
+      transaction.update(db.doc(target.path), {
+        status: desiredStatus,
+        moderation: {
+          lastAction: action,
+          reason,
+          actorUid: auth.uid,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      if (notificationRef && notificationSnapshot && notificationRecipientEligible(ownerSnapshot)) {
+        stageNotificationActivity({
+          transaction,
+          admin,
+          db,
+          uid: currentOwnerId,
+          notificationRef,
+          existingSnapshot: notificationSnapshot,
+          notification: {
+            channel: 'personal',
+            type: 'system',
+            subtype,
+            priority: 'normal',
+            count: 1,
+            target: notificationTarget,
+            navigation: navigationForTarget(target),
+          },
+        });
+      }
     });
     if (target.type !== 'comment') {
       await setMediaAvailability({
@@ -450,7 +580,13 @@ async function hideUserContent({ admin, uid, mediaBucket }) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => {});
   }
-  await deleteQueryInBatches(db, () => db.collectionGroup('notifications').where('actorId', '==', uid));
+  const likes = await db.collectionGroup('likes').where('userId', '==', uid).get();
+  for (let offset = 0; offset < likes.docs.length; offset += 10) {
+    await Promise.all(likes.docs.slice(offset, offset + 10).map((entry) => (
+      detachGroupedLikeContribution({ admin, likeRef: entry.ref, deleteLike: false })
+    )));
+  }
+  await purgeNotificationsForActor({ admin, actorId: uid });
   await db.doc(`publicProfiles/${uid}`).set({ status: 'suspended' }, { merge: true });
   return hidden;
 }
@@ -518,8 +654,11 @@ async function setUserAdmin({ admin, auth, data }) {
   const ref = admin.firestore().doc(`system/moderation/admins/${user.uid}`);
   if (enabled) await ref.set({ uid: user.uid, active: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   else await ref.set({ active: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  const adminNotificationsPurged = enabled
+    ? 0
+    : await purgeAdminNotificationsForUser({ admin, uid: user.uid });
   await audit({ admin, auth, action: enabled ? 'admin_granted' : 'admin_removed', target: { uid: user.uid }, reason });
-  return { uid: user.uid, admin: enabled };
+  return { uid: user.uid, admin: enabled, adminNotificationsPurged };
 }
 
 async function deleteUserAsAdmin({ admin, auth, data, mediaBucket }) {

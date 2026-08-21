@@ -104,6 +104,19 @@ test('a suspended account may reach only an explicitly exempted signed-in handle
   }));
 });
 
+test('accounts being deleted cannot reach ordinary signed-in handlers', async () => {
+  for (const deleting of [
+    { ...activeUser, status: 'deleting' },
+    { ...activeUser, moderation: { status: 'deleting' } },
+  ]) {
+    await assert.rejects(authorizeRequest({
+      admin: adminWithUser(deleting),
+      auth: passwordAuth(true),
+      access: ACCESS_LEVELS.SIGNED_IN,
+    }), (error) => error?.details?.reason === AUTH_REASONS.ACCOUNT_DELETING);
+  }
+});
+
 test('account setup gate requires verification and legal consent but not preferences', () => {
   const setupOnlyUser = {
     ...activeUser,

@@ -13,6 +13,7 @@ const {
   publicModerationReport,
   setUserEmailVerified,
 } = require('./adminService');
+const { ownerNotificationOutboxId } = require('./notificationService');
 
 test('admin operations require an explicit admin claim', () => {
   assert.throws(() => assertAdmin({ uid: 'user', token: {} }), (error) => error.details?.reason === 'admin_required');
@@ -211,6 +212,151 @@ test('dismissing a report fails if the target became held after the row loaded',
     (error) => error.details?.reason === 'content_not_active'
   );
   assert.equal(resolved, false);
+});
+
+test('restoring held content stages the owner alert in the status transaction', async () => {
+  const target = { type: 'recommendation', id: 'rec-1' };
+  const targetData = {
+    status: 'moderation_hold',
+    ownerId: 'owner-1',
+    title: 'Held recommendation',
+  };
+  const transactionWrites = [];
+  const db = {
+    doc(path) {
+      return {
+        path,
+        id: path.split('/').pop(),
+        get: async () => {
+          if (path === 'system/moderation/admins/admin-1') {
+            return { exists: true, data: () => ({ active: true }) };
+          }
+          if (path === 'recommendations/rec-1') {
+            return { exists: true, data: () => targetData };
+          }
+          if (path === 'users/owner-1') {
+            return { exists: true, data: () => ({ moderation: { status: 'active' } }) };
+          }
+          return { exists: false, data: () => null };
+        },
+        create: async () => {},
+      };
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => {
+        if (ref.path === 'recommendations/rec-1') {
+          return { ref, exists: true, data: () => targetData };
+        }
+        if (ref.path === 'users/owner-1') {
+          return { ref, exists: true, data: () => ({ moderation: { status: 'active' } }) };
+        }
+        return { ref, exists: false, data: () => null };
+      },
+      update: (ref, value) => transactionWrites.push({ type: 'update', path: ref.path, value }),
+      set: (ref, value, options) => transactionWrites.push({ type: 'set', path: ref.path, value, options }),
+    }),
+  };
+  const admin = {
+    firestore: Object.assign(() => db, {
+      FieldValue: {
+        increment: (amount) => ({ operation: 'increment', amount }),
+        serverTimestamp: () => 'server-time',
+      },
+    }),
+  };
+  const result = await moderateContent({
+    admin,
+    auth: {
+      uid: 'admin-1',
+      token: { admin: true, auth_time: Math.floor(Date.now() / 1000) },
+    },
+    data: { target, action: 'restore', reason: 'Owner appeal approved after review' },
+  });
+  assert.equal(result.action, 'restore');
+  assert(transactionWrites.some((entry) => (
+    entry.type === 'update'
+    && entry.path === 'recommendations/rec-1'
+    && entry.value.status === 'active'
+  )));
+  const notificationWrite = transactionWrites.find((entry) => (
+    entry.path.startsWith('users/owner-1/notifications/')
+  ));
+  assert.equal(notificationWrite.value.subtype, 'content_restored');
+  assert.equal(notificationWrite.value.isRead, false);
+  assert(transactionWrites.some((entry) => (
+    entry.path === 'users/owner-1/notificationState/state'
+    && entry.value.personalUnread?.amount === 1
+  )));
+});
+
+test('a deleted target resumes its pending owner alert instead of failing content_missing', async () => {
+  const target = { type: 'recommendation', id: 'rec-1' };
+  const targetPath = 'recommendations/rec-1';
+  const outboxId = ownerNotificationOutboxId('content_deleted', targetPath);
+  const outboxPath = `system/moderation/ownerNotifications/${outboxId}`;
+  const values = new Map([[outboxPath, {
+    schemaVersion: 1,
+    state: 'pending',
+    version: 1,
+    readyVersion: 0,
+    uid: 'owner-1',
+    subtype: 'content_deleted',
+    target: {
+      type: 'recommendation', id: 'rec-1', path: targetPath, title: 'Deleted', thumbUrls: [],
+    },
+  }]]);
+  const db = {
+    doc(path) {
+      return {
+        path,
+        id: path.split('/').pop(),
+        get: async () => {
+          if (path === 'system/moderation/admins/admin-1') {
+            return { exists: true, data: () => ({ active: true }) };
+          }
+          if (path === targetPath) return { exists: false, data: () => null };
+          return { exists: values.has(path), data: () => values.get(path) };
+        },
+        create: async () => {},
+      };
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => ({
+        ref,
+        exists: values.has(ref.path),
+        data: () => values.get(ref.path),
+      }),
+      update: (ref, patch) => values.set(ref.path, { ...values.get(ref.path), ...patch }),
+    }),
+    collectionGroup: (name) => {
+      assert.equal(name, 'notifications');
+      const query = {
+        where: () => query,
+        limit: () => query,
+        get: async () => ({ empty: true, size: 0, docs: [] }),
+      };
+      return query;
+    },
+  };
+  const admin = {
+    firestore: Object.assign(() => db, {
+      FieldValue: {
+        increment: (amount) => ({ operation: 'increment', amount }),
+        serverTimestamp: () => 'server-time',
+      },
+    }),
+  };
+  const result = await moderateContent({
+    admin,
+    auth: {
+      uid: 'admin-1',
+      token: { admin: true, auth_time: Math.floor(Date.now() / 1000) },
+    },
+    data: { target, action: 'delete', reason: 'Confirmed policy violation' },
+  });
+  assert.equal(result.recovered, true);
+  assert.equal(values.get(outboxPath).state, 'ready');
+  assert.equal(values.get(outboxPath).readyVersion, 1);
 });
 
 test('user search supports an exact display name after UID lookup is not applicable', async () => {

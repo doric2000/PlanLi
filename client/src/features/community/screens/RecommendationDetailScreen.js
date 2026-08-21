@@ -26,6 +26,8 @@ import { useLikes } from '../hooks/useLikes';
 export default function RecommendationDetailScreen({ route, navigation }) {
   const initialItem = route?.params?.item || route?.params?.recommendation || null;
   const postId = route?.params?.postId || initialItem?.postId || initialItem?.id || '';
+  const initialCommentsOpen = route?.params?.openComments === true;
+  const initialCommentId = route?.params?.commentId || null;
   const { data: canonicalItem, loading, refresh } = useRecommendationById(postId);
   const item = useMemo(() => canonicalItem || initialItem, [canonicalItem, initialItem]);
   const hasFocusedOnce = useRef(false);
@@ -54,11 +56,13 @@ export default function RecommendationDetailScreen({ route, navigation }) {
       item={item}
       postId={postId || item.id}
       navigation={navigation}
+      initialCommentsOpen={initialCommentsOpen}
+      initialCommentId={initialCommentId}
     />
   );
 }
 
-function RecommendationDetailLoaded({ item, postId, navigation }) {
+function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsOpen, initialCommentId }) {
   const insets = useSafeAreaInsets();
   const author = useUserData(item.ownerId);
   const { isAdmin } = useAdminClaim();
@@ -70,7 +74,7 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
   );
   const commentsCount = useCommentsCount('recommendations', postId);
   const [likesModalVisible, setLikesModalVisible] = useState(false);
-  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [commentsModalVisible, setCommentsModalVisible] = useState(initialCommentsOpen);
   const [gallery, setGallery] = useState({ visible: false, index: 0 });
   const canEdit = isActive && canManageRecommendation({
     user: auth.currentUser,
@@ -89,6 +93,10 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
     if (!isActive || !postId) return;
     recordRecommendationOpen(postId).catch(() => {});
   }, [isActive, postId]);
+
+  useEffect(() => {
+    if (initialCommentsOpen) setCommentsModalVisible(true);
+  }, [initialCommentsOpen, initialCommentId]);
 
   const snapshotData = useMemo(() => ({
     name: item.title,
@@ -173,6 +181,7 @@ function RecommendationDetailLoaded({ item, postId, navigation }) {
         onClose={() => setCommentsModalVisible(false)}
         postId={postId}
         collectionName="recommendations"
+        initialCommentId={initialCommentId}
       />
       <MediaGalleryModal
         visible={gallery.visible}

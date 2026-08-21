@@ -34,7 +34,8 @@ export const CommentsModal = ({
   visible, 
   onClose, 
   postId, 
-  collectionName = 'recommendations' 
+  collectionName = 'recommendations',
+  initialCommentId = null,
 }) => {
   return (
     <Modal
@@ -55,7 +56,8 @@ export const CommentsModal = ({
           {postId && (
             <CommentsSection 
               collectionName={collectionName} 
-              postId={postId} 
+              postId={postId}
+              initialCommentId={initialCommentId}
             />
           )}
         </View>

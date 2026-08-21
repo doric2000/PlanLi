@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import RouteDetailScreen from '../src/features/roadtrip/screens/RouteDetailScreen';
+import * as RouteService from '../src/services/RouteService';
 
 jest.mock('react-native-maps');
 jest.mock('../src/hooks/useUserData', () => ({
@@ -10,14 +11,25 @@ jest.mock('../src/hooks/useUserData', () => ({
 jest.mock('../src/hooks/useAdminClaim', () => ({ useAdminClaim: () => ({ isAdmin: false }) }));
 jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ isActive: true }) }));
 jest.mock('../src/config/firebase', () => ({ auth: { currentUser: null } }));
-jest.mock('../src/services/RouteService', () => ({ recordRouteOpen: jest.fn(() => Promise.resolve()) }));
+jest.mock('../src/services/RouteService', () => ({
+  loadRouteDetails: jest.fn(),
+  recordRouteOpen: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('../src/features/community/hooks/useLikes', () => ({
   useLikes: () => ({ isLiked: false, likeCount: 0, toggleLike: jest.fn() }),
 }));
 jest.mock('../src/features/community/hooks/useCommentsCount', () => ({ useCommentsCount: () => 0 }));
 jest.mock('../src/components/Avatar', () => ({ Avatar: () => null }));
 jest.mock('../src/components/CachedImage', () => () => null);
-jest.mock('../src/components/CommentsModal', () => ({ CommentsModal: () => null }));
+jest.mock('../src/components/CommentsModal', () => {
+  const ReactModule = require('react');
+  const { Text } = require('react-native');
+  return {
+    CommentsModal: ({ visible, initialCommentId }) => visible
+      ? ReactModule.createElement(Text, { testID: 'route-comments-focus' }, initialCommentId || 'comments')
+      : null,
+  };
+});
 jest.mock('../src/components/LikesModal', () => () => null);
 jest.mock('../src/components/RecommendationHero', () => ({ RecommendationHero: () => null }));
 jest.mock('../src/components/RecommendationActionBar', () => ({ RecommendationActionBar: () => null }));
@@ -69,6 +81,10 @@ const routeData = {
 };
 
 describe('RouteDetailScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('uses one elegant destination strip and opens the map through navigation', () => {
     const navigation = { setOptions: jest.fn(), goBack: jest.fn(), navigate: jest.fn() };
     const screen = render(
@@ -89,5 +105,20 @@ describe('RouteDetailScreen', () => {
     fireEvent.press(screen.getByTestId('route-day-toggle-1'));
     expect(screen.queryByTestId('route-day-stops-0')).toBeNull();
     expect(screen.getByTestId('route-day-stops-1')).toBeTruthy();
+  });
+
+  it('loads the canonical route and opens the exact comment from an alert', async () => {
+    RouteService.loadRouteDetails.mockResolvedValue(routeData);
+    const navigation = { setOptions: jest.fn(), goBack: jest.fn(), navigate: jest.fn() };
+    const screen = render(
+      <RouteDetailScreen
+        route={{ params: { routeId: 'route-1', openComments: true, commentId: 'comment-4' } }}
+        navigation={navigation}
+      />
+    );
+
+    expect(await screen.findByText('מסלול בצפון')).toBeTruthy();
+    expect(RouteService.loadRouteDetails).toHaveBeenCalledWith('route-1');
+    expect(screen.getByTestId('route-comments-focus').props.children).toBe('comment-4');
   });
 });

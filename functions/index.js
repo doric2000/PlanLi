@@ -42,19 +42,39 @@ const {
 } = require('./destinationCacheService');
 const {
   cleanupOrphanFavorites,
-  clearNotifications,
   deleteComment,
-  deleteNotification,
   getReactionState,
   refreshFavoriteOwnerPreviews,
   refreshFavoritesForTarget,
   saveComment,
   setFavorite,
-  setNotificationRead,
   setReaction,
 } = require('./socialService');
+const {
+  clearNotifications,
+  deleteNotification,
+  handleNotificationCleanupJobWrite,
+  handleOwnerNotificationOutboxWrite,
+  markAllNotificationsRead,
+  notificationDeliveryDescriptor,
+  setNotificationRead,
+} = require('./notificationService');
+const {
+  getPushPreferences,
+  handleNotificationPushWriteEvent,
+  processPendingPushDispatches,
+  processPendingPushReceipts,
+  registerNotificationDevice,
+  unregisterNotificationDevice,
+  updateNotificationPreferences,
+} = require('./notificationPushService');
 const { deleteContent, requestAccountDeletion } = require('./deletionService');
-const { setBlockedUser, submitReport } = require('./moderationService');
+const {
+  handleBlockedUserNotificationWrite,
+  handleModerationCaseNotificationWrite,
+  setBlockedUser,
+  submitReport,
+} = require('./moderationService');
 const {
   deleteUserAsAdmin,
   getAdminUser,
@@ -128,6 +148,7 @@ const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
 const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
 const publicRateLimitKey = defineSecret('PUBLIC_RATE_LIMIT_KEY');
 const appleSignInPrivateKey = defineSecret('APPLE_SIGN_IN_PRIVATE_KEY');
+const expoPushAccessToken = defineSecret('EXPO_PUSH_ACCESS_TOKEN');
 const appleSignInTeamId = defineString('APPLE_SIGN_IN_TEAM_ID', {
   description: 'Apple Developer Team ID used by Sign in with Apple.',
 });
@@ -402,10 +423,25 @@ exports.setNotificationRead = callable({ access: 'signedIn' }, (request) =>
   setNotificationRead({ admin, auth: request.auth, data: request.data })
 );
 exports.clearNotifications = callable({ access: 'signedIn' }, (request) =>
-  clearNotifications({ admin, auth: request.auth })
+  clearNotifications({ admin, auth: request.auth, data: request.data })
 );
 exports.deleteNotification = callable({ access: 'signedIn' }, (request) =>
   deleteNotification({ admin, auth: request.auth, data: request.data })
+);
+exports.markAllNotificationsRead = callable({ access: 'signedIn' }, (request) =>
+  markAllNotificationsRead({ admin, auth: request.auth, data: request.data })
+);
+exports.updateNotificationPreferences = callable({ access: 'signedIn' }, (request) =>
+  updateNotificationPreferences({ admin, auth: request.auth, data: request.data })
+);
+exports.getPushPreferences = callable({ access: 'signedIn' }, (request) =>
+  getPushPreferences({ admin, auth: request.auth })
+);
+exports.registerNotificationDevice = callable({ access: 'signedIn' }, (request) =>
+  registerNotificationDevice({ admin, auth: request.auth, data: request.data })
+);
+exports.unregisterNotificationDevice = callable({ access: 'signedIn' }, (request) =>
+  unregisterNotificationDevice({ admin, auth: request.auth, data: request.data })
 );
 
 exports.registerUser = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
@@ -719,6 +755,44 @@ exports.cleanupExpiredRuntimeScheduled = onSchedule(
   }
 );
 
+exports.retryNotificationPushScheduled = onSchedule(
+  {
+    schedule: 'every 5 minutes',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    secrets: [expoPushAccessToken],
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const result = await processPendingPushDispatches({
+      admin,
+      accessToken: expoPushAccessToken.value(),
+      limit: 100,
+    });
+    console.log('Notification push retry scan complete.', result);
+  }
+);
+
+exports.checkNotificationPushReceiptsScheduled = onSchedule(
+  {
+    schedule: 'every 15 minutes',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    secrets: [expoPushAccessToken],
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const result = await processPendingPushReceipts({
+      admin,
+      accessToken: expoPushAccessToken.value(),
+      limit: 500,
+    });
+    console.log('Notification push receipt scan complete.', result);
+  }
+);
+
 async function handleMediaCleanup(event, collectionName) {
   const change = event.data;
   if (!change) return;
@@ -938,6 +1012,56 @@ function projectionHandler(type, idParam, countryParam = null) {
 exports.onRecommendationFavoriteProjection = firestoreWritten(
   'recommendations/{recommendationId}',
   projectionHandler('recommendation', 'recommendationId')
+);
+
+exports.onNotificationPushWritten = firestoreWritten(
+  'users/{userId}/notifications/{notificationId}',
+  async (event) => {
+    const before = event.data?.before.exists ? event.data.before.data() : null;
+    const after = event.data?.after.exists ? event.data.after.data() : null;
+    const descriptor = notificationDeliveryDescriptor({
+      userId: event.params.userId,
+      notificationId: event.params.notificationId,
+      before,
+      after,
+    });
+    if (!descriptor) return { status: 'ignored', reason: 'no_new_activity' };
+    return handleNotificationPushWriteEvent({
+      admin,
+      event,
+      accessToken: expoPushAccessToken.value(),
+    });
+  },
+  {
+    memory: '512MiB',
+    timeoutSeconds: 120,
+    secrets: [expoPushAccessToken],
+  }
+);
+exports.onModerationCaseNotificationWritten = firestoreWritten(
+  'system/moderation/cases/{caseId}',
+  (event) => handleModerationCaseNotificationWrite({
+    admin,
+    event,
+    mediaBucket: mediaStorageBucket.value(),
+  }),
+  {
+    memory: '1GiB',
+    timeoutSeconds: 300,
+    serviceAccount: MEDIA_SERVICE_ACCOUNT,
+  }
+);
+exports.onOwnerNotificationOutboxWritten = firestoreWritten(
+  'system/moderation/ownerNotifications/{outboxId}',
+  (event) => handleOwnerNotificationOutboxWrite({ admin, event })
+);
+exports.onNotificationCleanupJobWritten = firestoreWritten(
+  'system/runtime/notificationCleanupJobs/{jobId}',
+  (event) => handleNotificationCleanupJobWrite({ admin, event })
+);
+exports.onBlockedUserNotificationWritten = firestoreWritten(
+  'users/{uid}/blockedUsers/{blockedUid}',
+  (event) => handleBlockedUserNotificationWrite({ admin, event })
 );
 exports.onRouteFavoriteProjection = firestoreWritten(
   'routes/{routeId}',

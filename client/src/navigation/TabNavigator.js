@@ -75,13 +75,6 @@ export default function TabNavigator() {
               return (
                 <View style={[styles.iconWrap, focused && styles.activeIconWrap]}>
                   {iconContent}
-                  {unreadCount > 0 && (
-                    <View style={notifications.badge}>
-                      <AppText style={notifications.badgeText}>
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </AppText>
-                    </View>
-                  )}
                 </View>
               );
             }
@@ -93,6 +86,13 @@ export default function TabNavigator() {
                   size={iconSize}
                   color={color}
                 />
+                {route.name === 'Notifications' && unreadCount > 0 && (
+                  <View style={notifications.badge}>
+                    <AppText style={notifications.badgeText}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </AppText>
+                  </View>
+                )}
               </View>
             );
           },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
 	View,
 	TouchableOpacity,
@@ -16,9 +16,11 @@ import {
   onSnapshot,
   limit,
   where,
+  doc,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { common } from '../styles';
+import { colors, common } from '../styles';
 import { Avatar } from './Avatar';
 import { formatTimestamp } from '../utils/formatTimestamp';
 import { saveComment } from '../services/SocialService';
@@ -35,14 +37,26 @@ import { useBlockedUsers } from '../features/moderation/BlockedUsersContext';
  * 
  * @param {Object} item - Comment object containing userId and text
  */
-const CommentItem = ({ item, collectionName, postId }) => {
+const CommentItem = ({ item, collectionName, postId, highlighted = false }) => {
   const userData = {
     name: item.authorPreview?.displayName || 'Traveler',
     photo: item.authorPreview?.photoURL || null,
   };
 
   return (
-    <View style={common.commentItem}>
+    <View
+      style={[
+        common.commentItem,
+        highlighted && {
+          backgroundColor: '#FFF7ED',
+          borderColor: colors.accentAction,
+          borderWidth: 1,
+          borderRadius: 12,
+        },
+      ]}
+      accessibilityLabel={highlighted ? 'התגובה שנפתחה מההתראה' : undefined}
+      testID={highlighted ? `highlighted-comment-${item.id}` : undefined}
+    >
       <Avatar photoURL={userData.photo} displayName={userData.name} size={40} />
       <View style={common.commentContent}>
         <View style={{ alignItems: 'flex-end', marginBottom: 2 }}>
@@ -80,7 +94,7 @@ const CommentItem = ({ item, collectionName, postId }) => {
  * @param {string} collectionName - Firebase collection (e.g., 'recommendations', 'routes')
  * @param {string} postId - The ID of the post to show comments for
  */
-export const CommentsSection = ({ collectionName, postId }) => {
+export const CommentsSection = ({ collectionName, postId, initialCommentId = null }) => {
   const { isBlocked } = useBlockedUsers();
   const {
     user: authUser,
@@ -93,8 +107,16 @@ export const CommentsSection = ({ collectionName, postId }) => {
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isNewestFirst, setIsNewestFirst] = useState(true);
+  const [focusedComment, setFocusedComment] = useState(null);
+  const [targetMissing, setTargetMissing] = useState(false);
+  const listRef = useRef(null);
+  const focusScrollRef = useRef({ key: '', failedOnce: false, timer: null });
 
   const canComment = isActive;
+
+  useEffect(() => () => {
+    if (focusScrollRef.current.timer) clearTimeout(focusScrollRef.current.timer);
+  }, []);
 
   useEffect(() => {
     if (!postId || !collectionName) return;
@@ -118,8 +140,34 @@ export const CommentsSection = ({ collectionName, postId }) => {
     return () => unsubscribe(); 
   }, [postId, collectionName, isBlocked]);
 
-  const getSortedComments = () => {
-    return [...comments].sort((a, b) => {
+  useEffect(() => {
+    let active = true;
+    setFocusedComment(null);
+    setTargetMissing(false);
+    if (!postId || !collectionName || !initialCommentId) return () => { active = false; };
+
+    getDoc(doc(db, collectionName, postId, 'comments', initialCommentId))
+      .then((snapshot) => {
+        if (!active) return;
+        const data = snapshot.exists() ? snapshot.data() : null;
+        if (!data || data.status !== 'active' || isBlocked(data.authorId)) {
+          setTargetMissing(true);
+          return;
+        }
+        setFocusedComment({ id: snapshot.id, ...data });
+      })
+      .catch(() => {
+        if (active) setTargetMissing(true);
+      });
+
+    return () => { active = false; };
+  }, [collectionName, initialCommentId, isBlocked, postId]);
+
+  const sortedComments = useMemo(() => {
+    const merged = focusedComment && !comments.some((item) => item.id === focusedComment.id)
+      ? [...comments, focusedComment]
+      : comments;
+    return [...merged].sort((a, b) => {
         const dateA = a.createdAt?.seconds || 0;
         const dateB = b.createdAt?.seconds || 0;
 
@@ -129,7 +177,21 @@ export const CommentsSection = ({ collectionName, postId }) => {
             return dateA - dateB;
         }
     });
-  };
+  }, [comments, focusedComment, isNewestFirst]);
+
+  useEffect(() => {
+    if (!initialCommentId) return undefined;
+    const index = sortedComments.findIndex((item) => item.id === initialCommentId);
+    if (index < 0) return undefined;
+    const key = `${collectionName}:${postId}:${initialCommentId}:${isNewestFirst}`;
+    if (focusScrollRef.current.key === key) return undefined;
+    if (focusScrollRef.current.timer) clearTimeout(focusScrollRef.current.timer);
+    focusScrollRef.current = { key, failedOnce: false, timer: null };
+    focusScrollRef.current.timer = setTimeout(() => {
+      listRef.current?.scrollToIndex?.({ index, animated: true, viewPosition: 0.5 });
+    }, 80);
+    return undefined;
+  }, [collectionName, initialCommentId, isNewestFirst, postId, sortedComments]);
 
   const handleAddComment = async () => {
     if (newComment.trim() === '') return;
@@ -174,14 +236,47 @@ export const CommentsSection = ({ collectionName, postId }) => {
           </TouchableOpacity>
       </View>
 
+      {targetMissing ? (
+        <View
+          style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: '#FFF7ED' }}
+          accessibilityRole="alert"
+          testID="comment-target-missing"
+        >
+          <AppText style={{ color: colors.textSecondary, textAlign: 'right' }}>
+            התגובה שאליה הפנתה ההתראה כבר אינה זמינה.
+          </AppText>
+        </View>
+      ) : null}
+
       <FlatList
-        data={getSortedComments()} 
-        renderItem={({ item }) => <CommentItem item={item} collectionName={collectionName} postId={postId} />}
+        ref={listRef}
+        data={sortedComments}
+        renderItem={({ item }) => (
+          <CommentItem
+            item={item}
+            collectionName={collectionName}
+            postId={postId}
+            highlighted={item.id === initialCommentId}
+          />
+        )}
         keyExtractor={item => item.id}
         style={common.commentList}
         nestedScrollEnabled={true}
         removeClippedSubviews={true}
         windowSize={5}
+        onScrollToIndexFailed={({ index, highestMeasuredFrameIndex, averageItemLength }) => {
+          if (focusScrollRef.current.failedOnce) return;
+          focusScrollRef.current.failedOnce = true;
+          const measuredIndex = Math.max(0, Math.min(index, highestMeasuredFrameIndex + 1));
+          listRef.current?.scrollToOffset?.({
+            offset: Math.max(0, Number(averageItemLength || 0) * measuredIndex),
+            animated: false,
+          });
+          if (focusScrollRef.current.timer) clearTimeout(focusScrollRef.current.timer);
+          focusScrollRef.current.timer = setTimeout(() => {
+            listRef.current?.scrollToIndex?.({ index, animated: false, viewPosition: 0.5 });
+          }, 100);
+        }}
       />
 
       <View style={common.commentInputContainer}>

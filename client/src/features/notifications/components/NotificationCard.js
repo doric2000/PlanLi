@@ -1,92 +1,149 @@
-/**
- * NotificationCard.js
- * 
- * Displays a single notification in a rectangular boxy design.
- * Shows post title, type indicator icon, actor info, and relative timestamp.
- * Clickable to navigate to the associated post.
- */
-
 import React from 'react';
-import { View, TouchableOpacity } from 'react-native';
-import AppText from "../../../components/AppText";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+import AppText from '../../../components/AppText';
 import { Avatar } from '../../../components/Avatar';
-import { formatNotificationMessage } from '../models/NotificationModel';
+import { colors } from '../../../styles';
 import { formatNotificationTime } from '../../../utils/formatNotificationTime';
-import { colors, notifications } from '../../../styles';
-import { NotificationType, PostType } from '../models/NotificationModel';
-import NavigationChevron from '../../../components/NavigationChevron';
+import { getNotificationPresentation } from '../models/NotificationModel';
+import { notificationCenterStyles as styles } from '../styles/notificationCenterStyles';
 
-export const NotificationCard = ({ notification, onPress, onMarkAsRead }) => {
-  const {
-    id,
-    type,
-    postType,
-    postTitle,
-    actorName,
-    actorAvatar,
-    timestamp,
-    isRead,
-  } = notification;
+const toneStyle = {
+  like: styles.typeBadgeLike,
+  comment: styles.typeBadgeComment,
+  system: styles.typeBadgeSystem,
+  admin: styles.typeBadgeAdmin,
+  urgent: styles.typeBadgeUrgent,
+};
 
-  const getTypeIcon = () => {
-    switch (type) {
-      case NotificationType.LIKE:
-        return <Ionicons name="heart" size={20} color={colors.heart} />;
-      case NotificationType.COMMENT:
-        return <Ionicons name="chatbubble" size={20} color={colors.secondary} />;
-      case NotificationType.MODERATION:
-        return <Ionicons name="shield-checkmark" size={20} color={colors.primary} />;
-      default:
-        return <Ionicons name="notifications" size={20} color={colors.primary} />;
-    }
-  };
-
-  const getPostTypeLabel = () => {
-    if (type === NotificationType.MODERATION) return 'ניהול';
-    return postType === PostType.ROUTE ? 'מסלול' : 'קהילה';
-  };
-
-  const message = formatNotificationMessage(notification);
-  const timeString = formatNotificationTime(timestamp);
-
-  const handlePress = () => {
-    if (!isRead && onMarkAsRead) {
-      onMarkAsRead(id);
-    }
-    if (onPress) {
-      onPress(notification);
-    }
-  };
+function ActorPreview({ notification, presentation }) {
+  const actors = (notification.actorPreviews?.length
+    ? notification.actorPreviews
+    : [notification.actorPreview].filter(Boolean)).slice(0, 4);
 
   return (
-    <TouchableOpacity
-      style={[notifications.cardContainer, !isRead && notifications.cardUnread]}
-      onPress={handlePress}
-      activeOpacity={0.7}
-    >
-      {!isRead && <View style={notifications.cardUnreadDot} />}
-      <NavigationChevron size={20} color={colors.textSecondary} style={notifications.cardArrowIcon} />
-      <View style={notifications.cardContent}>
-        <View style={notifications.cardHeader}>
-          <Avatar photoURL={actorAvatar} displayName={actorName} size={44} />
-          <View style={notifications.cardTypeIconContainer}>{getTypeIcon()}</View>
-        </View>
-        <View style={notifications.cardBody}>
-          <AppText style={notifications.cardMessage} numberOfLines={2}>{message}</AppText>
-          {type !== NotificationType.MODERATION ? (
-            <AppText style={notifications.cardPostTitle} numberOfLines={1}>"{postTitle}"</AppText>
-          ) : null}
-          <View style={notifications.cardFooter}>
-            <View style={notifications.cardPostTypeBadge}>
-              <AppText style={notifications.cardPostTypeText}>{getPostTypeLabel()}</AppText>
+    <View style={styles.actorColumn} importantForAccessibility="no-hide-descendants">
+      {actors.length ? (
+        <View style={styles.actorStack}>
+          {actors.map((actor, index) => (
+            <View
+              key={actor.id || `${actor.displayName}-${index}`}
+              style={[styles.actorStackItem, { zIndex: 4 - index }]}
+              testID={`notification-actor-${notification.id}-${index}`}
+            >
+              <Avatar
+                photoURL={actor.photoURL}
+                displayName={actor.displayName}
+                size={32}
+              />
             </View>
-            <AppText style={notifications.cardTimestamp}>{timeString}</AppText>
+          ))}
+        </View>
+      ) : (
+        <View style={[styles.actorStack, { justifyContent: 'center' }]}>
+          <Ionicons
+            name={presentation.icon}
+            size={30}
+            color={presentation.tone === 'urgent' ? colors.error : colors.brand}
+          />
+        </View>
+      )}
+      <View style={[styles.typeBadge, toneStyle[presentation.tone]]}>
+        <Ionicons name={presentation.icon} size={14} color={colors.white} />
+      </View>
+    </View>
+  );
+}
+
+export function NotificationCard({ notification, onPress, onMenuPress, busy = false }) {
+  const presentation = getNotificationPresentation(notification);
+  const time = formatNotificationTime(notification.createdAt);
+  const previews = (notification.target?.thumbUrls || []).slice(0, 4);
+  const accessibilityLabel = [
+    presentation.message,
+    presentation.detail,
+    time,
+    notification.isRead ? 'נקראה' : 'לא נקראה',
+  ].filter(Boolean).join('. ');
+
+  return (
+    <View
+      style={[
+        styles.row,
+        !notification.isRead && styles.rowUnread,
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint="פתיחת הפריט הקשור להתראה"
+        accessibilityState={{ busy, disabled: busy }}
+        disabled={busy}
+        onPress={() => onPress?.(notification)}
+        style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
+        testID={`notification-row-${notification.id}`}
+      >
+        <ActorPreview notification={notification} presentation={presentation} />
+
+        <View style={styles.rowBody}>
+          <AppText style={styles.rowMessage} numberOfLines={3}>
+            {presentation.message}
+          </AppText>
+          {presentation.detail ? (
+            <AppText style={styles.rowDetail} numberOfLines={3}>
+              {presentation.detail}
+            </AppText>
+          ) : null}
+
+          {previews.length ? (
+            <View style={styles.previews} testID={`notification-previews-${notification.id}`}>
+              {previews.map((uri, index) => (
+                <Image
+                  key={`${uri}-${index}`}
+                  accessibilityIgnoresInvertColors
+                  source={{ uri }}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.rowMeta}>
+            <AppText style={styles.rowTime}>{time}</AppText>
+            {!notification.isRead ? (
+              <View style={styles.unreadPill}>
+                <AppText style={styles.unreadPillText}>חדש</AppText>
+              </View>
+            ) : null}
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="אפשרויות להתראה"
+        accessibilityState={{ busy, disabled: busy }}
+        disabled={busy}
+        hitSlop={4}
+        onPress={() => onMenuPress?.(notification)}
+        style={({ pressed }) => [styles.rowMenu, pressed && styles.rowPressed]}
+        testID={`notification-menu-${notification.id}`}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={colors.brand} />
+        ) : (
+          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
+        )}
+      </Pressable>
+    </View>
   );
-};
+}
 
 export default NotificationCard;

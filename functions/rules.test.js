@@ -13,6 +13,7 @@ const {
   getDoc,
   getDocs,
   limit,
+  orderBy,
   query,
   setDoc,
   where,
@@ -128,7 +129,52 @@ test.beforeEach(async () => {
       ownerId: 'owner', type: 'recommendation', target: { id: 'rec-active' },
     });
     await setDoc(doc(db, 'users', 'owner', 'notifications', 'notification-1'), {
-      actorId: 'other', type: 'like', isRead: false,
+      schemaVersion: 2,
+      channel: 'personal',
+      actorId: 'other',
+      type: 'like',
+      subtype: 'grouped_like',
+      priority: 'normal',
+      isRead: false,
+      createdAt: new Date(),
+    });
+    await setDoc(doc(db, 'users', 'owner', 'notifications', 'notification-admin'), {
+      schemaVersion: 2,
+      channel: 'admin',
+      type: 'moderation',
+      subtype: 'report',
+      priority: 'urgent',
+      isRead: false,
+      createdAt: new Date(),
+    });
+    await setDoc(doc(db, 'users', 'active-admin', 'notifications', 'notification-admin'), {
+      schemaVersion: 2,
+      channel: 'admin',
+      type: 'moderation',
+      subtype: 'report',
+      priority: 'urgent',
+      isRead: false,
+      createdAt: new Date(),
+    });
+    await setDoc(doc(db, 'users', 'inactive-admin', 'notifications', 'notification-admin'), {
+      schemaVersion: 2,
+      channel: 'admin',
+      type: 'moderation',
+      subtype: 'report',
+      priority: 'urgent',
+      isRead: false,
+      createdAt: new Date(),
+    });
+    await setDoc(doc(db, 'users', 'owner', 'notificationState', 'state'), {
+      schemaVersion: 2,
+      personalUnread: 1,
+      adminUnread: 1,
+      pushPreferences: { pushEnabled: false },
+    });
+    await setDoc(doc(db, 'notificationDevices', 'token-hash'), {
+      uid: 'owner',
+      token: 'ExponentPushToken[private]',
+      platform: 'ios',
     });
     await setDoc(doc(db, 'users', 'owner', 'blockedUsers', 'other'), {
       blockedUid: 'other', createdAt: new Date(),
@@ -328,18 +374,78 @@ test('notification queries are owner-only and bounded', {
 
   await assertSucceeds(getDocs(query(
     ownerNotifications,
-    where('isRead', '==', false),
-    limit(50)
+    where('schemaVersion', '==', 2),
+    where('channel', '==', 'personal'),
+    orderBy('createdAt', 'desc'),
+    limit(25)
   )));
   await assertFails(getDocs(query(
     ownerNotifications,
-    where('isRead', '==', false)
+    where('schemaVersion', '==', 2),
+    where('channel', '==', 'personal'),
+    orderBy('createdAt', 'desc')
+  )));
+  await assertFails(getDocs(query(
+    ownerNotifications,
+    where('schemaVersion', '==', 2),
+    where('channel', '==', 'personal'),
+    orderBy('createdAt', 'desc'),
+    limit(26)
   )));
   await assertFails(getDocs(query(
     otherNotifications,
-    where('isRead', '==', false),
-    limit(50)
+    where('schemaVersion', '==', 2),
+    where('channel', '==', 'personal'),
+    orderBy('createdAt', 'desc'),
+    limit(25)
   )));
+});
+
+test('admin notification reads require ownership, claim, active registry, and channel filters', {
+  skip: !hasEmulators,
+}, async () => {
+  const ownerDb = env.authenticatedContext('owner', verifiedClaims).firestore();
+  const activeAdminDb = env.authenticatedContext('active-admin', { ...verifiedClaims, admin: true }).firestore();
+  const inactiveAdminDb = env.authenticatedContext('inactive-admin', { ...verifiedClaims, admin: true }).firestore();
+
+  await assertFails(getDoc(doc(ownerDb, 'users', 'owner', 'notifications', 'notification-admin')));
+  await assertSucceeds(getDoc(doc(activeAdminDb, 'users', 'active-admin', 'notifications', 'notification-admin')));
+  await assertFails(getDoc(doc(inactiveAdminDb, 'users', 'inactive-admin', 'notifications', 'notification-admin')));
+  await assertSucceeds(getDocs(query(
+    collection(activeAdminDb, 'users', 'active-admin', 'notifications'),
+    where('schemaVersion', '==', 2),
+    where('channel', '==', 'admin'),
+    orderBy('createdAt', 'desc'),
+    limit(25)
+  )));
+  await assertFails(getDocs(query(
+    collection(ownerDb, 'users', 'owner', 'notifications'),
+    orderBy('createdAt', 'desc'),
+    limit(25)
+  )));
+});
+
+test('notification state is owner-get-only and devices stay server-only', {
+  skip: !hasEmulators,
+}, async () => {
+  const ownerDb = env.authenticatedContext('owner', verifiedClaims).firestore();
+  const otherDb = env.authenticatedContext('other', verifiedClaims).firestore();
+  const stateRef = doc(ownerDb, 'users', 'owner', 'notificationState', 'state');
+
+  await assertSucceeds(getDoc(stateRef));
+  await assertFails(getDoc(doc(otherDb, 'users', 'owner', 'notificationState', 'state')));
+  await assertFails(getDocs(query(
+    collection(ownerDb, 'users', 'owner', 'notificationState'),
+    limit(1)
+  )));
+  await assertFails(setDoc(stateRef, { personalUnread: 999 }, { merge: true }));
+  await assertFails(getDoc(doc(ownerDb, 'notificationDevices', 'token-hash')));
+  await assertFails(setDoc(doc(ownerDb, 'notificationDevices', 'other-token'), {
+    uid: 'owner', token: 'private', platform: 'ios',
+  }));
+  await assertFails(setDoc(doc(ownerDb, 'users', 'owner', 'notifications', 'direct'), {
+    schemaVersion: 2, channel: 'personal', type: 'system', isRead: false,
+  }));
 });
 
 test('storage accepts active owned JPEG staging creates without a tester allowlist', {

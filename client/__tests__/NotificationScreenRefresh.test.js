@@ -1,11 +1,13 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import NotificationScreen from '../src/features/notifications/screens/NotificationScreen';
 
 const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
-let mockNotificationState;
+let mockCenter;
+const mockUser = { uid: 'owner', displayName: 'דנה', photoURL: null };
+const mockResolveTargetAvailability = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
@@ -19,71 +21,302 @@ jest.mock('@expo/vector-icons', () => {
     { ...props, testID: props.testID || `icon-${name}` },
     name
   );
-  return { Ionicons: Icon };
+  return { Ionicons: Icon, MaterialIcons: Icon };
 });
 
 jest.mock('react-native-safe-area-context', () => {
   const ReactRuntime = require('react');
   const { View } = require('react-native');
-  return {
-    SafeAreaView: ({ children, ...props }) => ReactRuntime.createElement(View, props, children),
-  };
+  return { SafeAreaView: ({ children, ...props }) => ReactRuntime.createElement(View, props, children) };
 });
 
-jest.mock('../src/features/notifications/hooks/useNotifications', () => ({
-  useNotifications: () => mockNotificationState,
+jest.mock('../src/features/notifications/context/NotificationCenterContext', () => ({
+  useNotificationCenter: () => mockCenter,
 }));
-
-jest.mock('../src/features/notifications/hooks/useClearNotifications', () => ({
-  useClearNotifications: () => ({
-    clearAll: jest.fn(),
-    markAsRead: jest.fn(),
-    clearing: false,
-  }),
+jest.mock('../src/features/notifications/services/NotificationService', () => ({
+  resolveNotificationTargetAvailability: (...args) => mockResolveTargetAvailability(...args),
 }));
+jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ user: mockUser }) }));
 
-jest.mock('../src/features/notifications/components/', () => {
-  const ReactRuntime = require('react');
-  const { Text } = require('react-native');
+const personalLike = {
+  id: 'like-1',
+  schemaVersion: 2,
+  channel: 'personal',
+  type: 'like',
+  priority: 'normal',
+  isRead: false,
+  createdAt: new Date('2026-08-21T10:00:00Z'),
+  count: 1,
+  actorPreview: { id: 'actor-1', displayName: 'נועה', photoURL: null },
+  actorPreviews: Array.from({ length: 4 }, (_, index) => ({
+    id: `actor-${index}`,
+    displayName: `מטייל ${index}`,
+    photoURL: null,
+  })),
+  target: { type: 'recommendation', title: 'מסעדה בחיפה', thumbUrls: [] },
+  navigation: { action: 'open_recommendation', recommendationId: 'post-1' },
+};
+
+const personalComment = {
+  ...personalLike,
+  id: 'comment-1',
+  type: 'comment',
+  isRead: true,
+  commentExcerpt: 'איזה מקום נהדר',
+  navigation: {
+    action: 'open_comment',
+    parentType: 'recommendation',
+    parentId: 'post-1',
+    commentId: 'comment-doc-1',
+  },
+};
+
+function channelState(items = []) {
   return {
-    NotificationCard: ({ notification }) => ReactRuntime.createElement(
-      Text,
-      { testID: `notification-${notification.id}` },
-      notification.id
-    ),
+    items,
+    loading: false,
+    refreshing: false,
+    loadingMore: false,
+    error: '',
+    cursor: null,
+    hasMore: false,
+    loaded: true,
   };
-});
+}
 
-jest.mock('../src/config/firebase', () => ({ db: {} }));
-jest.mock('firebase/firestore', () => ({ doc: jest.fn(), getDoc: jest.fn() }));
-jest.mock('../src/services/RouteService', () => ({ loadRouteDetails: jest.fn() }));
+function createCenter({ isAdmin = false, personal = [personalLike, personalComment] } = {}) {
+  return {
+    channels: {
+      personal: channelState(personal),
+      admin: channelState([]),
+    },
+    unreadCounts: { personal: personal.filter((item) => !item.isRead).length, admin: 2 },
+    activeFilters: { personal: 'all', admin: 'all' },
+    totalUnread: 1,
+    isAdmin,
+    adminLoading: false,
+    pendingActions: {},
+    mutationError: '',
+    clearMutationError: jest.fn(),
+    setActiveFilter: jest.fn(),
+    retry: jest.fn(),
+    refresh: jest.fn(() => Promise.resolve(true)),
+    loadMore: jest.fn(() => Promise.resolve(false)),
+    setRead: jest.fn(() => Promise.resolve(true)),
+    deleteOne: jest.fn(() => Promise.resolve(true)),
+    markChannelRead: jest.fn(() => Promise.resolve(true)),
+    clearChannel: jest.fn(() => Promise.resolve(true)),
+    resolveNotification: jest.fn(() => Promise.resolve(null)),
+  };
+}
 
-describe('NotificationScreen refresh and RTL header', () => {
+describe('NotificationScreen interactions', () => {
   beforeEach(() => {
-    mockNotificationState = {
-      notifications: [{ id: 'one' }],
-      loading: false,
-      refreshing: false,
-      refresh: jest.fn(),
+    jest.clearAllMocks();
+    mockCenter = createCenter();
+    mockResolveTargetAvailability.mockResolvedValue({ available: true, reason: 'active' });
+  });
+
+  it('keeps RTL header controls and gates the admin channel by the active claim', () => {
+    const screen = render(<NotificationScreen />);
+
+    expect(screen.getByTestId('notifications-header-profile-slot')).toBeTruthy();
+    expect(screen.getByTestId('notifications-header-action-slot')).toBeTruthy();
+    expect(screen.getByTestId('notifications-profile')).toBeTruthy();
+    expect(screen.queryByTestId('notification-channel-tabs')).toBeNull();
+    fireEvent.press(screen.getByTestId('notifications-profile'));
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('UserProfile', { uid: 'owner' });
+
+    mockCenter = createCenter({ isAdmin: true });
+    screen.rerender(<NotificationScreen />);
+    expect(screen.getByTestId('notification-channel-tabs')).toBeTruthy();
+    expect(screen.getByText(/ניהול/)).toBeTruthy();
+  });
+
+  it('filters rows without discarding the loaded channel data', () => {
+    const screen = render(<NotificationScreen />);
+    expect(screen.getByTestId('notification-row-like-1')).toBeTruthy();
+    expect(screen.getByTestId('notification-row-comment-1')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('notification-filter-likes'));
+    expect(mockCenter.setActiveFilter).toHaveBeenCalledWith('personal', 'likes');
+    mockCenter.activeFilters.personal = 'likes';
+    mockCenter.channels.personal = channelState([personalLike]);
+    screen.rerender(<NotificationScreen />);
+    expect(screen.getByTestId('notification-row-like-1')).toBeTruthy();
+    expect(screen.queryByTestId('notification-row-comment-1')).toBeNull();
+  });
+
+  it('marks an unread row once and emits the allowlisted root route action once', async () => {
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+    const row = screen.getByTestId('notification-row-like-1');
+
+    fireEvent.press(row);
+    fireEvent.press(row);
+
+    await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
+    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(onOpenAction).toHaveBeenCalledWith(
+      { type: 'navigate', routeName: 'RecommendationDetail', params: { postId: 'post-1' } },
+      personalLike
+    );
+  });
+
+  it.each([
+    ['held', 'התוכן נמצא בבדיקה'],
+    ['deleted', 'התוכן כבר לא זמין'],
+    ['unavailable', 'התוכן אינו זמין כרגע'],
+  ])('keeps a currently %s social target in a contextual sheet', async (reason, title) => {
+    mockResolveTargetAvailability.mockResolvedValue({ available: false, reason });
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+
+    fireEvent.press(screen.getByTestId('notification-row-like-1'));
+
+    await waitFor(() => expect(screen.getByText(title)).toBeTruthy());
+    expect(onOpenAction).not.toHaveBeenCalled();
+    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+  });
+
+  it('keeps a transient target lookup unread and retries before navigating', async () => {
+    mockResolveTargetAvailability
+      .mockRejectedValueOnce(Object.assign(new Error('offline'), {
+        code: 'firestore/unavailable',
+        reason: 'retryable',
+      }))
+      .mockResolvedValueOnce({ available: true, reason: 'active' });
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+
+    fireEvent.press(screen.getByTestId('notification-row-like-1'));
+    await waitFor(() => expect(screen.getByTestId('notification-status-retry')).toBeTruthy());
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
+    expect(onOpenAction).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('notification-status-retry'));
+    await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
+    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks restored system content before opening it', async () => {
+    const restored = {
+      ...personalLike,
+      id: 'restored-1',
+      type: 'system',
+      subtype: 'content_restored',
     };
+    mockCenter = createCenter({ personal: [restored] });
+    mockResolveTargetAvailability.mockResolvedValue({ available: false, reason: 'held' });
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+
+    fireEvent.press(screen.getByTestId('notification-row-restored-1'));
+    await waitFor(() => expect(mockResolveTargetAvailability).toHaveBeenCalledWith(restored));
+    expect(onOpenAction).not.toHaveBeenCalled();
+    expect(mockCenter.setRead).toHaveBeenCalledWith(restored, true);
   });
 
-  it('places back on the right and the secondary action on the left', () => {
+  it('offers read toggling and confirmed per-row deletion from a 44px menu target', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const screen = render(<NotificationScreen />);
-    const backSlot = StyleSheet.flatten(screen.getByTestId('notifications-header-back-slot').props.style);
-    const actionSlot = StyleSheet.flatten(screen.getByTestId('notifications-header-action-slot').props.style);
 
-    expect(backSlot.right).toBe(10);
-    expect(actionSlot.left).toBe(10);
-    expect(screen.getByTestId('icon-chevron-forward')).toBeTruthy();
+    const menuStyle = StyleSheet.flatten(screen.getByTestId('notification-menu-like-1').props.style);
+    expect(menuStyle).toMatchObject({ width: 44, height: 44 });
+    fireEvent.press(screen.getByTestId('notification-menu-like-1'));
+    fireEvent.press(screen.getByTestId('notification-toggle-read'));
+    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+
+    fireEvent.press(screen.getByTestId('notification-menu-like-1'));
+    fireEvent.press(screen.getByTestId('notification-delete'));
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    const destructive = alertSpy.mock.calls[0][2].find((button) => button.style === 'destructive');
+    destructive.onPress();
+    await waitFor(() => expect(mockCenter.deleteOne).toHaveBeenCalledWith(personalLike));
+    alertSpy.mockRestore();
   });
 
-  it('keeps the header and replaces the list while refreshing', () => {
-    mockNotificationState.refreshing = true;
+  it('renders all four bounded grouped-like actor previews', () => {
     const screen = render(<NotificationScreen />);
+    expect(screen.getByTestId('notification-actor-like-1-0', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId('notification-actor-like-1-3', { includeHiddenElements: true })).toBeTruthy();
+  });
 
-    expect(screen.getByText('התראות')).toBeTruthy();
-    expect(screen.getByTestId('notifications-refresh-state')).toBeTruthy();
-    expect(screen.queryByTestId('notification-one')).toBeNull();
+  it('resolves a push id once, marks it read, and ignores duplicate route params', async () => {
+    mockCenter.resolveNotification.mockResolvedValue(personalLike);
+    const onOpenAction = jest.fn();
+    const route = { params: { notificationId: 'like-1', channel: 'personal' } };
+    const screen = render(<NotificationScreen route={route} onOpenAction={onOpenAction} />);
+
+    await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
+    expect(mockCenter.resolveNotification).toHaveBeenCalledTimes(1);
+    expect(mockCenter.resolveNotification).toHaveBeenCalledWith('like-1', 'personal');
+    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+
+    screen.rerender(<NotificationScreen route={route} onOpenAction={onOpenAction} />);
+    await waitFor(() => expect(mockCenter.resolveNotification).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not open a stale cold-start target after newer push params win', async () => {
+    let finishFirstAvailability;
+    mockResolveTargetAvailability
+      .mockReturnValueOnce(new Promise((resolve) => { finishFirstAvailability = resolve; }))
+      .mockResolvedValueOnce({ available: true, reason: 'active' });
+    mockCenter.resolveNotification.mockImplementation((notificationId) => Promise.resolve(
+      notificationId === 'like-1' ? personalLike : personalComment
+    ));
+    const onOpenAction = jest.fn();
+    const screen = render(
+      <NotificationScreen
+        route={{ params: { notificationId: 'like-1', channel: 'personal' } }}
+        onOpenAction={onOpenAction}
+      />
+    );
+    await waitFor(() => expect(mockResolveTargetAvailability).toHaveBeenCalledTimes(1));
+
+    screen.rerender(
+      <NotificationScreen
+        route={{ params: { notificationId: 'comment-1', channel: 'personal' } }}
+        onOpenAction={onOpenAction}
+      />
+    );
+    await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
+    expect(onOpenAction.mock.calls[0][0]).toEqual({
+      type: 'navigate',
+      routeName: 'RecommendationDetail',
+      params: { postId: 'post-1', openComments: true, commentId: 'comment-doc-1' },
+    });
+
+    await act(async () => {
+      finishFirstAvailability({ available: true, reason: 'active' });
+      await Promise.resolve();
+    });
+    expect(onOpenAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows contextual missing content instead of navigating arbitrary push data', async () => {
+    const screen = render(
+      <NotificationScreen route={{ params: { notificationId: 'missing', channel: 'personal' } }} />
+    );
+
+    await waitFor(() => expect(screen.getByText('התוכן כבר לא זמין')).toBeTruthy());
+    expect(mockNavigation.navigate).not.toHaveBeenCalledWith(expect.any(String), expect.anything());
+  });
+
+  it('renders loading, retryable error, and empty states', () => {
+    mockCenter.channels.personal = { ...channelState([]), loading: true, loaded: false };
+    const screen = render(<NotificationScreen />);
+    expect(screen.getByTestId('notifications-loading-state')).toBeTruthy();
+
+    mockCenter.channels.personal = { ...channelState([]), error: 'בעיה זמנית' };
+    screen.rerender(<NotificationScreen />);
+    expect(screen.getByTestId('notifications-error-state')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('notifications-retry'));
+    expect(mockCenter.retry).toHaveBeenCalledWith('personal');
+
+    mockCenter.channels.personal = channelState([]);
+    screen.rerender(<NotificationScreen />);
+    expect(screen.getByTestId('notifications-empty-state')).toBeTruthy();
   });
 });

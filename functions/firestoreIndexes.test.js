@@ -116,3 +116,61 @@ test('moderation queues and reporter cleanup have their required indexes', () =>
     index.order === 'ASCENDING' && index.queryScope === 'COLLECTION_GROUP'
   )));
 });
+
+test('notification center filters have channel-scoped chronological indexes', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const notificationIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'notifications')
+    .map(fieldSignature);
+
+  for (const signature of [
+    'schemaVersion:ASCENDING|channel:ASCENDING|createdAt:DESCENDING',
+    'schemaVersion:ASCENDING|channel:ASCENDING|isRead:ASCENDING|createdAt:DESCENDING',
+    'schemaVersion:ASCENDING|channel:ASCENDING|type:ASCENDING|createdAt:DESCENDING',
+    'schemaVersion:ASCENDING|channel:ASCENDING|subtype:ASCENDING|createdAt:DESCENDING',
+    'schemaVersion:ASCENDING|channel:ASCENDING|priority:ASCENDING|createdAt:DESCENDING',
+  ]) assert.ok(notificationIndexes.includes(signature), `Missing notification index: ${signature}`);
+});
+
+test('push retry and receipt workers have indexes and TTL cleanup policies', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const deviceIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'notificationDevices')
+    .map(fieldSignature);
+  assert.ok(deviceIndexes.includes('uid:ASCENDING|enabled:ASCENDING'));
+  const dispatchIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'notificationPushDispatches')
+    .map(fieldSignature);
+  assert.ok(dispatchIndexes.includes('status:ASCENDING|nextAttemptAt:ASCENDING'));
+  assert.ok(dispatchIndexes.includes('status:ASCENDING|leaseUntil:ASCENDING'));
+  const receiptIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'notificationPushReceipts')
+    .map(fieldSignature);
+  assert.ok(receiptIndexes.includes('mode:ASCENDING|checkAfter:ASCENDING'));
+  for (const collectionGroup of ['notificationPushDispatches', 'notificationPushReceipts']) {
+    assert.ok(config.fieldOverrides.some((entry) => (
+      entry.collectionGroup === collectionGroup
+      && entry.fieldPath === 'expireAt'
+      && entry.ttl === true
+    )), `Missing push TTL policy for ${collectionGroup}`);
+  }
+});
+
+test('blocked-like cleanup and durable notification cleanup have indexes', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const likeIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'likes')
+    .map(fieldSignature);
+  assert.ok(likeIndexes.includes(
+    'userId:ASCENDING|notificationRecipientId:ASCENDING|__name__:ASCENDING'
+  ));
+  const notificationIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'notifications')
+    .map(fieldSignature);
+  assert.ok(notificationIndexes.includes('actorId:ASCENDING|type:ASCENDING'));
+  assert.ok(config.fieldOverrides.some((entry) => (
+    entry.collectionGroup === 'notificationCleanupJobs'
+    && entry.fieldPath === 'expireAt'
+    && entry.ttl === true
+  )));
+});

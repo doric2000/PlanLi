@@ -56,6 +56,10 @@ jest.mock('../src/services/ProfileService', () => ({
 process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = '123456789012-web-client.apps.googleusercontent.com';
 
 const { auth } = require('../src/config/firebase');
+const { signOut: firebaseSignOut } = require('firebase/auth');
+const {
+  setNotificationDeviceUnregisterHandler,
+} = require('../src/features/notifications/push/session');
 const {
   DEFAULT_DISPLAY_NAME,
   ensureAuthenticatedUserProfile,
@@ -65,12 +69,29 @@ const {
   reauthenticateWithApple,
   signInWithApple,
   signInWithGoogle,
+  signOutCentral,
 } = require('../src/services/AuthService');
 
 describe('AuthService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     auth.currentUser = null;
+  });
+
+  it('attempts notification-device cleanup before Firebase sign-out', async () => {
+    const order = [];
+    auth.currentUser = { providerData: [] };
+    const clear = setNotificationDeviceUnregisterHandler(async () => {
+      order.push('device');
+    });
+    firebaseSignOut.mockImplementationOnce(async () => {
+      order.push('firebase');
+    });
+
+    await signOutCentral();
+
+    expect(order).toEqual(['device', 'firebase']);
+    clear();
   });
 
   it('normalizes email and provides a safe account-collision message', () => {

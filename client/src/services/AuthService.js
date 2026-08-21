@@ -20,6 +20,7 @@ import {
 } from 'firebase/auth';
 
 import { auth } from '../config/firebase';
+import { unregisterNotificationDeviceBeforeSignOut } from '../features/notifications/push/session';
 import { completeAccountSetup, registerUserDocument } from './ProfileService';
 
 export const DEFAULT_DISPLAY_NAME = 'מטייל/ת PlanLi';
@@ -226,6 +227,7 @@ export async function refreshAuthenticatedUser() {
 }
 
 export async function signOutCentral() {
+  await unregisterNotificationDeviceBeforeSignOut();
   const providerIds = getProviderIds(auth.currentUser);
   if (providerIds.includes('google.com')) {
     await GoogleSignin.signOut().catch(() => {});

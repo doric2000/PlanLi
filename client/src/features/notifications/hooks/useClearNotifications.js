@@ -1,107 +1,36 @@
-/**
- * useClearNotifications.js
- * 
- * Hook for clearing notifications with loading state.
- * Provides a clean interface for notification management actions.
- */
+import { useCallback } from 'react';
 
-import { useState } from 'react';
-import { auth } from '../../../config/firebase';
-import { 
-  clearAllNotifications, 
-  markNotificationAsRead,
-  deleteNotification 
-} from '../services/NotificationService';
+import { useNotificationCenter } from '../context/NotificationCenterContext';
+import { NotificationChannel } from '../models/NotificationModel';
 
 /**
- * Custom hook for notification management actions
- * 
- * @returns {Object} Object containing:
- * - clearAll: Function to clear all notifications
- * - markAsRead: Function to mark a notification as read
- * - deleteOne: Function to delete a single notification
- * - clearing: Boolean indicating if clear operation is in progress
- * - error: Error object if any
+ * Compatibility facade for older notification callers. New UI should use the
+ * provider actions directly so a channel is always explicit.
  */
-export const useClearNotifications = () => {
-  const [clearing, setClearing] = useState(false);
-  const [error, setError] = useState(null);
-  const currentUser = auth.currentUser;
+export function useClearNotifications(channel = NotificationChannel.PERSONAL) {
+  const center = useNotificationCenter();
 
-  /**
-   * Clear all notifications for the current user
-   * 
-   * @returns {Promise<number>} Number of notifications cleared
-   */
-  const clearAll = async () => {
-    if (!currentUser) {
-      console.warn('No user logged in');
-      return 0;
-    }
+  const markAsRead = useCallback((notificationOrId, read = true) => {
+    const notification = typeof notificationOrId === 'string'
+      ? center.channels[channel].items.find((item) => item.id === notificationOrId)
+      : notificationOrId;
+    return notification ? center.setRead(notification, read) : Promise.resolve(false);
+  }, [center, channel]);
 
-    setClearing(true);
-    setError(null);
-
-    try {
-      return await clearAllNotifications(currentUser.uid);
-    } catch (err) {
-      console.error('Error clearing notifications:', err);
-      setError(err);
-      throw err;
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  /**
-   * Mark a notification as read
-   * 
-   * @param {string} notificationId - Notification ID to mark as read
-   * @returns {Promise<void>}
-   */
-  const markAsRead = async (notificationId) => {
-    if (!currentUser) {
-      console.warn('No user logged in');
-      return;
-    }
-
-    try {
-      await markNotificationAsRead(currentUser.uid, notificationId);
-    } catch (err) {
-      console.error('Error marking notification as read:', err);
-      setError(err);
-      throw err;
-    }
-  };
-
-  /**
-   * Delete a single notification
-   * 
-   * @param {string} notificationId - Notification ID to delete
-   * @returns {Promise<void>}
-   */
-  const deleteOne = async (notificationId) => {
-    if (!currentUser) {
-      console.warn('No user logged in');
-      return;
-    }
-
-    try {
-      await deleteNotification(currentUser.uid, notificationId);
-    } catch (err) {
-      console.error('Error deleting notification:', err);
-      setError(err);
-      throw err;
-    }
-  };
+  const deleteOne = useCallback((notificationOrId) => {
+    const notification = typeof notificationOrId === 'string'
+      ? center.channels[channel].items.find((item) => item.id === notificationOrId)
+      : notificationOrId;
+    return notification ? center.deleteOne(notification) : Promise.resolve(false);
+  }, [center, channel]);
 
   return {
-    clearAll,
+    clearAll: () => center.clearChannel(channel),
     markAsRead,
     deleteOne,
-    clearing,
-    error,
+    clearing: Boolean(center.pendingActions[`channel:${channel}:delete`]),
+    error: center.mutationError,
   };
-};
+}
 
 export default useClearNotifications;

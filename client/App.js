@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
@@ -21,7 +21,9 @@ import BlockedUsersScreen from "./src/features/profile/screens/BlockedUsersScree
 import LandingPageScreen from "./src/features/destination/screens/LandingPageScreen";
 import EditProfileScreen from "./src/features/profile/screens/EditProfileScreen";
 import PreferenceSetupScreen from "./src/features/profile/screens/PreferenceSetupScreen";
-import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
+import NotificationSettingsScreen from "./src/features/notifications/screens/NotificationSettingsScreen";
+import { NotificationCenterProvider } from "./src/features/notifications/context/NotificationCenterContext";
+import NotificationPushBridge from "./src/features/notifications/push/NotificationPushBridge";
 import AdminPanelScreen from "./src/features/admin/screens/AdminPanelScreen";
 import PreferenceSetupGate from "./src/navigation/PreferenceSetupGate";
 import {
@@ -43,7 +45,7 @@ const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 const EditProfileAuthed = withRequireAuth(EditProfileScreen);
-const NotificationsAuthed = withRequireAuth(NotificationScreen);
+const NotificationSettingsAuthed = withRequireAuth(NotificationSettingsScreen);
 const SettingsAuthed = withRequireAuth(SettingsScreen);
 const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
@@ -62,7 +64,7 @@ const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
  * - Register: New user registration
  * - Main: Tab Navigator (Home, Community, etc.)
  * - EditProfile: User profile editing screen
- * - Notifications: Notifications screen
+ * - NotificationSettings: Native push and category preferences
  * - Route: Routes list
  * - AddRecommendation: Modal for adding new content
  * - LandingPage: Dashboard for Landing Page Screen
@@ -72,6 +74,7 @@ const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
 export default function App() {
 	const initialRouteName = process.env.EXPO_PUBLIC_ADMIN_WEB === 'true' ? 'AdminPanel' : 'Main';
 	const previousRouteNameRef = useRef(null);
+	const [navigationReady, setNavigationReady] = useState(false);
 	const recordCurrentRoute = () => {
 		const currentRouteName = navigationRef.getCurrentRoute()?.name;
 		if (!currentRouteName || previousRouteNameRef.current === currentRouteName) return;
@@ -88,10 +91,14 @@ export default function App() {
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<AuthProvider navigationRef={navigationRef}>
 				 <BlockedUsersProvider>
+				 <NotificationCenterProvider>
 				 <ContentPublishProvider>
 				<NavigationContainer
 					ref={navigationRef}
-					onReady={recordCurrentRoute}
+					onReady={() => {
+						setNavigationReady(true);
+						recordCurrentRoute();
+					}}
 					onStateChange={recordCurrentRoute}
 				>
 				<Stack.Navigator
@@ -106,7 +113,7 @@ export default function App() {
 					<Stack.Screen name='Main' component={PreferenceSetupGate} />
 					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupAuthed} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
-					<Stack.Screen name="Notifications" component={NotificationsAuthed} />
+					<Stack.Screen name="NotificationSettings" component={NotificationSettingsAuthed} />
 					<Stack.Screen name='Settings' component={SettingsAuthed} />
 					<Stack.Screen name='BlockedUsers' component={BlockedUsersAuthed} />
 					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} />
@@ -146,6 +153,10 @@ export default function App() {
 					/>
 				</Stack.Navigator>
 				</NavigationContainer>
+				<NotificationPushBridge
+					navigationRef={navigationRef}
+					navigationReady={navigationReady}
+				/>
 				<AuthGateModal />
 				<ContentPublishBanner
 					onReview={(publishJobId, contentType) => {
@@ -158,6 +169,7 @@ export default function App() {
 					}}
 				/>
 				 </ContentPublishProvider>
+				 </NotificationCenterProvider>
 				 </BlockedUsersProvider>
 				</AuthProvider>
 			</SafeAreaProvider>
