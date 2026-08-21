@@ -1,47 +1,20 @@
 import { renderHook } from '@testing-library/react-native';
-import { collection, limit, onSnapshot, query, where } from 'firebase/firestore';
+
 import { useUnreadCount } from '../src/features/notifications/hooks/useUnreadCount';
 
-jest.mock('firebase/firestore', () => ({
-  collection: jest.fn(() => ({ kind: 'notifications' })),
-  limit: jest.fn((value) => ({ kind: 'limit', value })),
-  onSnapshot: jest.fn(() => jest.fn()),
-  query: jest.fn((...constraints) => ({ kind: 'query', constraints })),
-  where: jest.fn((...args) => ({ kind: 'where', args })),
-}));
+const mockCenter = {
+  unreadCounts: { personal: 4, admin: 2 },
+  totalUnread: 6,
+};
 
-jest.mock('../src/config/firebase', () => ({
-  auth: { currentUser: { uid: 'owner' } },
-  db: { kind: 'db' },
+jest.mock('../src/features/notifications/context/NotificationCenterContext', () => ({
+  useNotificationCenter: () => mockCenter,
 }));
 
 describe('useUnreadCount', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('uses the bounded notification query required by Firestore rules', () => {
-    const unsubscribe = jest.fn();
-    onSnapshot.mockReturnValue(unsubscribe);
-
-    const { unmount } = renderHook(() => useUnreadCount());
-
-    expect(collection).toHaveBeenCalledWith(
-      { kind: 'db' },
-      'users',
-      'owner',
-      'notifications'
-    );
-    expect(where).toHaveBeenCalledWith('isRead', '==', false);
-    expect(limit).toHaveBeenCalledWith(50);
-    expect(query).toHaveBeenCalledWith(
-      { kind: 'notifications' },
-      { kind: 'where', args: ['isRead', '==', false] },
-      { kind: 'limit', value: 50 }
-    );
-    expect(onSnapshot).toHaveBeenCalledTimes(1);
-
-    unmount();
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  it('uses denormalized provider counters without reading a notification list', () => {
+    expect(renderHook(() => useUnreadCount()).result.current).toBe(6);
+    expect(renderHook(() => useUnreadCount('personal')).result.current).toBe(4);
+    expect(renderHook(() => useUnreadCount('admin')).result.current).toBe(2);
   });
 });

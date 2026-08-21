@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, Share, StatusBar, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StatusBar, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -15,7 +15,7 @@ import { auth } from '../../../config/firebase';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useUserData } from '../../../hooks/useUserData';
-import { recordRouteOpen } from '../../../services/RouteService';
+import { loadRouteDetails, recordRouteOpen } from '../../../services/RouteService';
 import { colors, routeDetailScreenStyles as styles } from '../../../styles';
 import { canManageContent } from '../../../utils/contentPermissions';
 import { getRouteImageUrls } from '../../../utils/mediaAssets';
@@ -39,8 +39,96 @@ const EXTRA_ICONS = {
 };
 
 export default function RouteDetailScreen({ route, navigation }) {
+  const initialRouteData = route?.params?.routeData || null;
+  const requestedRouteId = route?.params?.routeId
+    || initialRouteData?.id
+    || initialRouteData?.routeId
+    || '';
+  const [routeData, setRouteData] = useState(initialRouteData);
+  const [loadingRoute, setLoadingRoute] = useState(!initialRouteData && !!requestedRouteId);
+  const [routeError, setRouteError] = useState('');
+  const requestIdRef = useRef(0);
+
+  const loadCanonicalRoute = useCallback(async () => {
+    if (!requestedRouteId) {
+      setRouteData(null);
+      setRouteError('המסלול שאליו הפנתה ההתראה אינו זמין עוד.');
+      return;
+    }
+    const requestId = ++requestIdRef.current;
+    setLoadingRoute(true);
+    setRouteError('');
+    try {
+      const loaded = await loadRouteDetails(requestedRouteId);
+      if (requestIdRef.current !== requestId) return;
+      if (!loaded) {
+        setRouteData(null);
+        setRouteError('המסלול הוסר או שאינו זמין כרגע.');
+        return;
+      }
+      setRouteData(loaded);
+    } catch {
+      if (requestIdRef.current === requestId) {
+        setRouteData(null);
+        setRouteError('לא הצלחנו לטעון את המסלול. אפשר לנסות שוב.');
+      }
+    } finally {
+      if (requestIdRef.current === requestId) setLoadingRoute(false);
+    }
+  }, [requestedRouteId]);
+
+  useEffect(() => {
+    const initialId = initialRouteData?.id || initialRouteData?.routeId || '';
+    if (initialRouteData && (!requestedRouteId || initialId === requestedRouteId)) {
+      setRouteData(initialRouteData);
+      setLoadingRoute(false);
+      setRouteError('');
+      return undefined;
+    }
+    loadCanonicalRoute();
+    return () => { requestIdRef.current += 1; };
+  }, [initialRouteData, loadCanonicalRoute, requestedRouteId]);
+
+  const loadedRouteId = routeData?.id || routeData?.routeId || '';
+  const routeReady = !!routeData && (!requestedRouteId || loadedRouteId === requestedRouteId);
+  const pendingRoute = loadingRoute || (!routeReady && !!requestedRouteId && !routeError);
+  if (!routeReady) {
+    return (
+      <SafeAreaView style={detailStyles.screen} edges={['top', 'left', 'right', 'bottom']}>
+        <View style={[styles.page, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+          {pendingRoute ? <ActivityIndicator size="large" color={colors.primary} /> : (
+            <Ionicons name="information-circle-outline" size={44} color={colors.textSecondary} />
+          )}
+          <AppText accessibilityRole={routeError ? 'alert' : undefined} style={[detailStyles.body, { marginTop: 12, textAlign: 'center' }]}>
+            {pendingRoute ? 'טוענים את המסלול…' : routeError}
+          </AppText>
+          {!pendingRoute && routeError ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="ניסיון נוסף לטעינת המסלול"
+              onPress={loadCanonicalRoute}
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 18 }}
+            >
+              <AppText style={{ color: colors.primary }}>ניסיון נוסף</AppText>
+            </Pressable>
+          ) : null}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <RouteDetailLoaded
+      routeData={routeData}
+      navigation={navigation}
+      initialCommentsOpen={route?.params?.openComments === true}
+      initialCommentId={route?.params?.commentId || null}
+    />
+  );
+}
+
+function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initialCommentId }) {
   const insets = useSafeAreaInsets();
-  const { routeData } = route.params;
   const routeId = routeData?.id || routeData?.routeId || '';
   const days = Array.isArray(routeData?.days) ? routeData.days : [];
   const validStops = useMemo(() => flattenValidRouteStops(days), [days]);
@@ -53,7 +141,7 @@ export default function RouteDetailScreen({ route, navigation }) {
   const { isLiked, likeCount, toggleLike } = useLikes('routes', routeId, routeData?.stats?.likeCount || 0);
   const commentsCount = useCommentsCount('routes', routeId);
   const [likesVisible, setLikesVisible] = useState(false);
-  const [commentsVisible, setCommentsVisible] = useState(false);
+  const [commentsVisible, setCommentsVisible] = useState(initialCommentsOpen);
   const canEdit = isActive && canManageContent({ user: auth.currentUser, ownerId: routeData?.ownerId, isAdmin });
   const destinationLabel = destinations.map((item) => item.name).filter(Boolean).join(' · ');
 
@@ -61,6 +149,10 @@ export default function RouteDetailScreen({ route, navigation }) {
     navigation.setOptions({ headerShown: false });
     if (isActive && routeId) recordRouteOpen(routeId).catch(() => {});
   }, [isActive, navigation, routeId]);
+
+  useEffect(() => {
+    if (initialCommentsOpen) setCommentsVisible(true);
+  }, [initialCommentsOpen, initialCommentId]);
 
   const snapshotData = useMemo(() => ({
     name: routeData?.title,
@@ -237,7 +329,13 @@ export default function RouteDetailScreen({ route, navigation }) {
       </View>
 
       <LikesModal visible={likesVisible} onClose={() => setLikesVisible(false)} collectionName="routes" itemId={routeId} likeCount={likeCount} />
-      <CommentsModal visible={commentsVisible} onClose={() => setCommentsVisible(false)} postId={routeId} collectionName="routes" />
+      <CommentsModal
+        visible={commentsVisible}
+        onClose={() => setCommentsVisible(false)}
+        postId={routeId}
+        collectionName="routes"
+        initialCommentId={initialCommentId}
+      />
     </SafeAreaView>
   );
 }

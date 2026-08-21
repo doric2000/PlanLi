@@ -308,4 +308,62 @@ describe('AdminPanelScreen request and action isolation', () => {
     expect(await screen.findByText('מנהל: מנהלת פלאן לי')).toBeTruthy();
     expect(screen.queryByText('מנהל: uid-hidden')).toBeNull();
   });
+
+  it('fetches, expands, and highlights the exact report opened from an admin notification', async () => {
+    AdminService.getModerationCase.mockResolvedValue({
+      id: 'case-focus',
+      target: { type: 'recommendation', id: 'rec-1' },
+      targetPreview: { title: 'המלצה ממוקדת', available: true },
+      priority: 'urgent',
+      reports: [{ id: 'report-1', category: 'other', details: 'פרט מאושר להצגת מנהל' }],
+    });
+    const screen = render(
+      <AdminPanelScreen
+        navigation={navigation}
+        route={{ params: { tab: 'reports', caseId: 'case-focus' } }}
+      />
+    );
+
+    const focused = await screen.findByTestId('admin-case-case-focus');
+    expect(AdminService.getModerationCase).toHaveBeenCalledWith('case-focus');
+    expect(focused.props.accessibilityLabel).toBe('הדיווח שנפתח מההתראה');
+    expect(screen.getByTestId('admin-case-details-panel-case-focus')).toBeTruthy();
+  });
+
+  it('fetches and highlights the exact destination review opened from an admin notification', async () => {
+    AdminService.listDestinationReviews.mockResolvedValue({
+      items: [{
+        id: 'blocked-first-by-default',
+        countryId: 'IT',
+        cityId: 'rome',
+        status: 'blocked',
+        updatedAt: '2026-08-21T00:00:00.000Z',
+      }],
+      nextCursor: null,
+    });
+    AdminService.getDestinationReview.mockResolvedValue({
+      countryId: 'IL',
+      cityId: 'haifa',
+      city: { status: 'active', identity: { names: { he: 'חיפה' } }, stats: { recommendationCount: 3 } },
+      country: { names: { he: 'ישראל' } },
+      review: { status: 'open' },
+      job: {},
+      issues: [],
+    });
+    const screen = render(
+      <AdminPanelScreen
+        navigation={navigation}
+        route={{ params: { tab: 'destinations', countryId: 'IL', cityId: 'haifa' } }}
+      />
+    );
+
+    const focused = await screen.findByTestId('admin-destination-notification_IL_haifa');
+    expect(AdminService.getDestinationReview).toHaveBeenCalledWith('IL', 'haifa');
+    const rows = screen.getAllByTestId(/^admin-destination-(notification_IL_haifa|blocked-first-by-default)$/);
+    expect(rows.map((row) => row.props.testID)).toEqual([
+      'admin-destination-notification_IL_haifa',
+      'admin-destination-blocked-first-by-default',
+    ]);
+    expect(focused.props.accessibilityLabel).toBe('בקרת העיר שנפתחה מההתראה');
+  });
 });

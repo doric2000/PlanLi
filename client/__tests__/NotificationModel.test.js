@@ -1,0 +1,152 @@
+import {
+  buildNotificationRouteAction,
+  buildStatusActionForError,
+  getNotificationFilterOptions,
+  getNotificationPresentation,
+  normalizeNotification,
+  NotificationChannel,
+  NotificationFilter,
+  notificationMatchesFilter,
+} from '../src/features/notifications/models/NotificationModel';
+
+describe('NotificationModel schema v2', () => {
+  it('presents content-status alerts without exposing moderation reasons', () => {
+    expect(getNotificationPresentation({
+      type: 'system',
+      subtype: 'content_held',
+      target: { title: 'מסלול לצפון' },
+    })).toMatchObject({
+      message: 'התוכן שלך הועבר זמנית לבדיקה',
+      detail: 'מסלול לצפון',
+      tone: 'system',
+    });
+  });
+
+  it('bounds renderable previews and rejects unsafe media or document ids', () => {
+    const notification = normalizeNotification('notification-1', {
+      schemaVersion: 2,
+      channel: 'personal',
+      type: 'comment',
+      actorPreviews: Array.from({ length: 7 }, (_, index) => ({
+        id: `actor-${index}`,
+        displayName: `Actor ${index}`,
+        photoURL: `https://example.com/${index}.jpg`,
+      })),
+      commentExcerpt: 'x'.repeat(240),
+      target: {
+        id: 'post/unsafe',
+        thumbUrls: [
+          'https://example.com/1.jpg',
+          'javascript:alert(1)',
+          'https://example.com/2.jpg',
+          'https://example.com/3.jpg',
+          'https://example.com/4.jpg',
+          'https://example.com/5.jpg',
+        ],
+      },
+    });
+
+    expect(notification.actorPreviews).toHaveLength(4);
+    expect(notification.commentExcerpt).toHaveLength(160);
+    expect(notification.target.id).toBeUndefined();
+    expect(notification.target.thumbUrls).toEqual([
+      'https://example.com/1.jpg',
+      'https://example.com/2.jpg',
+      'https://example.com/3.jpg',
+      'https://example.com/4.jpg',
+    ]);
+  });
+
+  it.each([
+    [
+      { action: 'open_recommendation', recommendationId: 'post-1' },
+      { type: 'navigate', routeName: 'RecommendationDetail', params: { postId: 'post-1' } },
+    ],
+    [
+      { action: 'open_route', routeId: 'route-1' },
+      { type: 'navigate', routeName: 'RouteDetail', params: { routeId: 'route-1' } },
+    ],
+    [
+      {
+        action: 'open_comment',
+        parentType: 'recommendation',
+        parentId: 'post-2',
+        commentId: 'comment-1',
+      },
+      {
+        type: 'navigate',
+        routeName: 'RecommendationDetail',
+        params: { postId: 'post-2', openComments: true, commentId: 'comment-1' },
+      },
+    ],
+    [
+      { action: 'open_moderation_case', caseId: 'case-1' },
+      { type: 'navigate', routeName: 'AdminPanel', params: { tab: 'reports', caseId: 'case-1' } },
+    ],
+    [
+      { action: 'open_destination_review', countryId: 'israel', cityId: 'haifa' },
+      {
+        type: 'navigate',
+        routeName: 'AdminPanel',
+        params: { tab: 'destinations', countryId: 'israel', cityId: 'haifa' },
+      },
+    ],
+  ])('maps an allowlisted intent without executing persisted route names', (navigation, expected) => {
+    expect(buildNotificationRouteAction({ navigation, target: {} })).toEqual(expected);
+  });
+
+  it('keeps held, deleted, malformed, and unsupported trip targets contextual', () => {
+    expect(buildNotificationRouteAction({
+      type: 'system',
+      subtype: 'content_held',
+      target: { id: 'post' },
+      navigation: { action: 'open_recommendation', recommendationId: 'post' },
+    })).toMatchObject({ type: 'status', reason: 'held' });
+    expect(buildNotificationRouteAction({
+      type: 'system',
+      subtype: 'content_deleted',
+      target: { id: 'post' },
+      navigation: { action: 'open_recommendation', recommendationId: 'post' },
+    })).toMatchObject({ type: 'status', reason: 'deleted' });
+    expect(buildNotificationRouteAction({
+      type: 'system',
+      subtype: 'content_restored',
+      target: { id: 'post' },
+      navigation: { action: 'open_recommendation', recommendationId: 'post' },
+    })).toEqual({ type: 'navigate', routeName: 'RecommendationDetail', params: { postId: 'post' } });
+    expect(buildNotificationRouteAction({
+      target: { status: 'held' },
+      navigation: { action: 'open_recommendation', recommendationId: 'post' },
+    })).toMatchObject({ type: 'status', reason: 'held' });
+    expect(buildNotificationRouteAction({
+      target: {},
+      navigation: { action: 'open_recommendation' },
+    })).toMatchObject({ type: 'status', reason: 'deleted' });
+    expect(buildNotificationRouteAction({
+      target: {},
+      navigation: { action: 'open_trip', tripId: 'trip-1' },
+    })).toMatchObject({ type: 'status', reason: 'unsupported' });
+    expect(buildNotificationRouteAction({
+      target: {},
+      navigation: { action: 'SomePersistedRoute', url: 'https://evil.example' },
+    })).toMatchObject({ type: 'status' });
+  });
+
+  it('maps resolved target failures to contextual held and unavailable states', () => {
+    expect(buildStatusActionForError({ reason: 'held' }))
+      .toMatchObject({ type: 'status', reason: 'held' });
+    expect(buildStatusActionForError({ reason: 'permission-denied' }))
+      .toMatchObject({ type: 'status', reason: 'unavailable' });
+  });
+
+  it('uses channel-specific filters and unread matching', () => {
+    expect(getNotificationFilterOptions(NotificationChannel.ADMIN, 3).map(({ key }) => key))
+      .toEqual(['all', 'unread', 'urgent', 'reports', 'destinations']);
+    expect(notificationMatchesFilter({ isRead: false }, NotificationFilter.UNREAD)).toBe(true);
+    expect(notificationMatchesFilter({ type: 'like' }, NotificationFilter.LIKES)).toBe(true);
+    expect(notificationMatchesFilter({
+      type: 'moderation',
+      navigation: { action: 'open_destination_review' },
+    }, NotificationFilter.REPORTS)).toBe(false);
+  });
+});

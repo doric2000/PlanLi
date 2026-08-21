@@ -84,9 +84,17 @@ function destinationFromDetails(previous, details) {
   };
 }
 
-export default function AdminPanelScreen({ navigation }) {
+export default function AdminPanelScreen({ navigation, route }) {
   const { isAdmin, loading: adminLoading } = useAdminClaim();
-  const [tab, setTab] = useState('overview');
+  const focusCaseId = typeof route?.params?.caseId === 'string' ? route.params.caseId : '';
+  const focusCountryId = typeof route?.params?.countryId === 'string' ? route.params.countryId : '';
+  const focusCityId = typeof route?.params?.cityId === 'string' ? route.params.cityId : '';
+  const requestedTab = route?.params?.tab === 'reports' || focusCaseId
+    ? 'reports'
+    : route?.params?.tab === 'destinations' || (focusCountryId && focusCityId)
+      ? 'destinations'
+      : 'overview';
+  const [tab, setTab] = useState(requestedTab);
   const [dashboard, setDashboard] = useState(null);
   const [reportCases, setReportCases] = useState([]);
   const [heldCases, setHeldCases] = useState([]);
@@ -135,6 +143,12 @@ export default function AdminPanelScreen({ navigation }) {
   const loadTab = useCallback(async (targetTab, { append = false, searchQuery = activeQueryRef.current } = {}) => {
     if (!isAdmin) return;
     const requestId = ++requestIds.current[targetTab];
+    if (!append && (
+      (targetTab === 'reports' && focusCaseId)
+      || (targetTab === 'destinations' && focusCountryId && focusCityId)
+    )) {
+      setActionErrors((current) => ({ ...current, [`focus:${targetTab}`]: '' }));
+    }
     updateTabState(targetTab, append
       ? { loadingMore: true, error: '' }
       : { loading: true, loadingMore: false, error: '' });
@@ -150,8 +164,32 @@ export default function AdminPanelScreen({ navigation }) {
           setReportDetails({});
           setExpandedReports({});
         }
-        setReportCases((current) => append ? [...current, ...(result.items || [])] : (result.items || []));
+        setReportCases((current) => (
+          append ? [...current, ...(result.items || [])] : (result.items || [])
+        ));
         updateTabState(targetTab, { nextCursor: result.nextCursor || null });
+        let focusedCase = null;
+        if (focusCaseId && !append) {
+          try {
+            focusedCase = await getModerationCase(focusCaseId);
+          } catch (_focusError) {
+            if (requestIds.current[targetTab] === requestId) {
+              setActionErrors((current) => ({
+                ...current,
+                'focus:reports': 'הדיווח שנפתח מההתראה כבר אינו זמין. רשימת הדיווחים העדכנית עדיין מוצגת.',
+              }));
+              navigation.setParams?.({ caseId: undefined });
+            }
+            return;
+          }
+          if (requestIds.current[targetTab] !== requestId) return;
+          setReportDetails((current) => ({ ...current, [focusedCase.id]: focusedCase }));
+          setExpandedReports((current) => ({ ...current, [focusedCase.id]: true }));
+          setReportCases((current) => [
+            focusedCase,
+            ...current.filter((item) => item.id !== focusedCase.id),
+          ]);
+        }
       } else if (targetTab === 'content') {
         const result = await listHeldContent();
         if (requestIds.current[targetTab] !== requestId) return;
@@ -160,8 +198,41 @@ export default function AdminPanelScreen({ navigation }) {
       } else if (targetTab === 'destinations') {
         const result = await listDestinationReviews(cursor ? { cursor } : {});
         if (requestIds.current[targetTab] !== requestId) return;
-        setDestinations((current) => sortDestinationReviews(append ? [...current, ...(result.items || [])] : (result.items || [])));
+        setDestinations((current) => sortDestinationReviews(
+          append ? [...current, ...(result.items || [])] : (result.items || [])
+        ));
         updateTabState(targetTab, { nextCursor: result.nextCursor || null });
+        let focusedDestination = null;
+        if (focusCountryId && focusCityId && !append) {
+          let details;
+          try {
+            details = await getDestinationReview(focusCountryId, focusCityId);
+          } catch (_focusError) {
+            if (requestIds.current[targetTab] === requestId) {
+              setActionErrors((current) => ({
+                ...current,
+                'focus:destinations': 'בקרת העיר שנפתחה מההתראה כבר אינה זמינה. הרשימה העדכנית עדיין מוצגת.',
+              }));
+              navigation.setParams?.({ countryId: undefined, cityId: undefined });
+            }
+            return;
+          }
+          if (requestIds.current[targetTab] !== requestId) return;
+          focusedDestination = destinationFromDetails({
+            id: `notification_${focusCountryId}_${focusCityId}`,
+            countryId: focusCountryId,
+            cityId: focusCityId,
+            status: 'open',
+          }, details);
+        }
+        if (focusedDestination) {
+          setDestinations((current) => [
+            focusedDestination,
+            ...sortDestinationReviews(current.filter((item) => (
+              item.countryId !== focusCountryId || item.cityId !== focusCityId
+            ))),
+          ]);
+        }
       } else if (targetTab === 'users') {
         const payload = searchQuery ? { query: searchQuery } : (cursor ? { cursor } : {});
         const result = await listAdminUsers(payload);
@@ -179,9 +250,10 @@ export default function AdminPanelScreen({ navigation }) {
     } finally {
       if (requestIds.current[targetTab] === requestId) updateTabState(targetTab, append ? { loadingMore: false } : { loading: false });
     }
-  }, [isAdmin, updateTabState]);
+  }, [focusCaseId, focusCityId, focusCountryId, isAdmin, navigation, updateTabState]);
 
   useEffect(() => { loadTab(tab); }, [loadTab, tab]);
+  useEffect(() => { setTab(requestedTab); }, [requestedTab]);
 
   const setInlineError = (scope, message) => setActionErrors((current) => ({ ...current, [scope]: message }));
 
@@ -389,6 +461,11 @@ export default function AdminPanelScreen({ navigation }) {
           <CenteredRefreshState accessibilityLabel="מרענן את נתוני הניהול" testID={`admin-${tab}-loading`} />
         ) : <>
         {currentState.error ? <View style={styles.error} testID={`admin-${tab}-error`}><AppText style={styles.errorText}>{currentState.error}</AppText><Action label="ניסיון נוסף" testID={`admin-${tab}-retry`} onPress={() => loadTab(tab)} /></View> : null}
+        {actionErrors[`focus:${tab}`] ? (
+          <View style={styles.error} testID={`admin-${tab}-focus-unavailable`}>
+            <AppText style={styles.errorText}>{actionErrors[`focus:${tab}`]}</AppText>
+          </View>
+        ) : null}
 
         {tab === 'overview' && dashboard ? <View style={styles.metrics}>{[['דיווחים פתוחים', dashboard.openCases], ['דחופים', dashboard.urgentCases], ['תוכן בהמתנה', dashboard.heldContent], ['ערים ממתינות לאישור', dashboard.pendingDestinations]].map(([label, value]) => <View key={label} style={styles.metric}><AppText style={styles.metricValue}>{value ?? 0}</AppText><AppText style={styles.metricLabel}>{label}</AppText></View>)}</View> : null}
 
@@ -396,7 +473,12 @@ export default function AdminPanelScreen({ navigation }) {
           const available = item.targetPreview?.available !== false;
           const held = tab === 'content' || item.status === 'auto_held' || item.targetPreview?.status === 'moderation_hold';
           const details = reportDetails[item.id];
-          return <View key={item.id} style={styles.card} testID={`admin-case-${item.id}`}>
+          return <View
+            key={item.id}
+            style={[styles.card, item.id === focusCaseId && { borderWidth: 2, borderColor: colors.accentAction }]}
+            testID={`admin-case-${item.id}`}
+            accessibilityLabel={item.id === focusCaseId ? 'הדיווח שנפתח מההתראה' : undefined}
+          >
           <View style={styles.row}><AppText style={styles.cardTitle}>{TARGET_LABELS[item.target?.type] || 'תוכן'}</AppText><View style={styles.badge}><AppText style={styles.badgeText}>{item.priority === 'urgent' ? 'דחוף' : `${item.uniqueCount24h || 0} מדווחים`}</AppText></View></View>
           <ModerationTargetPreview preview={item.targetPreview} />
           <AppText style={styles.technicalId}>מזהה טכני: {item.target?.id}</AppText>
@@ -419,7 +501,17 @@ export default function AdminPanelScreen({ navigation }) {
           </View>
         </View>})}
 
-        {tab === 'destinations' && destinations.map((item) => <View key={item.id} style={styles.card} testID={`admin-destination-${item.id}`}>
+        {tab === 'destinations' && destinations.map((item) => <View
+          key={item.id}
+          style={[
+            styles.card,
+            item.countryId === focusCountryId && item.cityId === focusCityId
+              ? { borderWidth: 2, borderColor: colors.accentAction }
+              : null,
+          ]}
+          testID={`admin-destination-${item.id}`}
+          accessibilityLabel={item.countryId === focusCountryId && item.cityId === focusCityId ? 'בקרת העיר שנפתחה מההתראה' : undefined}
+        >
           <View style={styles.row}><View><AppText style={styles.cardTitle}>{item.names?.he || item.names?.en || item.cityId}</AppText><AppText style={styles.body}>{item.countryNames?.he || item.countryId} · {item.countryId}/{item.cityId}</AppText></View><View style={styles.badge}><AppText style={styles.badgeText}>{item.status === 'blocked' ? 'חסום' : item.status === 'inactive' ? 'לא פעיל' : item.status === 'approved' ? 'מאושר' : item.status === 'approved_with_warnings' ? 'מאושר עם אזהרות' : 'לבדיקה'}</AppText></View></View>
           {item.image?.urls?.feed ? <Image source={{ uri: item.image.urls.feed }} style={styles.destinationImage} resizeMode="cover" /> : null}
           <AppText style={styles.body}>המלצות: {item.recommendationCount || 0} · שדה תעופה: {item.closestAirport?.iataCode || 'חסר'}</AppText>

@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 
 const {
   qualityIssues,
+  holdDestinationContentDocuments,
   listDestinationReviews,
+  notifyAdminsOfDestination,
   destinationCoordinates,
   selectAirportByIataCode,
   syncDestinationAirport,
@@ -73,6 +75,99 @@ test('destinationCoordinates reads multiple coordinate shapes', () => {
     identity: { geometry: { location: { lat: 33.66, lng: -95.5555 } } },
   }), { lat: 33.66, lng: -95.5555 });
   assert.equal(destinationCoordinates({ place: {} }), null);
+});
+
+test('destination discovery retries use the same durable notification generation', async () => {
+  const calls = [];
+  const destination = {
+    notificationVersion: 1,
+    names: { he: '×—×™×¤×”' },
+    image: { urls: { thumb: 'https://example.com/haifa.jpg' } },
+  };
+  const fanout = async (input) => { calls.push(input); return { delivered: 1 }; };
+
+  await notifyAdminsOfDestination({
+    admin: {}, countryId: 'il', cityId: 'haifa', destination, fanout,
+  });
+  await notifyAdminsOfDestination({
+    admin: {}, countryId: 'il', cityId: 'haifa', destination, fanout,
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].notificationId, calls[1].notificationId);
+  assert.equal(calls[0].activityVersion, 1);
+  assert.equal(calls[1].activityVersion, 1);
+  assert.equal(calls[0].createOnly, true);
+});
+
+test('holding destination content writes the status, notification, and unread counter atomically', async () => {
+  const content = {
+    ownerId: 'owner-1',
+    status: 'active',
+    title: 'A recommendation',
+    media: [{ url: 'https://example.com/photo.jpg' }],
+  };
+  const contentRef = {
+    id: 'post-1',
+    path: 'recommendations/post-1',
+    parent: { id: 'recommendations' },
+  };
+  const entry = { id: 'post-1', ref: contentRef };
+  const writes = [];
+  const db = {
+    doc: (path) => ({ path }),
+    runTransaction: async (callback) => {
+      let writeStarted = false;
+      const transaction = {
+        get: async (ref) => {
+          assert.equal(writeStarted, false, 'all transaction reads must precede writes');
+          if (ref.path === contentRef.path) return { exists: true, data: () => ({ ...content }) };
+          if (ref.path === 'users/owner-1') return { exists: true, data: () => ({}) };
+          return { exists: false, data: () => undefined };
+        },
+        update: (ref, patch) => {
+          writeStarted = true;
+          Object.assign(content, patch);
+          writes.push({ operation: 'update', path: ref.path, patch });
+        },
+        set: (ref, value, options) => {
+          writeStarted = true;
+          writes.push({ operation: 'set', path: ref.path, value, options });
+        },
+      };
+      return callback(transaction);
+    },
+  };
+  const firestore = () => db;
+  firestore.FieldValue = {
+    increment: (value) => ({ increment: value }),
+    serverTimestamp: () => 'server-time',
+  };
+  const patch = { status: 'moderation_hold', updatedAt: 'server-time' };
+
+  await holdDestinationContentDocuments({
+    admin: { firestore },
+    documents: [entry],
+    patch,
+  });
+
+  assert.equal(content.status, 'moderation_hold');
+  assert.equal(writes.filter((write) => write.operation === 'update').length, 1);
+  const notificationWrite = writes.find((write) => write.path.startsWith('users/owner-1/notifications/'));
+  assert.equal(notificationWrite.value.schemaVersion, 2);
+  assert.equal(notificationWrite.value.subtype, 'content_held');
+  assert.equal(notificationWrite.value.target.id, 'post-1');
+  assert.deepEqual(notificationWrite.value.target.thumbUrls, ['https://example.com/photo.jpg']);
+  const stateWrite = writes.find((write) => write.path === 'users/owner-1/notificationState/state');
+  assert.deepEqual(stateWrite.value.personalUnread, { increment: 1 });
+
+  const writeCount = writes.length;
+  await holdDestinationContentDocuments({
+    admin: { firestore },
+    documents: [entry],
+    patch,
+  });
+  assert.equal(writes.length, writeCount, 'retry must skip content already placed on hold');
 });
 
 test('airport candidates are bounded, sorted and distance annotated', () => {

@@ -3,6 +3,25 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { applyAffinitySignalInTransaction } = require('./personalizationService');
 const { evaluateTextSafety } = require('./moderationService');
+const {
+  buildNotificationTarget,
+  clearNotifications,
+  commentNotificationId,
+  deleteNotification,
+  groupedLikeNotificationId,
+  markAllNotificationsRead,
+  navigationForTarget,
+  notificationCleanupJobRef,
+  notificationRecipientEligible,
+  prepareGroupedLikeActivity,
+  prepareGroupedLikeRemoval,
+  processNotificationCleanupJob,
+  sanitizeActorPreview,
+  setNotificationRead,
+  stageNotificationActivity,
+  stageNotificationCleanupJob,
+  stageNotificationDelete,
+} = require('./notificationService');
 const { destinationHebrewName } = require('./destinationLocalizationService');
 
 const TARGETS = Object.freeze({
@@ -228,21 +247,6 @@ async function setFavorite({ admin, auth, data }) {
   return { saved, favoriteKey: key };
 }
 
-function notificationId(kind, targetPath, actorId, suffix = '') {
-  return `${kind}_${favoriteKeyForPath(`${targetPath}|${actorId}|${suffix}`)}`;
-}
-
-function targetPreview(target, targetData) {
-  return {
-    type: target.type,
-    id: target.id,
-    path: target.path,
-    ...(target.countryId ? { countryId: target.countryId } : {}),
-    title: targetData.title || targetData.name || '',
-    thumbUrl: mediaThumb(targetData),
-  };
-}
-
 async function setReaction({ admin, auth, data }) {
   assertVerified(auth);
   const target = normalizeTarget(data?.target);
@@ -267,9 +271,31 @@ async function setReaction({ admin, auth, data }) {
     nextCount = currentCount;
     if (liked !== wasLiked) nextCount = Math.max(0, currentCount + (liked ? 1 : -1));
 
+    const ownerId = targetData.ownerId;
+    const shouldNotifyOwner = ownerId && ownerId !== auth.uid && liked !== wasLiked;
     const actor = liked && !wasLiked
       ? await loadAuthorProfile(transaction, db, auth.uid)
       : null;
+    const likeData = likeSnapshot.exists ? likeSnapshot.data() || {} : {};
+    const notificationId = liked
+      ? groupedLikeNotificationId(target.path)
+      : (typeof likeData.notificationId === 'string' ? likeData.notificationId : null);
+    const notificationGeneration = typeof likeData.notificationGeneration === 'string'
+      ? likeData.notificationGeneration
+      : null;
+    const notificationRef = shouldNotifyOwner && notificationId
+      ? db.doc(`users/${ownerId}/notifications/${notificationId}`)
+      : null;
+    const [notificationSnapshot, ownerSnapshot, blockedSnapshot] = notificationRef
+      ? await Promise.all([
+        transaction.get(notificationRef),
+        transaction.get(db.doc(`users/${ownerId}`)),
+        transaction.get(db.doc(`users/${ownerId}/blockedUsers/${auth.uid}`)),
+      ])
+      : [null, null, null];
+    const canNotifyOwner = notificationRef
+      && notificationRecipientEligible(ownerSnapshot)
+      && !blockedSnapshot?.exists;
 
     if (liked !== wasLiked) {
       await applyAffinitySignalInTransaction({
@@ -285,16 +311,63 @@ async function setReaction({ admin, auth, data }) {
     }
 
     if (liked && !wasLiked) {
+      let preparedNotification = null;
+      if (canNotifyOwner && notificationSnapshot) {
+        const actorPreview = sanitizeActorPreview({
+          id: auth.uid,
+          displayName: actor?.displayName,
+          photoURL: actor?.photoURL,
+        });
+        preparedNotification = prepareGroupedLikeActivity({
+          existingSnapshot: notificationSnapshot,
+          actorPreview,
+          target: buildNotificationTarget({ target, data: targetData }),
+          navigation: navigationForTarget(target),
+        });
+        stageNotificationActivity({
+          transaction,
+          admin,
+          db,
+          uid: ownerId,
+          notificationRef,
+          existingSnapshot: notificationSnapshot,
+          notification: preparedNotification.notification,
+        });
+      }
       transaction.create(likeRef, {
         userId: auth.uid,
         userPreview: {
           displayName: actor?.displayName || 'Traveler',
           photoURL: actor?.photoURL || null,
         },
+        ...(preparedNotification ? {
+          notificationId,
+          notificationGeneration: preparedNotification.generation,
+          notificationRecipientId: ownerId,
+        } : {}),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else if (!liked && wasLiked) {
       transaction.delete(likeRef);
+      if (notificationRef && notificationSnapshot && notificationGeneration) {
+        const transition = prepareGroupedLikeRemoval({
+          existingSnapshot: notificationSnapshot,
+          actorId: auth.uid,
+          generation: notificationGeneration,
+        });
+        if (transition.action === 'delete') {
+          stageNotificationDelete({
+            transaction,
+            admin,
+            db,
+            uid: ownerId,
+            notificationRef,
+            existingSnapshot: notificationSnapshot,
+          });
+        } else if (transition.action === 'update') {
+          transaction.update(notificationRef, transition.patch);
+        }
+      }
     }
     if (liked !== wasLiked) {
       transaction.update(targetRef, {
@@ -303,26 +376,6 @@ async function setReaction({ admin, auth, data }) {
       });
     }
 
-    const ownerId = targetData.ownerId;
-    if (ownerId && ownerId !== auth.uid && liked !== wasLiked) {
-      const id = notificationId('like', target.path, auth.uid);
-      const notificationRef = db.doc(`users/${ownerId}/notifications/${id}`);
-      if (liked) {
-        transaction.set(notificationRef, {
-          type: 'like',
-          actorId: auth.uid,
-          actorPreview: {
-            displayName: actor?.displayName || 'Traveler',
-            photoURL: actor?.photoURL || null,
-          },
-          target: targetPreview(target, targetData),
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else {
-        transaction.delete(notificationRef);
-      }
-    }
   });
 
   return { liked, likeCount: nextCount };
@@ -365,6 +418,24 @@ async function saveComment({ admin, auth, data }) {
       displayName: author.displayName || 'Traveler',
       photoURL: author.photoURL || null,
     };
+    const ownerId = targetData.ownerId;
+    const shouldNotifyOwner = !commentId && ownerId && ownerId !== auth.uid;
+    const notificationId = shouldNotifyOwner
+      ? commentNotificationId(target.path, commentRef.id)
+      : null;
+    const notificationRef = notificationId
+      ? db.doc(`users/${ownerId}/notifications/${notificationId}`)
+      : null;
+    const [notificationSnapshot, ownerSnapshot, blockedSnapshot] = notificationRef
+      ? await Promise.all([
+        transaction.get(notificationRef),
+        transaction.get(db.doc(`users/${ownerId}`)),
+        transaction.get(db.doc(`users/${ownerId}/blockedUsers/${auth.uid}`)),
+      ])
+      : [null, null, null];
+    const canNotifyOwner = notificationRef
+      && notificationRecipientEligible(ownerSnapshot)
+      && !blockedSnapshot?.exists;
     if (commentId) {
       assert(commentSnapshot.exists, 'not-found', 'Comment does not exist.');
       const previous = commentSnapshot.data();
@@ -392,16 +463,33 @@ async function saveComment({ admin, auth, data }) {
         'stats.commentCount': nextCount,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      if (targetData.ownerId && targetData.ownerId !== auth.uid) {
-        const id = notificationId('comment', target.path, auth.uid, commentRef.id);
-        transaction.set(db.doc(`users/${targetData.ownerId}/notifications/${id}`), {
+      if (canNotifyOwner && notificationSnapshot) {
+        const commentTarget = {
           type: 'comment',
-          actorId: auth.uid,
-          actorPreview: authorPreview,
-          target: targetPreview(target, targetData),
-          commentId: commentRef.id,
-          isRead: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          id: commentRef.id,
+          parentType: target.type,
+          parentId: target.id,
+        };
+        stageNotificationActivity({
+          transaction,
+          admin,
+          db,
+          uid: ownerId,
+          notificationRef,
+          existingSnapshot: notificationSnapshot,
+          notification: {
+            channel: 'personal',
+            type: 'comment',
+            subtype: 'new_comment',
+            priority: 'normal',
+            actorId: auth.uid,
+            actorPreview: { id: auth.uid, ...authorPreview },
+            actorPreviews: [{ id: auth.uid, ...authorPreview }],
+            count: 1,
+            commentExcerpt: text,
+            target: buildNotificationTarget({ target, data: targetData }),
+            navigation: navigationForTarget(commentTarget),
+          },
         });
       }
     }
@@ -424,22 +512,52 @@ async function deleteComment({ admin, auth, data }) {
   const db = admin.firestore();
   const targetRef = db.doc(target.path);
   const commentRef = targetRef.collection('comments').doc(commentId);
+  const cleanupTargetPath = `${target.path}/comments/${commentId}`;
+  const cleanupJobRef = notificationCleanupJobRef(db, cleanupTargetPath);
+  let cleanupVersion = null;
 
   await db.runTransaction(async (transaction) => {
-    const [targetSnapshot, commentSnapshot] = await Promise.all([
+    const [targetSnapshot, commentSnapshot, cleanupJobSnapshot] = await Promise.all([
       transaction.get(targetRef),
       transaction.get(commentRef),
+      transaction.get(cleanupJobRef),
     ]);
-    assert(commentSnapshot.exists, 'not-found', 'Comment does not exist.');
+    if (!commentSnapshot.exists) {
+      const cleanupJob = cleanupJobSnapshot.exists ? cleanupJobSnapshot.data() || {} : null;
+      assert(
+        cleanupJob?.authorizedUid === auth.uid || isAdmin,
+        'not-found',
+        'Comment does not exist.'
+      );
+      cleanupVersion = cleanupJob.version;
+      return;
+    }
     const comment = commentSnapshot.data();
     assert(
       comment.authorId === auth.uid || isAdmin,
       'permission-denied',
       'You do not own this comment.'
     );
+    const targetData = targetSnapshot.exists ? targetSnapshot.data() || {} : {};
+    const notificationId = targetData.ownerId && targetData.ownerId !== comment.authorId
+      ? commentNotificationId(target.path, commentId)
+      : null;
+    const notificationRef = notificationId
+      ? db.doc(`users/${targetData.ownerId}/notifications/${notificationId}`)
+      : null;
+    const notificationSnapshot = notificationRef
+      ? await transaction.get(notificationRef)
+      : null;
     transaction.delete(commentRef);
+    cleanupVersion = stageNotificationCleanupJob({
+      transaction,
+      admin,
+      jobRef: cleanupJobRef,
+      existingSnapshot: cleanupJobSnapshot,
+      targetPath: cleanupTargetPath,
+      authorizedUid: auth.uid,
+    });
     if (targetSnapshot.exists) {
-      const targetData = targetSnapshot.data();
       transaction.update(targetRef, {
         'stats.commentCount': Math.max(
           0,
@@ -447,55 +565,23 @@ async function deleteComment({ admin, auth, data }) {
         ),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      if (targetData.ownerId && targetData.ownerId !== comment.authorId) {
-        transaction.delete(
-          db.doc(
-            `users/${targetData.ownerId}/notifications/${notificationId(
-              'comment',
-              target.path,
-              comment.authorId,
-              commentId
-            )}`
-          )
-        );
+      if (notificationRef && notificationSnapshot) {
+        stageNotificationDelete({
+          transaction,
+          admin,
+          db,
+          uid: targetData.ownerId,
+          notificationRef,
+          existingSnapshot: notificationSnapshot,
+        });
       }
     }
   });
-  return { deleted: true };
-}
-
-async function setNotificationRead({ admin, auth, data }) {
-  assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
-  const notificationIdValue = cleanId(data?.notificationId, 'notificationId');
-  const read = data?.read;
-  assert(typeof read === 'boolean', 'invalid-argument', 'read must be boolean.');
-  await admin.firestore().doc(
-    `users/${auth.uid}/notifications/${notificationIdValue}`
-  ).update({ isRead: read, readAt: read ? admin.firestore.FieldValue.serverTimestamp() : null });
-  return { read };
-}
-
-async function clearNotifications({ admin, auth }) {
-  assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
-  const db = admin.firestore();
-  let deleted = 0;
-  while (true) {
-    const snapshot = await db.collection(`users/${auth.uid}/notifications`).limit(400).get();
-    if (snapshot.empty) break;
-    const batch = db.batch();
-    snapshot.docs.forEach((entry) => batch.delete(entry.ref));
-    await batch.commit();
-    deleted += snapshot.size;
-  }
-  return { deleted };
-}
-
-async function deleteNotification({ admin, auth, data }) {
-  assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
-  const notificationIdValue = cleanId(data?.notificationId, 'notificationId');
-  await admin.firestore().doc(
-    `users/${auth.uid}/notifications/${notificationIdValue}`
-  ).delete();
+  await processNotificationCleanupJob({
+    admin,
+    targetPath: cleanupTargetPath,
+    expectedVersion: cleanupVersion,
+  });
   return { deleted: true };
 }
 
@@ -618,6 +704,7 @@ module.exports = {
   favoriteKeyForPath,
   getReactionState,
   isVerified,
+  markAllNotificationsRead,
   normalizeTarget,
   refreshFavoriteOwnerPreviews,
   refreshFavoritesForTarget,

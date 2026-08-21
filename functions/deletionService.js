@@ -11,6 +11,11 @@ const {
 const { refreshRecommendationFallbackForDestination } = require('./destinationImageService');
 const { revokeAppleAuthorization } = require('./appleAuthService');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
+const {
+  detachGroupedLikeContribution,
+  purgeNotificationsForActor,
+  purgeNotificationsForTarget,
+} = require('./notificationService');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -133,7 +138,11 @@ async function deleteContentInternal({
 
   await Promise.all([
     deleteQueryInBatches(db, () => db.collectionGroup('favorites').where('target.path', '==', normalized.path)),
-    deleteQueryInBatches(db, () => db.collectionGroup('notifications').where('target.path', '==', normalized.path)),
+    purgeNotificationsForTarget({
+      admin,
+      targetPath: normalized.path,
+      includeDescendants: true,
+    }),
   ]);
 
   if (normalized.type === 'recommendation') {
@@ -208,10 +217,6 @@ async function removeAuthoredInteractions({ admin, uid }) {
   const db = admin.firestore();
   const comments = await db.collectionGroup('comments').where('authorId', '==', uid).get();
   const likes = await db.collectionGroup('likes').where('userId', '==', uid).get();
-  const actorNotifications = await db
-    .collectionGroup('notifications')
-    .where('actorId', '==', uid)
-    .get();
   const affectedParents = new Map();
   comments.docs.forEach((entry) => {
     const parent = entry.ref.parent.parent;
@@ -221,7 +226,18 @@ async function removeAuthoredInteractions({ admin, uid }) {
     const parent = entry.ref.parent.parent;
     if (parent) affectedParents.set(parent.path, parent);
   });
-  const refs = [...comments.docs, ...likes.docs, ...actorNotifications.docs].map((entry) => entry.ref);
+  for (let offset = 0; offset < comments.docs.length; offset += 10) {
+    await Promise.all(comments.docs.slice(offset, offset + 10).map((entry) => (
+      purgeNotificationsForTarget({ admin, targetPath: entry.ref.path })
+    )));
+  }
+  for (let offset = 0; offset < likes.docs.length; offset += 10) {
+    await Promise.all(likes.docs.slice(offset, offset + 10).map((entry) => (
+      detachGroupedLikeContribution({ admin, likeRef: entry.ref, deleteLike: true })
+    )));
+  }
+  const removedNotifications = await purgeNotificationsForActor({ admin, actorId: uid });
+  const refs = comments.docs.map((entry) => entry.ref);
   for (let offset = 0; offset < refs.length; offset += 400) {
     const batch = db.batch();
     refs.slice(offset, offset + 400).forEach((ref) => batch.delete(ref));
@@ -241,7 +257,15 @@ async function removeAuthoredInteractions({ admin, uid }) {
       });
     }
   }
-  return { comments: comments.size, likes: likes.size, notifications: actorNotifications.size };
+  return { comments: comments.size, likes: likes.size, notifications: removedNotifications };
+}
+
+async function deleteNotificationDevicesForUser({ admin, uid }) {
+  const db = admin.firestore();
+  return deleteQueryInBatches(
+    db,
+    () => db.collection('notificationDevices').where('uid', '==', uid)
+  );
 }
 
 async function requestAccountDeletion({
@@ -282,6 +306,8 @@ async function requestAccountDeletion({
 async function deleteAccountInternal({ admin, uid, mediaBucket }) {
   const db = admin.firestore();
   const jobRef = db.doc(`system/accountDeletion/jobs/${uid}`);
+  const userRef = db.doc(`users/${uid}`);
+  const adminRegistryRef = db.doc(`system/moderation/admins/${uid}`);
   const updateJob = (step, extra = {}) => jobRef.set({
     uid,
     status: 'running',
@@ -289,6 +315,29 @@ async function deleteAccountInternal({ admin, uid, mediaBucket }) {
     ...extra,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
+
+  await db.runTransaction(async (transaction) => {
+    const [userSnapshot, adminSnapshot] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(adminRegistryRef),
+    ]);
+    if (userSnapshot.exists) {
+      transaction.set(userRef, {
+        status: 'deleting',
+        moderation: {
+          ...(userSnapshot.data()?.moderation || {}),
+          status: 'deleting',
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    if (adminSnapshot.exists) {
+      transaction.set(adminRegistryRef, {
+        active: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  });
 
   await jobRef.set({
     uid,
@@ -304,25 +353,33 @@ async function deleteAccountInternal({ admin, uid, mediaBucket }) {
   await updateJob('public-profile', { interactions, purgedReports });
 
   const publicProfileRef = db.doc(`publicProfiles/${uid}`);
+  await purgeNotificationsForTarget({ admin, targetPath: publicProfileRef.path });
   await publicProfileRef.set({ status: 'deleting' }, { merge: true });
   await deleteDocumentStrict(publicProfileRef);
   await updateJob('private-data');
 
-  const userRef = db.doc(`users/${uid}`);
   if (typeof db.recursiveDelete === 'function') {
     await db.recursiveDelete(userRef);
   } else {
     await Promise.all([
       deleteQueryInBatches(db, () => userRef.collection('favorites')),
       deleteQueryInBatches(db, () => userRef.collection('notifications')),
+      deleteQueryInBatches(db, () => userRef.collection('notificationState')),
       deleteQueryInBatches(db, () => userRef.collection('blockedUsers')),
       deleteQueryInBatches(db, () => userRef.collection('serverState')),
     ]);
     await deleteDocumentStrict(userRef);
   }
   await Promise.all([
+    deleteQueryInBatches(
+      db,
+      () => db.collection('system/moderation/ownerNotifications').where('uid', '==', uid)
+    ),
+    deleteQueryInBatches(db, () => userRef.collection('notifications')),
+    deleteQueryInBatches(db, () => userRef.collection('notificationState')),
     deleteQueryInBatches(db, () => db.collection('system/media/assets').where('ownerUid', '==', uid)),
-    deleteDocumentStrict(db.doc(`system/moderation/admins/${uid}`)),
+    deleteNotificationDevicesForUser({ admin, uid }),
+    deleteDocumentStrict(adminRegistryRef),
   ]);
   if (mediaBucket) {
     const bucket = admin.storage().bucket(mediaBucket);
@@ -354,6 +411,7 @@ module.exports = {
   deleteContent,
   deleteContentInternal,
   deleteOwnedContent,
+  deleteNotificationDevicesForUser,
   deleteQueryInBatches,
   deleteDocumentStrict,
   removeAuthoredInteractions,

@@ -46,6 +46,48 @@ EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=planli-f0b12-media-eu
 EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET=planli-f0b12-media-eu
 ```
 
+### Notification Center and native push rollout
+
+The source tree contains the `1.1.0` Notification Center and the
+`expo-notifications` native plugin. This does not change the live `1.0.0`
+TestFlight binary or deployed Firebase backend. The Firestore inbox remains the
+authoritative record on iOS, Android and Web; Expo push is opt-in and is not used
+for browser notifications. Expo Go cannot exercise remote push, and the plugin
+requires a newly authorized EAS Development Build before device testing.
+
+Before an authorized push rollout:
+
+1. Configure APNs and FCM credentials for the existing EAS project, enable Expo
+   enhanced push security, and store its access token without committing it:
+
+```powershell
+firebase functions:secrets:set EXPO_PUSH_ACCESS_TOKEN --project planli-f0b12
+```
+
+2. Deploy the reviewed notification indexes, Rules and Functions in that order.
+   Do not distribute the `1.1.0` binary until all three deployed boundaries are
+   compatible with its `appVersion` runtime.
+3. Choose and record a UTC cutoff after the new producers are live. The cleanup
+   is resumable and dry-run-only unless both apply flags match exactly:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm.cmd run cleanup-legacy-notifications -- --cutoff=REPLACE_WITH_REVIEWED_UTC_CUTOFF
+npm.cmd run cleanup-legacy-notifications -- --cutoff=REPLACE_WITH_REVIEWED_UTC_CUTOFF --apply --confirm-cutoff=REPLACE_WITH_REVIEWED_UTC_CUTOFF
+```
+
+The apply command performs production deletions and therefore requires separate
+migration authorization after its dry-run has been reviewed. It deletes only
+inbox rows at or before the immutable cutoff, preserves later schema-v2 events,
+and rebuilds per-channel unread counters. Never run it as part of an ordinary
+Functions or client deployment.
+
+4. Build and install an authorized `1.1.0` development binary on physical iOS
+   and Android devices. Verify denied, provisional and authorized permissions;
+   foreground/background/terminated delivery; cold-start taps; token rollover;
+   missing targets; and receipt processing. An Expo ticket is only acceptance by
+   Expo—the scheduled receipt worker is the delivery diagnostic boundary.
+
 The on-demand iOS simulator smoke test is defined in
 `client/.eas/workflows/e2e-test-ios.yml`. It runs only when a pull request is
 labeled `ios-e2e`; it is not a per-commit gate and must not be triggered without

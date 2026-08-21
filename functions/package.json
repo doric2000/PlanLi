@@ -29,6 +29,7 @@
     "audit-live": "node scripts/auditLiveState.js",
     "configure-function-iam": "node scripts/configureFunctionServiceAccounts.js",
     "cleanup-orphan-favorites": "node scripts/cleanupOrphanFavorites.js",
+    "cleanup-legacy-notifications": "node scripts/cleanupLegacyNotifications.js",
     "backfill-favorite-previews": "node scripts/backfillFavoritePreviews.js",
     "backfill-map-locations": "node scripts/backfillRecommendationMapLocations.js",
     "backfill-destination-images": "node scripts/backfillDestinationImages.js",
@@ -49,6 +50,7 @@
   "dependencies": {
     "@google-cloud/storage": "7.21.0",
     "countries-list": "3.4.1",
+    "expo-server-sdk": "7.1.0",
     "firebase-admin": "13.10.0",
     "firebase-functions": "7.3.2",
     "geofire-common": "^6.0.0",

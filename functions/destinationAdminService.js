@@ -27,6 +27,15 @@ const {
   getDestinationRenameJobRef,
   startDestinationRename,
 } = require('./destinationRenameService');
+const {
+  buildNotificationTarget,
+  destinationNotificationId,
+  fanoutAdminNotification,
+  navigationForTarget,
+  notificationRecipientEligible,
+  stageNotificationActivity,
+  systemNotificationId,
+} = require('./notificationService');
 
 const PAGE_SIZE = 30;
 const IMAGE_VARIANTS = ['large', 'feed', 'thumb'];
@@ -248,6 +257,7 @@ async function evaluateAndPersistDestination({ admin, countryId, cityId, created
     closestAirport: bundle.city.travelFacts?.closestAirport || null,
     recommendationCount: Math.max(0, Number(bundle.city.stats?.recommendationCount || 0)),
     job: bundle.job,
+    notificationVersion: Math.max(1, Math.trunc(Number(bundle.review.notificationVersion) || 1)),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     ...(created ? { discoveredAt: admin.firestore.FieldValue.serverTimestamp() } : {}),
   };
@@ -255,27 +265,43 @@ async function evaluateAndPersistDestination({ admin, countryId, cityId, created
   return serialize({ id: reviewId(countryId, cityId), ...payload });
 }
 
-async function notifyAdminsOfDestination({ admin, countryId, cityId }) {
-  const admins = await admin.firestore().collection('system/moderation/admins').where('active', '==', true).limit(50).get();
-  if (admins.empty) return;
-  const batch = admin.firestore().batch();
-  admins.docs.forEach((entry) => {
-    const ref = admin.firestore().doc(`users/${entry.id}/notifications/destination_${reviewId(countryId, cityId)}`);
-    batch.set(ref, {
+async function notifyAdminsOfDestination({
+  admin,
+  countryId,
+  cityId,
+  destination = null,
+  fanout = fanoutAdminNotification,
+}) {
+  const target = {
+    type: 'destination',
+    countryId,
+    cityId,
+    title: destination?.names?.he || destination?.names?.en || '',
+    thumbUrls: [
+      destination?.image?.urls?.thumb,
+      destination?.image?.urls?.feed,
+    ].filter(Boolean),
+  };
+  return fanout({
+    admin,
+    notificationId: destinationNotificationId(countryId, cityId),
+    createOnly: true,
+    activityVersion: Math.max(1, Math.trunc(Number(destination?.notificationVersion) || 1)),
+    notification: {
+      channel: 'admin',
       type: 'moderation',
+      subtype: 'destination_review_discovered',
       priority: 'normal',
-      target: { type: 'destination', countryId, cityId },
-      message: 'נוספה עיר חדשה שממתינה לבקרת איכות.',
-      isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+      count: 1,
+      target: buildNotificationTarget({ target, data: destination || {} }),
+      navigation: navigationForTarget(target),
+    },
   });
-  await batch.commit();
 }
 
 async function onDestinationCreated({ admin, countryId, cityId }) {
   const initial = await evaluateAndPersistDestination({ admin, countryId, cityId, created: true });
-  await notifyAdminsOfDestination({ admin, countryId, cityId });
+  await notifyAdminsOfDestination({ admin, countryId, cityId, destination: initial });
   await syncDestinationAirport({
     admin,
     countryId,
@@ -648,11 +674,59 @@ async function setDestinationAirport({ admin, auth, data }) {
   return { success: true };
 }
 
-async function updateDocumentsInBatches(admin, documents, patch) {
-  for (let offset = 0; offset < documents.length; offset += 400) {
-    const batch = admin.firestore().batch();
-    documents.slice(offset, offset + 400).forEach((document) => batch.update(document.ref, patch));
-    await batch.commit();
+function destinationContentType(document) {
+  const collection = document?.ref?.parent?.id;
+  if (collection === 'recommendations') return 'recommendation';
+  if (collection === 'routes') return 'route';
+  if (collection === 'trips') return 'trip';
+  return null;
+}
+
+async function holdDestinationContentDocuments({ admin, documents, patch }) {
+  const db = admin.firestore();
+  for (let offset = 0; offset < documents.length; offset += 10) {
+    await Promise.all(documents.slice(offset, offset + 10).map(async (entry) => {
+      return db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(entry.ref);
+        if (!currentSnapshot.exists || currentSnapshot.data()?.status !== 'active') return false;
+
+        const content = currentSnapshot.data() || {};
+        const type = destinationContentType(entry);
+        const ownerId = typeof content.ownerId === 'string' ? content.ownerId.trim() : '';
+        const target = type ? { type, id: entry.id } : null;
+        const notificationRef = ownerId && target
+          ? db.doc(`users/${ownerId}/notifications/${systemNotificationId('content_held', entry.ref.path)}`)
+          : null;
+        const [existingNotification, ownerSnapshot] = notificationRef
+          ? await Promise.all([
+            transaction.get(notificationRef),
+            transaction.get(db.doc(`users/${ownerId}`)),
+          ])
+          : [null, null];
+
+        transaction.update(entry.ref, patch);
+        if (notificationRef && notificationRecipientEligible(ownerSnapshot)) {
+          stageNotificationActivity({
+            transaction,
+            admin,
+            db,
+            uid: ownerId,
+            notificationRef,
+            existingSnapshot: existingNotification,
+            notification: {
+              channel: 'personal',
+              type: 'system',
+              subtype: 'content_held',
+              priority: 'normal',
+              count: 1,
+              target: buildNotificationTarget({ target, data: content }),
+              navigation: navigationForTarget(target),
+            },
+          });
+        }
+        return true;
+      });
+    }));
   }
 }
 
@@ -676,7 +750,8 @@ async function deactivateDestination({ admin, auth, data }) {
     moderation: { holdReason: 'destination_inactive', destination: { countryId, cityId }, reason, actorUid: auth.uid },
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
-  await updateDocumentsInBatches(admin, [...matchingRecommendations, ...matchingTrips, ...activeRoutes], patch);
+  const heldDocuments = [...matchingRecommendations, ...matchingTrips, ...activeRoutes];
+  await holdDestinationContentDocuments({ admin, documents: heldDocuments, patch });
   for (let offset = 0; offset < activeRoutes.length; offset += 400) {
     const batch = db.batch();
     activeRoutes.slice(offset, offset + 400).forEach((route) => {
@@ -704,6 +779,7 @@ module.exports = {
   getDestinationImageCandidates,
   getDestinationRenameJob,
   getDestinationReview,
+  holdDestinationContentDocuments,
   listDestinationReviews,
   notifyAdminsOfDestination,
   onDestinationCreated,

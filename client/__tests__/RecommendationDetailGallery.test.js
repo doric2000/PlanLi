@@ -47,7 +47,15 @@ jest.mock('../src/components/MediaGalleryModal', () => {
 jest.mock('../src/features/community/components/RecommendationDetailContent', () => () => null);
 jest.mock('../src/components/RecommendationActionBar', () => ({ RecommendationActionBar: () => null }));
 jest.mock('../src/components/LikesModal', () => () => null);
-jest.mock('../src/components/CommentsModal', () => ({ CommentsModal: () => null }));
+jest.mock('../src/components/CommentsModal', () => {
+  const ReactModule = require('react');
+  const { Text } = require('react-native');
+  return {
+    CommentsModal: ({ visible, initialCommentId }) => visible
+      ? ReactModule.createElement(Text, { testID: 'mock-comments-focus' }, initialCommentId || 'comments')
+      : null,
+  };
+});
 
 describe('RecommendationDetailScreen gallery', () => {
   it('opens the shared full-screen gallery at the tapped hero image', () => {
@@ -69,5 +77,17 @@ describe('RecommendationDetailScreen gallery', () => {
 
     fireEvent.press(screen.getByTestId('mock-recommendation-photo'));
     expect(screen.getByTestId('mock-gallery').props.children).toBe('1:2');
+  });
+
+  it('opens and focuses the exact comment requested by a notification', () => {
+    const item = { id: 'rec-1', ownerId: 'owner-1', title: 'המלצה' };
+    const screen = render(
+      <RecommendationDetailScreen
+        route={{ params: { item, openComments: true, commentId: 'comment-7' } }}
+        navigation={{ navigate: jest.fn() }}
+      />
+    );
+
+    expect(screen.getByTestId('mock-comments-focus').props.children).toBe('comment-7');
   });
 });

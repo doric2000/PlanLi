@@ -1,180 +1,479 @@
-/**
- * NotificationModel.js
- * 
- * Defines the data structure and schema for notifications in the Firestore database.
- * Follows the existing application patterns for data modeling.
- * 
- * Firestore Path: users/{userId}/notifications/{notificationId}
- */
+export const NOTIFICATION_SCHEMA_VERSION = 2;
 
-/**
- * Notification Types
- */
-export const NotificationType = {
+export const NotificationChannel = Object.freeze({
+  PERSONAL: 'personal',
+  ADMIN: 'admin',
+});
+
+export const NotificationType = Object.freeze({
   LIKE: 'like',
   COMMENT: 'comment',
+  SYSTEM: 'system',
   MODERATION: 'moderation',
+});
+
+export const NotificationPriority = Object.freeze({
+  NORMAL: 'normal',
+  URGENT: 'urgent',
+});
+
+export const NotificationNavigationAction = Object.freeze({
+  RECOMMENDATION: 'open_recommendation',
+  ROUTE: 'open_route',
+  TRIP: 'open_trip',
+  COMMENT: 'open_comment',
+  PROFILE: 'open_profile',
+  MODERATION_CASE: 'open_moderation_case',
+  DESTINATION_REVIEW: 'open_destination_review',
+});
+
+export const NotificationFilter = Object.freeze({
+  ALL: 'all',
+  UNREAD: 'unread',
+  LIKES: 'likes',
+  COMMENTS: 'comments',
+  SYSTEM: 'system',
+  URGENT: 'urgent',
+  REPORTS: 'reports',
+  DESTINATIONS: 'destinations',
+});
+
+const FILTERS_BY_CHANNEL = Object.freeze({
+  [NotificationChannel.PERSONAL]: Object.freeze([
+    NotificationFilter.ALL,
+    NotificationFilter.UNREAD,
+    NotificationFilter.LIKES,
+    NotificationFilter.COMMENTS,
+    NotificationFilter.SYSTEM,
+  ]),
+  [NotificationChannel.ADMIN]: Object.freeze([
+    NotificationFilter.ALL,
+    NotificationFilter.UNREAD,
+    NotificationFilter.URGENT,
+    NotificationFilter.REPORTS,
+    NotificationFilter.DESTINATIONS,
+  ]),
+});
+
+const ALLOWED_TYPES = new Set(Object.values(NotificationType));
+const ALLOWED_CHANNELS = new Set(Object.values(NotificationChannel));
+const ALLOWED_ACTIONS = new Set(Object.values(NotificationNavigationAction));
+const CONTENT_NAVIGATION_ACTIONS = new Set([
+  NotificationNavigationAction.RECOMMENDATION,
+  NotificationNavigationAction.ROUTE,
+  NotificationNavigationAction.TRIP,
+  NotificationNavigationAction.COMMENT,
+]);
+const UNAVAILABLE_STATUSES = new Set([
+  'deleted', 'held', 'inactive', 'moderation_hold', 'unavailable',
+]);
+const HELD_STATUSES = new Set(['held', 'moderation_hold']);
+
+const cleanText = (value, maximum = 180) => (
+  typeof value === 'string' ? value.replace(/\s+/gu, ' ').trim().slice(0, maximum) : ''
+);
+
+const cleanId = (value) => {
+  const result = cleanText(value, 180);
+  return result && !result.includes('/') ? result : '';
 };
 
-/**
- * Post Types (where the notification originated from)
- */
-export const PostType = {
-  RECOMMENDATION: 'recommendation',
-  ROUTE: 'route',
+const cleanUrl = (value) => {
+  const result = cleanText(value, 2000);
+  return /^(https?:|file:|blob:|data:image\/|content:|ph:|assets-library:)/iu.test(result)
+    ? result
+    : '';
 };
 
-/**
- * Notification Schema
- * 
- * @typedef {Object} Notification
- * @property {string} id - Unique notification identifier (Firestore document ID)
- * @property {string} userId - ID of the user receiving the notification
- * @property {string} type - Type of notification (like or comment) - see NotificationType
- * @property {string} postType - Type of post (recommendation or route) - see PostType
- * @property {string} postId - ID of the post that was liked/commented
- * @property {string} postTitle - Title of the post for display
- * @property {string} actorId - ID of the user who triggered the notification (last actor)
- * @property {string} actorName - Display name of the last actor
- * @property {string|null} actorAvatar - Avatar URL of the last actor (nullable)
- * @property {number} count - Total number of likes/comments that triggered this notification
- * @property {number} batchThreshold - The threshold at which this notification was sent (1, 10, 20, 100, etc.)
- * @property {boolean} isRead - Whether the notification has been read by the user
- * @property {firebase.firestore.Timestamp} timestamp - When the notification was created
- */
+const cleanCount = (value) => Math.min(999999, Math.max(1, Number(value) || 1));
 
-/**
- * Creates a new notification object with the required fields
- * 
- * @param {Object} params - Notification parameters
- * @param {string} params.userId - ID of the user receiving the notification
- * @param {string} params.type - Notification type (like/comment)
- * @param {string} params.postType - Post type (recommendation/route)
- * @param {string} params.postId - ID of the post
- * @param {string} params.postTitle - Title of the post
- * @param {string} params.actorId - ID of the actor
- * @param {string} params.actorName - Name of the actor
- * @param {string|null} params.actorAvatar - Avatar URL of the actor
- * @param {number} params.count - Count of interactions
- * @param {number} params.batchThreshold - Batch threshold for this notification
- * @returns {Object} Notification object ready for Firestore
- */
-export const createNotification = ({
-  userId,
-  type,
-  postType,
-  postId,
-  postTitle,
-  actorId,
-  actorName,
-  actorAvatar,
-  count,
-  batchThreshold,
-}) => {
+export function timestampToDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'number') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const seconds = Number(value.seconds ?? value._seconds);
+  if (Number.isFinite(seconds)) {
+    const date = new Date(seconds * 1000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeActor(value) {
+  if (!value || typeof value !== 'object') return null;
+  const id = cleanId(value.id || value.uid);
+  const displayName = cleanText(value.displayName || value.name, 80) || 'מטייל/ת';
+  const photoURL = cleanUrl(value.photoURL || value.avatarURL) || null;
+  return { ...(id ? { id } : {}), displayName, photoURL };
+}
+
+function normalizeTarget(value = {}) {
+  const type = cleanText(value.type, 40).toLowerCase();
+  const id = cleanId(value.id);
+  const parentType = cleanText(value.parentType, 40).toLowerCase();
+  const parentId = cleanId(value.parentId);
+  const countryId = cleanId(value.countryId);
+  const cityId = cleanId(value.cityId || (type === 'destination' ? value.id : ''));
+  const status = cleanText(value.status || value.availability, 40).toLowerCase();
+  const rawThumbs = Array.isArray(value.thumbUrls)
+    ? value.thumbUrls
+    : [value.thumbUrl].filter(Boolean);
+  const thumbUrls = Array.from(new Set(rawThumbs.map(cleanUrl).filter(Boolean))).slice(0, 4);
   return {
-    userId,
-    type,
-    postType,
-    postId,
-    postTitle,
-    actorId,
-    actorName,
-    actorAvatar: actorAvatar || null,
-    count,
-    batchThreshold,
-    isRead: false,
-    timestamp: new Date(),
+    ...(type ? { type } : {}),
+    ...(id ? { id } : {}),
+    ...(parentType ? { parentType } : {}),
+    ...(parentId ? { parentId } : {}),
+    ...(countryId ? { countryId } : {}),
+    ...(cityId ? { cityId } : {}),
+    ...(status ? { status } : {}),
+    title: cleanText(value.title, 140),
+    thumbUrls,
   };
-};
+}
+
+function normalizeNavigation(value = {}) {
+  const action = cleanText(value.action, 60).toLowerCase();
+  if (!ALLOWED_ACTIONS.has(action)) return action ? { action } : null;
+  const result = { action };
+  [
+    'recommendationId', 'routeId', 'tripId', 'profileId', 'uid', 'caseId',
+    'commentId', 'postId', 'parentId', 'countryId', 'cityId', 'targetId',
+  ].forEach((key) => {
+    const normalized = cleanId(value[key]);
+    if (normalized) result[key] = normalized;
+  });
+  const parentType = cleanText(value.parentType || value.postType, 40).toLowerCase();
+  if (parentType) result.parentType = parentType;
+  return result;
+}
 
 /**
- * Validates a notification object
- * 
- * @param {Object} notification - Notification object to validate
- * @returns {boolean} True if valid, false otherwise
+ * Converts canonical Firestore data into a small, render-safe notification.
+ * Functions remain authoritative for the persisted schema.
  */
-export const isValidNotification = (notification) => {
-  if (!notification) return false;
+export function normalizeNotification(id, value = {}) {
+  const type = ALLOWED_TYPES.has(value.type) ? value.type : NotificationType.SYSTEM;
+  const derivedChannel = type === NotificationType.MODERATION
+    ? NotificationChannel.ADMIN
+    : NotificationChannel.PERSONAL;
+  const channel = ALLOWED_CHANNELS.has(value.channel) ? value.channel : derivedChannel;
+  const directActor = normalizeActor(value.actorPreview);
+  const actorPreviews = (Array.isArray(value.actorPreviews) ? value.actorPreviews : [])
+    .map(normalizeActor)
+    .filter(Boolean)
+    .slice(0, 4);
+  if (!actorPreviews.length && directActor) actorPreviews.push(directActor);
 
-  const requiredFields = [
-    'userId',
-    'type',
-    'postType',
-    'postId',
-    'postTitle',
-    'actorId',
-    'actorName',
-    'count',
-    'batchThreshold',
-    'timestamp',
+  return {
+    id: cleanId(id),
+    schemaVersion: Number(value.schemaVersion) || 1,
+    channel,
+    type,
+    subtype: cleanText(value.subtype, 60).toLowerCase(),
+    priority: value.priority === NotificationPriority.URGENT
+      ? NotificationPriority.URGENT
+      : NotificationPriority.NORMAL,
+    isRead: value.isRead === true,
+    readAt: timestampToDate(value.readAt),
+    createdAt: timestampToDate(value.createdAt || value.timestamp),
+    count: cleanCount(value.count),
+    actorId: cleanId(value.actorId || directActor?.id),
+    actorPreview: directActor || actorPreviews[0] || null,
+    actorPreviews,
+    commentExcerpt: cleanText(value.commentExcerpt, 160),
+    title: cleanText(value.title, 140),
+    message: cleanText(value.message, 240),
+    target: normalizeTarget(value.target),
+    navigation: normalizeNavigation(value.navigation),
+  };
+}
+
+export function getNotificationFilterOptions(channel, unreadCount = 0) {
+  if (channel === NotificationChannel.ADMIN) {
+    return [
+      { key: NotificationFilter.ALL, label: 'הכול' },
+      { key: NotificationFilter.UNREAD, label: 'לא נקראו', count: unreadCount },
+      { key: NotificationFilter.URGENT, label: 'דחוף' },
+      { key: NotificationFilter.REPORTS, label: 'דיווחים' },
+      { key: NotificationFilter.DESTINATIONS, label: 'בקרת ערים' },
+    ];
+  }
+  return [
+    { key: NotificationFilter.ALL, label: 'הכול' },
+    { key: NotificationFilter.UNREAD, label: 'לא נקראו', count: unreadCount },
+    { key: NotificationFilter.LIKES, label: 'לייקים' },
+    { key: NotificationFilter.COMMENTS, label: 'תגובות' },
+    { key: NotificationFilter.SYSTEM, label: 'מערכת' },
   ];
+}
 
-  for (const field of requiredFields) {
-    if (notification[field] === undefined || notification[field] === null) {
-      if (field !== 'actorAvatar') {
-        // actorAvatar can be null
-        return false;
-      }
-    }
+export function getNotificationFiltersForChannel(channel) {
+  return FILTERS_BY_CHANNEL[channel] || FILTERS_BY_CHANNEL[NotificationChannel.PERSONAL];
+}
+
+export function normalizeNotificationFilter(channel, filter) {
+  return getNotificationFiltersForChannel(channel).includes(filter)
+    ? filter
+    : NotificationFilter.ALL;
+}
+
+export function notificationMatchesFilter(notification, filter) {
+  if (!notification || filter === NotificationFilter.ALL) return true;
+  if (filter === NotificationFilter.UNREAD) return !notification.isRead;
+  if (filter === NotificationFilter.LIKES) return notification.type === NotificationType.LIKE;
+  if (filter === NotificationFilter.COMMENTS) return notification.type === NotificationType.COMMENT;
+  if (filter === NotificationFilter.SYSTEM) return notification.type === NotificationType.SYSTEM;
+  if (filter === NotificationFilter.URGENT) return notification.priority === NotificationPriority.URGENT;
+  if (filter === NotificationFilter.DESTINATIONS) {
+    return notification.navigation?.action === NotificationNavigationAction.DESTINATION_REVIEW
+      || notification.subtype === 'destination_review'
+      || notification.target?.type === 'destination';
   }
-
-  // Validate enum values
-  if (!Object.values(NotificationType).includes(notification.type)) {
-    return false;
+  if (filter === NotificationFilter.REPORTS) {
+    return notification.type === NotificationType.MODERATION
+      && !notificationMatchesFilter(notification, NotificationFilter.DESTINATIONS);
   }
-
-  if (!Object.values(PostType).includes(notification.postType)) {
-    return false;
-  }
-
-  // Validate types
-  if (typeof notification.count !== 'number' || notification.count < 1) {
-    return false;
-  }
-
-  if (typeof notification.batchThreshold !== 'number' || notification.batchThreshold < 1) {
-    return false;
-  }
-
   return true;
-};
+}
 
-/**
- * Formats a notification for display
- * 
- * @param {Object} notification - Notification object
- * @returns {string} Formatted notification message
- */
-export const formatNotificationMessage = (notification) => {
-  const { type, actorName, count, postTitle } = notification;
+function targetLabel(notification) {
+  const title = notification?.target?.title;
+  if (title) return `“${title}”`;
+  if (notification?.target?.type === 'route') return 'המסלול שלך';
+  return 'התוכן שלך';
+}
 
-  if (type === NotificationType.MODERATION) {
-    if (typeof notification.message === 'string' && notification.message.trim()) {
-      return notification.message.trim().slice(0, 180);
+export function formatNotificationMessage(notification) {
+  if (!notification) return 'עדכון חדש';
+  if (notification.message) return notification.message;
+  const actor = notification.actorPreview?.displayName || notification.actorPreviews?.[0]?.displayName;
+  const count = cleanCount(notification.count);
+  if (notification.type === NotificationType.LIKE) {
+    if (count > 1) return `${count} לייקים חדשים על ${targetLabel(notification)}`;
+    return actor
+      ? `לייק חדש מ${actor} על ${targetLabel(notification)}`
+      : `לייק חדש על ${targetLabel(notification)}`;
+  }
+  if (notification.type === NotificationType.COMMENT) {
+    if (count > 1) return `${count} תגובות חדשות על ${targetLabel(notification)}`;
+    return actor
+      ? `תגובה חדשה מ${actor} על ${targetLabel(notification)}`
+      : `תגובה חדשה על ${targetLabel(notification)}`;
+  }
+  if (notification.type === NotificationType.MODERATION) {
+    if (notification.navigation?.action === NotificationNavigationAction.DESTINATION_REVIEW
+      || notification.target?.type === 'destination') {
+      return 'יעד חדש ממתין לבקרת איכות';
     }
-    return notification.priority === 'urgent'
+    return notification.priority === NotificationPriority.URGENT
       ? 'דיווח בטיחות דחוף ממתין לבדיקה'
       : 'דיווח קהילה חדש ממתין לבדיקה';
   }
-
-  if (count === 1) {
-    if (type === NotificationType.LIKE) {
-      return `${actorName} עשה לייק לפוסט שלך`;
-    } else if (type === NotificationType.COMMENT) {
-      return `${actorName} הגיב על הפוסט שלך`;
+  if (notification.type === NotificationType.SYSTEM) {
+    if (notification.subtype === 'content_held') {
+      return 'התוכן שלך הועבר זמנית לבדיקה';
     }
-  } else {
-    const others = count - 1;
-    if (type === NotificationType.LIKE) {
-      return others === 1
-        ? `${actorName} ועוד אדם אחד עשו לייק לפוסט שלך`
-        : `${actorName} ועוד ${others} אנשים עשו לייק לפוסט שלך`;
-    } else if (type === NotificationType.COMMENT) {
-      return others === 1
-        ? `${actorName} ועוד אדם אחד הגיבו על הפוסט שלך`
-        : `${actorName} ועוד ${others} אנשים הגיבו על הפוסט שלך`;
+    if (notification.subtype === 'content_restored') {
+      return 'התוכן שלך חזר להיות זמין';
+    }
+    if (notification.subtype === 'content_deleted') {
+      return 'התוכן שלך הוסר';
     }
   }
+  return notification.title || 'עדכון חדש מ־PlanLi';
+}
 
-  return 'התראה חדשה';
-};
+export function getNotificationPresentation(notification) {
+  const message = formatNotificationMessage(notification);
+  if (notification.type === NotificationType.LIKE) {
+    return { message, detail: '', icon: 'heart', tone: 'like', label: 'לייק' };
+  }
+  if (notification.type === NotificationType.COMMENT) {
+    return {
+      message,
+      detail: notification.commentExcerpt,
+      icon: 'chatbubble',
+      tone: 'comment',
+      label: 'תגובה',
+    };
+  }
+  if (notification.type === NotificationType.MODERATION) {
+    const destination = notification.navigation?.action === NotificationNavigationAction.DESTINATION_REVIEW
+      || notification.target?.type === 'destination';
+    return {
+      message,
+      detail: notification.target?.title,
+      icon: destination ? 'location' : 'shield-checkmark',
+      tone: notification.priority === NotificationPriority.URGENT ? 'urgent' : 'admin',
+      label: destination ? 'בקרת יעד' : 'ניהול',
+    };
+  }
+  return {
+    message,
+    detail: notification.target?.title,
+    icon: 'information-circle',
+    tone: 'system',
+    label: 'מערכת',
+  };
+}
+
+function statusAction(reason) {
+  if (reason === 'retryable') {
+    return {
+      type: 'status',
+      reason,
+      retryable: true,
+      title: 'לא הצלחנו לבדוק את התוכן',
+      message: 'בדקו את החיבור לרשת ונסו לפתוח את ההתראה שוב.',
+    };
+  }
+  if (reason === 'held') {
+    return {
+      type: 'status',
+      reason,
+      title: 'התוכן נמצא בבדיקה',
+      message: 'התוכן הושהה זמנית ולכן אי אפשר לפתוח אותו כרגע.',
+    };
+  }
+  if (reason === 'deleted') {
+    return {
+      type: 'status',
+      reason,
+      title: 'התוכן כבר לא זמין',
+      message: 'ייתכן שהתוכן נמחק או הוסר מאז שנשלחה ההתראה.',
+    };
+  }
+  if (reason === 'unavailable') {
+    return {
+      type: 'status',
+      reason,
+      title: 'התוכן אינו זמין כרגע',
+      message: 'ייתכן שהתוכן הוסר או הועבר לבדיקה. אפשר לחזור להתראות ולנסות שוב מאוחר יותר.',
+    };
+  }
+  return {
+    type: 'status',
+    reason: 'unsupported',
+    title: 'לא ניתן לפתוח את ההתראה',
+    message: 'ההתראה נשמרה, אבל היעד שלה אינו נתמך בגרסה הזו.',
+  };
+}
+
+const firstId = (...values) => values.map(cleanId).find(Boolean) || '';
+
+/**
+ * Public route-action contract used by NotificationScreen and push-response
+ * routing. Persisted route names or URLs are never executed.
+ */
+export function buildNotificationRouteAction(notification) {
+  if (notification?.type === NotificationType.SYSTEM) {
+    if (notification.subtype === 'content_held') return statusAction('held');
+    if (notification.subtype === 'content_deleted') return statusAction('deleted');
+  }
+  const targetStatus = cleanText(notification?.target?.status, 40).toLowerCase();
+  if (UNAVAILABLE_STATUSES.has(targetStatus)) {
+    return statusAction(HELD_STATUSES.has(targetStatus) ? 'held' : 'deleted');
+  }
+
+  const navigation = notification?.navigation;
+  const target = notification?.target || {};
+  const action = navigation?.action;
+  if (!ALLOWED_ACTIONS.has(action)) return statusAction('unsupported');
+
+  if (action === NotificationNavigationAction.RECOMMENDATION) {
+    const postId = firstId(navigation.recommendationId, navigation.postId, navigation.targetId, target.id);
+    return postId
+      ? { type: 'navigate', routeName: 'RecommendationDetail', params: { postId } }
+      : statusAction('deleted');
+  }
+  if (action === NotificationNavigationAction.ROUTE) {
+    const routeId = firstId(navigation.routeId, navigation.targetId, target.id);
+    return routeId
+      ? { type: 'navigate', routeName: 'RouteDetail', params: { routeId } }
+      : statusAction('deleted');
+  }
+  if (action === NotificationNavigationAction.COMMENT) {
+    const parentType = cleanText(navigation.parentType || target.parentType || target.type, 40).toLowerCase();
+    const parentId = firstId(navigation.parentId, navigation.postId, target.parentId, target.id);
+    const commentId = firstId(navigation.commentId, target.type === 'comment' ? target.id : '');
+    if (!parentId) return statusAction('deleted');
+    if (parentType === 'recommendation') {
+      return {
+        type: 'navigate',
+        routeName: 'RecommendationDetail',
+        params: { postId: parentId, openComments: true, ...(commentId ? { commentId } : {}) },
+      };
+    }
+    if (parentType === 'route') {
+      return {
+        type: 'navigate',
+        routeName: 'RouteDetail',
+        params: { routeId: parentId, openComments: true, ...(commentId ? { commentId } : {}) },
+      };
+    }
+    return statusAction('unsupported');
+  }
+  if (action === NotificationNavigationAction.PROFILE) {
+    const uid = firstId(navigation.profileId, navigation.uid, navigation.targetId, target.id);
+    return uid
+      ? { type: 'navigate', routeName: 'UserProfile', params: { uid } }
+      : statusAction('deleted');
+  }
+  if (action === NotificationNavigationAction.MODERATION_CASE) {
+    const caseId = firstId(navigation.caseId);
+    return caseId
+      ? { type: 'navigate', routeName: 'AdminPanel', params: { tab: 'reports', caseId } }
+      : statusAction('deleted');
+  }
+  if (action === NotificationNavigationAction.DESTINATION_REVIEW) {
+    const countryId = firstId(navigation.countryId, target.countryId);
+    const cityId = firstId(navigation.cityId, target.cityId, target.id);
+    return countryId && cityId
+      ? { type: 'navigate', routeName: 'AdminPanel', params: { tab: 'destinations', countryId, cityId } }
+      : statusAction('deleted');
+  }
+
+  // Trips do not yet have a supported root detail route.
+  return statusAction('unsupported');
+}
+
+export function notificationRequiresAvailabilityCheck(notification) {
+  return CONTENT_NAVIGATION_ACTIONS.has(notification?.navigation?.action);
+}
+
+export function buildStatusActionForError(error) {
+  const code = cleanText(error?.code, 80).replace(/^(firestore|functions)\//u, '');
+  const reason = cleanText(
+    error?.details?.reason || error?.customData?.details?.reason || error?.reason,
+    80
+  ).toLowerCase();
+  if (
+    reason.includes('retry')
+    || code === 'unavailable'
+    || code === 'deadline-exceeded'
+    || code === 'network-request-failed'
+  ) {
+    return statusAction('retryable');
+  }
+  if (reason.includes('hold') || reason.includes('held') || reason.includes('inactive')) {
+    return statusAction('held');
+  }
+  if (reason.includes('missing') || reason.includes('deleted') || reason.includes('not_found')) {
+    return statusAction('deleted');
+  }
+  if (reason.includes('unavailable') || reason.includes('permission')) {
+    return statusAction('unavailable');
+  }
+  return statusAction('unsupported');
+}
+
+export const PostType = Object.freeze({
+  RECOMMENDATION: 'recommendation',
+  ROUTE: 'route',
+});

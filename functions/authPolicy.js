@@ -13,6 +13,7 @@ const AUTH_REASONS = Object.freeze({
   LEGAL_CONSENT_REQUIRED: 'LEGAL_CONSENT_REQUIRED',
   PREFERENCES_REQUIRED: 'PREFERENCES_REQUIRED',
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  ACCOUNT_DELETING: 'ACCOUNT_DELETING',
 });
 
 const PROFILE_DETAILS_VERSION = 1;
@@ -99,6 +100,16 @@ async function authorizeRequest({
   assertSignedIn(auth);
   const snapshot = await admin.firestore().doc(`users/${auth.uid}`).get();
   const userDocument = snapshot.exists ? snapshot.data() : null;
+  if (!allowSuspended && (
+    userDocument?.status === 'deleting'
+    || userDocument?.moderation?.status === 'deleting'
+  )) {
+    throw policyError(
+      'failed-precondition',
+      'This account is being deleted.',
+      AUTH_REASONS.ACCOUNT_DELETING
+    );
+  }
   if (!allowSuspended && userDocument?.moderation?.status === 'suspended') {
     throw policyError(
       'permission-denied',

@@ -3,12 +3,16 @@ const assert = require('node:assert/strict');
 
 const {
   REPORT_CATEGORIES,
+  buildAdminNotificationProjection,
+  buildHeldMediaProjection,
   caseIdForPath,
   caseStatusForReport,
   evaluateTextSafety,
+  handleModerationCaseNotificationWrite,
   normalizeReportInput,
   normalizeReportTarget,
   setBlockedUser,
+  submitReport,
 } = require('./moderationService');
 
 test('normalizes every supported moderation target to a canonical path', () => {
@@ -46,6 +50,242 @@ test('a new report reopens resolved cases while preserving unresolved states', (
   assert.equal(caseStatusForReport('open', false), 'open');
   assert.equal(caseStatusForReport('auto_held', false), 'auto_held');
   assert.equal(caseStatusForReport('open', true), 'auto_held');
+});
+
+test('admin notification projections version unique reports, escalations, and reopenings safely', () => {
+  const target = {
+    type: 'recommendation',
+    id: 'rec-1',
+    path: 'recommendations/rec-1',
+    title: 'Safe preview',
+    thumbUrls: ['https://example.com/thumb.jpg'],
+  };
+  const first = buildAdminNotificationProjection({
+    previous: null,
+    newReport: true,
+    urgentEscalated: false,
+    reopening: false,
+    priority: 'normal',
+    reportCount: 1,
+    target,
+    occurredAt: 'time-1',
+    reporterId: 'must-not-persist',
+    details: 'must-not-persist',
+  });
+  assert.deepEqual(Object.keys(first).sort(), [
+    'count', 'occurredAt', 'priority', 'schemaVersion', 'subtype', 'target', 'version',
+  ]);
+  assert.equal(first.version, 1);
+  assert.equal(first.subtype, 'report_received');
+  assert.equal(JSON.stringify(first).includes('must-not-persist'), false);
+  assert.equal(buildAdminNotificationProjection({
+    previous: first,
+    newReport: false,
+    urgentEscalated: false,
+    reopening: false,
+    priority: 'normal',
+    reportCount: 1,
+    target,
+    occurredAt: 'time-2',
+  }), null);
+
+  const escalated = buildAdminNotificationProjection({
+    previous: first,
+    newReport: false,
+    urgentEscalated: true,
+    reopening: false,
+    priority: 'urgent',
+    reportCount: 1,
+    target,
+    occurredAt: 'time-2',
+  });
+  assert.equal(escalated.version, 2);
+  assert.equal(escalated.subtype, 'urgent_escalation');
+  const reopened = buildAdminNotificationProjection({
+    previous: escalated,
+    newReport: false,
+    urgentEscalated: false,
+    reopening: true,
+    priority: 'urgent',
+    reportCount: 1,
+    target,
+    occurredAt: 'time-3',
+  });
+  assert.equal(reopened.version, 3);
+  assert.equal(reopened.subtype, 'report_received');
+  assert.doesNotMatch(submitReport.toString(), /fanoutAdminNotification/u);
+});
+
+test('moderation case writes fan out only newer projection versions', async () => {
+  const target = {
+    type: 'route', id: 'route-1', path: 'routes/route-1', title: 'Route', thumbUrls: [],
+  };
+  const beforeProjection = buildAdminNotificationProjection({
+    previous: null,
+    newReport: true,
+    urgentEscalated: false,
+    reopening: false,
+    priority: 'normal',
+    reportCount: 1,
+    target,
+    occurredAt: 'time-1',
+  });
+  const afterProjection = buildAdminNotificationProjection({
+    previous: beforeProjection,
+    newReport: true,
+    urgentEscalated: true,
+    reopening: false,
+    priority: 'urgent',
+    reportCount: 2,
+    target,
+    occurredAt: 'time-2',
+  });
+  let fanoutInput;
+  const event = {
+    params: { caseId: 'case-1' },
+    data: {
+      before: { exists: true, data: () => ({ adminNotification: beforeProjection }) },
+      after: { exists: true, data: () => ({ adminNotification: afterProjection }) },
+    },
+  };
+  const result = await handleModerationCaseNotificationWrite({
+    admin: {},
+    event,
+    fanoutAdminNotificationImpl: async (input) => {
+      fanoutInput = input;
+      return [{}, {}];
+    },
+  });
+  assert.deepEqual(result, { status: 'fanout', version: 2, deliveries: 2 });
+  assert.equal(fanoutInput.activityVersion, 2);
+  assert.equal(fanoutInput.notification.priority, 'urgent');
+  assert.equal(fanoutInput.notification.count, 2);
+  assert.deepEqual(fanoutInput.notification.navigation, {
+    action: 'open_moderation_case', caseId: 'case-1',
+  });
+
+  const ignored = await handleModerationCaseNotificationWrite({
+    admin: {},
+    event: {
+      ...event,
+      data: {
+        before: { exists: true, data: () => ({ adminNotification: afterProjection }) },
+        after: { exists: true, data: () => ({ adminNotification: afterProjection }) },
+      },
+    },
+    fanoutAdminNotificationImpl: async () => { throw new Error('must not fan out'); },
+  });
+  assert.deepEqual(ignored, { status: 'ignored', reason: 'no_new_admin_notification' });
+});
+
+test('auto-hold media projection is sanitized and retried with case fanout', async () => {
+  const assetId = '123e4567-e89b-42d3-a456-426614174000';
+  const mediaProjection = buildHeldMediaProjection({
+    previous: null,
+    data: {
+      media: [{
+        assetId,
+        large: {
+          path: `media/owner-1/${assetId}/large.webp`,
+          url: 'https://private.example/token',
+        },
+        feed: { path: 'not-a-canonical-path' },
+      }],
+      privateText: 'must-not-persist',
+    },
+    occurredAt: 'time-1',
+  });
+  assert.deepEqual(mediaProjection.assets, [{
+    assetId,
+    large: { path: `media/owner-1/${assetId}/large.webp` },
+  }]);
+  assert.equal(JSON.stringify(mediaProjection).includes('private.example'), false);
+  assert.equal(JSON.stringify(mediaProjection).includes('must-not-persist'), false);
+
+  const target = { type: 'trip', id: 'trip-1', path: 'trips/trip-1' };
+  const adminProjection = buildAdminNotificationProjection({
+    previous: null,
+    newReport: true,
+    urgentEscalated: false,
+    reopening: false,
+    priority: 'normal',
+    reportCount: 3,
+    target,
+    occurredAt: 'time-1',
+  });
+  const event = {
+    params: { caseId: 'case-1' },
+    data: {
+      before: { exists: true, data: () => ({}) },
+      after: {
+        exists: true,
+        data: () => ({
+          adminNotification: adminProjection,
+          mediaModeration: mediaProjection,
+          target,
+        }),
+      },
+    },
+  };
+  let mediaAttempts = 0;
+  let fanoutAttempts = 0;
+  const invoke = () => handleModerationCaseNotificationWrite({
+    admin: {},
+    event,
+    mediaBucket: 'media-eu',
+    resolveCurrentModerationStateImpl: async () => ({
+      caseData: { mediaModeration: mediaProjection },
+      targetData: { status: 'moderation_hold' },
+    }),
+    setMediaAvailabilityImpl: async (input) => {
+      mediaAttempts += 1;
+      assert.equal(input.mediaBucket, 'media-eu');
+      assert.equal(input.available, false);
+      assert.equal(input.reason, 'community_reports');
+      assert.deepEqual(input.data, { media: mediaProjection.assets });
+      if (mediaAttempts === 1) throw new Error('transient media failure');
+    },
+    fanoutAdminNotificationImpl: async () => {
+      fanoutAttempts += 1;
+      return [{}];
+    },
+  });
+  await assert.rejects(invoke(), /transient media failure/u);
+  assert.deepEqual(await invoke(), {
+    status: 'fanout', version: 1, deliveries: 1, mediaVersion: 1,
+  });
+  assert.equal(mediaAttempts, 2);
+  assert.equal(fanoutAttempts, 2);
+});
+
+test('a delayed auto-hold event cannot hide media after content is restored', async () => {
+  const mediaProjection = {
+    schemaVersion: 1,
+    version: 3,
+    available: false,
+    assets: [],
+  };
+  let mediaWrites = 0;
+  const result = await handleModerationCaseNotificationWrite({
+    admin: {},
+    event: {
+      params: { caseId: 'case-1' },
+      data: {
+        before: { exists: true, data: () => ({ mediaModeration: { version: 2 } }) },
+        after: { exists: true, data: () => ({
+          target: { path: 'recommendations/post-1' },
+          mediaModeration: mediaProjection,
+        }) },
+      },
+    },
+    resolveCurrentModerationStateImpl: async () => ({
+      caseData: { mediaModeration: mediaProjection },
+      targetData: { status: 'active' },
+    }),
+    setMediaAvailabilityImpl: async () => { mediaWrites += 1; },
+  });
+  assert.equal(result.status, 'media_updated');
+  assert.equal(mediaWrites, 0);
 });
 
 test('text safety detects explicit severe and suspicious terms in Hebrew and English', () => {
@@ -99,6 +339,8 @@ test('blocking requires an active public target and enforces the per-user cap tr
     admin: fixture.admin,
     auth: { uid: 'user-1' },
     data: { blockedUid: 'target-1', blocked: true },
+    purgeNotificationsForActorForRecipientImpl: async () => 0,
+    detachBlockedActorLikeContributionsImpl: async () => 0,
   });
   assert(fixture.writes.some((entry) => entry.path === 'users/user-1/blockedUsers/target-1'));
   assert(fixture.writes.some((entry) => entry.value?.blockedUserCount === 250));
