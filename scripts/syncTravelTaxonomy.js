@@ -65,6 +65,49 @@ function documentationText(taxonomy) {
       }
     }
   }
+  const recommendationCatalog = taxonomy.recommendationCatalog;
+  if (recommendationCatalog) {
+    const recommendationInterestLabels = labelByAxis(recommendationCatalog.interests);
+    const recommendationSubcategories = recommendationCatalog.subcategories || [];
+    const recommendationServiceGroups = recommendationCatalog.serviceGroups || [];
+    lines.push(
+      '',
+      '## קטלוג המלצות מוכן להפעלה',
+      '',
+      `> גרסת סכימה ${recommendationCatalog.schemaVersion}; הפעלה בזמן ריצה: \`${recommendationCatalog.runtimeEnabled}\`. הקטלוג אינו מחובר עדיין לזרימות הפעילות.`,
+      '',
+    );
+    for (const category of recommendationCatalog.categories || []) {
+      const popularIds = new Set(category.popularSubcategoryIds || []);
+      lines.push(`- **${category.label}** (\`${category.id}\`)`);
+      const categoryItems = recommendationSubcategories.filter((item) => item.categoryId === category.id);
+      if (category.id !== 'services') {
+        for (const item of categoryItems) {
+          const interests = (item.interestIds || []).map((id) => recommendationInterestLabels[id] || id);
+          lines.push(`  - ${item.label} (\`${item.id}\`)${popularIds.has(item.id) ? ' — נפוץ' : ''}${interests.length ? ` → ${interests.join(', ')}` : ''}`);
+        }
+        continue;
+      }
+      for (const group of recommendationServiceGroups) {
+        lines.push(`  - **${group.label}** (\`${group.id}\`)`);
+        for (const item of categoryItems.filter((entry) => entry.groupId === group.id)) {
+          lines.push(`    - ${item.label} (\`${item.id}\`)${popularIds.has(item.id) ? ' — נפוץ' : ''}`);
+        }
+      }
+    }
+    const migrationCounts = Object.values(recommendationCatalog.legacyTagMappings || {}).reduce((counts, mapping) => {
+      counts[mapping.strategy] = (counts[mapping.strategy] || 0) + 1;
+      return counts;
+    }, {});
+    lines.push(
+      '',
+      '### מעבר מהקטלוג הפעיל',
+      '',
+      `- מיפוי ישיר: ${migrationCounts.direct || 0}`,
+      `- בדיקה ידנית: ${migrationCounts.review || 0}`,
+      `- מעבר למאפיין: ${migrationCounts.attribute || 0}`,
+    );
+  }
   const axisSections = [
     ['תחומי עניין', taxonomy.interests],
     ['אווירה', taxonomy.vibes],

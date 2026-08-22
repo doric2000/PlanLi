@@ -20,9 +20,32 @@ const ROUTE_EXPERIENCE_IDS = ids(taxonomy.routeExperienceLevels);
 const TRANSPORT_MODE_IDS = ids(taxonomy.transportModes);
 const CATEGORY_IDS = ids(taxonomy.categories);
 const TAG_IDS = ids(taxonomy.tags);
+const deepFreeze = (value) => {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return Object.freeze(value);
+};
+const RECOMMENDATION_CATALOG = deepFreeze(taxonomy.recommendationCatalog || {});
+const RECOMMENDATION_CATEGORIES = Object.freeze(
+  [...(RECOMMENDATION_CATALOG.categories || [])].sort((left, right) => left.order - right.order)
+);
+const RECOMMENDATION_CATEGORY_ORDER_BY_ID = Object.freeze(Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.id, item.order])
+));
+const RECOMMENDATION_SUBCATEGORIES = Object.freeze(
+  [...(RECOMMENDATION_CATALOG.subcategories || [])].sort((left, right) => (
+    RECOMMENDATION_CATEGORY_ORDER_BY_ID[left.categoryId] - RECOMMENDATION_CATEGORY_ORDER_BY_ID[right.categoryId]
+      || left.order - right.order
+  ))
+);
 
 const CATEGORY_BY_ID = byId(taxonomy.categories);
 const TAG_BY_ID = byId(taxonomy.tags);
+const RECOMMENDATION_CATEGORY_BY_ID = byId(RECOMMENDATION_CATEGORIES);
+const RECOMMENDATION_CATEGORY_ID_BY_LABEL = Object.freeze(Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.label, item.id])
+));
+const RECOMMENDATION_SUBCATEGORY_BY_ID = byId(RECOMMENDATION_SUBCATEGORIES);
 const TRAVELER_STYLE_BY_ID = byId(taxonomy.travelerStyles);
 const RECOMMENDATION_ATTRIBUTE_RULES = taxonomy.contentAttributeRules?.recommendations || {};
 const RECOMMENDATION_VIBE_TAG_IDS = new Set(RECOMMENDATION_ATTRIBUTE_RULES.vibeTagIds || []);
@@ -34,6 +57,126 @@ const TAG_ID_BY_ALIAS = Object.freeze({
   ...Object.fromEntries(taxonomy.tags.map((item) => [item.label, item.id])),
   ...(taxonomy.legacy?.tagAliases || {}),
 });
+
+const normalizedSearchText = (value) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[\u0591-\u05BD\u05BF\u05C1-\u05C2\u05C4-\u05C5\u05C7]/g, '')
+  .trim()
+  .toLocaleLowerCase('he');
+
+const RECOMMENDATION_SUBCATEGORY_IDS_BY_ALIAS = Object.freeze(RECOMMENDATION_SUBCATEGORIES.reduce(
+  (lookupByAlias, item) => {
+    for (const value of [item.id, item.label, ...(item.searchAliases || [])]) {
+      const alias = normalizedSearchText(value);
+      lookupByAlias[alias] ||= [];
+      if (!lookupByAlias[alias].includes(item.id)) lookupByAlias[alias].push(item.id);
+    }
+    return lookupByAlias;
+  },
+  {}
+));
+
+function normalizeRecommendationCategory(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return RECOMMENDATION_CATEGORY_BY_ID[text]
+    ? text
+    : RECOMMENDATION_CATEGORY_ID_BY_LABEL[text] || '';
+}
+
+function normalizeRecommendationSubcategories(values, categoryValue) {
+  const categoryWasSupplied = categoryValue != null && String(categoryValue).trim() !== '';
+  const categoryId = categoryWasSupplied ? normalizeRecommendationCategory(categoryValue) : '';
+  if (categoryWasSupplied && !categoryId) return [];
+  const maximum = RECOMMENDATION_CATALOG.selection?.subcategories?.max || 3;
+  const output = [];
+  for (const raw of Array.isArray(values) ? values : []) {
+    const candidateIds = RECOMMENDATION_SUBCATEGORY_BY_ID[raw]
+      ? [raw]
+      : RECOMMENDATION_SUBCATEGORY_IDS_BY_ALIAS[normalizedSearchText(raw)] || [];
+    const id = categoryId
+      ? candidateIds.find((candidateId) => RECOMMENDATION_SUBCATEGORY_BY_ID[candidateId]?.categoryId === categoryId)
+      : candidateIds.length === 1 ? candidateIds[0] : undefined;
+    const item = RECOMMENDATION_SUBCATEGORY_BY_ID[id];
+    if (!item || (categoryId && item.categoryId !== categoryId) || output.includes(id)) continue;
+    output.push(id);
+    if (output.length === maximum) break;
+  }
+  return output;
+}
+
+function isRecommendationClassificationValid({
+  categoryId: categoryValue,
+  subcategoryIds: values,
+  customSubcategoryLabel = '',
+} = {}) {
+  const categoryId = normalizeRecommendationCategory(categoryValue);
+  const rawValues = Array.isArray(values) ? values : [];
+  const normalized = normalizeRecommendationSubcategories(rawValues, categoryId);
+  const minimum = RECOMMENDATION_CATALOG.selection?.subcategories?.min || 1;
+  const maximum = RECOMMENDATION_CATALOG.selection?.subcategories?.max || 3;
+  if (rawValues.some((value) => typeof value !== 'string' || !value.trim())) return false;
+  const uniqueRaw = new Set(rawValues.filter((value) => typeof value === 'string').map((value) => value.trim()));
+  if (!categoryId || normalized.length < minimum || normalized.length > maximum || normalized.length !== uniqueRaw.size) {
+    return false;
+  }
+  const includesOther = normalized.some((id) => RECOMMENDATION_SUBCATEGORY_BY_ID[id]?.isOther === true);
+  if (customSubcategoryLabel != null && typeof customSubcategoryLabel !== 'string') return false;
+  const customLabelLength = typeof customSubcategoryLabel === 'string' ? customSubcategoryLabel.trim().length : 0;
+  const customRules = RECOMMENDATION_CATALOG.selection?.customLabel || { minLength: 2, maxLength: 40 };
+  return includesOther
+    ? customLabelLength >= customRules.minLength && customLabelLength <= customRules.maxLength
+    : customLabelLength === 0;
+}
+
+function searchRecommendationCatalog(query, { categoryId: categoryValue = '', limit = 20 } = {}) {
+  const needle = normalizedSearchText(query);
+  if (!needle) return [];
+  const categoryWasSupplied = categoryValue != null && String(categoryValue).trim() !== '';
+  const categoryId = categoryWasSupplied ? normalizeRecommendationCategory(categoryValue) : '';
+  if (categoryWasSupplied && !categoryId) return [];
+  return RECOMMENDATION_SUBCATEGORIES
+    .filter((item) => !categoryId || item.categoryId === categoryId)
+    .map((item) => {
+      const values = [item.label, item.id, ...(item.searchAliases || [])].map(normalizedSearchText);
+      const exact = values.some((value) => value === needle);
+      const prefix = values.some((value) => value.startsWith(needle));
+      const contains = values.some((value) => value.includes(needle));
+      return { item, score: exact ? 0 : prefix ? 1 : contains ? 2 : 3 };
+    })
+    .filter(({ score }) => score < 3)
+    .sort((left, right) => left.score - right.score
+      || RECOMMENDATION_CATEGORY_ORDER_BY_ID[left.item.categoryId]
+        - RECOMMENDATION_CATEGORY_ORDER_BY_ID[right.item.categoryId]
+      || left.item.order - right.item.order)
+    .slice(0, Math.max(0, Math.min(Number(limit) || 20, 50)))
+    .map(({ item }) => item);
+}
+
+function suggestClassificationFromGoogleTypes({ placeId, primaryType = '', types = [] } = {}) {
+  if (typeof placeId !== 'string' || !placeId.trim()) return [];
+  const providerTypes = Array.from(new Set([primaryType, ...(Array.isArray(types) ? types : [])]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim())));
+  const seen = new Set();
+  const output = [];
+  for (const providerType of providerTypes) {
+    for (const candidate of RECOMMENDATION_CATALOG.googlePlaceTypeMappings?.[providerType] || []) {
+      const subcategoryIds = normalizeRecommendationSubcategories(candidate.subcategoryIds, candidate.categoryId);
+      if (!subcategoryIds.length || subcategoryIds.some((id) => RECOMMENDATION_SUBCATEGORY_BY_ID[id]?.isOther)) continue;
+      const key = `${candidate.categoryId}:${subcategoryIds.join('|')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push({
+        categoryId: candidate.categoryId,
+        subcategoryIds,
+        providerType,
+        isPrimary: providerType === primaryType,
+        isSuggestion: true,
+      });
+    }
+  }
+  return output;
+}
 
 function uniqueAllowed(values, allowed, maximum = allowed.length) {
   if (!Array.isArray(values)) return [];
@@ -261,6 +404,9 @@ module.exports = {
   NEED_IDS,
   PACE_IDS,
   POST_BUDGET_IDS,
+  RECOMMENDATION_CATALOG,
+  RECOMMENDATION_CATEGORIES,
+  RECOMMENDATION_SUBCATEGORIES,
   ROUTE_DIFFICULTY_IDS,
   ROUTE_EXPERIENCE_IDS,
   SEASON_IDS,
@@ -275,14 +421,19 @@ module.exports = {
   categoryFromLegacyClassification,
   getCategoryLabel,
   isSmartProfileComplete,
+  isRecommendationClassificationValid,
   mapLegacyInterests,
   normalizeAliasedId,
   normalizeBudget,
   normalizeCategoryId,
   normalizeCategoryIds,
   normalizeRecommendationTags,
+  normalizeRecommendationCategory,
+  normalizeRecommendationSubcategories,
   normalizeSmartProfile,
   recommendationAttributeRequirements,
+  searchRecommendationCatalog,
+  suggestClassificationFromGoogleTypes,
   tagsMatchCategory,
   taxonomy,
   uniqueAllowed,

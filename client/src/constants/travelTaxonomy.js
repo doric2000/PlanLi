@@ -44,6 +44,152 @@ export const TAGS = taxonomy.tags.map((item) => ({
   environments: [...(item.environments || [])],
 }));
 
+const deepFreeze = (value) => {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) deepFreeze(nested);
+  return Object.freeze(value);
+};
+
+export const RECOMMENDATION_CATALOG = deepFreeze(taxonomy.recommendationCatalog || {});
+export const RECOMMENDATION_CATEGORIES = Object.freeze(
+  [...(RECOMMENDATION_CATALOG.categories || [])].sort((left, right) => left.order - right.order)
+);
+const recommendationCategoryOrderById = Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.id, item.order])
+);
+export const RECOMMENDATION_SUBCATEGORIES = Object.freeze(
+  [...(RECOMMENDATION_CATALOG.subcategories || [])].sort((left, right) => (
+    recommendationCategoryOrderById[left.categoryId] - recommendationCategoryOrderById[right.categoryId]
+      || left.order - right.order
+  ))
+);
+
+const recommendationCategoryById = Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.id, item])
+);
+const recommendationCategoryIdByLabel = Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.label, item.id])
+);
+const recommendationSubcategoryById = Object.fromEntries(
+  RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item])
+);
+
+const normalizedSearchText = (value) => String(value || '')
+  .normalize('NFKD')
+  .replace(/[\u0591-\u05BD\u05BF\u05C1-\u05C2\u05C4-\u05C5\u05C7]/g, '')
+  .trim()
+  .toLocaleLowerCase('he');
+
+const recommendationSubcategoryIdsByAlias = RECOMMENDATION_SUBCATEGORIES.reduce((lookupByAlias, item) => {
+  for (const value of [item.id, item.label, ...(item.searchAliases || [])]) {
+    const alias = normalizedSearchText(value);
+    lookupByAlias[alias] ||= [];
+    if (!lookupByAlias[alias].includes(item.id)) lookupByAlias[alias].push(item.id);
+  }
+  return lookupByAlias;
+}, {});
+
+export function normalizeRecommendationCategory(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return recommendationCategoryById[text]
+    ? text
+    : recommendationCategoryIdByLabel[text] || '';
+}
+
+export function normalizeRecommendationSubcategories(values, categoryValue) {
+  const categoryWasSupplied = categoryValue != null && String(categoryValue).trim() !== '';
+  const categoryId = categoryWasSupplied ? normalizeRecommendationCategory(categoryValue) : '';
+  if (categoryWasSupplied && !categoryId) return [];
+  const maximum = RECOMMENDATION_CATALOG.selection?.subcategories?.max || 3;
+  const output = [];
+  for (const raw of Array.isArray(values) ? values : []) {
+    const candidateIds = recommendationSubcategoryById[raw]
+      ? [raw]
+      : recommendationSubcategoryIdsByAlias[normalizedSearchText(raw)] || [];
+    const id = categoryId
+      ? candidateIds.find((candidateId) => recommendationSubcategoryById[candidateId]?.categoryId === categoryId)
+      : candidateIds.length === 1 ? candidateIds[0] : undefined;
+    const item = recommendationSubcategoryById[id];
+    if (!item || (categoryId && item.categoryId !== categoryId) || output.includes(id)) continue;
+    output.push(id);
+    if (output.length === maximum) break;
+  }
+  return output;
+}
+
+export function isRecommendationClassificationValid({
+  categoryId: categoryValue,
+  subcategoryIds: values,
+  customSubcategoryLabel = '',
+} = {}) {
+  const categoryId = normalizeRecommendationCategory(categoryValue);
+  const rawValues = Array.isArray(values) ? values : [];
+  const normalized = normalizeRecommendationSubcategories(rawValues, categoryId);
+  const minimum = RECOMMENDATION_CATALOG.selection?.subcategories?.min || 1;
+  const maximum = RECOMMENDATION_CATALOG.selection?.subcategories?.max || 3;
+  if (rawValues.some((value) => typeof value !== 'string' || !value.trim())) return false;
+  const uniqueRaw = new Set(rawValues.filter((value) => typeof value === 'string').map((value) => value.trim()));
+  if (!categoryId || normalized.length < minimum || normalized.length > maximum || normalized.length !== uniqueRaw.size) {
+    return false;
+  }
+  const includesOther = normalized.some((id) => recommendationSubcategoryById[id]?.isOther === true);
+  if (customSubcategoryLabel != null && typeof customSubcategoryLabel !== 'string') return false;
+  const customLabelLength = typeof customSubcategoryLabel === 'string' ? customSubcategoryLabel.trim().length : 0;
+  const customRules = RECOMMENDATION_CATALOG.selection?.customLabel || { minLength: 2, maxLength: 40 };
+  return includesOther
+    ? customLabelLength >= customRules.minLength && customLabelLength <= customRules.maxLength
+    : customLabelLength === 0;
+}
+
+export function searchRecommendationCatalog(query, { categoryId: categoryValue = '', limit = 20 } = {}) {
+  const needle = normalizedSearchText(query);
+  if (!needle) return [];
+  const categoryWasSupplied = categoryValue != null && String(categoryValue).trim() !== '';
+  const categoryId = categoryWasSupplied ? normalizeRecommendationCategory(categoryValue) : '';
+  if (categoryWasSupplied && !categoryId) return [];
+  return RECOMMENDATION_SUBCATEGORIES
+    .filter((item) => !categoryId || item.categoryId === categoryId)
+    .map((item) => {
+      const values = [item.label, item.id, ...(item.searchAliases || [])].map(normalizedSearchText);
+      const exact = values.some((value) => value === needle);
+      const prefix = values.some((value) => value.startsWith(needle));
+      const contains = values.some((value) => value.includes(needle));
+      return { item, score: exact ? 0 : prefix ? 1 : contains ? 2 : 3 };
+    })
+    .filter(({ score }) => score < 3)
+    .sort((left, right) => left.score - right.score
+      || recommendationCategoryOrderById[left.item.categoryId] - recommendationCategoryOrderById[right.item.categoryId]
+      || left.item.order - right.item.order)
+    .slice(0, Math.max(0, Math.min(Number(limit) || 20, 50)))
+    .map(({ item }) => item);
+}
+
+export function suggestClassificationFromGoogleTypes({ placeId, primaryType = '', types = [] } = {}) {
+  if (typeof placeId !== 'string' || !placeId.trim()) return [];
+  const providerTypes = Array.from(new Set([primaryType, ...(Array.isArray(types) ? types : [])]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim())));
+  const seen = new Set();
+  const output = [];
+  for (const providerType of providerTypes) {
+    for (const candidate of RECOMMENDATION_CATALOG.googlePlaceTypeMappings?.[providerType] || []) {
+      const subcategoryIds = normalizeRecommendationSubcategories(candidate.subcategoryIds, candidate.categoryId);
+      if (!subcategoryIds.length || subcategoryIds.some((id) => recommendationSubcategoryById[id]?.isOther)) continue;
+      const key = `${candidate.categoryId}:${subcategoryIds.join('|')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push({
+        categoryId: candidate.categoryId,
+        subcategoryIds,
+        providerType,
+        isPrimary: providerType === primaryType,
+        isSuggestion: true,
+      });
+    }
+  }
+  return output;
+}
+
 export const TAG_OPTIONS_BY_CATEGORY = Object.fromEntries(CATEGORIES.map((category) => [
   category.id,
   TAGS.filter((tag) => tag.categoryId === category.id && tag.selectable !== false),
