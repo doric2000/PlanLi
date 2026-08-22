@@ -242,11 +242,42 @@ export function notificationMatchesFilter(notification, filter) {
   return true;
 }
 
+const firstId = (...values) => values.map(cleanId).find(Boolean) || '';
+
 function targetLabel(notification) {
   const title = notification?.target?.title;
   if (title) return `“${title}”`;
   if (notification?.target?.type === 'route') return 'המסלול שלך';
   return 'התוכן שלך';
+}
+
+export function getNotificationLikeMessageParts(notification) {
+  if (notification?.type !== NotificationType.LIKE) return null;
+  const count = cleanCount(notification.count);
+  const actor = notification.actorPreview?.displayName || notification.actorPreviews?.[0]?.displayName;
+  const actionLabel = count === 1 ? '1 לייק' : `${count} לייקים`;
+  const remainder = count === 1
+    ? `${actor ? `חדש מ${actor}` : 'חדש'} על ${targetLabel(notification)}`
+    : `חדשים על ${targetLabel(notification)}`;
+  return { actionLabel, remainder };
+}
+
+export function buildNotificationLikesTarget(notification) {
+  if (notification?.type !== NotificationType.LIKE) return null;
+  const navigation = notification.navigation || {};
+  if (navigation.action === NotificationNavigationAction.RECOMMENDATION) {
+    const itemId = firstId(
+      navigation.recommendationId,
+      navigation.postId,
+      navigation.targetId
+    );
+    return itemId ? { collectionName: 'recommendations', itemId } : null;
+  }
+  if (navigation.action === NotificationNavigationAction.ROUTE) {
+    const itemId = firstId(navigation.routeId, navigation.targetId);
+    return itemId ? { collectionName: 'routes', itemId } : null;
+  }
+  return null;
 }
 
 export function formatNotificationMessage(notification) {
@@ -292,7 +323,14 @@ export function formatNotificationMessage(notification) {
 export function getNotificationPresentation(notification) {
   const message = formatNotificationMessage(notification);
   if (notification.type === NotificationType.LIKE) {
-    return { message, detail: '', icon: 'heart', tone: 'like', label: 'לייק' };
+    return {
+      message,
+      detail: '',
+      icon: 'heart',
+      tone: 'like',
+      label: 'לייק',
+      likeMessageParts: getNotificationLikeMessageParts(notification),
+    };
   }
   if (notification.type === NotificationType.COMMENT) {
     return {
@@ -364,8 +402,6 @@ function statusAction(reason) {
     message: 'ההתראה נשמרה, אבל היעד שלה אינו נתמך בגרסה הזו.',
   };
 }
-
-const firstId = (...values) => values.map(cleanId).find(Boolean) || '';
 
 /**
  * Public route-action contract used by NotificationScreen and push-response

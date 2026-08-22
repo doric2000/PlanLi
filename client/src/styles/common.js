@@ -616,9 +616,10 @@ export const common = {
 
 	// User item for likes list
 	userItem: {
-		flexDirection: "row",
+		flexDirection: "row-reverse",
 		alignItems: "center",
 		paddingVertical: 12,
+		gap: 12,
 		borderBottomWidth: 1,
 		borderBottomColor: "#F9FAFB",
 	},
@@ -647,6 +648,8 @@ export const common = {
 		fontSize: 15,
 		fontFamily: fontFamilies.semiBold,
 		color: "#1F2937",
+		textAlign: "right",
+		writingDirection: "rtl",
 	},
 
 	// Overlay touchable

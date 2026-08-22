@@ -138,21 +138,29 @@ export const notificationCenterStyles = StyleSheet.create({
     borderRightWidth: 3,
     borderRightColor: colors.accentAction,
   },
-  rowMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
   rowPressed: {
     opacity: 0.78,
   },
-  actorColumn: {
+  leadingPreview: {
     width: 66,
-    minHeight: 50,
+    height: 66,
     alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
+  },
+  targetPreviewImage: {
+    width: 62,
+    height: 62,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceSubtle,
+  },
+  leadingIconFallback: {
+    width: 62,
+    height: 62,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceSubtle,
   },
   typeBadge: {
     position: 'absolute',
@@ -172,22 +180,51 @@ export const notificationCenterStyles = StyleSheet.create({
   typeBadgeSystem: { backgroundColor: colors.brand },
   typeBadgeAdmin: { backgroundColor: colors.accentAction },
   typeBadgeUrgent: { backgroundColor: colors.error },
-  actorStack: {
-    width: 66,
+  actorPreviewStrip: {
     minHeight: 42,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
-  actorStackItem: {
-    marginStart: -13,
-    borderRadius: 16,
+  actorPreviewItem: {
+    borderRadius: 21,
     borderWidth: 2,
     borderColor: colors.white,
+  },
+  actorPreviewItemOverlap: {
+    marginStart: -8,
   },
   rowBody: {
     flex: 1,
     minWidth: 0,
+  },
+  rowBodyTarget: {
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
+  },
+  likeMessageRow: {
+    minHeight: layout.touchTarget,
+    flexDirection: 'row-reverse',
+    alignItems: 'stretch',
+  },
+  likeCountAction: {
+    minHeight: layout.touchTarget,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  likeCountActionText: {
+    color: colors.brand,
+    fontFamily: fontFamilies.semiBold,
+    fontSize: 15,
+    textDecorationLine: 'underline',
+    writingDirection: 'rtl',
+  },
+  likeMessageRemainder: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
   },
   rowMessage: {
     color: colors.textPrimary,
@@ -229,18 +266,6 @@ export const notificationCenterStyles = StyleSheet.create({
     fontFamily: fontFamilies.semiBold,
     fontSize: 11,
     writingDirection: 'rtl',
-  },
-  previews: {
-    marginTop: spacing.sm,
-    flexDirection: 'row-reverse',
-    gap: 6,
-  },
-  previewImage: {
-    flex: 1,
-    maxWidth: 58,
-    aspectRatio: 1,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surfaceSubtle,
   },
   rowMenu: {
     width: layout.touchTarget,
