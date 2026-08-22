@@ -12,6 +12,18 @@ import {
 } from '../src/features/notifications/models/NotificationModel';
 
 describe('NotificationModel schema v2', () => {
+  it('presents direct replies distinctly from comments on owned content', () => {
+    expect(getNotificationPresentation({
+      type: 'comment',
+      subtype: 'new_reply',
+      actorPreview: { displayName: 'נועה' },
+      commentExcerpt: 'בשמחה!',
+    })).toMatchObject({
+      message: 'נועה השיב/ה לתגובה שלך',
+      detail: 'בשמחה!',
+      label: 'תגובה',
+    });
+  });
   it('presents content-status alerts without exposing moderation reasons', () => {
     expect(getNotificationPresentation({
       type: 'system',

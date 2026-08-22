@@ -23,6 +23,20 @@ const {
 
 const TOKEN = 'ExpoPushToken[test-device-token]';
 
+test('reply pushes use direct-reply copy on the existing comments channel', () => {
+  const message = buildExpoMessage({
+    token: TOKEN,
+    notificationId: 'notification-1',
+    channel: 'personal',
+    category: 'comments',
+    subtype: 'new_reply',
+    version: 1,
+  });
+  assert.equal(message.channelId, 'planli-comments');
+  assert.equal(message.title, 'תשובה חדשה ב-PlanLi');
+  assert.equal(message.body, 'מישהו השיב לתגובה שלך.');
+});
+
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }

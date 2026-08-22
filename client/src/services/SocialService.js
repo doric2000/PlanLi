@@ -20,8 +20,15 @@ export const setReaction = (target, liked) =>
 export const getReactionState = (target) =>
   call('getReactionState', { target });
 
-export const saveComment = (target, text, commentId = null) =>
-  call('saveComment', { target, text, ...(commentId ? { commentId } : {}) });
+export const saveComment = (target, text, options = {}) => {
+  const normalized = typeof options === 'string' ? { commentId: options } : options || {};
+  return call('saveComment', {
+    target,
+    text,
+    ...(normalized.commentId ? { commentId: normalized.commentId } : {}),
+    ...(normalized.replyToCommentId ? { replyToCommentId: normalized.replyToCommentId } : {}),
+  });
+};
 
 export const deleteComment = (target, commentId) =>
   call('deleteComment', { target, commentId });

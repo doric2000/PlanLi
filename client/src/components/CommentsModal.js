@@ -1,67 +1,69 @@
 import React from 'react';
-import { View, TouchableOpacity, Modal } from 'react-native';
-import AppText from "./AppText";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CommentsSection } from './CommentSection';
-import { colors, common } from '../styles';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-/**
- * CommentsModal - A reusable modal component for displaying and managing comments.
- * 
- * This component provides a slide-up modal that contains the full comments experience,
- * including viewing existing comments and adding new ones.
- * 
- * USE THIS COMPONENT when you need to show comments for any post/item in the app.
- * Simply manage the visibility state and pass the post ID.
- * 
- * @param {boolean} visible - Controls whether the modal is shown or hidden
- * @param {function} onClose - Function to call when user closes the modal (X button or back)
- * @param {string} postId - The unique ID of the post/recommendation to load comments for
- * @param {string} collectionName - Firebase collection name (default: 'recommendations')
- * 
- * @example
- * // In your screen:
- * const [showComments, setShowComments] = useState(false);
- * const [selectedId, setSelectedId] = useState(null);
- * 
- * <CommentsModal
- *   visible={showComments}
- *   onClose={() => setShowComments(false)}
- *   postId={selectedId}
- * />
- */
-export const CommentsModal = ({ 
-  visible, 
-  onClose, 
-  postId, 
+import AppText from './AppText';
+import { CommentsSection } from './CommentSection';
+import { colors, commentStyles as styles } from '../styles';
+
+export const CommentsModal = ({
+  visible,
+  onClose,
+  postId,
   collectionName = 'recommendations',
   initialCommentId = null,
 }) => {
+  const insets = useSafeAreaInsets();
   return (
     <Modal
-      animationType="fade"
-      transparent={true}
+      animationType="slide"
+      transparent
       visible={visible}
       onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={common.modalOverlay}>
-        <View style={common.modalContentTall}>
-          <View style={common.modalHeader}>
-            <AppText style={common.modalTitle}>תגובות</AppText>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          
-          {postId && (
-            <CommentsSection 
-              collectionName={collectionName} 
-              postId={postId}
-              initialCommentId={initialCommentId}
-            />
-          )}
-        </View>
-      </View>
+      <KeyboardAvoidingView
+        style={styles.keyboard}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      >
+        <Pressable style={styles.overlay} onPress={onClose} testID="comments-backdrop">
+          <Pressable
+            style={styles.sheet}
+            onPress={(event) => event.stopPropagation?.()}
+            testID="comments-sheet"
+          >
+            <View style={styles.handle} />
+            <View style={styles.header}>
+              <View style={styles.headerSide} />
+              <AppText style={styles.headerTitle}>תגובות</AppText>
+              <Pressable
+                style={styles.headerSide}
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="סגירת תגובות"
+                testID="comments-close"
+              >
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+            {visible && postId ? (
+              <CommentsSection
+                collectionName={collectionName}
+                postId={postId}
+                initialCommentId={initialCommentId}
+                bottomInset={insets.bottom}
+              />
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

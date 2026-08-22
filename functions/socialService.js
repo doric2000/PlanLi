@@ -16,6 +16,7 @@ const {
   prepareGroupedLikeActivity,
   prepareGroupedLikeRemoval,
   processNotificationCleanupJob,
+  purgeNotificationsForTarget,
   sanitizeActorPreview,
   setNotificationRead,
   stageNotificationActivity,
@@ -51,6 +52,9 @@ const RATE_LIMITS = Object.freeze({
   deleteContent: { max: 20, windowMs: 60 * 60 * 1000 },
   notification: { max: 120, windowMs: 60 * 1000 },
 });
+
+const COMMENT_THREAD_DELETE_PAGE_SIZE = 200;
+const COMMENT_THREAD_DELETE_JOB_SCHEMA_VERSION = 1;
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -98,6 +102,27 @@ function normalizeTarget(target) {
 
 function favoriteKeyForPath(path) {
   return crypto.createHash('sha256').update(path).digest('base64url');
+}
+
+function commentThreadDeletionJobId(rootCommentPath) {
+  return crypto.createHash('sha256').update(rootCommentPath).digest('base64url');
+}
+
+function commentThreadDeletionJobRef(db, rootCommentPath) {
+  return db.doc(
+    `system/runtime/commentThreadDeletionJobs/${commentThreadDeletionJobId(rootCommentPath)}`
+  );
+}
+
+function canonicalCommentThread(value, commentId) {
+  const threadType = value?.threadType === 'reply' ? 'reply' : 'root';
+  const threadRootId = threadType === 'reply'
+    ? cleanId(value?.threadRootId, 'threadRootId')
+    : commentId;
+  const replyToCommentId = threadType === 'reply'
+    ? cleanId(value?.replyToCommentId, 'replyToCommentId')
+    : null;
+  return { threadType, threadRootId, replyToCommentId };
 }
 
 function compactObject(value) {
@@ -397,6 +422,14 @@ async function saveComment({ admin, auth, data }) {
   const textSafety = evaluateTextSafety(text);
   assert(textSafety.safe, 'invalid-argument', 'This comment cannot be published. Please revise it.');
   const commentId = data?.commentId ? cleanId(data.commentId, 'commentId') : null;
+  const replyToCommentId = data?.replyToCommentId
+    ? cleanId(data.replyToCommentId, 'replyToCommentId')
+    : null;
+  assert(
+    !(commentId && replyToCommentId),
+    'invalid-argument',
+    'A comment relationship cannot be changed while editing.'
+  );
   await consumeRateLimit({ admin, uid: auth.uid, action: 'comment' });
 
   const db = admin.firestore();
@@ -418,27 +451,14 @@ async function saveComment({ admin, auth, data }) {
       displayName: author.displayName || 'Traveler',
       photoURL: author.photoURL || null,
     };
-    const ownerId = targetData.ownerId;
-    const shouldNotifyOwner = !commentId && ownerId && ownerId !== auth.uid;
-    const notificationId = shouldNotifyOwner
-      ? commentNotificationId(target.path, commentRef.id)
-      : null;
-    const notificationRef = notificationId
-      ? db.doc(`users/${ownerId}/notifications/${notificationId}`)
-      : null;
-    const [notificationSnapshot, ownerSnapshot, blockedSnapshot] = notificationRef
-      ? await Promise.all([
-        transaction.get(notificationRef),
-        transaction.get(db.doc(`users/${ownerId}`)),
-        transaction.get(db.doc(`users/${ownerId}/blockedUsers/${auth.uid}`)),
-      ])
-      : [null, null, null];
-    const canNotifyOwner = notificationRef
-      && notificationRecipientEligible(ownerSnapshot)
-      && !blockedSnapshot?.exists;
     if (commentId) {
       assert(commentSnapshot.exists, 'not-found', 'Comment does not exist.');
       const previous = commentSnapshot.data();
+      assert(
+        previous.status === 'active',
+        'failed-precondition',
+        'Only published comments can be edited.'
+      );
       assert(
         previous.authorId === auth.uid || isAdmin,
         'permission-denied',
@@ -447,14 +467,94 @@ async function saveComment({ admin, auth, data }) {
       transaction.update(commentRef, {
         text,
         authorPreview,
+        ...(!previous.threadType ? {
+          threadType: 'root',
+          threadRootId: commentRef.id,
+          replyToCommentId: null,
+          replyCount: Math.max(0, Math.trunc(Number(previous.replyCount) || 0)),
+        } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      const thread = canonicalCommentThread(previous, commentRef.id);
+      result = {
+        id: commentRef.id,
+        authorId: auth.uid,
+        authorPreview,
+        text,
+        ...thread,
+        replyCount: Math.max(0, Math.trunc(Number(previous.replyCount) || 0)),
+      };
     } else {
+      let directReplySnapshot = null;
+      let rootSnapshot = null;
+      let rootRef = null;
+      let directReplyAuthorId = null;
+      let threadRootId = commentRef.id;
+      let threadType = 'root';
+
+      if (replyToCommentId) {
+        const directReplyRef = targetRef.collection('comments').doc(replyToCommentId);
+        directReplySnapshot = await transaction.get(directReplyRef);
+        assert(
+          directReplySnapshot.exists && directReplySnapshot.data()?.status === 'active',
+          'failed-precondition',
+          'The comment being replied to is no longer available.'
+        );
+        const directReply = directReplySnapshot.data() || {};
+        const directThread = canonicalCommentThread(directReply, directReplyRef.id);
+        directReplyAuthorId = cleanId(directReply.authorId, 'replyAuthorId');
+        threadRootId = directThread.threadRootId;
+        threadType = 'reply';
+        rootRef = targetRef.collection('comments').doc(threadRootId);
+        rootSnapshot = rootRef.path === directReplyRef.path
+          ? directReplySnapshot
+          : await transaction.get(rootRef);
+        assert(
+          rootSnapshot.exists && rootSnapshot.data()?.status === 'active',
+          'failed-precondition',
+          'The reply thread is no longer available.'
+        );
+        const rootThread = canonicalCommentThread(rootSnapshot.data() || {}, rootRef.id);
+        assert(rootThread.threadType === 'root', 'failed-precondition', 'The reply thread is invalid.');
+      }
+
+      const recipients = new Map();
+      const addRecipient = (uid, subtype) => {
+        if (!uid || uid === auth.uid) return;
+        const existing = recipients.get(uid);
+        if (!existing || subtype === 'new_reply') recipients.set(uid, subtype);
+      };
+      if (directReplyAuthorId) addRecipient(directReplyAuthorId, 'new_reply');
+      addRecipient(targetData.ownerId, 'new_comment');
+
+      const notificationId = commentNotificationId(target.path, commentRef.id);
+      const recipientRecords = await Promise.all(Array.from(recipients.entries()).map(
+        async ([uid, subtype]) => {
+          const notificationRef = db.doc(`users/${uid}/notifications/${notificationId}`);
+          const [notificationSnapshot, recipientSnapshot, blockedSnapshot] = await Promise.all([
+            transaction.get(notificationRef),
+            transaction.get(db.doc(`users/${uid}`)),
+            transaction.get(db.doc(`users/${uid}/blockedUsers/${auth.uid}`)),
+          ]);
+          return {
+            uid,
+            subtype,
+            notificationRef,
+            notificationSnapshot,
+            eligible: notificationRecipientEligible(recipientSnapshot) && !blockedSnapshot.exists,
+          };
+        }
+      ));
+
       transaction.create(commentRef, {
         authorId: auth.uid,
         authorPreview,
         text,
         status: 'active',
+        threadType,
+        threadRootId,
+        replyToCommentId,
+        replyCount: 0,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -463,69 +563,200 @@ async function saveComment({ admin, auth, data }) {
         'stats.commentCount': nextCount,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      if (canNotifyOwner && notificationSnapshot) {
-        const commentTarget = {
-          type: 'comment',
-          id: commentRef.id,
-          parentType: target.type,
-          parentId: target.id,
-        };
+      if (rootRef && rootSnapshot) {
+        transaction.update(rootRef, {
+          replyCount: Math.max(0, Math.trunc(Number(rootSnapshot.data()?.replyCount) || 0)) + 1,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          ...(!rootSnapshot.data()?.threadType ? {
+            threadType: 'root',
+            threadRootId: rootRef.id,
+            replyToCommentId: null,
+          } : {}),
+        });
+      }
+
+      const commentTarget = {
+        type: 'comment',
+        id: commentRef.id,
+        parentType: target.type,
+        parentId: target.id,
+      };
+      const notificationTarget = buildNotificationTarget({
+        target: commentTarget,
+        data: {},
+        parentData: targetData,
+      });
+      recipientRecords.forEach((recipient) => {
+        if (!recipient.eligible) return;
         stageNotificationActivity({
           transaction,
           admin,
           db,
-          uid: ownerId,
-          notificationRef,
-          existingSnapshot: notificationSnapshot,
+          uid: recipient.uid,
+          notificationRef: recipient.notificationRef,
+          existingSnapshot: recipient.notificationSnapshot,
           notification: {
             channel: 'personal',
             type: 'comment',
-            subtype: 'new_comment',
+            subtype: recipient.subtype,
             priority: 'normal',
             actorId: auth.uid,
             actorPreview: { id: auth.uid, ...authorPreview },
             actorPreviews: [{ id: auth.uid, ...authorPreview }],
             count: 1,
             commentExcerpt: text,
-            target: buildNotificationTarget({ target, data: targetData }),
+            target: notificationTarget,
             navigation: navigationForTarget(commentTarget),
           },
         });
-      }
+      });
+
+      result = {
+        id: commentRef.id,
+        authorId: auth.uid,
+        authorPreview,
+        text,
+        threadType,
+        threadRootId,
+        replyToCommentId,
+        replyCount: 0,
+      };
     }
-    result = {
-      id: commentRef.id,
-      authorId: auth.uid,
-      authorPreview,
-      text,
-    };
   });
   return { comment: result };
 }
 
-async function deleteComment({ admin, auth, data }) {
-  const isAdmin = await hasActiveAdminAccess({ admin, auth });
+function validCommentThreadDeletionJob(value) {
+  return value?.schemaVersion === COMMENT_THREAD_DELETE_JOB_SCHEMA_VERSION
+    && value?.type === 'comment_thread_delete'
+    && ['ready', 'complete'].includes(value?.state)
+    && typeof value?.parentPath === 'string'
+    && typeof value?.rootCommentPath === 'string'
+    && typeof value?.rootCommentId === 'string'
+    && typeof value?.authorizedUid === 'string';
+}
+
+async function processCommentThreadDeletionJob({ admin, rootCommentPath, expectedVersion = null }) {
+  const db = admin.firestore();
+  const jobRef = commentThreadDeletionJobRef(db, rootCommentPath);
+  while (true) {
+    const jobSnapshot = await jobRef.get();
+    if (!jobSnapshot.exists || !validCommentThreadDeletionJob(jobSnapshot.data())) {
+      return { state: 'ignored', deletedReplies: 0 };
+    }
+    const job = jobSnapshot.data() || {};
+    if (expectedVersion != null && job.version !== expectedVersion) {
+      return { state: 'superseded', deletedReplies: Number(job.deletedReplies || 0) };
+    }
+    if (job.state === 'complete') {
+      return { state: 'complete', deletedReplies: Number(job.deletedReplies || 0) };
+    }
+
+    const commentsRef = db.doc(job.parentPath).collection('comments');
+    const page = await commentsRef
+      .where('threadRootId', '==', job.rootCommentId)
+      .limit(COMMENT_THREAD_DELETE_PAGE_SIZE)
+      .get();
+    const replies = page.docs.filter((entry) => entry.id !== job.rootCommentId);
+    if (replies.length) {
+      for (let offset = 0; offset < replies.length; offset += 10) {
+        await Promise.all(replies.slice(offset, offset + 10).map((entry) => (
+          purgeNotificationsForTarget({ admin, targetPath: entry.ref.path })
+        )));
+      }
+      const batch = db.batch();
+      replies.forEach((entry) => batch.delete(entry.ref));
+      await batch.commit();
+      continue;
+    }
+
+    await purgeNotificationsForTarget({ admin, targetPath: rootCommentPath });
+    const parentRef = db.doc(job.parentPath);
+    const activeCount = await parentRef.collection('comments').where('status', '==', 'active').count().get();
+    await db.runTransaction(async (transaction) => {
+      const [currentJob, rootSnapshot, parentSnapshot] = await Promise.all([
+        transaction.get(jobRef),
+        transaction.get(db.doc(rootCommentPath)),
+        transaction.get(parentRef),
+      ]);
+      if (!currentJob.exists || !validCommentThreadDeletionJob(currentJob.data())) return;
+      const current = currentJob.data() || {};
+      if (current.state === 'complete' || (expectedVersion != null && current.version !== expectedVersion)) return;
+      if (rootSnapshot.exists) transaction.delete(rootSnapshot.ref);
+      if (parentSnapshot.exists) {
+        transaction.update(parentRef, {
+          'stats.commentCount': Math.max(0, Number(activeCount.data().count || 0)),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      const expireAt = admin.firestore.Timestamp?.fromMillis
+        ? admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      transaction.set(jobRef, {
+        state: 'complete',
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt,
+      }, { merge: true });
+    });
+    const complete = await jobRef.get();
+    return {
+      state: complete.data()?.state === 'complete' ? 'complete' : 'processing',
+      deletedReplies: Number(complete.data()?.deletedReplies || 0),
+    };
+  }
+}
+
+async function handleCommentThreadDeletionJobWrite({ admin, event }) {
+  const after = event?.data?.after?.exists ? event.data.after.data() || {} : null;
+  if (!validCommentThreadDeletionJob(after) || after.state !== 'ready') {
+    return { state: 'ignored' };
+  }
+  return processCommentThreadDeletionJob({
+    admin,
+    rootCommentPath: after.rootCommentPath,
+    expectedVersion: after.version,
+  });
+}
+
+async function deleteComment({ admin, auth, data, internalActorUid = null }) {
+  const internalUid = internalActorUid ? cleanId(internalActorUid, 'internalActorUid') : null;
+  const isAdmin = internalUid ? true : await hasActiveAdminAccess({ admin, auth });
   if (!isAdmin) assertVerified(auth);
+  const actorUid = internalUid || auth.uid;
   const target = normalizeTarget(data?.target);
   const commentId = cleanId(data?.commentId, 'commentId');
-  await consumeRateLimit({ admin, uid: auth.uid, action: 'comment' });
+  if (!internalUid) await consumeRateLimit({ admin, uid: auth.uid, action: 'comment' });
   const db = admin.firestore();
   const targetRef = db.doc(target.path);
   const commentRef = targetRef.collection('comments').doc(commentId);
   const cleanupTargetPath = `${target.path}/comments/${commentId}`;
   const cleanupJobRef = notificationCleanupJobRef(db, cleanupTargetPath);
   let cleanupVersion = null;
+  let threadDeletion = null;
 
   await db.runTransaction(async (transaction) => {
-    const [targetSnapshot, commentSnapshot, cleanupJobSnapshot] = await Promise.all([
+    const rootJobRef = commentThreadDeletionJobRef(db, cleanupTargetPath);
+    const [targetSnapshot, commentSnapshot, cleanupJobSnapshot, rootJobSnapshot] = await Promise.all([
       transaction.get(targetRef),
       transaction.get(commentRef),
       transaction.get(cleanupJobRef),
+      transaction.get(rootJobRef),
     ]);
     if (!commentSnapshot.exists) {
+      const rootJob = rootJobSnapshot.exists ? rootJobSnapshot.data() || {} : null;
+      if (validCommentThreadDeletionJob(rootJob)) {
+        assert(
+          rootJob.authorizedUid === actorUid || isAdmin,
+          'not-found',
+          'Comment does not exist.'
+        );
+        threadDeletion = { rootCommentPath: cleanupTargetPath, version: rootJob.version };
+        return;
+      }
       const cleanupJob = cleanupJobSnapshot.exists ? cleanupJobSnapshot.data() || {} : null;
       assert(
-        cleanupJob?.authorizedUid === auth.uid || isAdmin,
+        cleanupJob?.authorizedUid === actorUid || isAdmin,
         'not-found',
         'Comment does not exist.'
       );
@@ -534,10 +765,52 @@ async function deleteComment({ admin, auth, data }) {
     }
     const comment = commentSnapshot.data();
     assert(
-      comment.authorId === auth.uid || isAdmin,
+      comment.authorId === actorUid || isAdmin,
       'permission-denied',
       'You do not own this comment.'
     );
+    const thread = canonicalCommentThread(comment, commentId);
+    if (thread.threadType === 'root') {
+      const targetData = targetSnapshot.exists ? targetSnapshot.data() || {} : {};
+      const legacyOwnerNotificationRef = targetData.ownerId && targetData.ownerId !== comment.authorId
+        ? db.doc(
+          `users/${targetData.ownerId}/notifications/${commentNotificationId(target.path, commentId)}`
+        )
+        : null;
+      const legacyOwnerNotificationSnapshot = legacyOwnerNotificationRef
+        ? await transaction.get(legacyOwnerNotificationRef)
+        : null;
+      const version = Math.max(0, Math.trunc(Number(rootJobSnapshot.data()?.version) || 0)) + 1;
+      transaction.update(commentRef, {
+        status: 'deleting',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      if (legacyOwnerNotificationRef && legacyOwnerNotificationSnapshot) {
+        stageNotificationDelete({
+          transaction,
+          admin,
+          db,
+          uid: targetData.ownerId,
+          notificationRef: legacyOwnerNotificationRef,
+          existingSnapshot: legacyOwnerNotificationSnapshot,
+        });
+      }
+      transaction.set(rootJobRef, {
+        schemaVersion: COMMENT_THREAD_DELETE_JOB_SCHEMA_VERSION,
+        type: 'comment_thread_delete',
+        state: 'ready',
+        version,
+        parentPath: target.path,
+        rootCommentPath: cleanupTargetPath,
+        rootCommentId: commentId,
+        authorizedUid: actorUid,
+        deletedReplies: 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      threadDeletion = { rootCommentPath: cleanupTargetPath, version };
+      return;
+    }
+
     const targetData = targetSnapshot.exists ? targetSnapshot.data() || {} : {};
     const notificationId = targetData.ownerId && targetData.ownerId !== comment.authorId
       ? commentNotificationId(target.path, commentId)
@@ -548,6 +821,8 @@ async function deleteComment({ admin, auth, data }) {
     const notificationSnapshot = notificationRef
       ? await transaction.get(notificationRef)
       : null;
+    const rootRef = targetRef.collection('comments').doc(thread.threadRootId);
+    const rootSnapshot = await transaction.get(rootRef);
     transaction.delete(commentRef);
     cleanupVersion = stageNotificationCleanupJob({
       transaction,
@@ -555,9 +830,9 @@ async function deleteComment({ admin, auth, data }) {
       jobRef: cleanupJobRef,
       existingSnapshot: cleanupJobSnapshot,
       targetPath: cleanupTargetPath,
-      authorizedUid: auth.uid,
+      authorizedUid: actorUid,
     });
-    if (targetSnapshot.exists) {
+    if (targetSnapshot.exists && comment.status === 'active') {
       transaction.update(targetRef, {
         'stats.commentCount': Math.max(
           0,
@@ -565,24 +840,38 @@ async function deleteComment({ admin, auth, data }) {
         ),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      if (notificationRef && notificationSnapshot) {
-        stageNotificationDelete({
-          transaction,
-          admin,
-          db,
-          uid: targetData.ownerId,
-          notificationRef,
-          existingSnapshot: notificationSnapshot,
-        });
-      }
+    }
+    if (notificationRef && notificationSnapshot) {
+      stageNotificationDelete({
+        transaction,
+        admin,
+        db,
+        uid: targetData.ownerId,
+        notificationRef,
+        existingSnapshot: notificationSnapshot,
+      });
+    }
+    if (rootSnapshot.exists && comment.status === 'active') {
+      transaction.update(rootRef, {
+        replyCount: Math.max(0, Math.trunc(Number(rootSnapshot.data()?.replyCount) || 0) - 1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
   });
+  if (threadDeletion) {
+    const outcome = await processCommentThreadDeletionJob({
+      admin,
+      rootCommentPath: threadDeletion.rootCommentPath,
+      expectedVersion: threadDeletion.version,
+    });
+    return { deleted: outcome.state === 'complete', scope: 'thread', state: outcome.state };
+  }
   await processNotificationCleanupJob({
     admin,
     targetPath: cleanupTargetPath,
     expectedVersion: cleanupVersion,
   });
-  return { deleted: true };
+  return { deleted: true, scope: 'comment', state: 'complete' };
 }
 
 async function refreshFavoritesForTarget({ admin, target, data }) {
@@ -694,6 +983,7 @@ module.exports = {
   RATE_LIMITS,
   TARGETS,
   buildFavoritePreview,
+  canonicalCommentThread,
   cleanupOrphanFavorites,
   cleanId,
   cleanText,
@@ -703,9 +993,11 @@ module.exports = {
   deleteNotification,
   favoriteKeyForPath,
   getReactionState,
+  handleCommentThreadDeletionJobWrite,
   isVerified,
   markAllNotificationsRead,
   normalizeTarget,
+  processCommentThreadDeletionJob,
   refreshFavoriteOwnerPreviews,
   refreshFavoritesForTarget,
   saveComment,

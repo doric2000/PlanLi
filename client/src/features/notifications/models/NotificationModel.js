@@ -292,6 +292,11 @@ export function formatNotificationMessage(notification) {
       : `לייק חדש על ${targetLabel(notification)}`;
   }
   if (notification.type === NotificationType.COMMENT) {
+    if (notification.subtype === 'new_reply') {
+      return actor
+        ? `${actor} השיב/ה לתגובה שלך`
+        : 'השיבו לתגובה שלך';
+    }
     if (count > 1) return `${count} תגובות חדשות על ${targetLabel(notification)}`;
     return actor
       ? `תגובה חדשה מ${actor} על ${targetLabel(notification)}`

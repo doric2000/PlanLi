@@ -140,6 +140,29 @@ describe('NotificationService', () => {
     })).resolves.toEqual({ available: false, reason: 'deleted' });
   });
 
+  it('requires the root of a reply notification to remain active', async () => {
+    mockFirestore.getDoc
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ status: 'active', threadType: 'reply', threadRootId: 'root-1' }),
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ status: 'moderation_hold', threadType: 'root' }),
+      });
+    await expect(resolveNotificationTargetAvailability({
+      type: 'comment',
+      subtype: 'new_reply',
+      navigation: {
+        action: 'open_comment',
+        parentType: 'recommendation',
+        parentId: 'post-1',
+        commentId: 'reply-1',
+      },
+    })).resolves.toEqual({ available: false, reason: 'held' });
+    expect(mockFirestore.getDoc).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps a rules-hidden target contextual instead of guessing or navigating', async () => {
     mockFirestore.getDoc.mockRejectedValue({ code: 'firestore/permission-denied' });
     await expect(resolveNotificationTargetAvailability({

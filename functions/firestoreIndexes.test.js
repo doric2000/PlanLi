@@ -173,4 +173,20 @@ test('blocked-like cleanup and durable notification cleanup have indexes', () =>
     && entry.fieldPath === 'expireAt'
     && entry.ttl === true
   )));
+  assert.ok(config.fieldOverrides.some((entry) => (
+    entry.collectionGroup === 'commentThreadDeletionJobs'
+    && entry.fieldPath === 'expireAt'
+    && entry.ttl === true
+  )));
+});
+
+test('threaded comments have bounded root and reply indexes', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const indexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'comments')
+    .map(fieldSignature);
+  assert.ok(indexes.includes('status:ASCENDING|threadType:ASCENDING|createdAt:DESCENDING'));
+  assert.ok(indexes.includes(
+    'status:ASCENDING|threadType:ASCENDING|threadRootId:ASCENDING|createdAt:ASCENDING'
+  ));
 });

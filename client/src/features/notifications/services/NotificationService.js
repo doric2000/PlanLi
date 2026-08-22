@@ -104,8 +104,27 @@ export async function resolveNotificationTargetAvailability(notification) {
   try {
     const snapshot = await getDoc(targetRef);
     if (!snapshot.exists()) return { available: false, reason: 'deleted' };
-    const status = String(snapshot.data()?.status || '').trim().toLowerCase();
-    if (status === 'active') return { available: true, reason: 'active' };
+    const value = snapshot.data() || {};
+    const status = String(value.status || '').trim().toLowerCase();
+    if (status === 'active') {
+      const navigation = notification.navigation || {};
+      if (
+        navigation.action === NotificationNavigationAction.COMMENT
+        && value.threadType === 'reply'
+      ) {
+        const collectionName = CONTENT_COLLECTIONS[navigation.parentType];
+        const parentId = safeTargetId(navigation.parentId);
+        const rootId = safeTargetId(value.threadRootId);
+        if (!collectionName || !parentId || !rootId) return { available: false, reason: 'unavailable' };
+        const root = await getDoc(doc(db, collectionName, parentId, 'comments', rootId));
+        if (!root.exists()) return { available: false, reason: 'deleted' };
+        const rootStatus = String(root.data()?.status || '').trim().toLowerCase();
+        if (rootStatus === 'active') return { available: true, reason: 'active' };
+        if (HELD_TARGET_STATUSES.has(rootStatus)) return { available: false, reason: 'held' };
+        return { available: false, reason: 'unavailable' };
+      }
+      return { available: true, reason: 'active' };
+    }
     if (HELD_TARGET_STATUSES.has(status)) return { available: false, reason: 'held' };
     return { available: false, reason: 'unavailable' };
   } catch (error) {

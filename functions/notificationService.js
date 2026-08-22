@@ -9,7 +9,7 @@ const NOTIFICATION_TYPES = Object.freeze(['like', 'comment', 'system', 'moderati
 const NOTIFICATION_PRIORITIES = Object.freeze(['normal', 'urgent']);
 const NOTIFICATION_SUBTYPES = Object.freeze({
   like: Object.freeze(['grouped_likes']),
-  comment: Object.freeze(['new_comment']),
+  comment: Object.freeze(['new_comment', 'new_reply']),
   system: Object.freeze(['content_held', 'content_restored', 'content_deleted']),
   moderation: Object.freeze([
     'report_received',
