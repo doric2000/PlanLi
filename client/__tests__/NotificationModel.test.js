@@ -1,7 +1,9 @@
 import {
+  buildNotificationLikesTarget,
   buildNotificationRouteAction,
   buildStatusActionForError,
   getNotificationFilterOptions,
+  getNotificationLikeMessageParts,
   getNotificationPresentation,
   normalizeNotification,
   NotificationChannel,
@@ -80,6 +82,19 @@ describe('NotificationModel schema v2', () => {
       },
     ],
     [
+      {
+        action: 'open_comment',
+        parentType: 'route',
+        parentId: 'route-2',
+        commentId: 'comment-2',
+      },
+      {
+        type: 'navigate',
+        routeName: 'RouteDetail',
+        params: { routeId: 'route-2', openComments: true, commentId: 'comment-2' },
+      },
+    ],
+    [
       { action: 'open_moderation_case', caseId: 'case-1' },
       { type: 'navigate', routeName: 'AdminPanel', params: { tab: 'reports', caseId: 'case-1' } },
     ],
@@ -137,6 +152,51 @@ describe('NotificationModel schema v2', () => {
       .toMatchObject({ type: 'status', reason: 'held' });
     expect(buildStatusActionForError({ reason: 'permission-denied' }))
       .toMatchObject({ type: 'status', reason: 'unavailable' });
+  });
+
+  it('exposes a structured, clickable Hebrew like-count label', () => {
+    expect(getNotificationLikeMessageParts({
+      type: 'like',
+      count: 1,
+      actorPreview: { displayName: 'נועה' },
+      target: { title: 'מסלול לצפון' },
+    })).toEqual({
+      actionLabel: '1 לייק',
+      remainder: 'חדש מנועה על “מסלול לצפון”',
+    });
+    expect(getNotificationLikeMessageParts({
+      type: 'like',
+      count: 4,
+      target: { type: 'route' },
+    })).toEqual({
+      actionLabel: '4 לייקים',
+      remainder: 'חדשים על המסלול שלך',
+    });
+    expect(getNotificationLikeMessageParts({ type: 'comment' })).toBeNull();
+  });
+
+  it('derives liker-list targets only from allowlisted typed notification actions', () => {
+    expect(buildNotificationLikesTarget({
+      type: 'like',
+      navigation: { action: 'open_recommendation', recommendationId: 'post-1' },
+    })).toEqual({ collectionName: 'recommendations', itemId: 'post-1' });
+    expect(buildNotificationLikesTarget({
+      type: 'like',
+      navigation: { action: 'open_route', routeId: 'route-1' },
+    })).toEqual({ collectionName: 'routes', itemId: 'route-1' });
+    expect(buildNotificationLikesTarget({
+      type: 'like',
+      navigation: { action: 'open_trip', tripId: 'trip-1' },
+    })).toBeNull();
+    expect(buildNotificationLikesTarget({
+      type: 'comment',
+      navigation: { action: 'open_recommendation', recommendationId: 'post-1' },
+    })).toBeNull();
+    expect(buildNotificationLikesTarget({
+      type: 'like',
+      target: { id: 'post-without-typed-navigation-id' },
+      navigation: { action: 'open_recommendation' },
+    })).toBeNull();
   });
 
   it('uses channel-specific filters and unread matching', () => {

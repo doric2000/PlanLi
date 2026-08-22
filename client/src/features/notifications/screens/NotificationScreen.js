@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import { Avatar } from '../../../components/Avatar';
+import LikesModal from '../../../components/LikesModal';
 import SegmentedTabs from '../../../components/SegmentedTabs';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { colors } from '../../../styles';
@@ -33,6 +34,7 @@ import {
 import { useNotificationCenter } from '../context/NotificationCenterContext';
 import {
   buildNotificationRouteAction,
+  buildNotificationLikesTarget,
   buildStatusActionForError,
   getNotificationFilterOptions,
   notificationRequiresAvailabilityCheck,
@@ -149,6 +151,7 @@ export default function NotificationScreen({
   const [notificationMenuTarget, setNotificationMenuTarget] = useState(null);
   const [channelMenuVisible, setChannelMenuVisible] = useState(false);
   const [statusAction, setStatusAction] = useState(null);
+  const [likesTarget, setLikesTarget] = useState(null);
   const [resolvingPush, setResolvingPush] = useState(false);
   const mountedRef = useRef(true);
   const openingRef = useRef(new Set());
@@ -188,6 +191,7 @@ export default function NotificationScreen({
   useEffect(() => {
     setNotificationMenuTarget(null);
     setChannelMenuVisible(false);
+    setLikesTarget(null);
   }, [channel]);
 
   useEffect(() => {
@@ -256,6 +260,51 @@ export default function NotificationScreen({
       openingRef.current.delete(notification.id);
     }
   }, [navigation, onOpenAction, resolveTargetAvailability, setRead]);
+
+  const openNotificationLikes = useCallback(async (notification) => {
+    if (!notification?.id || openingRef.current.has(notification.id)) return;
+    openingRef.current.add(notification.id);
+    const markRead = () => (!notification.isRead
+      ? setRead(notification, true).catch(() => false)
+      : Promise.resolve(false));
+    try {
+      const target = buildNotificationLikesTarget(notification);
+      if (!target) {
+        await markRead();
+        if (mountedRef.current) setStatusAction(buildStatusActionForError({ reason: 'unsupported' }));
+        return;
+      }
+
+      let availability;
+      try {
+        availability = await resolveTargetAvailability(notification);
+      } catch (error) {
+        if (mountedRef.current) {
+          setStatusAction({
+            ...buildStatusActionForError(error),
+            onRetry: () => {
+              setStatusAction(null);
+              void openNotificationLikes(notification);
+            },
+          });
+        }
+        return;
+      }
+      if (!mountedRef.current) return;
+      if (availability?.available !== true) {
+        await markRead();
+        setStatusAction(buildStatusActionForError({
+          reason: availability?.reason || 'unavailable',
+        }));
+        return;
+      }
+
+      setLikesTarget(target);
+      await markRead();
+    } finally {
+      openingRef.current.delete(notification.id);
+    }
+  }, [resolveTargetAvailability, setRead]);
 
   useEffect(() => {
     const notificationId = safeRouteId(route?.params?.notificationId);
@@ -520,7 +569,8 @@ export default function NotificationScreen({
               <NotificationCard
                 notification={item}
                 busy={channelMutationBusy || Boolean(center.pendingActions[`item:${item.id}`])}
-                onPress={openNotification}
+                onTargetPress={openNotification}
+                onLikesPress={openNotificationLikes}
                 onMenuPress={(notification) => setNotificationMenuTarget({
                   id: notification.id,
                   channel: notification.channel,
@@ -548,6 +598,13 @@ export default function NotificationScreen({
           />
         )}
       </View>
+
+      <LikesModal
+        visible={Boolean(likesTarget)}
+        onClose={() => setLikesTarget(null)}
+        collectionName={likesTarget?.collectionName}
+        itemId={likesTarget?.itemId}
+      />
 
       <NotificationOverflowMenu
         notification={selectedNotification}

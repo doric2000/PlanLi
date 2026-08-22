@@ -37,6 +37,18 @@ jest.mock('../src/features/notifications/services/NotificationService', () => ({
   resolveNotificationTargetAvailability: (...args) => mockResolveTargetAvailability(...args),
 }));
 jest.mock('../src/hooks/useAuthUser', () => ({ useAuthUser: () => ({ user: mockUser }) }));
+jest.mock('../src/components/LikesModal', () => {
+  const ReactRuntime = require('react');
+  const { View } = require('react-native');
+  return function MockLikesModal({ visible, collectionName, itemId, likeCount }) {
+    return visible ? ReactRuntime.createElement(View, {
+      testID: 'likes-modal',
+      collectionName,
+      itemId,
+      likeCount,
+    }) : null;
+  };
+});
 
 const personalLike = {
   id: 'like-1',
@@ -53,7 +65,11 @@ const personalLike = {
     displayName: `מטייל ${index}`,
     photoURL: null,
   })),
-  target: { type: 'recommendation', title: 'מסעדה בחיפה', thumbUrls: [] },
+  target: {
+    type: 'recommendation',
+    title: 'מסעדה בחיפה',
+    thumbUrls: ['https://example.com/post.jpg', 'https://example.com/unused.jpg'],
+  },
   navigation: { action: 'open_recommendation', recommendationId: 'post-1' },
 };
 
@@ -212,6 +228,10 @@ describe('NotificationScreen interactions', () => {
     const onOpenAction = jest.fn();
     const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
 
+    expect(screen.getByTestId('notification-type-preview-restored-1', {
+      includeHiddenElements: true,
+    })).toBeTruthy();
+    expect(screen.queryByTestId('notification-target-image-restored-1')).toBeNull();
     fireEvent.press(screen.getByTestId('notification-row-restored-1'));
     await waitFor(() => expect(mockResolveTargetAvailability).toHaveBeenCalledWith(restored));
     expect(onOpenAction).not.toHaveBeenCalled();
@@ -241,6 +261,95 @@ describe('NotificationScreen interactions', () => {
     const screen = render(<NotificationScreen />);
     expect(screen.getByTestId('notification-actor-like-1-0', { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByTestId('notification-actor-like-1-3', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId('notification-target-image-like-1').props.source).toEqual({
+      uri: 'https://example.com/post.jpg',
+    });
+    expect(screen.queryByTestId('notification-previews-like-1')).toBeNull();
+  });
+
+  it('opens the full liker list from the independent 44px like-count action', async () => {
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+
+    const likesAction = screen.getByTestId('notification-likes-like-1');
+    expect(StyleSheet.flatten(likesAction.props.style).minHeight).toBe(44);
+    fireEvent.press(likesAction);
+    fireEvent.press(likesAction);
+
+    await waitFor(() => expect(screen.getByTestId('likes-modal')).toBeTruthy());
+    expect(screen.getByTestId('likes-modal').props).toMatchObject({
+      collectionName: 'recommendations',
+      itemId: 'post-1',
+    });
+    expect(screen.getByTestId('likes-modal').props).not.toHaveProperty('likeCount');
+    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(onOpenAction).not.toHaveBeenCalled();
+  });
+
+  it('uses a content fallback when social target media is missing', () => {
+    mockCenter = createCenter({
+      personal: [{
+        ...personalLike,
+        id: 'route-like-fallback',
+        target: { type: 'route', title: 'מסלול בגליל', thumbUrls: [] },
+        navigation: { action: 'open_route', routeId: 'route-1' },
+      }],
+    });
+    const screen = render(<NotificationScreen />);
+
+    expect(screen.getByTestId('notification-target-fallback-route-like-fallback')).toBeTruthy();
+    expect(screen.getByTestId('notification-actor-route-like-fallback-0', {
+      includeHiddenElements: true,
+    })).toBeTruthy();
+  });
+
+  it('revalidates content before opening the liker list', async () => {
+    mockResolveTargetAvailability.mockResolvedValue({ available: false, reason: 'held' });
+    const screen = render(<NotificationScreen />);
+
+    fireEvent.press(screen.getByTestId('notification-likes-like-1'));
+
+    await waitFor(() => expect(screen.getByText('התוכן נמצא בבדיקה')).toBeTruthy());
+    expect(screen.queryByTestId('likes-modal')).toBeNull();
+    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens a route like from its main thumbnail with the exact route id', async () => {
+    const routeLike = {
+      ...personalLike,
+      id: 'route-like-1',
+      target: {
+        type: 'route',
+        title: 'מסלול בגליל',
+        thumbUrls: ['https://example.com/route.jpg'],
+      },
+      navigation: { action: 'open_route', routeId: 'route-1' },
+    };
+    mockCenter = createCenter({ personal: [routeLike] });
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+
+    fireEvent.press(screen.getByTestId('notification-target-route-like-1'));
+
+    await waitFor(() => expect(onOpenAction).toHaveBeenCalledWith({
+      type: 'navigate',
+      routeName: 'RouteDetail',
+      params: { routeId: 'route-1' },
+    }, routeLike));
+  });
+
+  it('opens the exact comment from its main target thumbnail', async () => {
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+
+    fireEvent.press(screen.getByTestId('notification-target-comment-1'));
+
+    await waitFor(() => expect(onOpenAction).toHaveBeenCalledWith({
+      type: 'navigate',
+      routeName: 'RecommendationDetail',
+      params: { postId: 'post-1', openComments: true, commentId: 'comment-doc-1' },
+    }, personalComment));
   });
 
   it('resolves a push id once, marks it read, and ignores duplicate route params', async () => {
