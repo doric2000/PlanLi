@@ -67,40 +67,23 @@ physical iPhone. Expo Go is unsupported because PlanLi uses native auth modules.
 - Hosted admin/Web behavior: use the browser skill against the local export or
   deployed URL as appropriate. Do not use production admin mutations for testing.
 
-## Client validation ladder
+## Client validation triggers
 
 Run commands from `client/` and start with the narrowest relevant test:
 
 ```powershell
-npm.cmd test -- --runInBand __tests__/RelevantScreen.test.js __tests__/RelevantService.test.js
+npm.cmd test -- --runInBand --silent --runTestsByPath __tests__/RelevantScreen.test.js __tests__/RelevantService.test.js
 ```
 
-### Level 0
-
-Documentation or Codex configuration only: no client tests or exports.
-
-### Level 1
-
-- Run directly affected Jest tests.
-- Prefer React Native Testing Library assertions through roles, labels, text, and
-  stable test IDs rather than component implementation state.
-- For UI changes, exercise the changed loading/error/success path in Web/admin or
-  on the iPhone when practical.
-
-### Level 2
-
-- Run related test groups.
+- Prefer React Native Testing Library roles, labels, text, and stable test IDs.
+- Exercise the changed UI in Web/admin or on iPhone when practical; cover loading,
+  error, or auth only when affected.
 - Admin UI/assets/entry/bundler changes require `npm run export:admin-web`,
-  `npm run verify:admin-web`, and browser smoke testing.
-- Native config/dependency/assets/bundler/entry changes require an iOS export.
-- Shared navigation/auth/runtime changes require the related navigation/auth groups.
-- Run one base-branch `/review` after checks.
-
-### Level 3
-
-- Run the full client suite with `npm.cmd test -- --runInBand`.
-- Run applicable admin and iOS exports plus critical iPhone/browser smoke flows.
-- Request an EAS build only for a native/release need; do not build for JS-only work.
+  `npm run verify:admin-web`, and one focused browser smoke path.
+- Native config/dependency/assets/bundler/entry changes require
+  `npm run verify:ios-release-config` and an iOS export.
+- Shared navigation/auth/runtime changes require their related test groups.
+- Request an EAS build only for native/release need; never for JS-only work.
 
 Do not add a new E2E framework for a focused fix. The existing remote Maestro smoke
 workflow is on-demand only and cannot replace manual physical-device coverage.

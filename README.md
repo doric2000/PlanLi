@@ -285,9 +285,11 @@ and any location or place-search data transmitted off-device. Do not copy these
 notes into App Store Connect without inspecting a real production-mode Sentry
 event and replay from the signed beta build.
 
-### Local and remote gates
+### Manual release gates
 
-Run release checks on Node.js 22 from a clean release commit:
+These full checks are for an explicitly authorized release candidate, not ordinary
+development, commits, pushes, or merges. Run them on Node.js 22 from the clean release
+commit; normal changes use `npm run validate:changed` from the repository root.
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\client
@@ -658,9 +660,16 @@ npm run configure-function-iam
 npm run configure-function-iam -- --apply
 ```
 
-## Verification
+## Manual full verification and troubleshooting
 
-Run Functions tests from `functions`:
+Ordinary development uses the focused validation policy in `AGENTS.md` and
+`npm run validate:changed`. Use the commands below only for explicit release readiness
+or when troubleshooting requires the complete subsystem.
+
+Use `npm run validate:changed -- --plan-only` to inspect the selected checks without
+running them; `node scripts/validationPlan.js --help` lists exact-diff and scope options.
+
+Run the full Functions checks from `functions`:
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
@@ -670,7 +679,7 @@ npm run test:rules:emulator
 npm audit --omit=dev
 ```
 
-Run client tests and builds from `client`:
+Run the full client tests and exports from `client`:
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\client

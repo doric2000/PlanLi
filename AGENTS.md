@@ -68,7 +68,6 @@ Use the smallest relevant capability; more tools are not automatically better.
 - Codex configuration: use official OpenAI documentation or the OpenAI Docs skill.
 - Use a security diff review only for Auth, Rules, Storage, admin authorization,
   deletion, secrets, or an explicitly requested security review.
-- Use `/review` once for the selected diff scope; it does not replace tests or runtime QA.
 
 Before environment-dependent Firebase or EAS work, verify the account, project,
 repository, and intended environment. MCP access never authorizes deployment,
@@ -93,38 +92,28 @@ authorization. Do not create extra worktrees or clones as a workaround.
 - Migration/IAM scripts stay dry-run by default and require explicit apply authority.
 - If a check hangs or fails, diagnose it; do not repeatedly rerun heavy commands.
 
-## Risk-based validation
+## Focused validation policy
 
-Choose the lowest level that covers the changed boundary. State the chosen level.
+Validate changed behavior and consumers, not the repository by habit.
+`npm run validate:changed` covers `main...HEAD` plus working-tree changes.
 
-### Level 0 — documentation/configuration
+- Documentation-only work gets diff, instruction-size, and relevant syntax checks;
+  no application tests, exports, emulators, `/review`, or remote builds.
+- Code work gets direct/transitive tests and the smallest practical runtime proof.
+  For UI, cover only changed and relevant error, auth, or async states.
+- Rules, indexes, exports, native configuration, and dependencies use their specific
+  checks; they do not trigger unrelated suites.
+- Full client and Functions suites are explicit release checks only. Commit, push,
+  PR, merge, build, and infrastructure retry events do not require reruns.
+- Reuse evidence only for an unchanged tested diff and scope; rerun invalidated checks.
+- Review the final diff. Run `/review` once only for a final sensitive, shared-contract,
+  cross-subsystem, or release diff; it does not replace runtime evidence.
+- Keep output bounded: store noisy logs in ignored `.codex_tmp/validation/`, summarize
+  passes, and inspect the relevant failure excerpt first.
+- With no relevant test, add one for changed logic or report runtime evidence and the
+  gap; never substitute an unrelated full suite.
 
-For Markdown, `AGENTS.md`, and secret-free Codex configuration only:
-
-- inspect the diff, instruction sizes, and configuration syntax;
-- run `git diff --check` and Git status checks;
-- do not run application tests, exports, emulators, `/review`, or remote builds.
-
-### Level 1 — focused change (default)
-
-- Run only directly affected tests.
-- Exercise the changed runtime path when practical, especially UI async/error states.
-- Review the diff manually; no separate `/review` is required.
-
-### Level 2 — subsystem or cross-boundary change
-
-- Run related test groups and the relevant export/emulator/runtime check.
-- Run one `/review` against the base branch after tests.
-- Apply the subsystem-specific triggers in the nested `AGENTS.md`.
-
-### Level 3 — release
-
-- Run full affected suites, relevant emulators/exports, and critical runtime smoke flows.
-- Run one `/review`; add a security diff review only when the change is sensitive.
-- Remote builds, deployment, and store submission still require explicit authorization.
-
-Tests passing alone do not prove runtime behavior. Report what was actually exercised
-and what remains unverified. Do not invent lint/typecheck commands absent from scripts.
+Report what was exercised and unverified. Do not invent absent package scripts.
 
 ## Git order
 
@@ -133,7 +122,7 @@ or `chore/` branches and Conventional Commits.
 
 1. Inspect root, status, branch, worktrees, and unrelated changes.
 2. Fast-forward a clean `main`, then create the topic branch.
-3. Implement one topic and run its validation level.
+3. Implement one topic and run the affected validation.
 4. Review the final diff for regressions, secrets, debug code, and generated files.
 5. Stage explicit paths only; never use broad `git add` in a mixed worktree.
 6. Run `git diff --check`, `git status --short`, and `git diff --cached --name-status`.
