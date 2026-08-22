@@ -148,6 +148,17 @@ Repository state is not deployment state. Before an authorized release, read
 `README.md`, verify project/branch/commit/live state, and use the safe dependency
 order. Deploy backend or Hosting only from the appropriately updated target branch.
 
+Treat the `README.md` current environment status and release record as mandatory
+release outputs. Without waiting for a separate reminder, update them whenever an
+authorized workflow changes the app version, native build, EAS build/submission,
+EAS Update, TestFlight/App Store status, deployed backend, or installed tester
+state. Record the source commit, app version and build number, runtime/channel,
+provider IDs, timestamps, review state, installed/tested state, and OTA group when
+known. Mark unverified values explicitly instead of retaining a stale value. A
+release task is not complete until this record reflects the resulting live state;
+this documentation requirement does not itself authorize a build, submission,
+deployment, migration, or other release action.
+
 Final reports should be short and evidence-based:
 
 - changes and root cause;

@@ -7,11 +7,14 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 PlanLi has an external TestFlight beta; it has not been publicly released to the
 App Store, Google Play, or a public web domain. Native development is performed
 with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. TestFlight build `1.0.0 (12)` includes EAS Update on the
-`production` channel with runtime `1.0.0`; it was uploaded to App Store Connect
-on 2026-08-20 and is processing with Apple. Build `1.0.0 (10)` cannot receive
-OTA updates. No OTA bundle has been published yet. The deployed Firebase backend
-is not evidence of a client release.
+not supported. TestFlight version `1.1.0` is installed and in use on the owner's
+physical iPhone. It has been submitted for external TestFlight distribution and
+is waiting for Apple's Beta App Review as reported on 2026-08-22. Its exact iOS
+build number and EAS build/submission IDs have not yet been recorded in this
+repository. The production profile uses the `production` EAS Update channel and
+runtime `1.1.0`; no production OTA update for notification-interaction PR #144
+has been published. The deployed Firebase backend is not evidence of a client
+release.
 
 ## Run the client
 
@@ -187,13 +190,14 @@ remain explicit release operations; merging source code does not perform them.
 
 Current release record:
 
-- Source commit: `2da44e417c7ee7c5a380d140a6054508c8e05d48`.
-- EAS build: `f6e3ad31-a680-4501-a69a-6f038ce62336`, iOS `1.0.0 (12)`.
-- EAS Update: `production` channel, runtime `1.0.0`; no published update group.
-- EAS submission: `a40cbf40-b49a-476a-b223-97b377dfce22`.
-- App Store Connect app: `6801453067`; upload succeeded on 2026-08-20 and
-  Apple processing remains pending. External-group assignment and beta review
-  state have not been re-verified for build 12.
+- App version: `1.1.0`; the exact iOS build number is not yet recorded.
+- Installed state: running on the owner's physical iPhone through TestFlight.
+- EAS Update: `production` channel with runtime `1.1.0`; notification-interaction
+  PR #144 has not been published as an OTA update.
+- EAS build and submission IDs: not yet recorded.
+- App Store Connect app: `6801453067`; version `1.1.0` has been submitted for
+  external TestFlight distribution and is waiting for Apple's Beta App Review
+  as reported on 2026-08-22.
 
 The current release target is an **external TestFlight beta with open PlanLi
 registration**, not an App Store listing. PlanLi does not maintain a Firebase
@@ -306,11 +310,11 @@ After approval, enable the external group and public link. Record the branch,
 commit, EAS build ID, iOS build number, review status and processing result. Do
 not use auto-submit for the first beta.
 
-The next production build is the first build that can receive EAS Updates. It
-uses the `production` channel and derives its runtime version from the app
-version. Test an update on the `preview` channel before publishing the same
-commit to production. Publish only JavaScript, styling, and bundled-asset
-changes that are compatible with the installed native runtime:
+The installed `1.1.0` production build can receive compatible EAS Updates. It
+uses the `production` channel and derives runtime `1.1.0` from the app version.
+Test an update on the `preview` channel before publishing the same commit to
+production. Publish only JavaScript, styling, and bundled-asset changes that are
+compatible with the installed native runtime:
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\client
