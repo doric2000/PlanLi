@@ -15,6 +15,13 @@ const {
   saveRecommendation,
 } = require('./recommendationService');
 const { cleanupRouteRevisions, loadRouteDetails, saveRoute } = require('./routeService');
+const {
+  cleanupPublishedRouteDraftReceipts,
+  discardRouteDraft,
+  getCurrentRouteDraft,
+  publishRouteDraft,
+  saveRouteDraft,
+} = require('./routeDraftService');
 const { saveTrip } = require('./tripService');
 const { completeAccountSetup, registerUser, updateProfile } = require('./profileService');
 const { authorizeRequest } = require('./authPolicy');
@@ -369,6 +376,42 @@ exports.saveRoute = callable(
     ...PROVIDER_ROUTE_CALLABLE_LIMITS,
   },
   (request) => locationSave('route_save', request, (incidentId) => saveRoute({
+    admin,
+    auth: request.auth,
+    data: { ...(request.data || {}), incidentId },
+    mediaBucket: mediaStorageBucket.value(),
+    mapsKey: googleMapsKey.value(),
+    newPlacesKey: googlePlacesNewKey.value(),
+    placesProvider: placesProvider.value(),
+    restCountriesKey: restCountriesKey.value(),
+    providerRateLimitKey: publicRateLimitKey.value(),
+  }))
+);
+
+exports.getCurrentRouteDraft = callable(
+  { access: 'active', timeoutSeconds: 30 },
+  (request) => getCurrentRouteDraft({ admin, auth: request.auth })
+);
+
+exports.saveRouteDraft = callable(
+  { access: 'active', timeoutSeconds: 60, memory: '512MiB' },
+  (request) => saveRouteDraft({ admin, auth: request.auth, data: request.data })
+);
+
+exports.discardRouteDraft = callable(
+  { access: 'active', timeoutSeconds: 60, memory: '512MiB' },
+  (request) => discardRouteDraft({ admin, auth: request.auth, data: request.data })
+);
+
+exports.publishRouteDraft = callable(
+  {
+    access: 'active',
+    timeoutSeconds: 300,
+    memory: '1GiB',
+    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    ...PROVIDER_ROUTE_CALLABLE_LIMITS,
+  },
+  (request) => locationSave('route_draft_publish', request, (incidentId) => publishRouteDraft({
     admin,
     auth: request.auth,
     data: { ...(request.data || {}), incidentId },
@@ -748,11 +791,12 @@ exports.cleanupExpiredRuntimeScheduled = onSchedule(
     serviceAccount: CORE_SERVICE_ACCOUNT,
   },
   async () => {
-    const [runtime, revisions] = await Promise.all([
+    const [runtime, revisions, routeDraftReceipts] = await Promise.all([
       cleanupExpiredRuntimeDocuments({ admin, limit: 200 }),
       cleanupRouteRevisions({ admin, limit: 100 }),
+      cleanupPublishedRouteDraftReceipts({ admin, limit: 100 }),
     ]);
-    console.log('Expired runtime cleanup complete.', { runtime, revisions });
+    console.log('Expired runtime cleanup complete.', { runtime, revisions, routeDraftReceipts });
   }
 );
 

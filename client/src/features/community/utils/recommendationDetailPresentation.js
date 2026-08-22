@@ -31,15 +31,13 @@ export function getRecommendationDetailSections(item = {}) {
   const details = item.details || {};
   const facts = [];
 
-  const budget = item.budget ? getBudgetLabel(item.budget) : '';
-  if (budget) {
-    facts.push({
-      id: 'budget',
-      icon: 'account-balance-wallet',
-      title: 'רמת מחיר',
-      value: budget,
-    });
-  }
+  const budget = item.budget ? getBudgetLabel(item.budget) : 'מחיר לא צוין';
+  facts.push({
+    id: 'budget',
+    icon: 'account-balance-wallet',
+    title: 'רמת מחיר',
+    value: budget,
+  });
 
   [
     { id: 'eventSchedule', icon: 'event', title: 'מועד', value: details.eventSchedule },

@@ -24,6 +24,8 @@ const {
   normalizeAliasedId,
   normalizeBudget,
   normalizeCategoryIds,
+  normalizeRecommendationCategory,
+  normalizeRecommendationSubcategories,
   normalizeRecommendationTags,
   PACE_IDS,
 	POST_BUDGET_IDS,
@@ -86,18 +88,69 @@ function cleanCoordinates(value) {
   return { lat, lng };
 }
 
+function cleanOptionalCoordinates(value) {
+  if (value == null || value === '') return null;
+  return cleanCoordinates(value);
+}
+
+function cleanDestinationRef(value, field = 'destination') {
+  if (value == null) return null;
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', `${field} is invalid.`);
+  return {
+    countryId: cleanString(value.countryId, `${field}.countryId`, { min: 1, max: 180 }),
+    cityId: cleanString(value.cityId, `${field}.cityId`, { min: 1, max: 180 }),
+    countryName: cleanOptionalString(value.countryName, `${field}.countryName`, 200),
+    cityName: cleanOptionalString(value.cityName || value.name, `${field}.cityName`, 200),
+  };
+}
+
 function sanitizePlace(value, fallbackCoordinates, { requirePlaceId = false } = {}) {
   const place = value && typeof value === 'object' ? value : {};
   const placeId = cleanOptionalString(place.placeId, 'place.placeId', 300);
   const resolvedPlaceToken = cleanOptionalString(place.resolvedPlaceToken, 'place.resolvedPlaceToken', 300);
   assert(!requirePlaceId || placeId, 'invalid-argument', 'Every route stop requires a verified Place ID.');
+  const coordinates = cleanOptionalCoordinates(place.coordinates || fallbackCoordinates);
+  assert(!requirePlaceId || coordinates, 'invalid-argument', 'Every route stop requires valid coordinates.');
+  if (!placeId && !coordinates && !place.name && !place.address) return null;
   return {
     placeId,
     ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
     name: cleanOptionalString(place.name, 'place.name', 200),
     address: cleanOptionalString(place.address, 'place.address', 500),
-    coordinates: cleanCoordinates(place.coordinates || fallbackCoordinates),
+    ...(coordinates ? { coordinates } : {}),
   };
+}
+
+function normalizeLocationPrecision(value, { place, coordinates, destination, strict }) {
+  const inferred = place?.placeId ? 'exact' : coordinates ? 'pin' : destination ? 'general' : '';
+  const precision = cleanOptionalString(value, 'locationPrecision', 20) || inferred;
+  assert(['exact', 'pin', 'general'].includes(precision),
+    'invalid-argument', 'locationPrecision is invalid.');
+  if (precision === 'exact') {
+    assert(place?.placeId && place?.coordinates, 'invalid-argument', 'An exact route stop requires a verified place.');
+  } else if (precision === 'pin') {
+    assert(coordinates && destination, 'invalid-argument', 'A pinned route stop requires coordinates and a destination.');
+  } else {
+    assert(destination, 'invalid-argument', 'A general route stop requires a destination.');
+  }
+  assert(!strict || precision === 'exact', 'invalid-argument', 'Every route stop requires a verified Place ID.');
+  return precision;
+}
+
+function cleanOptionalTime(value, field) {
+  const result = cleanOptionalString(value, field, 5);
+  assert(!result || /^([01]\d|2[0-3]):[0-5]\d$/.test(result),
+    'invalid-argument', `${field} is invalid.`);
+  return result;
+}
+
+function cleanOptionalDuration(value, field) {
+  if (value == null || value === '') return null;
+  const result = Number(value);
+  assert(Number.isSafeInteger(result) && result >= 1 && result <= 1440,
+    'invalid-argument', `${field} is invalid.`);
+  return result;
 }
 
 function cleanEnumArray(value, field, allowed, maximum, { minimum = 0 } = {}) {
@@ -145,7 +198,92 @@ function legacyRouteMetadata(input) {
   };
 }
 
+function sanitizeStreamlinedRouteMetadata(input) {
+  const categoryIds = normalizeCategoryIds(input.categoryIds || []);
+  assert(categoryIds.length === (input.categoryIds || []).length,
+    'invalid-argument', 'categoryIds are invalid.');
+  const subcategoryIds = normalizeRecommendationTags(input.subcategoryIds || []);
+  assert(subcategoryIds.length === (input.subcategoryIds || []).length,
+    'invalid-argument', 'subcategoryIds are invalid.');
+  assert(subcategoryIds.every((tagId) =>
+    categoryIds.some((categoryId) => tagsMatchCategory([tagId], categoryId))),
+  'invalid-argument', 'subcategoryIds do not match categoryIds.');
+
+  const submitted = input.attributes && typeof input.attributes === 'object'
+    ? input.attributes
+    : {};
+  const allowedFields = [
+    'audienceScope', 'audiences', 'vibes', 'travelerStyles', 'needs',
+    'needsCoverageConfirmed', 'budgetLevel', 'seasons', 'environment',
+  ];
+  assert(Object.keys(submitted).every((key) => allowedFields.includes(key)),
+    'invalid-argument', 'Route attributes contain unsupported fields.');
+  const budgetLevel = normalizeBudget(submitted.budgetLevel);
+  assert(POST_BUDGET_IDS.includes(budgetLevel),
+    'invalid-argument', 'attributes.budgetLevel is required.');
+  const audienceScope = submitted.audienceScope === 'selected' ? 'selected' : 'all';
+  const audiences = cleanEnumArray(
+    submitted.audiences || [], 'attributes.audiences', TRAVEL_PARTY_IDS, 6
+  );
+  assert(audienceScope !== 'selected' || audiences.length > 0,
+    'invalid-argument', 'Choose at least one audience or use everyone.');
+  assert(audienceScope !== 'all' || audiences.length === 0,
+    'invalid-argument', 'Universal routes cannot select audiences.');
+  const needs = cleanEnumArray(submitted.needs || [], 'attributes.needs', NEED_IDS, NEED_IDS.length);
+  assert(!needs.length || submitted.needsCoverageConfirmed === true,
+    'invalid-argument', 'Route needs must be confirmed for the entire route.');
+  const seasons = cleanEnumArray(
+    submitted.seasons || [], 'attributes.seasons', SEASON_IDS, SEASON_IDS.length
+  );
+  const environment = cleanOptionalString(submitted.environment, 'attributes.environment', 40);
+  assert(!environment || ENVIRONMENT_IDS.includes(environment),
+    'invalid-argument', 'attributes.environment is invalid.');
+  const vibes = cleanEnumArray(submitted.vibes || [], 'attributes.vibes', VIBE_IDS, 4);
+  const travelerStyles = cleanEnumArray(
+    submitted.travelerStyles || [], 'attributes.travelerStyles', TRAVELER_STYLE_IDS, 4
+  );
+  const facets = buildTravelContentFacets({ categoryIds, subcategoryIds, budget: budgetLevel }, {
+    audienceScope,
+    audiences,
+    vibes,
+    travelerStyles,
+    needs,
+    seasons,
+    environments: environment ? [environment] : [],
+  }, { surface: 'route' });
+  facets.budgetLevel = budgetLevel;
+
+  const difficulty = input.difficulty
+    ? normalizeAliasedId(input.difficulty, ROUTE_DIFFICULTY_IDS, taxonomy.legacy?.routeDifficultyAliases)
+    : '';
+  assert(!input.difficulty || difficulty, 'invalid-argument', 'difficulty is invalid.');
+  const experienceLevel = input.experienceLevel
+    ? normalizeAliasedId(input.experienceLevel, ROUTE_EXPERIENCE_IDS, taxonomy.legacy?.routeExperienceAliases)
+    : '';
+  assert(!input.experienceLevel || experienceLevel, 'invalid-argument', 'experienceLevel is invalid.');
+  const transportModes = (input.transportModes || []).map((value) => normalizeAliasedId(
+    value, TRANSPORT_MODE_IDS, taxonomy.legacy?.transportModeAliases
+  ));
+  assert(transportModes.every(Boolean), 'invalid-argument', 'transportModes are invalid.');
+  const pace = input.pace ? normalizeAliasedId(input.pace, PACE_IDS) : '';
+  assert(!input.pace || pace, 'invalid-argument', 'pace is invalid.');
+  return {
+    categoryIds,
+    subcategoryIds,
+    facets,
+    difficulty,
+    experienceLevel,
+    transportModes: uniqueAllowed(transportModes, TRANSPORT_MODE_IDS, 4),
+    pace,
+    priceBasis: 'whole_route',
+    priceNote: cleanOptionalString(input.priceNote, 'priceNote', 120),
+  };
+}
+
 function sanitizeRouteMetadata(input) {
+  if (Number(input.routeSchemaVersion || 0) >= 2) {
+    return sanitizeStreamlinedRouteMetadata(input);
+  }
   const canonical = Number(input.taxonomyVersion || 0) >= 3;
   const strict = Number(input.taxonomyVersion || 0) >= 4;
   if (!canonical) return legacyRouteMetadata(input);
@@ -239,24 +377,67 @@ function sanitizeRouteMetadata(input) {
 
 function sanitizeRouteInput(input) {
   assert(input && typeof input === 'object', 'invalid-argument', 'Missing route data.');
-  const strict = Number(input.taxonomyVersion || 0) >= 3;
+  const streamlined = Number(input.routeSchemaVersion || 0) >= 2;
+  const strict = !streamlined && Number(input.taxonomyVersion || 0) >= 3;
   const days = Array.isArray(input.days) ? input.days : [];
   assert(days.length >= 1 && days.length <= MAX_ROUTE_DAYS, 'invalid-argument', 'Route days are invalid.');
   let totalStops = 0;
   const sanitizedDays = days.map((day, dayIndex) => {
     const stops = Array.isArray(day?.stops) ? day.stops : [];
+    assert(!streamlined || stops.length >= 1,
+      'invalid-argument', 'Every published route day requires at least one stop.');
     totalStops += stops.length;
-    const sanitizedStops = stops.map((stop, stopIndex) => ({
-      id: cleanDocumentId(stop?.id, `days[${dayIndex}].stops[${stopIndex}].id`, `stop_${String(stopIndex + 1).padStart(3, '0')}`),
-      position: stopIndex,
-      title: cleanString(stop?.title, `days[${dayIndex}].stops[${stopIndex}].title`, { min: 1, max: 160 }),
-      description: cleanOptionalString(stop?.description, `days[${dayIndex}].stops[${stopIndex}].description`, 3000),
-      location: cleanOptionalString(stop?.location, `days[${dayIndex}].stops[${stopIndex}].location`, 200),
-      country: cleanOptionalString(stop?.country, `days[${dayIndex}].stops[${stopIndex}].country`, 200),
-      place: sanitizePlace(stop?.place, stop?.coordinates, { requirePlaceId: strict }),
-      reuseSavedLocation: stop?.reuseSavedLocation === true,
-      media: stop?.media || null,
-    }));
+    const sanitizedStops = stops.map((stop, stopIndex) => {
+      const destination = cleanDestinationRef(
+        stop?.destination || stop?.destinationRef,
+        `days[${dayIndex}].stops[${stopIndex}].destination`
+      );
+      const place = sanitizePlace(stop?.place, stop?.coordinates, { requirePlaceId: strict });
+      const coordinates = cleanOptionalCoordinates(stop?.coordinates || place?.coordinates);
+      const locationPrecision = normalizeLocationPrecision(stop?.locationPrecision, {
+        place,
+        coordinates,
+        destination,
+        strict,
+      });
+      const canonicalCoordinates = locationPrecision === 'general' ? null : coordinates;
+      const canonicalPlace = locationPrecision === 'general'
+        ? null
+        : locationPrecision === 'pin' && place
+          ? {
+              placeId: '',
+              name: place.name,
+              address: place.address,
+              ...(canonicalCoordinates ? { coordinates: canonicalCoordinates } : {}),
+            }
+          : place;
+      const recommendationId = cleanOptionalString(
+        stop?.source?.recommendationId || stop?.recommendationId,
+        `days[${dayIndex}].stops[${stopIndex}].recommendationId`,
+        180
+      );
+      return {
+        id: cleanDocumentId(stop?.id, `days[${dayIndex}].stops[${stopIndex}].id`, `stop_${String(stopIndex + 1).padStart(3, '0')}`),
+        position: stopIndex,
+        title: cleanString(stop?.title, `days[${dayIndex}].stops[${stopIndex}].title`, { min: 1, max: 160 }),
+        description: cleanOptionalString(stop?.description, `days[${dayIndex}].stops[${stopIndex}].description`, 3000),
+        location: cleanOptionalString(stop?.location, `days[${dayIndex}].stops[${stopIndex}].location`, 200),
+        country: cleanOptionalString(stop?.country, `days[${dayIndex}].stops[${stopIndex}].country`, 200),
+        locationPrecision,
+        ...(destination ? { destination } : {}),
+        ...(canonicalPlace ? { place: canonicalPlace } : {}),
+        ...(canonicalCoordinates ? { coordinates: canonicalCoordinates } : {}),
+        ...(recommendationId ? { source: { type: 'recommendation', recommendationId } } : {}),
+        startTime: cleanOptionalTime(stop?.startTime, `days[${dayIndex}].stops[${stopIndex}].startTime`),
+        durationMinutes: cleanOptionalDuration(
+          stop?.durationMinutes,
+          `days[${dayIndex}].stops[${stopIndex}].durationMinutes`
+        ),
+        subcategoryIds: [],
+        reuseSavedLocation: stop?.reuseSavedLocation === true,
+        media: stop?.media || null,
+      };
+    });
     return {
       id: `day_${String(dayIndex + 1).padStart(3, '0')}`,
       position: dayIndex,
@@ -265,10 +446,12 @@ function sanitizeRouteInput(input) {
       stops: sanitizedStops,
     };
   });
-  assert(totalStops >= 1 && totalStops <= MAX_ROUTE_STOPS, 'invalid-argument', 'Route stops are invalid.');
-  const distanceKm = Number(input.distanceKm);
+  assert(totalStops >= (streamlined ? 2 : 1) && totalStops <= MAX_ROUTE_STOPS,
+    'invalid-argument', 'Route stops are invalid.');
+  const distanceKm = streamlined ? 0 : Number(input.distanceKm);
   assert(Number.isFinite(distanceKm) && distanceKm >= 0, 'invalid-argument', 'distanceKm is invalid.');
   return {
+    routeSchemaVersion: streamlined ? 2 : 1,
     title: cleanString(input.title, 'title', { min: 1, max: 120 }),
     description: cleanString(input.description, 'description', { min: 1, max: 5000 }),
     dayCount: sanitizedDays.length,
@@ -301,6 +484,64 @@ function replaceValidatedMedia(days, validated) {
   }));
 }
 
+function stopCoordinates(stop) {
+  if (stop?.locationPrecision === 'general') return null;
+  const value = stop?.place?.coordinates || stop?.coordinates;
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+function distanceBetweenKm(left, right) {
+  const radians = (degrees) => degrees * Math.PI / 180;
+  const latDelta = radians(right.lat - left.lat);
+  const lngDelta = radians(right.lng - left.lng);
+  const a = Math.sin(latDelta / 2) ** 2 +
+    Math.cos(radians(left.lat)) * Math.cos(radians(right.lat)) * Math.sin(lngDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function attachRouteLegEstimates(days, transportModes = []) {
+  const speedByMode = {
+    walking: 4.5,
+    bicycle: 15,
+    cycling: 15,
+    car: 50,
+    public_transport: 30,
+    public_transit: 30,
+    motorcycle: 45,
+    mixed: 35,
+  };
+  const speed = speedByMode[transportModes[0]] || 35;
+  let totalDistance = 0;
+  const output = days.map((day) => ({
+    ...day,
+    stops: day.stops.map((stop, index, stops) => {
+      if (index === 0) return { ...stop, travelFromPrevious: null };
+      const previousCoordinates = stopCoordinates(stops[index - 1]);
+      const currentCoordinates = stopCoordinates(stop);
+      if (!previousCoordinates || !currentCoordinates) {
+        return { ...stop, travelFromPrevious: null };
+      }
+      const distanceKm = Math.round(distanceBetweenKm(previousCoordinates, currentCoordinates) * 10) / 10;
+      totalDistance += distanceKm;
+      return {
+        ...stop,
+        travelFromPrevious: {
+          distanceKm,
+          estimatedDurationMinutes: Math.max(1, Math.round(distanceKm / speed * 60)),
+          estimated: true,
+        },
+      };
+    }),
+  }));
+  return {
+    days: output,
+    distanceKm: Math.round(totalDistance * 10) / 10,
+  };
+}
+
 async function mapWithConcurrency(values, concurrency, task) {
   const output = new Array(values.length);
   let cursor = 0;
@@ -315,6 +556,33 @@ async function mapWithConcurrency(values, concurrency, task) {
   return output;
 }
 
+async function loadTrustedRecommendationSources(db, days) {
+  const recommendationIds = Array.from(new Set(days.flatMap((day) => day.stops
+    .map((stop) => stop.source?.recommendationId)
+    .filter(Boolean))));
+  if (!recommendationIds.length) return new Map();
+  const snapshots = await Promise.all(recommendationIds.map((id) => db.doc(`recommendations/${id}`).get()));
+  return new Map(snapshots.map((snapshot, index) => {
+    assert(snapshot.exists, 'failed-precondition', 'A PlanLi recommendation used by this route is no longer available.');
+    const recommendation = snapshot.data() || {};
+    assert(recommendation.status === 'active', 'failed-precondition',
+      'A PlanLi recommendation used by this route is no longer active.');
+    const catalogCategoryId = normalizeRecommendationCategory(recommendation.categoryId);
+    const catalogSubcategoryIds = normalizeRecommendationSubcategories(
+      recommendation.subcategoryIds,
+      catalogCategoryId
+    );
+    const legacyCategoryId = normalizeCategoryIds([
+      recommendation.categoryId || recommendation.category,
+    ])[0] || '';
+    const legacySubcategoryIds = normalizeRecommendationTags(recommendation.tags || []);
+    return [recommendationIds[index], {
+      categoryId: catalogCategoryId || legacyCategoryId,
+      subcategoryIds: catalogSubcategoryIds.length ? catalogSubcategoryIds : legacySubcategoryIds,
+    }];
+  }));
+}
+
 async function resolveRoutePlaces({
   admin,
   auth,
@@ -325,23 +593,33 @@ async function resolveRoutePlaces({
   restCountriesKey,
   providerRateLimitKey,
   trustedPlaces = new Map(),
+  trustedRecommendations = new Map(),
 }) {
   const placeEntries = new Map();
+  const destinationEntries = new Map();
   days.forEach((day) => day.stops.forEach((stop) => {
-    const placeId = stop.place.placeId;
-    if (!placeId) return;
-    const current = placeEntries.get(placeId);
-    if (!current || (!current.resolvedPlaceToken && stop.place.resolvedPlaceToken)) {
-      placeEntries.set(placeId, {
-        placeId,
-        resolvedPlaceToken: stop.place.resolvedPlaceToken || null,
-        trusted: trustedPlaces.get(placeId) || null,
-      });
+    const placeId = stop.place?.placeId;
+    if (placeId) {
+      const current = placeEntries.get(placeId);
+      if (!current || (!current.resolvedPlaceToken && stop.place.resolvedPlaceToken)) {
+        placeEntries.set(placeId, {
+          placeId,
+          resolvedPlaceToken: stop.place.resolvedPlaceToken || null,
+          trusted: trustedPlaces.get(placeId) || null,
+        });
+      }
+      return;
+    }
+    if (stop.destination?.countryId && stop.destination?.cityId) {
+      const key = `${stop.destination.countryId}/${stop.destination.cityId}`;
+      destinationEntries.set(key, stop.destination);
     }
   }));
   const entries = Array.from(placeEntries.values());
-  assert(entries.length >= 1 && entries.length <= MAX_ROUTE_PLACES,
+  assert(entries.length <= MAX_ROUTE_PLACES,
     'invalid-argument', 'Route contains too many distinct places.');
+  assert(entries.length + destinationEntries.size >= 1,
+    'invalid-argument', 'Route requires at least one destination.');
   const rawEntries = entries.filter((entry) => !entry.resolvedPlaceToken && !entry.trusted);
   assert(
     rawEntries.length <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
@@ -381,28 +659,57 @@ async function resolveRoutePlaces({
     assert(destination.place?.placeId === entry.placeId, 'failed-precondition', 'A route place token does not match its stop. Search again.');
     return destination;
   });
+  const resolvedGeneral = await mapWithConcurrency(
+    Array.from(destinationEntries.entries()),
+    5,
+    async ([key, destinationRef]) => ({
+      key,
+      destination: await resolveExistingDestination(admin.firestore(), destinationRef),
+    })
+  );
   const byPlaceId = new Map(entries.map((entry, index) => [entry.placeId, resolved[index]]));
+  const byDestination = new Map(resolvedGeneral.map((entry) => [entry.key, entry.destination]));
   const resolvedDays = days.map((day) => ({
     ...day,
     stops: day.stops.map((stop) => {
-      const destination = byPlaceId.get(stop.place.placeId);
+      const trustedRecommendation = stop.source?.recommendationId
+        ? trustedRecommendations.get(stop.source.recommendationId)
+        : null;
+      assert(!stop.source?.recommendationId || trustedRecommendation,
+        'failed-precondition', 'A PlanLi recommendation used by this route is no longer available.');
+      const destination = stop.place?.placeId
+        ? byPlaceId.get(stop.place.placeId)
+        : byDestination.get(`${stop.destination?.countryId}/${stop.destination?.cityId}`);
       assert(destination, 'failed-precondition', 'A route place could not be verified.');
+      const precisePlace = stop.place?.placeId
+        ? destination.place
+        : stop.locationPrecision === 'pin'
+          ? {
+              placeId: '',
+              name: stop.place?.name || stop.title,
+              address: stop.place?.address || '',
+              coordinates: stop.coordinates || stop.place?.coordinates,
+            }
+          : null;
       return {
         ...stop,
-        location: destination.place.name || stop.location,
+        location: precisePlace?.name || stop.location ||
+          destinationHebrewName(destination.cityData) || destination.cityId,
         country: destination.countryData.name || destination.countryId,
-        place: destination.place,
+        ...(precisePlace ? { place: precisePlace } : {}),
         destination: {
           countryId: destination.countryId,
           cityId: destination.cityId,
           countryName: destination.countryData.name || destination.countryId,
           cityName: destinationHebrewName(destination.cityData) || destination.cityId,
         },
+        ...(trustedRecommendation?.categoryId ? { categoryId: trustedRecommendation.categoryId } : {}),
+        subcategoryIds: trustedRecommendation?.subcategoryIds || [],
       };
     }),
   }));
   const uniqueDestinations = new Map();
-  resolved.forEach((destination) => {
+  [...resolved, ...resolvedGeneral.map((entry) => entry.destination)].forEach((destination) => {
     uniqueDestinations.set(destination.cityRef.path, destination);
   });
   assert(uniqueDestinations.size <= MAX_ROUTE_DESTINATIONS, 'invalid-argument', 'Route contains too many destinations.');
@@ -503,8 +810,11 @@ async function saveRoute({
     ? cleanDocumentId(data.routeId, 'routeId', '')
     : null;
   const publishRequestId = normalizePublishRequestId(data?.publishRequestId);
+  const draftPublicationId = normalizePublishRequestId(data?.draftPublicationId);
   assert(!(routeId && publishRequestId), 'invalid-argument',
     'publishRequestId is only supported when creating a route.');
+  assert(!draftPublicationId || routeId, 'invalid-argument',
+    'draftPublicationId is only supported when updating a route.');
   const routeRef = routeId
     ? db.doc(`routes/${routeId}`)
     : publishRequestId
@@ -517,6 +827,14 @@ async function saveRoute({
     : null;
   if (routeId) {
     assert(existingRoute, 'not-found', 'Route does not exist.');
+    if (draftPublicationId && existingRoute.lastDraftPublicationId === draftPublicationId) {
+      return {
+        routeId: routeRef.id,
+        revisionId: existingRoute.activeRevisionId,
+        revisionVersion: revisionVersion(existingRoute),
+        idempotentReplay: true,
+      };
+    }
   } else {
     if (existingSnapshot.exists && publishRequestId) {
       const replay = existingSnapshot.data() || {};
@@ -566,6 +884,7 @@ async function saveRoute({
         days: mediaDays,
       })
     : new Map();
+  const trustedRecommendations = await loadTrustedRecommendationSources(db, mediaDays);
   const locationStartedAt = Date.now();
   const resolved = await resolveRoutePlaces({
     admin,
@@ -577,15 +896,19 @@ async function saveRoute({
     restCountriesKey,
     providerRateLimitKey,
     trustedPlaces,
+    trustedRecommendations,
   });
-  const days = resolved.days;
+  const routeLegs = route.routeSchemaVersion >= 2
+    ? attachRouteLegEstimates(resolved.days, route.transportModes)
+    : { days: resolved.days, distanceKm: route.distanceKm };
+  const days = routeLegs.days;
 
   const writeCount = days.length + days.reduce((sum, day) => sum + day.stops.length, 0) +
     resolved.catalogDestinations.length * 3 + 1;
   assert(writeCount <= 500, 'failed-precondition', 'Route is too large to save atomically.');
 
   const summaryPlaces = Array.from(new Set(days.flatMap((day) =>
-    day.stops.map((stop) => stop.location || stop.place.name).filter(Boolean)
+    day.stops.map((stop) => stop.location || stop.place?.name || stop.destination?.cityName).filter(Boolean)
   ))).slice(0, 30);
   const destinationKeys = Array.from(new Set(resolved.destinations.flatMap((destination) => [
     destinationKey(destination.countryId),
@@ -646,8 +969,16 @@ async function saveRoute({
         description: stop.description,
         location: stop.location,
         country: stop.country,
-        place: stop.place,
+        place: stop.place || null,
         destination: stop.destination,
+        locationPrecision: stop.locationPrecision || (stop.place?.placeId ? 'exact' : 'general'),
+        coordinates: stop.coordinates || null,
+        source: stop.source || null,
+        categoryId: stop.categoryId || '',
+        startTime: stop.startTime || '',
+        durationMinutes: stop.durationMinutes || null,
+        subcategoryIds: stop.subcategoryIds || [],
+        travelFromPrevious: stop.travelFromPrevious || null,
         media: stop.media,
       });
     });
@@ -791,12 +1122,15 @@ async function saveRoute({
       ownerId: currentRoute?.ownerId || uid,
       title: route.title,
       description: route.description,
+      routeSchemaVersion: route.routeSchemaVersion,
       status: preservedRouteStatus(currentRoute) === 'active' && !textSafety.safe
         ? 'moderation_hold'
         : preservedRouteStatus(currentRoute),
       ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
       dayCount: route.dayCount,
-      distanceKm: route.distanceKm,
+      distanceKm: routeLegs.distanceKm,
+      priceBasis: route.priceBasis || 'whole_route',
+      priceNote: route.priceNote || '',
       categoryIds: route.categoryIds,
       subcategoryIds: route.subcategoryIds,
       facets: route.facets,
@@ -814,6 +1148,7 @@ async function saveRoute({
       revisionVersion: baseVersion + 1,
       createdAt: currentRoute?.createdAt || now,
       updatedAt: now,
+      ...(draftPublicationId ? { lastDraftPublicationId: draftPublicationId } : {}),
     };
     if (currentSnapshot.exists) transaction.set(routeRef, routeDocument);
     else transaction.create(routeRef, routeDocument);
@@ -888,12 +1223,20 @@ async function loadRouteDetails({ admin, data }) {
     days.push({
       id: dayDocument.id,
       ...dayDocument.data(),
-      stops: stopsSnapshot.docs.map((stop) => ({ id: stop.id, ...stop.data() })),
+      stops: stopsSnapshot.docs.map((stop) => {
+        const data = stop.data();
+        return {
+          id: stop.id,
+          ...data,
+          locationPrecision: data.locationPrecision || (data.place?.placeId ? 'exact' : 'general'),
+        };
+      }),
     });
   }
   const [route] = await attachRouteDestinationPreviews(admin.firestore(), [{
     id: routeSnapshot.id,
     ...routeSnapshot.data(),
+    priceBasis: routeSnapshot.data()?.priceBasis || 'whole_route',
     days,
   }]);
   return { route };
@@ -930,9 +1273,11 @@ module.exports = {
   MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
   assertEditableRoute,
   assertRouteRevisionVersion,
+  attachRouteLegEstimates,
   cleanupRouteRevisions,
   collectMedia,
   loadRouteDetails,
+  loadTrustedRecommendationSources,
   loadTrustedRoutePlaces,
   mapWithConcurrency,
   resolveRoutePlaces,

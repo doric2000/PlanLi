@@ -5,6 +5,8 @@ const {
   MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
   assertEditableRoute,
   assertRouteRevisionVersion,
+  attachRouteLegEstimates,
+  loadTrustedRecommendationSources,
   cleanupRouteRevisions,
   loadRouteDetails,
   loadTrustedRoutePlaces,
@@ -157,6 +159,127 @@ test('taxonomy v5 route attributes are factual, scoped and derive interests from
 			seasons: ['spring'], environment: 'outdoor',
 		},
 	})), /budgetLevel/);
+});
+
+test('streamlined routes accept general and pinned stops while keeping price required', () => {
+  const route = sanitizeRouteInput({
+    routeSchemaVersion: 2,
+    taxonomyVersion: 5,
+    title: 'יומיים בבודפשט',
+    description: 'מסלול קצר וברור.',
+    attributes: { audienceScope: 'all', audiences: [], budgetLevel: 'balanced' },
+    days: [{
+      stops: [
+        {
+          title: 'הרובע היהודי',
+          locationPrecision: 'general',
+          destination: { countryId: 'HU', cityId: 'budapest' },
+          startTime: '09:30',
+          durationMinutes: 90,
+        },
+        {
+          title: 'נקודת צילום',
+          locationPrecision: 'pin',
+          destination: { countryId: 'HU', cityId: 'budapest' },
+          coordinates: { lat: 47.5, lng: 19.04 },
+        },
+      ],
+    }],
+  });
+  assert.equal(route.routeSchemaVersion, 2);
+  assert.equal(route.priceBasis, 'whole_route');
+  assert.equal(route.days[0].stops[0].locationPrecision, 'general');
+  assert.equal(route.days[0].stops[1].locationPrecision, 'pin');
+  assert.throws(() => sanitizeRouteInput({
+    routeSchemaVersion: 2,
+    taxonomyVersion: 5,
+    title: 'מסלול',
+    description: 'תיאור',
+    attributes: { audienceScope: 'all', audiences: [], budgetLevel: '' },
+    days: [{ stops: [{ title: 'א', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' } }, { title: 'ב', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' } }] }],
+  }), /budgetLevel/);
+});
+
+test('streamlined route publication strips precise data from general stops', () => {
+  const area = { countryId: 'HU', cityId: 'budapest' };
+  const route = sanitizeRouteInput({
+    routeSchemaVersion: 2,
+    taxonomyVersion: 5,
+    title: 'יומיים בבודפשט',
+    description: 'מסלול קצר וברור.',
+    attributes: { audienceScope: 'all', audiences: [], budgetLevel: 'balanced' },
+    days: [{ stops: [
+      {
+        title: 'הרובע היהודי',
+        locationPrecision: 'general',
+        destination: area,
+        place: {
+          placeId: 'stale-exact-place',
+          name: 'כתובת מדויקת',
+          coordinates: { lat: 47.5, lng: 19.1 },
+        },
+        coordinates: { lat: 47.5, lng: 19.1 },
+      },
+      { title: 'מרכז העיר', locationPrecision: 'general', destination: area },
+    ] }],
+  });
+  assert.equal(route.days[0].stops[0].locationPrecision, 'general');
+  assert.equal(Object.prototype.hasOwnProperty.call(route.days[0].stops[0], 'place'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(route.days[0].stops[0], 'coordinates'), false);
+});
+
+test('travel estimates are produced only between consecutive precise stops', () => {
+  const result = attachRouteLegEstimates([{
+    stops: [
+      { title: 'A', coordinates: { lat: 32.08, lng: 34.78 } },
+      {
+        title: 'B',
+        locationPrecision: 'general',
+        destination: { countryId: 'IL', cityId: 'TLV' },
+        coordinates: { lat: 32.081, lng: 34.781 },
+      },
+      { title: 'C', coordinates: { lat: 32.09, lng: 34.79 } },
+      { title: 'D', coordinates: { lat: 32.1, lng: 34.8 } },
+    ],
+  }], ['walking']);
+  assert.equal(result.days[0].stops[1].travelFromPrevious, null);
+  assert.equal(result.days[0].stops[2].travelFromPrevious, null);
+  assert.ok(result.days[0].stops[3].travelFromPrevious.distanceKm > 0);
+  assert.ok(result.days[0].stops[3].travelFromPrevious.estimatedDurationMinutes > 0);
+});
+
+test('PlanLi stop classification is reloaded from an active recommendation', async () => {
+  const documents = {
+    'recommendations/recommendation-1': {
+      status: 'active',
+      categoryId: 'food',
+      subcategoryIds: ['restaurant'],
+      tags: ['cafe'],
+    },
+  };
+  const db = {
+    doc: (path) => ({
+      get: async () => ({
+        exists: Boolean(documents[path]),
+        data: () => documents[path] || {},
+      }),
+    }),
+  };
+  const trusted = await loadTrustedRecommendationSources(db, [{
+    stops: [{ source: { recommendationId: 'recommendation-1' } }],
+  }]);
+  assert.deepEqual(trusted.get('recommendation-1'), {
+    categoryId: 'food',
+    subcategoryIds: ['restaurant'],
+  });
+
+  documents['recommendations/recommendation-1'].status = 'moderation_hold';
+  await assert.rejects(
+    loadTrustedRecommendationSources(db, [{
+      stops: [{ source: { recommendationId: 'recommendation-1' } }],
+    }]),
+    /no longer active/
+  );
 });
 
 test('route edits reject deletion races and changed revisions', () => {

@@ -32,13 +32,28 @@ function buildDayComparable({ description, image, stops }) {
 				lat: coords?.lat ?? null,
 				lng: coords?.lng ?? null,
 				placeId: stop.place?.placeId || stop.placeId || null,
+				locationPrecision: stop.locationPrecision || null,
+				destination: stop.destination?.countryId && stop.destination?.cityId
+					? `${stop.destination.countryId}/${stop.destination.cityId}`
+					: null,
+				startTime: stop.startTime || "",
+				durationMinutes: stop.durationMinutes || null,
+				recommendationId: stop.source?.recommendationId || null,
 			};
 		}),
 	});
 }
 
+function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
+	const [focused, setFocused] = useState(false);
+	return <FormInput {...props} placeholder={focused ? "" : placeholder} onFocus={(event) => {
+		setFocused(true); onFocus?.(event);
+	}} onBlur={(event) => { setFocused(false); onBlur?.(event); }} />;
+}
+
 export default function DayEditorModal({
 	visible, onClose, onSave, initialData, dayIndex, onPersistImage, onForgetImage,
+	routeDestination, allowImages = true,
 }) {
 	const [description, setDescription] = useState("");
 	const [stops, setStops] = useState([]);
@@ -128,7 +143,7 @@ export default function DayEditorModal({
 	};
 
 	const handleDeleteStop = (index) => {
-		Alert.alert("מחיקת תחנה", `להסיר את תחנה ${index + 1}?`, [
+		Alert.alert("מחיקת עצירה", `להסיר את העצירה מספר ${index + 1}?`, [
 			{ text: "ביטול", style: "cancel" },
 			{
 				text: "מחק",
@@ -143,11 +158,11 @@ export default function DayEditorModal({
 
 	const handleSave = () => {
 		if (!description && stops.length === 0) {
-			Alert.alert("חסר תוכן", "הוסף תיאור או לפחות תחנה אחת ליום.");
+			Alert.alert("חסר תוכן", "כדאי להוסיף תיאור או לפחות עצירה אחת ליום.");
 			return;
 		}
 		if (uploading) {
-			Alert.alert("המתן", "התמונה עדיין בהעלאה...");
+			Alert.alert("רק רגע", "התמונה עדיין עולה.");
 			return;
 		}
 		onSave({
@@ -187,7 +202,7 @@ export default function DayEditorModal({
 					<AppText style={styles.headerTitle}>יום {dayIndex + 1}</AppText>
 					<TouchableOpacity onPress={handleSave} disabled={uploading}>
 						<AppText style={[styles.headerBtn, styles.headerBtnStrong, uploading && styles.headerBtnDisabled]}>
-							שמור
+							שמירה
 						</AppText>
 					</TouchableOpacity>
 				</View>
@@ -197,10 +212,10 @@ export default function DayEditorModal({
 					contentContainerStyle={styles.scrollContent}
 					keyboardShouldPersistTaps="handled"
 				>
-					<FormInput
-						label="סיפור היום"
-						helperText="אפשר לכתוב בקצרה; את סדר הביקור מנהלים בתחנות שמתחת."
-						placeholder="מה עשית היום? איפה ביקרת?"
+					<FocusClearingFormInput
+						label="תיאור היום (רשות)"
+						helperText="אפשר לכתוב בקצרה; את סדר הביקור מנהלים בעצירות שמתחת."
+						placeholder="למשל: יום רגוע במרכז העיר עם אוכל, שוק ותצפית"
 						value={description}
 						onChangeText={setDescription}
 						multiline
@@ -217,14 +232,14 @@ export default function DayEditorModal({
 								}}
 								style={styles.addStopButton}
 							>
-								<AppText style={styles.addStopText}>+ הוסף תחנה</AppText>
+								<AppText style={styles.addStopText}>הוספת עצירה</AppText>
 							</TouchableOpacity>
-							<AppText style={styles.stopsTitle}>תחנות ביום הזה</AppText>
+							<AppText style={styles.stopsTitle}>עצירות ביום הזה</AppText>
 						</View>
 
 						{stops.length === 0 ? (
 							<AppText style={styles.emptyStopsText}>
-								עדיין אין תחנות. הוסף נקודות עצירה עם מיקום מדויק.
+								עדיין אין עצירות. אפשר להוסיף מקום מדויק, נקודה במפה או מיקום כללי.
 							</AppText>
 						) : (
 							stops.map((stop, index) => (
@@ -270,14 +285,14 @@ export default function DayEditorModal({
 										}}
 										style={styles.deleteStopButton}
 									>
-										<AppText style={styles.deleteStopText}>מחק</AppText>
+										<AppText style={styles.deleteStopText}>הסרה</AppText>
 									</TouchableOpacity>
 								</TouchableOpacity>
 							))
 						)}
 					</View>
 
-					<AppText style={styles.photoLabel}>תיעוד מהיום</AppText>
+					{allowImages ? <><AppText style={styles.photoLabel}>תיעוד מהיום</AppText>
 					<ImagePickerBox
 						imageUri={image}
 						onPress={() => pickOneForReview(async (uri) => {
@@ -293,7 +308,7 @@ export default function DayEditorModal({
 						placeholderText={uploading ? "מעלה תמונה..." : "הוסף תמונה"}
 						style={styles.imagePickerSpacing}
 						loading={uploading}
-					/>
+					/></> : null}
 				</ScrollView>
 
 				<StopEditorModal
@@ -305,6 +320,8 @@ export default function DayEditorModal({
 					stopIndex={editingStopIndex !== null ? editingStopIndex : stops.length}
 					onPersistImage={onPersistImage}
 					onForgetImage={onForgetImage}
+					routeDestination={routeDestination}
+					allowImages={allowImages}
 				/>
 				<ImageCropReviewModal
 					visible={reviewUris.length > 0}

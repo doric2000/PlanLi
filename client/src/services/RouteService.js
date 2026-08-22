@@ -9,6 +9,10 @@ import {
 
 let saveRouteCallable;
 let loadRouteDetailsCallable;
+let getCurrentRouteDraftCallable;
+let saveRouteDraftCallable;
+let discardRouteDraftCallable;
+let publishRouteDraftCallable;
 
 export const saveRoute = async (route, routeId = null, publishRequestId = null) => {
   saveRouteCallable ||= httpsCallable(cloudFunctions, 'saveRoute');
@@ -29,6 +33,36 @@ export const loadRouteDetails = async (routeId) => {
   loadRouteDetailsCallable ||= httpsCallable(cloudFunctions, 'loadRouteDetails');
   const response = await loadRouteDetailsCallable({ routeId });
   return response.data?.route || null;
+};
+
+export const getCurrentRouteDraft = async () => {
+  getCurrentRouteDraftCallable ||= httpsCallable(cloudFunctions, 'getCurrentRouteDraft');
+  const response = await getCurrentRouteDraftCallable({});
+  return response.data?.draft || null;
+};
+
+export const saveRouteDraft = async ({ draftId = null, sourceRouteId = null, expectedVersion = null, draft }) => {
+  saveRouteDraftCallable ||= httpsCallable(cloudFunctions, 'saveRouteDraft');
+  const response = await saveRouteDraftCallable({
+    draft,
+    ...(draftId ? { draftId } : {}),
+    ...(sourceRouteId ? { sourceRouteId } : {}),
+    ...(expectedVersion != null ? { expectedVersion } : {}),
+  });
+  return response.data;
+};
+
+export const discardRouteDraft = async (draftId) => {
+  discardRouteDraftCallable ||= httpsCallable(cloudFunctions, 'discardRouteDraft');
+  const response = await discardRouteDraftCallable({ draftId });
+  return response.data;
+};
+
+export const publishRouteDraft = async (draftId, expectedVersion) => {
+  publishRouteDraftCallable ||= httpsCallable(cloudFunctions, 'publishRouteDraft');
+  const response = await publishRouteDraftCallable({ draftId, expectedVersion });
+  clearPersonalizationDiscoveryCache('routes');
+  return response.data;
 };
 
 export const discoverRoutes = (payload = {}, options = {}) => getPersonalizedRoutes(payload, options);

@@ -2962,6 +2962,21 @@ export const stopEditorModalStyles = StyleSheet.create({
 	imagePickerSpacing: {
 		marginBottom: spacing.lg,
 	},
+	retryButton: {
+		alignSelf: "center",
+		minHeight: 42,
+		justifyContent: "center",
+		marginTop: 8,
+		paddingHorizontal: 16,
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: colors.primary,
+		backgroundColor: colors.white,
+	},
+	retryButtonText: {
+		color: colors.primary,
+		fontFamily: fontFamilies.semiBold,
+	},
 	removeButton: {
 		alignSelf: "center",
 		paddingHorizontal: 14,

@@ -175,6 +175,7 @@ function sanitizeRecommendationCatalogContent(data) {
   const rawBudget = cleanOptionalString(data.budget, { field: 'budget', max: 50 });
   const budget = normalizeBudget(rawBudget, { allowFlexible: false });
   assert(!rawBudget || budget, 'invalid-argument', 'budget is invalid.');
+  assert(budget && POST_BUDGET_IDS.includes(budget), 'invalid-argument', 'budget is required.');
 
   return {
     title: cleanString(data.title, { field: 'title', min: 1, max: 120 }),

@@ -93,6 +93,6 @@ describe('progressive discovery filter UI', () => {
   it('makes profile-filled hard filters visible in the collapsed section summary', () => {
     const screen = render(<Harness withProfile />);
     fireEvent.press(screen.getByTestId('discovery-use-profile'));
-    expect(screen.getByText('זוג · ₪₪')).toBeTruthy();
+    expect(screen.getByText('זוג · בינוני · ₪₪')).toBeTruthy();
   });
 });

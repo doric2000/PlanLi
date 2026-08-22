@@ -1,808 +1,392 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, TouchableOpacity, View } from "react-native";
-import { randomUUID } from "expo-crypto";
-import AppText from "../../../components/AppText";
-import { common, spacing } from "../../../styles";
-import {
-	CATEGORIES,
-	ENVIRONMENTS,
-	NEEDS,
-	PACES,
-	POST_BUDGETS,
-	ROUTE_DIFFICULTIES,
-	ROUTE_EXPERIENCE_LEVELS,
-	SEASONS,
-	TAG_OPTIONS_BY_CATEGORY,
-	TRANSPORT_MODES,
-	TRAVELER_STYLES,
-	TRAVEL_PARTIES,
-	TRAVEL_TAXONOMY_VERSION,
-	VIBES,
-} from "../../../constants/travelTaxonomy";
-import { useCurrentUser } from "../../../hooks/useCurrentUser";
-import { useImagePickerWithUpload } from "../../../hooks/useImagePickerWithUpload";
-import {
-	ROUTE_IMAGE_LONG_EDGE,
-	TRAVEL_IMAGE_COMPRESSION,
-} from "../../../constants/travelMedia";
-import useDurableDraftMedia from "../../../hooks/useDurableDraftMedia";
-import { useContentPublish } from "../../publishing/ContentPublishContext";
-import DayEditorModal from "../components/DayEditorModal";
-import DayList from "../components/DayList";
-import { FormInput } from "../../../components/FormInput";
-import { GuidedFormFooter, GuidedFormHeader, GuidedFormSection } from "../../../components/GuidedForm";
-import RtlChoiceGroup from "../../../components/RtlChoiceGroup";
-import { guidedFormStyles as guidedStyles } from "../../../components/guidedFormStyles";
-import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
-import { useBackButton } from "../../../hooks/useBackButton";
-import { useUnsavedLeaveGuard } from "../../../hooks/useUnsavedLeaveGuard";
-import { locationErrorKind, locationErrorMessage } from "../../../utils/locationErrors";
-import { travelMediaErrorMessage } from "../../../utils/travelMediaErrors";
-import {
-	ensureRouteDraftIds,
-	extractRoutePublishMedia,
-	prepareRouteMedia,
-	revokeRouteObjectUrls,
-} from "../utils/routeMedia";
-import { flattenValidRouteStops, markUnchangedRouteLocations } from "../utils/routeStops";
-import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
-import { saveRoute } from "../../../services/RouteService";
-import {
-	emptyValidation,
-	firstInvalidSection,
-	sectionErrorCount,
-	validateRouteForm,
-} from "../../../utils/guidedFormValidation";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-const ROUTE_SECTION_ORDER = ["basics", "days", "category", "fit"];
-const ROUTE_SECTION_FIELDS = {
-	basics: ["title", "days", "distance", "desc"],
-	days: ["stops"],
-	category: ["categoryIds", "subcategoryIds"],
-	fit: ["audiences", "budgetLevel", "difficulty", "transportModes", "pace", "seasons", "environment", "needsCoverageConfirmed"],
+import AppText from '../../../components/AppText';
+import { FormInput } from '../../../components/FormInput';
+import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
+import { useBackButton } from '../../../hooks/useBackButton';
+import {
+  PACES, POST_BUDGETS, ROUTE_DIFFICULTIES, SEASONS, TRANSPORT_MODES,
+} from '../../../constants/travelTaxonomy';
+import {
+  discardRouteDraft, getCurrentRouteDraft, publishRouteDraft, saveRouteDraft,
+} from '../../../services/RouteService';
+import { colors, routeBuilderStyles as styles } from '../../../styles';
+import NoyaGuide from '../../community/components/NoyaGuide';
+import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
+import DayEditorModal from '../components/DayEditorModal';
+import { flattenRouteStops } from '../utils/routeStops';
+
+const SAVE_DELAY_MS = 900;
+const emptyDays = (count) => Array.from({ length: count }, (_, index) => ({
+  id: `day_${String(index + 1).padStart(3, '0')}`, description: '', media: null, stops: [],
+}));
+
+const destinationFromRoute = (route) => {
+  const destination = route?.destinations?.[0] || route?.days?.flatMap((day) => day?.stops || [])
+    .map((stop) => stop?.destination).find((value) => value?.countryId && value?.cityId);
+  if (!destination) return null;
+  return {
+    key: `city:${destination.countryId}:${destination.cityId}`,
+    kind: 'city',
+    countryId: destination.countryId,
+    cityId: destination.cityId,
+    countryName: destination.countryName || destination.countryId,
+    name: destination.cityName || destination.name || destination.cityId,
+  };
 };
 
-const canonicalAttributes = (attributes = {}) => ({
-	audienceScope: attributes.audienceScope || "selected",
-	audiences: [...(attributes.audiences || [])].sort(),
-	vibes: [...(attributes.vibes || [])].sort(),
-	travelerStyles: [...(attributes.travelerStyles || [])].sort(),
-	needs: [...(attributes.needs || [])].sort(),
-	needsCoverageConfirmed: Boolean(attributes.needsCoverageConfirmed),
-	budgetLevel: attributes.budgetLevel || "",
-	seasons: [...(attributes.seasons || [])].sort(),
-	environment: attributes.environment || "",
-});
+const routeAsDraft = (route) => {
+  const area = route?.area || destinationFromRoute(route);
+  const rawDays = Array.isArray(route?.days) && route.days.length
+    ? route.days
+    : emptyDays(Math.max(1, Number(route?.dayCount || 1)));
+  const days = rawDays.map((day, dayIndex) => ({
+    ...day,
+    id: `day_${String(dayIndex + 1).padStart(3, '0')}`,
+    stops: (day.stops || []).map((stop, stopIndex) => ({
+      ...stop,
+      id: stop.id || `stop_${dayIndex + 1}_${stopIndex + 1}`,
+      locationPrecision: stop.locationPrecision || (stop.place?.placeId ? 'exact' : 'general'),
+    })),
+  }));
+  return {
+    area,
+    dayCount: days.length,
+    title: route?.title || '',
+    description: route?.description || '',
+    categoryIds: route?.categoryIds || [],
+    subcategoryIds: route?.subcategoryIds || [],
+    attributes: {
+      audienceScope: route?.attributes?.audienceScope || route?.facets?.audienceScope ||
+        (route?.facets?.audiences?.length ? 'selected' : 'all'),
+      audiences: route?.attributes?.audiences || route?.facets?.audiences || [],
+      budgetLevel: route?.attributes?.budgetLevel || route?.facets?.budgetLevel || '',
+      vibes: route?.attributes?.vibes || route?.facets?.vibes || [],
+      travelerStyles: route?.attributes?.travelerStyles || route?.facets?.travelerStyles || [],
+      needs: route?.attributes?.needs || route?.facets?.needs || [],
+      needsCoverageConfirmed: route?.attributes?.needsCoverageConfirmed === true ||
+        route?.facets?.needsScope === 'entire_route',
+      seasons: route?.attributes?.seasons || route?.facets?.seasons || [],
+      environment: route?.attributes?.environment || route?.facets?.environments?.[0] || '',
+    },
+    difficulty: route?.difficulty || '',
+    experienceLevel: route?.experienceLevel || '',
+    transportModes: route?.transportModes || [],
+    pace: route?.pace || '',
+    priceBasis: 'whole_route',
+    priceNote: route?.priceNote || '',
+    days,
+  };
+};
 
-function buildRouteComparableFromSource(r) {
-	if (!r) return null;
-	return JSON.stringify({
-		title: (r.title || "").trim(),
-		days: r.dayCount != null && r.dayCount !== "" ? String(r.dayCount) : "",
-		distance: r.distanceKm != null && r.distanceKm !== "" ? String(r.distanceKm) : "",
-		desc: (r.description || "").trim(),
-		routeDays: r.days || [],
-		categoryIds: [...(r.categoryIds || [])].sort(),
-		subcategoryIds: [...(r.subcategoryIds || [])].sort(),
-		attributes: canonicalAttributes({
-			audienceScope: r.facets?.audienceScope || (r.facets?.audiences?.length ? "selected" : "all"),
-			audiences: r.facets?.audiences,
-			vibes: r.facets?.vibes,
-			travelerStyles: r.facets?.travelerStyles,
-			needs: r.facets?.needs,
-			needsCoverageConfirmed: r.facets?.needsScope === "entire_route" || Boolean(r.facets?.needs?.length),
-			budgetLevel: r.facets?.budgetLevel,
-			seasons: r.facets?.seasons,
-			environment: r.facets?.environments?.[0] || "",
-		}),
-		difficulty: r.difficulty || "",
-		experienceLevel: r.experienceLevel || "",
-		transportModes: [...(r.transportModes || [])].sort(),
-		pace: r.pace || "",
-	});
+function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
+  const [focused, setFocused] = useState(false);
+  return <FormInput {...props} placeholder={focused ? '' : placeholder} onFocus={(event) => {
+    setFocused(true); onFocus?.(event);
+  }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} />;
 }
-
-function buildRouteFormComparable({
-	title,
-	days,
-	distance,
-	desc,
-	tripDays,
-	categoryIds,
-	subcategoryIds,
-	attributes,
-	difficulty,
-	experienceLevel,
-	transportModes,
-	pace,
-}) {
-	return JSON.stringify({
-		title: (title || "").trim(),
-		days: days != null && days !== "" ? String(days) : "",
-		distance: distance != null && distance !== "" ? String(distance) : "",
-		desc: (desc || "").trim(),
-		routeDays: tripDays || [],
-		categoryIds: [...(categoryIds || [])].sort(),
-		subcategoryIds: [...(subcategoryIds || [])].sort(),
-		attributes: canonicalAttributes(attributes),
-		difficulty: difficulty || "",
-		experienceLevel: experienceLevel || "",
-		transportModes: [...(transportModes || [])].sort(),
-		pace: pace || "",
-	});
-}
-
-const createEmptyDay = () => ({
-	draftId: randomUUID(),
-	description: "",
-	image: null,
-	stops: [],
-});
-
-const EMPTY_ROUTE_COMPARABLE = buildRouteFormComparable({
-	title: "",
-	days: "",
-	distance: "",
-	desc: "",
-	tripDays: [],
-	categoryIds: [],
-	subcategoryIds: [],
-	attributes: {
-		audienceScope: "selected",
-		audiences: [],
-		budgetLevel: "",
-		vibes: [],
-		travelerStyles: [],
-		needs: [],
-		needsCoverageConfirmed: false,
-		seasons: [],
-		environment: "",
-	},
-	difficulty: "",
-	experienceLevel: "",
-	transportModes: [],
-	pace: "",
-});
 
 export default function AddRoutesScreen({ navigation, route }) {
-	const routeToEdit = route?.params?.routeToEdit;
-	const publishJobId = route?.params?.publishJobId || null;
-	const editingRouteId = routeToEdit?.id ?? null;
-	const { enqueueCreate, loadJobForReview } = useContentPublish();
-	const {
-		draftJobId,
-		forgetUri: forgetDurableImage,
-		markEnqueued: markDurableImagesEnqueued,
-		mediaForUri: durableMediaForUri,
-		persistUris: persistReviewedImages,
-	} = useDurableDraftMedia({ enabled: !routeToEdit });
+  const routeToEdit = route?.params?.routeToEdit || null;
+  const sourceRouteId = routeToEdit?.id || routeToEdit?.routeId || null;
+  const [mode, setMode] = useState('loading');
+  const [existingDraft, setExistingDraft] = useState(null);
+  const [startArea, setStartArea] = useState(null);
+  const [startDayCount, setStartDayCount] = useState(1);
+  const [customDaysOpen, setCustomDaysOpen] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
+  const [startError, setStartError] = useState('');
+  const [draftId, setDraftId] = useState('');
+  const [area, setArea] = useState(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [days, setDays] = useState([]);
+  const [budgetLevel, setBudgetLevel] = useState('');
+  const [priceNote, setPriceNote] = useState('');
+  const [transportModes, setTransportModes] = useState([]);
+  const [difficulty, setDifficulty] = useState('');
+  const [pace, setPace] = useState('');
+  const [seasons, setSeasons] = useState([]);
+  const [categoryIds, setCategoryIds] = useState([]);
+  const [subcategoryIds, setSubcategoryIds] = useState([]);
+  const [preservedAttributes, setPreservedAttributes] = useState({});
+  const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [dayEditorVisible, setDayEditorVisible] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [optionalOpen, setOptionalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('saved');
+  const [saveError, setSaveError] = useState('');
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [validationMessage, setValidationMessage] = useState('');
+  const draftIdRef = useRef('');
+  const versionRef = useRef(0);
+  const sourceRouteIdRef = useRef(null);
+  const lastSavedComparableRef = useRef('');
+  const saveQueueRef = useRef(Promise.resolve());
+  const mountedRef = useRef(true);
 
-	const [title, setTitle] = useState("");
-	const [days, setDays] = useState("");
-	const [distance, setDistance] = useState("");
-	const [desc, setDesc] = useState("");
-	const [tripDays, setTripDays] = useState([]);
-	const [categoryIds, setCategoryIds] = useState([]);
-	const [subcategoryIds, setSubcategoryIds] = useState([]);
-	const [audienceScope, setAudienceScope] = useState("selected");
-	const [audiences, setAudiences] = useState([]);
-	const [budgetLevel, setBudgetLevel] = useState("");
-	const [difficulty, setDifficulty] = useState("");
-	const [experienceLevel, setExperienceLevel] = useState("");
-	const [transportModes, setTransportModes] = useState([]);
-	const [pace, setPace] = useState("");
-	const [vibes, setVibes] = useState([]);
-	const [travelerStyles, setTravelerStyles] = useState([]);
-	const [needs, setNeeds] = useState([]);
-	const [needsCoverageConfirmed, setNeedsCoverageConfirmed] = useState(false);
-	const [seasons, setSeasons] = useState([]);
-	const [environment, setEnvironment] = useState("");
-	const [submitting, setSubmitting] = useState(false);
-	const [isDayModalVisible, setDayModalVisible] = useState(false);
-	const [editingDayIndex, setEditingDayIndex] = useState(null);
-	const [editRouteBaseline, setEditRouteBaseline] = useState(null);
-	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
-	const [expandedSection, setExpandedSection] = useState("basics");
-	const [validation, setValidation] = useState(emptyValidation);
-	const [optionalFitOpen, setOptionalFitOpen] = useState(false);
-	const scrollRef = useRef(null);
-	const sectionLayoutsRef = useRef({});
+  useBackButton(navigation, { title: sourceRouteId ? 'עריכת מסלול' : 'מסלול חדש' });
 
-	const { user } = useCurrentUser();
-	const { uploadImageAssets } = useImagePickerWithUpload({
-		kind: "route",
-		quality: 1,
-		maxLongEdge: ROUTE_IMAGE_LONG_EDGE,
-		normalizeCompress: TRAVEL_IMAGE_COMPRESSION,
-	});
-	const toggle = (setter, value, maximum = 20) => setter((current) => current.includes(value)
-		? current.filter((item) => item !== value)
-		: [...current, value].slice(0, maximum));
+  const hydrateDraft = useCallback((draft) => {
+    const normalized = routeAsDraft(draft);
+    draftIdRef.current = draft.id;
+    versionRef.current = Number(draft.version || 0);
+    sourceRouteIdRef.current = draft.sourceRouteId || null;
+    setDraftId(draft.id);
+    setArea(normalized.area);
+    setTitle(normalized.title);
+    setDescription(normalized.description);
+    setDays(normalized.days);
+    setBudgetLevel(normalized.attributes.budgetLevel);
+    setPriceNote(normalized.priceNote);
+    setTransportModes(normalized.transportModes);
+    setDifficulty(normalized.difficulty);
+    setPace(normalized.pace);
+    setSeasons(normalized.attributes.seasons);
+    setCategoryIds(normalized.categoryIds);
+    setSubcategoryIds(normalized.subcategoryIds);
+    setPreservedAttributes(normalized.attributes);
+    setActiveDayIndex(0);
+    setSaveStatus('saved');
+    setSaveError('');
+    setMode('editor');
+    return normalized;
+  }, []);
 
-	useEffect(() => {
-		if (!routeToEdit) {
-			setEditRouteBaseline(null);
-			setExpandedSection("basics");
-			setValidation(emptyValidation());
-			setOptionalFitOpen(false);
-			return;
-		}
+  const createEditDraft = useCallback(async () => {
+    const initial = routeAsDraft(routeToEdit);
+    if (!initial.area) {
+      setStartError('לא הצלחנו לזהות יעד למסלול הקיים. כדאי להוסיף יעד לפני העריכה.');
+      setMode('start');
+      return;
+    }
+    const saved = await saveRouteDraft({ sourceRouteId, draft: initial });
+    const normalized = hydrateDraft({ ...initial, id: saved.draftId, version: saved.version, sourceRouteId });
+    lastSavedComparableRef.current = JSON.stringify(normalized);
+  }, [hydrateDraft, routeToEdit, sourceRouteId]);
 
-		setTitle(routeToEdit.title || "");
-		setDays(routeToEdit.dayCount ? String(routeToEdit.dayCount) : "");
-		setDistance(routeToEdit.distanceKm ? String(routeToEdit.distanceKm) : "");
-		setDesc(routeToEdit.description || "");
-		setTripDays(ensureRouteDraftIds(routeToEdit.days || [], () => randomUUID()));
-		setCategoryIds(routeToEdit.categoryIds || []);
-		setSubcategoryIds(routeToEdit.subcategoryIds || []);
-		setAudienceScope(routeToEdit.facets?.audienceScope || (routeToEdit.facets?.audiences?.length ? "selected" : "all"));
-		setAudiences(routeToEdit.facets?.audiences || []);
-		setBudgetLevel(routeToEdit.facets?.budgetLevel || "");
-		setDifficulty(routeToEdit.difficulty || "");
-		setExperienceLevel(routeToEdit.experienceLevel || "");
-		setTransportModes(routeToEdit.transportModes || []);
-		setPace(routeToEdit.pace || "");
-		setVibes(routeToEdit.facets?.vibes || []);
-		setTravelerStyles(routeToEdit.facets?.travelerStyles || []);
-		setNeeds(routeToEdit.facets?.needs || []);
-		setNeedsCoverageConfirmed(routeToEdit.facets?.needsScope === "entire_route" || Boolean(routeToEdit.facets?.needs?.length));
-		setSeasons(routeToEdit.facets?.seasons || []);
-		setEnvironment(routeToEdit.facets?.environments?.[0] || "");
-		setOptionalFitOpen(Boolean(
-			routeToEdit.experienceLevel
-			|| routeToEdit.facets?.vibes?.length
-			|| routeToEdit.facets?.travelerStyles?.length
-			|| routeToEdit.facets?.needs?.length
-		));
-		setExpandedSection("basics");
-		setValidation(emptyValidation());
-		setEditRouteBaseline(buildRouteComparableFromSource(routeToEdit));
-		// eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate when route id stable; read latest routeToEdit when id changes
-	}, [editingRouteId]);
+  useEffect(() => {
+    mountedRef.current = true;
+    let active = true;
+    getCurrentRouteDraft().then(async (current) => {
+      if (!active) return;
+      if (current) {
+        if (sourceRouteId && current.sourceRouteId === sourceRouteId) {
+          const normalized = hydrateDraft(current);
+          lastSavedComparableRef.current = JSON.stringify(normalized);
+        } else {
+          setExistingDraft(current);
+          setMode('choice');
+        }
+      } else if (sourceRouteId) await createEditDraft();
+      else setMode('start');
+    }).catch((error) => {
+      console.error('route_draft_load_failed', { code: error?.code || 'unknown' });
+      if (active) {
+        setStartError('לא הצלחנו לבדוק אם קיים מסלול בתהליך. אפשר לנסות שוב.');
+        setMode('start');
+      }
+    });
+    return () => { active = false; mountedRef.current = false; };
+  }, [createEditDraft, hydrateDraft, sourceRouteId]);
 
-	useEffect(() => {
-		if (!publishJobId || routeToEdit) return undefined;
-		let active = true;
-		loadJobForReview(publishJobId).then((job) => {
-			const restored = job?.reviewedDraft?.route;
-			if (!active || !restored) return;
-			const attributes = restored.attributes || {};
-			setTitle(restored.title || "");
-			setDays(restored.days?.length ? String(restored.days.length) : "");
-			setDistance(restored.distanceKm != null ? String(restored.distanceKm) : "");
-			setDesc(restored.description || "");
-			setTripDays(ensureRouteDraftIds(restored.days || [], () => randomUUID()));
-			setCategoryIds(restored.categoryIds || []);
-			setSubcategoryIds(restored.subcategoryIds || []);
-			setAudienceScope(attributes.audienceScope || "selected");
-			setAudiences(attributes.audiences || []);
-			setBudgetLevel(attributes.budgetLevel || "");
-			setDifficulty(restored.difficulty || "");
-			setExperienceLevel(restored.experienceLevel || "");
-			setTransportModes(restored.transportModes || []);
-			setPace(restored.pace || "");
-			setVibes(attributes.vibes || []);
-			setTravelerStyles(attributes.travelerStyles || []);
-			setNeeds(attributes.needs || []);
-			setNeedsCoverageConfirmed(Boolean(attributes.needsCoverageConfirmed));
-			setSeasons(attributes.seasons || []);
-			setEnvironment(attributes.environment || "");
-			setExpandedSection("days");
-			setValidation(emptyValidation());
-		}).catch((error) => {
-			console.error("Could not restore queued route:", error);
-			if (active) Alert.alert("לא הצלחנו לפתוח את הטיול", "אפשר לנסות שוב מסרגל הפרסום.");
-		});
-		return () => { active = false; };
-	}, [loadJobForReview, publishJobId, routeToEdit]);
+  const draftPayload = useMemo(() => ({
+    area, dayCount: days.length, title, description, categoryIds, subcategoryIds,
+    attributes: { ...preservedAttributes, budgetLevel, seasons },
+    difficulty, experienceLevel: '', transportModes, pace,
+    priceBasis: 'whole_route', priceNote, days,
+  }), [area, budgetLevel, categoryIds, days, description, difficulty, pace, preservedAttributes, priceNote, seasons, subcategoryIds, title, transportModes]);
+  const draftComparable = useMemo(() => JSON.stringify(draftPayload), [draftPayload]);
 
-	const routeFormComparable = useMemo(
-		() =>
-			buildRouteFormComparable({
-				title,
-				days,
-				distance,
-				desc,
-				tripDays,
-				categoryIds,
-				subcategoryIds,
-				attributes: { audienceScope, audiences, budgetLevel, vibes, travelerStyles, needs, needsCoverageConfirmed, seasons, environment },
-				difficulty,
-				experienceLevel,
-				transportModes,
-				pace,
-			}),
-		[
-			title,
-			days,
-			distance,
-			desc,
-			tripDays,
-			categoryIds,
-			subcategoryIds,
-			audienceScope,
-			audiences,
-			budgetLevel,
-			difficulty,
-			experienceLevel,
-			transportModes,
-			pace,
-			vibes,
-			travelerStyles,
-			needs,
-			needsCoverageConfirmed,
-			seasons,
-			environment,
-		]
-	);
+  const persistSnapshot = useCallback((snapshot, comparable) => {
+    saveQueueRef.current = saveQueueRef.current.catch(() => versionRef.current).then(async () => {
+      if (!draftIdRef.current || comparable === lastSavedComparableRef.current) return versionRef.current;
+      if (mountedRef.current) { setSaveStatus('saving'); setSaveError(''); }
+      try {
+        const saved = await saveRouteDraft({
+          draftId: draftIdRef.current,
+          sourceRouteId: sourceRouteIdRef.current,
+          expectedVersion: versionRef.current,
+          draft: snapshot,
+        });
+        versionRef.current = saved.version;
+        lastSavedComparableRef.current = comparable;
+        if (mountedRef.current) setSaveStatus('saved');
+        return saved.version;
+      } catch (error) {
+        if (mountedRef.current) {
+          setSaveStatus('error');
+          setSaveError(error?.details?.reason === 'ROUTE_DRAFT_VERSION_CONFLICT'
+            ? 'הטיוטה השתנתה במקום אחר. כדאי לפתוח אותה מחדש.'
+            : 'לא הצלחנו לשמור. השינויים נשארו במסך ואפשר לנסות שוב.');
+        }
+        throw error;
+      }
+    });
+    return saveQueueRef.current;
+  }, []);
 
-	const hasUnsavedChanges = routeToEdit
-		? Boolean(editRouteBaseline != null && editRouteBaseline !== routeFormComparable)
-		: routeFormComparable !== EMPTY_ROUTE_COMPARABLE;
+  useEffect(() => {
+    if (mode !== 'editor' || !draftId || draftComparable === lastSavedComparableRef.current) return undefined;
+    const timer = setTimeout(() => persistSnapshot(draftPayload, draftComparable).catch(() => {}), SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [draftComparable, draftId, draftPayload, mode, persistSnapshot]);
 
-	const pendingDiscardRef = useRef(null);
-	const dismissUnsavedModal = useCallback(() => {
-		setUnsavedModalVisible(false);
-		pendingDiscardRef.current = null;
-	}, []);
+  const openNewDraft = async () => {
+    if (!startArea?.countryId || !startArea?.cityId) { setStartError('כדאי לבחור עיר או אזור.'); return; }
+    const count = Number(startDayCount);
+    if (!Number.isSafeInteger(count) || count < 1 || count > 60) { setStartError('אפשר לבחור בין יום אחד ל־60 ימים.'); return; }
+    setStartBusy(true); setStartError('');
+    const cityName = startArea.name || startArea.cityName || startArea.cityId;
+    const initial = {
+      area: startArea, dayCount: count,
+      title: count === 1 ? `יום ב${cityName}` : `${count} ימים ב${cityName}`,
+      description: '', categoryIds: [], subcategoryIds: [],
+      attributes: { audienceScope: 'all', audiences: [], budgetLevel: '', seasons: [] },
+      difficulty: '', transportModes: [], pace: '', priceBasis: 'whole_route', priceNote: '',
+      days: emptyDays(count),
+    };
+    try {
+      const saved = await saveRouteDraft({ draft: initial });
+      const normalized = hydrateDraft({ ...initial, id: saved.draftId, version: saved.version });
+      lastSavedComparableRef.current = JSON.stringify(normalized);
+    } catch (error) {
+      if (error?.details?.reason === 'ROUTE_DRAFT_EXISTS') {
+        const current = await getCurrentRouteDraft().catch(() => null);
+        if (current) { setExistingDraft(current); setMode('choice'); }
+      } else setStartError('לא הצלחנו לפתוח את המסלול. אפשר לנסות שוב בעוד רגע.');
+    } finally { setStartBusy(false); }
+  };
 
-	const confirmUnsavedLeave = useCallback(() => {
-		const onConfirm = pendingDiscardRef.current;
-		setUnsavedModalVisible(false);
-		pendingDiscardRef.current = null;
-		if (onConfirm) onConfirm();
-	}, []);
+  const discardExistingAndContinue = async () => {
+    if (!existingDraft?.id || startBusy) return;
+    setStartBusy(true);
+    try {
+      await discardRouteDraft(existingDraft.id);
+      setExistingDraft(null);
+      if (sourceRouteId) await createEditDraft(); else setMode('start');
+    } catch (error) { Alert.alert('לא הצלחנו למחוק את הטיוטה', 'אפשר לנסות שוב בעוד רגע.'); }
+    finally { setStartBusy(false); }
+  };
+  const selectExistingDraft = () => {
+    const normalized = hydrateDraft(existingDraft);
+    lastSavedComparableRef.current = JSON.stringify(normalized);
+    setExistingDraft(null);
+  };
+  const moveStop = (from, direction) => setDays((current) => current.map((day, index) => {
+    if (index !== activeDayIndex) return day;
+    const to = from + direction;
+    if (to < 0 || to >= day.stops.length) return day;
+    const stops = [...day.stops];
+    [stops[from], stops[to]] = [stops[to], stops[from]];
+    return { ...day, stops };
+  }));
+  const saveDay = (value, index) => setDays((current) => current.map((day, dayIndex) =>
+    dayIndex === index ? { ...day, ...value, id: day.id } : day));
+  const validatePublish = () => {
+    if (!title.trim()) return 'כדאי להוסיף כותרת קצרה למסלול.';
+    if (!description.trim()) return 'כדאי להוסיף תיאור למסלול.';
+    if (!budgetLevel) return 'כדאי לבחור רמת מחיר למסלול כולו.';
+    if (days.some((day) => !day.stops?.length)) return 'כדאי להוסיף לפחות עצירה אחת לכל יום.';
+    if (flattenRouteStops(days).filter((stop) => stop.title?.trim()).length < 2) return 'כדאי להוסיף לפחות שתי עצירות שימושיות.';
+    return '';
+  };
+  const handlePublish = async () => {
+    const message = validatePublish();
+    setValidationMessage(message);
+    if (message) { setDetailsOpen(true); return; }
+    setPublishBusy(true);
+    try {
+      const version = await persistSnapshot(draftPayload, draftComparable);
+      await publishRouteDraft(draftIdRef.current, version);
+      Alert.alert('המסלול פורסם', 'המסלול זמין עכשיו ב־PlanLi.');
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('לא הצלחנו לפרסם את המסלול', saveError || 'הטיוטה נשמרה. אפשר לנסות לפרסם שוב בעוד רגע.');
+    } finally { setPublishBusy(false); }
+  };
 
-	const promptDiscardUnsaved = useCallback((onConfirmLeave) => {
-		pendingDiscardRef.current = onConfirmLeave;
-		setUnsavedModalVisible(true);
-	}, []);
+  if (mode === 'loading') return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><AppText style={styles.loadingText}>פותחים את בונה המסלול...</AppText></View>;
+  if (mode === 'choice') return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <NoyaGuide dismissible message="יש מסלול בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרנו, או למחוק ולהתחיל מחדש." />
+      <View style={styles.card}>
+        <AppText style={styles.startTitle}>{existingDraft?.title || 'מסלול בתהליך'}</AppText>
+        <AppText style={styles.body}>{existingDraft?.dayCount || existingDraft?.days?.length || 1} ימים{existingDraft?.area?.cityName ? ` · ${existingDraft.area.cityName}` : ''}</AppText>
+        <TouchableOpacity style={styles.primaryButton} onPress={selectExistingDraft} testID="route-draft-continue"><AppText style={styles.primaryButtonText}>המשך המסלול</AppText></TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryButton} onPress={discardExistingAndContinue} testID="route-draft-discard">
+          {startBusy ? <ActivityIndicator color={colors.primary} /> : <AppText style={styles.destructiveText}>מחיקה והתחלה מחדש</AppText>}
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+  if (mode === 'start') return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <NoyaGuide dismissible message="נתחיל בקטן. איפה המסלול וכמה ימים?" />
+      <View style={styles.card}>
+        <AppText style={styles.startTitle}>פתיחת מסלול</AppText>
+        <AppText style={styles.fieldLabel}>עיר או אזור</AppText>
+        <SingleDestinationPicker value={startArea} onChange={(value) => { setStartArea(value); setStartError(''); }} />
+        <AppText style={styles.fieldLabel}>כמה ימים?</AppText>
+        <View style={styles.dayChoices}>
+          {[1, 2, 3, 4].map((count) => <TouchableOpacity key={count} style={[styles.dayChoice, !customDaysOpen && startDayCount === count && styles.dayChoiceSelected]} onPress={() => { setCustomDaysOpen(false); setStartDayCount(count); }} accessibilityRole="radio" accessibilityState={{ checked: !customDaysOpen && startDayCount === count }} testID={`route-start-days-${count}`}><AppText style={[styles.dayChoiceText, !customDaysOpen && startDayCount === count && styles.dayChoiceTextSelected]}>{count}</AppText></TouchableOpacity>)}
+          <TouchableOpacity style={[styles.dayChoice, customDaysOpen && styles.dayChoiceSelected]} onPress={() => setCustomDaysOpen(true)} accessibilityRole="radio" accessibilityState={{ checked: customDaysOpen }} testID="route-start-days-custom"><AppText style={[styles.dayChoiceText, customDaysOpen && styles.dayChoiceTextSelected]}>אחר</AppText></TouchableOpacity>
+        </View>
+        {customDaysOpen ? <FocusClearingFormInput label="מספר ימים" value={String(startDayCount || '')} onChangeText={(value) => setStartDayCount(Number(value.replace(/\D/g, '')) || 0)} placeholder="למשל: 7" keyboardType="numeric" rtl testID="route-start-custom-days-input" /> : null}
+        {startError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{startError}</AppText></View> : null}
+        <TouchableOpacity style={[styles.primaryButton, startBusy && styles.primaryButtonDisabled]} onPress={openNewDraft} disabled={startBusy} testID="route-start-open">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>פתיחת המסלול</AppText>}</TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
 
-	const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
-		navigation,
-		guardActive: true,
-		sessionKey: String(editingRouteId ?? "create"),
-		hasUnsavedChanges,
-		submitting,
-		openUnsavedPrompt: promptDiscardUnsaved,
-	});
-
-	useBackButton(navigation, {
-		title: routeToEdit ? "עריכת מסלול" : "מסלול חדש",
-		onPress: handleHeaderBackPress,
-	});
-
-	useEffect(() => {
-		const parsedDays = Number.parseInt(days, 10);
-		if (!Number.isFinite(parsedDays) || parsedDays < 1) {
-			return;
-		}
-
-		setTripDays((currentDays) => {
-			if (currentDays.length === parsedDays) return currentDays;
-			if (currentDays.length > parsedDays) {
-				currentDays.slice(parsedDays).forEach((day) => {
-					Promise.resolve(forgetDurableImage(day?.image)).catch(() => {});
-					(day?.stops || []).forEach((stop) => {
-						Promise.resolve(forgetDurableImage(stop?.image)).catch(() => {});
-					});
-				});
-				return currentDays.slice(0, parsedDays);
-			}
-
-			return [
-				...currentDays,
-				...Array.from({ length: parsedDays - currentDays.length }, createEmptyDay),
-			];
-		});
-	// forgetDurableImage is stable for the lifetime of the draft.
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [days]);
-
-	useEffect(() => {
-		if (!needs.length) setNeedsCoverageConfirmed(false);
-	}, [needs.length]);
-
-	const validStops = useMemo(() => flattenValidRouteStops(tripDays), [tripDays]);
-	const validationValues = useMemo(() => ({
-		title,
-		days,
-		distance,
-		desc,
-		validStops,
-		categoryIds,
-		subcategoryIds,
-		tagOptionsByCategory: TAG_OPTIONS_BY_CATEGORY,
-		audienceScope,
-		audiences,
-		budgetLevel,
-		difficulty,
-		transportModes,
-		pace,
-		seasons,
-		environment,
-		needs,
-		needsCoverageConfirmed,
-	}), [
-		title,
-		days,
-		distance,
-		desc,
-		validStops,
-		categoryIds,
-		subcategoryIds,
-		audienceScope,
-		audiences,
-		budgetLevel,
-		difficulty,
-		transportModes,
-		pace,
-		seasons,
-		environment,
-		needs,
-		needsCoverageConfirmed,
-	]);
-
-	const scrollToSection = useCallback((sectionId) => {
-		const y = sectionLayoutsRef.current[sectionId];
-		if (typeof y === "number") {
-			scrollRef.current?.scrollTo?.({ y: Math.max(0, y - spacing.sm), animated: true });
-		}
-	}, []);
-
-	const replaceSectionValidation = useCallback((sectionId, nextValidation) => {
-		setValidation((current) => {
-			const fields = { ...(current?.fields || {}) };
-			for (const field of ROUTE_SECTION_FIELDS[sectionId] || []) delete fields[field];
-			Object.assign(fields, nextValidation.fields);
-			const sections = { ...(current?.sections || {}) };
-			delete sections[sectionId];
-			if (nextValidation.sections[sectionId]?.length) sections[sectionId] = nextValidation.sections[sectionId];
-			return { fields, sections };
-		});
-	}, []);
-
-	const continueFromSection = useCallback((sectionId) => {
-		const nextValidation = validateRouteForm(validationValues, sectionId);
-		replaceSectionValidation(sectionId, nextValidation);
-		if (sectionErrorCount(nextValidation, sectionId)) {
-			setExpandedSection(sectionId);
-			scrollToSection(sectionId);
-			return false;
-		}
-		const currentIndex = ROUTE_SECTION_ORDER.indexOf(sectionId);
-		const nextSection = ROUTE_SECTION_ORDER[currentIndex + 1];
-		if (nextSection) {
-			setExpandedSection(nextSection);
-			if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => scrollToSection(nextSection));
-			else scrollToSection(nextSection);
-		}
-		return true;
-	}, [replaceSectionValidation, scrollToSection, validationValues]);
-
-	const sectionIsComplete = useCallback((sectionId) => (
-		sectionErrorCount(validateRouteForm(validationValues, sectionId), sectionId) === 0
-	), [validationValues]);
-
-	useEffect(() => {
-		setValidation((current) => {
-			const touchedSections = Object.keys(current?.sections || {});
-			if (!touchedSections.length) return current;
-			const next = emptyValidation();
-			for (const sectionId of touchedSections) {
-				const sectionValidation = validateRouteForm(validationValues, sectionId);
-				Object.assign(next.fields, sectionValidation.fields);
-				if (sectionValidation.sections[sectionId]?.length) {
-					next.sections[sectionId] = sectionValidation.sections[sectionId];
-				}
-			}
-			return next;
-		});
-	}, [validationValues]);
-
-	const ensureVerifiedForWrite = () => {
-		return true;
-	};
-
-	const handleSaveDay = (dayData, index) => {
-		setTripDays((currentDays) => {
-			const nextDays = [...currentDays];
-			nextDays[index] = {
-				...dayData,
-				draftId: currentDays[index]?.draftId || dayData?.draftId || randomUUID(),
-			};
-			return nextDays;
-		});
-	};
-
-	const openDayEditor = (index) => {
-		setEditingDayIndex(index);
-		setDayModalVisible(true);
-	};
-
-	const addRoute = async () => {
-		if (!ensureVerifiedForWrite()) return;
-		if (!user) {
-			Alert.alert("שגיאה", "משתמש חייב להיות מחובר.");
-			return;
-		}
-
-		const parsedDistance = Number.parseFloat(distance);
-		const nextValidation = validateRouteForm(validationValues);
-		setValidation(nextValidation);
-		const invalidSection = firstInvalidSection(nextValidation, ROUTE_SECTION_ORDER);
-		if (invalidSection) {
-			setExpandedSection(invalidSection);
-			if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => scrollToSection(invalidSection));
-			else scrollToSection(invalidSection);
-			return;
-		}
-
-		setSubmitting(true);
-		try {
-			const routeData = {
-				taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
-				title: title.trim(),
-				description: desc.trim(),
-				distanceKm: parsedDistance,
-				days: [],
-				categoryIds,
-				subcategoryIds,
-				attributes: {
-					audienceScope,
-					audiences: audienceScope === "all" ? [] : audiences,
-					budgetLevel,
-					vibes,
-					travelerStyles,
-					needs,
-					needsCoverageConfirmed,
-					seasons,
-					environment,
-				},
-				difficulty,
-				experienceLevel,
-				transportModes,
-				pace,
-			};
-
-			if (!routeToEdit) {
-				const durableDays = ensureRouteDraftIds(tripDays, () => randomUUID());
-				const queued = extractRoutePublishMedia(durableDays);
-				const queuedRoute = { ...routeData, days: queued.days };
-				await enqueueCreate({
-					contentType: "route",
-					draftJobId: publishJobId ? null : draftJobId,
-					sourceJobId: publishJobId,
-					payload: { route: queuedRoute },
-					draft: { route: queuedRoute },
-					media: queued.media.map((item) => ({
-						...durableMediaForUri(item.uri),
-						slot: item.slot,
-					})),
-				});
-				markDurableImagesEnqueued();
-				revokeRouteObjectUrls(tripDays);
-				allowLeaveRef.current = true;
-				navigation.goBack();
-				return;
-			}
-
-			const preparedMedia = await prepareRouteMedia(tripDays, uploadImageAssets);
-			routeData.days = markUnchangedRouteLocations(
-				preparedMedia.days,
-				routeToEdit?.days || []
-			);
-
-			await saveRoute(routeData, routeToEdit?.id || null);
-			Alert.alert("הצלחה", "המסלול עודכן.");
-			revokeRouteObjectUrls(tripDays);
-			allowLeaveRef.current = true;
-			navigation.goBack();
-		} catch (error) {
-			const locationKind = locationErrorKind(error);
-			if (locationKind !== "unknown") {
-				console.info("route_save_location_failure", { kind: locationKind });
-			} else {
-				console.info("route_save_failure", { code: String(error?.code || "unknown") });
-			}
-			// Unclaimed prepared media is removed by the scheduled server cleanup.
-			Alert.alert(
-				locationKind === "dailyQuota"
-					? "מגבלת המיקום היומית"
-					: locationKind === "temporaryQuota" ? "מגבלת חיפוש זמנית" : "שגיאה",
-				locationKind === "unknown"
-					? travelMediaErrorMessage(error) || "לא הצלחנו לשמור את המסלול. אפשר לנסות שוב."
-					: locationErrorMessage(error)
-			);
-		} finally {
-			setSubmitting(false);
-		}
-	};
-
-	const currentStep = Math.max(1, ROUTE_SECTION_ORDER.indexOf(expandedSection) + 1);
-	const basicsSummary = title.trim()
-		? `${title.trim()}${days ? ` · ${days} ימים` : ""}`
-		: "שם, משך, מרחק ותיאור";
-	const daysSummary = tripDays.length
-		? `${tripDays.length} ימים · ${validStops.length} תחנות`
-		: "בונים כל יום בנפרד";
-	const categorySummary = categoryIds.length
-		? `${categoryIds.length} קטגוריות · ${subcategoryIds.length} תתי־קטגוריות`
-		: "מה מחכה בדרך";
-	const budgetLabel = POST_BUDGETS.find((item) => item.value === budgetLevel)?.postLabel || "";
-	const fitSummary = [
-		budgetLabel,
-		audienceScope === "all" ? "מתאים לכולם" : (audiences.length ? `${audiences.length} קהלים` : ""),
-	].filter(Boolean).join(" · ") || "התאמה, קושי וסגנון";
-
-	return (
-		<View style={[common.container, guidedStyles.screen]}>
-			<ScrollView
-				ref={scrollRef}
-				style={guidedStyles.scroll}
-				keyboardShouldPersistTaps="handled"
-				contentContainerStyle={guidedStyles.content}
-			>
-				<GuidedFormHeader
-					currentStep={currentStep}
-					totalSteps={ROUTE_SECTION_ORDER.length}
-					title={routeToEdit ? "עריכת מסלול" : "מסלול חדש"}
-					intro="מתחילים מהתמונה הגדולה, מסדרים את הימים ורק אז מדייקים למי המסלול מתאים."
-					testID="route-guided-header"
-				/>
-
-				<View onLayout={(event) => { sectionLayoutsRef.current.basics = event.nativeEvent.layout.y; }}>
-					<GuidedFormSection
-						id="basics"
-						index={1}
-						title="המסלול בקצרה"
-						summary={basicsSummary}
-						expanded={expandedSection === "basics"}
-						completed={sectionIsComplete("basics")}
-						errorCount={sectionErrorCount(validation, "basics")}
-						onToggle={() => setExpandedSection((current) => current === "basics" ? null : "basics")}
-						onContinue={() => continueFromSection("basics")}
-						testIDPrefix="route-section"
-					>
-						<FormInput label="כותרת המסלול" required rtl placeholder="לדוגמה: מסלול טבע בנורבגיה" value={title} onChangeText={setTitle} error={validation.fields.title} testID="route-title-input" />
-						<FormInput label="מספר ימים" required rtl helperText="ניצור כרטיס נפרד לכל יום." placeholder="לדוגמה: 4" value={days} onChangeText={setDays} keyboardType="numeric" error={validation.fields.days} testID="route-days-input" />
-						<FormInput label="מרחק משוער (ק״מ)" required rtl placeholder="לדוגמה: 120" value={distance} onChangeText={setDistance} keyboardType="numeric" error={validation.fields.distance} testID="route-distance-input" />
-						<FormInput label="תיאור המסלול" required rtl placeholder="מה הופך את המסלול למיוחד?" value={desc} onChangeText={setDesc} multiline numberOfLines={4} error={validation.fields.desc} testID="route-description-input" />
-					</GuidedFormSection>
-				</View>
-
-				<View onLayout={(event) => { sectionLayoutsRef.current.days = event.nativeEvent.layout.y; }}>
-					<GuidedFormSection
-						id="days"
-						index={2}
-						title="ימים ותחנות"
-						summary={daysSummary}
-						expanded={expandedSection === "days"}
-						completed={sectionIsComplete("days")}
-						errorCount={sectionErrorCount(validation, "days")}
-						onToggle={() => setExpandedSection((current) => current === "days" ? null : "days")}
-						onContinue={() => continueFromSection("days")}
-						continueLabel="המשך לקטגוריות"
-						testIDPrefix="route-section"
-					>
-						<AppText style={guidedStyles.fieldHelper}>פתחו כל יום והוסיפו את התחנות לפי סדר הביקור. אפשר לחזור ולערוך בכל רגע.</AppText>
-						<DayList days={tripDays} onEdit={openDayEditor} />
-						{!!validation.fields.stops && <AppText style={guidedStyles.fieldError}>{validation.fields.stops}</AppText>}
-					</GuidedFormSection>
-				</View>
-
-				<View onLayout={(event) => { sectionLayoutsRef.current.category = event.nativeEvent.layout.y; }}>
-					<GuidedFormSection
-						id="category"
-						index={3}
-						title="מה יש במסלול"
-						summary={categorySummary}
-						expanded={expandedSection === "category"}
-						completed={sectionIsComplete("category")}
-						errorCount={sectionErrorCount(validation, "category")}
-						onToggle={() => setExpandedSection((current) => current === "category" ? null : "category")}
-						onContinue={() => continueFromSection("category")}
-						continueLabel="המשך להתאמה"
-						testIDPrefix="route-section"
-					>
-						<RtlChoiceGroup
-							label="קטגוריות במסלול (חובה)"
-							helper="אפשר לבחור כמה תחומים; בגלילה מתחילים תמיד מימין."
-							options={CATEGORIES}
-							selectedIds={categoryIds}
-							onToggle={(id) => {
-								if (categoryIds.includes(id)) {
-									setSubcategoryIds((current) => current.filter((tagId) => !(TAG_OPTIONS_BY_CATEGORY[id] || []).some((tag) => tag.id === tagId)));
-								}
-								toggle(setCategoryIds, id, 8);
-							}}
-							maxSelected={8}
-							variant="tile"
-							layout="responsive"
-							error={validation.fields.categoryIds}
-							testIDPrefix="route-category"
-						/>
-						{categoryIds.map((categoryId) => (
-							<View style={guidedStyles.nestedPanel} key={categoryId}>
-								<AppText style={guidedStyles.nestedTitle}>תתי־קטגוריות · {CATEGORIES.find((item) => item.id === categoryId)?.label || ""}</AppText>
-								<RtlChoiceGroup
-									options={TAG_OPTIONS_BY_CATEGORY[categoryId] || []}
-									selectedIds={subcategoryIds}
-									onToggle={(id) => toggle(setSubcategoryIds, id, 20)}
-									maxSelected={20}
-									testIDPrefix={`route-subcategory-${categoryId}`}
-								/>
-							</View>
-						))}
-						{!!validation.fields.subcategoryIds && <AppText style={guidedStyles.fieldError}>{validation.fields.subcategoryIds}</AppText>}
-					</GuidedFormSection>
-				</View>
-
-				<View onLayout={(event) => { sectionLayoutsRef.current.fit = event.nativeEvent.layout.y; }}>
-					<GuidedFormSection
-						id="fit"
-						index={4}
-						title="קהל ומאפיינים"
-						summary={fitSummary}
-						expanded={expandedSection === "fit"}
-						completed={sectionIsComplete("fit")}
-						errorCount={sectionErrorCount(validation, "fit")}
-						onToggle={() => setExpandedSection((current) => current === "fit" ? null : "fit")}
-						testIDPrefix="route-section"
-					>
-						<RtlChoiceGroup label="היקף התאמה לקהל (חובה)" options={[{ id: "all", label: "מתאים לכולם" }, { id: "selected", label: "בחירת קהלים" }]} selectedIds={[audienceScope]} selectionMode="single" variant="segment" onToggle={(id) => { setAudienceScope(id); if (id === "all") setAudiences([]); }} testIDPrefix="route-audience-scope" />
-						{audienceScope === "selected" ? <RtlChoiceGroup label="קהל יעד (חובה)" options={TRAVEL_PARTIES} selectedIds={audiences} onToggle={(id) => toggle(setAudiences, id, 6)} maxSelected={6} error={validation.fields.audiences} testIDPrefix="route-audience" /> : null}
-						<RtlChoiceGroup label="רמת מחיר (חובה)" options={POST_BUDGETS} selectedIds={[budgetLevel]} selectionMode="single" variant="segment" onToggle={setBudgetLevel} error={validation.fields.budgetLevel} testIDPrefix="route-budget" />
-						<RtlChoiceGroup label="רמת קושי (חובה)" options={ROUTE_DIFFICULTIES} selectedIds={[difficulty]} selectionMode="single" onToggle={setDifficulty} error={validation.fields.difficulty} testIDPrefix="route-difficulty" />
-						<RtlChoiceGroup label="אמצעי התניידות (חובה)" options={TRANSPORT_MODES} selectedIds={transportModes} onToggle={(id) => toggle(setTransportModes, id, 4)} maxSelected={4} error={validation.fields.transportModes} testIDPrefix="route-transport" />
-						<RtlChoiceGroup label="קצב (חובה)" options={PACES} selectedIds={[pace]} selectionMode="single" onToggle={setPace} error={validation.fields.pace} testIDPrefix="route-pace" />
-						<RtlChoiceGroup label="עונה מתאימה (חובה)" options={SEASONS} selectedIds={seasons} onToggle={(id) => toggle(setSeasons, id, 6)} maxSelected={6} error={validation.fields.seasons} testIDPrefix="route-season" />
-						<RtlChoiceGroup label="סביבה עיקרית (חובה)" options={ENVIRONMENTS} selectedIds={[environment]} selectionMode="single" onToggle={setEnvironment} error={validation.fields.environment} testIDPrefix="route-environment" />
-
-						<TouchableOpacity style={guidedStyles.optionalToggle} onPress={() => setOptionalFitOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: optionalFitOpen }} testID="route-optional-toggle">
-							<AppText style={guidedStyles.optionalToggleText}>עוד פרטים שיעזרו למטיילים (רשות)</AppText>
-							<AppText style={guidedStyles.optionalToggleText}>{optionalFitOpen ? "−" : "+"}</AppText>
-						</TouchableOpacity>
-						{optionalFitOpen ? (
-							<View>
-								<RtlChoiceGroup label="ניסיון נדרש" options={ROUTE_EXPERIENCE_LEVELS} selectedIds={[experienceLevel]} selectionMode="single" onToggle={setExperienceLevel} testIDPrefix="route-experience" />
-								<RtlChoiceGroup label="אווירה" options={VIBES} selectedIds={vibes} onToggle={(id) => toggle(setVibes, id, 4)} maxSelected={4} testIDPrefix="route-vibe" />
-								<RtlChoiceGroup label="סגנון טיול" options={TRAVELER_STYLES} selectedIds={travelerStyles} onToggle={(id) => toggle(setTravelerStyles, id, 4)} maxSelected={4} testIDPrefix="route-style" />
-								<RtlChoiceGroup label="מידע מעשי ונגישות" options={NEEDS} selectedIds={needs} onToggle={(id) => toggle(setNeeds, id, NEEDS.length)} maxSelected={NEEDS.length} testIDPrefix="route-need" />
-								{needs.length > 0 ? (
-									<TouchableOpacity style={guidedStyles.checkboxRow} onPress={() => setNeedsCoverageConfirmed((current) => !current)} accessibilityRole="checkbox" accessibilityState={{ checked: needsCoverageConfirmed }} testID="route-needs-coverage-confirmation">
-										<View style={[guidedStyles.checkboxBox, needsCoverageConfirmed && guidedStyles.checkboxBoxChecked]}>{needsCoverageConfirmed ? <AppText style={guidedStyles.checkboxCheck}>✓</AppText> : null}</View>
-										<AppText style={guidedStyles.checkboxText}>בדקתי שהמידע שסומן נכון לכל המסלול, ולא רק לחלק מהתחנות.</AppText>
-									</TouchableOpacity>
-								) : null}
-								{!!validation.fields.needsCoverageConfirmed && <AppText style={guidedStyles.fieldError}>{validation.fields.needsCoverageConfirmed}</AppText>}
-							</View>
-						) : null}
-					</GuidedFormSection>
-				</View>
-			</ScrollView>
-
-			<GuidedFormFooter label={routeToEdit ? "שמור שינויים" : "פרסם מסלול"} onPress={addRoute} loading={submitting} disabled={submitting} testID="route-submit" />
-
-			<DayEditorModal
-				visible={isDayModalVisible}
-				onClose={() => setDayModalVisible(false)}
-				onSave={handleSaveDay}
-				dayIndex={editingDayIndex !== null ? editingDayIndex : 0}
-				initialData={editingDayIndex !== null ? tripDays[editingDayIndex] : {}}
-				onPersistImage={async (uri) => { await persistReviewedImages([uri]); }}
-				onForgetImage={forgetDurableImage}
-			/>
-			<UnsavedChangesModal
-				visible={unsavedModalVisible}
-				title={UNSAVED_LEAVE_TITLE}
-				message={UNSAVED_LEAVE_MESSAGE}
-				onCancel={dismissUnsavedModal}
-				onConfirm={confirmUnsavedLeave}
-				testID="route-unsaved-discard-modal"
-				cancelTestID="route-unsaved-discard-cancel"
-				confirmTestID="route-unsaved-discard-confirm"
-			/>
-		</View>
-	);
+  const activeDay = days[activeDayIndex] || days[0];
+  const allStops = flattenRouteStops(days);
+  const preciseStops = allStops.filter((stop) => stop.locationPrecision !== 'general' && stop.coordinates);
+  return (
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+          {saveStatus === 'saving' ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={saveStatus === 'error' ? 'alert-circle-outline' : 'cloud-done-outline'} size={17} color={saveStatus === 'error' ? colors.error : colors.textMuted} />}
+          <AppText style={[styles.statusText, saveStatus === 'error' && styles.statusError]}>{saveStatus === 'saving' ? 'שומר...' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : 'נשמר'}</AppText>
+          {saveStatus === 'error' ? <TouchableOpacity
+            onPress={() => persistSnapshot(draftPayload, draftComparable).catch(() => {})}
+            testID="route-save-retry"
+          ><AppText style={styles.retryText}>ניסיון נוסף</AppText></TouchableOpacity> : null}
+        </View>
+        <NoyaGuide dismissible message="אפשר להתחיל מהעצירות שכבר ברורות. את שאר הפרטים משלימים לפני הפרסום." />
+        <TouchableOpacity style={styles.mapPeek} onPress={() => navigation.navigate('RouteMap', { routeData: { title, days } })} accessibilityRole="button" testID="route-map-peek">
+          <View><AppText style={styles.mapPeekTitle}>מפת המסלול</AppText><AppText style={styles.mapPeekMeta}>{preciseStops.length ? `${preciseStops.length} נקודות מדויקות` : 'המפה תתעדכן כשיתווספו נקודות מדויקות'}</AppText></View><Ionicons name="map-outline" size={28} color={colors.white} />
+        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={styles.tabsContent}>
+          {days.map((day, index) => <TouchableOpacity key={day.id || index} style={[styles.tab, activeDayIndex === index && styles.tabSelected]} onPress={() => setActiveDayIndex(index)} accessibilityRole="tab" accessibilityState={{ selected: activeDayIndex === index }} testID={`route-day-tab-${index}`}><AppText style={[styles.tabText, activeDayIndex === index && styles.tabTextSelected]}>יום {index + 1}</AppText></TouchableOpacity>)}
+        </ScrollView>
+        <View style={styles.card}>
+          <View style={styles.sectionHeader}><AppText style={styles.sectionTitle}>יום {activeDayIndex + 1}</AppText><AppText style={styles.sectionMeta}>{activeDay?.stops?.length || 0} עצירות</AppText></View>
+          {!activeDay?.stops?.length ? <AppText style={styles.empty}>עדיין אין עצירות ביום הזה. אפשר להוסיף גם מקום כללי שאין לו נקודה מדויקת במפות.</AppText> : activeDay.stops.map((stop, index) => (
+            <TouchableOpacity key={stop.id || `${activeDayIndex}-${index}`} style={styles.stopCard} onPress={() => setDayEditorVisible(true)} accessibilityRole="button">
+              <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>
+              <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title}</AppText><AppText style={styles.stopMeta}>{stop.locationPrecision === 'general' ? 'מיקום כללי' : stop.location || stop.place?.name || 'נקודה במפה'}{stop.startTime ? ` · ${stop.startTime}` : ''}{stop.durationMinutes ? ` · ${stop.durationMinutes} דק׳` : ''}</AppText></View>
+              <View style={styles.stopControls}><TouchableOpacity style={styles.stopControl} onPress={(event) => { event.stopPropagation?.(); moveStop(index, -1); }} disabled={index === 0} accessibilityLabel="העברה למעלה"><Ionicons name="chevron-up" size={19} color={index === 0 ? colors.textMuted : colors.primary} /></TouchableOpacity><TouchableOpacity style={styles.stopControl} onPress={(event) => { event.stopPropagation?.(); moveStop(index, 1); }} disabled={index === activeDay.stops.length - 1} accessibilityLabel="העברה למטה"><Ionicons name="chevron-down" size={19} color={index === activeDay.stops.length - 1 ? colors.textMuted : colors.primary} /></TouchableOpacity></View>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.addStop} onPress={() => setDayEditorVisible(true)} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה</AppText></TouchableOpacity>
+        </View>
+        <TouchableOpacity style={styles.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} testID="route-details-toggle"><AppText style={styles.detailsToggleText}>פרטי המסלול והפרסום</AppText><Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} /></TouchableOpacity>
+        {detailsOpen ? <View style={styles.card}>
+          <FocusClearingFormInput label="כותרת המסלול" required value={title} onChangeText={setTitle} placeholder="למשל: שלושה ימים של אוכל ותרבות בבודפשט" maxLength={120} rtl testID="route-title-input" />
+          <FocusClearingFormInput label="תיאור המסלול" required value={description} onChangeText={setDescription} placeholder="למשל: מסלול רגוע שמשלב את השוק, מרכז העיר ושתי עצירות אוכל אהובות." multiline maxLength={5000} rtl testID="route-description-input" />
+          <RtlChoiceGroup label="רמת מחיר למסלול כולו (חובה)" helper="מספיק לבחור הערכה כללית לכל המסלול." options={POST_BUDGETS} selectedIds={[budgetLevel]} selectionMode="single" variant="segment" onToggle={(value) => { setBudgetLevel(value); setValidationMessage(''); }} testIDPrefix="route-budget" />
+          <FocusClearingFormInput label="מחיר מדויק או הערה (רשות)" value={priceNote} onChangeText={setPriceNote} placeholder="למשל: כ־600 ש״ח לאדם, ללא טיסות" maxLength={120} rtl testID="route-price-note" />
+          <TouchableOpacity style={styles.detailsToggle} onPress={() => setOptionalOpen((current) => !current)} testID="route-optional-toggle"><AppText style={styles.detailsToggleText}>עוד פרטים שימושיים (רשות)</AppText><Ionicons name={optionalOpen ? 'remove' : 'add'} size={20} color={colors.primary} /></TouchableOpacity>
+          {optionalOpen ? <View style={styles.optionalBox}><RtlChoiceGroup label="אמצעי התניידות" options={TRANSPORT_MODES} selectedIds={transportModes} onToggle={(value) => setTransportModes((current) => current.includes(value) ? current.filter((id) => id !== value) : [...current, value].slice(0, 4))} maxSelected={4} testIDPrefix="route-transport" /><RtlChoiceGroup label="רמת קושי" options={ROUTE_DIFFICULTIES} selectedIds={[difficulty]} selectionMode="single" onToggle={setDifficulty} testIDPrefix="route-difficulty" /><RtlChoiceGroup label="קצב" options={PACES} selectedIds={[pace]} selectionMode="single" onToggle={setPace} testIDPrefix="route-pace" /><RtlChoiceGroup label="עונה מתאימה" options={SEASONS} selectedIds={seasons} onToggle={(value) => setSeasons((current) => current.includes(value) ? current.filter((id) => id !== value) : [...current, value])} testIDPrefix="route-season" /></View> : null}
+          {validationMessage ? <View style={styles.errorBox}><AppText style={styles.errorText}>{validationMessage}</AppText></View> : null}
+          {saveError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{saveError}</AppText></View> : null}
+        </View> : null}
+      </ScrollView>
+      <View style={styles.footer}><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>פרסום המסלול</AppText>}</TouchableOpacity></View>
+      <DayEditorModal visible={dayEditorVisible} onClose={() => setDayEditorVisible(false)} onSave={saveDay} initialData={activeDay} dayIndex={activeDayIndex} routeDestination={area} allowImages={false} />
+    </View>
+  );
 }
