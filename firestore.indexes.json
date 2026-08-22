@@ -437,6 +437,25 @@
       ]
     },
     {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "threadType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "comments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "threadType", "order": "ASCENDING" },
+        { "fieldPath": "threadRootId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "cases",
       "queryScope": "COLLECTION",
       "fields": [
@@ -464,6 +483,12 @@
   "fieldOverrides": [
     {
       "collectionGroup": "notificationCleanupJobs",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "commentThreadDeletionJobs",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []

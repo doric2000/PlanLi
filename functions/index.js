@@ -44,6 +44,7 @@ const {
   cleanupOrphanFavorites,
   deleteComment,
   getReactionState,
+  handleCommentThreadDeletionJobWrite,
   refreshFavoriteOwnerPreviews,
   refreshFavoritesForTarget,
   saveComment,
@@ -1058,6 +1059,14 @@ exports.onOwnerNotificationOutboxWritten = firestoreWritten(
 exports.onNotificationCleanupJobWritten = firestoreWritten(
   'system/runtime/notificationCleanupJobs/{jobId}',
   (event) => handleNotificationCleanupJobWrite({ admin, event })
+);
+exports.onCommentThreadDeletionJobWritten = firestoreWritten(
+  'system/runtime/commentThreadDeletionJobs/{jobId}',
+  (event) => handleCommentThreadDeletionJobWrite({ admin, event }),
+  {
+    memory: '512MiB',
+    timeoutSeconds: 300,
+  }
 );
 exports.onBlockedUserNotificationWritten = firestoreWritten(
   'users/{uid}/blockedUsers/{blockedUid}',

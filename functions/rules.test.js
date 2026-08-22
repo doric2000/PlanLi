@@ -181,7 +181,24 @@ test.beforeEach(async () => {
     });
     await setDoc(doc(db, 'system', 'accountDeletion', 'jobs', 'private'), { status: 'running' });
     await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'comment-1'), {
-      ownerId: 'owner', text: 'Hello', status: 'active',
+      authorId: 'owner', text: 'Hello', status: 'active',
+      threadType: 'root', threadRootId: 'comment-1', replyToCommentId: null,
+      replyCount: 1, createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'reply-1'), {
+      authorId: 'other', text: 'Reply', status: 'active',
+      threadType: 'reply', threadRootId: 'comment-1', replyToCommentId: 'comment-1',
+      replyCount: 0, createdAt: new Date('2026-01-01T00:01:00Z'),
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'held-root'), {
+      authorId: 'owner', text: 'Held root', status: 'moderation_hold',
+      threadType: 'root', threadRootId: 'held-root', replyToCommentId: null,
+      replyCount: 1, createdAt: new Date('2026-01-01T00:02:00Z'),
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-active', 'comments', 'orphan-reply'), {
+      authorId: 'other', text: 'Orphaned reply', status: 'active',
+      threadType: 'reply', threadRootId: 'held-root', replyToCommentId: 'held-root',
+      replyCount: 0, createdAt: new Date('2026-01-01T00:03:00Z'),
     });
     await setDoc(doc(db, 'recommendations', 'rec-deleting', 'comments', 'comment-1'), {
       ownerId: 'owner', text: 'Hidden', status: 'active',
@@ -230,6 +247,49 @@ test('social children inherit their parent publication state', {
   await assertSucceeds(getDoc(doc(db, 'recommendations', 'rec-active', 'likes', 'owner')));
   await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting', 'comments', 'comment-1')));
   await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting', 'likes', 'owner')));
+});
+
+test('threaded comment root and reply queries remain bounded and active-only', {
+  skip: !hasEmulators,
+}, async () => {
+  const db = env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDocs(query(
+    collection(db, 'recommendations', 'rec-active', 'comments'),
+    where('status', '==', 'active'),
+    where('threadType', '==', 'root'),
+    orderBy('createdAt', 'desc'),
+    limit(20)
+  )));
+  await assertFails(getDoc(doc(
+    db, 'recommendations', 'rec-active', 'comments', 'orphan-reply'
+  )));
+  await assertFails(getDocs(query(
+    collection(db, 'recommendations', 'rec-active', 'comments'),
+    where('status', '==', 'active'),
+    where('threadType', '==', 'reply'),
+    where('threadRootId', '==', 'held-root'),
+    orderBy('createdAt', 'asc'),
+    limit(20)
+  )));
+  await assertSucceeds(getDocs(query(
+    collection(db, 'recommendations', 'rec-active', 'comments'),
+    where('status', '==', 'active'),
+    where('threadType', '==', 'reply'),
+    where('threadRootId', '==', 'comment-1'),
+    orderBy('createdAt', 'asc'),
+    limit(20)
+  )));
+  await assertFails(getDocs(query(
+    collection(db, 'recommendations', 'rec-active', 'comments'),
+    where('threadType', '==', 'root'),
+    limit(20)
+  )));
+  await assertFails(getDocs(query(
+    collection(db, 'recommendations', 'rec-active', 'comments'),
+    where('status', '==', 'active'),
+    where('threadType', '==', 'root'),
+    limit(31)
+  )));
 });
 
 test('blocked-user documents are private to their owner and server-written', {

@@ -185,6 +185,12 @@ test('canonical documents bound previews, excerpts, targets, and navigation', ()
   }), (error) => error.details?.reason === 'invalid_notification_input');
 });
 
+test('reply notifications are accepted as canonical comment activity', () => {
+  const notification = personalNotification({ subtype: 'new_reply' });
+  assert.equal(notification.type, 'comment');
+  assert.equal(notification.subtype, 'new_reply');
+});
+
 test('grouped likes retain one generation and stale unlikes cannot change a recreated row', () => {
   const ref = { id: 'like-row', path: 'users/owner/notifications/like-row' };
   const target = buildNotificationTarget({

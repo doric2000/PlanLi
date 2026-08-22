@@ -68,7 +68,18 @@ service cloud.firestore {
 
     function activeComment(collectionName, contentId) {
       return activeParent(collectionName, contentId)
-        && resource.data.status == 'active';
+        && resource.data.status == 'active'
+        && (
+          !('threadType' in resource.data)
+          || resource.data.threadType == 'root'
+          || (
+            resource.data.threadType == 'reply'
+            && resource.data.threadRootId is string
+            && get(
+              /databases/$(database)/documents/$(collectionName)/$(contentId)/comments/$(resource.data.threadRootId)
+            ).data.status == 'active'
+          )
+        );
     }
 
     function activeCountry(countryId) {

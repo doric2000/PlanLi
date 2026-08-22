@@ -257,6 +257,50 @@ async function listHeldContent({ admin, auth }) {
   return { items: items.slice(0, PAGE_SIZE).map(serialize), nextCursor: null };
 }
 
+async function syncRootReplyModeration({ admin, parentRef, rootId, rootPath, action, reason, actorUid }) {
+  let cursor = null;
+  let changed = 0;
+  while (true) {
+    let query = parentRef.collection('comments')
+      .where('threadRootId', '==', rootId)
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(400);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    const replies = snapshot.docs.filter((entry) => {
+      const value = entry.data() || {};
+      if (entry.id === rootId || value.threadType !== 'reply') return false;
+      if (action === 'hold') return value.status === 'active';
+      return value.status === 'moderation_hold'
+        && value.threadModeration?.rootPath === rootPath;
+    });
+    const batch = admin.firestore().batch();
+    replies.forEach((entry) => {
+      batch.update(entry.ref, action === 'hold' ? {
+        status: 'moderation_hold',
+        threadModeration: {
+          rootPath,
+          action: 'hold',
+          reason,
+          actorUid,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      } : {
+        status: 'active',
+        threadModeration: admin.firestore.FieldValue.delete(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    if (replies.length) await batch.commit();
+    changed += replies.length;
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 400) break;
+  }
+  return changed;
+}
+
 async function moderateContent({ admin, auth, data, mediaBucket }) {
   await prepareAdminAction(admin, auth, 'moderateContent');
   const reason = cleanText(data?.reason, 'reason');
@@ -393,6 +437,24 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
         && currentData.status !== 'active') {
         fail('failed-precondition', 'Only published content can be held.', 'content_not_active');
       }
+      if (action === 'restore'
+        && target.type === 'comment'
+        && currentData.threadType === 'reply') {
+        const rootId = typeof currentData.threadRootId === 'string'
+          ? currentData.threadRootId.trim()
+          : '';
+        const parentPath = target.path.split('/').slice(0, 2).join('/');
+        const rootSnapshot = rootId
+          ? await transaction.get(db.doc(`${parentPath}/comments/${rootId}`))
+          : null;
+        if (!rootSnapshot?.exists || rootSnapshot.data()?.status !== 'active') {
+          fail(
+            'failed-precondition',
+            'A reply cannot be restored while its thread is unavailable.',
+            'thread_not_active'
+          );
+        }
+      }
       const currentOwnerId = target.type === 'comment'
         ? currentData.authorId
         : currentData.ownerId;
@@ -416,6 +478,11 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
           actorUid: auth.uid,
           at: admin.firestore.FieldValue.serverTimestamp(),
         },
+        ...(action === 'hold'
+          && target.type === 'comment'
+          && currentData.threadType === 'reply'
+          ? { threadModeration: admin.firestore.FieldValue.delete() }
+          : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       if (notificationRef && notificationSnapshot && notificationRecipientEligible(ownerSnapshot)) {
@@ -446,6 +513,17 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
         available: action === 'restore',
         reason: action === 'hold' ? reason : null,
       });
+    } else if (targetData.threadType !== 'reply') {
+      const parentRef = db.doc(target.path.split('/').slice(0, 2).join('/'));
+      await syncRootReplyModeration({
+        admin,
+        parentRef,
+        rootId: target.id,
+        rootPath: target.path,
+        action,
+        reason,
+        actorUid: auth.uid,
+      });
     }
   }
   if (target.type === 'comment' && action !== 'dismiss') {
@@ -455,6 +533,30 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       'stats.commentCount': activeComments.data().count,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => {});
+    if (targetData.threadType === 'reply' && targetData.threadRootId) {
+      const rootRef = parentRef.collection('comments').doc(targetData.threadRootId);
+      const activeReplies = await parentRef.collection('comments')
+        .where('status', '==', 'active')
+        .where('threadType', '==', 'reply')
+        .where('threadRootId', '==', targetData.threadRootId)
+        .count()
+        .get();
+      await rootRef.update({
+        replyCount: activeReplies.data().count,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    } else if (action !== 'delete') {
+      const activeReplies = await parentRef.collection('comments')
+        .where('status', '==', 'active')
+        .where('threadType', '==', 'reply')
+        .where('threadRootId', '==', target.id)
+        .count()
+        .get();
+      await parentRef.collection('comments').doc(target.id).update({
+        replyCount: activeReplies.data().count,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
   }
   if (caseId) {
     await db.doc(`system/moderation/cases/${caseId}`).set({
@@ -561,9 +663,16 @@ async function hideUserContent({ admin, uid, mediaBucket }) {
   }
   const comments = await db.collectionGroup('comments').where('authorId', '==', uid).get();
   const affectedParents = new Map();
+  const affectedRoots = new Map();
   comments.docs.forEach((entry) => {
     const parent = entry.ref.parent.parent;
-    if (parent) affectedParents.set(parent.path, parent);
+    if (parent) {
+      affectedParents.set(parent.path, parent);
+      if (entry.data()?.threadType === 'reply' && entry.data()?.threadRootId) {
+        const root = parent.collection('comments').doc(entry.data().threadRootId);
+        affectedRoots.set(root.path, root);
+      }
+    }
   });
   for (let offset = 0; offset < comments.docs.length; offset += 400) {
     const batch = db.batch();
@@ -577,6 +686,18 @@ async function hideUserContent({ admin, uid, mediaBucket }) {
     const activeComments = await parent.collection('comments').where('status', '==', 'active').count().get();
     await parent.update({
       'stats.commentCount': activeComments.data().count,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
+  }
+  for (const root of affectedRoots.values()) {
+    const activeReplies = await root.parent
+      .where('status', '==', 'active')
+      .where('threadType', '==', 'reply')
+      .where('threadRootId', '==', root.id)
+      .count()
+      .get();
+    await root.update({
+      replyCount: activeReplies.data().count,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => {});
   }

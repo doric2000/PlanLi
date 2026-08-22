@@ -400,7 +400,7 @@ async function updateNotificationPreferences({ admin, auth, data }) {
   return { preferences };
 }
 
-function buildExpoMessage({ token, notificationId, channel, category, version }) {
+function buildExpoMessage({ token, notificationId, channel, category, version, subtype = null }) {
   cleanToken(token);
   cleanId(notificationId, 'notificationId');
   cleanDispatchVersion(version);
@@ -414,10 +414,11 @@ function buildExpoMessage({ token, notificationId, channel, category, version })
     throw new Error('Push category does not match the notification channel.');
   }
   const config = CHANNEL_CONFIG[pushCategory];
+  const reply = pushCategory === PUSH_CATEGORIES.COMMENTS && subtype === 'new_reply';
   return {
     to: token,
-    title: config.title,
-    body: config.body,
+    title: reply ? 'תשובה חדשה ב-PlanLi' : config.title,
+    body: reply ? 'מישהו השיב לתגובה שלך.' : config.body,
     sound: 'default',
     priority: 'high',
     channelId: config.androidChannelId,
@@ -998,6 +999,7 @@ async function dispatchExpectedNotificationVersion({
       channel: expectedChannel,
       category: expectedCategory,
       version: expectedVersion,
+      subtype: authoritative.subtype,
     }));
     const tickets = await sendMessagesWithRetry(client, messages, { sleep });
     providerAccepted = true;
@@ -1288,6 +1290,7 @@ async function processRetrySendJob({
     channel: job.channel,
     category: job.category,
     version: job.version,
+    subtype: notification.subtype,
   });
   let ticket;
   try {

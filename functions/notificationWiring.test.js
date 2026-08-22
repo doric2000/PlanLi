@@ -41,3 +41,10 @@ test('notification cleanup jobs have a retry-enabled written trigger', () => {
   assert.match(source, /system\/runtime\/notificationCleanupJobs\/\{jobId\}/u);
   assert.match(source, /handleNotificationCleanupJobWrite/u);
 });
+
+test('comment thread deletion jobs have a bounded retry trigger', () => {
+  assert.match(source, /onCommentThreadDeletionJobWritten/u);
+  assert.match(source, /system\/runtime\/commentThreadDeletionJobs\/\{jobId\}/u);
+  assert.match(source, /handleCommentThreadDeletionJobWrite/u);
+  assert.match(source, /onCommentThreadDeletionJobWritten[\s\S]*?timeoutSeconds: 300/u);
+});

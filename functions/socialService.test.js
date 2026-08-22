@@ -1,7 +1,51 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildFavoritePreview } = require('./socialService');
+const {
+  buildFavoritePreview,
+  canonicalCommentThread,
+  handleCommentThreadDeletionJobWrite,
+} = require('./socialService');
+
+test('comment threads normalize roots and one-level replies', () => {
+  assert.deepEqual(canonicalCommentThread({}, 'root-1'), {
+    threadType: 'root',
+    threadRootId: 'root-1',
+    replyToCommentId: null,
+  });
+  assert.deepEqual(canonicalCommentThread({
+    threadType: 'reply',
+    threadRootId: 'root-1',
+    replyToCommentId: 'reply-1',
+  }, 'reply-2'), {
+    threadType: 'reply',
+    threadRootId: 'root-1',
+    replyToCommentId: 'reply-1',
+  });
+});
+
+test('comment thread progress writes do not recursively start deletion workers', async () => {
+  const result = await handleCommentThreadDeletionJobWrite({
+    admin: null,
+    event: {
+      data: {
+        after: {
+          exists: true,
+          data: () => ({
+            schemaVersion: 1,
+            type: 'comment_thread_delete',
+            state: 'processing',
+            parentPath: 'recommendations/rec-1',
+            rootCommentPath: 'recommendations/rec-1/comments/root-1',
+            rootCommentId: 'root-1',
+            authorizedUid: 'user-1',
+          }),
+        },
+      },
+    },
+  });
+  assert.deepEqual(result, { state: 'ignored' });
+});
 
 test('favorite previews never persist rating metrics', () => {
   const preview = buildFavoritePreview({

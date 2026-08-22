@@ -5,6 +5,7 @@ const {
 } = require('./mediaCleanup');
 const {
   consumeRateLimit,
+  deleteComment,
   isVerified,
   normalizeTarget,
 } = require('./socialService');
@@ -226,10 +227,28 @@ async function removeAuthoredInteractions({ admin, uid }) {
     const parent = entry.ref.parent.parent;
     if (parent) affectedParents.set(parent.path, parent);
   });
-  for (let offset = 0; offset < comments.docs.length; offset += 10) {
-    await Promise.all(comments.docs.slice(offset, offset + 10).map((entry) => (
-      purgeNotificationsForTarget({ admin, targetPath: entry.ref.path })
-    )));
+  const orderedComments = [...comments.docs].sort((left, right) => {
+    const leftRoot = left.data()?.threadType !== 'reply';
+    const rightRoot = right.data()?.threadType !== 'reply';
+    return Number(rightRoot) - Number(leftRoot);
+  });
+  for (const entry of orderedComments) {
+    const current = await entry.ref.get();
+    if (!current.exists) continue;
+    const parent = entry.ref.parent.parent;
+    if (!parent) continue;
+    const [collectionName, parentId] = parent.path.split('/');
+    const type = collectionName === 'routes'
+      ? 'route'
+      : collectionName === 'trips'
+        ? 'trip'
+        : 'recommendation';
+    await deleteComment({
+      admin,
+      auth: null,
+      internalActorUid: uid,
+      data: { target: { type, id: parentId }, commentId: entry.id },
+    });
   }
   for (let offset = 0; offset < likes.docs.length; offset += 10) {
     await Promise.all(likes.docs.slice(offset, offset + 10).map((entry) => (
@@ -237,12 +256,6 @@ async function removeAuthoredInteractions({ admin, uid }) {
     )));
   }
   const removedNotifications = await purgeNotificationsForActor({ admin, actorId: uid });
-  const refs = comments.docs.map((entry) => entry.ref);
-  for (let offset = 0; offset < refs.length; offset += 400) {
-    const batch = db.batch();
-    refs.slice(offset, offset + 400).forEach((ref) => batch.delete(ref));
-    await batch.commit();
-  }
   for (const parent of affectedParents.values()) {
     const [parentSnapshot, likesCount, commentsCount] = await Promise.all([
       parent.get(),
