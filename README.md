@@ -11,10 +11,10 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Route-builder update group
-`b336e8bf-e86d-437d-89a7-1930d8e2cf0b` was published for iOS and Android on
-2026-08-23 from route-builder merge commit `78a1e87`; delivery and application
-on the physical iPhone remain unverified. The backend now has 92 active
+runtime `1.1.0`. Route destination-fix update group
+`70b6ac10-ddad-476b-a523-8088ba0e7454` was published for iOS and Android on
+2026-08-23 from merge commit `b1736e1`; delivery and application on the physical
+iPhone remain unverified. The backend has 92 active
 Node.js 22 v2 Functions in `europe-west1`, including the four route-draft
 callables. No Firestore Rules, indexes, Hosting, production documents, native
 builds, or Apple submissions changed in this release. The deployed Firebase
@@ -199,24 +199,27 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- Source release: route-builder PR `#154`, merged as commit `78a1e87`.
-- Preview EAS Update: group `1e2fca50-b35e-411e-80c1-d37e24e01b35`, runtime
-  `1.1.0`, iOS update `01a02b60-f944-741f-b8a1-ddf47327a877`, Android update
-  `01a02b60-f944-7b97-a902-f3954643a259`, published from `78a1e87` on
+- Source release: route destination-fix PR `#156`, merged as commit `b1736e1`.
+- Preview EAS Update: group `8bb220df-1c37-4ddb-ad66-6e52a4e5c228`, runtime
+  `1.1.0`, iOS update `01a02ba3-40fa-776c-b5ac-24b58ec03f46`, Android update
+  `01a02ba3-40fa-7ea5-907e-6c9d613f9d94`, published from `b1736e1` on
   2026-08-23 with the `production` EAS environment.
-- Production EAS Update: group `b336e8bf-e86d-437d-89a7-1930d8e2cf0b`, runtime
-  `1.1.0`, iOS update `01a02b68-d65a-73c1-b8e6-8862c21d90fa`, Android update
-  `01a02b68-d65a-7fa1-8eed-270f29bec1bb`, published from the same commit on
+- Production EAS Update: group `70b6ac10-ddad-476b-a523-8088ba0e7454`, runtime
+  `1.1.0`, iOS update `01a02ba9-bbf9-7a65-a291-54e114115b7b`, Android update
+  `01a02ba9-bbf9-72b8-b5dd-38740287bef7`, published from the same commit on
   2026-08-23. Roll back by republishing the prior production group
-  `4d6896e9-60d6-40c3-90e0-0a1415bae0b1` to `production`.
+  `b336e8bf-e86d-437d-89a7-1930d8e2cf0b` to `production`.
 - Firebase release: 92 active Node.js 22 v2 Functions in `europe-west1`.
   `saveRecommendation`, `saveRoute`, and `cleanupExpiredRuntimeScheduled` were
   updated, while `getCurrentRouteDraft`, `saveRouteDraft`, `discardRouteDraft`,
   and `publishRouteDraft` were created from `78a1e87` at
-  `2026-08-22T21:18Z`. Firestore Rules, indexes, and Hosting were not deployed.
-- Validation: all 134 Client suites (629 tests), all 539 Functions tests (517
-  passed and 22 skipped), changed-boundary validation, GitHub checks, RTL
-  phone-width visual QA, and the security diff scan passed. The separate
+  `2026-08-22T21:18Z`. `saveRouteDraft`, `publishRouteDraft`, and `saveRoute`
+  were updated from `b1736e1` at approximately `2026-08-22T22:32Z`. Firestore
+  Rules, indexes, and Hosting were not deployed.
+- Validation: all 135 Client suites (632 tests), all 542 Functions tests (520
+  passed and 22 skipped), all 22 Rules-emulator tests, changed-boundary
+  validation, GitHub checks, and focused route destination security tests
+  passed. The separate
   `/review` command could not inspect the diff because its Windows sandbox
   helper returned `Access is denied`; this is recorded as unverified rather
   than passed.
