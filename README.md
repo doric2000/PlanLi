@@ -11,13 +11,14 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Recommendation-catalog update group
-`de7985b8-2684-4a7d-80e6-fd3a29fc8c4f` was published for iOS and Android on
-2026-08-22 from merge commit `fb65664`; delivery and application on the physical
-iPhone remain unverified. All 87 Functions were deployed from the same commit,
-and all six existing recommendations were migrated to recommendation catalog
-v1 without conflicts. The deployed Firebase backend is not evidence that the
-OTA update has already been applied on a tester device.
+runtime `1.1.0`. Threaded-comments update group
+`4d6896e9-60d6-40c3-90e0-0a1415bae0b1` was published for iOS and Android on
+2026-08-22 from threaded-comments merge commit `513a008`; delivery and
+application on the physical iPhone remain unverified. All 88 Functions, the
+Firestore Rules, and the comment indexes were deployed from the same commit.
+All seven legacy comments were migrated to the threaded-comment schema and the
+verification dry-run reported no missing rows. The deployed Firebase backend is
+not evidence that the OTA update has already been applied on a tester device.
 
 ## Run the client
 
@@ -197,11 +198,25 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- EAS Update: group `de7985b8-2684-4a7d-80e6-fd3a29fc8c4f`, `production`
-  channel, runtime `1.1.0`, iOS update `01a029d3-a7a6-7be6-96e0-8a16dc0b3966`,
-  published from recommendation-catalog merge `fb65664` on 2026-08-22.
+- Preview EAS Update: group `32c627ba-fbce-4b57-9c49-81563cd3b1b2`, runtime
+  `1.1.0`, iOS update `01a02ac3-3003-70c2-894f-e71fe6017fbc`, Android update
+  `01a02ac3-3003-7c0a-b77b-48af60ff82bd`, published from threaded-comments
+  merge `513a008` on 2026-08-22 with the `production` EAS environment.
+- Production EAS Update: group `4d6896e9-60d6-40c3-90e0-0a1415bae0b1`, runtime
+  `1.1.0`, iOS update `01a02ac5-1724-7254-bb0c-9fa4d55e0d5b`, Android update
+  `01a02ac5-1724-7b84-b9fc-db18573c9e86`, republished from the verified preview
+  artifact set on 2026-08-22. Roll back by republishing the prior production
+  group `de7985b8-2684-4a7d-80e6-fd3a29fc8c4f` to `production`.
+- Firebase release: 88 Node.js 22 v2 Functions in `europe-west1`, Firestore
+  Rules, and all three comment indexes are deployed; the two threaded indexes
+  report `READY`. The comment migration updated 7 of 7 legacy rows and its
+  verification dry-run reports `missing: 0`.
 - OTA device state: Expo serves the iOS update to matching production requests,
   but download/application on the owner's iPhone has not yet been confirmed.
+- Known live-audit exception: two pre-existing recommendation documents
+  (`rec_9gXo3omDD7yJ9aIKQ_Yj` and `rec_GiMpMfW5sxBdz0RZ5u7o`) have invalid
+  `budget` taxonomy values. No unrelated production data was changed during the
+  comment release.
 - EAS submission ID: not yet recorded.
 - App Store Connect app: `6801453067`; version `1.1.0` has been submitted for
   external TestFlight distribution and is waiting for Apple's Beta App Review
