@@ -25,6 +25,7 @@ schemas, bucket fallbacks, or temporary client-write paths.
 ```text
 users/{uid}
 publicProfiles/{uid}
+notificationDevices/{tokenHash}
 recommendations/{id}/{likes|comments}/{id}
 routes/{id}/days/{dayId}/stops/{stopId}
 routes/{id}/{likes|comments}/{id}
