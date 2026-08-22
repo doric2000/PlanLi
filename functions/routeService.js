@@ -97,11 +97,20 @@ function cleanDestinationRef(value, field = 'destination') {
   if (value == null) return null;
   assert(value && typeof value === 'object' && !Array.isArray(value),
     'invalid-argument', `${field} is invalid.`);
+  const providerPlaceId = cleanOptionalString(value.providerPlaceId, `${field}.providerPlaceId`, 300);
+  const resolvedPlaceToken = providerPlaceId
+    ? cleanOptionalString(value.resolvedPlaceToken, `${field}.resolvedPlaceToken`, 300)
+    : '';
   return {
     countryId: cleanString(value.countryId, `${field}.countryId`, { min: 1, max: 180 }),
     cityId: cleanString(value.cityId, `${field}.cityId`, { min: 1, max: 180 }),
     countryName: cleanOptionalString(value.countryName, `${field}.countryName`, 200),
     cityName: cleanOptionalString(value.cityName || value.name, `${field}.cityName`, 200),
+    ...(providerPlaceId ? {
+      provider: 'google',
+      providerPlaceId,
+      ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
+    } : {}),
   };
 }
 
@@ -594,6 +603,9 @@ async function resolveRoutePlaces({
   providerRateLimitKey,
   trustedPlaces = new Map(),
   trustedRecommendations = new Map(),
+  resolveExisting = resolveExistingDestination,
+  resolveSubmitted = resolveSubmittedPlaceDestination,
+  consumeBudget = consumeProviderBudget,
 }) {
   const placeEntries = new Map();
   const destinationEntries = new Map();
@@ -621,30 +633,34 @@ async function resolveRoutePlaces({
   assert(entries.length + destinationEntries.size >= 1,
     'invalid-argument', 'Route requires at least one destination.');
   const rawEntries = entries.filter((entry) => !entry.resolvedPlaceToken && !entry.trusted);
+  const rawDestinationEntries = Array.from(destinationEntries.values()).filter(
+    (entry) => entry.providerPlaceId && !entry.resolvedPlaceToken
+  );
+  const rawProviderResolutionCount = rawEntries.length + rawDestinationEntries.length;
   assert(
-    rawEntries.length <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
+    rawProviderResolutionCount <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
     'resource-exhausted',
     'This route contains too many new places to verify at once. Save a section with at most five places.'
   );
-  if (rawEntries.length) {
-    await consumeProviderBudget({
+  if (rawProviderResolutionCount) {
+    await consumeBudget({
       admin,
       auth,
       action: 'fullResolution',
-      units: rawEntries.length,
+      units: rawProviderResolutionCount,
       key: providerRateLimitKey,
     });
   }
   const resolved = await mapWithConcurrency(entries, 5, async (entry) => {
     if (entry.trusted && !entry.resolvedPlaceToken) {
-      const destination = await resolveExistingDestination(
+      const destination = await resolveExisting(
         admin.firestore(),
         entry.trusted.destination
       );
       destination.place = entry.trusted.place;
       return destination;
     }
-    const destination = await resolveSubmittedPlaceDestination({
+    const destination = await resolveSubmitted({
       admin,
       auth,
       placeId: entry.placeId,
@@ -662,10 +678,29 @@ async function resolveRoutePlaces({
   const resolvedGeneral = await mapWithConcurrency(
     Array.from(destinationEntries.entries()),
     5,
-    async ([key, destinationRef]) => ({
-      key,
-      destination: await resolveExistingDestination(admin.firestore(), destinationRef),
-    })
+    async ([key, destinationRef]) => {
+      if (!destinationRef.providerPlaceId) {
+        return { key, destination: await resolveExisting(admin.firestore(), destinationRef) };
+      }
+      const destination = await resolveSubmitted({
+        admin,
+        auth,
+        placeId: destinationRef.providerPlaceId,
+        resolvedPlaceToken: destinationRef.resolvedPlaceToken || null,
+        mapsKey,
+        newPlacesKey,
+        placesProvider,
+        restCountriesKey,
+        providerRateLimitKey,
+        providerBudgetConsumed: !destinationRef.resolvedPlaceToken,
+      });
+      assert(
+        destination.countryId === destinationRef.countryId && destination.cityId === destinationRef.cityId,
+        'failed-precondition',
+        'A route destination token does not match its stop. Search again.'
+      );
+      return { key, destination };
+    }
   );
   const byPlaceId = new Map(entries.map((entry, index) => [entry.placeId, resolved[index]]));
   const byDestination = new Map(resolvedGeneral.map((entry) => [entry.key, entry.destination]));

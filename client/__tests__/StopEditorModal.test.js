@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Modal } from 'react-native';
 
 import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal';
 
@@ -25,6 +26,7 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
       testID="route-stop-select-destination"
       onPress={() => onChange({
         countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', name: 'בודפשט',
+        provider: 'google', providerPlaceId: 'google-city-1', resolvedPlaceToken: 'resolved-token-1',
       })}
     >
       <Text>בחירת בודפשט</Text>
@@ -77,6 +79,32 @@ describe('StopEditorModal', () => {
       locationPrecision: 'general',
       destination: expect.objectContaining({ countryId: 'HU', cityId: 'budapest' }),
     }), 0);
+    expect(onSave.mock.calls[0][0].destination).toEqual(expect.objectContaining({
+      provider: 'google', providerPlaceId: 'google-city-1', resolvedPlaceToken: 'resolved-token-1',
+    }));
+  });
+
+  it('keeps the discard confirmation inside the stop sheet and closes cleanly', () => {
+    const onClose = jest.fn();
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        onSave={jest.fn()}
+        onClose={onClose}
+        allowImages={false}
+      />
+    );
+    const nativeModalCount = screen.UNSAFE_getAllByType(Modal).length;
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'עצירה חדשה');
+    fireEvent.press(screen.getByText('ביטול'));
+
+    expect(screen.getByTestId('stop-editor-unsaved-modal')).toBeTruthy();
+    expect(screen.UNSAFE_getAllByType(Modal)).toHaveLength(nativeModalCount);
+
+    fireEvent.press(screen.getByTestId('stop-editor-unsaved-confirm'));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('removes stale precise data when an existing stop is changed to a general area', async () => {

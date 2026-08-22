@@ -11,6 +11,7 @@ const {
   loadRouteDetails,
   loadTrustedRoutePlaces,
   preservedRouteStatus,
+  resolveRoutePlaces,
   revisionVersion,
   sanitizeRouteInput,
   sanitizeRouteMetadata,
@@ -226,6 +227,60 @@ test('streamlined route publication strips precise data from general stops', () 
   assert.equal(route.days[0].stops[0].locationPrecision, 'general');
   assert.equal(Object.prototype.hasOwnProperty.call(route.days[0].stops[0], 'place'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(route.days[0].stops[0], 'coordinates'), false);
+});
+
+test('a new general destination is verified by provider proof and published without the proof', async () => {
+  const resolveSubmitted = async (input) => {
+    assert.equal(input.placeId, 'google-city-1');
+    assert.equal(input.resolvedPlaceToken, 'resolved-token-1');
+    assert.equal(input.providerBudgetConsumed, false);
+    return {
+      countryId: 'SI',
+      cityId: 'ljubljana',
+      countryData: { name: 'סלובניה' },
+      cityData: { name: 'לובליאנה' },
+      cityRef: { path: 'countries/SI/destinations/ljubljana' },
+      place: { placeId: 'google-city-1' },
+    };
+  };
+  const result = await resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days: [{ stops: [{
+      title: 'מרכז העיר',
+      locationPrecision: 'general',
+      destination: {
+        countryId: 'SI', cityId: 'ljubljana', countryName: 'סלובניה', cityName: 'לובליאנה',
+        provider: 'google', providerPlaceId: 'google-city-1', resolvedPlaceToken: 'resolved-token-1',
+      },
+    }] }],
+    resolveSubmitted,
+    consumeBudget: () => { throw new Error('provider budget should not be consumed for a resolved token'); },
+  });
+
+  assert.deepEqual(result.days[0].stops[0].destination, {
+    countryId: 'SI', cityId: 'ljubljana', countryName: 'סלובניה', cityName: 'לובליאנה',
+  });
+  assert.equal(result.catalogDestinations[0].cityRef.path, 'countries/SI/destinations/ljubljana');
+});
+
+test('a general destination proof cannot be reused with different destination IDs', async () => {
+  await assert.rejects(resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days: [{ stops: [{
+      title: 'יעד שגוי',
+      locationPrecision: 'general',
+      destination: {
+        countryId: 'FR', cityId: 'paris', providerPlaceId: 'google-city-1',
+        resolvedPlaceToken: 'resolved-token-1',
+      },
+    }] }],
+    resolveSubmitted: async () => ({
+      countryId: 'SI', cityId: 'ljubljana', countryData: { name: 'סלובניה' },
+      cityData: { name: 'לובליאנה' }, cityRef: { path: 'countries/SI/destinations/ljubljana' },
+    }),
+  }), /does not match/);
 });
 
 test('travel estimates are produced only between consecutive precise stops', () => {

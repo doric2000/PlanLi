@@ -328,7 +328,7 @@ export default function AddRoutesScreen({ navigation, route }) {
       <View style={styles.card}>
         <AppText style={styles.startTitle}>פתיחת מסלול</AppText>
         <AppText style={styles.fieldLabel}>עיר או אזור</AppText>
-        <SingleDestinationPicker value={startArea} onChange={(value) => { setStartArea(value); setStartError(''); }} />
+        <SingleDestinationPicker allowProviderDestinations value={startArea} onChange={(value) => { setStartArea(value); setStartError(''); }} />
         <AppText style={styles.fieldLabel}>כמה ימים?</AppText>
         <View style={styles.dayChoices}>
           {[1, 2, 3, 4].map((count) => <TouchableOpacity key={count} style={[styles.dayChoice, !customDaysOpen && startDayCount === count && styles.dayChoiceSelected]} onPress={() => { setCustomDaysOpen(false); setStartDayCount(count); }} accessibilityRole="radio" accessibilityState={{ checked: !customDaysOpen && startDayCount === count }} testID={`route-start-days-${count}`}><AppText style={[styles.dayChoiceText, !customDaysOpen && startDayCount === count && styles.dayChoiceTextSelected]}>{count}</AppText></TouchableOpacity>)}

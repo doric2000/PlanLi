@@ -32,6 +32,23 @@ function normalizedDestination(value) {
     name: value.cityName || value.name || value.location || value.cityId,
     coordinates: value.coordinates || null,
     viewport: value.viewport || null,
+    provider: value.provider || null,
+    providerPlaceId: value.providerPlaceId || null,
+    resolvedPlaceToken: value.resolvedPlaceToken || null,
+  };
+}
+
+function destinationRef(value) {
+  return {
+    countryId: value.countryId,
+    cityId: value.cityId,
+    countryName: value.countryName,
+    cityName: value.name,
+    ...(value.providerPlaceId ? {
+      provider: 'google',
+      providerPlaceId: value.providerPlaceId,
+      ...(value.resolvedPlaceToken ? { resolvedPlaceToken: value.resolvedPlaceToken } : {}),
+    } : {}),
   };
 }
 
@@ -177,12 +194,7 @@ export default function StopEditorModal({
         locationPrecision: 'general',
         location: destination.name,
         country: destination.countryName,
-        destination: {
-          countryId: destination.countryId,
-          cityId: destination.cityId,
-          countryName: destination.countryName,
-          cityName: destination.name,
-        },
+        destination: destinationRef(destination),
       };
     }
     if (mode === LOCATION_MODES.pin) {
@@ -195,12 +207,7 @@ export default function StopEditorModal({
         country: destination.countryName,
         coordinates: { lat, lng },
         place: { placeId: '', name: title.trim(), address: '', coordinates: { lat, lng } },
-        destination: {
-          countryId: destination.countryId,
-          cityId: destination.cityId,
-          countryName: destination.countryName,
-          cityName: destination.name,
-        },
+        destination: destinationRef(destination),
       };
     }
     if (!selectedRecommendation?.id && !selectedRecommendation?.source?.recommendationId) return null;
@@ -276,7 +283,7 @@ export default function StopEditorModal({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={tryClose}>
       <View style={styles.container}>
-        <UnsavedChangesModal visible={unsavedModalVisible} title={UNSAVED_LEAVE_TITLE} message={UNSAVED_LEAVE_MESSAGE} onCancel={dismissUnsavedModal} onConfirm={confirmUnsavedLeave} testID="stop-editor-unsaved-modal" cancelTestID="stop-editor-unsaved-cancel" confirmTestID="stop-editor-unsaved-confirm" />
+        <UnsavedChangesModal contained visible={unsavedModalVisible} title={UNSAVED_LEAVE_TITLE} message={UNSAVED_LEAVE_MESSAGE} onCancel={dismissUnsavedModal} onConfirm={confirmUnsavedLeave} testID="stop-editor-unsaved-modal" cancelTestID="stop-editor-unsaved-cancel" confirmTestID="stop-editor-unsaved-confirm" />
         <View style={styles.header}>
           <TouchableOpacity onPress={tryClose} disabled={uploading}><AppText style={styles.headerButton}>ביטול</AppText></TouchableOpacity>
           <AppText style={styles.headerTitle}>יום {dayIndex + 1} · עצירה {stopIndex + 1}</AppText>
@@ -289,7 +296,7 @@ export default function StopEditorModal({
           </View>
           <View style={styles.locationWrap}>
             {mode === LOCATION_MODES.exact ? <ExactLocationPicker value={exactValue} onChange={setExactValue} onResolvingChange={setLocationBusy} inputTestID="route-stop-location-input" /> : null}
-            {mode === LOCATION_MODES.general || mode === LOCATION_MODES.pin ? <SingleDestinationPicker value={destination} onChange={(value) => { setDestination(value); setPin(null); }} /> : null}
+            {mode === LOCATION_MODES.general || mode === LOCATION_MODES.pin ? <SingleDestinationPicker allowProviderDestinations value={destination} onChange={(value) => { setDestination(value); setPin(null); }} /> : null}
             {mode === LOCATION_MODES.pin && destination ? <ManualMapPinPicker destination={destination} value={pin} onChange={setPin} /> : null}
             {mode === LOCATION_MODES.planli ? <View style={composer.destinationResults}>
               {recommendationsLoading ? <ActivityIndicator /> : null}

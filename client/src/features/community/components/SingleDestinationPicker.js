@@ -1,17 +1,49 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
 import { useDestinationFilterOptions } from '../../../hooks/useDestinationFilterOptions';
+import {
+  finalizeDestinationChoice,
+  resolveDestinationForPlacePreview,
+  searchCities,
+} from '../../../services/LocationService';
 import { colors, recommendationComposerStyles as styles } from '../../../styles';
 import { compactDestinationText } from '../../../utils/destinationSearch';
 
-export default function SingleDestinationPicker({ value, onChange }) {
+function providerDestinationValue(result, selection) {
+  const country = result?.destination?.country;
+  const city = result?.destination?.city;
+  if (!country?.id || !city?.id) throw new Error('Destination resolution is incomplete.');
+  const providerPlaceId = selection?.providerPlaceId || selection?.place_id || city.googlePlaceId || '';
+  const resolvedPlaceToken = result?.resolvedPlaceToken || result?.place?.resolvedPlaceToken || '';
+  return {
+    key: `city:${country.id}:${city.id}`,
+    kind: 'city',
+    countryId: country.id,
+    cityId: city.id,
+    countryName: country.name || country.id,
+    name: city.name || city.id,
+    coordinates: city.coordinates || null,
+    provider: 'google',
+    ...(providerPlaceId ? { providerPlaceId } : {}),
+    ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
+  };
+}
+
+export default function SingleDestinationPicker({ value, onChange, allowProviderDestinations = false }) {
   const [query, setQuery] = useState('');
   const [settledQuery, setSettledQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  const [providerResults, setProviderResults] = useState([]);
+  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerError, setProviderError] = useState('');
+  const [providerRetry, setProviderRetry] = useState(0);
+  const [resolvingProvider, setResolvingProvider] = useState(false);
+  const [destinationChoice, setDestinationChoice] = useState(null);
+  const providerGenerationRef = useRef(0);
   const {
     options,
     loading,
@@ -38,11 +70,74 @@ export default function SingleDestinationPicker({ value, onChange }) {
     }).slice(0, 8);
   }, [options, settledQuery]);
 
+  useEffect(() => {
+    const needle = compactDestinationText(settledQuery);
+    const generation = ++providerGenerationRef.current;
+    if (!allowProviderDestinations || needle.length < 2 || loading || searchLoading || results.length) {
+      setProviderResults([]);
+      setProviderLoading(false);
+      setProviderError('');
+      return undefined;
+    }
+    const controller = new AbortController();
+    setProviderLoading(true);
+    setProviderError('');
+    searchCities(settledQuery, { signal: controller.signal }).then((nextResults) => {
+      if (generation !== providerGenerationRef.current) return;
+      setProviderResults(Array.isArray(nextResults) ? nextResults.slice(0, 8) : []);
+    }).catch(() => {
+      if (generation !== providerGenerationRef.current || controller.signal.aborted) return;
+      setProviderResults([]);
+      setProviderError('לא הצלחנו לחפש יעדים חדשים כרגע.');
+    }).finally(() => {
+      if (generation === providerGenerationRef.current) setProviderLoading(false);
+    });
+    return () => controller.abort();
+  }, [allowProviderDestinations, loading, providerRetry, results.length, searchLoading, settledQuery]);
+
   const select = (option) => {
     onChange?.(option);
     setQuery('');
     setSettledQuery('');
     setFocused(false);
+    setProviderResults([]);
+    setProviderError('');
+    setDestinationChoice(null);
+  };
+
+  const selectProvider = async (selection) => {
+    setResolvingProvider(true);
+    setProviderError('');
+    try {
+      const result = await resolveDestinationForPlacePreview(selection);
+      if (result?.status === 'destination_choice_required') {
+        setDestinationChoice({ ...result, selection });
+        return;
+      }
+      select(providerDestinationValue(result, selection));
+    } catch {
+      setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+    } finally {
+      setResolvingProvider(false);
+    }
+  };
+
+  const chooseProviderDestination = async (destinationChoiceId) => {
+    if (!destinationChoice?.resolutionId) return;
+    setResolvingProvider(true);
+    setProviderError('');
+    try {
+      const result = await finalizeDestinationChoice({
+        resolutionId: destinationChoice.resolutionId,
+        destinationChoiceId,
+        incidentId: destinationChoice.incidentId,
+      });
+      select(providerDestinationValue(result, destinationChoice.selection));
+    } catch {
+      setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+    } finally {
+      setResolvingProvider(false);
+    }
   };
 
   if (value?.cityId && value?.countryId) {
@@ -69,8 +164,10 @@ export default function SingleDestinationPicker({ value, onChange }) {
 
   const normalizedQuery = compactDestinationText(query);
   const searchPending = normalizedQuery.length >= 2 && (
-    compactDestinationText(settledQuery) !== normalizedQuery || searchLoading
+    compactDestinationText(settledQuery) !== normalizedQuery || loading || searchLoading || providerLoading || resolvingProvider
   );
+  const visibleResults = results.length ? results : providerResults;
+  const usingProviderResults = !results.length && providerResults.length > 0;
 
   return (
     <View style={styles.destinationPicker}>
@@ -80,7 +177,11 @@ export default function SingleDestinationPicker({ value, onChange }) {
           : <Ionicons name="search" size={19} color={colors.textMuted} />}
         <AppTextInput
           value={query}
-          onChangeText={setQuery}
+          onChangeText={(text) => {
+            setQuery(text);
+            setDestinationChoice(null);
+            setProviderError('');
+          }}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 180)}
           placeholder={focused ? '' : 'למשל: בודפשט, הונגריה'}
@@ -97,38 +198,76 @@ export default function SingleDestinationPicker({ value, onChange }) {
         <AppText style={styles.fieldHint}>כדאי להקליד לפחות שני תווים</AppText>
       ) : null}
 
-      {focused && normalizedQuery.length >= 2 && !searchPending && searchError ? (
-        <View style={styles.destinationResults}>
-          <AppText style={styles.destinationEmpty}>{searchError}</AppText>
-          <TouchableOpacity
-            onPress={retrySearch}
-            accessibilityRole="button"
-            testID="recommendation-destination-retry"
-          >
-            <AppText style={styles.textAction}>ניסיון נוסף</AppText>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {focused && normalizedQuery.length >= 2 && !searchPending && !searchError ? (
-        <View style={styles.destinationResults}>
-          {results.length ? results.map((option) => (
+      {focused && destinationChoice?.alternatives?.length ? (
+        <View style={styles.destinationResults} testID="recommendation-destination-provider-choices">
+          <AppText style={styles.destinationEmpty}>לאיזה יעד התכוונת?</AppText>
+          {destinationChoice.alternatives.map((alternative) => (
             <TouchableOpacity
-              key={option.key}
+              key={alternative.destinationChoiceId}
               style={styles.destinationResult}
-              onPress={() => select(option)}
+              onPress={() => chooseProviderDestination(alternative.destinationChoiceId)}
               accessibilityRole="button"
-              testID={`recommendation-destination-option-${option.countryId}-${option.cityId}`}
+              testID={`recommendation-destination-choice-${alternative.destinationChoiceId}`}
             >
               <Ionicons name="location-outline" size={19} color={colors.primary} />
               <View style={styles.destinationResultCopy}>
-                <AppText style={styles.destinationResultTitle}>{option.name}</AppText>
-                <AppText style={styles.destinationResultSubtitle}>{option.countryName}</AppText>
+                <AppText style={styles.destinationResultTitle}>{alternative.cityName}</AppText>
+                <AppText style={styles.destinationResultSubtitle}>{alternative.countryName}</AppText>
               </View>
             </TouchableOpacity>
-          )) : (
-            <AppText style={styles.destinationEmpty}>לא נמצא יעד פעיל ב־PlanLi</AppText>
+          ))}
+        </View>
+      ) : null}
+
+      {focused && normalizedQuery.length >= 2 && !searchPending && !destinationChoice ? (
+        <View style={styles.destinationResults}>
+          {providerError ? (
+            <View>
+              <AppText style={styles.destinationEmpty}>{providerError}</AppText>
+              <TouchableOpacity
+                onPress={() => setProviderRetry((value) => value + 1)}
+                accessibilityRole="button"
+                testID="recommendation-destination-provider-retry"
+              >
+                <AppText style={styles.textAction}>ניסיון נוסף</AppText>
+              </TouchableOpacity>
+            </View>
+          ) : searchError && !allowProviderDestinations ? (
+            <View>
+              <AppText style={styles.destinationEmpty}>{searchError}</AppText>
+              <TouchableOpacity onPress={retrySearch} accessibilityRole="button" testID="recommendation-destination-retry">
+                <AppText style={styles.textAction}>ניסיון נוסף</AppText>
+              </TouchableOpacity>
+            </View>
+          ) : visibleResults.length ? visibleResults.map((option, index) => {
+            const isProvider = usingProviderResults;
+            return (
+              <TouchableOpacity
+                key={isProvider ? option.selectionId || option.providerPlaceId : option.key}
+                style={styles.destinationResult}
+                onPress={() => isProvider ? selectProvider(option) : select(option)}
+                accessibilityRole="button"
+                testID={isProvider
+                  ? `recommendation-destination-provider-option-${index}`
+                  : `recommendation-destination-option-${option.countryId}-${option.cityId}`}
+              >
+                <Ionicons name="location-outline" size={19} color={colors.primary} />
+                <View style={styles.destinationResultCopy}>
+                  <AppText style={styles.destinationResultTitle}>
+                    {isProvider ? option.structured_formatting?.main_text || option.description : option.name}
+                  </AppText>
+                  <AppText style={styles.destinationResultSubtitle}>
+                    {isProvider ? option.structured_formatting?.secondary_text : option.countryName}
+                  </AppText>
+                </View>
+              </TouchableOpacity>
+            );
+          }) : (
+            <AppText style={styles.destinationEmpty}>
+              {allowProviderDestinations ? 'לא נמצא יעד מתאים' : 'לא נמצא יעד פעיל ב־PlanLi'}
+            </AppText>
           )}
+          {usingProviderResults ? <AppText style={styles.destinationEmpty}>תוצאות מ־Google Maps</AppText> : null}
         </View>
       ) : null}
     </View>

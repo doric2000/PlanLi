@@ -53,11 +53,22 @@ function cleanDestination(value, { optional = false } = {}) {
   if (value == null && optional) return null;
   assert(value && typeof value === 'object' && !Array.isArray(value),
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'destination is invalid.');
+  const providerPlaceId = cleanString(
+    value.providerPlaceId || '', 'destination.providerPlaceId', { max: 300, optional: true }
+  );
+  const resolvedPlaceToken = providerPlaceId
+    ? cleanString(value.resolvedPlaceToken || '', 'destination.resolvedPlaceToken', { max: 300, optional: true })
+    : '';
   return {
     countryId: cleanId(value.countryId, 'destination.countryId'),
     cityId: cleanId(value.cityId, 'destination.cityId'),
     countryName: cleanString(value.countryName || '', 'destination.countryName', { max: 200, optional: true }),
     cityName: cleanString(value.cityName || value.name || '', 'destination.cityName', { max: 200, optional: true }),
+    ...(providerPlaceId ? {
+      provider: 'google',
+      providerPlaceId,
+      ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
+    } : {}),
   };
 }
 
