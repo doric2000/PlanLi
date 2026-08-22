@@ -62,4 +62,21 @@ describe('getRecommendationDetailSections', () => {
     expect(result.needs).toEqual([]);
     expect(result.extras).toEqual([]);
   });
+
+  it('shows only details the creator supplied for a concise catalog recommendation', () => {
+    const result = getRecommendationDetailSections({
+      recommendationCatalogVersion: 1,
+      subcategoryIds: ['cafe'],
+      facets: { audienceScope: 'all', audiences: [], vibes: [], environments: [] },
+      details: { phone: '+36 20 123 4567' },
+    });
+
+    expect(result.facts).toEqual([{
+      id: 'phone',
+      icon: 'phone',
+      title: 'טלפון',
+      value: '+36 20 123 4567',
+    }]);
+    expect(result.tags).toEqual(['בית קפה']);
+  });
 });

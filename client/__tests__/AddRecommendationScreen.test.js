@@ -169,6 +169,32 @@ jest.mock('../src/components/GooglePlacesInput', () => {
   );
 });
 
+jest.mock('../src/features/community/components/SingleDestinationPicker', () => {
+  const { Button } = require('react-native');
+  return ({ value, onChange }) => value ? (
+    <Button
+      title="Selected destination"
+      testID="recommendation-destination-selected"
+      onPress={() => onChange(null)}
+    />
+  ) : (
+    <Button
+      title="Select general destination"
+      testID="recommendation-test-select-destination"
+      onPress={() => onChange({
+        key: 'city:HU:budapest',
+        kind: 'city',
+        countryId: 'HU',
+        cityId: 'budapest',
+        countryName: 'הונגריה',
+        name: 'בודפשט',
+        label: 'בודפשט · הונגריה',
+        coordinates: { lat: 47.4979, lng: 19.0402 },
+      })}
+    />
+  );
+});
+
 // F. Mock Back Button Hook
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
 
@@ -213,7 +239,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     Alert.alert.mockRestore?.();
   });
 
-  it('should fill all form fields (including geometry coordinates & tags) and submit to Firebase', async () => {
+  it('creates a concise catalog recommendation from an exact Google place', async () => {
     
     // ------------------------------------------------
     // Step 1: Arrange (Setup)
@@ -229,7 +255,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     };
     
     // Render the screen
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
@@ -237,14 +263,9 @@ describe('AddRecommendationScreen Integration Test', () => {
     // Step 2: Act (Simulate User Actions)
     // ------------------------------------------------
 
-    // 1. Enter Title
-    fireEvent.changeText(getByTestId('add-rec-title-input'), 'Best Pizza Ever');
-
-    // 2. Select Location (Simulated)
-    // We type 'Tel Aviv' and then click our mock button to simulate a Google API selection.
-    fireEvent.changeText(getByTestId('add-rec-location-input'), 'Tel Aviv'); 
+    // 1. Select and confirm an exact place.
+    fireEvent.changeText(getByTestId('recommendation-exact-location-search'), 'Tel Aviv');
     fireEvent.press(getByTestId('google-result-select')); 
-    // This triggers the LocationService mock, setting state with 'Israel', 'Tel Aviv', and coordinates.
     await waitFor(() =>
       expect(mockResolveDestinationForPlacePreview).toHaveBeenCalledWith(
         'dummy-place-id'
@@ -252,41 +273,26 @@ describe('AddRecommendationScreen Integration Test', () => {
     );
     expect(mockUploadImages).not.toHaveBeenCalled();
 
-    // Resolution opens the exact-place preview; the form value is committed only
-    // after the user verifies the marker and confirms it.
     fireEvent.press(getByTestId('exact-location-confirm'));
+    fireEvent.press(getByTestId('recommendation-next'));
 
-    fireEvent.press(getByTestId('add-rec-section-place-continue'));
+    // 2. Accept the Google classification suggestion.
+    await waitFor(() => expect(getByText('כן, מתאים')).toBeTruthy());
+    fireEvent.press(getByText('כן, מתאים'));
+    fireEvent.press(getByTestId('recommendation-next'));
 
-    // 3. Enter Description
-    fireEvent.changeText(getByTestId('add-rec-description-input'), 'Great cheese and crust!');
-
-    // Add an image (optional in validation, but required by test requirements)
-    fireEvent.press(getByTestId('add-rec-image-picker'));
+    // 3. Add the short story and an optional image.
+    fireEvent.changeText(getByTestId('recommendation-title-input'), 'Best Pizza Ever');
+    fireEvent.changeText(getByTestId('recommendation-description-input'), 'Great cheese and crust!');
+    fireEvent.press(getByTestId('recommendation-image-picker'));
     await waitFor(() => expect(mockPickImages).toHaveBeenCalled());
+    fireEvent.press(getByTestId('recommendation-next'));
 
-    fireEvent.press(getByTestId('add-rec-section-story-continue'));
-
-    // 4. Select Main Category
-    fireEvent.press(getByTestId('add-rec-category-0'));
-
-    // 5. Select Sub-Category (Tags)
-    // We wait for the tags to appear (async UI update) then select 'מסעדה'.
-    await waitFor(() => getByTestId('add-rec-tag-0'));
-    fireEvent.press(getByTestId('add-rec-tag-0'));
-
-    fireEvent.press(getByTestId('add-rec-section-category-continue'));
-
-    // 6. Select Budget
-    fireEvent.press(getByTestId('add-rec-budget-3'));
-
-	// 7. Select the factual attributes required for a restaurant recommendation.
-	fireEvent.press(getByTestId('add-rec-audience-0'));
-	fireEvent.press(getByTestId('add-rec-vibe-0'));
-	fireEvent.press(getByTestId('add-rec-environment-0'));
-
-	// 8. Submit Form
-    fireEvent.press(getByTestId('add-rec-submit'));
+    // 4. Optional contact information stays optional and the recommendation publishes.
+    fireEvent.press(getByTestId('recommendation-optional-phone'));
+    expect(getByTestId('recommendation-optional-input-phone').props.maxLength).toBe(40);
+    fireEvent.changeText(getByTestId('recommendation-optional-input-phone'), '+972 50 123 4567');
+    fireEvent.press(getByTestId('recommendation-next'));
 
     // ------------------------------------------------
     // Step 3: Assert (Verify Outcome)
@@ -299,20 +305,16 @@ describe('AddRecommendationScreen Integration Test', () => {
         sourceJobId: null,
         payload: expect.objectContaining({
           placeId: 'google-place-id',
+          locationMode: 'exact',
           recommendation: expect.objectContaining({
             title: 'Best Pizza Ever',
             description: 'Great cheese and crust!',
             categoryId: 'food',
-            tags: expect.arrayContaining(['restaurant']),
-            budget: 'comfort',
+            subcategoryIds: ['restaurant'],
+            recommendationCatalogVersion: 1,
             taxonomyVersion: 5,
             media: [],
-            attributes: expect.objectContaining({
-              audienceScope: 'selected',
-              audiences: ['solo'],
-              vibes: ['relaxed'],
-              environment: 'indoor',
-            }),
+            details: { phone: '+972 50 123 4567' },
           }),
         }),
         media: [{ uri: 'file:///tasty-pizza.jpg' }],
@@ -330,6 +332,141 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockRememberRecentDestination).not.toHaveBeenCalled();
   }, 15000);
 
+  it('creates a recommendation for a general destination without guessing its classification', async () => {
+    const navigationMock = {
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      navigate: jest.fn(),
+      dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const { getByTestId } = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    fireEvent.press(getByTestId('recommendation-location-mode-destination'));
+    fireEvent.press(getByTestId('recommendation-test-select-destination'));
+    fireEvent.press(getByTestId('recommendation-next'));
+
+    fireEvent.press(getByTestId('recommendation-category-nature'));
+    fireEvent.press(getByTestId('recommendation-subcategory-beach'));
+    fireEvent.press(getByTestId('recommendation-next'));
+
+    fireEvent.changeText(getByTestId('recommendation-title-input'), 'חוף עירוני נעים');
+    fireEvent.changeText(getByTestId('recommendation-description-input'), 'מתאים לעצירה רגועה ליד העיר.');
+    fireEvent.press(getByTestId('recommendation-next'));
+    fireEvent.press(getByTestId('recommendation-next'));
+
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        destinationRef: { countryId: 'HU', cityId: 'budapest' },
+        locationMode: 'destination',
+        recommendation: expect.objectContaining({
+          categoryId: 'nature',
+          subcategoryIds: ['beach'],
+        }),
+      }),
+    })));
+    expect(mockResolveDestinationForPlacePreview).not.toHaveBeenCalled();
+    expect(navigationMock.goBack).toHaveBeenCalled();
+  });
+
+  it('edits a catalog recommendation in the concise flow without losing its classification', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const existingAsset = {
+      assetId: '123e4567-e89b-42d3-a456-426614174111',
+      large: { url: 'https://cdn/existing-large.webp' },
+      feed: { url: 'https://cdn/existing-feed.webp' },
+      thumb: { url: 'https://cdn/existing-thumb.webp' },
+    };
+    const editItem = makeEditItem({
+      recommendationCatalogVersion: 1,
+      subcategoryIds: ['restaurant'],
+      details: { phone: '+972 50 111 2233' },
+      locationMode: 'exact',
+      media: [existingAsset],
+    });
+    const screen = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: editItem.id } }}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByText('עריכת המלצה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    fireEvent.changeText(screen.getByTestId('recommendation-title-input'), 'Original updated');
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+
+    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalledWith(expect.objectContaining({
+      recommendationId: 'post-1',
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      locationMode: 'exact',
+      recommendation: expect.objectContaining({
+        recommendationCatalogVersion: 1,
+        categoryId: 'food',
+        subcategoryIds: ['restaurant'],
+        title: 'Original updated',
+        details: { phone: '+972 50 111 2233' },
+        media: [existingAsset],
+      }),
+    })));
+    expect(mockEnqueueCreate).not.toHaveBeenCalled();
+    expect(mockUploadImages).not.toHaveBeenCalled();
+    expect(navigationMock.goBack).toHaveBeenCalled();
+  });
+
+  it('keeps the custom label while Other remains selected with another subcategory', () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    fireEvent.press(screen.getByTestId('recommendation-location-mode-destination'));
+    fireEvent.press(screen.getByTestId('recommendation-test-select-destination'));
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    fireEvent.press(screen.getByTestId('recommendation-category-food'));
+    fireEvent.press(screen.getByTestId('recommendation-subcategory-more'));
+    fireEvent.press(screen.getByTestId('recommendation-subcategory-food_other'));
+    fireEvent.changeText(screen.getByTestId('recommendation-custom-subcategory'), 'סיור אוכל ביתי');
+    fireEvent.press(screen.getByTestId('recommendation-subcategory-restaurant'));
+
+    expect(screen.getByTestId('recommendation-custom-subcategory').props.value).toBe('סיור אוכל ביתי');
+  });
+
+  it('requires reselecting a coordinate-aware destination before adding a pin in edit mode', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const editItem = makeEditItem({
+      recommendationCatalogVersion: 1,
+      subcategoryIds: ['restaurant'],
+      locationMode: 'destination',
+      place: null,
+    });
+    const screen = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: editItem.id } }}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-destination-selected')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-location-mode-pin'));
+
+    expect(screen.queryByTestId('recommendation-destination-selected')).toBeNull();
+    expect(screen.getByText('כדי לסמן נקודה במפה, כדאי לבחור שוב את העיר או האזור.')).toBeTruthy();
+  });
+
   it('shows a place-resolution limit inline without opening a native alert', async () => {
     mockResolveDestinationForPlacePreview.mockRejectedValueOnce(Object.assign(
       new Error('Google request limit reached.'),
@@ -345,24 +482,20 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     fireEvent.press(screen.getByTestId('google-result-select'));
 
-    await waitFor(() => expect(screen.getByTestId('add-rec-location-error')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('recommendation-location-error')).toBeTruthy());
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 
   it('restores a failed queued recommendation for review', async () => {
     mockLoadJobForReview.mockResolvedValueOnce({
       draft: {
+        step: 3,
+        locationMode: 'exact',
         title: 'Queued title',
         description: 'Queued description',
-        category: 'food',
-        selectedTags: ['restaurant'],
-        budget: 'comfort',
-        audienceScope: 'selected',
-        audiences: ['solo'],
-        recommendationVibes: ['relaxed'],
-        recommendationEnvironment: 'indoor',
-        recommendationNeeds: [],
-        needsConfirmed: false,
+        categoryId: 'food',
+        subcategoryIds: ['restaurant'],
+        details: {},
         selectedCountry: { id: 'IL', name: 'Israel' },
         selectedCity: { id: 'TLV', name: 'Tel Aviv' },
         selectedPlace: { placeId: 'place-1', name: 'Queued place' },
@@ -382,11 +515,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     );
 
     await waitFor(() => expect(mockLoadJobForReview).toHaveBeenCalledWith('publish-job-1'));
-    fireEvent.press(screen.getByLabelText(/המקום,/));
-    await waitFor(() => expect(screen.getByTestId('add-rec-title-input').props.value).toBe('Queued title'));
-    fireEvent.press(screen.getByLabelText(/קהל ומאפיינים,/));
-    expect(screen.getByTestId(`add-rec-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(true);
-    expect(screen.getByTestId(`add-rec-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'indoor')}`).props.accessibilityState.checked).toBe(true);
+    await waitFor(() => expect(screen.getByTestId('recommendation-title-input').props.value).toBe('Queued title'));
+    expect(screen.getByTestId('recommendation-description-input').props.value).toBe('Queued description');
   });
 
   it('edit mode preserves saved vibe and environment without marking the form dirty', async () => {
@@ -462,7 +592,7 @@ describe('AddRecommendationScreen Integration Test', () => {
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
-    fireEvent.changeText(getByTestId('add-rec-title-input'), 'טיוטת המלצה');
+    fireEvent.changeText(getByTestId('recommendation-exact-location-search'), 'טיוטת המלצה');
     const preventDefault = jest.fn();
     await act(async () => {
       beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });

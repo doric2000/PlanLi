@@ -97,12 +97,12 @@ test('recommendation attribute rules reference only canonical subcategories and 
 	}
 });
 
-test('prepared recommendation catalog is complete, ordered, and inactive', () => {
+test('recommendation catalog is complete, ordered, and active for creation', () => {
   const taxonomy = require('./travelTaxonomy.generated.json');
   const catalog = taxonomy.recommendationCatalog;
   assert.equal(taxonomy.version, 5);
   assert.equal(catalog.schemaVersion, 1);
-  assert.equal(catalog.runtimeEnabled, false);
+  assert.equal(catalog.runtimeEnabled, true);
   assert.equal(catalog.categories.length, 10);
   assert.equal(catalog.subcategories.length, 166);
   assert.equal(catalog.interests.length, 8);
@@ -147,7 +147,7 @@ test('prepared recommendation catalog is complete, ordered, and inactive', () =>
   }
 });
 
-test('prepared catalog provider and legacy mappings target valid items', () => {
+test('catalog provider and legacy mappings target valid items', () => {
   const taxonomy = require('./travelTaxonomy.generated.json');
   const catalog = taxonomy.recommendationCatalog;
   const categoryIds = new Set(catalog.categories.map((item) => item.id));
@@ -180,7 +180,7 @@ test('prepared catalog provider and legacy mappings target valid items', () => {
   }
 });
 
-test('active taxonomy contract remains unchanged while the new catalog is prepared', () => {
+test('legacy taxonomy contract remains unchanged while the catalog is active', () => {
   const taxonomy = require('./travelTaxonomy.generated.json');
   assert.equal(taxonomy.version, 5);
   assert.deepEqual(

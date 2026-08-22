@@ -61,6 +61,7 @@ import {
   sectionErrorCount,
   validateRecommendationForm,
 } from '../../../utils/guidedFormValidation';
+import CreateRecommendationScreen from './CreateRecommendationScreen';
 
 const EXACT_LOCATION_COPY = locationCopy('he');
 
@@ -226,7 +227,16 @@ const EMPTY_RECOMMENDATION_COMPARABLE = buildFormComparable({
   editableImageUris: [],
 });
 
-export default function AddRecommendationScreen({ navigation , route }) {
+export default function AddRecommendationScreen(props) {
+  const isEdit = props?.route?.params?.mode === 'edit';
+  const editItem = props?.route?.params?.item ?? props?.route?.params?.recommendation ?? null;
+  const usesRecommendationCatalog = Number(editItem?.recommendationCatalogVersion || 0) > 0;
+  return isEdit && !usesRecommendationCatalog
+    ? <LegacyAddRecommendationScreen {...props} />
+    : <CreateRecommendationScreen {...props} />;
+}
+
+function LegacyAddRecommendationScreen({ navigation , route }) {
   // --- Initialization & Params ---
   const isEdit = route?.params?.mode === 'edit';
   const editItem = route?.params?.item ?? route?.params?.recommendation ?? null;

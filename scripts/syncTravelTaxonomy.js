@@ -72,9 +72,9 @@ function documentationText(taxonomy) {
     const recommendationServiceGroups = recommendationCatalog.serviceGroups || [];
     lines.push(
       '',
-      '## קטלוג המלצות מוכן להפעלה',
+      '## קטלוג ההמלצות',
       '',
-      `> גרסת סכימה ${recommendationCatalog.schemaVersion}; הפעלה בזמן ריצה: \`${recommendationCatalog.runtimeEnabled}\`. הקטלוג אינו מחובר עדיין לזרימות הפעילות.`,
+      `> גרסת סכימה ${recommendationCatalog.schemaVersion}; הפעלה בזמן ריצה: \`${recommendationCatalog.runtimeEnabled}\`. הקטלוג מחובר לזרימת יצירת ההמלצות הקצרה.`,
       '',
     );
     for (const category of recommendationCatalog.categories || []) {

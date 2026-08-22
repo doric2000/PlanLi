@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { getDocs } from 'firebase/firestore';
 
 import { useDestinationFilterOptions } from '../src/hooks/useDestinationFilterOptions';
@@ -94,5 +94,31 @@ describe('useDestinationFilterOptions', () => {
     expect(searchDestinations).not.toHaveBeenCalledWith(expect.objectContaining({
       query: expect.anything(),
     }));
+  });
+
+  it('exposes a retry after a remote destination search fails', async () => {
+    searchDestinations.mockImplementation(({ query: searchQuery }) => (
+      searchQuery
+        ? Promise.reject(new Error('temporary outage'))
+        : Promise.resolve({ items: [] })
+    ));
+    const { result } = renderHook(() => useDestinationFilterOptions(true, 'Budapest'));
+
+    await waitFor(() => expect(result.current.searchError).toBe('לא הצלחנו לחפש יעדים כרגע.'));
+    searchDestinations.mockResolvedValue({
+      items: [{
+        cityId: 'budapest',
+        countryId: 'HU',
+        names: { he: 'בודפשט' },
+        countryNames: { he: 'הונגריה' },
+        coordinates: { lat: 47.4979, lng: 19.0402 },
+      }],
+    });
+    act(() => result.current.retrySearch());
+
+    await waitFor(() => expect(result.current.searchError).toBe(''));
+    await waitFor(() => expect(result.current.options).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cityId: 'budapest' }),
+    ])));
   });
 });

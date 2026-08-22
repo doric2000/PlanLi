@@ -25,6 +25,8 @@ function catalogItemToOption(data, countryNameFallbacks = {}) {
     countryName,
     countryNames,
     label: `${name} · ${countryName}`,
+    coordinates: data?.coordinates || null,
+    viewport: data?.viewport || null,
     popularity: Number(data?.recommendationCount || 0),
   };
 }
@@ -74,6 +76,8 @@ export function useDestinationFilterOptions(enabled = true, searchQuery = '') {
   const [loading, setLoading] = useState(false);
   const [remoteOptions, setRemoteOptions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchRetryKey, setSearchRetryKey] = useState(0);
   useEffect(() => {
     if (!enabled || cachedOptions) {
       if (cachedOptions && options !== cachedOptions) setOptions(cachedOptions);
@@ -91,10 +95,12 @@ export function useDestinationFilterOptions(enabled = true, searchQuery = '') {
     if (!enabled || queryKey.length < 2) {
       setRemoteOptions([]);
       setSearchLoading(false);
+      setSearchError('');
       return undefined;
     }
     let active = true;
     setSearchLoading(true);
+    setSearchError('');
     searchDestinations({ query: searchQuery, sort: 'popular', limit: 30 })
       .then((catalog) => {
         if (!active) return;
@@ -105,12 +111,13 @@ export function useDestinationFilterOptions(enabled = true, searchQuery = '') {
       .catch((error) => {
         if (active) {
           setRemoteOptions([]);
+          setSearchError('לא הצלחנו לחפש יעדים כרגע.');
           console.error('Failed to search destination filter options', error);
         }
       })
       .finally(() => active && setSearchLoading(false));
     return () => { active = false; };
-  }, [enabled, searchQuery]);
+  }, [enabled, searchQuery, searchRetryKey]);
   const mergedOptions = [...new Map([...options, ...remoteOptions]
     .map((option) => [option.key, option])).values()];
   const popularOptions = [...options].filter((option) => option.kind === 'city')
@@ -120,5 +127,7 @@ export function useDestinationFilterOptions(enabled = true, searchQuery = '') {
     popularOptions,
     loading: loading || searchLoading,
     searchLoading,
+    searchError,
+    retrySearch: () => setSearchRetryKey((value) => value + 1),
   };
 }
