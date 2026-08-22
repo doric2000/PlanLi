@@ -7,14 +7,15 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 PlanLi has an external TestFlight beta; it has not been publicly released to the
 App Store, Google Play, or a public web domain. Native development is performed
 with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. TestFlight version `1.1.0` is installed and in use on the owner's
-physical iPhone. It has been submitted for external TestFlight distribution and
-is waiting for Apple's Beta App Review as reported on 2026-08-22. Its exact iOS
-build number and EAS build/submission IDs have not yet been recorded in this
-repository. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`; no production OTA update for notification-interaction PR #144
-has been published. The deployed Firebase backend is not evidence of a client
-release.
+not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
+owner's physical iPhone. It has been submitted for external TestFlight
+distribution and is waiting for Apple's Beta App Review as reported on
+2026-08-22. The production profile uses the `production` EAS Update channel and
+runtime `1.1.0`. Notification-interaction update group
+`12d1a0e1-c5bc-4102-a1b0-1aa29ef81c69` was published for iOS and Android on
+2026-08-22 from commit `af3e108`; delivery and application on the physical
+iPhone remain unverified. The deployed Firebase backend is not evidence of a
+client release.
 
 ## Run the client
 
@@ -190,11 +191,16 @@ remain explicit release operations; merging source code does not perform them.
 
 Current release record:
 
-- App version: `1.1.0`; the exact iOS build number is not yet recorded.
+- App version/build: `1.1.0 (13)`.
 - Installed state: running on the owner's physical iPhone through TestFlight.
-- EAS Update: `production` channel with runtime `1.1.0`; notification-interaction
-  PR #144 has not been published as an OTA update.
-- EAS build and submission IDs: not yet recorded.
+- EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
+  center commit `4656434` with the `production` profile and runtime `1.1.0`.
+- EAS Update: group `12d1a0e1-c5bc-4102-a1b0-1aa29ef81c69`, `production`
+  channel, runtime `1.1.0`, iOS update `01a028f1-71d9-7fa1-ac31-e89eee4290f1`,
+  published from notification-interaction merge `af3e108` on 2026-08-22.
+- OTA device state: Expo serves the iOS update to matching production requests,
+  but download/application on the owner's iPhone has not yet been confirmed.
+- EAS submission ID: not yet recorded.
 - App Store Connect app: `6801453067`; version `1.1.0` has been submitted for
   external TestFlight distribution and is waiting for Apple's Beta App Review
   as reported on 2026-08-22.

@@ -187,9 +187,13 @@ export const notificationCenterStyles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   actorPreviewItem: {
+    width: layout.touchTarget,
+    height: layout.touchTarget,
     borderRadius: 21,
     borderWidth: 2,
     borderColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actorPreviewItemOverlap: {
     marginStart: -8,
@@ -205,18 +209,19 @@ export const notificationCenterStyles = StyleSheet.create({
   likeMessageRow: {
     minHeight: layout.touchTarget,
     flexDirection: 'row-reverse',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
   },
   likeCountAction: {
     minHeight: layout.touchTarget,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   likeCountActionText: {
     color: colors.brand,
     fontFamily: fontFamilies.semiBold,
     fontSize: 15,
+    lineHeight: 21,
     textDecorationLine: 'underline',
     writingDirection: 'rtl',
   },
@@ -224,7 +229,7 @@ export const notificationCenterStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: layout.touchTarget,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   rowMessage: {
     color: colors.textPrimary,
