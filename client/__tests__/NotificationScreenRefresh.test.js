@@ -267,6 +267,40 @@ describe('NotificationScreen interactions', () => {
     expect(screen.queryByTestId('notification-previews-like-1')).toBeNull();
   });
 
+  it('opens an actor profile directly from its 44px avatar action', async () => {
+    const onOpenAction = jest.fn();
+    const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+    const actor = screen.getByTestId('notification-actor-like-1-0');
+
+    expect(StyleSheet.flatten(actor.props.style)).toMatchObject({ width: 44, height: 44 });
+    fireEvent.press(actor);
+    fireEvent.press(actor);
+
+    await waitFor(() => expect(mockNavigation.navigate).toHaveBeenCalledWith(
+      'UserProfile',
+      { uid: 'actor-0' }
+    ));
+    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(onOpenAction).not.toHaveBeenCalled();
+  });
+
+  it('aligns the clickable like count with the first notification text line', () => {
+    const screen = render(<NotificationScreen />);
+    const messageRow = StyleSheet.flatten(
+      screen.getByTestId('notification-like-message-like-1').props.style
+    );
+    const likesAction = StyleSheet.flatten(
+      screen.getByTestId('notification-likes-like-1').props.style
+    );
+    const message = screen.getByTestId('notification-row-like-1');
+    const messageStyle = StyleSheet.flatten(message.props.style);
+
+    expect(messageRow.alignItems).toBe('flex-start');
+    expect(likesAction).toMatchObject({ minHeight: 44, justifyContent: 'flex-start' });
+    expect(messageStyle).toMatchObject({ minHeight: 44, justifyContent: 'flex-start' });
+  });
+
   it('opens the full liker list from the independent 44px like-count action', async () => {
     const onOpenAction = jest.fn();
     const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);

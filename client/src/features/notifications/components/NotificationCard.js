@@ -93,7 +93,7 @@ function LeadingPreview({ notification, presentation, onPress, busy }) {
   );
 }
 
-function ActorStrip({ notification }) {
+function ActorStrip({ notification, onActorPress, busy }) {
   const actors = (notification.actorPreviews?.length
     ? notification.actorPreviews
     : [notification.actorPreview].filter(Boolean)).slice(0, 4);
@@ -102,26 +102,47 @@ function ActorStrip({ notification }) {
   return (
     <View
       style={styles.actorPreviewStrip}
-      importantForAccessibility="no-hide-descendants"
       testID={`notification-actors-${notification.id}`}
     >
-      {actors.map((actor, index) => (
-        <View
-          key={actor.id || `${actor.displayName}-${index}`}
-          style={[
-            styles.actorPreviewItem,
-            index > 0 && styles.actorPreviewItemOverlap,
-            { zIndex: 4 - index },
-          ]}
-          testID={`notification-actor-${notification.id}-${index}`}
-        >
+      {actors.map((actor, index) => {
+        const actorStyle = [
+          styles.actorPreviewItem,
+          index > 0 && styles.actorPreviewItemOverlap,
+          { zIndex: 4 - index },
+        ];
+        const avatar = (
           <Avatar
             photoURL={actor.photoURL}
             displayName={actor.displayName}
             size={38}
           />
-        </View>
-      ))}
+        );
+        if (!actor.id) {
+          return (
+            <View
+              key={`${actor.displayName}-${index}`}
+              style={actorStyle}
+              testID={`notification-actor-${notification.id}-${index}`}
+            >
+              {avatar}
+            </View>
+          );
+        }
+        return (
+          <Pressable
+            key={actor.id}
+            accessibilityRole="button"
+            accessibilityLabel={`פתיחת הפרופיל של ${actor.displayName}`}
+            accessibilityState={{ busy, disabled: busy }}
+            disabled={busy}
+            onPress={() => onActorPress?.(notification, actor)}
+            style={({ pressed }) => [actorStyle, pressed && styles.rowPressed]}
+            testID={`notification-actor-${notification.id}-${index}`}
+          >
+            {avatar}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -143,6 +164,7 @@ export function NotificationCard({
   notification,
   onTargetPress,
   onLikesPress,
+  onActorPress,
   onMenuPress,
   busy = false,
 }) {
@@ -176,7 +198,10 @@ export function NotificationCard({
 
       <View style={styles.rowBody}>
         {isLike && presentation.likeMessageParts ? (
-          <View style={styles.likeMessageRow}>
+          <View
+            style={styles.likeMessageRow}
+            testID={`notification-like-message-${notification.id}`}
+          >
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${presentation.likeMessageParts.actionLabel}, הצגת כל האנשים שאהבו`}
@@ -220,7 +245,11 @@ export function NotificationCard({
 
         {(notification.type === NotificationType.LIKE
           || notification.type === NotificationType.COMMENT) ? (
-            <ActorStrip notification={notification} />
+            <ActorStrip
+              notification={notification}
+              onActorPress={onActorPress}
+              busy={busy}
+            />
           ) : null}
         <Meta notification={notification} time={time} />
       </View>

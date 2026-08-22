@@ -306,6 +306,21 @@ export default function NotificationScreen({
     }
   }, [resolveTargetAvailability, setRead]);
 
+  const openActorProfile = useCallback(async (notification, actor) => {
+    const actorId = safeRouteId(actor?.id);
+    if (!notification?.id || !actorId || openingRef.current.has(notification.id)) return;
+    openingRef.current.add(notification.id);
+    try {
+      const readPromise = !notification.isRead
+        ? setRead(notification, true).catch(() => false)
+        : Promise.resolve(false);
+      navigation.navigate('UserProfile', { uid: actorId });
+      await readPromise;
+    } finally {
+      openingRef.current.delete(notification.id);
+    }
+  }, [navigation, setRead]);
+
   useEffect(() => {
     const notificationId = safeRouteId(route?.params?.notificationId);
     const expectedChannel = route?.params?.channel;
@@ -571,6 +586,7 @@ export default function NotificationScreen({
                 busy={channelMutationBusy || Boolean(center.pendingActions[`item:${item.id}`])}
                 onTargetPress={openNotification}
                 onLikesPress={openNotificationLikes}
+                onActorPress={openActorProfile}
                 onMenuPress={(notification) => setNotificationMenuTarget({
                   id: notification.id,
                   channel: notification.channel,
