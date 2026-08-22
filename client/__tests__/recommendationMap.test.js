@@ -13,7 +13,9 @@ describe('recommendation map model', () => {
     shopping: ['shopping-bag', '#DB2777'],
     stay: ['bed', '#4F46E5'],
     transportation: ['directions-bus', '#0891B2'],
-    services: ['handyman', '#475569'],
+    services: ['support-agent', '#475569'],
+    nightlife: ['nightlife', '#7C2D92'],
+    events: ['event', '#C2410C'],
   };
 
   it.each(Object.entries(expected))('maps %s to its icon and color', (categoryId, [icon, color]) => {
