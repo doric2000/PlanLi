@@ -1,0 +1,222 @@
+name: Pull request validation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  changes:
+    name: Plan affected validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tooling: ${{ steps.plan.outputs.tooling }}
+      client: ${{ steps.plan.outputs.client }}
+      functions: ${{ steps.plan.outputs.functions }}
+      rules: ${{ steps.plan.outputs.rules }}
+      taxonomy: ${{ steps.plan.outputs.taxonomy }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.23.1
+
+      - name: Calculate affected checks
+        id: plan
+        run: >-
+          node scripts/validationPlan.js plan
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --github-output "$GITHUB_OUTPUT"
+
+  tooling:
+    name: Validation planner tests
+    if: needs.changes.outputs.tooling == 'true'
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.23.1
+
+      - name: Run validation planner tests
+        run: >-
+          node scripts/validationPlan.js run
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --scope tooling
+
+  client:
+    name: Affected client checks
+    if: needs.changes.outputs.client == 'true'
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install locked client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Run affected client validation
+        run: >-
+          node scripts/validationPlan.js run
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --scope client
+
+  functions:
+    name: Affected Functions checks
+    if: needs.changes.outputs.functions == 'true'
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install locked Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Run affected Functions validation
+        run: >-
+          node scripts/validationPlan.js run
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --scope functions
+
+  rules:
+    name: Firebase Rules emulator
+    if: needs.changes.outputs.rules == 'true'
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Use Java 21 for Firebase emulators
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install locked Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Install pinned Firebase CLI
+        run: npm install --global firebase-tools@15.25.1
+
+      - name: Run affected Rules validation
+        run: >-
+          node scripts/validationPlan.js run
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --scope rules
+
+  taxonomy:
+    name: Travel taxonomy parity
+    if: needs.changes.outputs.taxonomy == 'true'
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22.23.1
+
+      - name: Run taxonomy validation
+        run: >-
+          node scripts/validationPlan.js run
+          --base "$BASE_SHA"
+          --head "$HEAD_SHA"
+          --scope taxonomy
+
+  validation:
+    name: PR validation
+    if: always()
+    needs: [changes, tooling, client, functions, rules, taxonomy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every affected job to pass
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TOOLING_RESULT: ${{ needs.tooling.result }}
+          CLIENT_RESULT: ${{ needs.client.result }}
+          FUNCTIONS_RESULT: ${{ needs.functions.result }}
+          RULES_RESULT: ${{ needs.rules.result }}
+          TAXONOMY_RESULT: ${{ needs.taxonomy.result }}
+        run: |
+          for result in "$CHANGES_RESULT" "$TOOLING_RESULT" "$CLIENT_RESULT" "$FUNCTIONS_RESULT" "$RULES_RESULT" "$TAXONOMY_RESULT"; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "Affected validation did not pass: $result"
+              exit 1
+            fi
+          done
+          echo "All affected validation passed or was not required."

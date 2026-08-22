@@ -69,40 +69,22 @@ Applies to `functions/**` and supplements the repository guide.
   before version-sensitive changes.
 - Never point tests or exploratory scripts at production data.
 
-## Functions validation ladder
+## Functions validation triggers
 
 Run commands from `functions/` under Node 22.
 
 ```powershell
-node --test relevantService.test.js relevantPolicy.test.js
+node --test --test-reporter=spec relevantService.test.js relevantPolicy.test.js
 ```
 
-### Level 0
-
-Documentation or Codex configuration only: no Functions tests or emulators.
-
-### Level 1
-
-- Run only directly affected service/policy tests.
-- Use a focused Functions emulator harness only when pure tests cannot prove the
-  callable boundary.
-
-### Level 2
-
-- Run related backend test groups.
+- Run direct/transitive service and policy tests. Use a focused emulator only when
+  pure tests cannot prove the callable boundary.
 - Firestore or Storage Rules changes require `npm run test:rules:emulator`.
 - Shared callable, auth/claim, trigger, or multi-service changes require their
   nearest integration coverage.
 - Media changes require upload/display/delete smoke coverage without production data.
-- Run one base-branch `/review`; add a security diff review only for sensitive paths.
-
-### Level 3
-
-- Run the full Functions suite with `npm test`.
-- Run relevant Rules/emulator checks and read-only audits when the changed data
-  boundary requires them.
 - Migrations must pass dry-run before any separately authorized `--apply`.
-- Dependency audits apply when dependencies/lockfiles change or for release readiness.
+- Audit dependencies only after dependency/lockfile changes or for release readiness.
 
 ## Deployment gate
 

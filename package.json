@@ -1,7 +1,9 @@
 {
   "scripts": {
     "sync:travel-taxonomy": "node scripts/syncTravelTaxonomy.js",
-    "test:travel-taxonomy": "node scripts/syncTravelTaxonomy.js --check"
+    "test:travel-taxonomy": "node scripts/syncTravelTaxonomy.js --check",
+    "test:validation-plan": "node --test scripts/validationPlan.test.js",
+    "validate:changed": "node scripts/validationPlan.js run"
   },
   "devDependencies": {
     "patch-package": "^8.0.1"
