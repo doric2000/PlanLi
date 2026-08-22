@@ -65,6 +65,23 @@ test('route drafts keep general, pin, recommendation and optional timing fields 
   })), /startTime/);
 });
 
+test('route drafts keep provider proof private for a destination not yet in the catalog', () => {
+  const draft = sanitizeRouteDraft(partialDraft({
+    area: {
+      countryId: 'SI', cityId: 'ljubljana', countryName: 'סלובניה', cityName: 'לובליאנה',
+      provider: 'google', providerPlaceId: 'google-city-1', resolvedPlaceToken: 'resolved-token-1',
+    },
+    dayCount: 1,
+    days: [{ stops: [{ id: 'general', title: 'מרכז העיר', locationPrecision: 'general' }] }],
+  }));
+  assert.deepEqual(draft.area, {
+    countryId: 'SI', cityId: 'ljubljana', countryName: 'סלובניה', cityName: 'לובליאנה',
+    provider: 'google', providerPlaceId: 'google-city-1', resolvedPlaceToken: 'resolved-token-1',
+  });
+  assert.equal(draft.days[0].stops[0].destination.providerPlaceId, 'google-city-1');
+  assert.equal(draft.days[0].stops[0].destination.resolvedPlaceToken, 'resolved-token-1');
+});
+
 test('route drafts strip precise place data from general stops', () => {
   const draft = sanitizeRouteDraft(partialDraft({
     dayCount: 1,

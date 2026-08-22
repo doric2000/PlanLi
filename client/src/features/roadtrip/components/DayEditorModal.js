@@ -187,6 +187,7 @@ export default function DayEditorModal({
 			<SafeAreaView style={styles.container}>
 				<UnsavedChangesModal
 					visible={unsavedModalVisible}
+					contained
 					title={UNSAVED_LEAVE_TITLE}
 					message={UNSAVED_LEAVE_MESSAGE}
 					onCancel={dismissUnsavedModal}
