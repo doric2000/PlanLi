@@ -8,9 +8,9 @@ import {
   suggestClassificationFromGoogleTypes,
 } from '../src/constants/travelTaxonomy';
 
-describe('prepared recommendation catalog', () => {
-  it('stays inactive while exposing the complete prepared catalog', () => {
-    expect(RECOMMENDATION_CATALOG.runtimeEnabled).toBe(false);
+describe('recommendation catalog', () => {
+  it('is active while exposing the complete recommendation catalog', () => {
+    expect(RECOMMENDATION_CATALOG.runtimeEnabled).toBe(true);
     expect(Object.isFrozen(RECOMMENDATION_CATALOG.categories[0])).toBe(true);
     expect(RECOMMENDATION_CATEGORIES).toHaveLength(10);
     expect(RECOMMENDATION_SUBCATEGORIES).toHaveLength(166);

@@ -12,8 +12,8 @@ const {
   suggestClassificationFromGoogleTypes,
 } = require('./travelTaxonomy');
 
-test('prepared recommendation catalog exports remain read-only and inactive', () => {
-  assert.equal(RECOMMENDATION_CATALOG.runtimeEnabled, false);
+test('recommendation catalog exports remain read-only and active for creation', () => {
+  assert.equal(RECOMMENDATION_CATALOG.runtimeEnabled, true);
   assert.equal(Object.isFrozen(RECOMMENDATION_CATALOG), true);
   assert.equal(Object.isFrozen(RECOMMENDATION_CATALOG.categories[0]), true);
   assert.equal(RECOMMENDATION_CATEGORIES.length, 10);

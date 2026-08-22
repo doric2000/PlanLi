@@ -1,6 +1,7 @@
 import {
   CATEGORIES,
   INTERESTS,
+  RECOMMENDATION_CATEGORIES,
   TRAVEL_PARTIES,
   TRAVELER_STYLES,
   VIBES,
@@ -18,6 +19,8 @@ export const CATEGORY_COLORS = Object.freeze({
   stay: '#4F46E5',
   transportation: '#0891B2',
   services: '#475569',
+  nightlife: '#7C2D92',
+  events: '#C2410C',
 });
 
 export const FALLBACK_PRESENTATION = Object.freeze({
@@ -27,9 +30,10 @@ export const FALLBACK_PRESENTATION = Object.freeze({
   color: '#1E3A5F',
 });
 
-const CATEGORY_BY_ID = Object.fromEntries(
-  CATEGORIES.map((category, index) => [category.id, { ...category, order: index }])
-);
+const CATEGORY_BY_ID = Object.fromEntries([
+  ...CATEGORIES.map((category, index) => [category.id, { ...category, order: index }]),
+  ...RECOMMENDATION_CATEGORIES.map((category) => [category.id, category]),
+]);
 
 const INTEREST_TO_CATEGORY = Object.freeze({
   nature_scenery: 'nature',
@@ -116,7 +120,10 @@ const INTEREST_BY_ID = Object.fromEntries(INTERESTS.map((option) => [option.valu
 const VIBE_BY_ID = Object.fromEntries(VIBES.map((option) => [option.value, option]));
 
 export function getTravelCategoryPresentation(categoryId, legacyCategory) {
-  const normalizedId = normalizeCategoryId(categoryId) || normalizeCategoryId(legacyCategory);
+  const directId = typeof categoryId === 'string' && CATEGORY_BY_ID[categoryId.trim()]
+    ? categoryId.trim()
+    : '';
+  const normalizedId = directId || normalizeCategoryId(categoryId) || normalizeCategoryId(legacyCategory);
   const category = CATEGORY_BY_ID[normalizedId];
 
   if (!category) {

@@ -17,6 +17,7 @@ export { moderationStyles } from "./moderation";
 export { openWithLocationSheetStyles } from "./openWithLocationSheet";
 export { adminStyles } from "./admin";
 export { rtlHorizontalStyles } from "./rtlHorizontal";
+export { recommendationComposerStyles } from "./recommendationComposer";
 export {
   pageHeaderStyles,
   tabHeroStyles,

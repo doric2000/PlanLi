@@ -32,6 +32,7 @@ export default function GooglePlacesInput({
   googleFallbackDelayMs = 2000,
   googleSearchFn,
   placeholder = 'חפש עיר...',
+  clearPlaceholderOnFocus = false,
   inputTestID,
   containerStyle,
   inputWrapperStyle,
@@ -455,7 +456,7 @@ export default function GooglePlacesInput({
             explicitSearch && googlePlacesInput.explicitInput,
             inputStyle,
           ]}
-          placeholder={placeholder}
+          placeholder={clearPlaceholderOnFocus && inputFocused ? '' : placeholder}
           value={query}
           onChangeText={handleTextChange}
           onFocus={handleFocus}

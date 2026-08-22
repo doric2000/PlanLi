@@ -205,6 +205,24 @@ describe('GooglePlacesInput recent destinations', () => {
     expect(screen.getByLabelText('Search locations')).toBeTruthy();
   });
 
+  it('clears example placeholder copy on focus when the concise composer requests it', async () => {
+    const screen = render(
+      <ControlledInput
+        placeholder="למשל: Café Central, וינה"
+        clearPlaceholderOnFocus
+      />
+    );
+    const input = screen.getByTestId('places-input');
+
+    expect(input.props.placeholder).toBe('למשל: Café Central, וינה');
+    fireEvent(input, 'focus');
+    expect(screen.getByTestId('places-input').props.placeholder).toBe('');
+    fireEvent(input, 'blur');
+    await waitFor(() => {
+      expect(screen.getByTestId('places-input').props.placeholder).toBe('למשל: Café Central, וינה');
+    });
+  });
+
   it('allows Home autocomplete to use the exact shared tab-header field geometry', () => {
     const screen = render(
       <ControlledInput

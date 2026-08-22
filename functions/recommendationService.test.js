@@ -10,9 +10,11 @@ const {
   parsePlaceDetails,
   resolveGoogleDestination,
   resolvePlaceCountry,
-  resolveRecommendationDestination,
+	resolveRecommendationDestination,
 	sanitizeRecommendationAttributes,
+  sanitizeRecommendationCatalogContent,
   sanitizeRecommendationContent,
+  sanitizeRecommendationDetails,
   saveRecommendation,
   stableDocumentId,
   validateMediaAssets,
@@ -49,6 +51,65 @@ test('verified caller accepts verified password users, social users and admins',
     true
   );
   assert.equal(isVerifiedCaller({ uid: 'u1', token: { admin: true } }), true);
+});
+
+test('catalog recommendations need only a concise classification and keep useful details optional', () => {
+  const content = sanitizeRecommendationCatalogContent({
+    recommendationCatalogVersion: 1,
+    title: 'מקום ששווה להכיר',
+    description: 'אוכל מצוין ושירות נעים.',
+    categoryId: 'food',
+    subcategoryIds: ['restaurant'],
+  });
+
+  assert.equal(content.categoryId, 'food');
+  assert.deepEqual(content.subcategoryIds, ['restaurant']);
+  assert.deepEqual(content.catalogInterestIds, ['food']);
+  assert.equal(content.budget, '');
+  assert.deepEqual(sanitizeRecommendationDetails(undefined, content), {});
+  assert.deepEqual(sanitizeRecommendationDetails({
+    contactName: 'דנה',
+    phone: '+972 50 123 4567',
+    externalUrl: 'https://planli.example/place',
+  }, content), {
+    contactName: 'דנה',
+    phone: '+972 50 123 4567',
+    externalUrl: 'https://planli.example/place',
+  });
+});
+
+test('catalog validation keeps Other moderated and requires timing only for events', () => {
+  assert.throws(() => sanitizeRecommendationCatalogContent({
+    recommendationCatalogVersion: 1,
+    title: 'המלצה',
+    description: 'תיאור קצר',
+    categoryId: 'nature',
+    subcategoryIds: ['nature_other'],
+  }), /classification is invalid/);
+
+  const other = sanitizeRecommendationCatalogContent({
+    recommendationCatalogVersion: 1,
+    title: 'מערת קרח',
+    description: 'חוויה מיוחדת באזור.',
+    categoryId: 'nature',
+    subcategoryIds: ['nature_other'],
+    customSubcategoryLabel: 'קרחון נגיש',
+  });
+  assert.equal(other.customSubcategoryLabel, 'קרחון נגיש');
+
+  const event = sanitizeRecommendationCatalogContent({
+    recommendationCatalogVersion: 1,
+    title: 'פסטיבל קיץ',
+    description: 'מוזיקה מקומית ואוכל.',
+    categoryId: 'events',
+    subcategoryIds: ['music_festival'],
+  });
+  assert.throws(() => sanitizeRecommendationDetails({}, event), /Event timing is required/);
+  assert.deepEqual(sanitizeRecommendationDetails({
+    eventSchedule: '12 בספטמבר 2026 בשעה 20:00',
+  }, event), {
+    eventSchedule: '12 בספטמבר 2026 בשעה 20:00',
+  });
 });
 
 test('old Latin-only Sa Pa destination snapshots are revalidated locally without provider work', () => {
@@ -1094,6 +1155,108 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(Object.hasOwn(saved.search, 'tokens'), false);
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
+});
+
+test('catalog recommendations support a general destination and a nearby manual pin', async () => {
+  const destinationDocuments = {
+    'countries/HU': {
+      name: 'הונגריה', names: { he: 'הונגריה', en: 'Hungary' }, code: 'HU', status: 'active',
+    },
+    'countries/HU/destinations/budapest': {
+      name: 'בודפשט',
+      names: { he: 'בודפשט', en: 'Budapest' },
+      status: 'active',
+      stats: { recommendationCount: 0 },
+      googleCache: {
+        coordinates: { lat: 47.4979, lng: 19.0402 },
+        viewport: {
+          southwest: { lat: 47.35, lng: 18.9 },
+          northeast: { lat: 47.65, lng: 19.2 },
+        },
+      },
+    },
+  };
+  const catalogContent = {
+    taxonomyVersion: 5,
+    recommendationCatalogVersion: 1,
+    title: 'מקום מקומי ששווה להכיר',
+    description: 'המלצה קצרה בלי שאלון ארוך.',
+    categoryId: 'food',
+    subcategoryIds: ['cafe'],
+    details: { phone: '+36 20 123 4567' },
+    media: [],
+  };
+
+  const generalAdmin = createFakeAdmin(destinationDocuments);
+  const generalResult = await saveRecommendation({
+    admin: generalAdmin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      destinationRef: { countryId: 'HU', cityId: 'budapest' },
+      locationMode: 'destination',
+      recommendation: catalogContent,
+    },
+  });
+  const generalSaved = generalAdmin.documents.get(`recommendations/${generalResult.recommendationId}`);
+  assert.equal(generalSaved.locationMode, 'destination');
+  assert.equal(generalSaved.place, null);
+  assert.deepEqual(generalSaved.subcategoryIds, ['cafe']);
+  assert.deepEqual(generalSaved.details, { phone: '+36 20 123 4567' });
+  assert.ok(generalSaved.facets.interests.includes('food'));
+  assert.deepEqual(generalSaved.facets.catalogInterests, ['food']);
+
+  await assert.rejects(() => saveRecommendation({
+    admin: generalAdmin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      recommendationId: generalResult.recommendationId,
+      destinationRef: { countryId: 'HU', cityId: 'budapest' },
+      recommendation: {
+        taxonomyVersion: 5,
+        title: 'עריכה מגרסה ישנה',
+        description: 'אסור לאבד את הסיווג החדש.',
+        categoryId: 'food',
+        tags: ['cafe'],
+        budget: 'economy',
+        media: [],
+      },
+    },
+  }), /Update PlanLi before editing/);
+
+  for (const invalidLocation of [
+    { locationMode: 'pin' },
+    { locationMode: 'exact' },
+  ]) {
+    await assert.rejects(() => saveRecommendation({
+      admin: createFakeAdmin(destinationDocuments),
+      auth: verifiedAuth,
+      mapsKey: 'unused',
+      data: {
+        destinationRef: { countryId: 'HU', cityId: 'budapest' },
+        ...invalidLocation,
+        recommendation: catalogContent,
+      },
+    }), /map pin is required|exact place is required/i);
+  }
+
+  const pinAdmin = createFakeAdmin(destinationDocuments);
+  const pinResult = await saveRecommendation({
+    admin: pinAdmin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      destinationRef: { countryId: 'HU', cityId: 'budapest' },
+      locationMode: 'pin',
+      manualLocation: { coordinates: { lat: 47.5, lng: 19.05 } },
+      recommendation: catalogContent,
+    },
+  });
+  const pinSaved = pinAdmin.documents.get(`recommendations/${pinResult.recommendationId}`);
+  assert.equal(pinSaved.locationMode, 'pin');
+  assert.equal(pinSaved.place.source, 'manual_pin');
+  assert.deepEqual(pinSaved.place.coordinates, { lat: 47.5, lng: 19.05 });
 });
 
 test('saveRecommendation repairs an existing Latin-only Sa Pa destination without Google calls', async () => {

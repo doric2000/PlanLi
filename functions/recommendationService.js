@@ -20,6 +20,9 @@ const {
   normalizeBudget,
   normalizeCategoryId,
   POST_BUDGET_IDS,
+  RECOMMENDATION_CATALOG,
+  RECOMMENDATION_CATEGORIES,
+  RECOMMENDATION_SUBCATEGORIES,
   recommendationAttributeRequirements,
   SEASON_IDS,
   tagsMatchCategory,
@@ -27,6 +30,9 @@ const {
   TRAVEL_PARTY_IDS,
   TRAVELER_STYLE_IDS,
   VIBE_IDS,
+  isRecommendationClassificationValid,
+  normalizeRecommendationCategory,
+  normalizeRecommendationSubcategories,
 } = require('./travelTaxonomy');
 const { buildSearchIndex } = require('./discoverySearch');
 const { compactDestinationSearchText } = require('./destinationCatalogService');
@@ -37,7 +43,7 @@ const {
   normalizeDestinationHebrewData,
 } = require('./destinationLocalizationService');
 const { distanceKm } = require('./destinationIdentityService');
-const { buildMapLocation } = require('./mapLocation');
+const { buildMapLocation, normalizeMapCoordinates } = require('./mapLocation');
 const { consumeProviderBudget } = require('./providerRateLimitService');
 const {
   exactPlaceGoogleCacheFor,
@@ -69,6 +75,21 @@ const {
 const MAX_RECOMMENDATION_IMAGES = 5;
 const MAX_RECOMMENDATION_IMAGE_BYTES = 8 * 1024 * 1024;
 const GOOGLE_REVERSE_GEOCODE_TIMEOUT_MS = 6000;
+const RECOMMENDATION_CATEGORY_BY_ID = Object.freeze(Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.id, item])
+));
+const RECOMMENDATION_SUBCATEGORY_BY_ID = Object.freeze(Object.fromEntries(
+  RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item])
+));
+const LEGACY_TAG_IDS_BY_RECOMMENDATION_SUBCATEGORY = Object.freeze(Object.entries(
+  RECOMMENDATION_CATALOG.legacyTagMappings || {}
+).reduce((lookup, [legacyTagId, mapping]) => {
+  if (mapping?.strategy !== 'direct' || mapping.subcategoryIds?.length !== 1) return lookup;
+  const [subcategoryId] = mapping.subcategoryIds;
+  lookup[subcategoryId] ||= [];
+  lookup[subcategoryId].push(legacyTagId);
+  return lookup;
+}, {}));
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -121,8 +142,59 @@ function cleanStringArray(value, { field, maxItems, maxLength }) {
   );
 }
 
+function sanitizeRecommendationCatalogContent(data) {
+  assert(RECOMMENDATION_CATALOG.runtimeEnabled === true,
+    'failed-precondition', 'The recommendation catalog is not active.');
+  const catalogVersion = Number(data.recommendationCatalogVersion || 0);
+  assert(catalogVersion === Number(RECOMMENDATION_CATALOG.schemaVersion || 0),
+    'failed-precondition', 'Update PlanLi to use the current recommendation catalog.');
+
+  const categoryId = normalizeRecommendationCategory(data.categoryId);
+  const rawSubcategoryIds = cleanStringArray(data.subcategoryIds || [], {
+    field: 'subcategoryIds',
+    maxItems: RECOMMENDATION_CATALOG.selection?.subcategories?.max || 3,
+    maxLength: 80,
+  });
+  const subcategoryIds = normalizeRecommendationSubcategories(rawSubcategoryIds, categoryId);
+  const customSubcategoryLabel = cleanOptionalString(data.customSubcategoryLabel, {
+    field: 'customSubcategoryLabel',
+    max: RECOMMENDATION_CATALOG.selection?.customLabel?.maxLength || 40,
+  });
+  assert(isRecommendationClassificationValid({
+    categoryId,
+    subcategoryIds: rawSubcategoryIds,
+    customSubcategoryLabel,
+  }), 'invalid-argument', 'The recommendation classification is invalid.');
+
+  const legacyTags = Array.from(new Set(subcategoryIds.flatMap(
+    (subcategoryId) => LEGACY_TAG_IDS_BY_RECOMMENDATION_SUBCATEGORY[subcategoryId] || []
+  )));
+  const catalogInterestIds = Array.from(new Set(subcategoryIds.flatMap(
+    (subcategoryId) => RECOMMENDATION_SUBCATEGORY_BY_ID[subcategoryId]?.interestIds || []
+  )));
+  const rawBudget = cleanOptionalString(data.budget, { field: 'budget', max: 50 });
+  const budget = normalizeBudget(rawBudget, { allowFlexible: false });
+  assert(!rawBudget || budget, 'invalid-argument', 'budget is invalid.');
+
+  return {
+    title: cleanString(data.title, { field: 'title', min: 1, max: 120 }),
+    description: cleanString(data.description, { field: 'description', min: 1, max: 5000 }),
+    category: RECOMMENDATION_CATEGORY_BY_ID[categoryId]?.label || categoryId,
+    categoryId,
+    subcategoryIds,
+    customSubcategoryLabel,
+    catalogInterestIds,
+    recommendationCatalogVersion: catalogVersion,
+    tags: legacyTags,
+    budget,
+  };
+}
+
 function sanitizeRecommendationContent(data) {
   assert(data && typeof data === 'object', 'invalid-argument', 'Missing recommendation data.');
+  if (data.recommendationCatalogVersion != null || Array.isArray(data.subcategoryIds)) {
+    return sanitizeRecommendationCatalogContent(data);
+  }
   const strict = Number(data.taxonomyVersion || 0) >= 4;
 
   const rawTags = cleanStringArray(data.tags || [], {
@@ -155,6 +227,45 @@ function sanitizeRecommendationContent(data) {
     tags: tagAnalysis.tagIds,
     budget,
   };
+}
+
+function sanitizeRecommendationDetails(value, content) {
+  if (value == null) {
+    assert(content.categoryId !== 'events', 'invalid-argument', 'Event timing is required.');
+    return {};
+  }
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', 'details are invalid.');
+  const allowedFields = [
+    'contactName', 'phone', 'externalUrl', 'priceNote', 'accessibilityNote', 'eventSchedule',
+  ];
+  assert(Object.keys(value).every((key) => allowedFields.includes(key)),
+    'invalid-argument', 'details contain unsupported fields.');
+  const details = {
+    contactName: cleanOptionalString(value.contactName, { field: 'contactName', max: 80 }),
+    phone: cleanOptionalString(value.phone, { field: 'phone', max: 40 }),
+    externalUrl: cleanOptionalString(value.externalUrl, { field: 'externalUrl', max: 500 }),
+    priceNote: cleanOptionalString(value.priceNote, { field: 'priceNote', max: 120 }),
+    accessibilityNote: cleanOptionalString(value.accessibilityNote, { field: 'accessibilityNote', max: 500 }),
+    eventSchedule: cleanOptionalString(value.eventSchedule, { field: 'eventSchedule', max: 160 }),
+  };
+  if (details.phone) {
+    assert(/^[+\d][\d\s().-]{3,39}$/.test(details.phone),
+      'invalid-argument', 'phone is invalid.');
+  }
+  if (details.externalUrl) {
+    let parsed;
+    try {
+      parsed = new URL(details.externalUrl);
+    } catch (_) {
+      assert(false, 'invalid-argument', 'externalUrl is invalid.');
+    }
+    assert(['http:', 'https:'].includes(parsed.protocol),
+      'invalid-argument', 'externalUrl is invalid.');
+  }
+  assert(content.categoryId !== 'events' || details.eventSchedule,
+    'invalid-argument', 'Event timing is required.');
+  return Object.fromEntries(Object.entries(details).filter(([, entry]) => entry));
 }
 
 function sanitizeSubmittedFacets(value) {
@@ -781,6 +892,31 @@ function destinationContainsCoordinates(destination, coordinates) {
     ? lng >= west && lng <= east
     : lng >= west || lng <= east;
   return insideLatitude && insideLongitude;
+}
+
+function manualPlaceForDestination(value, destination) {
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', 'manualLocation is invalid.');
+  const coordinates = normalizeMapCoordinates(value.coordinates);
+  assert(coordinates, 'invalid-argument', 'manualLocation coordinates are invalid.');
+  const cityCoordinates = normalizeMapCoordinates(
+    destination?.cityData?.googleCache?.coordinates ||
+    destination?.cityData?.identity?.coordinates ||
+    destination?.cityData?.coordinates
+  );
+  const insideViewport = destinationContainsCoordinates(destination?.cityData, coordinates);
+  const nearDestination = cityCoordinates
+    ? distanceKm(cityCoordinates, coordinates) <= 100
+    : false;
+  assert(insideViewport || nearDestination,
+    'invalid-argument', 'The manual location is outside the selected destination.');
+  const label = cleanOptionalString(value.label, { field: 'manualLocation label', max: 120 });
+  return {
+    name: label || destinationHebrewName(destination.cityData) || destination.cityId,
+    address: '',
+    coordinates,
+    source: 'manual_pin',
+  };
 }
 
 function isSettlementDestination(destination) {
@@ -1757,25 +1893,53 @@ async function saveRecommendation({
   assert(Number(data?.recommendation?.taxonomyVersion || 0) >= taxonomy.version,
     'failed-precondition', 'Update PlanLi to choose Free or Cheap as separate budget options.');
 
+  const requestUsesRecommendationCatalog =
+    data?.recommendation?.recommendationCatalogVersion != null ||
+    Array.isArray(data?.recommendation?.subcategoryIds);
+  const previousUsesRecommendationCatalog = Number(previousData?.recommendationCatalogVersion || 0) > 0;
+  assert(
+    !(recommendationId && previousUsesRecommendationCatalog && !requestUsesRecommendationCatalog),
+    'failed-precondition',
+    'Update PlanLi before editing this recommendation.'
+  );
   const content = sanitizeRecommendationContent(data?.recommendation);
-  const textSafety = evaluateTextSafety([content.title, content.description]);
-  const attributes = sanitizeRecommendationAttributes(
-    data?.recommendation?.attributes,
-    content,
-    {
-      legacyFacets: data?.recommendation?.facets,
-      taxonomyVersion: data?.recommendation?.taxonomyVersion,
-    }
-  );
-  const facets = buildRecommendationFacets(
-	{
-		...content,
-		tags: Number(data?.recommendation?.taxonomyVersion || 0) >= 4
-			? content.tags
-			: data?.recommendation?.tags || [],
-	},
-    attributes
-  );
+  const usesRecommendationCatalog = content.recommendationCatalogVersion > 0;
+  const details = sanitizeRecommendationDetails(data?.recommendation?.details, content);
+  const textSafety = evaluateTextSafety([
+    content.title,
+    content.description,
+    ...Object.values(details),
+    content.customSubcategoryLabel,
+  ]);
+  const attributes = usesRecommendationCatalog
+    ? { audienceScope: 'all', audiences: [], vibes: [], environments: [], needs: [] }
+    : sanitizeRecommendationAttributes(
+        data?.recommendation?.attributes,
+        content,
+        {
+          legacyFacets: data?.recommendation?.facets,
+          taxonomyVersion: data?.recommendation?.taxonomyVersion,
+        }
+      );
+  const baseFacets = buildRecommendationFacets(
+      {
+        ...content,
+        tags: Number(data?.recommendation?.taxonomyVersion || 0) >= 4
+          ? content.tags
+          : data?.recommendation?.tags || [],
+      },
+      attributes
+    );
+  const facets = usesRecommendationCatalog
+    ? {
+        ...baseFacets,
+        interests: Array.from(new Set([
+          ...(baseFacets.interests || []),
+          ...(content.catalogInterestIds || []),
+        ])),
+        catalogInterests: content.catalogInterestIds,
+      }
+    : baseFacets;
   const media = await validateMediaAssets({
     admin,
     uid,
@@ -1783,11 +1947,33 @@ async function saveRecommendation({
     mediaBucket,
     existingMedia: previousData?.media,
   });
+  const locationMode = cleanOptionalString(data?.locationMode, { field: 'locationMode', max: 20 });
+  assert(!locationMode || ['exact', 'destination', 'pin'].includes(locationMode),
+    'invalid-argument', 'locationMode is invalid.');
+  assert(!usesRecommendationCatalog || locationMode,
+    'invalid-argument', 'locationMode is required.');
   let destination;
   if (data?.destinationRef) {
     destination = await resolveExistingDestination(db, data.destinationRef);
-    if (
+    if (usesRecommendationCatalog && locationMode === 'pin') {
+      assert(data?.manualLocation, 'invalid-argument', 'A map pin is required for pin mode.');
+    }
+    if (usesRecommendationCatalog && locationMode === 'exact') {
+      assert(
+        recommendationId &&
+          previousData?.place?.placeId &&
+          previousData?.destination?.countryId === destination.countryId &&
+          previousData?.destination?.cityId === destination.cityId,
+        'invalid-argument',
+        'An exact place is required for exact mode.'
+      );
+    }
+    if (data?.manualLocation) {
+      assert(locationMode === 'pin', 'invalid-argument', 'manualLocation requires pin mode.');
+      destination.place = manualPlaceForDestination(data.manualLocation, destination);
+    } else if (
       recommendationId &&
+      locationMode !== 'destination' &&
       previousData?.place?.placeId &&
       previousData?.destination?.countryId === destination.countryId &&
       previousData?.destination?.cityId === destination.cityId
@@ -1795,6 +1981,8 @@ async function saveRecommendation({
       destination.place = previousData.place;
     }
   } else {
+    assert(!usesRecommendationCatalog || locationMode === 'exact',
+      'invalid-argument', 'An exact location is required for this location mode.');
     destination = await resolveSubmittedPlaceDestination({
       admin,
       auth,
@@ -1821,6 +2009,8 @@ async function saveRecommendation({
       cityName: destinationHebrewName(destination.cityData) || destination.cityId,
     },
     media,
+    details,
+    locationMode: locationMode || (destination.place?.placeId ? 'exact' : 'destination'),
     place: destination.place,
     mapLocation: buildMapLocation(destination.place?.coordinates),
   };
@@ -1830,9 +2020,12 @@ async function saveRecommendation({
     destination: payload.destination,
     place: payload.place,
     categoryIds: [content.categoryId],
-    subcategoryIds: content.tags,
-    interestIds: facets.interests,
+    subcategoryIds: content.subcategoryIds || content.tags,
+    interestIds: Array.from(new Set([...(facets.interests || []), ...(content.catalogInterestIds || [])])),
   });
+  const moderationHoldReason = !textSafety.safe
+    ? textSafety.reason
+    : content.customSubcategoryLabel ? 'taxonomy_other' : '';
 
   const transactionOutcome = await db.runTransaction(async (transaction) => {
     const current = await transaction.get(recommendationRef);
@@ -1890,8 +2083,8 @@ async function saveRecommendation({
           destination: transactionDestination,
           place: payload.place,
           categoryIds: [content.categoryId],
-          subcategoryIds: content.tags,
-          interestIds: facets.interests,
+          subcategoryIds: content.subcategoryIds || content.tags,
+          interestIds: Array.from(new Set([...(facets.interests || []), ...(content.catalogInterestIds || [])])),
         }),
       };
     if (recommendationId) {
@@ -2006,17 +2199,17 @@ async function saveRecommendation({
     if (recommendationId) {
       transaction.update(recommendationRef, {
         ...transactionPayload,
-        status: currentData.status === 'active' && !textSafety.safe
+        status: currentData.status === 'active' && moderationHoldReason
           ? 'moderation_hold'
-          : (currentData.status || (textSafety.safe ? 'active' : 'moderation_hold')),
-        ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
+          : (currentData.status || (moderationHoldReason ? 'moderation_hold' : 'active')),
+        ...(moderationHoldReason ? { moderation: { holdReason: moderationHoldReason } } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
       transaction.create(recommendationRef, {
         ...transactionPayload,
-        status: textSafety.safe ? 'active' : 'moderation_hold',
-        ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
+        status: moderationHoldReason ? 'moderation_hold' : 'active',
+        ...(moderationHoldReason ? { moderation: { holdReason: moderationHoldReason } } : {}),
         ownerId: uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2072,6 +2265,8 @@ module.exports = {
   resolveRecommendationDestination,
   resolveExistingDestination,
   sanitizeRecommendationContent,
+  sanitizeRecommendationCatalogContent,
+  sanitizeRecommendationDetails,
   sanitizeRecommendationAttributes,
   sanitizeSubmittedFacets,
   saveRecommendation,

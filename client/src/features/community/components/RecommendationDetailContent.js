@@ -185,7 +185,7 @@ export default function RecommendationDetailContent({
                 value={fact.value}
                 style={[
                   styles.factItem,
-                  fact.id === 'audiences' && styles.factItemFull,
+                  ['audiences', 'accessibilityNote', 'externalUrl', 'eventSchedule'].includes(fact.id) && styles.factItemFull,
                 ]}
                 testID={`recommendation-fact-${fact.id}`}
               />

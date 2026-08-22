@@ -1121,7 +1121,7 @@
   ],
   "recommendationCatalog": {
     "schemaVersion": 1,
-    "runtimeEnabled": false,
+    "runtimeEnabled": true,
     "selection": {
       "category": {
         "min": 1,
