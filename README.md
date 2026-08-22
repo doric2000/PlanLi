@@ -318,6 +318,14 @@ not use auto-submit for the first beta.
 
 The installed `1.1.0` production build can receive compatible EAS Updates. It
 uses the `production` channel and derives runtime `1.1.0` from the app version.
+Until the beta is explicitly closed, the Expo marketing version is locked to
+`1.1.0`; `verify:ios-release` rejects an accidental version change. This lock
+does not apply to the iOS build string: every newly uploaded binary must still
+use a unique, incremented build number, and the production EAS profile keeps
+`autoIncrement: true`. Prefer compatible EAS Updates for JavaScript, styling,
+and bundled assets so the installed `1.1.0` binary can receive beta changes
+without another binary upload. Keeping the marketing version does not guarantee
+that Apple will waive TestFlight review for a later build.
 Test an update on the `preview` channel before publishing the same commit to
 production. Publish only JavaScript, styling, and bundled-asset changes that are
 compatible with the installed native runtime:
@@ -482,6 +490,27 @@ Roll out taxonomy changes in this order: required Firestore indexes, Functions,
 the supported client, and only then the reviewed personalization migration.
 Never run the migration with `--apply` as part of an ordinary client/backend
 deployment.
+
+The recommendation catalog v1 migration moves existing recommendations to the
+short Noya classification flow. It is dry-run by default, accepts only direct
+legacy-tag mappings, refuses every ambiguous classification before any write,
+and writes an ignored rollback checkpoint. A provider result containing only
+broad locality types is migrated to a general destination and its misleading
+map point is removed. Apply is additionally guarded by the production project
+identifier:
+
+```powershell
+cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
+npm.cmd run migrate-recommendation-catalog
+# Only after Functions and the supported 1.1.0 client are released and every row is reviewed:
+npm.cmd run migrate-recommendation-catalog -- --apply --confirm-project=planli-f0b12
+npm.cmd run migrate-recommendation-catalog -- --rollback .recommendation-catalog-v1\<checkpoint>.json --confirm-project=planli-f0b12
+npm.cmd run audit-live
+```
+
+The migration does not alter recommendation timestamps, ownership, media,
+engagement counters, comments, likes, or status. Routes retain taxonomy v5
+until their separate creation flow is redesigned.
 
 Recommendations and routes store server-derived `facets`. Interests are
 derived only from canonical categories and subcategories; they are not a

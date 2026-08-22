@@ -11,6 +11,9 @@ const {
   NEED_IDS,
   PACE_IDS,
   POST_BUDGET_IDS,
+  RECOMMENDATION_CATALOG,
+  RECOMMENDATION_CATEGORIES,
+  RECOMMENDATION_SUBCATEGORIES,
   ROUTE_DIFFICULTY_IDS,
   ROUTE_EXPERIENCE_IDS,
   SEASON_IDS,
@@ -19,10 +22,16 @@ const {
   TRAVELER_STYLE_IDS,
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
-  tagsMatchCategory,
+  isRecommendationClassificationValid,
   taxonomy,
-	recommendationAttributeRequirements,
 } = require('../travelTaxonomy');
+
+const RECOMMENDATION_CATEGORY_BY_ID = Object.freeze(Object.fromEntries(
+  RECOMMENDATION_CATEGORIES.map((item) => [item.id, item])
+));
+const RECOMMENDATION_SUBCATEGORY_BY_ID = Object.freeze(Object.fromEntries(
+  RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item])
+));
 
 const PROJECT_ID = 'planli-f0b12';
 const US_BUCKET = 'planli-f0b12.firebasestorage.app';
@@ -84,8 +93,31 @@ function taxonomyContentErrors(documentPath, data = {}) {
   const active = data.status === 'active';
   if (/^recommendations\/[^/]+$/.test(documentPath) && active) {
     if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
-    if (!CATEGORY_IDS.includes(data.categoryId)) errors.push('category');
-	if (!canonicalArray(data.tags, TAG_IDS, { minimum: 1 }) || !tagsMatchCategory(data.tags, data.categoryId)) errors.push('subcategories');
+    const catalogVersion = Number(data.recommendationCatalogVersion || 0);
+    if (catalogVersion !== Number(RECOMMENDATION_CATALOG.schemaVersion || 0)) {
+      errors.push('recommendation-catalog-version');
+    }
+    const catalogClassificationValid = isRecommendationClassificationValid({
+      categoryId: data.categoryId,
+      subcategoryIds: data.subcategoryIds,
+      customSubcategoryLabel: data.customSubcategoryLabel,
+    });
+    if (!catalogClassificationValid) errors.push('recommendation-classification');
+    if (data.category !== RECOMMENDATION_CATEGORY_BY_ID[data.categoryId]?.label) {
+      errors.push('category-label');
+    }
+	if (!canonicalArray(data.tags || [], TAG_IDS)) errors.push('legacy-tags');
+    const expectedCatalogInterests = [...new Set((data.subcategoryIds || []).flatMap(
+      (subcategoryId) => RECOMMENDATION_SUBCATEGORY_BY_ID[subcategoryId]?.interestIds || []
+    ))];
+    if (!canonicalArray(data.catalogInterestIds, INTEREST_IDS) ||
+        JSON.stringify(data.catalogInterestIds) !== JSON.stringify(expectedCatalogInterests)) {
+      errors.push('catalog-interests');
+    }
+    if (!canonicalArray(data.facets?.catalogInterests, INTEREST_IDS) ||
+        JSON.stringify(data.facets?.catalogInterests) !== JSON.stringify(expectedCatalogInterests)) {
+      errors.push('catalog-interest-facets');
+    }
     if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: 1 })) errors.push('interests');
     if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('audiences');
     if (!canonicalArray(data.facets?.vibes, VIBE_IDS)) errors.push('vibes');
@@ -100,14 +132,18 @@ function taxonomyContentErrors(documentPath, data = {}) {
 	if (data.facets?.seasons.length) errors.push('recommendation-seasons');
 	if (data.facets?.needs.length && data.facets?.needsScope !== 'recommendation') errors.push('needs-scope');
 	if (!data.facets?.needs.length && data.facets?.needsScope) errors.push('empty-needs-scope');
-	const requirements = recommendationAttributeRequirements(data.tags);
-	if (requirements.vibes && !data.facets?.vibes.length) errors.push('required-vibe');
-	if (!requirements.vibes && data.facets?.vibes.length) errors.push('inapplicable-vibe');
-	if (requirements.environment && !data.facets?.environments.length) errors.push('required-environment');
-	if (!requirements.environment && data.facets?.environments.length) errors.push('inapplicable-environment');
-	if (data.facets?.needs.some((needId) => !requirements.needs.includes(needId))) errors.push('inapplicable-need');
 	if (!POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
 	if (data.budget !== data.facets?.budgetLevel) errors.push('budget-facet-mismatch');
+    if (!['exact', 'destination', 'pin'].includes(data.locationMode)) errors.push('location-mode');
+    if (data.locationMode === 'exact' && !data.place?.placeId) errors.push('exact-place');
+    if (data.locationMode === 'destination' && data.place?.placeId) errors.push('general-place-point');
+    if (data.locationMode === 'pin' &&
+        (data.place?.source !== 'manual_pin' || !Number.isFinite(data.place?.coordinates?.lat) ||
+          !Number.isFinite(data.place?.coordinates?.lng))) errors.push('manual-pin');
+    if (!data.details || typeof data.details !== 'object' || Array.isArray(data.details)) errors.push('details');
+    if (data.categoryId === 'events' && !String(data.details?.eventSchedule || '').trim()) {
+      errors.push('event-schedule');
+    }
     if (!canonicalSearchIndex(data.search)) errors.push('search');
   }
   if (/^routes\/[^/]+$/.test(documentPath) && active) {

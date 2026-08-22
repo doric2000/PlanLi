@@ -123,8 +123,8 @@ if (!String(packageJson.dependencies?.['expo-updates'] || '').trim()) {
 if (packageJson.dependencies?.['expo-notifications'] !== '~0.32.17') {
   fail('expo-notifications must stay on the SDK 54 compatible ~0.32.17 release.');
 }
-if (app.version === '1.0.0') {
-  fail('The native push build must use a new appVersion/runtimeVersion (1.1.0 or newer).');
+if (app.version !== '1.1.0') {
+  fail('The beta marketing version and EAS runtime must remain fixed at 1.1.0 until beta exit is approved.');
 }
 if (app.runtimeVersion?.policy !== 'appVersion') {
   fail('The EAS Update runtime version must use the appVersion policy.');
