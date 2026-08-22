@@ -1,7 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { failures, inspectValue } = require('./auditLiveState');
+const { failures, inspectValue, isAllowedRoot } = require('./auditLiveState');
+
+test('live audit recognizes the server-owned global notification device registry', () => {
+  assert.equal(isAllowedRoot('notificationDevices'), true);
+  assert.equal(isAllowedRoot('unexpectedCollection'), false);
+});
 
 test('live audit rejects rating fields at every object depth', () => {
   const report = {

@@ -11,11 +11,13 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Notification-interaction update group
-`12d1a0e1-c5bc-4102-a1b0-1aa29ef81c69` was published for iOS and Android on
-2026-08-22 from commit `af3e108`; delivery and application on the physical
-iPhone remain unverified. The deployed Firebase backend is not evidence of a
-client release.
+runtime `1.1.0`. Recommendation-catalog update group
+`de7985b8-2684-4a7d-80e6-fd3a29fc8c4f` was published for iOS and Android on
+2026-08-22 from merge commit `fb65664`; delivery and application on the physical
+iPhone remain unverified. All 87 Functions were deployed from the same commit,
+and all six existing recommendations were migrated to recommendation catalog
+v1 without conflicts. The deployed Firebase backend is not evidence that the
+OTA update has already been applied on a tester device.
 
 ## Run the client
 
@@ -195,9 +197,9 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- EAS Update: group `12d1a0e1-c5bc-4102-a1b0-1aa29ef81c69`, `production`
-  channel, runtime `1.1.0`, iOS update `01a028f1-71d9-7fa1-ac31-e89eee4290f1`,
-  published from notification-interaction merge `af3e108` on 2026-08-22.
+- EAS Update: group `de7985b8-2684-4a7d-80e6-fd3a29fc8c4f`, `production`
+  channel, runtime `1.1.0`, iOS update `01a029d3-a7a6-7be6-96e0-8a16dc0b3966`,
+  published from recommendation-catalog merge `fb65664` on 2026-08-22.
 - OTA device state: Expo serves the iOS update to matching production requests,
   but download/application on the owner's iPhone has not yet been confirmed.
 - EAS submission ID: not yet recorded.

@@ -43,6 +43,7 @@ const MEDIA_SERVICE_ACCOUNT =
 const ALLOWED_ROOTS = new Set([
   'countries',
   'destinationCatalog',
+  'notificationDevices',
   'publicProfiles',
   'recommendations',
   'routes',
@@ -50,6 +51,10 @@ const ALLOWED_ROOTS = new Set([
   'trips',
   'users',
 ]);
+
+function isAllowedRoot(rootId) {
+  return ALLOWED_ROOTS.has(rootId);
+}
 const FORBIDDEN_FIELDS = new Set([
   'created_at',
   'imageAsset',
@@ -246,7 +251,7 @@ async function auditFirestore(db) {
   const report = {
     roots,
     documentCount: documents.length,
-    unexpectedRoots: roots.filter((root) => !ALLOWED_ROOTS.has(root)),
+    unexpectedRoots: roots.filter((root) => !isAllowedRoot(root)),
     forbiddenFields: [],
     usReferences: [],
     euReferenceCount: 0,
@@ -521,5 +526,6 @@ module.exports = {
   favoriteKeyForPath,
   failures,
   inspectValue,
+  isAllowedRoot,
   taxonomyContentErrors,
 };
