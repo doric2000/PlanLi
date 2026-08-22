@@ -9,10 +9,18 @@ test('live audit accepts canonical active recommendations and rejects client-era
     status: 'active',
 	taxonomyVersion: 5,
     categoryId: 'nature',
+    category: 'טבע ונופים',
+    recommendationCatalogVersion: 1,
+    subcategoryIds: ['beach'],
+    catalogInterestIds: ['nature_scenery', 'beaches_water'],
     tags: ['beach'],
     budget: 'balanced',
+    locationMode: 'exact',
+    place: { placeId: 'place-1' },
+    details: {},
     facets: {
-	  interests: ['nature_scenery', 'beaches_water'], audienceScope: 'all', audiences: [], vibes: ['relaxed'], travelerStyles: [],
+	  interests: ['nature_scenery', 'beaches_water'], catalogInterests: ['nature_scenery', 'beaches_water'],
+      audienceScope: 'all', audiences: [], vibes: ['relaxed'], travelerStyles: [],
 	  needs: [], needsScope: '', budgetLevel: 'balanced', seasons: [], environments: ['outdoor'],
     },
     search: buildSearchIndex({ title: 'חוף', categoryIds: ['nature'], subcategoryIds: ['beach'] }),
@@ -22,6 +30,9 @@ test('live audit accepts canonical active recommendations and rejects client-era
     ...canonical, facets: { ...canonical.facets, budgetLevel: 'comfort' },
   }).includes('budget-facet-mismatch'));
   assert.ok(taxonomyContentErrors('recommendations/r1', { ...canonical, taxonomyVersion: 2 }).includes('taxonomy-version'));
+  assert.ok(taxonomyContentErrors('recommendations/r1', {
+    ...canonical, recommendationCatalogVersion: undefined, subcategoryIds: undefined,
+  }).includes('recommendation-catalog-version'));
 });
 
 test('live audit requires route-only canonical facets and destinations', () => {

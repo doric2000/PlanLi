@@ -25,6 +25,7 @@
     "migrate-database": "node scripts/migrateDatabaseCanonical.js",
     "migrate-personalization": "node scripts/migrateTravelPersonalization.js",
     "migrate-budget-taxonomy": "node scripts/migrateBudgetTaxonomyV5.js",
+    "migrate-recommendation-catalog": "node scripts/migrateRecommendationCatalogV1.js",
     "curate-recommendations": "node scripts/curateRecommendations.js",
     "audit-live": "node scripts/auditLiveState.js",
     "configure-function-iam": "node scripts/configureFunctionServiceAccounts.js",
