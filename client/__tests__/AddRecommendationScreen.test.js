@@ -288,7 +288,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => expect(mockPickImages).toHaveBeenCalled());
     fireEvent.press(getByTestId('recommendation-next'));
 
-    // 4. Optional contact information stays optional and the recommendation publishes.
+    // 4. Price is required, while exact contact details stay optional.
+    fireEvent.press(getByTestId('recommendation-budget-2'));
     fireEvent.press(getByTestId('recommendation-optional-phone'));
     expect(getByTestId('recommendation-optional-input-phone').props.maxLength).toBe(40);
     fireEvent.changeText(getByTestId('recommendation-optional-input-phone'), '+972 50 123 4567');
@@ -313,6 +314,7 @@ describe('AddRecommendationScreen Integration Test', () => {
             subcategoryIds: ['restaurant'],
             recommendationCatalogVersion: 1,
             taxonomyVersion: 5,
+            budget: 'balanced',
             media: [],
             details: { phone: '+972 50 123 4567' },
           }),
@@ -355,6 +357,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.changeText(getByTestId('recommendation-title-input'), 'חוף עירוני נעים');
     fireEvent.changeText(getByTestId('recommendation-description-input'), 'מתאים לעצירה רגועה ליד העיר.');
     fireEvent.press(getByTestId('recommendation-next'));
+    fireEvent.press(getByTestId('recommendation-budget-1'));
     fireEvent.press(getByTestId('recommendation-next'));
 
     await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -364,6 +367,7 @@ describe('AddRecommendationScreen Integration Test', () => {
         recommendation: expect.objectContaining({
           categoryId: 'nature',
           subcategoryIds: ['beach'],
+          budget: 'economy',
         }),
       }),
     })));

@@ -12,6 +12,7 @@ import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import { FormInput } from '../../../components/FormInput';
+import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
 import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
@@ -22,6 +23,7 @@ import {
   RECOMMENDATION_CATALOG,
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
+  POST_BUDGETS,
   TRAVEL_TAXONOMY_VERSION,
   isRecommendationClassificationValid,
   searchRecommendationCatalog,
@@ -125,6 +127,7 @@ function catalogFormComparable({
   customSubcategoryLabel,
   title,
   description,
+  budget,
   details,
   eventSchedule,
   imageUris,
@@ -141,6 +144,7 @@ function catalogFormComparable({
     customSubcategoryLabel: customSubcategoryLabel.trim(),
     title,
     description,
+    budget,
     details: cleanDetails(details),
     eventSchedule: eventSchedule.trim(),
     imageUris: [...(imageUris || [])],
@@ -173,6 +177,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [dismissedSuggestion, setDismissedSuggestion] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [budget, setBudget] = useState('');
   const [details, setDetails] = useState({});
   const [activeOptionalField, setActiveOptionalField] = useState('');
   const [eventSchedule, setEventSchedule] = useState('');
@@ -270,6 +275,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     customSubcategoryLabel,
     title,
     description,
+    budget,
     details,
     eventSchedule,
     imageUris: editableImageUris,
@@ -277,6 +283,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     categoryId,
     customSubcategoryLabel,
     description,
+    budget,
     details,
     editableImageUris,
     eventSchedule,
@@ -289,7 +296,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     title,
   ]);
   const createDirty = Boolean(
-    title.trim() || description.trim() || categoryId || subcategoryIds.length ||
+    title.trim() || description.trim() || budget || categoryId || subcategoryIds.length ||
     selectedCountry?.id || generalDestination?.cityId || editableImageUris.length ||
     locationQuery.trim() || Object.keys(cleanDetails(details)).length || eventSchedule.trim()
   );
@@ -354,6 +361,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setCustomSubcategoryLabel(editItem.customSubcategoryLabel || '');
     setTitle(editItem.title || '');
     setDescription(editItem.description || '');
+    setBudget(editItem.budget || '');
     setDetails(initialDetails);
     setEventSchedule(initialSchedule);
     setEditableImageUris(imageUris);
@@ -374,6 +382,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       customSubcategoryLabel: editItem.customSubcategoryLabel || '',
       title: editItem.title || '',
       description: editItem.description || '',
+      budget: editItem.budget || '',
       details: initialDetails,
       eventSchedule: initialSchedule,
       imageUris,
@@ -408,6 +417,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       setCustomSubcategoryLabel(draft.customSubcategoryLabel || '');
       setTitle(draft.title || '');
       setDescription(draft.description || '');
+      setBudget(draft.budget || '');
       setDetails(draft.details || {});
       setEventSchedule(draft.eventSchedule || '');
       hydrateSelection({
@@ -543,8 +553,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       if (!title.trim()) return 'כדאי להוסיף שם קצר וברור.';
       if (!description.trim()) return 'כדאי לכתוב במשפט או שניים למה ההמלצה שווה.';
     }
-    if (targetStep === 4 && categoryId === 'events' && !eventSchedule.trim()) {
-      return 'באירוע כדאי לציין מתי הוא מתקיים.';
+    if (targetStep === 4) {
+      if (!budget) return 'כדאי לבחור את רמת המחיר.';
+      if (categoryId === 'events' && !eventSchedule.trim()) {
+        return 'באירוע כדאי לציין מתי הוא מתקיים.';
+      }
     }
     return '';
   }, [
@@ -563,6 +576,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     title,
     description,
     eventSchedule,
+    budget,
   ]);
 
   const goNext = () => {
@@ -609,6 +623,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         recommendationCatalogVersion: RECOMMENDATION_CATALOG.schemaVersion,
         title: title.trim(),
         description: description.trim(),
+        budget,
         categoryId,
         subcategoryIds,
         ...(customSubcategoryLabel.trim() ? { customSubcategoryLabel: customSubcategoryLabel.trim() } : {}),
@@ -659,6 +674,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           customSubcategoryLabel,
           title,
           description,
+          budget,
           details,
           eventSchedule,
         },
@@ -909,7 +925,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     const optionalField = OPTIONAL_FIELDS.find((field) => field.id === activeOptionalField);
     return (
       <>
-        <NoyaGuide message="הכול מוכן. יש עוד פרט שימושי? אפשר להוסיף עכשיו או לפרסם כמו שזה." />
+        <NoyaGuide message="כמעט סיימנו. מה רמת המחיר? אחר כך אפשר להוסיף עוד פרט שימושי או לפרסם." />
         <View style={styles.preview}>
           {previewUris[0] ? (
             <Image source={{ uri: previewUris[0] }} style={styles.previewImage} resizeMode="cover" />
@@ -925,6 +941,20 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             </AppText>
           </View>
         </View>
+
+        <RtlChoiceGroup
+          label="רמת מחיר (חובה)"
+          helper="הסכום המדויק יכול להשתנות. כאן מספיק לבחור הערכה כללית."
+          options={POST_BUDGETS}
+          selectedIds={[budget]}
+          selectionMode="single"
+          variant="segment"
+          onToggle={(value) => {
+            setBudget(value);
+            setValidationMessage('');
+          }}
+          testIDPrefix="recommendation-budget"
+        />
 
         {categoryId === 'events' ? (
           <View style={styles.optionalField}>

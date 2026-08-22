@@ -49,7 +49,7 @@ describe('RecommendationMapPreviewCard', () => {
     expect(screen.getByText('אוכל ושתייה')).toBeTruthy();
     expect(screen.getByText('המסעדה של השכונה')).toBeTruthy();
     expect(screen.getByText('שוק לוינסקי, תל אביב, ישראל')).toBeTruthy();
-    expect(screen.getByText('₪₪')).toBeTruthy();
+    expect(screen.getByText('בינוני · ₪₪')).toBeTruthy();
     expect(screen.getByText('17')).toBeTruthy();
     expect(screen.getByTestId('map-preview-image').props.children).toBe('https://example.com/thumb.webp');
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-map-preview-category').props.style).backgroundColor)

@@ -60,12 +60,20 @@ test('catalog recommendations need only a concise classification and keep useful
     description: 'אוכל מצוין ושירות נעים.',
     categoryId: 'food',
     subcategoryIds: ['restaurant'],
+    budget: 'balanced',
   });
 
   assert.equal(content.categoryId, 'food');
   assert.deepEqual(content.subcategoryIds, ['restaurant']);
   assert.deepEqual(content.catalogInterestIds, ['food']);
-  assert.equal(content.budget, '');
+  assert.equal(content.budget, 'balanced');
+  assert.throws(() => sanitizeRecommendationCatalogContent({
+    recommendationCatalogVersion: 1,
+    title: 'מקום ששווה להכיר',
+    description: 'אוכל מצוין ושירות נעים.',
+    categoryId: 'food',
+    subcategoryIds: ['restaurant'],
+  }), /budget/);
   assert.deepEqual(sanitizeRecommendationDetails(undefined, content), {});
   assert.deepEqual(sanitizeRecommendationDetails({
     contactName: 'דנה',
@@ -85,6 +93,7 @@ test('catalog validation keeps Other moderated and requires timing only for even
     description: 'תיאור קצר',
     categoryId: 'nature',
     subcategoryIds: ['nature_other'],
+    budget: 'free',
   }), /classification is invalid/);
 
   const other = sanitizeRecommendationCatalogContent({
@@ -94,6 +103,7 @@ test('catalog validation keeps Other moderated and requires timing only for even
     categoryId: 'nature',
     subcategoryIds: ['nature_other'],
     customSubcategoryLabel: 'קרחון נגיש',
+    budget: 'balanced',
   });
   assert.equal(other.customSubcategoryLabel, 'קרחון נגיש');
 
@@ -103,6 +113,7 @@ test('catalog validation keeps Other moderated and requires timing only for even
     description: 'מוזיקה מקומית ואוכל.',
     categoryId: 'events',
     subcategoryIds: ['music_festival'],
+    budget: 'balanced',
   });
   assert.throws(() => sanitizeRecommendationDetails({}, event), /Event timing is required/);
   assert.deepEqual(sanitizeRecommendationDetails({
@@ -1183,6 +1194,7 @@ test('catalog recommendations support a general destination and a nearby manual 
     description: 'המלצה קצרה בלי שאלון ארוך.',
     categoryId: 'food',
     subcategoryIds: ['cafe'],
+    budget: 'economy',
     details: { phone: '+36 20 123 4567' },
     media: [],
   };

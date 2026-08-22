@@ -29,10 +29,10 @@
   ],
   "budgets": [
     { "id": "free", "label": "חינם", "helper": "ללא תשלום", "postLabel": "חינם", "postApplicable": true },
-    { "id": "economy", "label": "חסכוני", "helper": "₪", "postLabel": "₪", "postApplicable": true },
-    { "id": "balanced", "label": "מאוזן", "helper": "₪₪", "postLabel": "₪₪", "postApplicable": true },
-    { "id": "comfort", "label": "נוח", "helper": "₪₪₪", "postLabel": "₪₪₪", "postApplicable": true },
-    { "id": "premium", "label": "מפנק", "helper": "₪₪₪₪", "postLabel": "₪₪₪₪", "postApplicable": true },
+    { "id": "economy", "label": "חסכוני", "helper": "₪", "postLabel": "חסכוני · ₪", "postApplicable": true },
+    { "id": "balanced", "label": "בינוני", "helper": "₪₪", "postLabel": "בינוני · ₪₪", "postApplicable": true },
+    { "id": "comfort", "label": "יקר", "helper": "₪₪₪", "postLabel": "יקר · ₪₪₪", "postApplicable": true },
+    { "id": "premium", "label": "יוקרתי", "helper": "₪₪₪₪", "postLabel": "יוקרתי · ₪₪₪₪", "postApplicable": true },
     { "id": "flexible", "label": "לא משנה", "helper": "פתוח/ה להצעות", "postApplicable": false }
   ],
   "travelParties": [

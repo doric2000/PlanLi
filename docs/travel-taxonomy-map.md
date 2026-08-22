@@ -343,9 +343,9 @@
 
 - חינם (`free`)
 - חסכוני (`economy`)
-- מאוזן (`balanced`)
-- נוח (`comfort`)
-- מפנק (`premium`)
+- בינוני (`balanced`)
+- יקר (`comfort`)
+- יוקרתי (`premium`)
 - לא משנה (`flexible`)
 
 ## קצב

@@ -87,6 +87,16 @@ export const recommendationComposerStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     ...shadows.small,
   },
+  noyaClose: {
+    position: 'absolute',
+    left: spacing.sm,
+    top: spacing.xs,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noyaCloseText: { color: colors.textMuted, fontSize: 22, lineHeight: 24 },
   noyaName: {
     color: colors.primary,
     fontSize: 12,

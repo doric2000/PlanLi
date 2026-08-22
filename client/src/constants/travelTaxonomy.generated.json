@@ -114,28 +114,28 @@
       "id": "economy",
       "label": "חסכוני",
       "helper": "₪",
-      "postLabel": "₪",
+      "postLabel": "חסכוני · ₪",
       "postApplicable": true
     },
     {
       "id": "balanced",
-      "label": "מאוזן",
+      "label": "בינוני",
       "helper": "₪₪",
-      "postLabel": "₪₪",
+      "postLabel": "בינוני · ₪₪",
       "postApplicable": true
     },
     {
       "id": "comfort",
-      "label": "נוח",
+      "label": "יקר",
       "helper": "₪₪₪",
-      "postLabel": "₪₪₪",
+      "postLabel": "יקר · ₪₪₪",
       "postApplicable": true
     },
     {
       "id": "premium",
-      "label": "מפנק",
+      "label": "יוקרתי",
       "helper": "₪₪₪₪",
-      "postLabel": "₪₪₪₪",
+      "postLabel": "יוקרתי · ₪₪₪₪",
       "postApplicable": true
     },
     {

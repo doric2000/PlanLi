@@ -1,448 +1,164 @@
 import React from 'react';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+
 import AddRoutesScreen from '../src/features/roadtrip/screens/AddRoutesScreen';
-import { ENVIRONMENTS, VIBES } from '../src/constants/travelTaxonomy';
 
-const mockSaveRoute = jest.fn(() => Promise.resolve({ routeId: 'route-1' }));
-
-const mockUploadImageAssets = jest.fn(async () => []);
-const mockRemoveUploadedImage = jest.fn(async () => {});
-
-jest.mock('firebase/firestore', () => ({
-  collection: jest.fn(() => ({ __type: 'collectionRef' })),
-  doc: jest.fn(() => ({ __type: 'docRef' })),
-  addDoc: jest.fn(() => Promise.resolve({ id: 'new-id' })),
-  updateDoc: jest.fn(() => Promise.resolve()),
-  serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
-}));
-
-jest.mock('../src/config/firebase', () => ({
-  db: { __type: 'db' },
-  auth: { currentUser: { uid: 'test-user', emailVerified: true } },
-}));
-
-jest.mock('../src/hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ user: { uid: 'test-user' } }),
-}));
+const mockGetCurrentRouteDraft = jest.fn();
+const mockSaveRouteDraft = jest.fn();
+const mockDiscardRouteDraft = jest.fn();
+const mockPublishRouteDraft = jest.fn();
 
 jest.mock('../src/services/RouteService', () => ({
-  saveRoute: (...args) => mockSaveRoute(...args),
-}));
-
-const mockEnqueueCreate = jest.fn(async () => 'route-job-1');
-const mockLoadJobForReview = jest.fn(async () => null);
-jest.mock('../src/features/publishing/ContentPublishContext', () => ({
-  useContentPublish: () => ({
-    enqueueCreate: mockEnqueueCreate,
-    loadJobForReview: mockLoadJobForReview,
-  }),
-}));
-
-jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
-  useImagePickerWithUpload: () => ({
-    uploadImageAssets: mockUploadImageAssets,
-    removeUploadedImage: mockRemoveUploadedImage,
-  }),
-}));
-jest.mock('../src/hooks/useDurableDraftMedia', () => ({
-  __esModule: true,
-  default: () => ({
-    draftJobId: '123e4567-e89b-42d3-a456-426614174000',
-    forgetUri: jest.fn(async () => {}),
-    markEnqueued: jest.fn(),
-    mediaForUri: (uri) => ({ uri }),
-    persistUris: async (uris) => uris,
-  }),
+  getCurrentRouteDraft: (...args) => mockGetCurrentRouteDraft(...args),
+  saveRouteDraft: (...args) => mockSaveRouteDraft(...args),
+  discardRouteDraft: (...args) => mockDiscardRouteDraft(...args),
+  publishRouteDraft: (...args) => mockPublishRouteDraft(...args),
 }));
 
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
-
+jest.mock('../src/features/community/components/NoyaGuide', () => {
+  const { Text } = require('react-native');
+  return ({ message }) => <Text>{message}</Text>;
+});
+jest.mock('../src/features/community/components/SingleDestinationPicker', () => {
+  const { Pressable, Text, View } = require('react-native');
+  return ({ value, onChange }) => value ? (
+    <View><Text>{value.name}</Text><Pressable testID="destination-clear" onPress={() => onChange(null)}><Text>שינוי</Text></Pressable></View>
+  ) : (
+    <Pressable testID="destination-select" onPress={() => onChange({
+      countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', name: 'בודפשט',
+    })}><Text>בחירת בודפשט</Text></Pressable>
+  );
+});
 jest.mock('../src/features/roadtrip/components/DayEditorModal', () => {
   const { View } = require('react-native');
-  return () => <View testID="day-editor-modal-mock" />;
+  return () => <View testID="day-editor-modal" />;
 });
 
-jest.mock('../src/features/roadtrip/components/DayList', () => {
-  const { View } = require('react-native');
-  return () => <View testID="day-list-mock" />;
+const navigation = () => ({
+  goBack: jest.fn(),
+  navigate: jest.fn(),
+  setOptions: jest.fn(),
+  addListener: jest.fn(() => jest.fn()),
 });
 
-const UNSAVED_TITLE = 'שינויים לא שמורים';
-
-function makeRouteToEdit(overrides = {}) {
-  return {
-    id: 'route-1',
-    title: 'Original route',
-    dayCount: 1,
-    distanceKm: 100,
-    description: 'Route description',
-    days: [
-      {
-        description: '',
-        image: null,
-        stops: [
-          {
-            place: {
-              placeId: 'place-a',
-              geometry: { location: { lat: 32.0, lng: 34.8 } },
-              name: 'Stop A',
-            },
-          },
-        ],
-      },
+const currentDraft = (overrides = {}) => ({
+  id: 'draft-1',
+  version: 2,
+  sourceRouteId: null,
+  area: { countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', cityName: 'בודפשט' },
+  dayCount: 1,
+  title: 'יום בבודפשט',
+  description: 'מסלול קצר',
+  attributes: { audienceScope: 'all', audiences: [], budgetLevel: 'balanced', seasons: [] },
+  categoryIds: [],
+  subcategoryIds: [],
+  transportModes: [],
+  days: [{
+    id: 'day_001',
+    stops: [
+      { id: 'a', title: 'השוק', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' } },
+      { id: 'b', title: 'בית קפה', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' } },
     ],
-    taxonomyVersion: 3,
-    categoryIds: ['nature'],
-    subcategoryIds: ['viewpoint'],
-    facets: {
-      interests: ['nature_scenery'],
-      audiences: ['friends'],
-      budgetLevel: 'balanced',
-      vibes: [],
-      travelerStyles: ['roadtrip'],
-      needs: [],
-	  seasons: ['all_year'],
-      environments: ['outdoor'],
-    },
-    difficulty: 'easy',
-    experienceLevel: 'beginner',
-    transportModes: ['car'],
-    pace: 'balanced',
-    ...overrides,
-  };
-}
+  }],
+  ...overrides,
+});
 
-describe('AddRoutesScreen unsaved guard (edit)', () => {
+describe('streamlined route builder', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
-    mockUploadImageAssets.mockResolvedValue([]);
-    mockRemoveUploadedImage.mockResolvedValue();
+    mockGetCurrentRouteDraft.mockResolvedValue(null);
+    mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 1 });
+    mockDiscardRouteDraft.mockResolvedValue({ discarded: true });
+    mockPublishRouteDraft.mockResolvedValue({ routeId: 'route-1', published: true });
+    jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
   });
 
-  it('guides a new route from basics to the day builder', async () => {
-    const navigationMock = {
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      navigate: jest.fn(),
-      dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    };
-    const { getByTestId, queryByTestId } = render(
-      <AddRoutesScreen navigation={navigationMock} route={{ params: {} }} />
-    );
-
-    expect(queryByTestId('route-section-days-continue')).toBeNull();
-    fireEvent.changeText(getByTestId('route-title-input'), 'מסלול קצר');
-    fireEvent.changeText(getByTestId('route-days-input'), '2');
-    fireEvent.changeText(getByTestId('route-distance-input'), '18');
-    fireEvent.changeText(getByTestId('route-description-input'), 'מסלול נעים ליומיים');
-    fireEvent.press(getByTestId('route-section-basics-continue'));
-
-    await waitFor(() => expect(getByTestId('route-section-days-continue')).toBeTruthy());
+  afterEach(() => {
+    require('react-native').Alert.alert.mockRestore();
   });
 
-  it('closes a reviewed route after durable enqueue without calling the network save', async () => {
-    const source = makeRouteToEdit();
-    mockLoadJobForReview.mockResolvedValueOnce({
-      reviewedDraft: {
-        route: {
-          taxonomyVersion: 5,
-          title: source.title,
-          description: source.description,
-          distanceKm: source.distanceKm,
-          days: source.days,
-          categoryIds: source.categoryIds,
-          subcategoryIds: source.subcategoryIds,
-          attributes: {
-            audienceScope: 'selected',
-            audiences: source.facets.audiences,
-            budgetLevel: source.facets.budgetLevel,
-            vibes: source.facets.vibes,
-            travelerStyles: source.facets.travelerStyles,
-            needs: [],
-            needsCoverageConfirmed: false,
-            seasons: source.facets.seasons,
-            environment: source.facets.environments[0],
-          },
-          difficulty: source.difficulty,
-          experienceLevel: source.experienceLevel,
-          transportModes: source.transportModes,
-          pace: source.pace,
-        },
-      },
-    });
-    const navigationMock = {
-      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    };
-    const { getByTestId } = render(
-      <AddRoutesScreen navigation={navigationMock} route={{ params: { publishJobId: 'route-job-1' } }} />
+  it('opens a server draft from only a destination and day count', async () => {
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(
+      () => expect(screen.getByText('נתחיל בקטן. איפה המסלול וכמה ימים?')).toBeTruthy(),
+      { timeout: 5000 }
     );
-    await waitFor(() => expect(mockLoadJobForReview).toHaveBeenCalledWith('route-job-1'));
-    fireEvent.press(getByTestId('route-submit'));
-    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalled());
-    expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
-      contentType: 'route', sourceJobId: 'route-job-1',
+    fireEvent.press(screen.getByTestId('destination-select'));
+    fireEvent.press(screen.getByTestId('route-start-days-2'));
+    fireEvent.press(screen.getByTestId('route-start-open'));
+    await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draft: expect.objectContaining({ dayCount: 2, title: '2 ימים בבודפשט' }),
+    })));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+  });
+
+  it('offers continue or discard when one private draft already exists', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-discard'));
+    await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
+    expect(screen.getByText('נתחיל בקטן. איפה המסלול וכמה ימים?')).toBeTruthy();
+  });
+
+  it('keeps an existing draft and requires route description, price and useful stops before publish', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({
+      sourceRouteId: 'route-1',
+      description: '',
+      attributes: { audienceScope: 'all', audiences: [], budgetLevel: '', seasons: [] },
+      days: [{ id: 'day_001', stops: [] }],
     }));
-    expect(mockSaveRoute).not.toHaveBeenCalled();
-    expect(navigationMock.goBack).toHaveBeenCalled();
-  });
-
-  it('protects unsaved work when creating a new route', async () => {
-    let beforeRemoveHandler;
-    const navigationMock = {
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      navigate: jest.fn(),
-      dispatch: jest.fn(),
-      addListener: jest.fn((event, handler) => {
-        if (event === 'beforeRemove') beforeRemoveHandler = handler;
-        return jest.fn();
-      }),
-    };
-    const { getByTestId } = render(
-      <AddRoutesScreen navigation={navigationMock} route={{ params: {} }} />
-    );
-
-    fireEvent.changeText(getByTestId('route-title-input'), 'טיוטת מסלול');
-    const preventDefault = jest.fn();
-    await act(async () => {
-      beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
-    });
-
-    expect(preventDefault).toHaveBeenCalled();
-    expect(getByTestId('route-unsaved-discard-modal')).toBeTruthy();
-  });
-
-  it('beforeRemove shows unsaved modal when dirty; כן dispatches action', async () => {
-    let beforeRemoveHandler;
-    const navigationMock = {
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      navigate: jest.fn(),
-      dispatch: jest.fn(),
-      addListener: jest.fn((event, handler) => {
-        if (event === 'beforeRemove') beforeRemoveHandler = handler;
-        return jest.fn();
-      }),
-    };
-
-    const routeToEdit = makeRouteToEdit();
-
-    const { getByTestId, getByText } = render(
-      <AddRoutesScreen
-        navigation={navigationMock}
-        route={{ params: { routeToEdit } }}
-      />
-    );
-
-    await waitFor(() => {
-      expect(getByTestId('route-title-input').props.value).toBe('Original route');
-    });
-
-    fireEvent.changeText(getByTestId('route-title-input'), 'Changed route');
-
-    const preventDefault = jest.fn();
-    const action = { type: 'POP', source: 'test' };
-    await act(async () => {
-      beforeRemoveHandler({ preventDefault, data: { action } });
-    });
-
-    expect(preventDefault).toHaveBeenCalled();
-    await waitFor(() => {
-      expect(getByTestId('route-unsaved-discard-modal')).toBeTruthy();
-    });
-    expect(getByText(UNSAVED_TITLE)).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.press(getByTestId('route-unsaved-discard-confirm'));
-    });
-    expect(navigationMock.dispatch).toHaveBeenCalledWith(action);
-  });
-
-  it('beforeRemove does not prevent when form matches baseline', async () => {
-    let beforeRemoveHandler;
-    const navigationMock = {
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      navigate: jest.fn(),
-      dispatch: jest.fn(),
-      addListener: jest.fn((event, handler) => {
-        if (event === 'beforeRemove') beforeRemoveHandler = handler;
-        return jest.fn();
-      }),
-    };
-
-    const routeToEdit = makeRouteToEdit();
-
-    const { getByTestId } = render(
-      <AddRoutesScreen
-        navigation={navigationMock}
-        route={{ params: { routeToEdit } }}
-      />
-    );
-
-    await waitFor(() => {
-      expect(getByTestId('route-title-input').props.value).toBe('Original route');
-    });
-
-    const preventDefault = jest.fn();
-    beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
-
-    expect(preventDefault).not.toHaveBeenCalled();
-  });
-
-  it('restores and resubmits saved vibe and environment while editing', async () => {
-    const navigationMock = {
-      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    };
-    const routeToEdit = makeRouteToEdit({
-      facets: {
-        ...makeRouteToEdit().facets,
-        vibes: ['relaxed'],
-        environments: ['outdoor'],
-      },
-    });
-    const screen = render(
-      <AddRoutesScreen navigation={navigationMock} route={{ params: { routeToEdit } }} />
-    );
-    await waitFor(() => expect(screen.getByTestId('route-title-input').props.value).toBe('Original route'));
-    fireEvent.press(screen.getByLabelText(/קהל ומאפיינים,/));
-    expect(screen.getByTestId(`route-vibe-${VIBES.findIndex((item) => item.value === 'relaxed')}`).props.accessibilityState.checked).toBe(true);
-    expect(screen.getByTestId(`route-environment-${ENVIRONMENTS.findIndex((item) => item.value === 'outdoor')}`).props.accessibilityState.checked).toBe(true);
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: { id: 'route-1' } } }} />);
+    await waitFor(() => expect(screen.getByTestId('route-submit')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-submit'));
-    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
-    expect(mockSaveRoute.mock.calls[0][0].attributes.vibes).toEqual(['relaxed']);
-    expect(mockSaveRoute.mock.calls[0][0].attributes.environment).toBe('outdoor');
+    await waitFor(() => expect(screen.getByTestId('route-description-input')).toBeTruthy());
+    expect(screen.getByText('כדאי להוסיף תיאור למסלול.')).toBeTruthy();
+    expect(mockPublishRouteDraft).not.toHaveBeenCalled();
   });
 
-  it('leaves failed prepared media for scheduled server cleanup', async () => {
-    const asset = {
-      assetId: '123e4567-e89b-42d3-a456-426614174000',
-      large: {
-        url: 'https://cdn.example/day-large.webp',
-        path: 'media/test-user/a/large.webp',
-      },
-      feed: {
-        url: 'https://cdn.example/day-feed.webp',
-        path: 'media/test-user/a/feed.webp',
-      },
-      thumb: {
-        url: 'https://cdn.example/day-thumb.webp',
-        path: 'media/test-user/a/thumb.webp',
-      },
-    };
-    mockUploadImageAssets.mockResolvedValueOnce([asset]);
-    mockSaveRoute.mockRejectedValueOnce(new Error('write failed'));
-    const navigationMock = {
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      navigate: jest.fn(),
-      dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    };
-    const routeToEdit = makeRouteToEdit({
-      days: [
-        {
-          description: '',
-          image: 'file:///day.jpg',
-          stops: makeRouteToEdit().days[0].stops,
-        },
-      ],
-    });
-    const { getByTestId } = render(
-      <AddRoutesScreen
-        navigation={navigationMock}
-        route={{ params: { routeToEdit } }}
-      />
-    );
-
-    await waitFor(() => {
-      expect(getByTestId('route-title-input').props.value).toBe('Original route');
-    });
-    await act(async () => {
-      fireEvent.press(getByTestId('route-submit'));
-    });
-
-    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
-    expect(mockRemoveUploadedImage).not.toHaveBeenCalled();
-    expect(navigationMock.goBack).not.toHaveBeenCalled();
-  });
-
-  it('shows a localized retry message for Google quota failures without console errors', async () => {
-    const quotaError = Object.assign(
-      new Error('Google request limit reached. Please try again shortly.'),
-      { code: 'functions/resource-exhausted' }
-    );
-    mockSaveRoute.mockRejectedValueOnce(quotaError);
-    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const navigationMock = {
-      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    };
-    const screen = render(
-      <AddRoutesScreen navigation={navigationMock} route={{ params: { routeToEdit: makeRouteToEdit() } }} />
-    );
-
-    await waitFor(() => expect(screen.getByTestId('route-title-input').props.value).toBe('Original route'));
+  it('publishes the exact saved draft version after validation succeeds', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const nav = navigation();
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
     fireEvent.press(screen.getByTestId('route-submit'));
-
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith(
-      'מגבלת חיפוש זמנית',
-      'מגבלת החיפוש הזמנית הושגה. נסו שוב בעוד זמן קצר.'
-    ));
-    expect(consoleErrorSpy).not.toHaveBeenCalled();
-    expect(navigationMock.goBack).not.toHaveBeenCalled();
-
-    alertSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    await waitFor(() => expect(mockPublishRouteDraft).toHaveBeenCalledWith('draft-1', 2));
+    expect(nav.goBack).toHaveBeenCalled();
   });
 
-  it('retains canonical remote media without version fields', async () => {
-    const navigationMock = {
-      goBack: jest.fn(),
-      setOptions: jest.fn(),
-      navigate: jest.fn(),
-      dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
-    };
-    const routeToEdit = makeRouteToEdit({
-      days: [
-        {
-          description: '',
-          image: 'https://cdn.example/day-feed.webp',
-          media: {
-            assetId: '123e4567-e89b-42d3-a456-426614174000',
-            large: { url: 'https://cdn.example/day-large.webp' },
-            feed: { url: 'https://cdn.example/day-feed.webp' },
-            thumb: { url: 'https://cdn.example/day-thumb.webp' },
-          },
-          stops: makeRouteToEdit().days[0].stops,
-        },
-      ],
-    });
-    const { getByTestId } = render(
-      <AddRoutesScreen
-        navigation={navigationMock}
-        route={{ params: { routeToEdit } }}
-      />
-    );
+  it('autosaves changed publication details with optimistic versioning', async () => {
+    jest.useFakeTimers();
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 3 });
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-description-input'), 'תיאור מעודכן');
+    await act(async () => { jest.advanceTimersByTime(1000); await Promise.resolve(); });
+    await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'draft-1', expectedVersion: 2,
+      draft: expect.objectContaining({ description: 'תיאור מעודכן' }),
+    })));
+    jest.useRealTimers();
+  });
 
-    await waitFor(() => {
-      expect(getByTestId('route-title-input').props.value).toBe('Original route');
-    });
-    await act(async () => {
-      fireEvent.press(getByTestId('route-submit'));
-    });
-
-    await waitFor(() => expect(mockSaveRoute).toHaveBeenCalled());
-    expect(mockSaveRoute.mock.calls[0][0].mediaVersion).toBeUndefined();
-    expect(mockSaveRoute.mock.calls[0][0].days[0].media.assetId).toBe(
-      '123e4567-e89b-42d3-a456-426614174000'
-    );
-    expect(mockSaveRoute.mock.calls[0][0].days[0].image).toBeUndefined();
+  it('keeps local changes after an autosave failure and retries successfully', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    mockSaveRouteDraft
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ draftId: 'draft-1', version: 3 });
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-description-input'), 'תיאור שנשאר במסך');
+    await waitFor(() => expect(screen.getByTestId('route-save-retry')).toBeTruthy(), { timeout: 4000 });
+    expect(screen.getByTestId('route-description-input').props.value).toBe('תיאור שנשאר במסך');
+    fireEvent.press(screen.getByTestId('route-save-retry'));
+    await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('נשמר')).toBeTruthy());
   });
 });

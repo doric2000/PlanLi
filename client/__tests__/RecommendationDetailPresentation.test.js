@@ -52,6 +52,12 @@ describe('getRecommendationDetailSections', () => {
 
     expect(result.facts).toEqual([
       {
+        id: 'budget',
+        icon: 'account-balance-wallet',
+        title: 'רמת מחיר',
+        value: 'מחיר לא צוין',
+      },
+      {
         id: 'audiences',
         icon: 'groups',
         title: 'קהל',
@@ -71,12 +77,20 @@ describe('getRecommendationDetailSections', () => {
       details: { phone: '+36 20 123 4567' },
     });
 
-    expect(result.facts).toEqual([{
-      id: 'phone',
-      icon: 'phone',
-      title: 'טלפון',
-      value: '+36 20 123 4567',
-    }]);
+    expect(result.facts).toEqual([
+      {
+        id: 'budget',
+        icon: 'account-balance-wallet',
+        title: 'רמת מחיר',
+        value: 'מחיר לא צוין',
+      },
+      {
+        id: 'phone',
+        icon: 'phone',
+        title: 'טלפון',
+        value: '+36 20 123 4567',
+      },
+    ]);
     expect(result.tags).toEqual(['בית קפה']);
   });
 });
