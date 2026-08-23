@@ -10,6 +10,7 @@ export const recommendationComposerStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.appSurface,
   },
+  keyboardAvoiding: { flex: 1 },
   header: {
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
@@ -409,4 +410,12 @@ export const recommendationComposerStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   backButtonText: { color: colors.primary, fontSize: 14, fontFamily: fontFamilies.medium },
+  keyboardDismissButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
