@@ -15,6 +15,7 @@ const {
   hasHebrewName,
   normalizeDestinationHebrewData,
 } = require('./destinationLocalizationService');
+const { normalizeRouteTime } = require('./routeTime');
 const {
   buildTravelContentFacets,
   CATEGORY_IDS,
@@ -148,8 +149,8 @@ function normalizeLocationPrecision(value, { place, coordinates, destination, st
 }
 
 function cleanOptionalTime(value, field) {
-  const result = cleanOptionalString(value, field, 5);
-  assert(!result || /^([01]\d|2[0-3]):[0-5]\d$/.test(result),
+  const result = normalizeRouteTime(cleanOptionalString(value, field, 5));
+  assert(result !== null,
     'invalid-argument', `${field} is invalid.`);
   return result;
 }
@@ -425,6 +426,9 @@ function sanitizeRouteInput(input) {
         `days[${dayIndex}].stops[${stopIndex}].recommendationId`,
         180
       );
+      const additionalMedia = stop?.additionalMedia == null ? [] : stop.additionalMedia;
+      assert(Array.isArray(additionalMedia) && additionalMedia.length <= 2,
+        'invalid-argument', 'A route stop supports up to three images.');
       return {
         id: cleanDocumentId(stop?.id, `days[${dayIndex}].stops[${stopIndex}].id`, `stop_${String(stopIndex + 1).padStart(3, '0')}`),
         position: stopIndex,
@@ -445,6 +449,7 @@ function sanitizeRouteInput(input) {
         subcategoryIds: [],
         reuseSavedLocation: stop?.reuseSavedLocation === true,
         media: stop?.media || null,
+        additionalMedia,
       };
     });
     return {
@@ -476,6 +481,9 @@ function collectMedia(days) {
     if (day.media?.assetId) unique.set(day.media.assetId, day.media);
     day.stops.forEach((stop) => {
       if (stop.media?.assetId) unique.set(stop.media.assetId, stop.media);
+      (stop.additionalMedia || []).forEach((asset) => {
+        if (asset?.assetId) unique.set(asset.assetId, asset);
+      });
     });
   });
   return Array.from(unique.values());
@@ -489,6 +497,9 @@ function replaceValidatedMedia(days, validated) {
     stops: day.stops.map((stop) => ({
       ...stop,
       media: stop.media?.assetId ? byId.get(stop.media.assetId) || null : null,
+      additionalMedia: (stop.additionalMedia || [])
+        .map((asset) => byId.get(asset?.assetId))
+        .filter(Boolean),
     })),
   }));
 }
@@ -1015,6 +1026,7 @@ async function saveRoute({
         subcategoryIds: stop.subcategoryIds || [],
         travelFromPrevious: stop.travelFromPrevious || null,
         media: stop.media,
+        additionalMedia: stop.additionalMedia || [],
       });
     });
   });

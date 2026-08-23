@@ -29,6 +29,25 @@ function partialDraft(overrides = {}) {
   };
 }
 
+function media(id) {
+  return {
+    assetId: id,
+    large: { path: `media/owner/${id}/large.webp` },
+    feed: { path: `media/owner/${id}/feed.webp` },
+    thumb: { path: `media/owner/${id}/thumb.webp` },
+  };
+}
+
+const MEDIA_IDS = [
+  '123e4567-e89b-42d3-a456-426614174001',
+  '123e4567-e89b-42d3-a456-426614174002',
+  '123e4567-e89b-42d3-a456-426614174003',
+];
+
+function indexedMedia(index) {
+  return media(`123e4567-e89b-42d3-a456-${String(index + 1).padStart(12, '0')}`);
+}
+
 test('route drafts accept the minimal destination and day count without publish fields', () => {
   const draft = sanitizeRouteDraft(partialDraft());
   assert.equal(draft.routeSchemaVersion, 2);
@@ -46,7 +65,8 @@ test('route drafts keep general, pin, recommendation and optional timing fields 
     days: [{ stops: [
       {
         id: 'general', title: 'הרובע היהודי', locationPrecision: 'general',
-        destination: { countryId: 'HU', cityId: 'budapest' }, startTime: '09:30', durationMinutes: 60,
+        destination: { countryId: 'HU', cityId: 'budapest' }, startTime: '8:30', durationMinutes: 60,
+        media: media(MEDIA_IDS[0]), additionalMedia: [media(MEDIA_IDS[1]), media(MEDIA_IDS[2])],
       },
       {
         id: 'pin', title: 'נקודת צילום', locationPrecision: 'pin',
@@ -54,15 +74,38 @@ test('route drafts keep general, pin, recommendation and optional timing fields 
         source: { recommendationId: 'recommendation-1' },
       },
     ] }],
-  }));
-  assert.equal(draft.days[0].stops[0].startTime, '09:30');
+  }), { ownerUid: auth.uid });
+  assert.equal(draft.days[0].stops[0].startTime, '08:30');
   assert.equal(draft.days[0].stops[0].durationMinutes, 60);
+  assert.deepEqual(draft.days[0].stops[0].mediaCleanupKeys, MEDIA_IDS.map((id) => `owner/${id}`));
+  assert.equal(draft.days[0].stops[0].additionalMedia.length, 2);
   assert.equal(draft.days[0].stops[1].locationPrecision, 'pin');
   assert.equal(draft.days[0].stops[1].source.recommendationId, 'recommendation-1');
   assert.throws(() => sanitizeRouteDraft(partialDraft({
     dayCount: 1,
     days: [{ stops: [{ title: 'תחנה', startTime: '28:90' }] }],
   })), /startTime/);
+  assert.throws(() => sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: [{
+      title: 'תחנה', locationPrecision: 'general',
+      destination: { countryId: 'HU', cityId: 'budapest' },
+      additionalMedia: [media('1'), media('2'), media('3')],
+    }] }],
+  })), /three images/);
+  assert.throws(() => sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: Array.from({ length: 14 }, (_, index) => ({
+      title: `תחנה ${index + 1}`,
+      media: indexedMedia(index * 3),
+      additionalMedia: [indexedMedia(index * 3 + 1), indexedMedia(index * 3 + 2)],
+    })) }],
+  }), { ownerUid: auth.uid }), /up to 40 images/);
+  const untrustedDescriptor = sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: [{ title: 'תחנה', media: { assetId: MEDIA_IDS[0] } }] }],
+  }), { ownerUid: auth.uid });
+  assert.deepEqual(untrustedDescriptor.days[0].stops[0].mediaCleanupKeys, []);
 });
 
 test('route drafts keep provider proof private for a destination not yet in the catalog', () => {

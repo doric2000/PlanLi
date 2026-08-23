@@ -1,13 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { Linking, Pressable, View, useWindowDimensions } from 'react-native';
+import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
 import MediaGalleryModal from '../../../components/MediaGalleryModal';
+import OpenWithLocationSheet from '../../../components/OpenWithLocationSheet';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { colors, routeItineraryStyles as styles } from '../../../styles';
-import { buildGoogleMapsPlaceUrl } from '../utils/routeStops';
+import {
+  buildGoogleMapsPlaceUrl,
+  buildWazePlaceUrl,
+  getStopCoordinates,
+  getStopMediaAssets,
+} from '../utils/routeStops';
 
 function galleryForDay(day, dayIndex) {
   const values = [];
@@ -17,12 +23,19 @@ function galleryForDay(day, dayIndex) {
     values.push({ id, url, media, caption });
   };
   add(day?.media, day?.image, `יום ${dayIndex + 1}`, `${day?.id || dayIndex}:cover`);
-  (day?.stops || []).forEach((stop, index) => add(
-    stop?.media,
-    stop?.image,
-    stop?.title || `תחנה ${index + 1}`,
-    stop?.id || `${dayIndex}:${index}`
-  ));
+  (day?.stops || []).forEach((stop, index) => {
+    const assets = getStopMediaAssets(stop);
+    if (!assets.length) {
+      add(null, stop?.image, stop?.title || `תחנה ${index + 1}`, stop?.id || `${dayIndex}:${index}`);
+      return;
+    }
+    assets.forEach((asset, photoIndex) => add(
+      asset,
+      null,
+      stop?.title || `תחנה ${index + 1}`,
+      `${stop?.id || `${dayIndex}:${index}`}:photo:${photoIndex}`
+    ));
+  });
   return values;
 }
 
@@ -30,6 +43,7 @@ export default function RouteItinerary({ days = [] }) {
   const { width } = useWindowDimensions();
   const [expandedDay, setExpandedDay] = useState(days.length ? 0 : null);
   const [gallery, setGallery] = useState({ visible: false, items: [], index: 0 });
+  const [navigationStop, setNavigationStop] = useState(null);
   const twoColumns = width >= 720;
 
   const dayGalleries = useMemo(() => days.map(galleryForDay), [days]);
@@ -43,6 +57,10 @@ export default function RouteItinerary({ days = [] }) {
     <View style={styles.container} testID="route-itinerary">
       {days.map((day, dayIndex) => {
         const stops = Array.isArray(day?.stops) ? day.stops : [];
+        const inferredDaySummary = stops.slice(0, 3)
+          .map((stop) => stop?.title || stop?.place?.name || stop?.location)
+          .filter(Boolean)
+          .join(' · ');
         const isOpen = expandedDay === dayIndex;
         const dayItems = dayGalleries[dayIndex] || [];
         const coverUrl = dayItems[0]?.url || '';
@@ -72,7 +90,7 @@ export default function RouteItinerary({ days = [] }) {
               <View style={styles.dayCopy}>
                 <AppText style={styles.dayTitle}>יום {dayIndex + 1}</AppText>
                 <AppText style={styles.dayDescription} numberOfLines={isOpen ? 3 : 2}>
-                  {day?.description || 'פתחו כדי לצפות בתחנות ובתמונות של היום'}
+                  {day?.description || inferredDaySummary}
                 </AppText>
                 <AppText style={styles.dayMeta}>{stops.length} תחנות</AppText>
               </View>
@@ -84,7 +102,9 @@ export default function RouteItinerary({ days = [] }) {
                 {stops.map((stop, stopIndex) => {
                   const thumb = getMediaVariantUrl(stop?.media, 'thumb', stop?.image);
                   const large = getMediaVariantUrl(stop?.media, 'large', stop?.image);
-                  const mapUrl = buildGoogleMapsPlaceUrl(stop);
+                  const canNavigate = Boolean(
+                    buildGoogleMapsPlaceUrl(stop) || buildWazePlaceUrl(stop)
+                  );
                   return (
                     <View
                       key={stop?.id || `${dayIndex}:${stopIndex}`}
@@ -109,14 +129,14 @@ export default function RouteItinerary({ days = [] }) {
                         <AppText style={styles.stopAddress} numberOfLines={2}>{stop?.place?.address || stop?.location || stop?.place?.name}</AppText>
                       </View>
                       <Pressable
-                        style={[styles.mapButton, !mapUrl && styles.mapButtonDisabled]}
-                        onPress={() => mapUrl && Linking.openURL(mapUrl).catch(() => {})}
-                        disabled={!mapUrl}
+                        style={[styles.mapButton, !canNavigate && styles.mapButtonDisabled]}
+                        onPress={() => canNavigate && setNavigationStop(stop)}
+                        disabled={!canNavigate}
                         accessibilityRole="button"
-                        accessibilityLabel={`פתיחת ${stop?.title || 'התחנה'} בגוגל מפות`}
+                        accessibilityLabel={`אפשרויות ניווט אל ${stop?.title || 'התחנה'}`}
                         testID={`route-stop-map-${dayIndex}-${stopIndex}`}
                       >
-                        <Ionicons name="map-outline" size={19} color={mapUrl ? colors.primary : colors.textMuted} />
+                        <Ionicons name="map-outline" size={19} color={canNavigate ? colors.primary : colors.textMuted} />
                       </Pressable>
                     </View>
                   );
@@ -132,6 +152,17 @@ export default function RouteItinerary({ days = [] }) {
         items={gallery.items}
         initialIndex={gallery.index}
         onClose={() => setGallery((current) => ({ ...current, visible: false }))}
+      />
+      <OpenWithLocationSheet
+        visible={Boolean(navigationStop)}
+        onClose={() => setNavigationStop(null)}
+        place={navigationStop ? {
+          ...(navigationStop.place || {}),
+          name: navigationStop.place?.name || navigationStop.title || navigationStop.location,
+          address: navigationStop.place?.address || navigationStop.location,
+          coordinates: getStopCoordinates(navigationStop),
+        } : null}
+        destination={navigationStop?.destination || null}
       />
     </View>
   );

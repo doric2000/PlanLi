@@ -1,5 +1,6 @@
 import { getPlaceCoordinates } from "../../../utils/distance";
 import { buildGoogleMapsUrl, buildWazeUrl } from "../../../utils/placeNavigation";
+import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 
 const encode = (value) => encodeURIComponent(String(value || "").trim());
 
@@ -15,6 +16,26 @@ export const hasValidStopLocation = (stop) => !!getStopCoordinates(stop);
 
 export const hasRoutableStopLocation = (stop) =>
 	!!stop?.place?.placeId || hasValidStopLocation(stop);
+
+export const getStopMediaAssets = (stop) => {
+	const assets = [stop?.media, ...(Array.isArray(stop?.additionalMedia) ? stop.additionalMedia : [])]
+		.filter((asset) => asset && typeof asset === "object");
+	const seen = new Set();
+	return assets.filter((asset) => {
+		const key = asset.assetId || asset.feed?.url || asset.large?.url;
+		if (!key || seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	}).slice(0, 3);
+};
+
+export const getStopMediaUrls = (stop, variant = "feed") => {
+	const urls = getStopMediaAssets(stop)
+		.map((asset) => getMediaVariantUrl(asset, variant))
+		.filter(Boolean);
+	if (!urls.length && stop?.image) urls.push(stop.image);
+	return Array.from(new Set(urls)).slice(0, 3);
+};
 
 export const flattenRouteStops = (routeOrDays) => {
 	const days = Array.isArray(routeOrDays)

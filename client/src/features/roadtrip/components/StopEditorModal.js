@@ -16,7 +16,8 @@ import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { recommendationComposerStyles as composer, stopEditorModalStyles as styles } from '../../../styles';
 import ManualMapPinPicker from '../../community/components/ManualMapPinPicker';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
-import { getStopCoordinates } from '../utils/routeStops';
+import { getStopCoordinates, getStopMediaAssets } from '../utils/routeStops';
+import { normalizeRouteTimeInput } from '../utils/routeTime';
 
 const createStopId = () => `stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const LOCATION_MODES = { planli: 'planli', exact: 'exact', pin: 'pin', general: 'general' };
@@ -59,8 +60,18 @@ function initialModeFor(stop) {
   return LOCATION_MODES.exact;
 }
 
-function buildStopComparable(value) {
-  return JSON.stringify(value, (key, entry) => key === 'media' ? entry?.assetId || null : entry);
+function buildStopComparable(value) { return JSON.stringify(value); }
+
+function recommendationIdFor(value) {
+  return value?.source?.recommendationId || value?.recommendationId || value?.id || '';
+}
+
+function photoItemsForStop(stop) {
+  const assets = getStopMediaAssets(stop);
+  if (assets.length) {
+    return assets.map((asset) => ({ asset, uri: getMediaVariantUrl(asset, 'feed') })).filter((item) => item.uri);
+  }
+  return stop?.image ? [{ asset: null, uri: stop.image }] : [];
 }
 
 function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
@@ -72,7 +83,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function StopEditorModal({
   visible, onClose, onSave, initialData, dayIndex, stopIndex,
-  onPersistImage, onForgetImage, routeDestination, allowImages = true,
+  onForgetImage, routeDestination, allowImages = true,
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -87,14 +98,14 @@ export default function StopEditorModal({
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [recommendationsError, setRecommendationsError] = useState('');
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
+  const [photoItems, setPhotoItems] = useState([]);
+  const [photosBusy, setPhotosBusy] = useState(false);
   const [stopBaseline, setStopBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
   const pendingDiscardRef = useRef(null);
   const {
-    imageUri: image,
-    setImageUri: setImage,
-    pickOneForReview,
-    clearImage,
+    pickImagesForReview,
+    uploadImageAssets,
     cancelReview,
     completeReview,
     reviewUris,
@@ -107,6 +118,7 @@ export default function StopEditorModal({
   useEffect(() => {
     if (!visible) {
       setStopBaseline(null);
+      setPhotosBusy(false);
       setUnsavedModalVisible(false);
       pendingDiscardRef.current = null;
       return;
@@ -115,7 +127,7 @@ export default function StopEditorModal({
     const nextDestination = normalizedDestination(initialData?.destination || routeDestination);
     const coordinates = getStopCoordinates(initialData);
     const nextPin = coordinates ? { latitude: coordinates.lat, longitude: coordinates.lng } : null;
-    const nextImage = initialData?.image || getMediaVariantUrl(initialData?.media, 'feed') || null;
+    const nextPhotoItems = photoItemsForStop(initialData);
     setTitle(initialData?.title || '');
     setDescription(initialData?.description || '');
     setMode(nextMode);
@@ -125,15 +137,17 @@ export default function StopEditorModal({
     setStartTime(initialData?.startTime || '');
     setDurationMinutes(initialData?.durationMinutes ? String(initialData.durationMinutes) : '');
     setSelectedRecommendation(initialData?.source?.recommendationId ? initialData : null);
-    setImage(nextImage);
+    setPhotoItems(nextPhotoItems);
     setStopBaseline(buildStopComparable({
       title: initialData?.title || '', description: initialData?.description || '', mode: nextMode,
       exactValue: nextMode === LOCATION_MODES.exact ? initialData || null : null,
       destination: nextDestination, pin: nextPin,
-      startTime: initialData?.startTime || '', durationMinutes: initialData?.durationMinutes || '',
-      selectedRecommendationId: initialData?.source?.recommendationId || '', image: nextImage,
+      startTime: initialData?.startTime || '',
+      durationMinutes: initialData?.durationMinutes ? String(initialData.durationMinutes) : '',
+      selectedRecommendationId: initialData?.source?.recommendationId || '',
+      photos: nextPhotoItems.map((item) => item.asset?.assetId || item.uri),
     }));
-  }, [initialData, routeDestination, setImage, visible]);
+  }, [initialData, routeDestination, visible]);
 
   useEffect(() => {
     if (!visible || mode !== LOCATION_MODES.planli || recommendations.length || recommendationsLoading || recommendationsError) return;
@@ -147,10 +161,11 @@ export default function StopEditorModal({
 
   const comparable = useMemo(() => buildStopComparable({
     title, description, mode, exactValue, destination, pin, startTime, durationMinutes,
-    selectedRecommendationId: selectedRecommendation?.id || selectedRecommendation?.source?.recommendationId || '',
-    image,
-  }), [description, destination, durationMinutes, exactValue, image, mode, pin, selectedRecommendation, startTime, title]);
+    selectedRecommendationId: recommendationIdFor(selectedRecommendation),
+    photos: photoItems.map((item) => item.asset?.assetId || item.uri),
+  }), [description, destination, durationMinutes, exactValue, mode, photoItems, pin, selectedRecommendation, startTime, title]);
   const hasUnsavedChanges = stopBaseline != null && comparable !== stopBaseline;
+  const mediaBusy = uploading || photosBusy;
   const dismissUnsavedModal = useCallback(() => {
     setUnsavedModalVisible(false); pendingDiscardRef.current = null;
   }, []);
@@ -159,11 +174,11 @@ export default function StopEditorModal({
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; action?.();
   }, []);
   const tryClose = useCallback(() => {
-    if (uploading) return;
+    if (mediaBusy) return;
     if (!hasUnsavedChanges) { onClose?.(); return; }
     pendingDiscardRef.current = () => onClose?.();
     setUnsavedModalVisible(true);
-  }, [hasUnsavedChanges, onClose, uploading]);
+  }, [hasUnsavedChanges, mediaBusy, onClose]);
 
   const selectRecommendation = (item) => {
     setSelectedRecommendation(item);
@@ -172,6 +187,39 @@ export default function StopEditorModal({
     setDestination(normalizedDestination(item.destination));
     const coordinates = getStopCoordinates(item);
     setPin(coordinates ? { latitude: coordinates.lat, longitude: coordinates.lng } : null);
+  };
+
+  const addPhotos = () => {
+    const remaining = 3 - photoItems.length;
+    if (remaining <= 0) {
+      Alert.alert('אפשר עד שלוש תמונות', 'כדי להוסיף תמונה אחרת, אפשר להסיר קודם אחת מהתמונות.');
+      return;
+    }
+    pickImagesForReview({
+      limit: remaining,
+      onComplete: async (uris) => {
+        setPhotosBusy(true);
+        try {
+          const assets = await uploadImageAssets(uris, { limit: remaining });
+          setPhotoItems((current) => [
+            ...current.filter((item) => item.asset),
+            ...assets.map((asset) => ({ asset, uri: getMediaVariantUrl(asset, 'feed') })),
+          ].filter((item) => item.uri).slice(0, 3));
+        } catch {
+          Alert.alert('לא הצלחנו להוסיף את התמונות', 'התמונות לא נשמרו. אפשר לנסות שוב.');
+        } finally {
+          setPhotosBusy(false);
+        }
+      },
+    });
+  };
+
+  const removePhoto = (index) => {
+    setPhotoItems((current) => {
+      const removed = current[index];
+      if (!removed?.asset) Promise.resolve(onForgetImage?.(removed?.uri)).catch(() => {});
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
   };
 
   const buildLocation = () => {
@@ -242,9 +290,10 @@ export default function StopEditorModal({
   const handleSave = () => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) { Alert.alert('חסר שם לעצירה', 'כדאי להוסיף שם קצר לעצירה.'); return; }
-    if (uploading || locationBusy) { Alert.alert('רק רגע', 'כדאי להשלים את בחירת המיקום לפני השמירה.'); return; }
-    if (startTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) {
-      Alert.alert('שעה לא תקינה', 'אפשר לכתוב שעה בפורמט 09:30.'); return;
+    if (mediaBusy || locationBusy) { Alert.alert('רק רגע', 'כדאי להשלים את בחירת המיקום והתמונות לפני השמירה.'); return; }
+    const normalizedStartTime = normalizeRouteTimeInput(startTime);
+    if (normalizedStartTime === null) {
+      Alert.alert('שעה לא תקינה', 'אפשר לכתוב למשל 8:30 או 09:30.'); return;
     }
     const duration = durationMinutes ? Number(durationMinutes) : null;
     if (duration != null && (!Number.isSafeInteger(duration) || duration < 1 || duration > 1440)) {
@@ -258,17 +307,20 @@ export default function StopEditorModal({
       'categoryId', 'subcategoryIds', 'locationPrecision', 'location', 'country',
       'reuseSavedLocation',
     ].forEach((field) => delete preservedStop[field]);
+    const canonicalMedia = photoItems.map((item) => item.asset).filter(Boolean);
+    const legacyImage = canonicalMedia.length ? null : photoItems[0]?.uri || null;
     const nextStop = {
       ...preservedStop, ...location,
       id: initialData?.id || createStopId(),
       title: trimmedTitle,
       description: description.trim(),
-      startTime,
+      startTime: normalizedStartTime,
       durationMinutes: duration,
-      image: allowImages ? image || null : initialData?.image || null,
-      media: allowImages && image === (initialData?.image || getMediaVariantUrl(initialData?.media, 'feed'))
-        ? initialData?.media || null
-        : initialData?.media || null,
+      image: allowImages ? legacyImage : initialData?.image || null,
+      media: allowImages ? canonicalMedia[0] || null : initialData?.media || null,
+      additionalMedia: allowImages
+        ? canonicalMedia.slice(1, 3)
+        : initialData?.additionalMedia || [],
     };
     onSave?.(nextStop, stopIndex);
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();
@@ -285,9 +337,9 @@ export default function StopEditorModal({
       <View style={styles.container}>
         <UnsavedChangesModal contained visible={unsavedModalVisible} title={UNSAVED_LEAVE_TITLE} message={UNSAVED_LEAVE_MESSAGE} onCancel={dismissUnsavedModal} onConfirm={confirmUnsavedLeave} testID="stop-editor-unsaved-modal" cancelTestID="stop-editor-unsaved-cancel" confirmTestID="stop-editor-unsaved-confirm" />
         <View style={styles.header}>
-          <TouchableOpacity onPress={tryClose} disabled={uploading}><AppText style={styles.headerButton}>ביטול</AppText></TouchableOpacity>
+          <TouchableOpacity onPress={tryClose} disabled={mediaBusy}><AppText style={styles.headerButton}>ביטול</AppText></TouchableOpacity>
           <AppText style={styles.headerTitle}>יום {dayIndex + 1} · עצירה {stopIndex + 1}</AppText>
-          <TouchableOpacity onPress={handleSave} disabled={uploading || locationBusy}><AppText style={[styles.headerButton, styles.headerButtonStrong]}>שמירה</AppText></TouchableOpacity>
+          <TouchableOpacity onPress={handleSave} disabled={mediaBusy || locationBusy}><AppText style={[styles.headerButton, styles.headerButtonStrong]}>שמירה</AppText></TouchableOpacity>
         </View>
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <FocusClearingFormInput label="שם העצירה" placeholder="למשל: השוק המרכזי" value={title} onChangeText={setTitle} rtl testID="route-stop-title-input" />
@@ -317,7 +369,7 @@ export default function StopEditorModal({
           <FocusClearingFormInput label="תיאור העצירה (רשות)" placeholder="למשל: מה כדאי לעשות כאן וכמה זמן להקדיש" value={description} onChangeText={setDescription} multiline style={styles.descriptionInput} rtl />
           <FocusClearingFormInput label="שעת התחלה (רשות)" placeholder="למשל: 09:30" value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" maxLength={5} rtl testID="route-stop-start-time" />
           <FocusClearingFormInput label="משך ביקור בדקות (רשות)" placeholder="למשל: 90" value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/\D/g, ''))} keyboardType="numeric" maxLength={4} rtl testID="route-stop-duration" />
-          {allowImages ? <><AppText style={styles.photoLabel}>תמונה לעצירה</AppText><ImagePickerBox imageUri={image} onPress={() => pickOneForReview(async (uri) => { await onPersistImage?.(uri); await onForgetImage?.(image); setImage(uri); })} onRemove={() => { Promise.resolve(onForgetImage?.(image)).catch(() => {}); clearImage(); }} maxImages={1} placeholderText={uploading ? 'מעלה תמונה...' : 'הוספת תמונה'} style={styles.imagePickerSpacing} loading={uploading} /></> : null}
+          {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map((item) => item.uri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText={mediaBusy ? 'מעלה תמונות...' : 'הוספת עד 3 תמונות'} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
         </ScrollView>
         <ImageCropReviewModal visible={reviewUris.length > 0} uris={reviewUris} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={cancelReview} onComplete={completeReview} />
       </View>

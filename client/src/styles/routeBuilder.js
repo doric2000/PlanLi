@@ -111,6 +111,12 @@ export const routeBuilderStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stopThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    backgroundColor: colors.borderLight,
+  },
   stopNumberText: { color: colors.white, fontFamily: fontFamilies.semiBold },
   stopCopy: { flex: 1, alignItems: 'flex-end' },
   stopTitle: { color: colors.textPrimary, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
