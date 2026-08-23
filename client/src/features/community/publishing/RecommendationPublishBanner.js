@@ -18,9 +18,9 @@ export function publishErrorMessage(job) {
 }
 
 function statusCopy(job, queuedCount) {
-  const noun = job.contentType === 'route' ? 'הטיול' : 'ההמלצה';
+  const noun = job.contentType === 'route' ? 'המסלול' : 'ההמלצה';
   if (job.status === 'success') return job.contentType === 'route'
-    ? 'הטיול פורסם בהצלחה'
+    ? 'המסלול פורסם בהצלחה'
     : 'ההמלצה פורסמה בהצלחה';
   if (job.status === 'failed') return `לא הצלחנו לפרסם את ${noun}`;
   if (job.stage === 'saving') return `שומר את ${noun}…`;
@@ -38,7 +38,7 @@ export default function RecommendationPublishBanner({ onReview }) {
   const progress = Math.round(Math.max(0, Math.min(1, activeJob.progress || 0)) * 100);
   const confirmDiscard = () => Alert.alert(
     'מחיקת הפרסום?',
-    `${activeJob.contentType === 'route' ? 'הטיול' : 'ההמלצה'} והתמונות ששמרנו לפרסום יימחקו מהמכשיר.`,
+    `${activeJob.contentType === 'route' ? 'המסלול' : 'ההמלצה'} והתמונות ששמרנו לפרסום יימחקו מהמכשיר.`,
     [
       { text: 'ביטול', style: 'cancel' },
       { text: 'מחיקה', style: 'destructive', onPress: () => discard(activeJob.id) },

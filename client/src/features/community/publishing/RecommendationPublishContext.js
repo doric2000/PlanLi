@@ -15,7 +15,7 @@ import { TRAVEL_TAXONOMY_VERSION } from '../../../constants/travelTaxonomy';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import { saveRecommendation } from '../../../services/RecommendationService';
-import { saveRoute } from '../../../services/RouteService';
+import { publishRouteDraft, saveRoute, saveRouteDraft } from '../../../services/RouteService';
 import {
   addDiagnosticBreadcrumb,
   captureDiagnosticException,
@@ -556,7 +556,35 @@ export function ContentPublishProvider({ children }) {
           asset: finalMedia[index],
         }));
         const routePayload = applyRoutePublishMedia(current.payload.route, preparedEntries);
-        result = await saveRoute(routePayload, null, current.publishRequestId);
+        if (current.payload?.draftId) {
+          let publishVersion = Number(current.payload.expectedVersion);
+          if (preparedEntries.length && current.payload.routeDraftMediaSaved !== true) {
+            const savedDraft = await saveRouteDraft({
+              draftId: current.payload.draftId,
+              sourceRouteId: current.payload.sourceRouteId || null,
+              expectedVersion: publishVersion,
+              draft: routePayload,
+            });
+            publishVersion = Number(savedDraft.version);
+            await updateJob(jobId, (job) => ({
+              ...job,
+              payload: {
+                ...job.payload,
+                route: routePayload,
+                expectedVersion: publishVersion,
+                routeDraftMediaSaved: true,
+              },
+              updatedAt: Date.now(),
+            }));
+          }
+          result = await publishRouteDraft(current.payload.draftId, publishVersion);
+        } else {
+          result = await saveRoute(
+            routePayload,
+            current.payload?.routeId || null,
+            current.payload?.routeId ? null : current.publishRequestId
+          );
+        }
       } else {
         let savePayload = {
           ...current.payload,

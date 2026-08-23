@@ -33,7 +33,11 @@ export const getStopMediaUrls = (stop, variant = "feed") => {
 	const urls = getStopMediaAssets(stop)
 		.map((asset) => getMediaVariantUrl(asset, variant))
 		.filter(Boolean);
-	if (!urls.length && stop?.image) urls.push(stop.image);
+	(Array.isArray(stop?.pendingMedia) ? stop.pendingMedia : [])
+		.map((entry) => entry?.uri)
+		.filter(Boolean)
+		.forEach((uri) => urls.push(uri));
+	if (stop?.image) urls.push(stop.image);
 	return Array.from(new Set(urls)).slice(0, 3);
 };
 

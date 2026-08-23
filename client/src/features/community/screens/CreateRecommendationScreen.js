@@ -914,6 +914,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           maxImages={5}
           placeholderText="הוספת תמונות"
           imageFit="cover"
+          previewAspectRatio={1}
           testID="recommendation-image-picker"
         />
       </View>

@@ -1,21 +1,45 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
-import AddRoutesScreen from '../src/features/roadtrip/screens/AddRoutesScreen';
+import AddRoutesScreen, {
+  routeFooterInsetsStyle,
+  routeDraftForServer,
+} from '../src/features/roadtrip/screens/AddRoutesScreen';
 
 const mockGetCurrentRouteDraft = jest.fn();
 const mockSaveRouteDraft = jest.fn();
 const mockDiscardRouteDraft = jest.fn();
-const mockPublishRouteDraft = jest.fn();
+const mockEnqueueCreate = jest.fn();
+const mockLoadJobForReview = jest.fn();
 
 jest.mock('../src/services/RouteService', () => ({
   getCurrentRouteDraft: (...args) => mockGetCurrentRouteDraft(...args),
   saveRouteDraft: (...args) => mockSaveRouteDraft(...args),
   discardRouteDraft: (...args) => mockDiscardRouteDraft(...args),
-  publishRouteDraft: (...args) => mockPublishRouteDraft(...args),
+}));
+
+jest.mock('../src/features/publishing/ContentPublishContext', () => ({
+  useContentPublish: () => ({
+    enqueueCreate: mockEnqueueCreate,
+    loadJobForReview: mockLoadJobForReview,
+  }),
+}));
+jest.mock('../src/hooks/useDurableDraftMedia', () => ({
+  __esModule: true,
+  default: () => ({
+    draftJobId: '123e4567-e89b-42d3-a456-426614174099',
+    forgetUri: jest.fn(async () => {}),
+    markEnqueued: jest.fn(),
+    mediaForUri: (uri) => ({ uri }),
+    persistUris: jest.fn(async (uris) => uris),
+  }),
 }));
 
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
+jest.mock('react-native-safe-area-context', () => ({
+  ...jest.requireActual('react-native-safe-area-context'),
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
+}));
 jest.mock('../src/features/community/components/NoyaGuide', () => {
   const { Text } = require('react-native');
   return ({ message }) => <Text>{message}</Text>;
@@ -70,12 +94,42 @@ describe('streamlined route builder', () => {
     mockGetCurrentRouteDraft.mockResolvedValue(null);
     mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 1 });
     mockDiscardRouteDraft.mockResolvedValue({ discarded: true });
-    mockPublishRouteDraft.mockResolvedValue({ routeId: 'route-1', published: true });
+    mockEnqueueCreate.mockResolvedValue('route-job-1');
+    mockLoadJobForReview.mockResolvedValue(null);
     jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => {
     require('react-native').Alert.alert.mockRestore();
+  });
+
+  it('keeps device-only image references out of the server draft', () => {
+    const canonicalMedia = { assetId: 'asset-1', feed: { url: 'https://cdn/feed.webp' } };
+    const serverDraft = routeDraftForServer({
+      title: 'מסלול',
+      days: [{
+        id: 'day_001',
+        image: 'file:///day.jpg',
+        stops: [{
+          id: 'stop-1',
+          image: 'file:///crop.jpg',
+          pendingMedia: [{
+            uri: 'file:///crop.jpg',
+            localReference: { platform: 'native', key: 'file:///private/crop.jpg' },
+          }],
+          media: canonicalMedia,
+        }],
+      }],
+    });
+    expect(serverDraft.days[0]).not.toHaveProperty('image');
+    expect(serverDraft.days[0].stops[0]).not.toHaveProperty('image');
+    expect(serverDraft.days[0].stops[0]).not.toHaveProperty('pendingMedia');
+    expect(serverDraft.days[0].stops[0].media).toBe(canonicalMedia);
+  });
+
+  it('keeps the publication action above the iPhone home indicator', () => {
+    expect(routeFooterInsetsStyle(34)).toEqual({ paddingBottom: 34 });
+    expect(routeFooterInsetsStyle(0)).toEqual({ paddingBottom: 14 });
   });
 
   it('opens a server draft from only a destination and day count', async () => {
@@ -116,18 +170,45 @@ describe('streamlined route builder', () => {
     fireEvent.press(screen.getByTestId('route-submit'));
     await waitFor(() => expect(screen.getByTestId('route-description-input')).toBeTruthy());
     expect(screen.getByText('כדאי להוסיף תיאור למסלול.')).toBeTruthy();
-    expect(mockPublishRouteDraft).not.toHaveBeenCalled();
+    expect(mockEnqueueCreate).not.toHaveBeenCalled();
   });
 
-  it('publishes the exact saved draft version after validation succeeds', async () => {
+  it('durably queues the exact saved draft version and leaves while publication continues', async () => {
     mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
     const nav = navigation();
     const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     fireEvent.press(screen.getByTestId('route-submit'));
-    await waitFor(() => expect(mockPublishRouteDraft).toHaveBeenCalledWith('draft-1', 2));
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      contentType: 'route',
+      payload: expect.objectContaining({ draftId: 'draft-1', expectedVersion: 2 }),
+    })));
     expect(nav.goBack).toHaveBeenCalled();
+  });
+
+  it('restores a failed background publication with its local image preview for editing', async () => {
+    mockLoadJobForReview.mockResolvedValue({
+      contentType: 'route',
+      payload: { draftId: 'draft-1', expectedVersion: 3 },
+      reviewedDraft: {
+        route: currentDraft({
+          days: [{
+            id: 'day_001',
+            stops: [
+              { id: 'a', title: 'השוק', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' }, pendingMedia: [{ uri: 'file:///crop.jpg' }], image: 'file:///crop.jpg' },
+              { id: 'b', title: 'בית קפה', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' } },
+            ],
+          }],
+        }),
+      },
+    });
+    const screen = render(
+      <AddRoutesScreen navigation={navigation()} route={{ params: { publishJobId: 'route-job-1' } }} />
+    );
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    expect(mockLoadJobForReview).toHaveBeenCalledWith('route-job-1');
+    expect(mockGetCurrentRouteDraft).not.toHaveBeenCalled();
   });
 
   it('autosaves changed publication details with optimistic versioning', async () => {

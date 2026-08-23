@@ -44,7 +44,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 }
 
 export default function DayEditorModal({
-	visible, onClose, onSave, initialData, dayIndex, onForgetImage,
+	visible, onClose, onSave, initialData, dayIndex, onForgetImage, onPersistImages, mediaForImage,
 	routeDestination, allowStopImages = true,
 }) {
 	const [description, setDescription] = useState("");
@@ -275,6 +275,8 @@ export default function DayEditorModal({
 					dayIndex={dayIndex}
 					stopIndex={editingStopIndex !== null ? editingStopIndex : stops.length}
 					onForgetImage={onForgetImage}
+					onPersistImages={onPersistImages}
+					mediaForImage={mediaForImage}
 					routeDestination={routeDestination}
 					allowImages={allowStopImages}
 				/>

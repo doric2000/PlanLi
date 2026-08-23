@@ -1,28 +1,51 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
 import { FormInput } from '../../../components/FormInput';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
 import { useBackButton } from '../../../hooks/useBackButton';
+import useDurableDraftMedia from '../../../hooks/useDurableDraftMedia';
 import {
   PACES, POST_BUDGETS, ROUTE_DIFFICULTIES, SEASONS, TRANSPORT_MODES,
+  TRAVEL_TAXONOMY_VERSION,
 } from '../../../constants/travelTaxonomy';
 import {
-  discardRouteDraft, getCurrentRouteDraft, publishRouteDraft, saveRouteDraft,
+  discardRouteDraft, getCurrentRouteDraft, saveRouteDraft,
 } from '../../../services/RouteService';
 import { colors, routeBuilderStyles as styles } from '../../../styles';
 import NoyaGuide from '../../community/components/NoyaGuide';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
+import { useContentPublish } from '../../publishing/ContentPublishContext';
 import DayEditorModal from '../components/DayEditorModal';
+import { extractRoutePublishMedia } from '../utils/routeMedia';
 import { flattenRouteStops, getStopMediaUrls } from '../utils/routeStops';
 
 const SAVE_DELAY_MS = 900;
+export const routeFooterInsetsStyle = (bottomInset) => ({
+  paddingBottom: Math.max(14, Number(bottomInset) || 0),
+});
 const emptyDays = (count) => Array.from({ length: count }, (_, index) => ({
   id: `day_${String(index + 1).padStart(3, '0')}`, description: '', media: null, stops: [],
 }));
+
+export const routeDraftForServer = (draft) => ({
+  ...(draft || {}),
+  days: (Array.isArray(draft?.days) ? draft.days : []).map((day) => {
+    const serverDay = { ...(day || {}) };
+    delete serverDay.image;
+    serverDay.stops = (Array.isArray(day?.stops) ? day.stops : []).map((stop) => {
+      const serverStop = { ...(stop || {}) };
+      delete serverStop.image;
+      delete serverStop.pendingMedia;
+      return serverStop;
+    });
+    return serverDay;
+  }),
+});
 
 const destinationFromRoute = (route) => {
   const destination = route?.destinations?.[0] || route?.days?.flatMap((day) => day?.stops || [])
@@ -90,8 +113,18 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 }
 
 export default function AddRoutesScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const routeToEdit = route?.params?.routeToEdit || null;
   const sourceRouteId = routeToEdit?.id || routeToEdit?.routeId || null;
+  const publishJobId = route?.params?.publishJobId || null;
+  const { enqueueCreate, loadJobForReview } = useContentPublish();
+  const {
+    draftJobId,
+    forgetUri: forgetDurableImage,
+    markEnqueued: markDurableImagesEnqueued,
+    mediaForUri: durableMediaForUri,
+    persistUris: persistDurableImages,
+  } = useDurableDraftMedia();
   const [mode, setMode] = useState('loading');
   const [existingDraft, setExistingDraft] = useState(null);
   const [startArea, setStartArea] = useState(null);
@@ -172,7 +205,22 @@ export default function AddRoutesScreen({ navigation, route }) {
   useEffect(() => {
     mountedRef.current = true;
     let active = true;
-    getCurrentRouteDraft().then(async (current) => {
+    const openInitialState = async () => {
+      if (publishJobId && typeof loadJobForReview === 'function') {
+        const job = await loadJobForReview(publishJobId);
+        if (job?.contentType === 'route' && job?.reviewedDraft?.route && job?.payload?.draftId) {
+          const restored = {
+            ...job.reviewedDraft.route,
+            id: job.payload.draftId,
+            version: job.payload.expectedVersion,
+            sourceRouteId: job.payload.sourceRouteId || null,
+          };
+          const normalized = hydrateDraft(restored);
+          lastSavedComparableRef.current = JSON.stringify(normalized);
+          return;
+        }
+      }
+      const current = await getCurrentRouteDraft();
       if (!active) return;
       if (current) {
         if (sourceRouteId && current.sourceRouteId === sourceRouteId) {
@@ -184,7 +232,8 @@ export default function AddRoutesScreen({ navigation, route }) {
         }
       } else if (sourceRouteId) await createEditDraft();
       else setMode('start');
-    }).catch((error) => {
+    };
+    openInitialState().catch((error) => {
       console.error('route_draft_load_failed', { code: error?.code || 'unknown' });
       if (active) {
         setStartError('לא הצלחנו לבדוק אם קיים מסלול בתהליך. אפשר לנסות שוב.');
@@ -192,7 +241,7 @@ export default function AddRoutesScreen({ navigation, route }) {
       }
     });
     return () => { active = false; mountedRef.current = false; };
-  }, [createEditDraft, hydrateDraft, sourceRouteId]);
+  }, [createEditDraft, hydrateDraft, loadJobForReview, publishJobId, sourceRouteId]);
 
   const draftPayload = useMemo(() => ({
     area, dayCount: days.length, title, description, categoryIds, subcategoryIds,
@@ -211,13 +260,17 @@ export default function AddRoutesScreen({ navigation, route }) {
           draftId: draftIdRef.current,
           sourceRouteId: sourceRouteIdRef.current,
           expectedVersion: versionRef.current,
-          draft: snapshot,
+          draft: routeDraftForServer(snapshot),
         });
         versionRef.current = saved.version;
         lastSavedComparableRef.current = comparable;
         if (mountedRef.current) setSaveStatus('saved');
         return saved.version;
       } catch (error) {
+        console.error('route_draft_save_failed', {
+          code: String(error?.code || 'unknown'),
+          reason: String(error?.details?.reason || 'unknown'),
+        });
         if (mountedRef.current) {
           setSaveStatus('error');
           setSaveError(error?.details?.reason === 'ROUTE_DRAFT_VERSION_CONFLICT'
@@ -302,11 +355,28 @@ export default function AddRoutesScreen({ navigation, route }) {
     setPublishBusy(true);
     try {
       const version = await persistSnapshot(draftPayload, draftComparable);
-      await publishRouteDraft(draftIdRef.current, version);
-      Alert.alert(
-        isEditingRoute ? 'השינויים נשמרו' : 'המסלול פורסם',
-        isEditingRoute ? 'המסלול המעודכן זמין עכשיו ב־PlanLi.' : 'המסלול זמין עכשיו ב־PlanLi.'
-      );
+      if (typeof enqueueCreate !== 'function') throw new Error('Route publishing is unavailable.');
+      const extracted = extractRoutePublishMedia(draftPayload.days);
+      const queuedRoute = {
+        ...draftPayload,
+        routeSchemaVersion: 2,
+        taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
+        days: extracted.days,
+      };
+      await enqueueCreate({
+        contentType: 'route',
+        draftJobId: publishJobId ? null : draftJobId,
+        sourceJobId: publishJobId,
+        payload: {
+          route: queuedRoute,
+          draftId: draftIdRef.current,
+          expectedVersion: version,
+          ...(sourceRouteIdRef.current ? { sourceRouteId: sourceRouteIdRef.current } : {}),
+        },
+        media: extracted.media,
+        draft: { route: draftPayload },
+      });
+      markDurableImagesEnqueued(extracted.media.map((entry) => entry.uri));
       navigation.goBack();
     } catch (error) {
       Alert.alert(
@@ -393,8 +463,8 @@ export default function AddRoutesScreen({ navigation, route }) {
           {saveError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{saveError}</AppText></View> : null}
         </View> : null}
       </ScrollView>
-      <View style={styles.footer}><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
-      <DayEditorModal visible={dayEditorVisible} onClose={() => setDayEditorVisible(false)} onSave={saveDay} initialData={activeDay} dayIndex={activeDayIndex} routeDestination={area} allowStopImages />
+      <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer"><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
+      <DayEditorModal visible={dayEditorVisible} onClose={() => setDayEditorVisible(false)} onSave={saveDay} initialData={activeDay} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
     </View>
   );
 }

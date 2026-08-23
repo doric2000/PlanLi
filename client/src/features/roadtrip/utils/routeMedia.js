@@ -35,20 +35,29 @@ export function extractRoutePublishMedia(tripDays) {
       day.media = null;
     }
     day.stops.forEach((stop, stopIndex) => {
-      if (isLocalImageUri(stop.image)) {
+      const canonicalCount = [
+        stop.media,
+        ...(Array.isArray(stop.additionalMedia) ? stop.additionalMedia : []),
+      ].filter(Boolean).length;
+      const pendingMedia = Array.isArray(stop.pendingMedia) && stop.pendingMedia.length
+        ? stop.pendingMedia.filter((entry) => isLocalImageUri(entry?.uri))
+        : isLocalImageUri(stop.image) ? [{ uri: stop.image }] : [];
+      pendingMedia.forEach((pending, pendingIndex) => {
         media.push({
-          uri: stop.image,
+          ...pending,
+          uri: pending.uri,
           slot: {
             type: 'route-stop',
             dayIndex,
             stopIndex,
             dayDraftId: day.draftId || day.id || null,
             draftId: stop.draftId || stop.id || null,
+            mediaIndex: canonicalCount + pendingIndex,
           },
         });
-        delete stop.image;
-        stop.media = null;
-      }
+      });
+      delete stop.image;
+      delete stop.pendingMedia;
     });
   });
   return { days, media };
@@ -72,7 +81,30 @@ export function applyRoutePublishMedia(route, mediaEntries, { preview = false } 
   for (const entry of mediaEntries || []) {
     const target = targetForSlot(nextRoute.days, entry.slot);
     if (!target) throw new Error('A queued route image no longer matches its day or stop.');
-    if (preview) {
+    if (entry.slot?.type === 'route-stop' && preview) {
+      const pending = Array.isArray(target.pendingMedia) ? [...target.pendingMedia] : [];
+      const pendingIndex = Math.max(0, Number(entry.slot.mediaIndex || 0) -
+        [target.media, ...(target.additionalMedia || [])].filter(Boolean).length);
+      pending[pendingIndex] = {
+        uri: entry.uri,
+        ...(entry.mediaId ? { mediaId: entry.mediaId } : {}),
+        ...(entry.localReference ? { localReference: entry.localReference } : {}),
+      };
+      target.pendingMedia = pending.filter(Boolean).slice(0, 3);
+      target.image = target.pendingMedia[0]?.uri || target.image;
+    } else if (entry.slot?.type === 'route-stop') {
+      const asset = entry.asset || entry.preparedAsset;
+      if (!asset) throw new Error('A queued route image was not prepared.');
+      const assets = [target.media, ...(Array.isArray(target.additionalMedia)
+        ? target.additionalMedia
+        : [])].filter(Boolean);
+      const mediaIndex = Math.max(0, Number(entry.slot.mediaIndex || assets.length));
+      assets[mediaIndex] = asset;
+      delete target.image;
+      delete target.pendingMedia;
+      target.media = assets[0] || null;
+      target.additionalMedia = assets.slice(1, 3);
+    } else if (preview) {
       target.image = entry.uri;
       target.media = entry.asset || entry.preparedAsset || target.media || null;
     } else {

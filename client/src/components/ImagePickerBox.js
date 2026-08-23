@@ -7,6 +7,12 @@ import CachedImage from './CachedImage';
 import RtlPagedFlatList from './RtlPagedFlatList';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 
+export const imagePickerFrameStyle = ({ height = 200, previewAspectRatio } = {}) => (
+  Number(previewAspectRatio) > 0
+    ? { height: undefined, aspectRatio: Number(previewAspectRatio) }
+    : { height }
+);
+
 /**
  * Reusable image picker box component.
  * - Empty: shows placeholder, press to pick.
@@ -23,6 +29,7 @@ export const ImagePickerBox = ({
   iconSize = 40,
   iconColor = colors.primary,
   height = 200,
+  previewAspectRatio,
   style,
   imageStyle,
   imageFit = 'cover',
@@ -55,6 +62,7 @@ export const ImagePickerBox = ({
 
   const pageWidth = containerWidth || windowWidth || 0;
   const canSwipe = count > 1;
+  const frameStyle = imagePickerFrameStyle({ height, previewAspectRatio });
 
   const scrollToIndex = (nextIndex) => {
     if (!count) return;
@@ -69,7 +77,7 @@ export const ImagePickerBox = ({
 
   return (
     <View
-      style={[styles.container, { height }, style]}
+      style={[styles.container, frameStyle, style]}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
     >
       {loading ? (

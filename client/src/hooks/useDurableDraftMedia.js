@@ -43,7 +43,15 @@ export default function useDurableDraftMedia({ enabled = true } = {}) {
     return durable ? { uri, ...durable } : { uri };
   }, []);
 
-  const markEnqueued = useCallback(() => {
+  const markEnqueued = useCallback((usedUris = null) => {
+    if (Array.isArray(usedUris)) {
+      const used = new Set(usedUris.filter(Boolean));
+      referencesByUriRef.current.forEach((durable, uri) => {
+        if (used.has(uri)) return;
+        referencesByUriRef.current.delete(uri);
+        deleteContentPublishMedia(durable.localReference).catch(() => {});
+      });
+    }
     committedRef.current = true;
     referencesByUriRef.current.clear();
   }, []);

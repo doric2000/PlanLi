@@ -20,6 +20,8 @@ const mockUser = { uid: 'owner-1' };
 const mockUploadImageAsset = jest.fn();
 const mockSaveRecommendation = jest.fn();
 const mockSaveRoute = jest.fn();
+const mockSaveRouteDraft = jest.fn();
+const mockPublishRouteDraft = jest.fn();
 const mockLoadJobs = jest.fn();
 const mockSaveJobs = jest.fn();
 const mockPersistMedia = jest.fn();
@@ -40,6 +42,8 @@ jest.mock('../src/services/RecommendationService', () => ({
 }));
 jest.mock('../src/services/RouteService', () => ({
   saveRoute: (...args) => mockSaveRoute(...args),
+  saveRouteDraft: (...args) => mockSaveRouteDraft(...args),
+  publishRouteDraft: (...args) => mockPublishRouteDraft(...args),
 }));
 jest.mock('../src/services/ErrorReporting', () => ({
   addDiagnosticBreadcrumb: (...args) => mockAddDiagnosticBreadcrumb(...args),
@@ -79,6 +83,8 @@ describe('RecommendationPublishProvider', () => {
     });
     mockDeleteJobMedia.mockResolvedValue(undefined);
     mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
+    mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 4 });
+    mockPublishRouteDraft.mockResolvedValue({ routeId: 'route-1', published: true });
   });
 
   it('durably enqueues before the unresolved network save and completes in the background', async () => {
@@ -138,6 +144,78 @@ describe('RecommendationPublishProvider', () => {
     expect(routeId).toBeNull();
     expect(publishRequestId).toMatch(/^[0-9a-f-]{36}$/i);
     await waitFor(() => expect(api.completedVersionByType.route).toBe(1));
+    screen.unmount();
+  });
+
+  it('uploads route draft media in the background before publishing the new draft revision', async () => {
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        contentType: 'route',
+        payload: {
+          draftId: 'draft-1',
+          expectedVersion: 3,
+          route: {
+            title: 'Queued route',
+            days: [{ draftId: 'day-1', stops: [{ draftId: 'stop-1' }] }],
+          },
+        },
+        draft: { route: { title: 'Queued route' } },
+        media: [{
+          uri: 'file:///stop.jpg',
+          slot: {
+            type: 'route-stop', dayIndex: 0, stopIndex: 0,
+            dayDraftId: 'day-1', draftId: 'stop-1', mediaIndex: 0,
+          },
+        }],
+      });
+    });
+    await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'draft-1',
+      expectedVersion: 3,
+      draft: expect.objectContaining({
+        days: [expect.objectContaining({
+          stops: [expect.objectContaining({ media: expect.objectContaining({ assetId: expect.any(String) }) })],
+        })],
+      }),
+    })));
+    await waitFor(() => expect(mockPublishRouteDraft).toHaveBeenCalledWith('draft-1', 4));
+    expect(mockSaveRoute).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('retries a route draft publication without uploading or saving its media revision twice', async () => {
+    mockPublishRouteDraft
+      .mockRejectedValueOnce({ code: 'functions/invalid-argument', message: 'Could not publish route.' })
+      .mockResolvedValueOnce({ routeId: 'route-1', published: true });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        contentType: 'route',
+        payload: {
+          draftId: 'draft-1', expectedVersion: 3,
+          route: { title: 'Queued route', days: [{ draftId: 'day-1', stops: [] }] },
+        },
+        draft: { route: { title: 'Queued route' } },
+        media: [{
+          uri: 'file:///day.jpg',
+          slot: { type: 'route-day', dayIndex: 0, draftId: 'day-1' },
+        }],
+      });
+    });
+    await waitFor(() => expect(api.activeJob.status).toBe('failed'));
+    const jobId = api.activeJob.id;
+    await act(async () => { await api.retry(jobId); });
+    await waitFor(() => expect(api.activeJob.status).toBe('success'));
+    expect(mockUploadImageAsset).toHaveBeenCalledTimes(1);
+    expect(mockSaveRouteDraft).toHaveBeenCalledTimes(1);
+    expect(mockPublishRouteDraft).toHaveBeenCalledTimes(2);
     screen.unmount();
   });
 

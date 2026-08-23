@@ -468,10 +468,25 @@ export const imageCropReviewStyles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.12)',
   },
   headerAction: {
-    width: 64,
+    minWidth: 72,
     minHeight: 44,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerActionSecondary: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.48)',
+  },
+  headerActionPrimary: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  headerActionDisabled: {
+    opacity: 0.45,
   },
   headerCopy: {
     flex: 1,
@@ -497,7 +512,7 @@ export const imageCropReviewStyles = StyleSheet.create({
     fontFamily: fontFamilies.medium,
   },
   confirmText: {
-    color: colors.primary,
+    color: '#1E3A5F',
     fontSize: 14,
     fontFamily: fontFamilies.semiBold,
   },
@@ -517,6 +532,11 @@ export const imageCropReviewStyles = StyleSheet.create({
     backgroundColor: '#000000',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.28)',
+  },
+  gestureSurface: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
   },
   imageWrap: {
     position: 'absolute',
