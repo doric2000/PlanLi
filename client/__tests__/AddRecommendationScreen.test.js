@@ -194,30 +194,35 @@ jest.mock('../src/components/GooglePlacesInput', () => {
   );
 });
 
+const mockSingleDestinationPickerProps = jest.fn();
 jest.mock('../src/features/community/components/SingleDestinationPicker', () => {
   const { Button } = require('react-native');
-  return ({ value, onChange }) => value ? (
-    <Button
-      title="Selected destination"
-      testID="recommendation-destination-selected"
-      onPress={() => onChange(null)}
-    />
-  ) : (
-    <Button
-      title="Select general destination"
-      testID="recommendation-test-select-destination"
-      onPress={() => onChange({
-        key: 'city:HU:budapest',
-        kind: 'city',
-        countryId: 'HU',
-        cityId: 'budapest',
-        countryName: 'הונגריה',
-        name: 'בודפשט',
-        label: 'בודפשט · הונגריה',
-        coordinates: { lat: 47.4979, lng: 19.0402 },
-      })}
-    />
-  );
+  return (props) => {
+    mockSingleDestinationPickerProps(props);
+    const { value, onChange } = props;
+    return value ? (
+      <Button
+        title="Selected destination"
+        testID="recommendation-destination-selected"
+        onPress={() => onChange(null)}
+      />
+    ) : (
+      <Button
+        title="Select general destination"
+        testID="recommendation-test-select-destination"
+        onPress={() => onChange({
+          key: 'city:HU:budapest',
+          kind: 'city',
+          countryId: 'HU',
+          cityId: 'budapest',
+          countryName: 'הונגריה',
+          name: 'בודפשט',
+          label: 'בודפשט · הונגריה',
+          coordinates: { lat: 47.4979, lng: 19.0402 },
+        })}
+      />
+    );
+  };
 });
 
 // F. Mock Back Button Hook
@@ -596,6 +601,23 @@ describe('AddRecommendationScreen Integration Test', () => {
     })));
     expect(mockResolveDestinationForPlacePreview).not.toHaveBeenCalled();
     expect(navigationMock.goBack).toHaveBeenCalled();
+  });
+
+  it('allows provider destinations when choosing a city or region', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitForCatalogEditor(screen);
+    fireEvent.press(screen.getByTestId('recommendation-location-mode-destination'));
+
+    expect(mockSingleDestinationPickerProps).toHaveBeenCalledWith(expect.objectContaining({
+      allowProviderDestinations: true,
+    }));
   });
 
   it('edits a catalog recommendation in the concise flow without losing its classification', async () => {
