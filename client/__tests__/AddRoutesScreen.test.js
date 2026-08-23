@@ -78,14 +78,27 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
 });
 jest.mock('../src/features/roadtrip/components/DayEditorModal', () => {
   const { View } = require('react-native');
-  return ({ visible, initialInsertIndex, initialEditIndex }) => (
+  return ({ visible, initialInsertIndex }) => (
     <View
       testID="day-editor-modal"
-      accessibilityLabel={visible
-        ? `insert-${initialInsertIndex};edit-${initialEditIndex}`
-        : 'closed'}
+      accessibilityLabel={visible ? `insert-${initialInsertIndex}` : 'closed'}
     />
   );
+});
+jest.mock('../src/features/roadtrip/components/StopEditorModal', () => {
+  const { Pressable, Text, View } = require('react-native');
+  return ({ visible, initialData, dayIndex, stopIndex, onSave, onClose }) => visible ? (
+    <View
+      testID="direct-stop-editor"
+      accessibilityLabel={`stop-${dayIndex}-${stopIndex}-${initialData?.id || 'null'}`}
+    >
+      <Text>{initialData?.title || 'missing stop'}</Text>
+      <Pressable testID="direct-stop-save" onPress={() => {
+        onSave?.({ ...initialData, title: 'עצירה מעודכנת' }, stopIndex);
+        onClose?.();
+      }}><Text>שמירת עצירה ישירה</Text></Pressable>
+    </View>
+  ) : <View testID="direct-stop-editor-closed" />;
 });
 
 const navigation = () => ({
@@ -175,16 +188,20 @@ describe('streamlined route builder', () => {
     expect(screen.getByTestId('route-stop-drag-handle-0')).toBeTruthy();
     expect(screen.getByTestId('route-stop-drag-handle-1')).toBeTruthy();
     fireEvent.press(screen.getByTestId('route-insert-stop-1'));
-    expect(screen.getByLabelText('insert-1;edit-null')).toBeTruthy();
+    expect(screen.getByLabelText('insert-1')).toBeTruthy();
   });
 
-  it('opens the selected stop editor directly from the route builder', async () => {
+  it('opens and saves the selected stop directly without opening the day editor', async () => {
     mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     fireEvent.press(screen.getByTestId('route-stop-edit-1'));
-    expect(screen.getByLabelText('insert-null;edit-1')).toBeTruthy();
+    expect(screen.getByLabelText('stop-0-1-b')).toBeTruthy();
+    expect(screen.getByLabelText('closed')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('direct-stop-save'));
+    expect(screen.getByText('עצירה מעודכנת')).toBeTruthy();
+    expect(screen.getByTestId('direct-stop-editor-closed')).toBeTruthy();
   });
 
   it('opens a server draft from only a destination and day count', async () => {

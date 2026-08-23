@@ -52,7 +52,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function DayEditorModal({
 	visible, onClose, onSave, initialData, dayIndex, onForgetImage, onPersistImages, mediaForImage,
-	routeDestination, allowStopImages = true, initialInsertIndex = null, initialEditIndex = null,
+	routeDestination, allowStopImages = true, initialInsertIndex = null,
 }) {
 	const [description, setDescription] = useState("");
 	const [dayNoteOpen, setDayNoteOpen] = useState(false);
@@ -63,7 +63,6 @@ export default function DayEditorModal({
 	const [dayBaseline, setDayBaseline] = useState(null);
 	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 	const pendingDiscardRef = useRef(null);
-	const directStopEdit = Number.isInteger(initialEditIndex) && !Number.isInteger(initialInsertIndex);
 
 	useEffect(() => {
 		if (!visible) {
@@ -81,17 +80,13 @@ export default function DayEditorModal({
 			setEditingStopIndex(Math.max(0, Math.min(initialInsertIndex, stops0.length)));
 			setInsertingStop(true);
 			setStopModalVisible(true);
-		} else if (Number.isInteger(initialEditIndex) && initialEditIndex >= 0 && initialEditIndex < stops0.length) {
-			setEditingStopIndex(initialEditIndex);
-			setInsertingStop(false);
-			setStopModalVisible(true);
 		} else {
 			setEditingStopIndex(null);
 			setInsertingStop(false);
 			setStopModalVisible(false);
 		}
 		setDayBaseline(buildDayComparable({ description: desc0, stops: stops0 }));
-	}, [visible, initialData, initialEditIndex, initialInsertIndex]);
+	}, [visible, initialData, initialInsertIndex]);
 
 	const dayFormComparable = useMemo(
 		() => buildDayComparable({ description, stops }),
@@ -132,19 +127,10 @@ export default function DayEditorModal({
 		}
 		setStops(next);
 		setInsertingStop(false);
-		if (directStopEdit) {
-			onSave({
-				description,
-				image: initialData?.image || null,
-				media: initialData?.media || null,
-				stops: next,
-			}, dayIndex);
-		}
 	};
 
 	const closeStopEditor = () => {
 		setStopModalVisible(false);
-		if (directStopEdit) onClose();
 	};
 
 	const openNewStopAt = (index) => {

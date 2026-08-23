@@ -27,6 +27,7 @@ import NoyaGuide from '../../community/components/NoyaGuide';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
 import { useContentPublish } from '../../publishing/ContentPublishContext';
 import DayEditorModal from '../components/DayEditorModal';
+import StopEditorModal from '../components/StopEditorModal';
 import { extractRoutePublishMedia } from '../utils/routeMedia';
 import {
   flattenRouteStops, getStopMediaUrls, markUnchangedRouteLocations,
@@ -164,7 +165,9 @@ export default function AddRoutesScreen({ navigation, route }) {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [dayEditorVisible, setDayEditorVisible] = useState(false);
   const [requestedStopInsertIndex, setRequestedStopInsertIndex] = useState(null);
-  const [requestedStopEditIndex, setRequestedStopEditIndex] = useState(null);
+  const [directStopDayIndex, setDirectStopDayIndex] = useState(null);
+  const [directStopIndex, setDirectStopIndex] = useState(null);
+  const [directStopEditorVisible, setDirectStopEditorVisible] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState('saved');
@@ -353,16 +356,33 @@ export default function AddRoutesScreen({ navigation, route }) {
   }));
   const replaceActiveDayStops = (stops) => setDays((current) => current.map((day, index) =>
     index === activeDayIndex ? { ...day, stops } : day));
-  const openDayEditor = ({ insertIndex = null, editIndex = null } = {}) => {
+  const openDayEditor = ({ insertIndex = null } = {}) => {
     setRequestedStopInsertIndex(Number.isInteger(insertIndex) ? insertIndex : null);
-    setRequestedStopEditIndex(Number.isInteger(editIndex) ? editIndex : null);
     setDayEditorVisible(true);
   };
   const closeDayEditor = () => {
     setRequestedStopInsertIndex(null);
-    setRequestedStopEditIndex(null);
     setDayEditorVisible(false);
   };
+  const openDirectStopEditor = (stopIndex) => {
+    if (!Number.isInteger(stopIndex) || !days[activeDayIndex]?.stops?.[stopIndex]) return;
+    setDirectStopDayIndex(activeDayIndex);
+    setDirectStopIndex(stopIndex);
+    setDirectStopEditorVisible(true);
+  };
+  const closeDirectStopEditor = () => {
+    setDirectStopEditorVisible(false);
+    setDirectStopDayIndex(null);
+    setDirectStopIndex(null);
+  };
+  const saveDirectStop = (stopData) => setDays((current) => current.map((day, dayIndex) => {
+    if (dayIndex !== directStopDayIndex) return day;
+    return {
+      ...day,
+      stops: (day.stops || []).map((stop, stopIndex) =>
+        stopIndex === directStopIndex ? stopData : stop),
+    };
+  }));
   const saveDay = (value, index) => setDays((current) => current.map((day, dayIndex) =>
     dayIndex === index ? { ...day, ...value, id: day.id } : day));
   const validatePublish = () => {
@@ -449,6 +469,9 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
 
   const activeDay = days[activeDayIndex] || days[0];
+  const directStop = Number.isInteger(directStopDayIndex) && Number.isInteger(directStopIndex)
+    ? days[directStopDayIndex]?.stops?.[directStopIndex] || null
+    : null;
   const allStops = flattenRouteStops(days);
   const preciseStops = allStops.filter((stop) => stop.locationPrecision !== 'general' && stop.coordinates);
   return (
@@ -490,7 +513,7 @@ export default function AddRoutesScreen({ navigation, route }) {
                   <ScaleDecorator activeScale={1.02}>
                     <TouchableOpacity
                       style={[styles.stopCard, isActive && styles.stopCardDragging]}
-                      onPress={() => openDayEditor({ editIndex: index })}
+                      onPress={() => openDirectStopEditor(index)}
                       accessibilityRole="button"
                       accessibilityLabel={`עריכת העצירה ${stop.title || index + 1}`}
                       disabled={isActive}
@@ -536,7 +559,20 @@ export default function AddRoutesScreen({ navigation, route }) {
         </View> : null}
       </NestableScrollContainer>
       <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer"><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
-      <DayEditorModal visible={dayEditorVisible} onClose={closeDayEditor} onSave={saveDay} initialData={activeDay} initialInsertIndex={requestedStopInsertIndex} initialEditIndex={requestedStopEditIndex} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
+      <DayEditorModal visible={dayEditorVisible} onClose={closeDayEditor} onSave={saveDay} initialData={activeDay} initialInsertIndex={requestedStopInsertIndex} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
+      <StopEditorModal
+        visible={directStopEditorVisible && Boolean(directStop)}
+        onClose={closeDirectStopEditor}
+        onSave={saveDirectStop}
+        initialData={directStop}
+        dayIndex={Number.isInteger(directStopDayIndex) ? directStopDayIndex : 0}
+        stopIndex={Number.isInteger(directStopIndex) ? directStopIndex : 0}
+        onForgetImage={forgetDurableImage}
+        onPersistImages={persistDurableImages}
+        mediaForImage={durableMediaForUri}
+        routeDestination={area}
+        allowImages
+      />
     </GestureHandlerRootView>
   );
 }
