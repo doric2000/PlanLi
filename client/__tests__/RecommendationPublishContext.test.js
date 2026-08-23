@@ -19,6 +19,8 @@ jest.mock('expo-crypto', () => ({
 const mockUser = { uid: 'owner-1' };
 const mockUploadImageAsset = jest.fn();
 const mockSaveRecommendation = jest.fn();
+const mockSaveRecommendationDraft = jest.fn();
+const mockPublishRecommendationDraft = jest.fn();
 const mockSaveRoute = jest.fn();
 const mockSaveRouteDraft = jest.fn();
 const mockPublishRouteDraft = jest.fn();
@@ -39,6 +41,8 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
 }));
 jest.mock('../src/services/RecommendationService', () => ({
   saveRecommendation: (...args) => mockSaveRecommendation(...args),
+  saveRecommendationDraft: (...args) => mockSaveRecommendationDraft(...args),
+  publishRecommendationDraft: (...args) => mockPublishRecommendationDraft(...args),
 }));
 jest.mock('../src/services/RouteService', () => ({
   saveRoute: (...args) => mockSaveRoute(...args),
@@ -85,6 +89,8 @@ describe('RecommendationPublishProvider', () => {
     mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
     mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 4 });
     mockPublishRouteDraft.mockResolvedValue({ routeId: 'route-1', published: true });
+    mockSaveRecommendationDraft.mockResolvedValue({ draftId: 'recommendation-draft-1', version: 8 });
+    mockPublishRecommendationDraft.mockResolvedValue({ recommendationId: 'rec-draft-1', published: true });
   });
 
   it('durably enqueues before the unresolved network save and completes in the background', async () => {
@@ -184,6 +190,73 @@ describe('RecommendationPublishProvider', () => {
     })));
     await waitFor(() => expect(mockPublishRouteDraft).toHaveBeenCalledWith('draft-1', 4));
     expect(mockSaveRoute).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('saves canonical recommendation media into an exact draft version before publishing it', async () => {
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: {
+          draftId: 'recommendation-draft-1',
+          expectedVersion: 7,
+          sourceRecommendationId: 'rec-1',
+        },
+        draft: {
+          step: 4,
+          title: 'טיוטה לפרסום',
+          media: [],
+          localMediaCount: 1,
+        },
+        media: [{ uri: 'file:///recommendation.jpg' }],
+      });
+    });
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith({
+      draftId: 'recommendation-draft-1',
+      sourceRecommendationId: 'rec-1',
+      expectedVersion: 7,
+      saveRequestId: expect.any(String),
+      draft: expect.objectContaining({
+        title: 'טיוטה לפרסום',
+        media: [expect.objectContaining({ assetId: '123e4567-e89b-42d3-a456-426614174000' })],
+        localMediaCount: 0,
+      }),
+    }));
+    await waitFor(() => expect(mockPublishRecommendationDraft)
+      .toHaveBeenCalledWith('recommendation-draft-1', 8));
+    expect(mockSaveRecommendation).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.activeJob.status).toBe('success'));
+    screen.unmount();
+  });
+
+  it('reuses the persisted save request after a lost media-version response', async () => {
+    mockSaveRecommendationDraft
+      .mockRejectedValueOnce({ code: 'functions/invalid-argument', message: 'lost response' })
+      .mockResolvedValueOnce({ draftId: 'recommendation-draft-1', version: 8, idempotentReplay: true });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: { draftId: 'recommendation-draft-1', expectedVersion: 7 },
+        draft: { title: 'Recovered', media: [], localMediaCount: 1 },
+        media: [{ uri: 'file:///recommendation.jpg' }],
+      });
+    });
+    await waitFor(() => expect(api.activeJob.status).toBe('failed'));
+    const jobId = api.activeJob.id;
+    const firstRequest = mockSaveRecommendationDraft.mock.calls[0][0].saveRequestId;
+    expect(firstRequest).toEqual(expect.any(String));
+    await act(async () => { await api.retry(jobId); });
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(2));
+    expect(mockSaveRecommendationDraft.mock.calls[1][0].saveRequestId).toBe(firstRequest);
+    await waitFor(() => expect(mockPublishRecommendationDraft)
+      .toHaveBeenCalledWith('recommendation-draft-1', 8));
+    await waitFor(() => expect(api.activeJob.status).toBe('success'));
     screen.unmount();
   });
 

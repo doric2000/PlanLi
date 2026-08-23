@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { randomUUID } from 'expo-crypto';
 import {
   ActivityIndicator,
   Alert,
@@ -20,14 +21,10 @@ import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
 import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
-import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
-import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 import {
-  RECOMMENDATION_CATALOG,
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
   POST_BUDGETS,
-  TRAVEL_TAXONOMY_VERSION,
   isRecommendationClassificationValid,
   searchRecommendationCatalog,
   suggestClassificationFromGoogleTypes,
@@ -36,11 +33,10 @@ import {
   RECOMMENDATION_IMAGE_LONG_EDGE,
   TRAVEL_IMAGE_COMPRESSION,
 } from '../../../constants/travelMedia';
-import useDurableDraftMedia from '../../../hooks/useDurableDraftMedia';
+import useRecommendationDraftMedia from '../../../hooks/useRecommendationDraftMedia';
 import useExactPlaceSelection from '../../../hooks/useExactPlaceSelection';
 import { useBackButton } from '../../../hooks/useBackButton';
 import useReviewedImagePicker from '../../../hooks/useReviewedImagePicker';
-import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import {
   colors,
   recommendationComposerStyles as styles,
@@ -49,12 +45,17 @@ import {
 import { findMediaAssetByUrl, getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
-import { saveRecommendation } from '../../../services/RecommendationService';
+import {
+  discardRecommendationDraft,
+  getCurrentRecommendationDraft,
+  saveRecommendationDraft,
+} from '../../../services/RecommendationService';
 import ManualMapPinPicker from '../components/ManualMapPinPicker';
 import NoyaGuide from '../components/NoyaGuide';
 import SingleDestinationPicker from '../components/SingleDestinationPicker';
 
 const STEP_COUNT = 4;
+const SAVE_DELAY_MS = 900;
 const LOCATION_MODES = {
   exact: 'exact',
   destination: 'destination',
@@ -163,20 +164,45 @@ function catalogFormComparable({
   });
 }
 
+function draftSnapshotComparable(formComparable, { step, generalDestination, locationQuery }) {
+  return JSON.stringify({
+    formComparable,
+    step,
+    generalDestination: generalDestination ? {
+      countryId: generalDestination.countryId || '',
+      cityId: generalDestination.cityId || '',
+      key: generalDestination.key || '',
+    } : null,
+    locationQuery: locationQuery || '',
+  });
+}
+
 export default function CreateRecommendationScreen({ navigation, route }) {
   const editItem = route?.params?.item ?? route?.params?.recommendation ?? null;
-  const isEdit = route?.params?.mode === 'edit' && Number(editItem?.recommendationCatalogVersion || 0) > 0;
-  const editPostId = route?.params?.postId || editItem?.id || null;
-  const publishJobId = isEdit ? null : route?.params?.publishJobId || null;
+  const requestedIsEdit = route?.params?.mode === 'edit' && Number(editItem?.recommendationCatalogVersion || 0) > 0;
+  const requestedEditPostId = requestedIsEdit ? route?.params?.postId || editItem?.id || null : null;
+  const publishJobId = requestedIsEdit ? null : route?.params?.publishJobId || null;
   const { enqueueCreate, loadJobForReview } = useRecommendationPublish();
   const {
-    draftJobId,
+    bindDraft,
+    clearDraft: clearDraftMedia,
+    clearStaleDraft,
     forgetUri: forgetDurableImage,
-    markEnqueued: markDurableImagesEnqueued,
     mediaForUri: durableMediaForUri,
     persistUris: persistReviewedImages,
-  } = useDurableDraftMedia({ enabled: !isEdit });
+    restoreDraft: restoreDraftMedia,
+  } = useRecommendationDraftMedia();
 
+  const [mode, setMode] = useState('loading');
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [existingDraft, setExistingDraft] = useState(null);
+  const [draftId, setDraftId] = useState('');
+  const [sourceRecommendationId, setSourceRecommendationId] = useState(requestedEditPostId || '');
+  const [sourceMedia, setSourceMedia] = useState(Array.isArray(editItem?.media) ? editItem.media : []);
+  const [saveStatus, setSaveStatus] = useState('saved');
+  const [saveError, setSaveError] = useState('');
+  const [missingLocalMediaCount, setMissingLocalMediaCount] = useState(0);
   const [step, setStep] = useState(1);
   const [locationMode, setLocationMode] = useState(LOCATION_MODES.exact);
   const [generalDestination, setGeneralDestination] = useState(null);
@@ -197,19 +223,28 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [validationMessage, setValidationMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
-  const pendingDiscardRef = useRef(null);
   const hydratedEditIdRef = useRef(null);
   const scrollViewRef = useRef(null);
   const focusedInputTargetRef = useRef(null);
+  const draftIdRef = useRef('');
+  const versionRef = useRef(0);
+  const sourceRecommendationIdRef = useRef(requestedEditPostId || '');
+  const lastSavedComparableRef = useRef('');
+  const saveQueueRef = useRef(Promise.resolve());
+  const pendingSaveRequestRef = useRef(null);
+  const latestDraftRef = useRef(null);
+  const latestComparableRef = useRef('');
+  const allowLeaveRef = useRef(false);
+  const mountedRef = useRef(true);
+  const isEdit = Boolean(sourceRecommendationId);
+  const editPostId = sourceRecommendationId || null;
 
   const {
     cancelReview,
     completeReview,
     pickImagesForReview,
     reviewUris,
-    uploadImageAssets,
   } = useReviewedImagePicker({
     kind: 'recommendation',
     aspect: [1, 1],
@@ -275,9 +310,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, [allCategorySubcategories, categoryId, popularSubcategories, showAllSubcategories, subcategorySearch]);
 
   const previewUris = useMemo(() => editableImageUris.map((uri) => {
-    const asset = findMediaAssetByUrl(editItem?.media, uri);
+    const asset = findMediaAssetByUrl(sourceMedia, uri);
     return asset ? getMediaVariantUrl(asset, 'feed', uri) : uri;
-  }), [editItem?.media, editableImageUris]);
+  }), [editableImageUris, sourceMedia]);
 
   const formComparable = useMemo(() => catalogFormComparable({
     locationMode,
@@ -310,6 +345,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     subcategoryIds,
     title,
   ]);
+  const draftComparable = useMemo(() => draftSnapshotComparable(formComparable, {
+    step,
+    generalDestination,
+    locationQuery,
+  }), [formComparable, generalDestination, locationQuery, step]);
   const createDirty = Boolean(
     title.trim() || description.trim() || budget || categoryId || subcategoryIds.length ||
     selectedCountry?.id || generalDestination?.cityId || editableImageUris.length ||
@@ -318,6 +358,76 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const dirty = isEdit
     ? Boolean(editSnapshotBaseline && editSnapshotBaseline !== formComparable)
     : createDirty;
+  const serverMedia = useMemo(() => editableImageUris
+    .map((uri) => findMediaAssetByUrl(sourceMedia, uri))
+    .filter(Boolean), [editableImageUris, sourceMedia]);
+  const draftPayload = useMemo(() => ({
+    step,
+    locationMode,
+    generalDestination,
+    manualCoordinate,
+    selectedCountry,
+    selectedCity,
+    selectedPlace,
+    locationQuery,
+    categoryId,
+    subcategoryIds,
+    customSubcategoryLabel,
+    title,
+    description,
+    budget,
+    details,
+    eventSchedule,
+    media: serverMedia,
+    localMediaCount: Math.max(0, editableImageUris.length - serverMedia.length),
+  }), [
+    budget, categoryId, customSubcategoryLabel, description, details, editableImageUris.length,
+    eventSchedule, generalDestination, locationMode, locationQuery, manualCoordinate, selectedCity,
+    selectedCountry, selectedPlace, serverMedia, step, subcategoryIds, title,
+  ]);
+  latestDraftRef.current = draftPayload;
+  latestComparableRef.current = draftComparable;
+
+  const persistSnapshot = useCallback((snapshot, comparable, { force = false } = {}) => {
+    saveQueueRef.current = saveQueueRef.current.catch(() => versionRef.current).then(async () => {
+      const shouldCreate = !draftIdRef.current && Boolean(sourceRecommendationIdRef.current || comparable);
+      if ((!draftIdRef.current && !shouldCreate) || (!force && comparable === lastSavedComparableRef.current)) {
+        return versionRef.current;
+      }
+      if (mountedRef.current) { setSaveStatus('saving'); setSaveError(''); }
+      const pendingRequest = pendingSaveRequestRef.current?.comparable === comparable
+        ? pendingSaveRequestRef.current
+        : { comparable, saveRequestId: randomUUID() };
+      pendingSaveRequestRef.current = pendingRequest;
+      try {
+        const saved = await saveRecommendationDraft({
+          ...(draftIdRef.current ? { draftId: draftIdRef.current, expectedVersion: versionRef.current } : {}),
+          sourceRecommendationId: sourceRecommendationIdRef.current || null,
+          saveRequestId: pendingRequest.saveRequestId,
+          draft: snapshot,
+        });
+        draftIdRef.current = saved.draftId;
+        versionRef.current = saved.version;
+        lastSavedComparableRef.current = comparable;
+        pendingSaveRequestRef.current = null;
+        await bindDraft(saved.draftId);
+        if (mountedRef.current) {
+          setDraftId(saved.draftId);
+          setSaveStatus('saved');
+        }
+        return saved.version;
+      } catch (error) {
+        if (mountedRef.current) {
+          setSaveStatus('error');
+          setSaveError(error?.details?.reason === 'RECOMMENDATION_DRAFT_VERSION_CONFLICT'
+            ? 'הטיוטה השתנתה במקום אחר. כדאי לפתוח אותה מחדש.'
+            : 'לא הצלחנו לשמור. השינויים נשארו במסך ואפשר לנסות שוב.');
+        }
+        throw error;
+      }
+    });
+    return saveQueueRef.current;
+  }, [bindDraft]);
 
   const scrollFocusedInputIntoView = useCallback(() => {
     const inputTarget = focusedInputTargetRef.current;
@@ -347,27 +457,47 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     };
   }, [scrollFocusedInputIntoView]);
 
-  const promptDiscard = useCallback((onConfirm) => {
+  const finishLeave = useCallback((action = null) => {
+    allowLeaveRef.current = true;
+    if (action && typeof navigation.dispatch === 'function') navigation.dispatch(action);
+    else navigation.goBack();
+  }, [navigation]);
+
+  const requestLeave = useCallback(async (action = null) => {
     Keyboard.dismiss();
-    pendingDiscardRef.current = onConfirm;
-    setUnsavedModalVisible(true);
-  }, []);
-  const { allowLeaveRef, handleHeaderBackPress } = useUnsavedLeaveGuard({
-    navigation,
-    guardActive: true,
-    sessionKey: `${isEdit ? 'edit' : 'create'}-recommendation-${editPostId || publishJobId || draftJobId}`,
-    hasUnsavedChanges: dirty,
-    submitting,
-    openUnsavedPrompt: promptDiscard,
-  });
-  const handleComposerHeaderBackPress = useCallback(() => {
-    Keyboard.dismiss();
-    handleHeaderBackPress();
-  }, [handleHeaderBackPress]);
+    if (mode !== 'editor' || (!draftIdRef.current && !dirty)) {
+      finishLeave(action);
+      return;
+    }
+    try {
+      await persistSnapshot(latestDraftRef.current, latestComparableRef.current);
+      finishLeave(action);
+    } catch {
+      Alert.alert('לא הצלחנו לשמור לפני היציאה', 'השינויים עדיין מופיעים במסך. אפשר לנסות שוב או לצאת בלי לשמור אותם.', [
+        { text: 'הישארות', style: 'cancel' },
+        { text: 'יציאה ללא שמירה', style: 'destructive', onPress: () => finishLeave(action) },
+        { text: 'ניסיון נוסף', onPress: () => requestLeave(action) },
+      ]);
+    }
+  }, [dirty, finishLeave, mode, persistSnapshot]);
   useBackButton(navigation, {
     title: isEdit ? 'עריכת המלצה' : 'המלצה חדשה',
-    onPress: handleComposerHeaderBackPress,
+    onPress: () => requestLeave(),
   });
+
+  useEffect(() => navigation.addListener?.('beforeRemove', (event) => {
+    if (allowLeaveRef.current || mode !== 'editor') return;
+    event.preventDefault?.();
+    requestLeave(event.data?.action || null);
+  }), [mode, navigation, requestLeave]);
+
+  useEffect(() => {
+    if (mode !== 'editor' || (!draftId && !dirty) || draftComparable === lastSavedComparableRef.current) return undefined;
+    const timer = setTimeout(() => persistSnapshot(draftPayload, draftComparable).catch(() => {}), SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [dirty, draftComparable, draftId, draftPayload, mode, persistSnapshot]);
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     if (!isEdit || !editItem || !editPostId || hydratedEditIdRef.current === editPostId) return;
@@ -415,6 +545,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setBudget(editItem.budget || '');
     setDetails(initialDetails);
     setEventSchedule(initialSchedule);
+    setSourceMedia(Array.isArray(editItem.media) ? editItem.media : []);
     setEditableImageUris(imageUris);
     hydrateSelection({
       country,
@@ -453,37 +584,115 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     });
   }, [hydrateSelection, isEdit, route?.params?.prefillLocation]);
 
+  const hydrateServerDraft = useCallback(async (draft, { localUris = null } = {}) => {
+    const remoteMedia = Array.isArray(draft.media) ? draft.media : [];
+    const remoteUris = remoteMedia.map((asset) => getMediaVariantUrl(asset, 'feed')).filter(Boolean);
+    const restored = localUris == null
+      ? await restoreDraftMedia(draft.id, draft.localMediaCount)
+      : { uris: localUris, missingCount: 0 };
+    const imageUris = [...remoteUris, ...(restored.uris || [])].slice(0, 5);
+    const nextSourceId = draft.sourceRecommendationId || '';
+    draftIdRef.current = draft.id || '';
+    versionRef.current = Number(draft.version || 0);
+    sourceRecommendationIdRef.current = nextSourceId;
+    setDraftId(draftIdRef.current);
+    setSourceRecommendationId(nextSourceId);
+    setSourceMedia(remoteMedia);
+    setMissingLocalMediaCount(restored.missingCount || 0);
+    setStep(Math.max(1, Math.min(STEP_COUNT, Number(draft.step || 1))));
+    setLocationMode(draft.locationMode || LOCATION_MODES.exact);
+    setGeneralDestination(draft.generalDestination || null);
+    setManualCoordinate(draft.manualCoordinate || null);
+    setCategoryId(draft.categoryId || '');
+    setSubcategoryIds(Array.isArray(draft.subcategoryIds) ? draft.subcategoryIds : []);
+    setCustomSubcategoryLabel(draft.customSubcategoryLabel || '');
+    setTitle(draft.title || '');
+    setDescription(draft.description || '');
+    setBudget(draft.budget || '');
+    setDetails(draft.details || {});
+    setEventSchedule(draft.eventSchedule || '');
+    setEditableImageUris(imageUris);
+    hydrateSelection({
+      country: draft.selectedCountry || null,
+      city: draft.selectedCity || null,
+      place: draft.selectedPlace || null,
+      query: draft.locationQuery || draft.selectedPlace?.name || '',
+    });
+    const comparable = catalogFormComparable({
+      locationMode: draft.locationMode || LOCATION_MODES.exact,
+      selectedCountry: draft.selectedCountry || null,
+      selectedCity: draft.selectedCity || null,
+      selectedPlace: draft.selectedPlace || null,
+      manualCoordinate: draft.manualCoordinate || null,
+      categoryId: draft.categoryId || '',
+      subcategoryIds: draft.subcategoryIds || [],
+      customSubcategoryLabel: draft.customSubcategoryLabel || '',
+      title: draft.title || '',
+      description: draft.description || '',
+      budget: draft.budget || '',
+      details: draft.details || {},
+      eventSchedule: draft.eventSchedule || '',
+      imageUris,
+    });
+    lastSavedComparableRef.current = draftSnapshotComparable(comparable, {
+      step: Math.max(1, Math.min(STEP_COUNT, Number(draft.step || 1))),
+      generalDestination: draft.generalDestination || null,
+      locationQuery: draft.locationQuery || draft.selectedPlace?.name || '',
+    });
+    setEditSnapshotBaseline(nextSourceId ? comparable : null);
+    setSaveStatus('saved');
+    setSaveError('');
+    setMode('editor');
+  }, [hydrateSelection, restoreDraftMedia]);
+
   useEffect(() => {
-    if (isEdit || !publishJobId || typeof loadJobForReview !== 'function') return undefined;
     let active = true;
-    loadJobForReview(publishJobId).then((job) => {
-      if (!active || !job?.draft) return;
-      const draft = job.draft;
-      setStep(Math.max(1, Math.min(STEP_COUNT, Number(draft.step || 3))));
-      setLocationMode(draft.locationMode || LOCATION_MODES.exact);
-      setGeneralDestination(draft.generalDestination || null);
-      setManualCoordinate(draft.manualCoordinate || null);
-      setCategoryId(draft.categoryId || '');
-      setSubcategoryIds(Array.isArray(draft.subcategoryIds) ? draft.subcategoryIds : []);
-      setCustomSubcategoryLabel(draft.customSubcategoryLabel || '');
-      setTitle(draft.title || '');
-      setDescription(draft.description || '');
-      setBudget(draft.budget || '');
-      setDetails(draft.details || {});
-      setEventSchedule(draft.eventSchedule || '');
-      hydrateSelection({
-        country: draft.selectedCountry || null,
-        city: draft.selectedCity || null,
-        place: draft.selectedPlace || null,
-        query: draft.locationQuery || draft.selectedPlace?.name || '',
-      });
-      setEditableImageUris(Array.isArray(job.imageUris) ? job.imageUris : []);
-    }).catch((error) => {
-      console.error('Could not restore queued recommendation:', error);
-      if (active) Alert.alert('לא הצלחנו לפתוח את ההמלצה', 'אפשר לנסות שוב מסרגל הפרסום.');
+    mountedRef.current = true;
+    const open = async () => {
+      setLoadError('');
+      if (publishJobId && typeof loadJobForReview === 'function') {
+        const job = await loadJobForReview(publishJobId);
+        if (job?.draft && job?.payload?.draftId) {
+          await hydrateServerDraft({
+            ...job.draft,
+            id: job.payload.draftId,
+            version: job.payload.expectedVersion,
+            sourceRecommendationId: job.payload.sourceRecommendationId || job.draft.sourceRecommendationId || null,
+          }, {
+            localUris: (job.materializedMedia || [])
+              .filter((entry) => entry.type !== 'remote')
+              .map((entry) => entry.uri)
+              .filter(Boolean),
+          });
+          return;
+        }
+      }
+      const current = await getCurrentRecommendationDraft();
+      if (!active) return;
+      if (current) {
+        if (requestedEditPostId && current.sourceRecommendationId === requestedEditPostId) {
+          await hydrateServerDraft(current);
+        } else if (requestedEditPostId) {
+          setExistingDraft(current);
+          setMode('switchChoice');
+        } else {
+          setExistingDraft(current);
+          setMode('choice');
+        }
+      } else {
+        await clearStaleDraft();
+        if (active) setMode('editor');
+      }
+    };
+    open().catch((error) => {
+      console.error('recommendation_draft_load_failed', { code: error?.code || 'unknown' });
+      if (active) {
+        setLoadError('לא הצלחנו לבדוק אם קיימת המלצה בתהליך. אפשר לנסות שוב.');
+        setMode('loadError');
+      }
     });
     return () => { active = false; };
-  }, [hydrateSelection, isEdit, loadJobForReview, publishJobId]);
+  }, [clearStaleDraft, hydrateServerDraft, loadAttempt, loadJobForReview, publishJobId, requestedEditPostId]);
 
   const switchLocationMode = useCallback((nextMode) => {
     setLocationMode(nextMode);
@@ -649,90 +858,24 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     if (message || submitting) return;
     setSubmitting(true);
     try {
-      const destinationPayload = locationMode === LOCATION_MODES.exact
-        ? selectedPlace?.resolvedPlaceToken
-          ? {
-              resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
-              ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
-              ...(selectedPlace.incidentId ? { incidentId: selectedPlace.incidentId } : {}),
-              locationMode,
-            }
-          : isEdit && selectedCountry?.id && selectedCity?.id
-            ? {
-                destinationRef: { countryId: selectedCountry.id, cityId: selectedCity.id },
-                locationMode,
-              }
-            : { placeId: selectedPlace.placeId, locationMode }
-        : {
-            destinationRef: { countryId: selectedCountry.id, cityId: selectedCity.id },
-            locationMode,
-            ...(locationMode === LOCATION_MODES.pin
-              ? { manualLocation: { coordinates: normalizeManualCoordinate(manualCoordinate) } }
-              : {}),
-          };
-
-      const recommendation = {
-        taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
-        recommendationCatalogVersion: RECOMMENDATION_CATALOG.schemaVersion,
-        title: title.trim(),
-        description: description.trim(),
-        budget,
-        categoryId,
-        subcategoryIds,
-        ...(customSubcategoryLabel.trim() ? { customSubcategoryLabel: customSubcategoryLabel.trim() } : {}),
-        details: {
-          ...cleanDetails(details),
-          ...(eventSchedule.trim() ? { eventSchedule: eventSchedule.trim() } : {}),
-        },
-      };
-
-      if (isEdit) {
-        const localUris = editableImageUris.filter((uri) => !findMediaAssetByUrl(editItem?.media, uri));
-        const uploaded = localUris.length ? await uploadImageAssets(localUris) : [];
-        const uploadedQueue = [...uploaded];
-        const media = editableImageUris.map((uri) => (
-          findMediaAssetByUrl(editItem?.media, uri) || uploadedQueue.shift()
-        )).filter(Boolean);
-        await saveRecommendation({
-          recommendationId: editPostId,
-          ...destinationPayload,
-          recommendation: { ...recommendation, media },
-        });
-        Alert.alert('השינויים נשמרו', 'ההמלצה עודכנה בהצלחה.');
-        allowLeaveRef.current = true;
-        navigation.goBack();
-        return;
-      }
-
+      const version = await persistSnapshot(draftPayload, draftComparable, { force: true });
       await enqueueCreate({
         contentType: 'recommendation',
-        draftJobId: publishJobId ? null : draftJobId,
         sourceJobId: publishJobId,
         payload: {
-          ...destinationPayload,
-          recommendation: { ...recommendation, media: [] },
+          draftId: draftIdRef.current,
+          expectedVersion: version,
+          ...(sourceRecommendationIdRef.current
+            ? { sourceRecommendationId: sourceRecommendationIdRef.current }
+            : {}),
         },
-        media: editableImageUris.map((uri) => durableMediaForUri(uri)),
-        draft: {
-          step,
-          locationMode,
-          generalDestination,
-          manualCoordinate,
-          selectedCountry,
-          selectedCity,
-          selectedPlace,
-          locationQuery,
-          categoryId,
-          subcategoryIds,
-          customSubcategoryLabel,
-          title,
-          description,
-          budget,
-          details,
-          eventSchedule,
-        },
+        media: editableImageUris.map((uri) => {
+          const asset = findMediaAssetByUrl(sourceMedia, uri);
+          return asset ? { asset } : durableMediaForUri(uri);
+        }),
+        draft: { ...draftPayload, sourceRecommendationId: sourceRecommendationIdRef.current || null },
       });
-      markDurableImagesEnqueued();
+      await clearDraftMedia({ deleteFiles: false });
       allowLeaveRef.current = true;
       navigation.goBack();
     } catch (error) {
@@ -741,6 +884,34 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         'לא הצלחנו לשמור את ההמלצה',
         travelMediaErrorMessage(error) || 'אפשר לנסות שוב בעוד רגע.'
       );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const continueExistingDraft = async () => {
+    if (!existingDraft) return;
+    try {
+      await hydrateServerDraft(existingDraft);
+      setExistingDraft(null);
+    } catch {
+      Alert.alert('לא הצלחנו לפתוח את הטיוטה', 'אפשר לנסות שוב בעוד רגע.');
+    }
+  };
+
+  const discardExistingDraft = async () => {
+    if (!existingDraft?.id || submitting) return;
+    setSubmitting(true);
+    try {
+      await discardRecommendationDraft(existingDraft.id);
+      await clearDraftMedia({ deleteFiles: true });
+      setExistingDraft(null);
+      draftIdRef.current = '';
+      versionRef.current = 0;
+      setDraftId('');
+      setMode('editor');
+    } catch {
+      Alert.alert('לא הצלחנו למחוק את הטיוטה', 'אפשר לנסות שוב בעוד רגע.');
     } finally {
       setSubmitting(false);
     }
@@ -1069,6 +1240,49 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     );
   };
 
+  if (mode === 'loading') return (
+    <View style={styles.draftStateScreen}>
+      <ActivityIndicator color={colors.primary} />
+      <AppText style={styles.draftBody}>פותחים את ההמלצה...</AppText>
+    </View>
+  );
+  if (mode === 'loadError') return (
+    <View style={styles.draftStateScreen}>
+      <View style={styles.draftCard}>
+        <AppText style={styles.draftTitle}>לא הצלחנו לפתוח את ההמלצה</AppText>
+        <AppText style={styles.draftBody}>{loadError}</AppText>
+        <TouchableOpacity style={[styles.primaryButton, styles.draftPrimaryButton]} onPress={() => { setMode('loading'); setLoadAttempt((value) => value + 1); }} testID="recommendation-draft-load-retry">
+          <AppText style={styles.primaryButtonText}>ניסיון נוסף</AppText>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+  if (mode === 'choice' || mode === 'switchChoice') return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <NoyaGuide message={mode === 'switchChoice'
+        ? 'יש המלצה אחרת עם שינויים שעדיין לא פורסמו. אפשר לשמור אותה ולחזור, או לוותר עליה ולפתוח את ההמלצה שבחרת.'
+        : existingDraft?.sourceRecommendationId
+          ? 'יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן.'
+          : 'יש המלצה בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרת, או למחוק ולהתחיל מחדש.'} />
+      <View style={styles.draftCard}>
+        <AppText style={styles.draftTitle}>{existingDraft?.title || 'המלצה בתהליך'}</AppText>
+        {existingDraft?.selectedCity?.name ? <AppText style={styles.draftBody}>{existingDraft.selectedCity.name}</AppText> : null}
+        {mode === 'choice' ? (
+          <TouchableOpacity style={[styles.primaryButton, styles.draftPrimaryButton]} onPress={continueExistingDraft} testID="recommendation-draft-continue">
+            <AppText style={styles.primaryButtonText}>המשך ההמלצה</AppText>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.draftSecondaryButton} onPress={() => finishLeave()} testID="recommendation-switch-cancel">
+            <AppText style={styles.draftSecondaryText}>ביטול ושמירת הטיוטה</AppText>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.draftSecondaryButton} onPress={discardExistingDraft} disabled={submitting} testID="recommendation-draft-discard">
+          {submitting ? <ActivityIndicator color={colors.error} /> : <AppText style={styles.draftDestructiveText}>{existingDraft?.sourceRecommendationId ? 'ויתור על העריכות' : 'מחיקה והתחלה מחדש'}</AppText>}
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
   return (
     <View style={styles.screen}>
       <View style={styles.header} testID="recommendation-composer-header">
@@ -1082,6 +1296,15 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           accessibilityValue={{ min: 1, max: STEP_COUNT, now: step }}
         >
           <View style={[styles.progressFill, { width: `${(step / STEP_COUNT) * 100}%` }]} />
+        </View>
+        <View style={styles.saveStatusRow} accessibilityLiveRegion="polite">
+          {saveStatus === 'saving' ? <ActivityIndicator size="small" color={colors.white} /> : null}
+          <AppText style={styles.saveStatusText}>{saveStatus === 'saving' ? 'שומר…' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : draftId ? 'נשמר' : ''}</AppText>
+          {saveStatus === 'error' ? (
+            <TouchableOpacity onPress={() => persistSnapshot(draftPayload, draftComparable).catch(() => {})} testID="recommendation-save-retry">
+              <AppText style={styles.saveRetryText}>ניסיון נוסף</AppText>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -1098,6 +1321,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           testID="recommendation-composer-scroll"
         >
+          {missingLocalMediaCount > 0 ? (
+            <View style={styles.missingMediaNotice} testID="recommendation-missing-local-media">
+              <AppText style={styles.missingMediaText}>חלק מהתמונות נשמרו רק במכשיר שבו נבחרו ולא זמינות כאן. אפשר לבחור אותן שוב לפני הפרסום.</AppText>
+            </View>
+          ) : null}
           {step === 1 ? renderLocationStep() : null}
           {step === 2 ? renderTaxonomyStep() : null}
           {step === 3 ? renderStoryStep() : null}
@@ -1164,22 +1392,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           )}
         </SafeAreaInsetsContext.Consumer>
       </KeyboardAvoidingView>
-
-      <UnsavedChangesModal
-        visible={unsavedModalVisible}
-        title={UNSAVED_LEAVE_TITLE}
-        message={UNSAVED_LEAVE_MESSAGE}
-        onCancel={() => {
-          pendingDiscardRef.current = null;
-          setUnsavedModalVisible(false);
-        }}
-        onConfirm={() => {
-          const confirm = pendingDiscardRef.current;
-          pendingDiscardRef.current = null;
-          setUnsavedModalVisible(false);
-          confirm?.();
-        }}
-      />
 
       <ImageCropReviewModal
         visible={reviewUris.length > 0}

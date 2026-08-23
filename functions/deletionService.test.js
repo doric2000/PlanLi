@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   deleteDocumentStrict,
   deleteNotificationDevicesForUser,
+  deleteRecommendationDraftsForUser,
   removeReporterModerationData,
   requestAccountDeletion,
 } = require('./deletionService');
@@ -38,6 +39,21 @@ test('account cleanup includes durable owner-notification outboxes', () => {
     source.indexOf("status: 'deleting'") < source.indexOf("step: 'content'"),
     'the account must be write-gated before destructive cleanup begins'
   );
+  assert.ok(
+    source.indexOf('deleteRecommendationDraftsForUser({ admin, uid })')
+      < source.indexOf('admin.auth().deleteUser(uid)'),
+    'private recommendation drafts must be deleted before the Auth user'
+  );
+});
+
+test('account deletion recursively removes only the recommendation draft owner namespace', async () => {
+  const deleted = [];
+  const db = {
+    doc: (path) => ({ path }),
+    recursiveDelete: async (ref) => deleted.push(ref.path),
+  };
+  await deleteRecommendationDraftsForUser({ admin: { firestore: () => db }, uid: 'user-1' });
+  assert.deepEqual(deleted, ['system/recommendationDrafts/owners/user-1']);
 });
 
 test('account cleanup deletes every global notification device owned by the user', async () => {

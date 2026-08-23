@@ -48,6 +48,20 @@ async function deleteDocumentStrict(ref) {
   }
 }
 
+async function deleteRecommendationDraftsForUser({ admin, uid }) {
+  const db = admin.firestore();
+  const ownerRef = db.doc(`system/recommendationDrafts/owners/${uid}`);
+  if (typeof db.recursiveDelete === 'function') {
+    await db.recursiveDelete(ownerRef);
+    return;
+  }
+  await Promise.all([
+    deleteQueryInBatches(db, () => ownerRef.collection('draftVersions')),
+    deleteQueryInBatches(db, () => ownerRef.collection('publicationReceipts')),
+  ]);
+  await deleteDocumentStrict(ownerRef);
+}
+
 async function removeReporterModerationData({ admin, uid }) {
   const db = admin.firestore();
   const reports = await db.collectionGroup('reports').where('reporterId', '==', uid).get();
@@ -392,6 +406,7 @@ async function deleteAccountInternal({ admin, uid, mediaBucket }) {
     deleteQueryInBatches(db, () => userRef.collection('notificationState')),
     deleteQueryInBatches(db, () => db.collection('system/media/assets').where('ownerUid', '==', uid)),
     deleteNotificationDevicesForUser({ admin, uid }),
+    deleteRecommendationDraftsForUser({ admin, uid }),
     deleteDocumentStrict(adminRegistryRef),
   ]);
   if (mediaBucket) {
@@ -424,6 +439,7 @@ module.exports = {
   deleteContent,
   deleteContentInternal,
   deleteOwnedContent,
+  deleteRecommendationDraftsForUser,
   deleteNotificationDevicesForUser,
   deleteQueryInBatches,
   deleteDocumentStrict,

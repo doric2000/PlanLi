@@ -14,7 +14,11 @@ import { auth } from '../../../config/firebase';
 import { TRAVEL_TAXONOMY_VERSION } from '../../../constants/travelTaxonomy';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
-import { saveRecommendation } from '../../../services/RecommendationService';
+import {
+  publishRecommendationDraft,
+  saveRecommendation,
+  saveRecommendationDraft,
+} from '../../../services/RecommendationService';
 import { publishRouteDraft, saveRoute, saveRouteDraft } from '../../../services/RouteService';
 import {
   addDiagnosticBreadcrumb,
@@ -586,29 +590,67 @@ export function ContentPublishProvider({ children }) {
           );
         }
       } else {
-        let savePayload = {
-          ...current.payload,
-          publishRequestId: current.publishRequestId,
-          recommendation: { ...current.payload.recommendation, media: finalMedia },
-        };
-        try {
-          result = await saveRecommendation(savePayload);
-        } catch (error) {
-          if (!current.payload?.resolvedPlaceToken || !current.draft?.selectedPlace?.placeId || !isExpiredPlaceTokenError(error)) {
-            throw error;
+        if (current.payload?.draftId) {
+          let publishVersion = Number(current.payload.expectedVersion);
+          const hasPreparedLocalMedia = (current.media || []).some((entry) => entry.type === 'local');
+          if (hasPreparedLocalMedia && current.payload.recommendationDraftMediaSaved !== true) {
+            let mediaSaveRequestId = current.payload.recommendationDraftMediaSaveRequestId;
+            if (!mediaSaveRequestId) {
+              mediaSaveRequestId = randomUUID();
+              await updateJob(jobId, (job) => ({
+                ...job,
+                payload: {
+                  ...job.payload,
+                  recommendationDraftMediaSaveRequestId: mediaSaveRequestId,
+                },
+                updatedAt: Date.now(),
+              }));
+            }
+            const savedDraft = await saveRecommendationDraft({
+              draftId: current.payload.draftId,
+              sourceRecommendationId: current.payload.sourceRecommendationId || null,
+              expectedVersion: publishVersion,
+              saveRequestId: mediaSaveRequestId,
+              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+            });
+            publishVersion = Number(savedDraft.version);
+            await updateJob(jobId, (job) => ({
+              ...job,
+              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              payload: {
+                ...job.payload,
+                expectedVersion: publishVersion,
+                recommendationDraftMediaSaved: true,
+              },
+              updatedAt: Date.now(),
+            }));
           }
-          const { resolvedPlaceToken, ...withoutExpiredToken } = current.payload;
-          savePayload = {
-            ...withoutExpiredToken,
-            placeId: current.draft.selectedPlace.placeId,
+          result = await publishRecommendationDraft(current.payload.draftId, publishVersion);
+        } else {
+          let savePayload = {
+            ...current.payload,
             publishRequestId: current.publishRequestId,
             recommendation: { ...current.payload.recommendation, media: finalMedia },
           };
-          await updateJob(jobId, (job) => ({
-            ...job,
-            payload: { ...withoutExpiredToken, placeId: current.draft.selectedPlace.placeId },
-          }));
-          result = await saveRecommendation(savePayload);
+          try {
+            result = await saveRecommendation(savePayload);
+          } catch (error) {
+            if (!current.payload?.resolvedPlaceToken || !current.draft?.selectedPlace?.placeId || !isExpiredPlaceTokenError(error)) {
+              throw error;
+            }
+            const { resolvedPlaceToken, ...withoutExpiredToken } = current.payload;
+            savePayload = {
+              ...withoutExpiredToken,
+              placeId: current.draft.selectedPlace.placeId,
+              publishRequestId: current.publishRequestId,
+              recommendation: { ...current.payload.recommendation, media: finalMedia },
+            };
+            await updateJob(jobId, (job) => ({
+              ...job,
+              payload: { ...withoutExpiredToken, placeId: current.draft.selectedPlace.placeId },
+            }));
+            result = await saveRecommendation(savePayload);
+          }
         }
       }
       console.info('content_publish_stage_timing', {
