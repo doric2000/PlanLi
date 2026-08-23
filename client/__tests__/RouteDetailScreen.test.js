@@ -58,7 +58,8 @@ const routeData = {
   distanceKm: 42,
   categoryIds: [],
   subcategoryIds: [],
-  facets: {},
+  facets: { budgetLevel: 'balanced' },
+  priceNote: 'ללא טיסות',
   destinationPreviews: [{
     countryId: 'IL', cityId: 'haifa', name: 'חיפה',
     destinationImage: { urls: { thumb: 'https://img.example/haifa.jpg' } },
@@ -75,7 +76,8 @@ const routeData = {
     stops: [{
       id: 'stop-2', title: 'הנמל',
       destination: { countryId: 'IL', cityId: 'haifa' },
-      place: { coordinates: { lat: 32.82, lng: 34.99 } },
+      locationPrecision: 'general',
+      location: 'אזור הנמל',
     }],
   }],
 };
@@ -94,17 +96,21 @@ describe('RouteDetailScreen', () => {
     expect(screen.getByText('חיפה')).toBeTruthy();
     expect(screen.getAllByText('חיפה')).toHaveLength(1);
     fireEvent.press(screen.getByTestId('route-map-preview'));
-    expect(navigation.navigate).toHaveBeenCalledWith('RouteMap', { routeData });
+    expect(navigation.navigate).toHaveBeenCalledWith('RouteMap', { routeData, initialDayIndex: 0 });
     expect(screen.getByTestId('route-map-preview-marker-1').props.anchor).toEqual({
       x: 0.5,
       y: 39 / 50,
     });
 
+    expect(screen.getByTestId('route-day-count').props.children).toBe(2);
+    expect(screen.getByTestId('route-stop-count').props.children).toBe(2);
+    expect(screen.getByTestId('route-budget-label').props.children).toContain('₪₪');
     expect(screen.getByTestId('route-day-stops-0')).toBeTruthy();
     expect(screen.queryByTestId('route-day-stops-1')).toBeNull();
-    fireEvent.press(screen.getByTestId('route-day-toggle-1'));
-    expect(screen.queryByTestId('route-day-stops-0')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-day-tab-1'));
     expect(screen.getByTestId('route-day-stops-1')).toBeTruthy();
+    expect(screen.getByText('אזור כללי')).toBeTruthy();
+    expect(screen.getByText('ללא טיסות')).toBeTruthy();
   });
 
   it('loads the canonical route and opens the exact comment from an alert', async () => {

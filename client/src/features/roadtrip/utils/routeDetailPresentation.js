@@ -1,6 +1,5 @@
 import {
   CATEGORIES,
-  ENVIRONMENTS,
   NEEDS,
   PACES,
   ROUTE_DIFFICULTIES,
@@ -9,7 +8,6 @@ import {
   TRANSPORT_MODES,
   TRAVELER_STYLES,
   TRAVEL_PARTIES,
-  VIBES,
   getBudgetLabel,
   getOptionLabel,
   getTagLabel,
@@ -26,18 +24,25 @@ export function buildRouteDetailPresentation(route) {
   const audienceValues = facets.audienceScope === 'all'
     ? ['מתאים לכולם']
     : labels(TRAVEL_PARTIES, facets.audiences);
+  const budgetLabel = getBudgetLabel(facets.budgetLevel || route?.attributes?.budgetLevel || '');
   const facts = [
-    facets.budgetLevel ? {
-      id: 'budget', icon: 'payments', title: 'רמת מחיר', value: getBudgetLabel(facets.budgetLevel),
+    budgetLabel ? {
+      id: 'budget', icon: 'payments', title: 'מחיר', value: budgetLabel,
+    } : null,
+    route?.priceNote ? {
+      id: 'priceNote', icon: 'receipt-long', title: 'הערת מחיר', value: route.priceNote,
+    } : null,
+    route?.transportModes?.length ? {
+      id: 'transport', icon: 'directions-car', title: 'התניידות', value: labels(TRANSPORT_MODES, route.transportModes).join(' · '),
+    } : null,
+    route?.pace ? {
+      id: 'pace', icon: 'speed', title: 'קצב', value: getOptionLabel(PACES, route.pace),
     } : null,
     audienceValues.length ? {
       id: 'audiences', icon: 'groups', title: 'למי מתאים', value: audienceValues.join(' · '),
     } : null,
-    facets.vibes?.length ? {
-      id: 'vibes', icon: 'sentiment-satisfied-alt', title: 'אווירה', value: labels(VIBES, facets.vibes).join(' · '),
-    } : null,
-    facets.environments?.length ? {
-      id: 'environment', icon: 'landscape', title: 'סביבה', value: labels(ENVIRONMENTS, facets.environments).join(' · '),
+    facets.seasons?.length ? {
+      id: 'seasons', icon: 'wb-sunny', title: 'עונות מתאימות', value: labels(SEASONS, facets.seasons).join(' · '),
     } : null,
   ].filter((fact) => fact?.value);
 
@@ -55,9 +60,6 @@ export function buildRouteDetailPresentation(route) {
     { id: 'experience', icon: 'hiking', title: 'ניסיון נדרש', values: route?.experienceLevel
       ? [getOptionLabel(ROUTE_EXPERIENCE_LEVELS, route.experienceLevel)]
       : [] },
-    { id: 'transport', icon: 'directions-car', title: 'התניידות', values: labels(TRANSPORT_MODES, route?.transportModes) },
-    { id: 'pace', icon: 'speed', title: 'קצב', values: route?.pace ? [getOptionLabel(PACES, route.pace)] : [] },
-    { id: 'seasons', icon: 'wb-sunny', title: 'עונות מתאימות', values: labels(SEASONS, facets.seasons) },
     { id: 'travelerStyles', icon: 'explore', title: 'סגנון טיול', values: labels(TRAVELER_STYLES, facets.travelerStyles) },
   ].filter((group) => group.values.length);
 

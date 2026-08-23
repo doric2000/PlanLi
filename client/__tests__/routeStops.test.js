@@ -1,11 +1,15 @@
 import {
 	buildGoogleMapsDirectionsUrl,
 	buildGoogleMapsDirectionsUrls,
+	buildGoogleMapsDaySegments,
 	buildGoogleMapsPlaceUrl,
+	buildRouteMapSegments,
 	buildWazePlaceUrl,
 	derivePlacesFromStops,
 	flattenRouteStops,
 	flattenValidRouteStops,
+	formatRouteDuration,
+	formatRouteLegEstimate,
 	hasValidStopLocation,
 	markUnchangedRouteLocations,
 } from "../src/features/roadtrip/utils/routeStops";
@@ -66,6 +70,16 @@ describe("roadtrip route stop helpers", () => {
 		expect(hasValidStopLocation(route.days[0].stops[0])).toBe(true);
 		expect(hasValidStopLocation(route.days[0].stops[1])).toBe(false);
 		expect(flattenValidRouteStops(route).map((stop) => stop.id)).toEqual(["a", "c"]);
+	});
+
+	it("never treats a general destination as an exact map point", () => {
+		const general = {
+			locationPrecision: "general",
+			place: { placeId: "legacy-place", coordinates: { lat: 32.1, lng: 34.8 } },
+		};
+		expect(hasValidStopLocation(general)).toBe(false);
+		expect(buildGoogleMapsPlaceUrl(general)).toBeNull();
+		expect(buildWazePlaceUrl(general)).toBeNull();
 	});
 
 	it("derives route places from stop locations", () => {
@@ -140,6 +154,47 @@ describe("roadtrip route stop helpers", () => {
 		expect(urls[0]).toContain("destination_place_id=place-4");
 		expect(urls[1]).toContain("origin_place_id=place-4");
 		expect(urls[1]).toContain("destination_place_id=place-5");
+	});
+
+	it("breaks map and Google directions segments at general stops and day boundaries", () => {
+		const segmentedRoute = { days: [{ stops: [
+			{ id: "a", locationPrecision: "exact", place: { placeId: "a", coordinates: { lat: 1, lng: 1 } } },
+			{ id: "b", locationPrecision: "general", destination: { cityId: "city" } },
+			{ id: "c", locationPrecision: "pin", coordinates: { lat: 2, lng: 2 } },
+			{ id: "d", locationPrecision: "exact", place: { placeId: "d", coordinates: { lat: 3, lng: 3 } } },
+		] }, { stops: [
+			{ id: "e", locationPrecision: "exact", place: { placeId: "e", coordinates: { lat: 4, lng: 4 } } },
+		] }] };
+
+		const segments = buildRouteMapSegments(segmentedRoute);
+		expect(segments.map((segment) => segment.stops.map((stop) => stop.id))).toEqual([["a"], ["c", "d"], ["e"]]);
+		const dayUrls = buildGoogleMapsDaySegments(segmentedRoute, 0);
+		expect(dayUrls).toHaveLength(2);
+		expect(dayUrls[0].startStopIndex).toBe(0);
+		expect(dayUrls[0].endStopIndex).toBe(0);
+		expect(dayUrls[1].startStopIndex).toBe(2);
+		expect(dayUrls[1].endStopIndex).toBe(3);
+	});
+
+	it("breaks drawn map lines at a stop that has a Place ID but no coordinates", () => {
+		const routeWithMissingCoordinates = { days: [{ stops: [
+			{ id: "a", locationPrecision: "exact", place: { placeId: "a", coordinates: { lat: 1, lng: 1 } } },
+			{ id: "missing", locationPrecision: "exact", place: { placeId: "missing" } },
+			{ id: "c", locationPrecision: "exact", place: { placeId: "c", coordinates: { lat: 3, lng: 3 } } },
+		] }] };
+
+		const segments = buildRouteMapSegments(routeWithMissingCoordinates);
+		expect(segments.map((segment) => segment.stops.map((stop) => stop.id))).toEqual([["a"], ["c"]]);
+		expect(buildGoogleMapsDaySegments(routeWithMissingCoordinates, 0)).toHaveLength(1);
+	});
+
+	it("formats visit durations and explicitly labels rough leg estimates", () => {
+		expect(formatRouteDuration(30)).toBe("30 דק׳");
+		expect(formatRouteDuration(60)).toBe("שעה");
+		expect(formatRouteDuration(90)).toBe("שעה וחצי");
+		expect(formatRouteDuration(135)).toBe("שעתיים ו־15 דק׳");
+		expect(formatRouteLegEstimate({ travelFromPrevious: { distanceKm: 4.1, estimatedDurationMinutes: 12 } }))
+			.toBe("כ־4.1 ק״מ בקו אווירי · הערכת זמן גסה כ־12 דק׳");
 	});
 });
 

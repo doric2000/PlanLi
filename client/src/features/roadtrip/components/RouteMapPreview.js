@@ -6,16 +6,24 @@ import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
 import NavigationChevron from '../../../components/NavigationChevron';
 import { colors, routeMapPreviewStyles as styles } from '../../../styles';
-import { getRouteInitialRegion } from '../utils/routeStops';
+import {
+  getRouteInitialRegion,
+  getStopCoordinates,
+  hasValidStopLocation,
+  splitContiguousMappableStops,
+} from '../utils/routeStops';
 import RouteStopMarker, { COMPACT_ROUTE_STOP_MARKER_ANCHOR } from './RouteStopMarker';
 
-export default function RouteMapPreview({ stops, onPress }) {
-  const routeStops = Array.isArray(stops) ? stops : [];
+export default function RouteMapPreview({ stops, onPress, hiddenStopCount = 0 }) {
+  const allStops = Array.isArray(stops) ? stops : [];
+  const routeStops = useMemo(() => allStops.filter(hasValidStopLocation), [allStops]);
+  const visibleStops = routeStops.slice(0, 12);
+  const segments = useMemo(() => splitContiguousMappableStops(allStops), [allStops]);
   const region = useMemo(() => getRouteInitialRegion(routeStops), [routeStops]);
-  const coordinates = useMemo(() => routeStops.map((stop) => ({
-    latitude: stop.coordinates.lat,
-    longitude: stop.coordinates.lng,
-  })), [routeStops]);
+  const extraMarkerCount = Math.max(0, routeStops.length - visibleStops.length);
+  const preciseLabel = routeStops.length === 1 ? 'נקודה מדויקת אחת' : `${routeStops.length} נקודות מדויקות`;
+  const extraLabel = extraMarkerCount === 1 ? 'ועוד נקודה במפה המלאה' : `ועוד ${extraMarkerCount} נקודות במפה המלאה`;
+  const hiddenLabel = hiddenStopCount === 1 ? 'עצירה אחת לא מוצגת' : `${hiddenStopCount} עצירות לא מוצגות`;
 
   return (
     <TouchableOpacity style={styles.container} activeOpacity={0.9} onPress={onPress} testID="route-map-preview">
@@ -30,19 +38,31 @@ export default function RouteMapPreview({ stops, onPress }) {
           pitchEnabled={false}
           toolbarEnabled={false}
         >
-          {coordinates.length > 1 ? (
-            <Polyline coordinates={coordinates} strokeColor={colors.primary} strokeWidth={4} />
-          ) : null}
-          {routeStops.slice(0, 8).map((stop, index) => (
+          {segments.filter((segment) => segment.length > 1).map((segment, index) => (
+            <Polyline
+              key={`preview-segment-${index}`}
+              coordinates={segment.map((stop) => {
+                const coordinates = getStopCoordinates(stop);
+                return { latitude: coordinates.lat, longitude: coordinates.lng };
+              })}
+              strokeColor={colors.primary}
+              strokeWidth={3}
+              lineDashPattern={[7, 7]}
+            />
+          ))}
+          {visibleStops.map((stop) => {
+            const coordinates = getStopCoordinates(stop);
+            return (
             <Marker
               key={stop.id || `${stop.dayIndex}:${stop.stopIndex}`}
-              testID={`route-map-preview-marker-${stop.globalIndex + 1}`}
-              coordinate={coordinates[index]}
+              testID={`route-map-preview-marker-${stop.stopIndex + 1}`}
+              coordinate={{ latitude: coordinates.lat, longitude: coordinates.lng }}
               anchor={COMPACT_ROUTE_STOP_MARKER_ANCHOR}
             >
-              <RouteStopMarker stop={stop} compact />
+              <RouteStopMarker stop={stop} displayNumber={stop.stopIndex + 1} compact />
             </Marker>
-          ))}
+            );
+          })}
         </MapView>
         <View style={styles.mapShade} />
         <View style={styles.cta}>
@@ -51,8 +71,12 @@ export default function RouteMapPreview({ stops, onPress }) {
             <Ionicons name="map-outline" size={19} color={colors.primary} />
           </View>
           <View style={styles.ctaCopy}>
-            <AppText style={styles.ctaTitle}>פתיחת מפת המסלול</AppText>
-            <AppText style={styles.ctaSubtitle}>{routeStops.length} תחנות על המפה</AppText>
+            <AppText style={styles.ctaTitle}>צפייה במפת היום</AppText>
+            <AppText style={styles.ctaSubtitle}>
+              {preciseLabel}
+              {extraMarkerCount ? ` · ${extraLabel}` : ''}
+              {hiddenStopCount ? ` · ${hiddenLabel}` : ''}
+            </AppText>
           </View>
         </View>
       </View>

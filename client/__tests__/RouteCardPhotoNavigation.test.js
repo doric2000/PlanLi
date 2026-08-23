@@ -85,4 +85,25 @@ describe('RouteCard photo navigation', () => {
 
     expect(openRoute).toHaveBeenCalledTimes(1);
   });
+
+  it('shows the route budget instead of the misleading straight-line distance', () => {
+    const screen = render(
+      <RouteCard
+        item={{
+          ...route,
+          dayCount: 3,
+          distanceKm: 42.7,
+          facets: { budgetLevel: 'balanced' },
+          transportModes: ['car'],
+        }}
+        variant="feed"
+        onPress={jest.fn()}
+        showActionBar={false}
+      />,
+    );
+
+    expect(screen.getByText('3 ימים')).toBeTruthy();
+    expect(screen.getByText('בינוני · ₪₪')).toBeTruthy();
+    expect(screen.queryByText(/42\.7|ק״מ/)).toBeNull();
+  });
 });

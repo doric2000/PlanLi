@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StatusBar, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Share, StatusBar, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -17,17 +17,17 @@ import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useUserData } from '../../../hooks/useUserData';
 import { loadRouteDetails, recordRouteOpen } from '../../../services/RouteService';
 import { colors, routeDetailScreenStyles as styles } from '../../../styles';
+import { getBudgetLabel } from '../../../constants/travelTaxonomy';
 import { canManageContent } from '../../../utils/contentPermissions';
 import { getRouteImageUrls } from '../../../utils/mediaAssets';
 import { recommendationDetailStyles as detailStyles } from '../../community/components/recommendationDetailStyles';
 import { useCommentsCount } from '../../community/hooks/useCommentsCount';
 import { useLikes } from '../../community/hooks/useLikes';
-import PlacesRoute from '../components/PlacesRoute';
 import RouteItinerary from '../components/RouteItinerary';
 import RouteMapPreview from '../components/RouteMapPreview';
 import { buildRouteDetailPresentation } from '../utils/routeDetailPresentation';
 import { getRouteDestinationPreviews } from '../utils/routeDestinationPreviews';
-import { flattenValidRouteStops } from '../utils/routeStops';
+import { flattenRouteStops, getRouteDayStops, hasValidStopLocation } from '../utils/routeStops';
 
 const EXTRA_ICONS = {
   difficulty: 'terrain',
@@ -37,6 +37,28 @@ const EXTRA_ICONS = {
   seasons: 'wb-sunny',
   travelerStyles: 'explore',
 };
+
+function ExpandableDescription({ text }) {
+  const [expanded, setExpanded] = useState(false);
+  const canExpand = String(text || '').trim().length > 180;
+  if (!text) return null;
+  return (
+    <View>
+      <AppText style={detailStyles.body} numberOfLines={!expanded && canExpand ? 3 : undefined}>{text}</AppText>
+      {canExpand ? (
+        <Pressable
+          style={styles.descriptionToggle}
+          onPress={() => setExpanded((value) => !value)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          testID="route-description-toggle"
+        >
+          <AppText style={styles.descriptionToggleText}>{expanded ? 'צמצום' : 'הצגת ההמשך'}</AppText>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 export default function RouteDetailScreen({ route, navigation }) {
   const initialRouteData = route?.params?.routeData || null;
@@ -131,19 +153,31 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
   const insets = useSafeAreaInsets();
   const routeId = routeData?.id || routeData?.routeId || '';
   const days = Array.isArray(routeData?.days) ? routeData.days : [];
-  const validStops = useMemo(() => flattenValidRouteStops(days), [days]);
+  const allStops = useMemo(() => flattenRouteStops(days), [days]);
+  const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const activeDay = days[activeDayIndex] || days[0] || null;
+  const activeStops = useMemo(() => getRouteDayStops(days, activeDayIndex), [activeDayIndex, days]);
+  const activePreciseStops = useMemo(() => activeStops.filter(hasValidStopLocation), [activeStops]);
+  const hiddenMapStopCount = Math.max(0, activeStops.length - activePreciseStops.length);
   const author = useUserData(routeData?.ownerId);
   const { isAdmin } = useAdminClaim();
   const { isActive } = useAuthUser();
   const images = useMemo(() => getRouteImageUrls(routeData, 'large'), [routeData]);
   const destinations = useMemo(() => getRouteDestinationPreviews(routeData, 4), [routeData]);
   const presentation = useMemo(() => buildRouteDetailPresentation(routeData), [routeData]);
+  const budgetValue = routeData?.facets?.budgetLevel || routeData?.attributes?.budgetLevel || '';
+  const budgetLabel = getBudgetLabel(budgetValue) || 'מחיר לא צוין';
   const { isLiked, likeCount, toggleLike } = useLikes('routes', routeId, routeData?.stats?.likeCount || 0);
   const commentsCount = useCommentsCount('routes', routeId);
   const [likesVisible, setLikesVisible] = useState(false);
   const [commentsVisible, setCommentsVisible] = useState(initialCommentsOpen);
   const canEdit = isActive && canManageContent({ user: auth.currentUser, ownerId: routeData?.ownerId, isAdmin });
   const destinationLabel = destinations.map((item) => item.name).filter(Boolean).join(' · ');
+
+  useEffect(() => {
+    if (activeDayIndex >= days.length) setActiveDayIndex(Math.max(0, days.length - 1));
+  }, [activeDayIndex, days.length]);
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -159,7 +193,6 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
     thumbnail_url: getRouteImageUrls(routeData, 'thumb')[0] || null,
     sub_text: routeData?.description ? routeData.description.slice(0, 100) : '',
     days: routeData?.dayCount,
-    distance: routeData?.distanceKm,
   }), [routeData]);
 
   const editRoute = () => navigation.navigate('AddRoutesScreen', { routeToEdit: routeData });
@@ -189,12 +222,14 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
           />
 
           <View style={detailStyles.contentSurface} testID="route-detail-content">
-            <View style={detailStyles.categoryRow}>
-              <MaterialIcons name="route" size={19} color={colors.textSecondary} />
-              <AppText style={detailStyles.categoryText}>מסלול טיול</AppText>
-            </View>
-
             <AppText style={detailStyles.title}>{routeData?.title}</AppText>
+
+            {!!destinationLabel && (
+              <View style={styles.destinationRow}>
+                <Ionicons name="location-outline" size={17} color={colors.primary} />
+                <AppText style={styles.destinationText}>{destinationLabel}</AppText>
+              </View>
+            )}
 
             <ContentDetailAuthorRow
               author={{ ...author, contentCreatedAt: routeData?.createdAt }}
@@ -206,46 +241,98 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
               editTestID="route-detail-edit"
             />
 
-            {!!routeData?.description && (
-              <View style={detailStyles.section}>
-                <AppText style={detailStyles.sectionTitle}>על המסלול</AppText>
-                <AppText style={detailStyles.body}>{routeData.description}</AppText>
-              </View>
-            )}
-
             <View style={styles.metricsRow}>
               <View style={styles.metric}>
                 <Ionicons name="calendar-outline" size={19} color={colors.primary} />
-                <AppText style={styles.metricValue}>{routeData?.dayCount || days.length}</AppText>
-                <AppText style={styles.metricLabel}>ימים</AppText>
+                <AppText style={styles.metricValue} testID="route-day-count">{days.length || routeData?.dayCount || 0}</AppText>
+                <AppText style={styles.metricLabel}>{days.length === 1 ? 'יום' : 'ימים'}</AppText>
               </View>
               <View style={styles.metric}>
                 <Ionicons name="location-outline" size={19} color={colors.primary} />
-                <AppText style={styles.metricValue}>{validStops.length}</AppText>
-                <AppText style={styles.metricLabel}>תחנות</AppText>
+                <AppText style={styles.metricValue} testID="route-stop-count">{allStops.length}</AppText>
+                <AppText style={styles.metricLabel}>{allStops.length === 1 ? 'עצירה' : 'עצירות'}</AppText>
               </View>
               <View style={styles.metric}>
-                <Ionicons name="navigate-outline" size={19} color={colors.primary} />
-                <AppText style={styles.metricValue}>{routeData?.distanceKm || 0}</AppText>
-                <AppText style={styles.metricLabel}>ק״מ</AppText>
+                <MaterialIcons name="payments" size={19} color={colors.primary} />
+                <AppText style={[styles.metricValue, styles.metricValueCompact]} numberOfLines={1} testID="route-budget-label">{budgetLabel}</AppText>
+                <AppText style={styles.metricLabel}>מחיר למסלול</AppText>
               </View>
             </View>
 
+            {!!routeData?.description && (
+              <View style={detailStyles.section}>
+                <AppText style={detailStyles.sectionTitle}>על המסלול</AppText>
+                <ExpandableDescription text={routeData.description} />
+              </View>
+            )}
+
+            {days.length > 1 ? (
+              <View style={styles.dayTabsSection}>
+                <AppText style={styles.dayTabsTitle}>בחירת יום</AppText>
+                <FlatList
+                  horizontal
+                  data={days}
+                  keyExtractor={(day, index) => day?.id || `route-day-tab-${index}`}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.dayTabsContent}
+                  renderItem={({ index }) => {
+                    const selected = index === activeDayIndex;
+                    return (
+                      <Pressable
+                        style={[styles.dayTab, selected && styles.dayTabSelected]}
+                        onPress={() => setActiveDayIndex(index)}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected }}
+                        testID={`route-day-tab-${index}`}
+                      >
+                        <AppText style={[styles.dayTabText, selected && styles.dayTabTextSelected]}>יום {index + 1}</AppText>
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
+            ) : null}
+
             <View style={detailStyles.section}>
-              <AppText style={detailStyles.sectionTitle}>המסלול על המפה</AppText>
-              {validStops.length ? (
-                <>
-                  <View style={styles.mapPreviewSpacing}>
-                    <RouteMapPreview stops={validStops} onPress={() => navigation.navigate('RouteMap', { routeData })} />
-                  </View>
-                  {!!destinations.length && <PlacesRoute places={destinations} compact maximum={4} style={styles.destinationsSpacing} />}
-                </>
+              <AppText style={detailStyles.sectionTitle}>מפת יום {activeDayIndex + 1}</AppText>
+              {activePreciseStops.length ? (
+                <View style={styles.mapPreviewSpacing}>
+                  <RouteMapPreview
+                    stops={activeStops}
+                    hiddenStopCount={hiddenMapStopCount}
+                    onPress={() => navigation.navigate('RouteMap', { routeData, initialDayIndex: activeDayIndex })}
+                  />
+                </View>
               ) : (
                 <View style={styles.mapUnavailable}>
                   <Ionicons name="map-outline" size={20} color={colors.textMuted} />
-                  <AppText style={styles.mapUnavailableText}>אין נקודות מפה במסלול</AppText>
+                  <AppText style={styles.mapUnavailableText}>אין ביום הזה נקודות מדויקות להצגה במפה.</AppText>
                 </View>
               )}
+              {!!hiddenMapStopCount && activePreciseStops.length ? (
+                <View style={styles.mapPrecisionNotice} testID="route-map-hidden-stops-note">
+                  <Ionicons name="information-circle-outline" size={17} color={colors.textSecondary} />
+                  <AppText style={styles.mapPrecisionNoticeText}>
+                    {hiddenMapStopCount === 1
+                      ? 'עצירה אחת אינה מוצגת במפה כי אין לה נקודה מדויקת.'
+                      : `${hiddenMapStopCount} עצירות אינן מוצגות במפה כי אין להן נקודה מדויקת.`}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={detailStyles.section}>
+              <AppText style={detailStyles.sectionTitle}>תוכנית היום</AppText>
+              <View style={styles.itinerarySpacing}>
+                <RouteItinerary
+                  day={activeDay}
+                  dayIndex={activeDayIndex}
+                  dayCount={days.length}
+                  onPreviousDay={() => setActiveDayIndex((index) => Math.max(0, index - 1))}
+                  onNextDay={() => setActiveDayIndex((index) => Math.min(days.length - 1, index + 1))}
+                  onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}
+                />
+              </View>
             </View>
 
             {!!presentation.facts.length && (
@@ -266,8 +353,19 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
 
             {!!presentation.tags.length && (
               <View style={detailStyles.section}>
-                <AppText style={detailStyles.sectionTitle}>מה תמצאו בדרך</AppText>
-                <MetadataLine icon="local-offer" values={presentation.tags} style={detailStyles.metadataLine} testID="route-tags-metadata" />
+                <AppText style={detailStyles.sectionTitle}>מה יש במסלול</AppText>
+                <MetadataLine icon="local-offer" values={tagsExpanded ? presentation.tags : presentation.tags.slice(0, 4)} style={detailStyles.metadataLine} testID="route-tags-metadata" />
+                {presentation.tags.length > 4 ? (
+                  <Pressable
+                    style={styles.tagsToggle}
+                    onPress={() => setTagsExpanded((value) => !value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: tagsExpanded }}
+                    testID="route-tags-toggle"
+                  >
+                    <AppText style={styles.tagsToggleText}>{tagsExpanded ? 'צמצום' : 'הצגת הכול'}</AppText>
+                  </Pressable>
+                ) : null}
               </View>
             )}
 
@@ -296,19 +394,12 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
                     <View key={need} style={detailStyles.needRow}>
                       <View style={detailStyles.needIcon}><MaterialIcons name="info-outline" size={20} color={colors.textSecondary} /></View>
                       <AppText style={detailStyles.needText}>{need}</AppText>
-                      <Ionicons name="chevron-back" size={17} color={colors.textMuted} />
                     </View>
                   ))}
                 </View>
               </View>
             )}
 
-            <View style={detailStyles.section}>
-              <AppText style={detailStyles.sectionTitle}>לו״ז המסלול</AppText>
-              <View style={styles.itinerarySpacing}>
-                <RouteItinerary days={days} />
-              </View>
-            </View>
           </View>
         </ScrollView>
 

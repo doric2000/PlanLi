@@ -26,6 +26,7 @@ import { formatTimestamp } from "../../../utils/formatTimestamp";
 import { getRouteImageUrls } from "../../../utils/mediaAssets";
 import {
 	getOptionLabel,
+	getBudgetLabel,
 	ROUTE_DIFFICULTIES,
 	TRANSPORT_MODES,
 } from "../../../constants/travelTaxonomy";
@@ -37,7 +38,6 @@ const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
 	menuTitle: "\u05e0\u05d9\u05d4\u05d5\u05dc \u05de\u05e1\u05dc\u05d5\u05dc",
 	days: "\u05d9\u05de\u05d9\u05dd",
-	km: "\u05e7\u05f4\u05de",
 	noImage: "\u05de\u05e1\u05dc\u05d5\u05dc \u05d8\u05d9\u05d5\u05dc",
 };
 
@@ -316,6 +316,7 @@ export const RouteCard = ({
 	const renderContent = (feed = false) => {
 		const difficultyLabel = getOptionLabel(ROUTE_DIFFICULTIES, item.difficulty);
 		const transportLabel = getOptionLabel(TRANSPORT_MODES, item.transportModes?.[0]);
+		const budgetLabel = getBudgetLabel(item?.facets?.budgetLevel || item?.attributes?.budgetLevel || '');
 		const personalizationReasonCode = item?.personalization?.reasonCodes?.[0];
 		const content = (
 			<View style={[cards.recContent, feed && styles.feedContent]}>
@@ -337,10 +338,10 @@ export const RouteCard = ({
 							<AppText style={styles.metaText}>{item.dayCount} {text.days}</AppText>
 						</View>
 					) : null}
-					{item.distanceKm ? (
+					{budgetLabel ? (
 						<View style={styles.metaPill}>
-							<Ionicons name="navigate-outline" size={14} color="#1F2937" />
-							<AppText style={styles.metaText}>{item.distanceKm} {text.km}</AppText>
+							<Ionicons name="wallet-outline" size={14} color="#1F2937" />
+							<AppText style={styles.metaText}>{budgetLabel}</AppText>
 						</View>
 					) : null}
 					{transportLabel ? (

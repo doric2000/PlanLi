@@ -33,6 +33,13 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 jest.mock('../src/components/CachedImage', () => () => null);
+jest.mock('../src/components/OpenWithLocationSheet', () => {
+  const ReactModule = require('react');
+  const { Text } = require('react-native');
+  return ({ visible, place }) => visible
+    ? ReactModule.createElement(Text, { testID: 'open-with-sheet' }, place?.name || '')
+    : null;
+});
 
 const routeData = {
   Title: 'Northern route',
@@ -40,6 +47,11 @@ const routeData = {
     stops: [
       { id: 'a', title: 'First', place: { coordinates: { lat: 32.08, lng: 34.78 } } },
       { id: 'b', title: 'Second', place: { coordinates: { lat: 32.18, lng: 34.88 } } },
+    ],
+  }, {
+    stops: [
+      { id: 'general', title: 'General', locationPrecision: 'general', destination: { cityName: 'Haifa' } },
+      { id: 'c', title: 'Third', locationPrecision: 'exact', place: { coordinates: { lat: 31.9, lng: 34.7 } } },
     ],
   }],
 };
@@ -80,6 +92,8 @@ describe('RouteMapScreen', () => {
       top: 14,
     });
     expect(StyleSheet.flatten(screen.getByTestId('route-map-controls').props.style).bottom).toBeUndefined();
+    fireEvent.press(screen.getByText('אפשרויות ניווט'));
+    expect(screen.getByTestId('open-with-sheet').props.children).toBe('Second');
 
     fireEvent.press(screen.getByTestId('route-map-my-location'));
     const region = screen.getByTestId('route-map').props.initialRegion;
@@ -91,5 +105,22 @@ describe('RouteMapScreen', () => {
     const routeRegion = screen.getByTestId('route-map').props.initialRegion;
     expect(routeRegion.latitude).toBeCloseTo(32.13);
     expect(routeRegion.longitude).toBeCloseTo(34.83);
+  });
+
+  it('filters the map by day and identifies hidden general stops', async () => {
+    const screen = render(
+      <RouteMapScreen route={{ params: { routeData } }} navigation={{ goBack: jest.fn() }} />
+    );
+    await act(async () => {});
+
+    fireEvent.press(screen.getByTestId('route-map-day-1'));
+    expect(screen.getByTestId('route-map-marker-2')).toBeTruthy();
+    expect(screen.getByTestId('route-map-hidden-notice')).toBeTruthy();
+    expect(screen.queryByTestId('route-map-marker-1')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('route-map-all-days'));
+    expect(screen.getByTestId('route-map-marker-1-1')).toBeTruthy();
+    expect(screen.getByTestId('route-map-marker-2-2')).toBeTruthy();
+    expect(screen.queryByTestId('route-map-open-day')).toBeNull();
   });
 });

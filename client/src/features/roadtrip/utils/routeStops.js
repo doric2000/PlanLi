@@ -5,6 +5,7 @@ import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 const encode = (value) => encodeURIComponent(String(value || "").trim());
 
 export const getStopCoordinates = (stop) => {
+	if (stop?.locationPrecision === "general") return null;
 	const coords = getPlaceCoordinates(stop?.place) || stop?.coordinates;
 	const lat = Number(coords?.lat);
 	const lng = Number(coords?.lng);
@@ -15,7 +16,7 @@ export const getStopCoordinates = (stop) => {
 export const hasValidStopLocation = (stop) => !!getStopCoordinates(stop);
 
 export const hasRoutableStopLocation = (stop) =>
-	!!stop?.place?.placeId || hasValidStopLocation(stop);
+	stop?.locationPrecision !== "general" && (!!stop?.place?.placeId || hasValidStopLocation(stop));
 
 export const getStopMediaAssets = (stop) => {
 	const assets = [stop?.media, ...(Array.isArray(stop?.additionalMedia) ? stop.additionalMedia : [])]
@@ -64,6 +65,68 @@ export const flattenRouteStops = (routeOrDays) => {
 export const flattenValidRouteStops = (routeOrDays) =>
 	flattenRouteStops(routeOrDays).filter(hasValidStopLocation);
 
+export const getRouteDayStops = (routeOrDays, dayIndex = 0) =>
+	flattenRouteStops(routeOrDays).filter((stop) => stop.dayIndex === dayIndex);
+
+const splitContiguousStops = (stops = [], predicate) => {
+	const segments = [];
+	let current = [];
+	(stops || []).forEach((stop) => {
+		if (predicate(stop)) {
+			current.push(stop);
+			return;
+		}
+		if (current.length) segments.push(current);
+		current = [];
+	});
+	if (current.length) segments.push(current);
+	return segments;
+};
+
+export const splitContiguousRoutableStops = (stops = []) =>
+	splitContiguousStops(stops, hasRoutableStopLocation);
+
+export const splitContiguousMappableStops = (stops = []) =>
+	splitContiguousStops(stops, hasValidStopLocation);
+
+export const buildRouteMapSegments = (routeOrDays, selectedDayIndex = null) => {
+	const stops = flattenRouteStops(routeOrDays);
+	const days = new Map();
+	stops.forEach((stop) => {
+		if (selectedDayIndex != null && stop.dayIndex !== selectedDayIndex) return;
+		if (!days.has(stop.dayIndex)) days.set(stop.dayIndex, []);
+		days.get(stop.dayIndex).push(stop);
+	});
+	return Array.from(days.entries()).flatMap(([dayIndex, dayStops]) =>
+		splitContiguousMappableStops(dayStops).map((segmentStops, segmentIndex) => ({
+			id: `day-${dayIndex + 1}-segment-${segmentIndex + 1}`,
+			dayIndex,
+			segmentIndex,
+			stops: segmentStops,
+			coordinates: segmentStops.map((stop) => getStopCoordinates(stop)),
+		}))
+	);
+};
+
+export const formatRouteDuration = (value) => {
+	const minutes = Number(value);
+	if (!Number.isSafeInteger(minutes) || minutes <= 0) return "";
+	if (minutes < 60) return `${minutes} דק׳`;
+	const hours = Math.floor(minutes / 60);
+	const remainder = minutes % 60;
+	const hourLabel = hours === 1 ? "שעה" : hours === 2 ? "שעתיים" : `${hours} שעות`;
+	if (!remainder) return hourLabel;
+	if (remainder === 30) return `${hourLabel} וחצי`;
+	return `${hourLabel} ו־${remainder} דק׳`;
+};
+
+export const formatRouteLegEstimate = (stop) => {
+	const distance = Number(stop?.travelFromPrevious?.distanceKm);
+	const duration = Number(stop?.travelFromPrevious?.estimatedDurationMinutes);
+	if (!Number.isFinite(distance) || distance <= 0 || !Number.isFinite(duration) || duration <= 0) return "";
+	return `כ־${distance} ק״מ בקו אווירי · הערכת זמן גסה כ־${Math.round(duration)} דק׳`;
+};
+
 export const getRouteInitialRegion = (stops = []) => {
 	if (!stops.length) {
 		return { latitude: 31.0461, longitude: 34.8516, latitudeDelta: 6, longitudeDelta: 6 };
@@ -92,6 +155,7 @@ export const derivePlacesFromStops = (routeOrDays) => {
 };
 
 export const buildGoogleMapsPlaceUrl = (stop) => {
+	if (stop?.locationPrecision === "general") return null;
 	const place = stop?.place || {};
 	return buildGoogleMapsUrl({
 		place,
@@ -181,4 +245,21 @@ export const buildGoogleMapsDirectionsUrls = (routeOrStops) => {
 	}
 	return urls;
 };
+
+export const buildGoogleMapsDaySegments = (routeOrDays, dayIndex = 0) =>
+	splitContiguousRoutableStops(getRouteDayStops(routeOrDays, dayIndex)).flatMap((segmentStops, segmentIndex) => {
+		const urls = buildGoogleMapsDirectionsUrls(segmentStops);
+		return urls.map((url, urlIndex) => ({
+			id: `day-${dayIndex + 1}-segment-${segmentIndex + 1}-part-${urlIndex + 1}`,
+			dayIndex,
+			segmentIndex,
+			partIndex: urlIndex,
+			url,
+			startStopIndex: segmentStops[Math.min(urlIndex * (GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT - 1), segmentStops.length - 1)]?.stopIndex ?? 0,
+			endStopIndex: segmentStops[Math.min(
+				urlIndex * (GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT - 1) + GOOGLE_MAPS_MAX_STOPS_PER_SEGMENT - 1,
+				segmentStops.length - 1
+			)]?.stopIndex ?? 0,
+		}));
+	});
 
