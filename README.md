@@ -11,18 +11,19 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Client update group
-`747983a9-8e48-45aa-8cf6-0cd69af4c189` was published for iOS
-(`01a02e70-c41b-7f5e-936f-ade1f4b44242`) and Android
-(`01a02e70-c41b-799e-a7d0-ed4ec68e6bd8`) at `2026-08-23T11:45:37Z` from PR
-`#162` merge commit `2fd38b4`. Its GitHub checks passed before merge. Delivery
-and application on the physical iPhone remain unverified. App version and
-runtime remain `1.1.0`, TestFlight build remains `13`, and no native build or
-Apple submission was created. The backend has 92 active Node.js 22 v2 Functions
-in `europe-west1`; no Functions, Firestore Rules, indexes, Hosting, production
-documents, migrations, or Firebase resources changed in this client-only
-release. The published EAS update is not evidence that it has already been
-applied on a tester device.
+runtime `1.1.0`. Route-stop ordering update group
+`e8c046f1-d428-40ea-b297-dc33ea9a6948` was published for iOS
+(`01a02ec4-c08f-7c5f-9a9f-e4ae259ae8ca`) and Android
+(`01a02ec4-c08f-7038-9f4c-f1c624677418`) at `2026-08-23T13:17:21Z` from PR
+`#164` merge commit `407c711`. The PR was merged and the OTA was published
+without waiting for or running an additional validation cycle, by explicit
+request. Delivery, application, and behavior on the physical iPhone remain
+unverified. App version and runtime remain `1.1.0`, TestFlight build remains
+`13`, and no native build or Apple submission was created. The backend has 92
+active Node.js 22 v2 Functions in `europe-west1`; no Functions, Firestore Rules,
+indexes, Hosting, production documents, migrations, or Firebase resources
+changed in this client-only release. The published EAS update is not evidence
+that it has already been applied on a tester device.
 
 ## Run the client
 
