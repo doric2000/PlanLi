@@ -1,11 +1,13 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Keyboard, ScrollView, StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ForgotPasswordScreen from '../src/features/auth/screens/ForgotPasswordScreen';
 import AuthEntryScreen from '../src/features/auth/screens/AuthEntryScreen';
 import LoginScreen from '../src/features/auth/screens/LoginScreen';
 import RegisterScreen from '../src/features/auth/screens/RegisterScreen';
 import CompleteAccountScreen from '../src/features/auth/screens/CompleteAccountScreen';
+import { shouldEnableAccessibleAuthOverflow } from '../src/features/auth/components/AuthFormLayout';
 import { AUTH_STATES } from '../src/constants/authPolicy';
 
 const mockSignInWithEmail = jest.fn();
@@ -276,5 +278,107 @@ describe('authentication screens', () => {
   it('shows the selected horizontal PlanLi wordmark on login and registration', () => {
     expect(render(<LoginScreen navigation={{ navigate: jest.fn() }} />).getByTestId('brand-wordmark')).toBeTruthy();
     expect(render(<RegisterScreen navigation={{ navigate: jest.fn() }} />).getByTestId('brand-wordmark')).toBeTruthy();
+  });
+
+  it('keeps login and registration static, compact, and direction-aware', () => {
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width: 375,
+      height: 667,
+      scale: 2,
+      fontScale: 1,
+    });
+    const navigation = { navigate: jest.fn(), replace: jest.fn() };
+    const login = render(<LoginScreen navigation={navigation} />);
+
+    expect(login.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+    expect(login.getByTestId('auth-error-slot')).toBeTruthy();
+    expect(StyleSheet.flatten(login.getByTestId('login-password').props.style)).toMatchObject({
+      textAlign: 'right',
+      writingDirection: 'rtl',
+    });
+
+    const email = login.getByTestId('login-email');
+    expect(StyleSheet.flatten(email.props.style)).toMatchObject({
+      textAlign: 'right',
+      writingDirection: 'rtl',
+    });
+    fireEvent.changeText(email, 'person@example.com');
+    expect(StyleSheet.flatten(login.getByTestId('login-email').props.style)).toMatchObject({
+      textAlign: 'right',
+      writingDirection: 'ltr',
+    });
+
+    login.unmount();
+    const registration = render(<RegisterScreen navigation={navigation} />);
+    expect(registration.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+    expect(registration.getByTestId('auth-error-slot')).toBeTruthy();
+    fireEvent.changeText(registration.getByTestId('register-email'), 'person@example.com');
+    expect(StyleSheet.flatten(registration.getByTestId('register-email').props.style)).toMatchObject({
+      textAlign: 'right',
+      writingDirection: 'ltr',
+    });
+
+    registration.unmount();
+    const forgotPassword = render(<ForgotPasswordScreen navigation={{ replace: jest.fn(), goBack: jest.fn() }} />);
+    fireEvent.changeText(forgotPassword.getByTestId('reset-email-input'), 'person@example.com');
+    expect(StyleSheet.flatten(forgotPassword.getByTestId('reset-email-input').props.style)).toMatchObject({
+      textAlign: 'right',
+      writingDirection: 'ltr',
+    });
+    dimensions.mockRestore();
+  });
+
+  it('reserves scrolling for accessibility font scaling', () => {
+    expect(shouldEnableAccessibleAuthOverflow(1)).toBe(false);
+    expect(shouldEnableAccessibleAuthOverflow(1.2)).toBe(false);
+    expect(shouldEnableAccessibleAuthOverflow(1.21)).toBe(true);
+
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width: 375,
+      height: 667,
+      scale: 2,
+      fontScale: 1.21,
+    });
+    const screen = render(<LoginScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
+    expect(screen.getByTestId('auth-accessible-scroll')).toBeTruthy();
+    dimensions.mockRestore();
+  });
+
+  it('hides secondary chrome while the keyboard is visible and restores it afterward', () => {
+    const callbacks = {};
+    const addListener = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, callback) => {
+      callbacks[event] = callback;
+      return { remove: jest.fn() };
+    });
+
+    const screen = render(<LoginScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
+    expect(screen.getByTestId('auth-form-brand')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-footer')).toBeTruthy();
+    expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
+
+    act(() => callbacks.keyboardDidShow());
+    expect(screen.queryByTestId('auth-form-brand')).toBeNull();
+    expect(screen.queryByTestId('auth-form-footer')).toBeNull();
+    expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
+    expect(screen.queryByTestId('auth-back-button')).toBeNull();
+    expect(screen.getByTestId('login-email')).toBeTruthy();
+    expect(screen.getByTestId('login-password')).toBeTruthy();
+    expect(screen.getByTestId('email-login-button')).toBeTruthy();
+
+    act(() => callbacks.keyboardDidHide());
+    expect(screen.getByTestId('auth-form-brand')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-footer')).toBeTruthy();
+
+    screen.unmount();
+    const registration = render(<RegisterScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
+    act(() => callbacks.keyboardDidShow());
+    expect(registration.queryByTestId('auth-form-brand')).toBeNull();
+    expect(registration.getByTestId('register-name')).toBeTruthy();
+    expect(registration.getByTestId('register-email')).toBeTruthy();
+    expect(registration.getByTestId('register-password')).toBeTruthy();
+    expect(registration.getByTestId('register-confirm-password')).toBeTruthy();
+    expect(registration.getByTestId('legal-consent-checkbox')).toBeTruthy();
+    expect(registration.getByTestId('email-register-button')).toBeTruthy();
+    addListener.mockRestore();
   });
 });
