@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, View } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSigninButton } from '@react-native-google-signin/google-signin';
 
 import { forms } from '../../../styles';
 
 export const SocialLoginButtons = ({
-  mode = 'login',
   onGoogleLogin,
   onAppleLogin,
   disabled = false,
-  compact = false,
+  loadingProvider = null,
 }) => {
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -27,27 +26,44 @@ export const SocialLoginButtons = ({
   if (Platform.OS === 'web') return null;
 
   return (
-    <View style={[forms.authSocialContainer, compact && forms.authSocialContainerCompact]} testID="auth-social-buttons">
-      <GoogleSigninButton
-        style={forms.authGoogleButton}
-        size={GoogleSigninButton.Size.Wide}
-        color={GoogleSigninButton.Color.Light}
-        onPress={onGoogleLogin}
-        disabled={disabled}
-        testID="auth-google-button"
-      />
+    <View style={forms.authSocialContainer} testID="auth-social-buttons">
       {Platform.OS === 'ios' && appleAvailable ? (
-        <AppleAuthentication.AppleAuthenticationButton
-          buttonType={mode === 'register'
-            ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
-            : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-          cornerRadius={12}
-          style={forms.authAppleButton}
-          onPress={disabled ? () => {} : onAppleLogin}
+        <Pressable
+          style={({ pressed }) => [forms.authProviderIconSlot, pressed && forms.authProviderIconPressed]}
+          onPress={onAppleLogin}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel="המשך עם Apple"
           testID="auth-apple-button"
-        />
+        >
+          <Image
+            source={require('../../../../assets/apple-sign-in-logo.png')}
+            style={forms.authAppleIcon}
+            resizeMode="contain"
+          />
+          {loadingProvider === 'apple' ? (
+            <View style={forms.authProviderLoadingOverlay} pointerEvents="none">
+              <ActivityIndicator color="#FFFFFF" />
+            </View>
+          ) : null}
+        </Pressable>
       ) : null}
+      <View style={forms.authProviderIconSlot}>
+        <GoogleSigninButton
+          style={forms.authGoogleIconButton}
+          size={GoogleSigninButton.Size.Icon}
+          color={GoogleSigninButton.Color.Light}
+          onPress={onGoogleLogin}
+          disabled={disabled}
+          accessibilityLabel="המשך עם Google"
+          testID="auth-google-button"
+        />
+        {loadingProvider === 'google' ? (
+          <View style={forms.authProviderLoadingOverlay} pointerEvents="none">
+            <ActivityIndicator color="#1E3A5F" />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 };

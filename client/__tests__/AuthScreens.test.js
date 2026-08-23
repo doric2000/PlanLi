@@ -16,6 +16,8 @@ const mockValidateNewPassword = jest.fn();
 const mockSendResetEmail = jest.fn();
 const mockEnsureAuthenticatedUserProfile = jest.fn();
 const mockSignInWithGoogle = jest.fn();
+const mockSignInWithApple = jest.fn();
+const mockIsProviderCancellation = jest.fn(() => false);
 const mockRunAuthTransition = jest.fn(async (operation) => operation());
 const mockCompleteAccountSetup = jest.fn();
 const mockSynchronizeUserDocument = jest.fn();
@@ -50,12 +52,16 @@ jest.mock('../src/features/auth/components/SocialLoginButtons', () => {
   const ReactModule = require('react');
   const { TouchableOpacity, View } = require('react-native');
   return {
-    SocialLoginButtons: ({ onGoogleLogin }) => ReactModule.createElement(
+    SocialLoginButtons: ({ onGoogleLogin, onAppleLogin }) => ReactModule.createElement(
       View,
       { testID: 'mock-social-buttons' },
       ReactModule.createElement(TouchableOpacity, {
         testID: 'mock-google-login',
         onPress: onGoogleLogin,
+      }),
+      ReactModule.createElement(TouchableOpacity, {
+        testID: 'mock-apple-login',
+        onPress: onAppleLogin,
       })
     ),
   };
@@ -64,11 +70,11 @@ jest.mock('../src/features/auth/components/SocialLoginButtons', () => {
 jest.mock('../src/services/AuthService', () => ({
   ensureAuthenticatedUserProfile: (...args) => mockEnsureAuthenticatedUserProfile(...args),
   formatAuthError: (error) => error?.message || 'שגיאה',
-  isProviderCancellation: () => false,
+  isProviderCancellation: (...args) => mockIsProviderCancellation(...args),
   normalizeEmail: (value) => String(value || '').trim().toLowerCase(),
   registerWithEmail: (...args) => mockRegisterWithEmail(...args),
   sendResetEmail: (...args) => mockSendResetEmail(...args),
-  signInWithApple: jest.fn(),
+  signInWithApple: (...args) => mockSignInWithApple(...args),
   signInWithEmail: (...args) => mockSignInWithEmail(...args),
   signInWithGoogle: (...args) => mockSignInWithGoogle(...args),
   validateNewPassword: (...args) => mockValidateNewPassword(...args),
@@ -77,8 +83,11 @@ jest.mock('../src/services/AuthService', () => ({
 describe('authentication screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSignInWithGoogle.mockReset();
+    mockSignInWithApple.mockReset();
     mockValidateNewPassword.mockResolvedValue({ isValid: true });
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
+    mockIsProviderCancellation.mockReturnValue(false);
     mockCompleteAccountSetup.mockResolvedValue({ ok: true, userDocument: { displayName: 'Admin' } });
     mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.PREFERENCES_REQUIRED);
     mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
@@ -107,16 +116,42 @@ describe('authentication screens', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('ForgotPassword');
   });
 
-  it('keeps social providers on login and provides a working back action', () => {
+  it('keeps login provider-free and provides a working back action', () => {
     const navigation = {
       navigate: jest.fn(), reset: jest.fn(), replace: jest.fn(), goBack: jest.fn(),
       canGoBack: jest.fn(() => true),
     };
     const screen = render(<LoginScreen navigation={navigation} />);
-    expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
+    expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
     fireEvent.press(screen.getByTestId('auth-back-button'));
     expect(navigation.goBack).toHaveBeenCalled();
     expect(mockClearPendingReturn).toHaveBeenCalled();
+  });
+
+  it('keeps the approved welcome copy and opens email login and registration', () => {
+    const navigation = { navigate: jest.fn() };
+    const screen = render(<AuthEntryScreen navigation={navigation} />);
+
+    expect(screen.getByText('הטיול שלך מתחיל כאן')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('auth-entry-login-button'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Login');
+    fireEvent.press(screen.getByTestId('auth-entry-register-button'));
+    expect(navigation.navigate).toHaveBeenCalledWith('Register');
+    expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
+  });
+
+  it('returns an existing external-provider user to the app', async () => {
+    const navigation = { reset: jest.fn(), navigate: jest.fn() };
+    const user = { uid: 'existing-google-user' };
+    mockSignInWithGoogle.mockResolvedValue({ user, profile: { displayName: 'Dana' } });
+
+    const screen = render(<AuthEntryScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('mock-google-login'));
+
+    await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    }));
   });
 
   it('sends a new external-provider user to legal consent before preferences', async () => {
@@ -127,13 +162,37 @@ describe('authentication screens', () => {
     mockSignInWithGoogle.mockResolvedValue({ user, profile: { displayName: 'Dana' } });
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: true });
 
-    const screen = render(<LoginScreen navigation={navigation} />);
+    const screen = render(<AuthEntryScreen navigation={navigation} />);
     fireEvent.press(screen.getByTestId('mock-google-login'));
 
     await waitFor(() => expect(navigation.reset).toHaveBeenCalledWith({
       index: 0,
       routes: [{ name: 'CompleteAccount' }],
     }));
+  });
+
+  it('uses Apple from the welcome screen and keeps provider cancellation silent', async () => {
+    const navigation = { reset: jest.fn(), navigate: jest.fn() };
+    const cancellation = new Error('cancelled');
+    mockSignInWithApple.mockRejectedValue(cancellation);
+    mockIsProviderCancellation.mockReturnValue(true);
+
+    const screen = render(<AuthEntryScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('mock-apple-login'));
+
+    await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalled());
+    expect(screen.queryByTestId('auth-entry-error')).toBeNull();
+  });
+
+  it('shows formatted provider errors in the welcome error slot', async () => {
+    const navigation = { reset: jest.fn(), navigate: jest.fn() };
+    mockSignInWithGoogle.mockRejectedValue(new Error('שגיאת ספק'));
+
+    const screen = render(<AuthEntryScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('mock-google-login'));
+
+    await waitFor(() => expect(screen.getByTestId('auth-entry-error')).toHaveTextContent('שגיאת ספק'));
+    expect(screen.getByTestId('auth-entry-error-slot')).toBeTruthy();
   });
 
   it('opens the Home tab when the guest continues browsing', () => {
@@ -288,6 +347,10 @@ describe('authentication screens', () => {
       fontScale: 1,
     });
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
+    const welcome = render(<AuthEntryScreen navigation={navigation} />);
+    expect(welcome.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+    expect(welcome.getByTestId('welcome-brand-wordmark')).toBeTruthy();
+    welcome.unmount();
     const login = render(<LoginScreen navigation={navigation} />);
 
     expect(login.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
@@ -341,6 +404,9 @@ describe('authentication screens', () => {
     });
     const screen = render(<LoginScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
     expect(screen.getByTestId('auth-accessible-scroll')).toBeTruthy();
+    screen.unmount();
+    const welcome = render(<AuthEntryScreen navigation={{ navigate: jest.fn() }} />);
+    expect(welcome.getByTestId('auth-entry-accessible-scroll')).toBeTruthy();
     dimensions.mockRestore();
   });
 
@@ -354,12 +420,11 @@ describe('authentication screens', () => {
     const screen = render(<LoginScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
     expect(screen.getByTestId('auth-form-brand')).toBeTruthy();
     expect(screen.getByTestId('auth-form-footer')).toBeTruthy();
-    expect(screen.getByTestId('mock-social-buttons')).toBeTruthy();
+    expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
 
     act(() => callbacks.keyboardDidShow());
     expect(screen.queryByTestId('auth-form-brand')).toBeNull();
     expect(screen.queryByTestId('auth-form-footer')).toBeNull();
-    expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
     expect(screen.queryByTestId('auth-back-button')).toBeNull();
     expect(screen.getByTestId('login-email')).toBeTruthy();
     expect(screen.getByTestId('login-password')).toBeTruthy();

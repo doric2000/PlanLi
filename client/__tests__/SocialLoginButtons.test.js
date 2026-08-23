@@ -13,16 +13,9 @@ jest.mock('@react-native-google-signin/google-signin', () => {
   return { GoogleSigninButton };
 });
 
-jest.mock('expo-apple-authentication', () => {
-  const ReactModule = require('react');
-  const { View: NativeView } = require('react-native');
-  return {
-    isAvailableAsync: jest.fn(() => Promise.resolve(true)),
-    AppleAuthenticationButton: (props) => ReactModule.createElement(NativeView, props),
-    AppleAuthenticationButtonType: { SIGN_IN: 'sign-in', SIGN_UP: 'sign-up' },
-    AppleAuthenticationButtonStyle: { BLACK: 'black' },
-  };
-});
+jest.mock('expo-apple-authentication', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+}));
 
 describe('SocialLoginButtons', () => {
   const originalPlatform = Platform.OS;
@@ -35,10 +28,9 @@ describe('SocialLoginButtons', () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
   });
 
-  it('keeps native branded buttons at their supported widths in compact mode', async () => {
+  it('renders accessible icon-only provider buttons at equal touch-target sizes', async () => {
     const screen = render(
       <SocialLoginButtons
-        compact
         onGoogleLogin={jest.fn()}
         onAppleLogin={jest.fn()}
       />
@@ -47,12 +39,14 @@ describe('SocialLoginButtons', () => {
     await waitFor(() => expect(screen.getByTestId('auth-apple-button')).toBeTruthy());
 
     expect(StyleSheet.flatten(screen.getByTestId('auth-google-button').props.style)).toMatchObject({
-      width: 232,
+      width: 48,
       height: 48,
     });
     expect(StyleSheet.flatten(screen.getByTestId('auth-apple-button').props.style)).toMatchObject({
-      width: 224,
+      width: 48,
       height: 48,
     });
+    expect(screen.getByLabelText('המשך עם Google')).toBeTruthy();
+    expect(screen.getByLabelText('המשך עם Apple')).toBeTruthy();
   });
 });

@@ -78,7 +78,7 @@ export default function AuthFormLayout({ children, testID, onBack }) {
 
   return (
     <SafeAreaView style={authStyles.formSafe} edges={['top', 'right', 'bottom', 'left']}>
-      <LinearGradient colors={['#E9F0F8', '#F7F9FC', '#FFFFFF']} style={authStyles.formGradient}>
+      <LinearGradient colors={['#FFFFFF', '#FBFCFE', '#FFF8ED']} style={authStyles.formGradient}>
         {!keyboardVisible ? (
           <View pointerEvents="none" style={authStyles.formDecoration} testID="auth-form-decoration">
             <View style={authStyles.formDecorationNavy} />

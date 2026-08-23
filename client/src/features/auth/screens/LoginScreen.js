@@ -1,20 +1,15 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Platform, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Keyboard, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import { AuthInput } from '../../../components/AuthInput';
 import { authStyles } from '../../../styles';
 import {
   formatAuthError,
-  isProviderCancellation,
-  signInWithApple,
   signInWithEmail,
-  signInWithGoogle,
-  ensureAuthenticatedUserProfile,
 } from '../../../services/AuthService';
 import AuthFormLayout from '../components/AuthFormLayout';
 import BrandWordmark from '../components/BrandWordmark';
-import { SocialLoginButtons } from '../components/SocialLoginButtons';
-import { leaveAuthFlow, resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
+import { leaveAuthFlow, resetToMain } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 
 export default function LoginScreen({ navigation, route }) {
@@ -43,23 +38,6 @@ export default function LoginScreen({ navigation, route }) {
       }, 'sign_in_email');
     } catch (loginError) {
       setError(formatAuthError(loginError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSocialLogin = async (provider) => {
-    setLoading(true);
-    setError('');
-    try {
-      await runAuthTransition(async () => {
-        const result = provider === 'apple' ? await signInWithApple() : await signInWithGoogle();
-        const bootstrap = await ensureAuthenticatedUserProfile(result.user, result.profile);
-        if (bootstrap?.created) resetToRootRoute(navigation, 'CompleteAccount');
-        else complete();
-      }, provider === 'apple' ? 'sign_in_apple' : 'sign_in_google');
-    } catch (socialError) {
-      if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
     } finally {
       setLoading(false);
     }
@@ -114,12 +92,6 @@ export default function LoginScreen({ navigation, route }) {
             onPress={handleLogin} disabled={loading} testID="email-login-button">
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>התחברות</AppText>}
           </TouchableOpacity>
-          {!keyboardVisible && Platform.OS !== 'web' ? (
-            <>
-              <View style={[authStyles.dividerRow, authStyles.formDividerRow]}><View style={authStyles.divider} /><AppText style={authStyles.dividerText}>או</AppText><View style={authStyles.divider} /></View>
-              <SocialLoginButtons compact onGoogleLogin={() => handleSocialLogin('google')} onAppleLogin={() => handleSocialLogin('apple')} disabled={loading} />
-            </>
-          ) : null}
           {!keyboardVisible ? (
             <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer">
               <AppText style={authStyles.footerText}>אין חשבון? </AppText>
