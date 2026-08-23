@@ -2879,6 +2879,26 @@ export const dayEditorModalStyles = StyleSheet.create({
         writingDirection: "rtl",
         lineHeight: 19,
     },
+    reorderHint: {
+        color: colors.textMuted,
+        fontSize: 12,
+        textAlign: "right",
+        writingDirection: "rtl",
+        marginBottom: 8,
+    },
+    insertStopButton: {
+        minHeight: 38,
+        flexDirection: "row-reverse",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 5,
+    },
+    insertStopText: {
+        color: colors.brandOrange,
+        fontSize: 12,
+        fontFamily: fontFamilies.semiBold,
+        writingDirection: "rtl",
+    },
     stopCard: {
         flexDirection: "row-reverse",
         alignItems: "center",
@@ -2889,6 +2909,10 @@ export const dayEditorModalStyles = StyleSheet.create({
         borderRadius: 14,
         padding: 10,
         marginBottom: 8,
+    },
+    stopCardDragging: {
+        borderColor: colors.brandOrange,
+        backgroundColor: '#FFF9F0',
     },
     stopThumb: {
         width: 42,
@@ -2938,6 +2962,12 @@ export const dayEditorModalStyles = StyleSheet.create({
         fontSize: 12,
         fontFamily: fontFamilies.semiBold,
         writingDirection: "rtl",
+    },
+    dragHandle: {
+        minWidth: 44,
+        minHeight: 44,
+        alignItems: "center",
+        justifyContent: "center",
     },
     imagePickerSpacing: {
         marginBottom: spacing.xl,

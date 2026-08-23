@@ -93,6 +93,7 @@ export const routeBuilderStyles = StyleSheet.create({
   sectionTitle: { color: colors.textPrimary, fontSize: 18, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
   sectionMeta: { color: colors.textMuted, fontSize: 13 },
   empty: { color: colors.textMuted, textAlign: 'center', paddingVertical: 18, lineHeight: 21 },
+  reorderHint: { color: colors.textMuted, fontSize: 12, textAlign: 'right' },
   stopCard: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -102,6 +103,10 @@ export const routeBuilderStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: 12,
+  },
+  stopCardDragging: {
+    borderColor: colors.brandOrange,
+    backgroundColor: '#FFF9F0',
   },
   stopNumber: {
     width: 30,
@@ -121,8 +126,15 @@ export const routeBuilderStyles = StyleSheet.create({
   stopCopy: { flex: 1, alignItems: 'flex-end' },
   stopTitle: { color: colors.textPrimary, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
   stopMeta: { color: colors.textMuted, fontSize: 12, marginTop: 3, textAlign: 'right' },
-  stopControls: { flexDirection: 'row-reverse', gap: 2 },
-  stopControl: { minWidth: 34, minHeight: 38, alignItems: 'center', justifyContent: 'center' },
+  dragHandle: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  insertStop: {
+    minHeight: 38,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  insertStopText: { color: colors.brandOrange, fontSize: 12, fontFamily: fontFamilies.semiBold },
   addStop: {
     minHeight: 48,
     borderRadius: 14,
