@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  NestableDraggableFlatList,
+  NestableScrollContainer,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
@@ -28,6 +34,13 @@ const SAVE_DELAY_MS = 900;
 export const routeFooterInsetsStyle = (bottomInset) => ({
   paddingBottom: Math.max(14, Number(bottomInset) || 0),
 });
+export const reorderRouteStops = (stops, from, to) => {
+  const next = Array.isArray(stops) ? [...stops] : [];
+  if (from === to || from < 0 || to < 0 || from >= next.length || to >= next.length) return next;
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+};
 const emptyDays = (count) => Array.from({ length: count }, (_, index) => ({
   id: `day_${String(index + 1).padStart(3, '0')}`, description: '', media: null, stops: [],
 }));
@@ -148,6 +161,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   const [preservedAttributes, setPreservedAttributes] = useState({});
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [dayEditorVisible, setDayEditorVisible] = useState(false);
+  const [requestedStopInsertIndex, setRequestedStopInsertIndex] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState('saved');
@@ -330,14 +344,20 @@ export default function AddRoutesScreen({ navigation, route }) {
     lastSavedComparableRef.current = JSON.stringify(normalized);
     setExistingDraft(null);
   };
-  const moveStop = (from, direction) => setDays((current) => current.map((day, index) => {
+  const moveStop = (from, to) => setDays((current) => current.map((day, index) => {
     if (index !== activeDayIndex) return day;
-    const to = from + direction;
-    if (to < 0 || to >= day.stops.length) return day;
-    const stops = [...day.stops];
-    [stops[from], stops[to]] = [stops[to], stops[from]];
-    return { ...day, stops };
+    return { ...day, stops: reorderRouteStops(day.stops, from, to) };
   }));
+  const replaceActiveDayStops = (stops) => setDays((current) => current.map((day, index) =>
+    index === activeDayIndex ? { ...day, stops } : day));
+  const openDayEditor = (insertIndex = null) => {
+    setRequestedStopInsertIndex(Number.isInteger(insertIndex) ? insertIndex : null);
+    setDayEditorVisible(true);
+  };
+  const closeDayEditor = () => {
+    setRequestedStopInsertIndex(null);
+    setDayEditorVisible(false);
+  };
   const saveDay = (value, index) => setDays((current) => current.map((day, dayIndex) =>
     dayIndex === index ? { ...day, ...value, id: day.id } : day));
   const validatePublish = () => {
@@ -423,8 +443,8 @@ export default function AddRoutesScreen({ navigation, route }) {
   const allStops = flattenRouteStops(days);
   const preciseStops = allStops.filter((stop) => stop.locationPrecision !== 'general' && stop.coordinates);
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <GestureHandlerRootView style={styles.screen}>
+      <NestableScrollContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.statusRow} accessibilityLiveRegion="polite">
           {saveStatus === 'saving' ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={saveStatus === 'error' ? 'alert-circle-outline' : 'cloud-done-outline'} size={17} color={saveStatus === 'error' ? colors.error : colors.textMuted} />}
           <AppText style={[styles.statusText, saveStatus === 'error' && styles.statusError]}>{saveStatus === 'saving' ? 'שומר...' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : 'נשמר'}</AppText>
@@ -442,14 +462,50 @@ export default function AddRoutesScreen({ navigation, route }) {
         </ScrollView>
         <View style={styles.card}>
           <View style={styles.sectionHeader}><AppText style={styles.sectionTitle}>יום {activeDayIndex + 1}</AppText><AppText style={styles.sectionMeta}>{activeDay?.stops?.length || 0} עצירות</AppText></View>
-          {!activeDay?.stops?.length ? <AppText style={styles.empty}>עדיין אין עצירות ביום הזה. אפשר להוסיף גם מקום כללי שאין לו נקודה מדויקת במפות.</AppText> : activeDay.stops.map((stop, index) => (
-            <TouchableOpacity key={stop.id || `${activeDayIndex}-${index}`} style={styles.stopCard} onPress={() => setDayEditorVisible(true)} accessibilityRole="button">
-              {getStopMediaUrls(stop, 'thumb')[0] ? <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" priority="low" /> : <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
-              <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title}</AppText><AppText style={styles.stopMeta}>{stop.locationPrecision === 'general' ? 'מיקום כללי' : stop.location || stop.place?.name || 'נקודה במפה'}{stop.startTime ? ` · ${stop.startTime}` : ''}{stop.durationMinutes ? ` · ${stop.durationMinutes} דק׳` : ''}</AppText></View>
-              <View style={styles.stopControls}><TouchableOpacity style={styles.stopControl} onPress={(event) => { event.stopPropagation?.(); moveStop(index, -1); }} disabled={index === 0} accessibilityLabel="העברה למעלה"><Ionicons name="chevron-up" size={19} color={index === 0 ? colors.textMuted : colors.primary} /></TouchableOpacity><TouchableOpacity style={styles.stopControl} onPress={(event) => { event.stopPropagation?.(); moveStop(index, 1); }} disabled={index === activeDay.stops.length - 1} accessibilityLabel="העברה למטה"><Ionicons name="chevron-down" size={19} color={index === activeDay.stops.length - 1 ? colors.textMuted : colors.primary} /></TouchableOpacity></View>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.addStop} onPress={() => setDayEditorVisible(true)} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה</AppText></TouchableOpacity>
+          {!activeDay?.stops?.length ? <AppText style={styles.empty}>עדיין אין עצירות ביום הזה. אפשר להוסיף גם מקום כללי שאין לו נקודה מדויקת במפות.</AppText> : <>
+            <AppText style={styles.reorderHint}>לחיצה ארוכה על הידית וגרירה משנה את סדר העצירות</AppText>
+            <NestableDraggableFlatList
+              data={activeDay.stops}
+              keyExtractor={(stop, index) => stop.id || `${activeDayIndex}-${index}`}
+              activationDistance={8}
+              onDragEnd={({ data }) => replaceActiveDayStops(data)}
+              testID="route-stop-draggable-list"
+              renderItem={({ item: stop, index, drag, isActive }) => (
+                <View>
+                  {index > 0 ? <TouchableOpacity
+                    style={styles.insertStop}
+                    onPress={() => openDayEditor(index)}
+                    accessibilityRole="button"
+                    testID={`route-insert-stop-${index}`}
+                  ><Ionicons name="add-circle-outline" size={18} color={colors.brandOrange} /><AppText style={styles.insertStopText}>הוספת עצירה כאן</AppText></TouchableOpacity> : null}
+                  <ScaleDecorator activeScale={1.02}>
+                    <TouchableOpacity style={[styles.stopCard, isActive && styles.stopCardDragging]} onPress={() => openDayEditor()} accessibilityRole="button" disabled={isActive}>
+                      {getStopMediaUrls(stop, 'thumb')[0] ? <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" priority="low" /> : <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
+                      <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title}</AppText><AppText style={styles.stopMeta}>{stop.locationPrecision === 'general' ? 'מיקום כללי' : stop.location || stop.place?.name || 'נקודה במפה'}{stop.startTime ? ` · ${stop.startTime}` : ''}{stop.durationMinutes ? ` · ${stop.durationMinutes} דק׳` : ''}</AppText></View>
+                      <TouchableOpacity
+                        style={styles.dragHandle}
+                        onLongPress={drag}
+                        delayLongPress={180}
+                        onPress={(event) => event.stopPropagation?.()}
+                        accessibilityLabel={`שינוי מיקום העצירה ${index + 1}`}
+                        accessibilityHint="לחיצה ארוכה וגרירה משנה את הסדר"
+                        accessibilityActions={[
+                          ...(index > 0 ? [{ name: 'moveUp', label: 'העברה למעלה' }] : []),
+                          ...(index < activeDay.stops.length - 1 ? [{ name: 'moveDown', label: 'העברה למטה' }] : []),
+                        ]}
+                        onAccessibilityAction={({ nativeEvent }) => {
+                          if (nativeEvent.actionName === 'moveUp') moveStop(index, index - 1);
+                          if (nativeEvent.actionName === 'moveDown') moveStop(index, index + 1);
+                        }}
+                        testID={`route-stop-drag-handle-${index}`}
+                      ><Ionicons name="reorder-three-outline" size={27} color={colors.primary} /></TouchableOpacity>
+                    </TouchableOpacity>
+                  </ScaleDecorator>
+                </View>
+              )}
+            />
+          </>}
+          <TouchableOpacity style={styles.addStop} onPress={() => openDayEditor(activeDay?.stops?.length || 0)} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה בסוף היום</AppText></TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} testID="route-details-toggle"><AppText style={styles.detailsToggleText}>פרטי המסלול והפרסום</AppText><Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} /></TouchableOpacity>
         {detailsOpen ? <View style={styles.card}>
@@ -462,9 +518,9 @@ export default function AddRoutesScreen({ navigation, route }) {
           {validationMessage ? <View style={styles.errorBox}><AppText style={styles.errorText}>{validationMessage}</AppText></View> : null}
           {saveError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{saveError}</AppText></View> : null}
         </View> : null}
-      </ScrollView>
+      </NestableScrollContainer>
       <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer"><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
-      <DayEditorModal visible={dayEditorVisible} onClose={() => setDayEditorVisible(false)} onSave={saveDay} initialData={activeDay} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
-    </View>
+      <DayEditorModal visible={dayEditorVisible} onClose={closeDayEditor} onSave={saveDay} initialData={activeDay} initialInsertIndex={requestedStopInsertIndex} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
+    </GestureHandlerRootView>
   );
 }

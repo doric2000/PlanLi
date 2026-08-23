@@ -1,5 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { Alert, Modal, SafeAreaView, ScrollView, TouchableOpacity, View } from "react-native";
+import { Alert, Modal, SafeAreaView, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
+	NestableDraggableFlatList,
+	NestableScrollContainer,
+	ScaleDecorator,
+} from "react-native-draggable-flatlist";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AppText from "../../../components/AppText";
 
 import CachedImage from "../../../components/CachedImage";
@@ -8,7 +15,7 @@ import UnsavedChangesModal from "../../../components/UnsavedChangesModal";
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from "../../../constants/unsavedLeaveStrings";
 import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { getStopCoordinates, getStopMediaUrls } from "../utils/routeStops";
-import { dayEditorModalStyles as styles } from "../../../styles";
+import { colors, dayEditorModalStyles as styles } from "../../../styles";
 import StopEditorModal from "./StopEditorModal";
 
 function buildDayComparable({ description, stops }) {
@@ -45,13 +52,14 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function DayEditorModal({
 	visible, onClose, onSave, initialData, dayIndex, onForgetImage, onPersistImages, mediaForImage,
-	routeDestination, allowStopImages = true,
+	routeDestination, allowStopImages = true, initialInsertIndex = null,
 }) {
 	const [description, setDescription] = useState("");
 	const [dayNoteOpen, setDayNoteOpen] = useState(false);
 	const [stops, setStops] = useState([]);
 	const [stopModalVisible, setStopModalVisible] = useState(false);
 	const [editingStopIndex, setEditingStopIndex] = useState(null);
+	const [insertingStop, setInsertingStop] = useState(false);
 	const [dayBaseline, setDayBaseline] = useState(null);
 	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 	const pendingDiscardRef = useRef(null);
@@ -68,10 +76,17 @@ export default function DayEditorModal({
 		setDescription(desc0);
 		setDayNoteOpen(Boolean(desc0));
 		setStops(stops0);
-		setEditingStopIndex(null);
-		setStopModalVisible(false);
+		if (Number.isInteger(initialInsertIndex)) {
+			setEditingStopIndex(Math.max(0, Math.min(initialInsertIndex, stops0.length)));
+			setInsertingStop(true);
+			setStopModalVisible(true);
+		} else {
+			setEditingStopIndex(null);
+			setInsertingStop(false);
+			setStopModalVisible(false);
+		}
 		setDayBaseline(buildDayComparable({ description: desc0, stops: stops0 }));
-	}, [visible, initialData]);
+	}, [visible, initialData, initialInsertIndex]);
 
 	const dayFormComparable = useMemo(
 		() => buildDayComparable({ description, stops }),
@@ -104,14 +119,31 @@ export default function DayEditorModal({
 	const handleSaveStop = (stopData, index) => {
 		setStops((prev) => {
 			const next = [...prev];
-			if (index >= next.length) {
+			if (insertingStop) {
+				next.splice(Math.max(0, Math.min(index, next.length)), 0, stopData);
+			} else if (index >= next.length) {
 				next.push(stopData);
 			} else {
 				next[index] = stopData;
 			}
 			return next;
 		});
+		setInsertingStop(false);
 	};
+
+	const openNewStopAt = (index) => {
+		setEditingStopIndex(Math.max(0, Math.min(index, stops.length)));
+		setInsertingStop(true);
+		setStopModalVisible(true);
+	};
+
+	const moveStop = (from, to) => setStops((current) => {
+		if (from === to || from < 0 || to < 0 || from >= current.length || to >= current.length) return current;
+		const next = [...current];
+		const [moved] = next.splice(from, 1);
+		next.splice(to, 0, moved);
+		return next;
+	});
 
 	const handleDeleteStop = (index) => {
 		Alert.alert("מחיקת עצירה", `להסיר את העצירה מספר ${index + 1}?`, [
@@ -149,6 +181,7 @@ export default function DayEditorModal({
 
 	return (
 		<Modal visible={visible} animationType="fade" presentationStyle="pageSheet" onRequestClose={tryClose}>
+			<GestureHandlerRootView style={styles.container}>
 			<SafeAreaView style={styles.container}>
 				<UnsavedChangesModal
 					visible={unsavedModalVisible}
@@ -173,7 +206,7 @@ export default function DayEditorModal({
 					</TouchableOpacity>
 				</View>
 
-				<ScrollView
+				<NestableScrollContainer
 					style={styles.content}
 					contentContainerStyle={styles.scrollContent}
 					keyboardShouldPersistTaps="handled"
@@ -199,10 +232,7 @@ export default function DayEditorModal({
 					<View style={styles.stopsSection}>
 						<View style={styles.stopsHeader}>
 							<TouchableOpacity
-								onPress={() => {
-									setEditingStopIndex(stops.length);
-									setStopModalVisible(true);
-								}}
+								onPress={() => openNewStopAt(stops.length)}
 								style={styles.addStopButton}
 							>
 								<AppText style={styles.addStopText}>הוספת עצירה</AppText>
@@ -215,63 +245,72 @@ export default function DayEditorModal({
 								עדיין אין עצירות. אפשר להוסיף מקום מדויק, נקודה במפה או מיקום כללי.
 							</AppText>
 						) : (
-							stops.map((stop, index) => (
-								<TouchableOpacity
-									key={stop.id || `${stop.title}:${index}`}
-									style={styles.stopCard}
-									activeOpacity={0.85}
-									onPress={() => {
-										setEditingStopIndex(index);
-										setStopModalVisible(true);
-									}}
-								>
-									{stop.image || stop.media ? (
-										<CachedImage
-											source={{
-												uri: getMediaVariantUrl(
-													stop.media,
-													"thumb",
-													stop.image
-												),
-											}}
-											style={styles.stopThumb}
-											contentFit="cover"
-											priority="low"
-										/>
-									) : (
-										<View style={styles.stopNumberBadge}>
-											<AppText style={styles.stopNumberText}>{index + 1}</AppText>
+							<>
+								<AppText style={styles.reorderHint}>לחיצה ארוכה על הידית וגרירה משנה את הסדר</AppText>
+								<NestableDraggableFlatList
+									data={stops}
+									keyExtractor={(stop, index) => stop.id || `${stop.title}:${index}`}
+									activationDistance={8}
+									onDragEnd={({ data }) => setStops(data)}
+									testID="day-stop-draggable-list"
+									renderItem={({ item: stop, index, drag, isActive }) => (
+										<View>
+											{index > 0 ? <TouchableOpacity style={styles.insertStopButton} onPress={() => openNewStopAt(index)} testID={`day-insert-stop-${index}`}>
+												<Ionicons name="add-circle-outline" size={18} color={colors.brandOrange} />
+												<AppText style={styles.insertStopText}>הוספת עצירה כאן</AppText>
+											</TouchableOpacity> : null}
+											<ScaleDecorator activeScale={1.02}>
+												<TouchableOpacity
+													style={[styles.stopCard, isActive && styles.stopCardDragging]}
+													activeOpacity={0.85}
+													disabled={isActive}
+													onPress={() => {
+														setEditingStopIndex(index);
+														setInsertingStop(false);
+														setStopModalVisible(true);
+													}}
+												>
+													{stop.image || stop.media ? (
+														<CachedImage source={{ uri: getMediaVariantUrl(stop.media, "thumb", stop.image) }} style={styles.stopThumb} contentFit="cover" priority="low" />
+													) : <View style={styles.stopNumberBadge}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
+													<View style={styles.stopTextWrap}>
+														<AppText style={styles.stopTitle} numberOfLines={1}>{stop.title}</AppText>
+														<AppText style={styles.stopMeta} numberOfLines={1}>{stop.location || stop.place?.name || stop.place?.address}</AppText>
+													</View>
+													<TouchableOpacity onPress={(event) => { event.stopPropagation?.(); handleDeleteStop(index); }} style={styles.deleteStopButton}><AppText style={styles.deleteStopText}>הסרה</AppText></TouchableOpacity>
+													<TouchableOpacity
+														style={styles.dragHandle}
+														onLongPress={drag}
+														delayLongPress={180}
+														onPress={(event) => event.stopPropagation?.()}
+														accessibilityLabel={`שינוי מיקום העצירה ${index + 1}`}
+														accessibilityHint="לחיצה ארוכה וגרירה משנה את הסדר"
+														accessibilityActions={[
+															...(index > 0 ? [{ name: "moveUp", label: "העברה למעלה" }] : []),
+															...(index < stops.length - 1 ? [{ name: "moveDown", label: "העברה למטה" }] : []),
+														]}
+														onAccessibilityAction={({ nativeEvent }) => {
+															if (nativeEvent.actionName === "moveUp") moveStop(index, index - 1);
+															if (nativeEvent.actionName === "moveDown") moveStop(index, index + 1);
+														}}
+														testID={`day-stop-drag-handle-${index}`}
+													><Ionicons name="reorder-three-outline" size={27} color={colors.primary} /></TouchableOpacity>
+												</TouchableOpacity>
+											</ScaleDecorator>
 										</View>
 									)}
-									<View style={styles.stopTextWrap}>
-										<AppText style={styles.stopTitle} numberOfLines={1}>
-											{stop.title}
-										</AppText>
-										<AppText style={styles.stopMeta} numberOfLines={1}>
-											{stop.location || stop.place?.name || stop.place?.address}
-										</AppText>
-									</View>
-									<TouchableOpacity
-										onPress={(event) => {
-											event.stopPropagation?.();
-											handleDeleteStop(index);
-										}}
-										style={styles.deleteStopButton}
-									>
-										<AppText style={styles.deleteStopText}>הסרה</AppText>
-									</TouchableOpacity>
-								</TouchableOpacity>
-							))
+								/>
+							</>
 						)}
 					</View>
 
-				</ScrollView>
+				</NestableScrollContainer>
 
 				<StopEditorModal
 					visible={stopModalVisible}
 					onClose={() => setStopModalVisible(false)}
 					onSave={handleSaveStop}
-					initialData={editingStopIndex !== null ? stops[editingStopIndex] : null}
+					initialData={!insertingStop && editingStopIndex !== null ? stops[editingStopIndex] : null}
 					dayIndex={dayIndex}
 					stopIndex={editingStopIndex !== null ? editingStopIndex : stops.length}
 					onForgetImage={onForgetImage}
@@ -281,6 +320,7 @@ export default function DayEditorModal({
 					allowImages={allowStopImages}
 				/>
 			</SafeAreaView>
+			</GestureHandlerRootView>
 		</Modal>
 	);
 }

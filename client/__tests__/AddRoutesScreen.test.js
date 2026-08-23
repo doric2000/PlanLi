@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import AddRoutesScreen, {
+  reorderRouteStops,
   routeFooterInsetsStyle,
   routeDraftForServer,
 } from '../src/features/roadtrip/screens/AddRoutesScreen';
@@ -36,6 +37,27 @@ jest.mock('../src/hooks/useDurableDraftMedia', () => ({
 }));
 
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
+jest.mock('react-native-gesture-handler', () => {
+  const { View } = require('react-native');
+  return { GestureHandlerRootView: View };
+});
+jest.mock('react-native-draggable-flatlist', () => {
+  const React = require('react');
+  const { ScrollView, View } = require('react-native');
+  return {
+    NestableScrollContainer: React.forwardRef(({ children, ...props }, ref) => (
+      <ScrollView {...props} ref={ref}>{children}</ScrollView>
+    )),
+    NestableDraggableFlatList: ({ data, keyExtractor, renderItem, testID }) => (
+      <View testID={testID}>{data.map((item, index) => (
+        <React.Fragment key={keyExtractor(item, index)}>
+          {renderItem({ item, index, drag: () => {}, isActive: false })}
+        </React.Fragment>
+      ))}</View>
+    ),
+    ScaleDecorator: ({ children }) => <>{children}</>,
+  };
+});
 jest.mock('react-native-safe-area-context', () => ({
   ...jest.requireActual('react-native-safe-area-context'),
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
@@ -56,7 +78,12 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
 });
 jest.mock('../src/features/roadtrip/components/DayEditorModal', () => {
   const { View } = require('react-native');
-  return () => <View testID="day-editor-modal" />;
+  return ({ visible, initialInsertIndex }) => (
+    <View
+      testID="day-editor-modal"
+      accessibilityLabel={visible ? `insert-${initialInsertIndex}` : 'closed'}
+    />
+  );
 });
 
 const navigation = () => ({
@@ -130,6 +157,23 @@ describe('streamlined route builder', () => {
   it('keeps the publication action above the iPhone home indicator', () => {
     expect(routeFooterInsetsStyle(34)).toEqual({ paddingBottom: 34 });
     expect(routeFooterInsetsStyle(0)).toEqual({ paddingBottom: 14 });
+  });
+
+  it('reorders stops without changing their data', () => {
+    const stops = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    expect(reorderRouteStops(stops, 0, 2).map((stop) => stop.id)).toEqual(['b', 'c', 'a']);
+    expect(stops.map((stop) => stop.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('shows drag handles and can start a new stop between existing stops', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    expect(screen.getByTestId('route-stop-drag-handle-0')).toBeTruthy();
+    expect(screen.getByTestId('route-stop-drag-handle-1')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('route-insert-stop-1'));
+    expect(screen.getByLabelText('insert-1')).toBeTruthy();
   });
 
   it('opens a server draft from only a destination and day count', async () => {
