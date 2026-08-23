@@ -197,6 +197,7 @@ function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination, ownerUi
     durationMinutes,
     categoryId: cleanId(stop.categoryId || '', 'stop.categoryId', { optional: true }),
     subcategoryIds: cleanStringList(stop.subcategoryIds, 'stop.subcategoryIds', 3),
+    ...(stop.reuseSavedLocation === true ? { reuseSavedLocation: true } : {}),
     media,
     additionalMedia,
     mediaCleanupKeys: mediaAssets.map((asset) => mediaCleanupKey(asset, ownerUid)).filter(Boolean),

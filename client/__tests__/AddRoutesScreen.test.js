@@ -78,10 +78,12 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
 });
 jest.mock('../src/features/roadtrip/components/DayEditorModal', () => {
   const { View } = require('react-native');
-  return ({ visible, initialInsertIndex }) => (
+  return ({ visible, initialInsertIndex, initialEditIndex }) => (
     <View
       testID="day-editor-modal"
-      accessibilityLabel={visible ? `insert-${initialInsertIndex}` : 'closed'}
+      accessibilityLabel={visible
+        ? `insert-${initialInsertIndex};edit-${initialEditIndex}`
+        : 'closed'}
     />
   );
 });
@@ -173,7 +175,16 @@ describe('streamlined route builder', () => {
     expect(screen.getByTestId('route-stop-drag-handle-0')).toBeTruthy();
     expect(screen.getByTestId('route-stop-drag-handle-1')).toBeTruthy();
     fireEvent.press(screen.getByTestId('route-insert-stop-1'));
-    expect(screen.getByLabelText('insert-1')).toBeTruthy();
+    expect(screen.getByLabelText('insert-1;edit-null')).toBeTruthy();
+  });
+
+  it('opens the selected stop editor directly from the route builder', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    fireEvent.press(screen.getByTestId('route-stop-edit-1'));
+    expect(screen.getByLabelText('insert-null;edit-1')).toBeTruthy();
   });
 
   it('opens a server draft from only a destination and day count', async () => {
@@ -229,6 +240,52 @@ describe('streamlined route builder', () => {
       payload: expect.objectContaining({ draftId: 'draft-1', expectedVersion: 2 }),
     })));
     expect(nav.goBack).toHaveBeenCalled();
+  });
+
+  it('publishes reordered existing stops without resolving their saved places again', async () => {
+    const originalStops = [
+      {
+        id: 'a', title: 'השוק', locationPrecision: 'exact',
+        place: { placeId: 'place-a', coordinates: { lat: 47.5, lng: 19.1 } },
+        destination: { countryId: 'HU', cityId: 'budapest' },
+      },
+      {
+        id: 'b', title: 'בית קפה', locationPrecision: 'exact',
+        place: { placeId: 'place-b', coordinates: { lat: 47.51, lng: 19.11 } },
+        destination: { countryId: 'HU', cityId: 'budapest' },
+      },
+    ];
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({
+      sourceRouteId: 'route-1',
+      days: [{ id: 'day_001', stops: [originalStops[1], originalStops[0]] }],
+    }));
+    mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 3 });
+    const routeToEdit = {
+      id: 'route-1',
+      days: [{ id: 'day_001', stops: originalStops }],
+    };
+    const screen = render(
+      <AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit } }} />
+    );
+    await waitFor(() => expect(screen.getByTestId('route-submit')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-submit'));
+
+    await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'draft-1',
+      sourceRouteId: 'route-1',
+      expectedVersion: 2,
+      draft: expect.objectContaining({
+        days: [expect.objectContaining({
+          stops: [
+            expect.objectContaining({ id: 'b', reuseSavedLocation: true }),
+            expect.objectContaining({ id: 'a', reuseSavedLocation: true }),
+          ],
+        })],
+      }),
+    })));
+    expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ expectedVersion: 3 }),
+    }));
   });
 
   it('restores a failed background publication with its local image preview for editing', async () => {
