@@ -1,5 +1,4 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
 import { useCallback } from 'react';
@@ -46,10 +45,7 @@ export default function TabNavigator() {
       initialRouteName="Home"
       screenOptions={({ route, navigation }) => {
         const config = tabConfigs[route.name];
-        const focusedRouteName = route.name === 'Auth'
-          ? getFocusedRouteNameFromRoute(route) || 'AuthEntry'
-          : undefined;
-        const hideTabBar = shouldHideMainTabBar(route.name, focusedRouteName);
+        const hideTabBar = shouldHideMainTabBar(route.name);
         return ({
           tabBarIcon: ({ focused, color, size }) => {
             const showCommunityDot = route.name === 'Community' && !focused;
