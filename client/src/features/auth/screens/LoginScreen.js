@@ -60,6 +60,8 @@ export default function LoginScreen({ navigation, route }) {
               keyboardType="email-address"
               autoCapitalize="none"
               contentDirection="ltr"
+              embeddedLabel
+              showLeadingIcon={false}
               compact={compact}
               hideLabel={keyboardVisible}
               returnKeyType="next"
@@ -75,6 +77,8 @@ export default function LoginScreen({ navigation, route }) {
               placeholder="הזינו סיסמה"
               iconName="lock-closed-outline"
               isPassword
+              embeddedLabel
+              showLeadingIcon={false}
               compact={compact}
               hideLabel={keyboardVisible}
               returnKeyType="go"

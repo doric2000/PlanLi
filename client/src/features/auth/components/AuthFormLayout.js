@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { authStyles } from '../../../styles';
 
@@ -78,12 +79,31 @@ export default function AuthFormLayout({ children, testID, onBack }) {
 
   return (
     <SafeAreaView style={authStyles.formSafe} edges={['top', 'right', 'bottom', 'left']}>
-      <LinearGradient colors={['#FFFFFF', '#FBFCFE', '#FFF8ED']} style={authStyles.formGradient}>
+      <LinearGradient
+        colors={['#FFFFFF', '#FFFFFF', '#F8FBFE']}
+        style={authStyles.formGradient}
+        testID="auth-form-gradient"
+      >
         {!keyboardVisible ? (
           <View pointerEvents="none" style={authStyles.formDecoration} testID="auth-form-decoration">
-            <View style={authStyles.formDecorationNavy} />
-            <View style={authStyles.formDecorationOrange} />
-            <View style={authStyles.formRouteLine} />
+            <Svg style={authStyles.formRouteArtwork} width="100%" height="126" viewBox="0 0 375 126">
+              <Path
+                d="M-18 91 C42 44 83 103 132 77 C178 52 201 112 256 80 C300 55 328 87 393 42"
+                fill="none"
+                stroke="#F5961D"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeDasharray="7 8"
+                opacity="0.11"
+              />
+              <Circle cx="132" cy="77" r="7" fill="#FFFFFF" stroke="#F5961D" strokeWidth="3" opacity="0.13" />
+              <Path
+                d="M328 45 C318 45 311 53 311 63 C311 76 328 91 328 91 C328 91 345 76 345 63 C345 53 338 45 328 45 Z"
+                fill="#F5961D"
+                opacity="0.12"
+              />
+              <Circle cx="328" cy="62" r="5" fill="#FFFFFF" opacity="0.8" />
+            </Svg>
           </View>
         ) : null}
         <KeyboardAvoidingView

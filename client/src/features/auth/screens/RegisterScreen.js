@@ -76,6 +76,8 @@ export default function RegisterScreen({ navigation, route }) {
               placeholder="הזינו את שמכם המלא"
               iconName="person-outline"
               autoCapitalize="words"
+              embeddedLabel
+              showLeadingIcon={false}
               compact={compact}
               hideLabel={keyboardVisible}
               returnKeyType="next"
@@ -92,6 +94,8 @@ export default function RegisterScreen({ navigation, route }) {
               iconName="mail-outline"
               keyboardType="email-address"
               contentDirection="ltr"
+              embeddedLabel
+              showLeadingIcon={false}
               compact={compact}
               hideLabel={keyboardVisible}
               returnKeyType="next"
@@ -107,6 +111,8 @@ export default function RegisterScreen({ navigation, route }) {
               placeholder="לפחות 10 תווים"
               iconName="lock-closed-outline"
               isPassword
+              embeddedLabel
+              showLeadingIcon={false}
               compact={compact}
               hideLabel={keyboardVisible}
               returnKeyType="next"
@@ -123,6 +129,8 @@ export default function RegisterScreen({ navigation, route }) {
               placeholder="הזינו שוב את הסיסמה"
               iconName="lock-closed-outline"
               isPassword
+              embeddedLabel
+              showLeadingIcon={false}
               compact={compact}
               hideLabel={keyboardVisible}
               returnKeyType="done"
