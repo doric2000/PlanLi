@@ -22,6 +22,13 @@ const {
   publishRouteDraft,
   saveRouteDraft,
 } = require('./routeDraftService');
+const {
+  cleanupRecommendationDraftArtifacts,
+  discardRecommendationDraft,
+  getCurrentRecommendationDraft,
+  publishRecommendationDraft,
+  saveRecommendationDraft,
+} = require('./recommendationDraftService');
 const { saveTrip } = require('./tripService');
 const { completeAccountSetup, registerUser, updateProfile } = require('./profileService');
 const { authorizeRequest } = require('./authPolicy');
@@ -269,6 +276,44 @@ exports.saveRecommendation = callable(
     mediaBucket: mediaStorageBucket.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   }))
+);
+
+exports.getCurrentRecommendationDraft = callable(
+  { access: 'active', timeoutSeconds: 30 },
+  (request) => getCurrentRecommendationDraft({ admin, auth: request.auth })
+);
+
+exports.saveRecommendationDraft = callable(
+  { access: 'active', timeoutSeconds: 60, memory: '512MiB' },
+  (request) => saveRecommendationDraft({ admin, auth: request.auth, data: request.data })
+);
+
+exports.discardRecommendationDraft = callable(
+  { access: 'active', timeoutSeconds: 60, memory: '512MiB' },
+  (request) => discardRecommendationDraft({ admin, auth: request.auth, data: request.data })
+);
+
+exports.publishRecommendationDraft = callable(
+  {
+    access: 'active',
+    timeoutSeconds: 300,
+    memory: '1GiB',
+    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    ...PROVIDER_CALLABLE_LIMITS,
+  },
+  (request) => locationSave('recommendation_draft_publish', request, (incidentId) => (
+    publishRecommendationDraft({
+      admin,
+      auth: request.auth,
+      data: { ...(request.data || {}), incidentId },
+      mapsKey: googleMapsKey.value(),
+      newPlacesKey: googlePlacesNewKey.value(),
+      placesProvider: placesProvider.value(),
+      restCountriesKey: restCountriesKey.value(),
+      mediaBucket: mediaStorageBucket.value(),
+      providerRateLimitKey: publicRateLimitKey.value(),
+    })
+  ))
 );
 
 exports.resolveRecommendationDestination = callable(
@@ -791,12 +836,15 @@ exports.cleanupExpiredRuntimeScheduled = onSchedule(
     serviceAccount: CORE_SERVICE_ACCOUNT,
   },
   async () => {
-    const [runtime, revisions, routeDraftReceipts] = await Promise.all([
+    const [runtime, revisions, routeDraftReceipts, recommendationDrafts] = await Promise.all([
       cleanupExpiredRuntimeDocuments({ admin, limit: 200 }),
       cleanupRouteRevisions({ admin, limit: 100 }),
       cleanupPublishedRouteDraftReceipts({ admin, limit: 100 }),
+      cleanupRecommendationDraftArtifacts({ admin, limit: 100 }),
     ]);
-    console.log('Expired runtime cleanup complete.', { runtime, revisions, routeDraftReceipts });
+    console.log('Expired runtime cleanup complete.', {
+      runtime, revisions, routeDraftReceipts, recommendationDrafts,
+    });
   }
 );
 

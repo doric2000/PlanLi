@@ -83,8 +83,14 @@ const mockSaveRecommendation = jest.fn(() =>
     city: { id: 'TLV', name: 'תל אביב' },
   })
 );
+const mockGetCurrentRecommendationDraft = jest.fn(() => Promise.resolve(null));
+const mockSaveRecommendationDraft = jest.fn(() => Promise.resolve({ draftId: 'recommendation-draft-1', version: 1 }));
+const mockDiscardRecommendationDraft = jest.fn(() => Promise.resolve({ discarded: true }));
 jest.mock('../src/services/RecommendationService', () => ({
   saveRecommendation: (...args) => mockSaveRecommendation(...args),
+  getCurrentRecommendationDraft: (...args) => mockGetCurrentRecommendationDraft(...args),
+  saveRecommendationDraft: (...args) => mockSaveRecommendationDraft(...args),
+  discardRecommendationDraft: (...args) => mockDiscardRecommendationDraft(...args),
 }));
 
 const mockRememberRecentDestination = jest.fn(() => Promise.resolve([]));
@@ -145,6 +151,24 @@ jest.mock('../src/hooks/useDurableDraftMedia', () => ({
     markEnqueued: jest.fn(),
     mediaForUri: (uri) => ({ uri }),
     persistUris: async (uris) => uris,
+  }),
+}));
+const mockBindRecommendationDraftMedia = jest.fn(async () => {});
+const mockClearRecommendationDraftMedia = jest.fn(async () => {});
+const mockClearStaleRecommendationDraftMedia = jest.fn(async () => {});
+const mockForgetRecommendationDraftMedia = jest.fn(async () => {});
+const mockPersistRecommendationDraftMedia = jest.fn(async (uris) => uris);
+const mockRestoreRecommendationDraftMedia = jest.fn(async () => ({ uris: [], missingCount: 0 }));
+jest.mock('../src/hooks/useRecommendationDraftMedia', () => ({
+  __esModule: true,
+  default: () => ({
+    bindDraft: mockBindRecommendationDraftMedia,
+    clearDraft: mockClearRecommendationDraftMedia,
+    clearStaleDraft: mockClearStaleRecommendationDraftMedia,
+    forgetUri: mockForgetRecommendationDraftMedia,
+    mediaForUri: (uri) => ({ uri }),
+    persistUris: mockPersistRecommendationDraftMedia,
+    restoreDraft: mockRestoreRecommendationDraftMedia,
   }),
 }));
 
@@ -233,12 +257,20 @@ describe('AddRecommendationScreen Integration Test', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetCurrentRecommendationDraft.mockResolvedValue(null);
+    mockSaveRecommendationDraft.mockResolvedValue({ draftId: 'recommendation-draft-1', version: 1 });
+    mockDiscardRecommendationDraft.mockResolvedValue({ discarded: true });
+    mockRestoreRecommendationDraftMedia.mockResolvedValue({ uris: [], missingCount: 0 });
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
   afterEach(() => {
     Alert.alert.mockRestore?.();
   });
+
+  const waitForCatalogEditor = (screen) => waitFor(() =>
+    expect(screen.getByTestId('recommendation-exact-location-search')).toBeTruthy()
+  );
 
   it('scrolls a focused native input above the keyboard with composer clearance', () => {
     const scrollResponderScrollNativeHandleToKeyboard = jest.fn();
@@ -251,6 +283,109 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(scrollFocusedRecommendationInputIntoView(null, 42)).toBe(false);
   });
 
+  it('offers continue or discard when a recommendation draft already exists', async () => {
+    mockGetCurrentRecommendationDraft.mockResolvedValueOnce({
+      ...makeEditItem({
+        id: undefined,
+        title: 'המלצה שנשמרה',
+        recommendationCatalogVersion: undefined,
+      }),
+      id: 'draft-existing',
+      version: 4,
+      sourceRecommendationId: null,
+      step: 3,
+      locationMode: 'destination',
+      selectedCountry: { id: 'IL', name: 'ישראל' },
+      selectedCity: { id: 'TLV', name: 'תל אביב' },
+      media: [],
+      localMediaCount: 1,
+    });
+    mockRestoreRecommendationDraftMedia.mockResolvedValueOnce({ uris: [], missingCount: 1 });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    expect(screen.getByTestId('recommendation-draft-discard')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-title-input').props.value).toBe('המלצה שנשמרה'));
+    expect(mockRestoreRecommendationDraftMedia).toHaveBeenCalledWith('draft-existing', 1);
+    expect(screen.getByTestId('recommendation-missing-local-media')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('recommendation-back'));
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'draft-existing',
+      expectedVersion: 4,
+      draft: expect.objectContaining({ step: 2 }),
+    })), { timeout: 2500 });
+  });
+
+  it('keeps another draft unless the user discards it before opening a requested edit', async () => {
+    mockGetCurrentRecommendationDraft.mockResolvedValueOnce({
+      id: 'draft-other', version: 2, sourceRecommendationId: 'another-post',
+      step: 2, locationMode: 'destination', title: 'עריכה אחרת', media: [], localMediaCount: 0,
+    });
+    const editItem = makeEditItem({ recommendationCatalogVersion: 1 });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { mode: 'edit', item: editItem, postId: editItem.id } }}
+      />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-switch-cancel')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-switch-cancel'));
+    expect(navigationMock.goBack).toHaveBeenCalled();
+    expect(mockDiscardRecommendationDraft).not.toHaveBeenCalled();
+  });
+
+  it('creates the draft only after the first meaningful change and autosaves after the debounce', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+    await waitForCatalogEditor(screen);
+    expect(mockSaveRecommendationDraft).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByTestId('recommendation-exact-location-search'), 'טיוטה ראשונה');
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      sourceRecommendationId: null,
+      draft: expect.objectContaining({ locationQuery: 'טיוטה ראשונה' }),
+    })), { timeout: 2500 });
+    expect(mockBindRecommendationDraftMedia).toHaveBeenCalledWith('recommendation-draft-1');
+  });
+
+  it('shows an autosave failure and retries with the same unsaved snapshot', async () => {
+    mockSaveRecommendationDraft
+      .mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'functions/unavailable' }))
+      .mockResolvedValueOnce({ draftId: 'recommendation-draft-1', version: 1 });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+    await waitForCatalogEditor(screen);
+    fireEvent.changeText(screen.getByTestId('recommendation-exact-location-search'), 'שינוי שלא נשמר');
+    await waitFor(() => expect(screen.getByTestId('recommendation-save-retry')).toBeTruthy(), { timeout: 2500 });
+    fireEvent.press(screen.getByTestId('recommendation-save-retry'));
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(2));
+    expect(mockSaveRecommendationDraft.mock.calls[1][0].draft.locationQuery).toBe('שינוי שלא נשמר');
+    expect(mockSaveRecommendationDraft.mock.calls[1][0].saveRequestId)
+      .toBe(mockSaveRecommendationDraft.mock.calls[0][0].saveRequestId);
+  });
+
   it('keeps a bottom optional field reachable and dismissible while preserving its text', async () => {
     const keyboardListeners = {};
     const dismissSpy = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
@@ -259,6 +394,7 @@ describe('AddRecommendationScreen Integration Test', () => {
       return { remove: jest.fn() };
     });
     mockLoadJobForReview.mockResolvedValueOnce({
+      payload: { draftId: 'recommendation-draft-keyboard', expectedVersion: 3 },
       draft: {
         step: 4,
         locationMode: 'exact',
@@ -349,6 +485,8 @@ describe('AddRecommendationScreen Integration Test', () => {
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
+    await waitForCatalogEditor({ getByTestId });
+
     // ------------------------------------------------
     // Step 2: Act (Simulate User Actions)
     // ------------------------------------------------
@@ -392,23 +530,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => {
       expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
         contentType: 'recommendation',
-        draftJobId: '123e4567-e89b-42d3-a456-426614174000',
         sourceJobId: null,
-        payload: expect.objectContaining({
-          placeId: 'google-place-id',
-          locationMode: 'exact',
-          recommendation: expect.objectContaining({
-            title: 'Best Pizza Ever',
-            description: 'Great cheese and crust!',
-            categoryId: 'food',
-            subcategoryIds: ['restaurant'],
-            recommendationCatalogVersion: 1,
-            taxonomyVersion: 5,
-            budget: 'balanced',
-            media: [],
-            details: { phone: '+972 50 123 4567' },
-          }),
-        }),
+        payload: { draftId: 'recommendation-draft-1', expectedVersion: 1 },
         media: [{ uri: 'file:///tasty-pizza.jpg' }],
         draft: expect.objectContaining({
           title: 'Best Pizza Ever',
@@ -416,6 +539,16 @@ describe('AddRecommendationScreen Integration Test', () => {
         }),
       }));
     });
+    expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draft: expect.objectContaining({
+        title: 'Best Pizza Ever',
+        description: 'Great cheese and crust!',
+        categoryId: 'food',
+        subcategoryIds: ['restaurant'],
+        budget: 'balanced',
+        details: { phone: '+972 50 123 4567' },
+      }),
+    }));
 
     // Verify navigation back to the previous screen
     expect(navigationMock.goBack).toHaveBeenCalled();
@@ -436,6 +569,8 @@ describe('AddRecommendationScreen Integration Test', () => {
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
+    await waitForCatalogEditor({ getByTestId });
+
     fireEvent.press(getByTestId('recommendation-location-mode-destination'));
     fireEvent.press(getByTestId('recommendation-test-select-destination'));
     fireEvent.press(getByTestId('recommendation-next'));
@@ -451,14 +586,12 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(getByTestId('recommendation-next'));
 
     await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({
-        destinationRef: { countryId: 'HU', cityId: 'budapest' },
-        locationMode: 'destination',
-        recommendation: expect.objectContaining({
-          categoryId: 'nature',
-          subcategoryIds: ['beach'],
-          budget: 'economy',
-        }),
+      payload: { draftId: 'recommendation-draft-1', expectedVersion: 1 },
+      draft: expect.objectContaining({
+        generalDestination: expect.objectContaining({ countryId: 'HU', cityId: 'budapest' }),
+        categoryId: 'nature',
+        subcategoryIds: ['beach'],
+        budget: 'economy',
       }),
     })));
     expect(mockResolveDestinationForPlacePreview).not.toHaveBeenCalled();
@@ -491,31 +624,35 @@ describe('AddRecommendationScreen Integration Test', () => {
     );
 
     await waitFor(() => expect(screen.getByText('עריכת המלצה')).toBeTruthy());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 950)); });
+    expect(mockSaveRecommendationDraft).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId('recommendation-next'));
     fireEvent.press(screen.getByTestId('recommendation-next'));
     fireEvent.changeText(screen.getByTestId('recommendation-title-input'), 'Original updated');
     fireEvent.press(screen.getByTestId('recommendation-next'));
     fireEvent.press(screen.getByTestId('recommendation-next'));
 
-    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalledWith(expect.objectContaining({
-      recommendationId: 'post-1',
-      destinationRef: { countryId: 'IL', cityId: 'TLV' },
-      locationMode: 'exact',
-      recommendation: expect.objectContaining({
-        recommendationCatalogVersion: 1,
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        draftId: 'recommendation-draft-1',
+        expectedVersion: 1,
+        sourceRecommendationId: 'post-1',
+      },
+      media: [{ asset: existingAsset }],
+      draft: expect.objectContaining({
+        sourceRecommendationId: 'post-1',
         categoryId: 'food',
         subcategoryIds: ['restaurant'],
         title: 'Original updated',
         details: { phone: '+972 50 111 2233' },
-        media: [existingAsset],
       }),
     })));
-    expect(mockEnqueueCreate).not.toHaveBeenCalled();
+    expect(mockSaveRecommendation).not.toHaveBeenCalled();
     expect(mockUploadImages).not.toHaveBeenCalled();
     expect(navigationMock.goBack).toHaveBeenCalled();
   });
 
-  it('keeps the custom label while Other remains selected with another subcategory', () => {
+  it('keeps the custom label while Other remains selected with another subcategory', async () => {
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
@@ -523,6 +660,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     const screen = render(
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
+
+    await waitForCatalogEditor(screen);
 
     fireEvent.press(screen.getByTestId('recommendation-location-mode-destination'));
     fireEvent.press(screen.getByTestId('recommendation-test-select-destination'));
@@ -574,6 +713,8 @@ describe('AddRecommendationScreen Integration Test', () => {
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
+    await waitForCatalogEditor(screen);
+
     fireEvent.press(screen.getByTestId('google-result-select'));
 
     await waitFor(() => expect(screen.getByTestId('recommendation-location-error')).toBeTruthy());
@@ -582,6 +723,7 @@ describe('AddRecommendationScreen Integration Test', () => {
 
   it('restores a failed queued recommendation for review', async () => {
     mockLoadJobForReview.mockResolvedValueOnce({
+      payload: { draftId: 'recommendation-draft-review', expectedVersion: 7 },
       draft: {
         step: 3,
         locationMode: 'exact',
@@ -595,7 +737,7 @@ describe('AddRecommendationScreen Integration Test', () => {
         selectedPlace: { placeId: 'place-1', name: 'Queued place' },
         locationQuery: 'Queued place',
       },
-      imageUris: ['file:///durable-queue-image.jpg'],
+      materializedMedia: [{ type: 'local', uri: 'file:///durable-queue-image.jpg' }],
     });
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
@@ -686,6 +828,8 @@ describe('AddRecommendationScreen Integration Test', () => {
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
+    await waitForCatalogEditor({ getByTestId });
+
     fireEvent.changeText(getByTestId('recommendation-exact-location-search'), 'טיוטת המלצה');
     const preventDefault = jest.fn();
     await act(async () => {
@@ -693,7 +837,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     });
 
     expect(preventDefault).toHaveBeenCalled();
-    expect(getByTestId('unsaved-discard-modal')).toBeTruthy();
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalled());
+    await waitFor(() => expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' }));
   });
 
   it('edit mode: beforeRemove shows unsaved alert when dirty; כן dispatches action', async () => {

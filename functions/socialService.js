@@ -51,6 +51,7 @@ const RATE_LIMITS = Object.freeze({
   comment: { max: 30, windowMs: 10 * 60 * 1000 },
   deleteContent: { max: 20, windowMs: 60 * 60 * 1000 },
   notification: { max: 120, windowMs: 60 * 1000 },
+  recommendationDraftSave: { max: 120, windowMs: 10 * 60 * 1000 },
 });
 
 const COMMENT_THREAD_DELETE_PAGE_SIZE = 200;
