@@ -30,8 +30,8 @@ jest.mock('react-native-draggable-flatlist', () => {
 });
 jest.mock('../src/features/roadtrip/components/StopEditorModal', () => {
   const { Pressable, Text, View } = require('react-native');
-  return ({ visible, onSave, onClose, stopIndex }) => visible ? (
-    <Pressable testID="stop-editor-save" onPress={() => {
+  return ({ visible, onSave, onClose, stopIndex, initialData }) => visible ? (
+    <Pressable testID="stop-editor-save" accessibilityLabel={`editing-${initialData?.id || 'new'}`} onPress={() => {
       onSave({ id: 'inserted', title: 'עצירה חדשה', location: 'בין העצירות' }, stopIndex);
       onClose();
     }}><Text>שמירת עצירה</Text></Pressable>
@@ -106,6 +106,45 @@ describe('DayEditorModal', () => {
     fireEvent.press(screen.getByTestId('stop-editor-save'));
     fireEvent.press(screen.getByText('שמירה'));
     expect(onSave.mock.calls[0][0].stops.map((stop) => stop.id)).toEqual(['one', 'inserted', 'two']);
+  });
+
+  it('opens a requested existing stop with its saved data', () => {
+    const onSave = jest.fn();
+    const onClose = jest.fn();
+    const screen = render(
+      <DayEditorModal
+        visible
+        dayIndex={0}
+        initialEditIndex={1}
+        initialData={{
+          description: '',
+          stops: [{ id: 'one', title: 'ראשונה' }, { id: 'two', title: 'שנייה' }],
+        }}
+        onSave={onSave}
+        onClose={onClose}
+      />
+    );
+    expect(screen.getByLabelText('editing-two')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('stop-editor-save'));
+    expect(onSave.mock.calls[0][0].stops.map((stop) => stop.id)).toEqual(['one', 'inserted']);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the selected existing stop into the editor from the day list', () => {
+    const screen = render(
+      <DayEditorModal
+        visible
+        dayIndex={0}
+        initialData={{
+          description: '',
+          stops: [{ id: 'one', title: 'ראשונה' }, { id: 'two', title: 'שנייה' }],
+        }}
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+    fireEvent.press(screen.getByTestId('day-stop-edit-1'));
+    expect(screen.getByLabelText('editing-two')).toBeTruthy();
   });
 
   it('supports an accessible order change from the drag handle', () => {

@@ -28,7 +28,9 @@ import SingleDestinationPicker from '../../community/components/SingleDestinatio
 import { useContentPublish } from '../../publishing/ContentPublishContext';
 import DayEditorModal from '../components/DayEditorModal';
 import { extractRoutePublishMedia } from '../utils/routeMedia';
-import { flattenRouteStops, getStopMediaUrls } from '../utils/routeStops';
+import {
+  flattenRouteStops, getStopMediaUrls, markUnchangedRouteLocations,
+} from '../utils/routeStops';
 
 const SAVE_DELAY_MS = 900;
 export const routeFooterInsetsStyle = (bottomInset) => ({
@@ -162,6 +164,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [dayEditorVisible, setDayEditorVisible] = useState(false);
   const [requestedStopInsertIndex, setRequestedStopInsertIndex] = useState(null);
+  const [requestedStopEditIndex, setRequestedStopEditIndex] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState('saved');
@@ -265,9 +268,9 @@ export default function AddRoutesScreen({ navigation, route }) {
   }), [area, budgetLevel, categoryIds, days, description, difficulty, pace, preservedAttributes, priceNote, seasons, subcategoryIds, title, transportModes]);
   const draftComparable = useMemo(() => JSON.stringify(draftPayload), [draftPayload]);
 
-  const persistSnapshot = useCallback((snapshot, comparable) => {
+  const persistSnapshot = useCallback((snapshot, comparable, { force = false } = {}) => {
     saveQueueRef.current = saveQueueRef.current.catch(() => versionRef.current).then(async () => {
-      if (!draftIdRef.current || comparable === lastSavedComparableRef.current) return versionRef.current;
+      if (!draftIdRef.current || (!force && comparable === lastSavedComparableRef.current)) return versionRef.current;
       if (mountedRef.current) { setSaveStatus('saving'); setSaveError(''); }
       try {
         const saved = await saveRouteDraft({
@@ -350,12 +353,14 @@ export default function AddRoutesScreen({ navigation, route }) {
   }));
   const replaceActiveDayStops = (stops) => setDays((current) => current.map((day, index) =>
     index === activeDayIndex ? { ...day, stops } : day));
-  const openDayEditor = (insertIndex = null) => {
+  const openDayEditor = ({ insertIndex = null, editIndex = null } = {}) => {
     setRequestedStopInsertIndex(Number.isInteger(insertIndex) ? insertIndex : null);
+    setRequestedStopEditIndex(Number.isInteger(editIndex) ? editIndex : null);
     setDayEditorVisible(true);
   };
   const closeDayEditor = () => {
     setRequestedStopInsertIndex(null);
+    setRequestedStopEditIndex(null);
     setDayEditorVisible(false);
   };
   const saveDay = (value, index) => setDays((current) => current.map((day, dayIndex) =>
@@ -374,11 +379,15 @@ export default function AddRoutesScreen({ navigation, route }) {
     if (message) { setDetailsOpen(true); return; }
     setPublishBusy(true);
     try {
-      const version = await persistSnapshot(draftPayload, draftComparable);
-      if (typeof enqueueCreate !== 'function') throw new Error('Route publishing is unavailable.');
-      const extracted = extractRoutePublishMedia(draftPayload.days);
-      const queuedRoute = {
+      const publishDraft = isEditingRoute ? {
         ...draftPayload,
+        days: markUnchangedRouteLocations(draftPayload.days, routeAsDraft(routeToEdit).days),
+      } : draftPayload;
+      const version = await persistSnapshot(publishDraft, draftComparable, { force: isEditingRoute });
+      if (typeof enqueueCreate !== 'function') throw new Error('Route publishing is unavailable.');
+      const extracted = extractRoutePublishMedia(publishDraft.days);
+      const queuedRoute = {
+        ...publishDraft,
         routeSchemaVersion: 2,
         taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
         days: extracted.days,
@@ -394,7 +403,7 @@ export default function AddRoutesScreen({ navigation, route }) {
           ...(sourceRouteIdRef.current ? { sourceRouteId: sourceRouteIdRef.current } : {}),
         },
         media: extracted.media,
-        draft: { route: draftPayload },
+        draft: { route: publishDraft },
       });
       markDurableImagesEnqueued(extracted.media.map((entry) => entry.uri));
       navigation.goBack();
@@ -474,12 +483,19 @@ export default function AddRoutesScreen({ navigation, route }) {
                 <View>
                   {index > 0 ? <TouchableOpacity
                     style={styles.insertStop}
-                    onPress={() => openDayEditor(index)}
+                    onPress={() => openDayEditor({ insertIndex: index })}
                     accessibilityRole="button"
                     testID={`route-insert-stop-${index}`}
                   ><Ionicons name="add-circle-outline" size={18} color={colors.brandOrange} /><AppText style={styles.insertStopText}>הוספת עצירה כאן</AppText></TouchableOpacity> : null}
                   <ScaleDecorator activeScale={1.02}>
-                    <TouchableOpacity style={[styles.stopCard, isActive && styles.stopCardDragging]} onPress={() => openDayEditor()} accessibilityRole="button" disabled={isActive}>
+                    <TouchableOpacity
+                      style={[styles.stopCard, isActive && styles.stopCardDragging]}
+                      onPress={() => openDayEditor({ editIndex: index })}
+                      accessibilityRole="button"
+                      accessibilityLabel={`עריכת העצירה ${stop.title || index + 1}`}
+                      disabled={isActive}
+                      testID={`route-stop-edit-${index}`}
+                    >
                       {getStopMediaUrls(stop, 'thumb')[0] ? <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" priority="low" /> : <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
                       <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title}</AppText><AppText style={styles.stopMeta}>{stop.locationPrecision === 'general' ? 'מיקום כללי' : stop.location || stop.place?.name || 'נקודה במפה'}{stop.startTime ? ` · ${stop.startTime}` : ''}{stop.durationMinutes ? ` · ${stop.durationMinutes} דק׳` : ''}</AppText></View>
                       <TouchableOpacity
@@ -505,7 +521,7 @@ export default function AddRoutesScreen({ navigation, route }) {
               )}
             />
           </>}
-          <TouchableOpacity style={styles.addStop} onPress={() => openDayEditor(activeDay?.stops?.length || 0)} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה בסוף היום</AppText></TouchableOpacity>
+          <TouchableOpacity style={styles.addStop} onPress={() => openDayEditor({ insertIndex: activeDay?.stops?.length || 0 })} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה בסוף היום</AppText></TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} testID="route-details-toggle"><AppText style={styles.detailsToggleText}>פרטי המסלול והפרסום</AppText><Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} /></TouchableOpacity>
         {detailsOpen ? <View style={styles.card}>
@@ -520,7 +536,7 @@ export default function AddRoutesScreen({ navigation, route }) {
         </View> : null}
       </NestableScrollContainer>
       <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer"><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
-      <DayEditorModal visible={dayEditorVisible} onClose={closeDayEditor} onSave={saveDay} initialData={activeDay} initialInsertIndex={requestedStopInsertIndex} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
+      <DayEditorModal visible={dayEditorVisible} onClose={closeDayEditor} onSave={saveDay} initialData={activeDay} initialInsertIndex={requestedStopInsertIndex} initialEditIndex={requestedStopEditIndex} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
     </GestureHandlerRootView>
   );
 }

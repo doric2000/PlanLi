@@ -146,6 +146,25 @@ test('route drafts strip precise place data from general stops', () => {
   assert.equal(Object.prototype.hasOwnProperty.call(draft.days[0].stops[0], 'coordinates'), false);
 });
 
+test('route drafts preserve the request to reuse a server-verified saved location', () => {
+  const draft = sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: [{
+      id: 'saved-stop',
+      title: 'תחנה קיימת',
+      locationPrecision: 'exact',
+      reuseSavedLocation: true,
+      place: {
+        placeId: 'saved-place',
+        name: 'מקום קיים',
+        coordinates: { lat: 47.5, lng: 19.1 },
+      },
+    }] }],
+  }));
+  assert.equal(draft.days[0].stops[0].reuseSavedLocation, true);
+  assert.equal(publishableRoute(draft).days[0].stops[0].reuseSavedLocation, true);
+});
+
 test('publish payload keeps one route schema and whole-route pricing', () => {
   const draft = sanitizeRouteDraft(partialDraft({
     description: 'מסלול שימושי.',

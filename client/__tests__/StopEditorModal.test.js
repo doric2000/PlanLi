@@ -18,7 +18,12 @@ jest.mock('../src/services/PersonalizationService', () => ({
 }));
 jest.mock('../src/components/ExactLocationPicker', () => {
   const { View } = require('react-native');
-  return () => <View testID="exact-location-picker" />;
+  return ({ value }) => (
+    <View
+      testID="exact-location-picker"
+      accessibilityLabel={`exact-${value?.countryId || 'null'}-${value?.cityId || 'null'}-${value?.place?.placeId || 'null'}`}
+    />
+  );
 });
 jest.mock('../src/features/community/components/SingleDestinationPicker', () => {
   const { Pressable, Text } = require('react-native');
@@ -188,7 +193,7 @@ describe('StopEditorModal', () => {
     expect(saved.image).toBe('file:///one.jpg');
   });
 
-  it('removes stale precise data when an existing stop is changed to a general area', async () => {
+  it('removes stale precise data when an existing stop is changed to a general area', () => {
     const onSave = jest.fn();
     const screen = render(
       <StopEditorModal
@@ -214,7 +219,6 @@ describe('StopEditorModal', () => {
         allowImages={false}
       />
     );
-    await waitFor(() => expect(screen.getByText('עדיין אין המלצות זמינות לבחירה.')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-stop-mode-general'));
     fireEvent.press(screen.getByTestId('route-stop-select-destination'));
     fireEvent.press(screen.getByText('שמירה'));
@@ -227,6 +231,48 @@ describe('StopEditorModal', () => {
     expect(saved).not.toHaveProperty('source');
     expect(saved).not.toHaveProperty('categoryId');
     expect(saved).not.toHaveProperty('subcategoryIds');
+  });
+
+  it('hydrates and saves an unchanged exact stop from its nested saved destination', () => {
+    const onSave = jest.fn();
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={1}
+        initialData={{
+          id: 'existing-stop',
+          title: 'בית קפה',
+          location: 'בודפשט',
+          country: 'הונגריה',
+          locationPrecision: 'exact',
+          reuseSavedLocation: true,
+          destination: {
+            countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', cityName: 'בודפשט',
+          },
+          place: {
+            placeId: 'saved-place',
+            name: 'בית קפה',
+            coordinates: { lat: 47.5, lng: 19.1 },
+          },
+        }}
+        onSave={onSave}
+        onClose={jest.fn()}
+        allowImages={false}
+      />
+    );
+
+    expect(screen.getByLabelText('exact-HU-budapest-saved-place')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'בית קפה מעודכן');
+    fireEvent.press(screen.getByText('שמירה'));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'existing-stop',
+      title: 'בית קפה מעודכן',
+      reuseSavedLocation: true,
+      destination: expect.objectContaining({ countryId: 'HU', cityId: 'budapest' }),
+      place: expect.objectContaining({ placeId: 'saved-place' }),
+    }), 1);
   });
 
   it('shows a retry state when PlanLi recommendations fail and loads them on retry', async () => {

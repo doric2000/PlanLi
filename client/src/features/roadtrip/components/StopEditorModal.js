@@ -60,6 +60,18 @@ function initialModeFor(stop) {
   return LOCATION_MODES.exact;
 }
 
+function exactValueForStop(stop) {
+  if (!stop) return null;
+  const destination = stop.destination || {};
+  return {
+    ...stop,
+    countryId: stop.countryId || destination.countryId,
+    cityId: stop.cityId || destination.cityId,
+    country: stop.country || destination.countryName,
+    location: stop.location || destination.cityName,
+  };
+}
+
 function buildStopComparable(value) { return JSON.stringify(value); }
 
 function recommendationIdFor(value) {
@@ -126,6 +138,7 @@ export default function StopEditorModal({
       return;
     }
     const nextMode = initialModeFor(initialData);
+    const nextExactValue = nextMode === LOCATION_MODES.exact ? exactValueForStop(initialData) : null;
     const nextDestination = normalizedDestination(initialData?.destination || routeDestination);
     const coordinates = getStopCoordinates(initialData);
     const nextPin = coordinates ? { latitude: coordinates.lat, longitude: coordinates.lng } : null;
@@ -133,7 +146,7 @@ export default function StopEditorModal({
     setTitle(initialData?.title || '');
     setDescription(initialData?.description || '');
     setMode(nextMode);
-    setExactValue(nextMode === LOCATION_MODES.exact ? initialData || null : null);
+    setExactValue(nextExactValue);
     setDestination(nextDestination);
     setPin(nextPin);
     setStartTime(initialData?.startTime || '');
@@ -142,7 +155,7 @@ export default function StopEditorModal({
     setPhotoItems(nextPhotoItems);
     setStopBaseline(buildStopComparable({
       title: initialData?.title || '', description: initialData?.description || '', mode: nextMode,
-      exactValue: nextMode === LOCATION_MODES.exact ? initialData || null : null,
+      exactValue: nextExactValue,
       destination: nextDestination, pin: nextPin,
       startTime: initialData?.startTime || '',
       durationMinutes: initialData?.durationMinutes ? String(initialData.durationMinutes) : '',
@@ -307,6 +320,8 @@ export default function StopEditorModal({
     }
     const location = buildLocation();
     if (!location) { Alert.alert('חסר מיקום', 'כדאי להשלים את בחירת המיקום לעצירה.'); return; }
+    const canonicalLocation = { ...location };
+    delete canonicalLocation.reuseSavedLocation;
     const preservedStop = { ...(initialData || {}) };
     [
       'place', 'coordinates', 'destination', 'source', 'recommendationId',
@@ -320,7 +335,7 @@ export default function StopEditorModal({
       ...(item.localReference ? { localReference: item.localReference } : {}),
     }));
     const nextStop = {
-      ...preservedStop, ...location,
+      ...preservedStop, ...canonicalLocation,
       id: initialData?.id || createStopId(),
       title: trimmedTitle,
       description: description.trim(),
@@ -332,6 +347,12 @@ export default function StopEditorModal({
         ? canonicalMedia.slice(1, 3)
         : initialData?.additionalMedia || [],
       pendingMedia: allowImages ? pendingMedia : initialData?.pendingMedia || [],
+      ...(initialData?.reuseSavedLocation === true &&
+        canonicalLocation.locationPrecision === 'exact' &&
+        initialData.place?.placeId === canonicalLocation.place?.placeId &&
+        !canonicalLocation.place?.resolvedPlaceToken
+        ? { reuseSavedLocation: true }
+        : {}),
     };
     onSave?.(nextStop, stopIndex);
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();

@@ -52,7 +52,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function DayEditorModal({
 	visible, onClose, onSave, initialData, dayIndex, onForgetImage, onPersistImages, mediaForImage,
-	routeDestination, allowStopImages = true, initialInsertIndex = null,
+	routeDestination, allowStopImages = true, initialInsertIndex = null, initialEditIndex = null,
 }) {
 	const [description, setDescription] = useState("");
 	const [dayNoteOpen, setDayNoteOpen] = useState(false);
@@ -63,6 +63,7 @@ export default function DayEditorModal({
 	const [dayBaseline, setDayBaseline] = useState(null);
 	const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
 	const pendingDiscardRef = useRef(null);
+	const directStopEdit = Number.isInteger(initialEditIndex) && !Number.isInteger(initialInsertIndex);
 
 	useEffect(() => {
 		if (!visible) {
@@ -80,13 +81,17 @@ export default function DayEditorModal({
 			setEditingStopIndex(Math.max(0, Math.min(initialInsertIndex, stops0.length)));
 			setInsertingStop(true);
 			setStopModalVisible(true);
+		} else if (Number.isInteger(initialEditIndex) && initialEditIndex >= 0 && initialEditIndex < stops0.length) {
+			setEditingStopIndex(initialEditIndex);
+			setInsertingStop(false);
+			setStopModalVisible(true);
 		} else {
 			setEditingStopIndex(null);
 			setInsertingStop(false);
 			setStopModalVisible(false);
 		}
 		setDayBaseline(buildDayComparable({ description: desc0, stops: stops0 }));
-	}, [visible, initialData, initialInsertIndex]);
+	}, [visible, initialData, initialEditIndex, initialInsertIndex]);
 
 	const dayFormComparable = useMemo(
 		() => buildDayComparable({ description, stops }),
@@ -117,18 +122,29 @@ export default function DayEditorModal({
 	}, [hasUnsavedChanges, onClose]);
 
 	const handleSaveStop = (stopData, index) => {
-		setStops((prev) => {
-			const next = [...prev];
-			if (insertingStop) {
-				next.splice(Math.max(0, Math.min(index, next.length)), 0, stopData);
-			} else if (index >= next.length) {
-				next.push(stopData);
-			} else {
-				next[index] = stopData;
-			}
-			return next;
-		});
+		const next = [...stops];
+		if (insertingStop) {
+			next.splice(Math.max(0, Math.min(index, next.length)), 0, stopData);
+		} else if (index >= next.length) {
+			next.push(stopData);
+		} else {
+			next[index] = stopData;
+		}
+		setStops(next);
 		setInsertingStop(false);
+		if (directStopEdit) {
+			onSave({
+				description,
+				image: initialData?.image || null,
+				media: initialData?.media || null,
+				stops: next,
+			}, dayIndex);
+		}
+	};
+
+	const closeStopEditor = () => {
+		setStopModalVisible(false);
+		if (directStopEdit) onClose();
 	};
 
 	const openNewStopAt = (index) => {
@@ -269,6 +285,7 @@ export default function DayEditorModal({
 														setInsertingStop(false);
 														setStopModalVisible(true);
 													}}
+													testID={`day-stop-edit-${index}`}
 												>
 													{stop.image || stop.media ? (
 														<CachedImage source={{ uri: getMediaVariantUrl(stop.media, "thumb", stop.image) }} style={styles.stopThumb} contentFit="cover" priority="low" />
@@ -308,7 +325,7 @@ export default function DayEditorModal({
 
 				<StopEditorModal
 					visible={stopModalVisible}
-					onClose={() => setStopModalVisible(false)}
+					onClose={closeStopEditor}
 					onSave={handleSaveStop}
 					initialData={!insertingStop && editingStopIndex !== null ? stops[editingStopIndex] : null}
 					dayIndex={dayIndex}
