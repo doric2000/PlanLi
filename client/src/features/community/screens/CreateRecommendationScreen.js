@@ -1032,7 +1032,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         ) : (
           <>
             <AppText style={styles.fieldLabel}>בחירת עיר או אזור</AppText>
-            <SingleDestinationPicker value={generalDestination} onChange={chooseGeneralDestination} />
+            <SingleDestinationPicker
+              allowProviderDestinations
+              value={generalDestination}
+              onChange={chooseGeneralDestination}
+            />
             {locationMode === LOCATION_MODES.destination ? (
               <AppText style={styles.fieldHint}>ההמלצה תופיע בתוך היעד בלי נקודה מדויקת במפה.</AppText>
             ) : null}
