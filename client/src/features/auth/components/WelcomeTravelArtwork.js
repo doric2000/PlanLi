@@ -3,7 +3,7 @@ import { Image, View } from 'react-native';
 
 import { authStyles } from '../../../styles';
 
-export default function WelcomeTravelArtwork() {
+export default function WelcomeTravelArtwork({ topInset = 0 }) {
   return (
     <View
       style={authStyles.welcomeArtwork}
@@ -18,7 +18,7 @@ export default function WelcomeTravelArtwork() {
         resizeMode="cover"
         testID="welcome-travel-image"
       />
-      <View style={authStyles.welcomeMarkHalo}>
+      <View style={[authStyles.welcomeMarkHalo, { top: 70 + topInset }]} testID="welcome-mark-position">
         <Image
           source={require('../../../../assets/brand-mark.png')}
           style={authStyles.welcomeMark}

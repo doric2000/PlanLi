@@ -44,12 +44,19 @@ export default function LoginScreen({ navigation, route }) {
   };
 
   return (
-    <AuthFormLayout testID="login-screen" onBack={handleBack}>
-      {({ compact, keyboardVisible }) => (
+    <AuthFormLayout
+      testID="login-screen"
+      onBack={handleBack}
+      header={({ compact }) => (
         <>
-          {!keyboardVisible ? <View style={authStyles.formBrand} testID="auth-form-brand"><BrandWordmark form /></View> : null}
-          {!keyboardVisible ? <AppText style={[authStyles.formTitle, compact && authStyles.formTitleCompact]}>ברוכים השבים</AppText> : null}
-          {!keyboardVisible ? <AppText style={authStyles.formSubtitle}>התחברו והמשיכו לתכנן את הטיול הבא.</AppText> : null}
+          <View style={authStyles.formBrand} testID="auth-form-brand"><BrandWordmark form /></View>
+          <AppText style={[authStyles.formTitle, compact && authStyles.formTitleCompact]}>ברוכים השבים</AppText>
+          <AppText style={authStyles.formSubtitle}>התחברו והמשיכו לתכנן את הטיול הבא.</AppText>
+        </>
+      )}
+    >
+      {({ compact }) => (
+        <>
           <View style={authStyles.formFields}>
             <AuthInput
               label="אימייל"
@@ -63,7 +70,6 @@ export default function LoginScreen({ navigation, route }) {
               embeddedLabel
               showLeadingIcon={false}
               compact={compact}
-              hideLabel={keyboardVisible}
               returnKeyType="next"
               blurOnSubmit={false}
               onSubmitEditing={() => passwordRef.current?.focus()}
@@ -80,7 +86,6 @@ export default function LoginScreen({ navigation, route }) {
               embeddedLabel
               showLeadingIcon={false}
               compact={compact}
-              hideLabel={keyboardVisible}
               returnKeyType="go"
               onSubmitEditing={handleLogin}
               testID="login-password"
@@ -96,12 +101,10 @@ export default function LoginScreen({ navigation, route }) {
             onPress={handleLogin} disabled={loading} testID="email-login-button">
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>התחברות</AppText>}
           </TouchableOpacity>
-          {!keyboardVisible ? (
-            <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer">
-              <AppText style={authStyles.footerText}>אין חשבון? </AppText>
-              <TouchableOpacity onPress={() => navigation.replace('Register')}><AppText style={authStyles.link}>הרשמה</AppText></TouchableOpacity>
-            </View>
-          ) : null}
+          <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer">
+            <AppText style={authStyles.footerText}>אין חשבון? </AppText>
+            <TouchableOpacity onPress={() => navigation.replace('Register')}><AppText style={authStyles.link}>הרשמה</AppText></TouchableOpacity>
+          </View>
         </>
       )}
     </AuthFormLayout>

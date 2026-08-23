@@ -1,52 +1,81 @@
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { SocialLoginButtons } from '../src/features/auth/components/SocialLoginButtons';
 
-jest.mock('@react-native-google-signin/google-signin', () => {
-  const ReactModule = require('react');
-  const { View: NativeView } = require('react-native');
-  const GoogleSigninButton = (props) => ReactModule.createElement(NativeView, props);
-  GoogleSigninButton.Size = { Icon: 'icon', Standard: 'standard', Wide: 'wide' };
-  GoogleSigninButton.Color = { Light: 'light' };
-  return { GoogleSigninButton };
-});
+const mockAppleAvailable = jest.fn();
 
 jest.mock('expo-apple-authentication', () => ({
-  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  isAvailableAsync: (...args) => mockAppleAvailable(...args),
 }));
 
 describe('SocialLoginButtons', () => {
   const originalPlatform = Platform.OS;
 
-  beforeAll(() => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Platform.OS = 'ios';
+    mockAppleAvailable.mockResolvedValue(true);
   });
 
-  afterAll(() => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
+  afterEach(() => {
+    Platform.OS = originalPlatform;
   });
 
-  it('renders accessible icon-only provider buttons at equal touch-target sizes', async () => {
+  it('renders equally sized circular Apple and official round Google controls', async () => {
+    const onAppleLogin = jest.fn();
+    const onGoogleLogin = jest.fn();
+    const screen = render(
+      <SocialLoginButtons onAppleLogin={onAppleLogin} onGoogleLogin={onGoogleLogin} />
+    );
+
+    const apple = await waitFor(() => screen.getByTestId('auth-apple-button'));
+    const google = screen.getByTestId('auth-google-button');
+
+    expect(StyleSheet.flatten(apple.props.style)).toMatchObject({
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    });
+    expect(StyleSheet.flatten(google.props.style)).toMatchObject({
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('auth-google-icon').props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+    });
+    expect(screen.getByTestId('auth-google-icon').props.resizeMode).toBe('contain');
+    expect(google.props.accessibilityLabel).toBe('המשך עם Google');
+    expect(apple.props.accessibilityLabel).toBe('המשך עם Apple');
+
+    fireEvent.press(google);
+    fireEvent.press(apple);
+    expect(onGoogleLogin).toHaveBeenCalledTimes(1);
+    expect(onAppleLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps provider controls disabled and exposes the active loading state', async () => {
     const screen = render(
       <SocialLoginButtons
-        onGoogleLogin={jest.fn()}
         onAppleLogin={jest.fn()}
+        onGoogleLogin={jest.fn()}
+        disabled
+        loadingProvider="google"
       />
     );
 
-    await waitFor(() => expect(screen.getByTestId('auth-apple-button')).toBeTruthy());
-
-    expect(StyleSheet.flatten(screen.getByTestId('auth-google-button').props.style)).toMatchObject({
-      width: 48,
-      height: 48,
+    await waitFor(() => screen.getByTestId('auth-apple-button'));
+    expect(screen.getByTestId('auth-google-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: true,
     });
-    expect(StyleSheet.flatten(screen.getByTestId('auth-apple-button').props.style)).toMatchObject({
-      width: 48,
-      height: 48,
+    expect(screen.getByTestId('auth-apple-button').props.accessibilityState).toEqual({
+      disabled: true,
+      busy: false,
     });
-    expect(screen.getByLabelText('המשך עם Google')).toBeTruthy();
-    expect(screen.getByLabelText('המשך עם Apple')).toBeTruthy();
   });
 });

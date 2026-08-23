@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { ScrollView, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StatusBar, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppText from '../../../components/AppText';
 import { authStyles } from '../../../styles';
 import BrandWordmark from '../components/BrandWordmark';
@@ -23,6 +23,7 @@ export default function AuthEntryScreen({ navigation }) {
   const [loadingProvider, setLoadingProvider] = useState(null);
   const [error, setError] = useState('');
   const { fontScale = 1 } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const accessibleOverflow = shouldEnableAccessibleAuthOverflow(fontScale);
   const loading = Boolean(loadingProvider);
 
@@ -46,10 +47,13 @@ export default function AuthEntryScreen({ navigation }) {
   const content = (
     <View style={authStyles.welcomeContent}>
       <View style={authStyles.welcomeHero} testID="auth-entry-hero">
-        <View style={authStyles.welcomeWordmarkCapsule}>
+        <View
+          style={[authStyles.welcomeWordmarkCapsule, { top: insets.top + 8 }]}
+          testID="welcome-wordmark-position"
+        >
           <BrandWordmark welcome testID="welcome-brand-wordmark" />
         </View>
-        <WelcomeTravelArtwork />
+        <WelcomeTravelArtwork topInset={insets.top} />
       </View>
       <View style={authStyles.welcomeSheet} testID="auth-entry-sheet">
         <AppText style={authStyles.welcomeTitle}>הטיול שלך מתחיל כאן</AppText>
@@ -97,22 +101,25 @@ export default function AuthEntryScreen({ navigation }) {
   );
 
   return (
-    <LinearGradient
-      colors={['#FFF0D2', '#F8F5EC', '#DDECF7']}
-      style={authStyles.welcomeGradient}
-      testID="auth-entry-gradient"
-    >
-      <SafeAreaView style={authStyles.welcomeSafe} edges={['top', 'right', 'left']} testID="auth-entry-screen">
-        {accessibleOverflow ? (
-          <ScrollView
-            contentContainerStyle={authStyles.welcomeAccessibleContent}
-            showsVerticalScrollIndicator={false}
-            testID="auth-entry-accessible-scroll"
-          >
-            {content}
-          </ScrollView>
-        ) : content}
-      </SafeAreaView>
-    </LinearGradient>
+    <>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <LinearGradient
+        colors={['#FFF0D2', '#F8F5EC', '#DDECF7']}
+        style={authStyles.welcomeGradient}
+        testID="auth-entry-gradient"
+      >
+        <SafeAreaView style={authStyles.welcomeSafe} edges={['right', 'left']} testID="auth-entry-screen">
+          {accessibleOverflow ? (
+            <ScrollView
+              contentContainerStyle={authStyles.welcomeAccessibleContent}
+              showsVerticalScrollIndicator={false}
+              testID="auth-entry-accessible-scroll"
+            >
+              {content}
+            </ScrollView>
+          ) : content}
+        </SafeAreaView>
+      </LinearGradient>
+    </>
   );
 }

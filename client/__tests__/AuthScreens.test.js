@@ -1,5 +1,5 @@
 import React from 'react';
-import { Keyboard, processColor, ScrollView, StyleSheet } from 'react-native';
+import { Keyboard, processColor, ScrollView, StatusBar, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ForgotPasswordScreen from '../src/features/auth/screens/ForgotPasswordScreen';
@@ -24,6 +24,12 @@ const mockSynchronizeUserDocument = jest.fn();
 const mockClearPendingReturn = jest.fn();
 let mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
 let mockUserDocument = { displayName: 'Admin' };
+let mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+jest.mock('react-native-safe-area-context', () => ({
+  ...jest.requireActual('react-native-safe-area-context'),
+  useSafeAreaInsets: () => mockSafeAreaInsets,
+}));
 
 jest.mock('../src/features/auth/AuthContext', () => ({
   useAuth: () => ({
@@ -92,6 +98,7 @@ describe('authentication screens', () => {
     mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.PREFERENCES_REQUIRED);
     mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
     mockUserDocument = { displayName: 'Admin' };
+    mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   });
 
   it('uses the central email login service and returns to the app', async () => {
@@ -340,6 +347,7 @@ describe('authentication screens', () => {
   });
 
   it('keeps login and registration static, compact, and direction-aware', () => {
+    mockSafeAreaInsets = { top: 47, right: 0, bottom: 34, left: 0 };
     const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
       width: 375,
       height: 667,
@@ -349,6 +357,21 @@ describe('authentication screens', () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
     const welcome = render(<AuthEntryScreen navigation={navigation} />);
     expect(welcome.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+    expect(welcome.UNSAFE_getByType(StatusBar).props).toMatchObject({
+      barStyle: 'dark-content',
+      translucent: true,
+      backgroundColor: 'transparent',
+    });
+    expect(welcome.getByTestId('auth-entry-screen').props.edges).toMatchObject({
+      top: 'off',
+      right: 'additive',
+      bottom: 'off',
+      left: 'additive',
+    });
+    expect(StyleSheet.flatten(welcome.getByTestId('welcome-wordmark-position').props.style)).toMatchObject({ top: 55 });
+    expect(StyleSheet.flatten(
+      welcome.getByTestId('welcome-mark-position', { includeHiddenElements: true }).props.style
+    )).toMatchObject({ top: 117 });
     expect(welcome.getByTestId('welcome-brand-wordmark')).toBeTruthy();
     expect(welcome.getByTestId('welcome-travel-artwork', { includeHiddenElements: true })).toBeTruthy();
     expect(welcome.getByTestId('welcome-travel-image', { includeHiddenElements: true }).props.resizeMode).toBe('cover');
@@ -368,7 +391,8 @@ describe('authentication screens', () => {
     welcome.unmount();
     const login = render(<LoginScreen navigation={navigation} />);
 
-    expect(login.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+    expect(login.UNSAFE_queryAllByType(ScrollView)).toHaveLength(1);
+    expect(login.getByTestId('auth-form-scroll').props.scrollEnabled).toBe(false);
     expect(login.getByTestId('auth-error-slot')).toBeTruthy();
     expect(login.getByTestId('auth-form-gradient').props.colors).toEqual(
       ['#FFFFFF', '#FFFFFF', '#F8FBFE'].map(processColor)
@@ -397,7 +421,8 @@ describe('authentication screens', () => {
 
     login.unmount();
     const registration = render(<RegisterScreen navigation={navigation} />);
-    expect(registration.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+    expect(registration.UNSAFE_queryAllByType(ScrollView)).toHaveLength(1);
+    expect(registration.getByTestId('auth-form-scroll').props.scrollEnabled).toBe(false);
     expect(registration.getByTestId('auth-error-slot')).toBeTruthy();
     expect(registration.getByTestId('register-name-embedded-label')).toHaveTextContent('שם מלא');
     expect(registration.getByTestId('register-email-embedded-label')).toHaveTextContent('אימייל');
@@ -436,8 +461,14 @@ describe('authentication screens', () => {
     dimensions.mockRestore();
   });
 
-  it('hides secondary chrome while the keyboard is visible and restores it afterward', () => {
+  it('keeps auth chrome fixed and enables only the form scroller while the keyboard is visible', () => {
     const callbacks = {};
+    const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({
+      width: 375,
+      height: 667,
+      scale: 2,
+      fontScale: 1,
+    });
     const addListener = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, callback) => {
       callbacks[event] = callback;
       return { remove: jest.fn() };
@@ -446,12 +477,19 @@ describe('authentication screens', () => {
     const screen = render(<LoginScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
     expect(screen.getByTestId('auth-form-brand')).toBeTruthy();
     expect(screen.getByTestId('auth-form-footer')).toBeTruthy();
+    expect(screen.getByTestId('auth-back-button')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-decoration')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-scroll').props.scrollEnabled).toBe(false);
     expect(screen.queryByTestId('mock-social-buttons')).toBeNull();
 
     act(() => callbacks.keyboardDidShow());
-    expect(screen.queryByTestId('auth-form-brand')).toBeNull();
-    expect(screen.queryByTestId('auth-form-footer')).toBeNull();
-    expect(screen.queryByTestId('auth-back-button')).toBeNull();
+    expect(screen.getByTestId('auth-form-brand')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-footer')).toBeTruthy();
+    expect(screen.getByTestId('auth-back-button')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-decoration')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-scroll').props.scrollEnabled).toBe(true);
+    expect(screen.getByTestId('login-email-embedded-label')).toHaveTextContent('אימייל');
+    expect(screen.getByTestId('login-password-embedded-label')).toHaveTextContent('סיסמה');
     expect(screen.getByTestId('login-email')).toBeTruthy();
     expect(screen.getByTestId('login-password')).toBeTruthy();
     expect(screen.getByTestId('email-login-button')).toBeTruthy();
@@ -459,17 +497,22 @@ describe('authentication screens', () => {
     act(() => callbacks.keyboardDidHide());
     expect(screen.getByTestId('auth-form-brand')).toBeTruthy();
     expect(screen.getByTestId('auth-form-footer')).toBeTruthy();
+    expect(screen.getByTestId('auth-form-scroll').props.scrollEnabled).toBe(false);
 
     screen.unmount();
     const registration = render(<RegisterScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
     act(() => callbacks.keyboardDidShow());
-    expect(registration.queryByTestId('auth-form-brand')).toBeNull();
+    expect(registration.getByTestId('auth-form-brand')).toBeTruthy();
+    expect(registration.getByTestId('auth-form-footer')).toBeTruthy();
+    expect(registration.getByTestId('auth-back-button')).toBeTruthy();
+    expect(registration.getByTestId('auth-form-scroll').props.scrollEnabled).toBe(true);
     expect(registration.getByTestId('register-name')).toBeTruthy();
     expect(registration.getByTestId('register-email')).toBeTruthy();
     expect(registration.getByTestId('register-password')).toBeTruthy();
     expect(registration.getByTestId('register-confirm-password')).toBeTruthy();
     expect(registration.getByTestId('legal-consent-checkbox')).toBeTruthy();
     expect(registration.getByTestId('email-register-button')).toBeTruthy();
+    dimensions.mockRestore();
     addListener.mockRestore();
   });
 });
