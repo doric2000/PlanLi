@@ -5,6 +5,8 @@ import AppTextInput from "../../../components/AppTextInput";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+import PageHeader from '../../../components/PageHeader';
+import RtlBackButton from '../../../components/RtlBackButton';
 import { auth } from '../../../config/firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { signOutCentral } from '../../../services/AuthService';
@@ -125,7 +127,7 @@ export default function ChangePasswordScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safe}>
       <UnsavedChangesModal
         visible={unsavedModalVisible}
         title={UNSAVED_LEAVE_TITLE}
@@ -136,16 +138,11 @@ export default function ChangePasswordScreen({ navigation }) {
         cancelTestID="change-password-unsaved-cancel"
         confirmTestID="change-password-unsaved-confirm"
       />
-      {/* Header: back left + title center */}
-      <View style={styles.header}>
-        <View style={styles.rightSpacer} />
-
-        <AppText style={styles.headerTitle}>שינוי סיסמה</AppText>
-
-        <TouchableOpacity onPress={handleHeaderBackPress} style={styles.backBtn} activeOpacity={0.8}>
-          <Ionicons name="arrow-forward" size={22} color="#111" />
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        renderStart={() => <RtlBackButton onPress={handleHeaderBackPress} />}
+        title="שינוי סיסמה"
+        variant="detail"
+      />
 
       <View style={styles.container}>
         {!canChangePassword ? (

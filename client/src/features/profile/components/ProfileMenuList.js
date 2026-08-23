@@ -2,42 +2,46 @@ import React from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
-import NavigationChevron from '../../../components/NavigationChevron';
 
-import { cards, typography, colors, profileMenuListStyles as styles } from '../../../styles';
+import { colors, drawerMenuListStyles as styles } from '../../../styles';
 
 export default function ProfileMenuList({ items, onPressItem, notificationBadge }) {
   return (
-    <View style={cards.profileMenu}>
+    <View style={styles.group} testID="drawer-menu-group">
       {items.map((item, index) => {
-        // Show badge only for Notifications item
         const showBadge = item.key === 'notifications' && notificationBadge > 0;
+        const itemKey = item.key || item.label || index;
 
         return (
           <TouchableOpacity
-            key={item.key || item.label || index}
-            style={cards.profileMenuItem}
+            accessibilityLabel={item.label}
+            accessibilityRole="button"
+            key={itemKey}
+            style={[styles.row, index === items.length - 1 && styles.rowLast]}
             onPress={() => onPressItem?.(item.key ?? item.label)}
             activeOpacity={0.85}
+            testID={`drawer-menu-item-${itemKey}`}
           >
-            <NavigationChevron
-              size={20}
-              color={colors.textMuted}
-              testID={`profile-menu-chevron-${item.key || index}`}
-            />
-            <View style={cards.profileMenuItemLeft}>
-              <View style={styles.iconContainer}>
-                <Ionicons name={item.icon} size={22} color={colors.textSecondary} />
-                {showBadge && (
-                  <View style={styles.badge}>
-                    <AppText style={styles.badgeText}>
-                      {notificationBadge > 99 ? '99+' : notificationBadge}
-                    </AppText>
-                  </View>
-                )}
-              </View>
-              <AppText style={typography.profileMenuItemText}>{item.label}</AppText>
+            <View style={styles.iconBubble} testID={`drawer-menu-icon-${itemKey}`}>
+              <Ionicons name={item.icon} size={20} color={colors.primary} />
             </View>
+            <AppText numberOfLines={1} style={styles.label}>{item.label}</AppText>
+            {showBadge ? (
+              <View accessibilityLabel={`${notificationBadge} התראות חדשות`} style={styles.badge}>
+                <AppText style={styles.badgeText}>
+                  {notificationBadge > 99 ? '99+' : notificationBadge}
+                </AppText>
+              </View>
+            ) : null}
+            <Ionicons
+              accessibilityElementsHidden
+              color={colors.textMuted}
+              importantForAccessibility="no"
+              name="chevron-back"
+              size={18}
+              style={styles.chevron}
+              testID={`profile-menu-chevron-${itemKey}`}
+            />
           </TouchableOpacity>
         );
       })}

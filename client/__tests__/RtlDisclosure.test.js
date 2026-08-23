@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 import ProfileMenuList from '../src/features/profile/components/ProfileMenuList';
@@ -13,7 +13,7 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 describe('RTL disclosure rows', () => {
-  it('places a right-pointing profile-menu chevron first on a row-reverse layout', () => {
+  it('lays out drawer rows explicitly from the RTL start with a left-facing chevron', () => {
     const screen = render(
       <ProfileMenuList
         items={[{ key: 'settings', label: 'הגדרות', icon: 'settings-outline' }]}
@@ -21,10 +21,29 @@ describe('RTL disclosure rows', () => {
         notificationBadge={0}
       />
     );
-    const row = screen.UNSAFE_getByType(TouchableOpacity);
-    const chevron = row.props.children[0];
+    const row = screen.getByTestId('drawer-menu-item-settings');
+    const rowStyle = StyleSheet.flatten(row.props.style);
 
-    expect(chevron.props.testID).toBe('profile-menu-chevron-settings');
-    expect(screen.getByText('chevron-forward', { includeHiddenElements: true })).toBeTruthy();
+    expect(rowStyle).toEqual(expect.objectContaining({
+      flexDirection: 'row-reverse',
+      minHeight: 58,
+    }));
+    expect(StyleSheet.flatten(screen.getByText('הגדרות').props.style).writingDirection).toBe('rtl');
+    expect(screen.getByText('chevron-back', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText('settings-outline', { includeHiddenElements: true })).toBeTruthy();
+  });
+
+  it('caps the notification badge and preserves a 44px-plus touch row', () => {
+    const screen = render(
+      <ProfileMenuList
+        items={[{ key: 'notifications', label: 'התראות', icon: 'notifications-outline' }]}
+        onPressItem={jest.fn()}
+        notificationBadge={140}
+      />
+    );
+
+    expect(screen.getByText('99+')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('drawer-menu-item-notifications').props.style).minHeight)
+      .toBeGreaterThanOrEqual(44);
   });
 });

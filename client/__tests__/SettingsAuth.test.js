@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render as renderNative, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsScreen from '../src/features/profile/screens/SettingsScreen';
 
@@ -11,6 +12,15 @@ const mockReauthenticateWithPassword = jest.fn();
 const mockRequestAccountDeletion = jest.fn();
 const mockSignOut = jest.fn();
 const mockRevokeGoogleAccess = jest.fn();
+
+const TEST_METRICS = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
+const render = (ui) => renderNative(
+  <SafeAreaProvider initialMetrics={TEST_METRICS}>{ui}</SafeAreaProvider>
+);
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
@@ -120,6 +130,19 @@ describe('Settings authentication behavior', () => {
     const screen = render(<SettingsScreen navigation={{ navigate: mockNavigate, goBack: jest.fn() }} />);
     fireEvent.press(screen.getByTestId('settings-blocked-users-button'));
     expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
+  });
+
+  it('renders the modern grouped settings sections', () => {
+    const screen = render(<SettingsScreen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} />);
+
+    expect(screen.getByTestId('settings-account-section')).toBeTruthy();
+    expect(screen.getByTestId('settings-personalization-section')).toBeTruthy();
+    expect(screen.getByTestId('settings-legal-section')).toBeTruthy();
+    expect(screen.getByTestId('settings-danger-section')).toBeTruthy();
+    expect(screen.getByText('ההתאמה האישית פעילה')).toBeTruthy();
+    expect(
+      screen.getByTestId('settings-personalization-section').findByProps({ name: 'options-outline' })
+    ).toBeTruthy();
   });
 
   it('uses an RTL-facing back arrow in the right-side header slot', () => {
