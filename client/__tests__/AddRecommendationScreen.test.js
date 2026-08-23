@@ -1,7 +1,8 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
-import { Alert } from 'react-native';
+import { scrollFocusedRecommendationInputIntoView } from '../src/features/community/screens/CreateRecommendationScreen';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { ENVIRONMENTS, VIBES } from '../src/constants/travelTaxonomy';
 
 // ==========================================
@@ -237,6 +238,95 @@ describe('AddRecommendationScreen Integration Test', () => {
 
   afterEach(() => {
     Alert.alert.mockRestore?.();
+  });
+
+  it('scrolls a focused native input above the keyboard with composer clearance', () => {
+    const scrollResponderScrollNativeHandleToKeyboard = jest.fn();
+    const responder = { scrollResponderScrollNativeHandleToKeyboard };
+
+    expect(scrollFocusedRecommendationInputIntoView({
+      getScrollResponder: () => responder,
+    }, 42)).toBe(true);
+    expect(scrollResponderScrollNativeHandleToKeyboard).toHaveBeenCalledWith(42, 16, true);
+    expect(scrollFocusedRecommendationInputIntoView(null, 42)).toBe(false);
+  });
+
+  it('keeps a bottom optional field reachable and dismissible while preserving its text', async () => {
+    const keyboardListeners = {};
+    const dismissSpy = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});
+    const addListenerSpy = jest.spyOn(Keyboard, 'addListener').mockImplementation((event, listener) => {
+      keyboardListeners[event] = listener;
+      return { remove: jest.fn() };
+    });
+    mockLoadJobForReview.mockResolvedValueOnce({
+      draft: {
+        step: 4,
+        locationMode: 'exact',
+        title: 'Queued title',
+        description: 'Queued description',
+        categoryId: 'food',
+        subcategoryIds: ['restaurant'],
+        budget: 'economy',
+        details: {},
+        selectedCountry: { id: 'IL', name: 'Israel' },
+        selectedCity: { id: 'TLV', name: 'Tel Aviv' },
+        selectedPlace: { placeId: 'place-1', name: 'Queued place' },
+        locationQuery: 'Queued place',
+      },
+      imageUris: [],
+    });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: { publishJobId: 'publish-job-keyboard' } }}
+      />
+    );
+
+    try {
+      await waitFor(() => expect(screen.getByTestId('recommendation-optional-accessibilityNote')).toBeTruthy());
+      fireEvent.press(screen.getByTestId('recommendation-optional-accessibilityNote'));
+      const input = screen.getByTestId('recommendation-optional-input-accessibilityNote');
+      fireEvent(input, 'focus', { nativeEvent: { target: 42 } });
+      act(() => {
+        keyboardListeners.keyboardDidShow?.();
+      });
+
+      expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.behavior).toBe(
+        Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined
+      );
+      expect(screen.getByTestId('recommendation-composer-scroll').props.keyboardDismissMode).toBe(
+        Platform.OS === 'ios' ? 'interactive' : 'on-drag'
+      );
+      fireEvent.changeText(input, 'כניסה נגישה ומעלית');
+      fireEvent.press(screen.getByTestId('recommendation-keyboard-dismiss'));
+
+      expect(dismissSpy).toHaveBeenCalled();
+      expect(screen.getByTestId('recommendation-optional-input-accessibilityNote').props.value)
+        .toBe('כניסה נגישה ומעלית');
+
+      dismissSpy.mockClear();
+      fireEvent.press(screen.getByTestId('recommendation-back'));
+      expect(dismissSpy).toHaveBeenCalled();
+
+      dismissSpy.mockClear();
+      fireEvent.press(screen.getByTestId('recommendation-next'));
+      expect(dismissSpy).toHaveBeenCalled();
+      expect(screen.getByTestId('recommendation-optional-input-accessibilityNote').props.value)
+        .toBe('כניסה נגישה ומעלית');
+
+      const { useBackButton } = require('../src/hooks/useBackButton');
+      dismissSpy.mockClear();
+      useBackButton.mock.calls.at(-1)[1].onPress();
+      expect(dismissSpy).toHaveBeenCalled();
+    } finally {
+      screen.unmount();
+      addListenerSpy.mockRestore();
+      dismissSpy.mockRestore();
+    }
   });
 
   it('creates a concise catalog recommendation from an exact Google place', async () => {

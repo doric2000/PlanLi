@@ -3,6 +3,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   TouchableOpacity,
   View,
@@ -67,6 +70,15 @@ const OPTIONAL_FIELDS = [
 
 const categoryById = Object.fromEntries(RECOMMENDATION_CATEGORIES.map((item) => [item.id, item]));
 const subcategoryById = Object.fromEntries(RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item]));
+
+export function scrollFocusedRecommendationInputIntoView(scrollView, inputTarget) {
+  if (!scrollView || inputTarget == null) return false;
+  const responder = scrollView.getScrollResponder?.() || scrollView;
+  const scrollToKeyboard = responder?.scrollResponderScrollNativeHandleToKeyboard;
+  if (typeof scrollToKeyboard !== 'function') return false;
+  scrollToKeyboard.call(responder, inputTarget, spacing.lg, true);
+  return true;
+}
 
 function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
   const [focused, setFocused] = useState(false);
@@ -184,10 +196,13 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [editableImageUris, setEditableImageUris] = useState([]);
   const [validationMessage, setValidationMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const pendingDiscardRef = useRef(null);
   const hydratedEditIdRef = useRef(null);
+  const scrollViewRef = useRef(null);
+  const focusedInputTargetRef = useRef(null);
 
   const {
     cancelReview,
@@ -304,7 +319,36 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     ? Boolean(editSnapshotBaseline && editSnapshotBaseline !== formComparable)
     : createDirty;
 
+  const scrollFocusedInputIntoView = useCallback(() => {
+    const inputTarget = focusedInputTargetRef.current;
+    if (inputTarget == null) return;
+    requestAnimationFrame(() => {
+      scrollFocusedRecommendationInputIntoView(scrollViewRef.current, inputTarget);
+    });
+  }, []);
+
+  const handleComposerInputFocus = useCallback((event) => {
+    focusedInputTargetRef.current = event?.nativeEvent?.target ?? event?.target ?? null;
+    if (keyboardVisible) scrollFocusedInputIntoView();
+  }, [keyboardVisible, scrollFocusedInputIntoView]);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+      scrollFocusedInputIntoView();
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+      focusedInputTargetRef.current = null;
+    });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, [scrollFocusedInputIntoView]);
+
   const promptDiscard = useCallback((onConfirm) => {
+    Keyboard.dismiss();
     pendingDiscardRef.current = onConfirm;
     setUnsavedModalVisible(true);
   }, []);
@@ -316,7 +360,14 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     submitting,
     openUnsavedPrompt: promptDiscard,
   });
-  useBackButton(navigation, { title: isEdit ? 'עריכת המלצה' : 'המלצה חדשה', onPress: handleHeaderBackPress });
+  const handleComposerHeaderBackPress = useCallback(() => {
+    Keyboard.dismiss();
+    handleHeaderBackPress();
+  }, [handleHeaderBackPress]);
+  useBackButton(navigation, {
+    title: isEdit ? 'עריכת המלצה' : 'המלצה חדשה',
+    onPress: handleComposerHeaderBackPress,
+  });
 
   useEffect(() => {
     if (!isEdit || !editItem || !editPostId || hydratedEditIdRef.current === editPostId) return;
@@ -580,6 +631,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   ]);
 
   const goNext = () => {
+    Keyboard.dismiss();
     const message = validateStep(step);
     setValidationMessage(message);
     if (message) return;
@@ -591,6 +643,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   };
 
   const handleSubmit = async () => {
+    Keyboard.dismiss();
     const message = validateStep(4) || validateStep(3) || validateStep(2) || validateStep(1);
     setValidationMessage(message);
     if (message || submitting) return;
@@ -825,6 +878,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               value={subcategorySearch}
               onChangeText={setSubcategorySearch}
               placeholder="למשל: גלידה, קרוז או פוניקולר"
+              onFocus={handleComposerInputFocus}
               rtl
               testID="recommendation-subcategory-search"
             />
@@ -856,6 +910,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
                 onChangeText={setCustomSubcategoryLabel}
                 placeholder="למשל: סיור צילום לילי"
                 maxLength={40}
+                onFocus={handleComposerInputFocus}
                 rtl
                 testID="recommendation-custom-subcategory"
               />
@@ -891,6 +946,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           onChangeText={setTitle}
           placeholder="למשל: בית קפה קטן ושקט במרכז"
           maxLength={120}
+          onFocus={handleComposerInputFocus}
           rtl
           testID="recommendation-title-input"
         />
@@ -902,6 +958,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           placeholder="למשל: קפה מצוין, מאפים טריים ושירות חם. כדאי להגיע מוקדם."
           multiline
           maxLength={5000}
+          onFocus={handleComposerInputFocus}
           rtl
           testID="recommendation-description-input"
         />
@@ -966,6 +1023,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               onChangeText={setEventSchedule}
               placeholder="למשל: 12 בספטמבר 2026 בשעה 20:00"
               maxLength={160}
+              onFocus={handleComposerInputFocus}
               rtl
               testID="recommendation-event-schedule"
             />
@@ -1001,6 +1059,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               maxLength={optionalField.maxLength}
               autoCapitalize={optionalField.id === 'externalUrl' ? 'none' : undefined}
               autoCorrect={optionalField.id !== 'externalUrl'}
+              onFocus={handleComposerInputFocus}
               rtl
               testID={`recommendation-optional-input-${optionalField.id}`}
             />
@@ -1026,59 +1085,85 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        testID="recommendation-keyboard-avoiding"
       >
-        {step === 1 ? renderLocationStep() : null}
-        {step === 2 ? renderTaxonomyStep() : null}
-        {step === 3 ? renderStoryStep() : null}
-        {step === 4 ? renderReviewStep() : null}
-        {validationMessage ? (
-          <AppText
-            style={styles.fieldError}
-            accessibilityRole="alert"
-            accessibilityLiveRegion="polite"
-            testID="recommendation-step-error"
-          >
-            {validationMessage}
-          </AppText>
-        ) : null}
-      </ScrollView>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          testID="recommendation-composer-scroll"
+        >
+          {step === 1 ? renderLocationStep() : null}
+          {step === 2 ? renderTaxonomyStep() : null}
+          {step === 3 ? renderStoryStep() : null}
+          {step === 4 ? renderReviewStep() : null}
+          {validationMessage ? (
+            <AppText
+              style={styles.fieldError}
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+              testID="recommendation-step-error"
+            >
+              {validationMessage}
+            </AppText>
+          ) : null}
+        </ScrollView>
 
-      <SafeAreaInsetsContext.Consumer>
-        {(insets) => (
-          <View style={[styles.footer, { paddingBottom: Math.max(insets?.bottom || 0, 12) }]}>
-            <View style={styles.footerInner}>
-              <TouchableOpacity
-                style={[styles.primaryButton, (submitting || resolvingLocation) && styles.primaryButtonDisabled]}
-                onPress={goNext}
-                disabled={submitting || resolvingLocation}
-                accessibilityRole="button"
-                testID="recommendation-next"
-              >
-                {submitting
-                  ? <ActivityIndicator color={colors.white} />
-                  : <AppText style={styles.primaryButtonText}>{step === STEP_COUNT ? (isEdit ? 'שמירת השינויים' : 'פרסום ההמלצה') : 'המשך'}</AppText>}
-              </TouchableOpacity>
-              {step > 1 ? (
+        <SafeAreaInsetsContext.Consumer>
+          {(insets) => (
+            <View
+              style={[
+                styles.footer,
+                { paddingBottom: Math.max(keyboardVisible ? 0 : insets?.bottom || 0, 12) },
+              ]}
+            >
+              <View style={styles.footerInner}>
                 <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => {
-                    setValidationMessage('');
-                    setStep((current) => Math.max(1, current - 1));
-                  }}
+                  style={[styles.primaryButton, (submitting || resolvingLocation) && styles.primaryButtonDisabled]}
+                  onPress={goNext}
+                  disabled={submitting || resolvingLocation}
                   accessibilityRole="button"
-                  testID="recommendation-back"
+                  testID="recommendation-next"
                 >
-                  <AppText style={styles.backButtonText}>חזרה</AppText>
+                  {submitting
+                    ? <ActivityIndicator color={colors.white} />
+                    : <AppText style={styles.primaryButtonText}>{step === STEP_COUNT ? (isEdit ? 'שמירת השינויים' : 'פרסום ההמלצה') : 'המשך'}</AppText>}
                 </TouchableOpacity>
-              ) : null}
+                {step > 1 ? (
+                  <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setValidationMessage('');
+                      setStep((current) => Math.max(1, current - 1));
+                    }}
+                    accessibilityRole="button"
+                    testID="recommendation-back"
+                  >
+                    <AppText style={styles.backButtonText}>חזרה</AppText>
+                  </TouchableOpacity>
+                ) : null}
+                {keyboardVisible ? (
+                  <TouchableOpacity
+                    style={styles.keyboardDismissButton}
+                    onPress={Keyboard.dismiss}
+                    accessibilityRole="button"
+                    accessibilityLabel="סגירת המקלדת"
+                    testID="recommendation-keyboard-dismiss"
+                  >
+                    <Ionicons name="chevron-down" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
-          </View>
-        )}
-      </SafeAreaInsetsContext.Consumer>
+          )}
+        </SafeAreaInsetsContext.Consumer>
+      </KeyboardAvoidingView>
 
       <UnsavedChangesModal
         visible={unsavedModalVisible}
