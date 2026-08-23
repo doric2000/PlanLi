@@ -11,19 +11,18 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Route-stop ordering update group
-`e8c046f1-d428-40ea-b297-dc33ea9a6948` was published for iOS
-(`01a02ec4-c08f-7c5f-9a9f-e4ae259ae8ca`) and Android
-(`01a02ec4-c08f-7038-9f4c-f1c624677418`) at `2026-08-23T13:17:21Z` from PR
-`#164` merge commit `407c711`. The PR was merged and the OTA was published
-without waiting for or running an additional validation cycle, by explicit
-request. Delivery, application, and behavior on the physical iPhone remain
-unverified. App version and runtime remain `1.1.0`, TestFlight build remains
-`13`, and no native build or Apple submission was created. The backend has 92
-active Node.js 22 v2 Functions in `europe-west1`; no Functions, Firestore Rules,
-indexes, Hosting, production documents, migrations, or Firebase resources
-changed in this client-only release. The published EAS update is not evidence
-that it has already been applied on a tester device.
+runtime `1.1.0`. Auth welcome and sign-in polish update group
+`9602e8f0-0c25-4a5e-9872-b82aaa68a1f4` was published for iOS
+(`01a02f6c-ade0-7ace-a575-6a3fd4f32d55`) and Android
+(`01a02f6c-ade0-771d-ab1f-9c55f3ec8bb9`) at `2026-08-23T16:20:46.688Z` from
+PR `#169` merge commit `eecff6f`. Delivery, application, and the Google/Apple
+provider handshakes on the physical iPhone remain unverified. App version and
+runtime remain `1.1.0`, TestFlight build remains `13`, and no native build or
+Apple submission was created. The backend has 92 active Node.js 22 v2 Functions
+in `europe-west1`; no Functions, Firestore Rules, indexes, Hosting, production
+documents, migrations, or Firebase resources changed in this client-only
+release. The published EAS update is not evidence that it has already been
+applied on a tester device.
 
 ## Run the client
 
@@ -203,30 +202,28 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- Source release: route-stop PR `#160`, merged as commit `0f6dbfe`.
-- Preview EAS Update: group `b21e020b-54e8-4545-a399-3ae1b8e35642`, runtime
-  `1.1.0`, iOS update `01a02e1b-8d7b-75d1-8d0d-38276ce40a9c`, Android update
-  `01a02e1b-8d7b-7362-91e0-de282748b5de`, published from `0f6dbfe` at
-  `2026-08-23T10:12:32Z` with the `production` EAS environment.
-- Production EAS Update: group `7816c923-aa79-4bb0-8ef4-6660338bcaf1`, runtime
-  `1.1.0`, iOS update `01a02e23-455f-77e3-8ae3-ec1b3dfb55b4`, Android update
-  `01a02e23-455f-706b-860c-96719c8a5736`, published from the same commit at
-  `2026-08-23T10:20:58Z`. Roll back by republishing the prior production group
-  `5f55ca46-87d9-4e86-9a3a-ccacd029277c` to `production`.
+- Source release: auth welcome PR `#169`, merged as commit `eecff6f`.
+- Preview EAS Update: group `c1bfeede-8577-420a-977b-3ac56f35cdde`, runtime
+  `1.1.0`, iOS update `01a02f65-fa4a-7f77-9040-1e731c9e60ba`, Android update
+  `01a02f65-fa4a-7ecd-8227-4710537f2651`, published from `eecff6f` at
+  `2026-08-23T16:13:27.498Z` with the `production` EAS environment.
+- Production EAS Update: group `9602e8f0-0c25-4a5e-9872-b82aaa68a1f4`, runtime
+  `1.1.0`, iOS update `01a02f6c-ade0-7ace-a575-6a3fd4f32d55`, Android update
+  `01a02f6c-ade0-771d-ab1f-9c55f3ec8bb9`, published from the same commit at
+  `2026-08-23T16:20:46.688Z`. Roll back by republishing the prior production
+  group `e8c046f1-d428-40ea-b297-dc33ea9a6948` to `production`.
 - Firebase release: 92 active Node.js 22 v2 Functions in `europe-west1`.
   `saveRouteDraft`, `publishRouteDraft`, `saveRoute`, and
   `cleanupPreparedMediaScheduled` were updated from `0f6dbfe` at approximately
   `2026-08-23T10:01Z`. Their focused deployment completed successfully and the
   deployed list reports the expected Node.js 22 v2 targets. Firestore Rules,
   indexes, Storage Rules, Hosting, and production documents were not changed.
-- Validation: five affected Client suites passed all 23 focused tests, the
-  focused Functions suites passed all 38 tests, changed-boundary validation
-  passed locally, and PR `#160` passed its planner, affected-client,
-  affected-Functions, and final PR checks. Both EAS exports, project
-  fingerprints, uploads, and publication records completed successfully. No
-  post-deployment errors were present in the CLI log sample; the Firebase MCP
-  error-log query itself returned an internal tooling error. Authenticated
-  route editing on a physical iPhone remains the runtime verification gate.
+- Validation: four focused auth/navigation suites passed all 33 tests, the iOS
+  release configuration check and export passed, and PR `#169` passed its plan,
+  affected-client, and final PR checks. Both EAS exports, project fingerprints,
+  uploads, publications, and read-only metadata confirmations completed
+  successfully. Download/application and the live Google/Apple authentication
+  handshakes on a physical iPhone remain the runtime verification gates.
 - OTA device state: Expo serves the iOS update to matching production requests,
   but download/application on the owner's iPhone has not yet been confirmed.
 - Known live-audit exception: two pre-existing recommendation documents
