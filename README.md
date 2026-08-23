@@ -11,16 +11,18 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Route-stop update group
-`7816c923-aa79-4bb0-8ef4-6660338bcaf1` was published for iOS and Android on
-2026-08-23 from route-stop merge commit `0f6dbfe`; delivery and application on
-the physical iPhone remain unverified. The backend has 92 active Node.js 22 v2
-Functions in `europe-west1`. `saveRouteDraft`, `publishRouteDraft`, `saveRoute`,
-and `cleanupPreparedMediaScheduled` were updated from the same source at
-approximately `2026-08-23T10:01Z`. No Firestore Rules, indexes, Hosting,
-production documents, native builds, build numbers, or Apple submissions
-changed in this release. The deployed Firebase backend is not evidence that
-the OTA update has already been applied on a tester device.
+runtime `1.1.0`. Client update group
+`747983a9-8e48-45aa-8cf6-0cd69af4c189` was published for iOS
+(`01a02e70-c41b-7f5e-936f-ade1f4b44242`) and Android
+(`01a02e70-c41b-799e-a7d0-ed4ec68e6bd8`) at `2026-08-23T11:45:37Z` from PR
+`#162` merge commit `2fd38b4`. Its GitHub checks passed before merge. Delivery
+and application on the physical iPhone remain unverified. App version and
+runtime remain `1.1.0`, TestFlight build remains `13`, and no native build or
+Apple submission was created. The backend has 92 active Node.js 22 v2 Functions
+in `europe-west1`; no Functions, Firestore Rules, indexes, Hosting, production
+documents, migrations, or Firebase resources changed in this client-only
+release. The published EAS update is not evidence that it has already been
+applied on a tester device.
 
 ## Run the client
 
