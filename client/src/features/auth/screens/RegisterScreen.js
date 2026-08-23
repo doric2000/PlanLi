@@ -62,12 +62,19 @@ export default function RegisterScreen({ navigation, route }) {
   };
 
   return (
-    <AuthFormLayout testID="register-screen" onBack={handleBack}>
-      {({ compact, keyboardVisible }) => (
+    <AuthFormLayout
+      testID="register-screen"
+      onBack={handleBack}
+      header={({ compact }) => (
         <>
-          {!keyboardVisible ? <View style={authStyles.formBrand} testID="auth-form-brand"><BrandWordmark form /></View> : null}
-          {!keyboardVisible ? <AppText style={[authStyles.formTitle, compact && authStyles.formTitleCompact]}>יוצאים לדרך</AppText> : null}
-          {!keyboardVisible ? <AppText style={authStyles.formSubtitle}>כמה פרטים קצרים והחשבון מוכן.</AppText> : null}
+          <View style={authStyles.formBrand} testID="auth-form-brand"><BrandWordmark form /></View>
+          <AppText style={[authStyles.formTitle, compact && authStyles.formTitleCompact]}>יוצאים לדרך</AppText>
+          <AppText style={authStyles.formSubtitle}>כמה פרטים קצרים והחשבון מוכן.</AppText>
+        </>
+      )}
+    >
+      {({ compact }) => (
+        <>
           <View style={authStyles.formFields}>
             <AuthInput
               label="שם מלא"
@@ -79,7 +86,6 @@ export default function RegisterScreen({ navigation, route }) {
               embeddedLabel
               showLeadingIcon={false}
               compact={compact}
-              hideLabel={keyboardVisible}
               returnKeyType="next"
               blurOnSubmit={false}
               onSubmitEditing={() => emailRef.current?.focus()}
@@ -97,7 +103,6 @@ export default function RegisterScreen({ navigation, route }) {
               embeddedLabel
               showLeadingIcon={false}
               compact={compact}
-              hideLabel={keyboardVisible}
               returnKeyType="next"
               blurOnSubmit={false}
               onSubmitEditing={() => passwordRef.current?.focus()}
@@ -114,7 +119,6 @@ export default function RegisterScreen({ navigation, route }) {
               embeddedLabel
               showLeadingIcon={false}
               compact={compact}
-              hideLabel={keyboardVisible}
               returnKeyType="next"
               blurOnSubmit={false}
               onSubmitEditing={() => confirmPasswordRef.current?.focus()}
@@ -132,7 +136,6 @@ export default function RegisterScreen({ navigation, route }) {
               embeddedLabel
               showLeadingIcon={false}
               compact={compact}
-              hideLabel={keyboardVisible}
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
               testID="register-confirm-password"
@@ -145,9 +148,7 @@ export default function RegisterScreen({ navigation, route }) {
           <TouchableOpacity style={[authStyles.primaryButton, authStyles.formPrimaryButton, loading && authStyles.primaryButtonDisabled]} onPress={handleRegister} disabled={loading} testID="email-register-button">
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>יצירת חשבון</AppText>}
           </TouchableOpacity>
-          {!keyboardVisible ? (
-            <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer"><AppText style={authStyles.footerText}>כבר יש חשבון? </AppText><TouchableOpacity onPress={() => navigation.replace('Login')}><AppText style={authStyles.link}>התחברות</AppText></TouchableOpacity></View>
-          ) : null}
+          <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer"><AppText style={authStyles.footerText}>כבר יש חשבון? </AppText><TouchableOpacity onPress={() => navigation.replace('Login')}><AppText style={authStyles.link}>התחברות</AppText></TouchableOpacity></View>
         </>
       )}
     </AuthFormLayout>

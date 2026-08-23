@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Platform, Pressable, View } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { GoogleSigninButton } from '@react-native-google-signin/google-signin';
 
 import { forms } from '../../../styles';
 
@@ -34,6 +33,7 @@ export const SocialLoginButtons = ({
           disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel="המשך עם Apple"
+          accessibilityState={{ disabled, busy: loadingProvider === 'apple' }}
           testID="auth-apple-button"
         >
           <Image
@@ -48,22 +48,27 @@ export const SocialLoginButtons = ({
           ) : null}
         </Pressable>
       ) : null}
-      <View style={forms.authProviderIconSlot}>
-        <GoogleSigninButton
-          style={forms.authGoogleIconButton}
-          size={GoogleSigninButton.Size.Icon}
-          color={GoogleSigninButton.Color.Light}
-          onPress={onGoogleLogin}
-          disabled={disabled}
-          accessibilityLabel="המשך עם Google"
-          testID="auth-google-button"
+      <Pressable
+        style={({ pressed }) => [forms.authProviderIconSlot, pressed && forms.authProviderIconPressed]}
+        onPress={onGoogleLogin}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel="המשך עם Google"
+        accessibilityState={{ disabled, busy: loadingProvider === 'google' }}
+        testID="auth-google-button"
+      >
+        <Image
+          source={require('../../../../assets/google-sign-in-round@3x.png')}
+          style={forms.authGoogleIcon}
+          resizeMode="contain"
+          testID="auth-google-icon"
         />
         {loadingProvider === 'google' ? (
           <View style={forms.authProviderLoadingOverlay} pointerEvents="none">
             <ActivityIndicator color="#1E3A5F" />
           </View>
         ) : null}
-      </View>
+      </Pressable>
     </View>
   );
 };

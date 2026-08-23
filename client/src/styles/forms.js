@@ -226,9 +226,10 @@ export const forms = {
 		shadowRadius: 8,
 		elevation: 3,
 	},
-	authGoogleIconButton: {
-		width: 48,
-		height: 48,
+	authGoogleIcon: {
+		width: 44,
+		height: 44,
+		borderRadius: 22,
 	},
 	authAppleIcon: {
 		width: 44,
