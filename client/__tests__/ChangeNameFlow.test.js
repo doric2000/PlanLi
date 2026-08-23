@@ -5,13 +5,23 @@
  * - Show success alert, tap OK, and navigate back.
  */
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render as renderNative, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import SettingsScreen from '../src/features/profile/screens/SettingsScreen';
 import ChangeNameScreen from '../src/features/profile/screens/ChangeNameScreen';
 import { saveProfile } from '../src/services/ProfileService';
 
 let mockUserDocument = {};
+
+const TEST_METRICS = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
+const render = (ui) => renderNative(
+  <SafeAreaProvider initialMetrics={TEST_METRICS}>{ui}</SafeAreaProvider>
+);
 
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');

@@ -3,14 +3,15 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  SafeAreaView,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
 import { Avatar } from '../../../components/Avatar';
+import PageHeader from '../../../components/PageHeader';
+import RtlBackButton from '../../../components/RtlBackButton';
 import { useAuth } from '../../auth/AuthContext';
 import { useBlockedUsers } from '../../moderation/BlockedUsersContext';
 import { setBlockedUser } from '../../../services/SocialService';
@@ -92,19 +93,14 @@ export default function BlockedUsersScreen({ navigation }) {
   }, [handleCallableAuthError, updateBlocked]);
 
   return (
-    <SafeAreaView style={styles.safe} testID="blocked-users-screen">
-      <View style={styles.header}>
-        <View style={styles.rightSpacer} />
-        <AppText style={styles.headerTitle}>משתמשים שחסמת</AppText>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.8}
-          testID="blocked-users-back-button"
-        >
-          <Ionicons name="arrow-forward" size={22} color="#111" />
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safe} testID="blocked-users-screen">
+      <PageHeader
+        renderStart={() => (
+          <RtlBackButton onPress={() => navigation.goBack()} testID="blocked-users-back-button" />
+        )}
+        title="משתמשים שחסמת"
+        variant="detail"
+      />
 
       <View style={styles.container}>
         {blockedUsers.length === 0 ? (

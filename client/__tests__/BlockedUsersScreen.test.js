@@ -1,12 +1,22 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render as renderNative, waitFor } from '@testing-library/react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import BlockedUsersScreen from '../src/features/profile/screens/BlockedUsersScreen';
 import { useBlockedUsers } from '../src/features/moderation/BlockedUsersContext';
 import { useAuth } from '../src/features/auth/AuthContext';
 import { setBlockedUser } from '../src/services/SocialService';
 import { useUserData } from '../src/hooks/useUserData';
+
+const TEST_METRICS = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, left: 0, right: 0, bottom: 34 },
+};
+
+const render = (ui) => renderNative(
+  <SafeAreaProvider initialMetrics={TEST_METRICS}>{ui}</SafeAreaProvider>
+);
 
 jest.mock('../src/features/moderation/BlockedUsersContext', () => ({
   useBlockedUsers: jest.fn(),

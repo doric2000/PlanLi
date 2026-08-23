@@ -4,6 +4,7 @@ import {
   Alert,
   Modal,
   Platform,
+  ScrollView,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -12,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
+import PageHeader from '../../../components/PageHeader';
+import RtlBackButton from '../../../components/RtlBackButton';
 import { auth } from '../../../config/firebase';
 import {
   formatAuthError,
@@ -25,7 +28,55 @@ import {
 } from '../../../services/AuthService';
 import { requestAccountDeletion } from '../../../services/SocialService';
 import { resetPersonalizationActivity } from '../../../services/PersonalizationService';
-import { preferenceSetupStyles as preferenceStyles, settingsScreenStyles as styles } from '../../../styles';
+import { colors, settingsHubStyles as styles } from '../../../styles';
+
+function SettingsRow({
+  detail,
+  danger = false,
+  disabled = false,
+  icon,
+  label,
+  last = false,
+  loading = false,
+  onPress,
+  testID,
+}) {
+  return (
+    <TouchableOpacity
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ disabled, busy: loading }}
+      activeOpacity={0.82}
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.row,
+        last && styles.rowLast,
+        disabled && styles.rowDisabled,
+      ]}
+      testID={testID}
+    >
+      <View style={[styles.iconBubble, danger && styles.dangerIcon]}>
+        <Ionicons name={icon} size={19} color={danger ? '#B42318' : colors.primary} />
+      </View>
+      <View style={styles.rowCopy}>
+        <AppText style={[styles.rowName, danger && styles.dangerText]}>{label}</AppText>
+        {detail ? <AppText style={styles.rowDetail}>{detail}</AppText> : null}
+      </View>
+      {loading ? (
+        <ActivityIndicator color={danger ? '#B42318' : colors.primary} size="small" />
+      ) : (
+        <Ionicons
+          accessibilityElementsHidden
+          color={colors.textMuted}
+          importantForAccessibility="no"
+          name="chevron-back"
+          size={18}
+        />
+      )}
+    </TouchableOpacity>
+  );
+}
 
 export default function SettingsScreen({ navigation }) {
   const [deleting, setDeleting] = useState(false);
@@ -138,44 +189,46 @@ export default function SettingsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe} testID="settings-screen">
+    <SafeAreaView edges={['left', 'right', 'bottom']} style={styles.safe} testID="settings-screen">
       <Modal
-        visible={passwordModalVisible}
-        transparent
         animationType="fade"
         onRequestClose={() => !deleting && setPasswordModalVisible(false)}
+        transparent
+        visible={passwordModalVisible}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <AppText style={styles.modalTitle}>אימות לפני מחיקה</AppText>
             <AppText style={styles.modalText}>הזינו את הסיסמה כדי למחוק את החשבון לצמיתות.</AppText>
             <AppTextInput
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
+              onChangeText={setPassword}
               placeholder="סיסמה"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.placeholder}
+              secureTextEntry
               style={styles.modalInput}
               testID="delete-account-password-input"
+              value={password}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setPasswordModalVisible(false)}
+                activeOpacity={0.82}
                 disabled={deleting}
+                onPress={() => setPasswordModalVisible(false)}
+                style={styles.modalCancelButton}
               >
                 <AppText style={styles.modalCancelText}>ביטול</AppText>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalDeleteButton, deleting && styles.buttonDisabled]}
-                onPress={deletePasswordAccount}
+                activeOpacity={0.82}
                 disabled={deleting || !password}
+                onPress={deletePasswordAccount}
+                style={[styles.modalDeleteButton, deleting && styles.buttonDisabled]}
                 testID="delete-account-password-confirm"
               >
                 {deleting
-                  ? <ActivityIndicator color="#FFFFFF" />
+                  ? <ActivityIndicator color={colors.white} />
                   : <AppText style={styles.modalDeleteText}>מחקו חשבון</AppText>}
               </TouchableOpacity>
             </View>
@@ -183,107 +236,118 @@ export default function SettingsScreen({ navigation }) {
         </View>
       </Modal>
 
-      <View style={styles.header}>
-        <View style={styles.rightSpacer} />
-        <AppText style={styles.headerTitle}>הגדרות</AppText>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.8}
-          testID="settings-back-button"
-        >
-          <Ionicons name="arrow-forward" size={22} color="#111" />
-        </TouchableOpacity>
-      </View>
+      <PageHeader
+        renderStart={() => (
+          <RtlBackButton onPress={() => navigation.goBack()} testID="settings-back-button" />
+        )}
+        testID="settings-header"
+        title="הגדרות"
+        variant="detail"
+      />
 
-      <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('ChangeName')}
-          testID="settings-change-name-button"
-        >
-          <AppText style={styles.primaryBtnText}>שינוי שם</AppText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('BlockedUsers')}
-          testID="settings-blocked-users-button"
-        >
-          <AppText style={styles.primaryBtnText}>משתמשים שחסמת</AppText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={resetPersonalization}
-          disabled={resettingPersonalization}
-          testID="settings-reset-personalization-button"
-        >
-          {resettingPersonalization
-            ? <ActivityIndicator color="#FFFFFF" />
-            : <AppText style={styles.primaryBtnText}>איפוס התאמה אישית</AppText>}
-        </TouchableOpacity>
-
-        <View style={preferenceStyles.promptCard}>
-          <AppText style={preferenceStyles.promptTitle}>התאמה אישית פעילה</AppText>
-          <AppText style={preferenceStyles.promptText}>
-            לייקים, שמירות ופתיחת המלצות משפרים את סדר התוצאות. אפשר לאפס את הלמידה בכל עת.
-          </AppText>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        style={styles.scroll}
+      >
+        <AppText style={styles.sectionTitle}>חשבון</AppText>
+        <View style={styles.group} testID="settings-account-section">
+          <SettingsRow
+            detail="עדכון השם שמוצג בפרופיל"
+            icon="person-outline"
+            label="שינוי שם"
+            onPress={() => navigation.navigate('ChangeName')}
+            testID="settings-change-name-button"
+          />
+          {hasPasswordProvider ? (
+            <SettingsRow
+              detail="אבטחת החשבון ופרטי ההתחברות"
+              icon="lock-closed-outline"
+              label="שינוי סיסמה"
+              onPress={() => navigation.navigate('ChangePassword')}
+              testID="settings-change-password-button"
+            />
+          ) : null}
+          <SettingsRow
+            detail="צפייה וניהול של רשימת החסימות"
+            icon="person-remove-outline"
+            label="משתמשים שחסמת"
+            last
+            onPress={() => navigation.navigate('BlockedUsers')}
+            testID="settings-blocked-users-button"
+          />
         </View>
 
-        {hasPasswordProvider ? (
+        <AppText style={styles.sectionTitle}>התאמה אישית</AppText>
+        <View style={styles.personalizationCard} testID="settings-personalization-section">
+          <View style={styles.personalizationTop}>
+            <View style={styles.personalizationIcon}>
+              <Ionicons name="options-outline" size={20} color={colors.white} />
+            </View>
+            <View style={styles.personalizationCopy}>
+              <AppText style={styles.personalizationTitle}>ההתאמה האישית פעילה</AppText>
+              <AppText style={styles.personalizationText}>
+                לייקים, שמירות ופתיחת המלצות משפרים את סדר התוצאות עבורך.
+              </AppText>
+            </View>
+          </View>
           <TouchableOpacity
-            style={styles.primaryBtn}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('ChangePassword')}
-            testID="settings-change-password-button"
+            accessibilityLabel="איפוס הלמידה"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: resettingPersonalization, busy: resettingPersonalization }}
+            activeOpacity={0.82}
+            disabled={resettingPersonalization}
+            onPress={resetPersonalization}
+            style={[styles.resetButton, resettingPersonalization && styles.buttonDisabled]}
+            testID="settings-reset-personalization-button"
           >
-            <AppText style={styles.primaryBtnText}>שינוי סיסמה</AppText>
+            {resettingPersonalization ? (
+              <ActivityIndicator color="#8A5507" size="small" />
+            ) : (
+              <Ionicons name="refresh-outline" size={18} color="#8A5507" />
+            )}
+            <AppText style={styles.resetText}>איפוס הלמידה</AppText>
           </TouchableOpacity>
-        ) : null}
+        </View>
 
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('Terms')}
-          testID="settings-terms-button"
-        >
-          <AppText style={styles.primaryBtnText}>תנאי שימוש</AppText>
-        </TouchableOpacity>
+        <AppText style={styles.sectionTitle}>פרטיות וקהילה</AppText>
+        <View style={styles.group} testID="settings-legal-section">
+          <SettingsRow
+            icon="document-text-outline"
+            label="תנאי שימוש"
+            onPress={() => navigation.navigate('Terms')}
+            testID="settings-terms-button"
+          />
+          <SettingsRow
+            icon="shield-checkmark-outline"
+            label="מדיניות פרטיות"
+            onPress={() => navigation.navigate('Privacy')}
+            testID="settings-privacy-button"
+          />
+          <SettingsRow
+            icon="people-outline"
+            label="כללי הקהילה"
+            last
+            onPress={() => navigation.navigate('CommunityGuidelines')}
+            testID="settings-community-guidelines-button"
+          />
+        </View>
 
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('Privacy')}
-          testID="settings-privacy-button"
-        >
-          <AppText style={styles.primaryBtnText}>מדיניות פרטיות</AppText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('CommunityGuidelines')}
-          testID="settings-community-guidelines-button"
-        >
-          <AppText style={styles.primaryBtnText}>כללי הקהילה</AppText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.primaryBtn, styles.dangerButton]}
-          activeOpacity={0.9}
-          onPress={deleteAccount}
-          disabled={deleting}
-          testID="settings-delete-account-button"
-        >
-          {deleting
-            ? <ActivityIndicator color="#FFFFFF" />
-            : <AppText style={styles.primaryBtnText}>מחיקת חשבון</AppText>}
-        </TouchableOpacity>
-      </View>
+        <AppText style={styles.sectionTitle}>ניהול חשבון</AppText>
+        <View style={[styles.group, styles.dangerGroup]} testID="settings-danger-section">
+          <SettingsRow
+            danger
+            detail="מחיקה לצמיתות של החשבון והתוכן"
+            disabled={deleting}
+            icon="trash-outline"
+            label="מחיקת חשבון"
+            last
+            loading={deleting}
+            onPress={deleteAccount}
+            testID="settings-delete-account-button"
+          />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

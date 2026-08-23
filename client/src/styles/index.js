@@ -21,6 +21,12 @@ export { recommendationComposerStyles } from "./recommendationComposer";
 export { routeBuilderStyles } from "./routeBuilder";
 export { commentStyles } from "./comments";
 export {
+  detailHeaderStyles,
+  drawerMenuListStyles,
+  settingsHubStyles,
+  userDrawerStyles,
+} from "./userMenu";
+export {
   pageHeaderStyles,
   tabHeroStyles,
   TAB_HERO_ACTION_HEIGHT,

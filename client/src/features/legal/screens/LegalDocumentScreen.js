@@ -1,8 +1,9 @@
 import React from 'react';
-import { ScrollView, TouchableOpacity, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
+import PageHeader from '../../../components/PageHeader';
+import RtlBackButton from '../../../components/RtlBackButton';
 import { authStyles } from '../../../styles';
 import { COMMUNITY_DOCUMENT, PRIVACY_DOCUMENT, TERMS_DOCUMENT } from '../legalContent';
 
@@ -11,11 +12,12 @@ export default function LegalDocumentScreen({ navigation, route }) {
     ? PRIVACY_DOCUMENT
     : route?.name === 'CommunityGuidelines' ? COMMUNITY_DOCUMENT : TERMS_DOCUMENT;
   return (
-    <SafeAreaView style={authStyles.legalSafe} testID={`${route?.name?.toLowerCase()}-screen`}>
-      <View style={authStyles.legalHeader}>
-        <TouchableOpacity style={authStyles.legalBack} onPress={() => navigation.goBack()} accessibilityLabel="חזרה"><Ionicons name="arrow-forward" size={24} color="#1E3A5F" /></TouchableOpacity>
-        <AppText style={authStyles.legalHeaderTitle}>{document.title}</AppText>
-      </View>
+    <SafeAreaView edges={['left', 'right', 'bottom']} style={authStyles.legalSafe} testID={`${route?.name?.toLowerCase()}-screen`}>
+      <PageHeader
+        renderStart={() => <RtlBackButton onPress={() => navigation.goBack()} />}
+        title={document.title}
+        variant="detail"
+      />
       <ScrollView contentContainerStyle={authStyles.legalContent} showsVerticalScrollIndicator={false}>
         <AppText style={authStyles.legalMeta}>גרסה {document.version} · תחילה {document.effectiveDate}</AppText>
         <AppText style={authStyles.legalIntro}>{document.intro}</AppText>
