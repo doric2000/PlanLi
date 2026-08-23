@@ -425,6 +425,28 @@ test('legacy provider fan-out is capped until resolved place tokens replace it',
   assert.equal(MAX_PROVIDER_RESOLUTIONS_PER_SAVE, 5);
 });
 
+test('the new-place request ceiling is explicit and non-retryable', async () => {
+  const days = [{ id: 'day_001', stops: Array.from({ length: 6 }, (_, index) => ({
+    id: `new-${index}`,
+    title: `New ${index}`,
+    locationPrecision: 'exact',
+    place: { placeId: `new-place-${index}`, coordinates: { lat: 32 + index / 100, lng: 34.8 } },
+  })) }];
+  await assert.rejects(
+    resolveRoutePlaces({
+      admin: { firestore: () => ({}) },
+      auth: { uid: 'owner' },
+      days,
+      consumeBudget: async () => { throw new Error('budget must not be consumed'); },
+      resolveSubmitted: async () => { throw new Error('provider must not be called'); },
+    }),
+    (error) => error?.code === 'resource-exhausted' &&
+      error?.details?.reason === 'ROUTE_NEW_PLACE_LIMIT' &&
+      error?.details?.retryable === false &&
+      error?.details?.providerCalls === 0
+  );
+});
+
 test('saveRoute requires taxonomy v5 for budget-bearing writes', async () => {
   const routeRef = {
     id: 'new-route', path: 'routes/new-route',

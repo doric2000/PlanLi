@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import AddRoutesScreen, {
+  mergeRestoredRouteMedia,
   reorderRouteStops,
   routeFooterInsetsStyle,
   routeDraftForServer,
@@ -15,6 +16,10 @@ const mockLoadRouteDetails = jest.fn();
 const mockEnqueueCreate = jest.fn();
 const mockLoadJobForReview = jest.fn();
 const mockUseBackButton = jest.fn();
+const mockBindRouteDraftMedia = jest.fn(async () => {});
+const mockClearRouteDraftMedia = jest.fn(async () => {});
+const mockClearStaleRouteDraftMedia = jest.fn(async () => {});
+const mockRestoreRouteDraftMedia = jest.fn(async () => ({ entries: [], missingCount: 0 }));
 
 jest.mock('../src/services/RouteService', () => ({
   getCurrentRouteDraft: (...args) => mockGetCurrentRouteDraft(...args),
@@ -31,14 +36,17 @@ jest.mock('../src/features/publishing/ContentPublishContext', () => ({
     loadJobForReview: mockLoadJobForReview,
   }),
 }));
-jest.mock('../src/hooks/useDurableDraftMedia', () => ({
+jest.mock('../src/hooks/useRouteDraftMedia', () => ({
   __esModule: true,
   default: () => ({
     draftJobId: '123e4567-e89b-42d3-a456-426614174099',
+    bindDraft: mockBindRouteDraftMedia,
+    clearDraft: mockClearRouteDraftMedia,
+    clearStaleDraft: mockClearStaleRouteDraftMedia,
     forgetUri: jest.fn(async () => {}),
-    markEnqueued: jest.fn(),
     mediaForUri: (uri) => ({ uri }),
     persistUris: jest.fn(async (uris) => uris),
+    restoreDraft: mockRestoreRouteDraftMedia,
   }),
 }));
 
@@ -59,7 +67,7 @@ jest.mock('react-native-draggable-flatlist', () => {
     NestableDraggableFlatList: ({ data, keyExtractor, renderItem, testID }) => (
       <View testID={testID}>{data.map((item, index) => (
         <React.Fragment key={keyExtractor(item, index)}>
-          {renderItem({ item, index, drag: () => {}, isActive: false })}
+          {renderItem({ item, getIndex: () => index, drag: () => {}, isActive: false })}
         </React.Fragment>
       ))}</View>
     ),
@@ -169,6 +177,17 @@ describe('streamlined route builder', () => {
     expect(serverDraft.days[0].stops[0].media).toBe(canonicalMedia);
   });
 
+  it('restores durable local media to the matching stable stop ID', () => {
+    const merged = mergeRestoredRouteMedia(currentDraft(), [{
+      dayId: 'day_001', stopId: 'b', uri: 'file:///restored.jpg', mediaId: 'media-1',
+    }]);
+    expect(merged.days[0].stops[0].pendingMedia).toBeUndefined();
+    expect(merged.days[0].stops[1]).toEqual(expect.objectContaining({
+      image: 'file:///restored.jpg',
+      pendingMedia: [expect.objectContaining({ uri: 'file:///restored.jpg', mediaId: 'media-1' })],
+    }));
+  });
+
   it('keeps the publication action above the iPhone home indicator', () => {
     expect(routeFooterInsetsStyle(34)).toEqual({ paddingBottom: 34 });
     expect(routeFooterInsetsStyle(0)).toEqual({ paddingBottom: 14 });
@@ -185,12 +204,14 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
-    expect(screen.getByTestId('route-stop-drag-handle-0')).toBeTruthy();
-    expect(screen.getByTestId('route-stop-drag-handle-1')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('route-insert-stop-1'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    expect(screen.queryByText('NaN')).toBeNull();
+    expect(screen.getByTestId('route-stop-drag-handle-a')).toBeTruthy();
+    expect(screen.getByTestId('route-stop-drag-handle-b')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('route-insert-stop-before-b'));
     expect(screen.getByLabelText('stop-0-1-null')).toBeTruthy();
     fireEvent.press(screen.getByTestId('direct-stop-save'));
-    fireEvent.press(screen.getByTestId('route-stop-edit-1'));
+    fireEvent.press(screen.getByTestId('route-stop-edit-stable-new-stop-id'));
     expect(screen.getByLabelText('stop-0-1-stable-new-stop-id')).toBeTruthy();
   });
 
@@ -199,7 +220,8 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
-    fireEvent.press(screen.getByTestId('route-stop-edit-1'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-edit-b'));
     expect(screen.getByLabelText('stop-0-1-b')).toBeTruthy();
     fireEvent.press(screen.getByTestId('direct-stop-save'));
     expect(screen.getByText('עצירה מעודכנת')).toBeTruthy();
@@ -211,12 +233,13 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
     fireEvent.changeText(screen.getByTestId('route-day-description-input'), 'יום רגוע');
     expect(screen.getByTestId('route-day-description-input').props.value).toBe('יום רגוע');
     require('react-native').Alert.alert.mockImplementationOnce((_title, _message, buttons) => {
       buttons.find((button) => button.style === 'destructive')?.onPress?.();
     });
-    fireEvent.press(screen.getByTestId('route-stop-remove-0'));
+    fireEvent.press(screen.getByTestId('route-stop-remove-a'));
     expect(screen.queryByText('השוק')).toBeNull();
     expect(screen.getByLabelText('עריכת העצירה בית קפה')).toBeTruthy();
   });
@@ -226,6 +249,14 @@ describe('streamlined route builder', () => {
       .toBe(routeEditorComparable(currentDraft({ sourceRouteId: 'route-1', version: 9 })));
   });
 
+  it('preserves canonical day and stop IDs while comparing an edit', () => {
+    const comparable = JSON.parse(routeEditorComparable(currentDraft({
+      days: [{ id: 'stable-day-id', stops: [{ id: 'stable-stop-id', title: 'עצירה' }] }],
+    })));
+    expect(comparable.days[0].id).toBe('stable-day-id');
+    expect(comparable.days[0].stops[0].id).toBe('stable-stop-id');
+  });
+
   it('opens an unchanged existing route locally without creating a draft', async () => {
     const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: source } }} />);
@@ -233,6 +264,43 @@ describe('streamlined route builder', () => {
     expect(mockSaveRouteDraft).not.toHaveBeenCalled();
     expect(screen.getByTestId('route-submit').props.accessibilityState?.disabled ||
       screen.getByTestId('route-submit').props.disabled).toBe(true);
+  });
+
+  it('leaves an unchanged existing route without a prompt or server write', async () => {
+    const nav = navigation();
+    const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: { routeToEdit: source } }} />);
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
+    await act(async () => { await backOptions.onPress(); });
+    expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+    expect(require('react-native').Alert.alert).not.toHaveBeenCalledWith(
+      'יש שינויים שלא פורסמו', expect.anything(), expect.anything(), expect.anything()
+    );
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans an exact same-route no-op draft before opening the source', async () => {
+    const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({ sourceRouteId: 'route-2' }));
+    mockLoadRouteDetails.mockResolvedValue(source);
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: source } }} />);
+    await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
+    expect(await screen.findByTestId('route-map-peek')).toBeTruthy();
+    expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+  });
+
+  it('does not discard a same-route draft whose only unpublished change is local media', async () => {
+    const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({
+      sourceRouteId: 'route-2',
+      localMediaCount: 1,
+    }));
+    mockLoadRouteDetails.mockResolvedValue(source);
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: source } }} />);
+    await waitFor(() => expect(mockRestoreRouteDraftMedia).toHaveBeenCalledWith('draft-1', 1));
+    expect(await screen.findByTestId('route-map-peek')).toBeTruthy();
+    expect(mockDiscardRouteDraft).not.toHaveBeenCalled();
   });
 
   it('cleans up a legacy no-op edit draft before opening another route', async () => {
@@ -293,7 +361,7 @@ describe('streamlined route builder', () => {
     jest.useRealTimers();
   });
 
-  it('flushes a pending first edit before leaving', async () => {
+  it('asks before leaving and saves a draft only after the user chooses it', async () => {
     const nav = navigation();
     const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
     const screen = render(<AddRoutesScreen navigation={nav} route={{ params: { routeToEdit: source } }} />);
@@ -302,10 +370,34 @@ describe('streamlined route builder', () => {
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי לפני יציאה');
     const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
     await act(async () => { await backOptions.onPress(); });
+    expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+    const leaveAlert = require('react-native').Alert.alert.mock.calls.find(([title]) => title === 'יש שינויים שלא פורסמו');
+    await act(async () => {
+      await leaveAlert[2].find((button) => button.text === 'שמירת טיוטה ויציאה').onPress();
+    });
     expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
       sourceRouteId: 'route-2',
+      saveRequestId: 'stable-new-stop-id',
       draft: expect.objectContaining({ description: 'שינוי לפני יציאה' }),
     }));
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards the private edit draft before leaving when the user rejects changes', async () => {
+    const nav = navigation();
+    const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: { routeToEdit: source } }} />);
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי למחיקה');
+    const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
+    await act(async () => { await backOptions.onPress(); });
+    const leaveAlert = require('react-native').Alert.alert.mock.calls.find(([title]) => title === 'יש שינויים שלא פורסמו');
+    await act(async () => {
+      await leaveAlert[2].find((button) => button.text === 'ויתור על השינויים ויציאה').onPress();
+    });
+    expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+    expect(mockClearRouteDraftMedia).toHaveBeenCalledWith({ deleteFiles: true });
     expect(nav.goBack).toHaveBeenCalledTimes(1);
   });
 
@@ -351,7 +443,7 @@ describe('streamlined route builder', () => {
     }));
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: { id: 'route-1' } } }} />);
     await waitFor(() => expect(screen.getByTestId('route-submit')).toBeTruthy());
-    expect(screen.getByText('שמור שינויים')).toBeTruthy();
+    expect(screen.getByText('פרסום השינויים')).toBeTruthy();
     expect(screen.queryByText('פרסום המסלול')).toBeNull();
     fireEvent.press(screen.getByTestId('route-submit'));
     await waitFor(() => expect(screen.getByTestId('route-description-input')).toBeTruthy());
@@ -365,6 +457,7 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-submit'));
     await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
       contentType: 'route',
@@ -450,6 +543,7 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'תיאור מעודכן');
     await act(async () => { jest.advanceTimersByTime(1000); await Promise.resolve(); });
@@ -468,12 +562,13 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'תיאור שנשאר במסך');
     await waitFor(() => expect(screen.getByTestId('route-save-retry')).toBeTruthy(), { timeout: 4000 });
     expect(screen.getByTestId('route-description-input').props.value).toBe('תיאור שנשאר במסך');
     fireEvent.press(screen.getByTestId('route-save-retry'));
     await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.getByText('נשמר')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('הטיוטה נשמרה')).toBeTruthy());
   });
 });

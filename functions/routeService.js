@@ -648,11 +648,13 @@ async function resolveRoutePlaces({
     (entry) => entry.providerPlaceId && !entry.resolvedPlaceToken
   );
   const rawProviderResolutionCount = rawEntries.length + rawDestinationEntries.length;
-  assert(
-    rawProviderResolutionCount <= MAX_PROVIDER_RESOLUTIONS_PER_SAVE,
-    'resource-exhausted',
-    'This route contains too many new places to verify at once. Save a section with at most five places.'
-  );
+  if (rawProviderResolutionCount > MAX_PROVIDER_RESOLUTIONS_PER_SAVE) {
+    throw new HttpsError(
+      'resource-exhausted',
+      'This route contains too many new places to verify at once. Save a section with at most five places.',
+      { reason: 'ROUTE_NEW_PLACE_LIMIT', retryable: false, providerCalls: 0 }
+    );
+  }
   if (rawProviderResolutionCount) {
     await consumeBudget({
       admin,

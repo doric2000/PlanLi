@@ -232,6 +232,9 @@ function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
       stop.additionalMedia.length, 0), 0);
   assert(mediaCount <= MAX_ROUTE_MEDIA,
     'invalid-argument', 'ROUTE_DRAFT_INVALID', `A route supports up to ${MAX_ROUTE_MEDIA} images.`);
+  const localMediaCount = Number(draft.localMediaCount || 0);
+  assert(Number.isSafeInteger(localMediaCount) && localMediaCount >= 0 && localMediaCount <= MAX_ROUTE_MEDIA,
+    'invalid-argument', 'ROUTE_DRAFT_INVALID', 'localMediaCount is invalid.');
   const attributes = draft.attributes && typeof draft.attributes === 'object' ? draft.attributes : {};
   return {
     routeSchemaVersion: 2,
@@ -259,6 +262,7 @@ function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
     pace: cleanId(draft.pace || '', 'pace', { optional: true }),
     priceBasis: 'whole_route',
     priceNote: cleanString(draft.priceNote || '', 'priceNote', { max: 120, optional: true }),
+    localMediaCount,
     days,
   };
 }
@@ -359,6 +363,7 @@ async function saveRouteDraft({ admin, auth, data }) {
   const uid = auth.uid;
   const incomingDraftId = cleanId(data?.draftId || '', 'draftId', { optional: true });
   const sourceRouteId = cleanId(data?.sourceRouteId || '', 'sourceRouteId', { optional: true });
+  const saveRequestId = normalizePublishRequestId(data?.saveRequestId);
   const expectedVersion = data?.expectedVersion == null ? null : Number(data.expectedVersion);
   assert(expectedVersion == null || (Number.isSafeInteger(expectedVersion) && expectedVersion >= 0),
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'expectedVersion is invalid.');
@@ -369,6 +374,18 @@ async function saveRouteDraft({ admin, auth, data }) {
   const pointerRef = draftPointerRef(db, uid);
   const pointerSnapshot = await pointerRef.get();
   const current = pointerSnapshot.exists ? pointerSnapshot.data() || {} : null;
+  if (current && saveRequestId && current.lastSaveRequestId === saveRequestId) {
+    assert(current.ownerId === uid && (!incomingDraftId || current.draftId === incomingDraftId),
+      'permission-denied', 'ROUTE_DRAFT_FORBIDDEN', 'Route draft is unavailable.');
+    assert((current.sourceRouteId || '') === (sourceRouteId || ''),
+      'failed-precondition', 'ROUTE_DRAFT_SOURCE_MISMATCH', 'Route draft belongs to another route.');
+    return {
+      draftId: current.draftId,
+      version: current.version,
+      sourceRouteId: current.sourceRouteId || null,
+      idempotentReplay: true,
+    };
+  }
   if (current && !incomingDraftId) {
     throw draftError('already-exists', 'ROUTE_DRAFT_EXISTS', 'A route draft already exists.');
   }
@@ -431,6 +448,7 @@ async function saveRouteDraft({ admin, auth, data }) {
         sourceRouteId: sourceRouteId || current?.sourceRouteId || null,
         publicationId,
         publishRequestId,
+        lastSaveRequestId: saveRequestId || null,
         createdAt: current?.createdAt || now,
         updatedAt: now,
       });

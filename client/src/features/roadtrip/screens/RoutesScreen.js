@@ -81,6 +81,7 @@ export default function RoutesScreen({ navigation }) {
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const personalizationInitialized = useRef(false);
   const requestSerial = useRef(0);
+  const routeActionRef = useRef('');
   const principal = currentUser?.uid || 'guest';
   const routesListRef = useRef(null);
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
@@ -169,6 +170,9 @@ export default function RoutesScreen({ navigation }) {
     Alert.alert('מחיקת מסלול', 'בטוחים שברצונכם למחוק את המסלול?', [
       { text: 'ביטול', style: 'cancel' },
       { text: 'מחק', style: 'destructive', onPress: async () => {
+        const actionKey = `delete:${routeId}`;
+        if (routeActionRef.current) return;
+        routeActionRef.current = actionKey;
         try {
           await deleteContent({ type: 'route', id: routeId });
           requestSerial.current += 1;
@@ -181,17 +185,41 @@ export default function RoutesScreen({ navigation }) {
         } catch (error) {
           console.error('Error deleting route:', error);
           Alert.alert('שגיאה', 'לא הצלחנו למחוק את המסלול.');
+        } finally {
+          if (routeActionRef.current === actionKey) routeActionRef.current = '';
         }
       } },
     ]);
   };
   const handleEdit = async (route) => {
-    const routeToEdit = await loadRouteDetails(route.id);
-    if (routeToEdit) navigation.navigate('AddRoutesScreen', { routeToEdit });
+    const actionKey = `edit:${route.id}`;
+    if (routeActionRef.current) return;
+    routeActionRef.current = actionKey;
+    try {
+      const routeToEdit = await loadRouteDetails(route.id);
+      if (!routeToEdit) throw new Error('Route is unavailable.');
+      navigation.navigate('AddRoutesScreen', { routeToEdit });
+    } catch (error) {
+      console.warn('route_edit_open_failed', { code: error?.code || 'unknown' });
+      Alert.alert('לא הצלחנו לפתוח את העריכה', 'המסלול לא השתנה. אפשר לנסות שוב בעוד רגע.');
+    } finally {
+      if (routeActionRef.current === actionKey) routeActionRef.current = '';
+    }
   };
   const openRoute = async (route) => {
-    const routeData = await loadRouteDetails(route.id);
-    if (routeData) navigation.navigate('RouteDetail', { routeData });
+    const actionKey = `open:${route.id}`;
+    if (routeActionRef.current) return;
+    routeActionRef.current = actionKey;
+    try {
+      const routeData = await loadRouteDetails(route.id);
+      if (!routeData) throw new Error('Route is unavailable.');
+      navigation.navigate('RouteDetail', { routeData });
+    } catch (error) {
+      console.warn('route_detail_open_failed', { code: error?.code || 'unknown' });
+      Alert.alert('לא הצלחנו לפתוח את המסלול', 'אפשר לנסות שוב בעוד רגע.');
+    } finally {
+      if (routeActionRef.current === actionKey) routeActionRef.current = '';
+    }
   };
   const isFiltered = hasDiscoveryFilters(filters);
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
