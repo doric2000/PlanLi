@@ -409,7 +409,7 @@ async function cleanupPreparedMedia({
 }) {
   const bucket = getMediaBucket(admin, mediaBucket);
   const [files] = await bucket.getFiles({ prefix: 'media/' });
-  const expired = files.filter((file) => {
+  const expiredCandidates = files.filter((file) => {
     const state = file.metadata?.metadata?.state;
     const createdAt = Date.parse(
       file.metadata?.timeCreated || file.metadata?.updated || ''
@@ -420,8 +420,38 @@ async function cleanupPreparedMedia({
       now - createdAt >= olderThanMs
     );
   });
+  const candidateAssetKeys = Array.from(new Set(expiredCandidates.map((file) => {
+    const match = String(file.name || '').match(/^media\/([^/]+)\/([^/]+)\/(?:large|feed|thumb)\.webp$/);
+    return match ? `${match[1]}/${match[2]}` : null;
+  }).filter(Boolean)));
+  const referencedAssetKeys = new Set();
+  if (candidateAssetKeys.length && typeof admin.firestore === 'function') {
+    for (let offset = 0; offset < candidateAssetKeys.length; offset += 30) {
+      const assetKeys = candidateAssetKeys.slice(offset, offset + 30);
+      // Draft stop documents keep these server-derived, owner-qualified keys so prepared media
+      // survives the 24-hour orphan cleanup while the private draft exists.
+      // eslint-disable-next-line no-await-in-loop
+      const snapshot = await admin.firestore()
+        .collectionGroup('stops')
+        .where('mediaCleanupKeys', 'array-contains-any', assetKeys)
+        .get();
+      snapshot.docs.forEach((document) => {
+        (document.data()?.mediaCleanupKeys || []).forEach((assetKey) => {
+          if (assetKeys.includes(assetKey)) referencedAssetKeys.add(assetKey);
+        });
+      });
+    }
+  }
+  const expired = expiredCandidates.filter((file) => {
+    const match = String(file.name || '').match(/^media\/([^/]+)\/([^/]+)\/(?:large|feed|thumb)\.webp$/);
+    return !match || !referencedAssetKeys.has(`${match[1]}/${match[2]}`);
+  });
   await removeFiles(expired);
-  return { inspected: files.length, removed: expired.length };
+  return {
+    inspected: files.length,
+    removed: expired.length,
+    protectedDraftAssets: referencedAssetKeys.size,
+  };
 }
 
 module.exports = {

@@ -8,6 +8,7 @@ const {
   attachRouteLegEstimates,
   loadTrustedRecommendationSources,
   cleanupRouteRevisions,
+  collectMedia,
   loadRouteDetails,
   loadTrustedRoutePlaces,
   preservedRouteStatus,
@@ -175,8 +176,10 @@ test('streamlined routes accept general and pinned stops while keeping price req
           title: 'הרובע היהודי',
           locationPrecision: 'general',
           destination: { countryId: 'HU', cityId: 'budapest' },
-          startTime: '09:30',
+          startTime: '8:30',
           durationMinutes: 90,
+          media: { assetId: 'media-1' },
+          additionalMedia: [{ assetId: 'media-2' }, { assetId: 'media-3' }],
         },
         {
           title: 'נקודת צילום',
@@ -190,7 +193,14 @@ test('streamlined routes accept general and pinned stops while keeping price req
   assert.equal(route.routeSchemaVersion, 2);
   assert.equal(route.priceBasis, 'whole_route');
   assert.equal(route.days[0].stops[0].locationPrecision, 'general');
+  assert.equal(route.days[0].stops[0].startTime, '08:30');
+  assert.equal(route.days[0].stops[0].additionalMedia.length, 2);
   assert.equal(route.days[0].stops[1].locationPrecision, 'pin');
+  assert.deepEqual(collectMedia(route.days).map((asset) => asset.assetId), [
+    'media-1',
+    'media-2',
+    'media-3',
+  ]);
   assert.throws(() => sanitizeRouteInput({
     routeSchemaVersion: 2,
     taxonomyVersion: 5,

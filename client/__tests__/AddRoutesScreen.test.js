@@ -111,6 +111,8 @@ describe('streamlined route builder', () => {
     }));
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: { id: 'route-1' } } }} />);
     await waitFor(() => expect(screen.getByTestId('route-submit')).toBeTruthy());
+    expect(screen.getByText('שמור שינויים')).toBeTruthy();
+    expect(screen.queryByText('פרסום המסלול')).toBeNull();
     fireEvent.press(screen.getByTestId('route-submit'));
     await waitFor(() => expect(screen.getByTestId('route-description-input')).toBeTruthy());
     expect(screen.getByText('כדאי להוסיף תיאור למסלול.')).toBeTruthy();

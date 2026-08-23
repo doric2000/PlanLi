@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 're
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
+import CachedImage from '../../../components/CachedImage';
 import { FormInput } from '../../../components/FormInput';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
 import { useBackButton } from '../../../hooks/useBackButton';
@@ -16,7 +17,7 @@ import { colors, routeBuilderStyles as styles } from '../../../styles';
 import NoyaGuide from '../../community/components/NoyaGuide';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
 import DayEditorModal from '../components/DayEditorModal';
-import { flattenRouteStops } from '../utils/routeStops';
+import { flattenRouteStops, getStopMediaUrls } from '../utils/routeStops';
 
 const SAVE_DELAY_MS = 900;
 const emptyDays = (count) => Array.from({ length: count }, (_, index) => ({
@@ -126,8 +127,9 @@ export default function AddRoutesScreen({ navigation, route }) {
   const lastSavedComparableRef = useRef('');
   const saveQueueRef = useRef(Promise.resolve());
   const mountedRef = useRef(true);
+  const isEditingRoute = Boolean(sourceRouteId || sourceRouteIdRef.current);
 
-  useBackButton(navigation, { title: sourceRouteId ? 'עריכת מסלול' : 'מסלול חדש' });
+  useBackButton(navigation, { title: isEditingRoute ? 'עריכת מסלול' : 'מסלול חדש' });
 
   const hydrateDraft = useCallback((draft) => {
     const normalized = routeAsDraft(draft);
@@ -301,10 +303,16 @@ export default function AddRoutesScreen({ navigation, route }) {
     try {
       const version = await persistSnapshot(draftPayload, draftComparable);
       await publishRouteDraft(draftIdRef.current, version);
-      Alert.alert('המסלול פורסם', 'המסלול זמין עכשיו ב־PlanLi.');
+      Alert.alert(
+        isEditingRoute ? 'השינויים נשמרו' : 'המסלול פורסם',
+        isEditingRoute ? 'המסלול המעודכן זמין עכשיו ב־PlanLi.' : 'המסלול זמין עכשיו ב־PlanLi.'
+      );
       navigation.goBack();
     } catch (error) {
-      Alert.alert('לא הצלחנו לפרסם את המסלול', saveError || 'הטיוטה נשמרה. אפשר לנסות לפרסם שוב בעוד רגע.');
+      Alert.alert(
+        isEditingRoute ? 'לא הצלחנו לשמור את השינויים' : 'לא הצלחנו לפרסם את המסלול',
+        saveError || 'הטיוטה נשמרה. אפשר לנסות שוב בעוד רגע.'
+      );
     } finally { setPublishBusy(false); }
   };
 
@@ -366,7 +374,7 @@ export default function AddRoutesScreen({ navigation, route }) {
           <View style={styles.sectionHeader}><AppText style={styles.sectionTitle}>יום {activeDayIndex + 1}</AppText><AppText style={styles.sectionMeta}>{activeDay?.stops?.length || 0} עצירות</AppText></View>
           {!activeDay?.stops?.length ? <AppText style={styles.empty}>עדיין אין עצירות ביום הזה. אפשר להוסיף גם מקום כללי שאין לו נקודה מדויקת במפות.</AppText> : activeDay.stops.map((stop, index) => (
             <TouchableOpacity key={stop.id || `${activeDayIndex}-${index}`} style={styles.stopCard} onPress={() => setDayEditorVisible(true)} accessibilityRole="button">
-              <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>
+              {getStopMediaUrls(stop, 'thumb')[0] ? <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" priority="low" /> : <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
               <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title}</AppText><AppText style={styles.stopMeta}>{stop.locationPrecision === 'general' ? 'מיקום כללי' : stop.location || stop.place?.name || 'נקודה במפה'}{stop.startTime ? ` · ${stop.startTime}` : ''}{stop.durationMinutes ? ` · ${stop.durationMinutes} דק׳` : ''}</AppText></View>
               <View style={styles.stopControls}><TouchableOpacity style={styles.stopControl} onPress={(event) => { event.stopPropagation?.(); moveStop(index, -1); }} disabled={index === 0} accessibilityLabel="העברה למעלה"><Ionicons name="chevron-up" size={19} color={index === 0 ? colors.textMuted : colors.primary} /></TouchableOpacity><TouchableOpacity style={styles.stopControl} onPress={(event) => { event.stopPropagation?.(); moveStop(index, 1); }} disabled={index === activeDay.stops.length - 1} accessibilityLabel="העברה למטה"><Ionicons name="chevron-down" size={19} color={index === activeDay.stops.length - 1 ? colors.textMuted : colors.primary} /></TouchableOpacity></View>
             </TouchableOpacity>
@@ -385,8 +393,8 @@ export default function AddRoutesScreen({ navigation, route }) {
           {saveError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{saveError}</AppText></View> : null}
         </View> : null}
       </ScrollView>
-      <View style={styles.footer}><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>פרסום המסלול</AppText>}</TouchableOpacity></View>
-      <DayEditorModal visible={dayEditorVisible} onClose={() => setDayEditorVisible(false)} onSave={saveDay} initialData={activeDay} dayIndex={activeDayIndex} routeDestination={area} allowImages={false} />
+      <View style={styles.footer}><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
+      <DayEditorModal visible={dayEditorVisible} onClose={() => setDayEditorVisible(false)} onSave={saveDay} initialData={activeDay} dayIndex={activeDayIndex} routeDestination={area} allowStopImages />
     </View>
   );
 }

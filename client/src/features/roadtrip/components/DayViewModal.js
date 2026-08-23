@@ -11,7 +11,6 @@ import { buildGoogleMapsPlaceUrl } from "../utils/routeStops";
 const text = {
 	day: "\u05d9\u05d5\u05dd",
 	dayStory: "\u05e1\u05d9\u05e4\u05d5\u05e8 \u05d4\u05d9\u05d5\u05dd",
-	noDayDescription: "\u05d0\u05d9\u05df \u05ea\u05d9\u05d0\u05d5\u05e8 \u05dc\u05d9\u05d5\u05dd \u05d4\u05d6\u05d4.",
 	stops: "\u05ea\u05d7\u05e0\u05d5\u05ea",
 	maps: "\u05de\u05e4\u05d5\u05ea",
 	noStops: "\u05d0\u05d9\u05df \u05ea\u05d7\u05e0\u05d5\u05ea \u05d1\u05d9\u05d5\u05dd \u05d4\u05d6\u05d4.",
@@ -58,12 +57,12 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 						/>
 					)}
 
-					<View style={styles.descriptionContainer}>
+					{!!dayData.description && <View style={styles.descriptionContainer}>
 						<AppText style={styles.label}>{text.dayStory}</AppText>
 						<AppText style={styles.description}>
-							{dayData.description || text.noDayDescription}
+							{dayData.description}
 						</AppText>
-					</View>
+					</View>}
 
 					<View style={styles.stopsContainer}>
 						<AppText style={styles.label}>{text.stops}</AppText>

@@ -2,8 +2,9 @@ const crypto = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 
 const { isVerifiedCaller, normalizePublishRequestId } = require('./recommendationService');
-const { saveRoute } = require('./routeService');
+const { MAX_ROUTE_MEDIA, saveRoute } = require('./routeService');
 const { taxonomy } = require('./travelTaxonomy');
+const { normalizeRouteTime } = require('./routeTime');
 
 const MAX_ROUTE_DAYS = 60;
 const MAX_ROUTE_STOPS = 150;
@@ -111,7 +112,26 @@ function cleanMedia(value) {
   };
 }
 
-function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination) {
+function cleanAdditionalMedia(value) {
+  const media = value == null ? [] : value;
+  assert(Array.isArray(media) && media.length <= 2,
+    'invalid-argument', 'ROUTE_DRAFT_INVALID', 'A route stop supports up to three images.');
+  return media.map(cleanMedia).filter(Boolean);
+}
+
+function mediaCleanupKey(asset, ownerUid) {
+  if (!ownerUid || !asset?.assetId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(asset.assetId)) {
+    return null;
+  }
+  const prefix = `media/${ownerUid}/${asset.assetId}`;
+  const canonical = ['large', 'feed', 'thumb'].every((variant) =>
+    asset?.[variant]?.path === `${prefix}/${variant}.webp`
+  );
+  return canonical ? `${ownerUid}/${asset.assetId}` : null;
+}
+
+function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination, ownerUid) {
   const stop = value && typeof value === 'object' ? value : {};
   const place = cleanPlace(stop.place);
   const coordinates = cleanCoordinates(stop.coordinates || place?.coordinates);
@@ -122,8 +142,10 @@ function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination) {
   );
   assert(!locationPrecision || ['exact', 'pin', 'general'].includes(locationPrecision),
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'locationPrecision is invalid.');
-  const startTime = cleanString(stop.startTime || '', 'startTime', { max: 5, optional: true });
-  assert(!startTime || /^([01]\d|2[0-3]):[0-5]\d$/.test(startTime),
+  const startTime = normalizeRouteTime(cleanString(
+    stop.startTime || '', 'startTime', { max: 5, optional: true }
+  ));
+  assert(startTime !== null,
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'startTime is invalid.');
   const durationMinutes = stop.durationMinutes == null || stop.durationMinutes === ''
     ? null
@@ -156,6 +178,9 @@ function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination) {
     'recommendationId',
     { optional: true }
   );
+  const media = cleanMedia(stop.media);
+  const additionalMedia = cleanAdditionalMedia(stop.additionalMedia);
+  const mediaAssets = [media, ...additionalMedia].filter(Boolean);
   return {
     id: cleanId(stop.id || `stop_${dayIndex + 1}_${stopIndex + 1}`, 'stop.id'),
     position: stopIndex,
@@ -172,11 +197,13 @@ function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination) {
     durationMinutes,
     categoryId: cleanId(stop.categoryId || '', 'stop.categoryId', { optional: true }),
     subcategoryIds: cleanStringList(stop.subcategoryIds, 'stop.subcategoryIds', 3),
-    media: cleanMedia(stop.media),
+    media,
+    additionalMedia,
+    mediaCleanupKeys: mediaAssets.map((asset) => mediaCleanupKey(asset, ownerUid)).filter(Boolean),
   };
 }
 
-function sanitizeRouteDraft(value) {
+function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
   const draft = value && typeof value === 'object' ? value : {};
   const area = cleanDestination(draft.area || draft.destination, { optional: true });
   const rawDays = Array.isArray(draft.days) ? draft.days : [];
@@ -191,12 +218,19 @@ function sanitizeRouteDraft(value) {
       position: dayIndex,
       description: cleanString(day.description || '', 'day.description', { max: 5000, optional: true }),
       media: cleanMedia(day.media),
-      stops: stops.map((stop, stopIndex) => cleanDraftStop(stop, dayIndex, stopIndex, area)),
+      stops: stops.map((stop, stopIndex) => cleanDraftStop(
+        stop, dayIndex, stopIndex, area, ownerUid
+      )),
     };
   });
   const stopCount = days.reduce((sum, day) => sum + day.stops.length, 0);
   assert(stopCount <= MAX_ROUTE_STOPS,
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'Route draft contains too many stops.');
+  const mediaCount = days.reduce((total, day) => total + (day.media ? 1 : 0) +
+    day.stops.reduce((stopTotal, stop) => stopTotal + (stop.media ? 1 : 0) +
+      stop.additionalMedia.length, 0), 0);
+  assert(mediaCount <= MAX_ROUTE_MEDIA,
+    'invalid-argument', 'ROUTE_DRAFT_INVALID', `A route supports up to ${MAX_ROUTE_MEDIA} images.`);
   const attributes = draft.attributes && typeof draft.attributes === 'object' ? draft.attributes : {};
   return {
     routeSchemaVersion: 2,
@@ -328,7 +362,7 @@ async function saveRouteDraft({ admin, auth, data }) {
   assert(expectedVersion == null || (Number.isSafeInteger(expectedVersion) && expectedVersion >= 0),
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'expectedVersion is invalid.');
   await assertEditableSource(db, sourceRouteId, uid);
-  const draft = sanitizeRouteDraft(data?.draft);
+  const draft = sanitizeRouteDraft(data?.draft, { ownerUid: uid });
   assert(draft.area, 'invalid-argument', 'ROUTE_DRAFT_DESTINATION_REQUIRED', 'Choose a destination first.');
 
   const pointerRef = draftPointerRef(db, uid);

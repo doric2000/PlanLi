@@ -155,6 +155,33 @@ test('prepared cleanup removes only expired unclaimed objects', async () => {
     mediaBucket: 'media-eu',
     now,
   });
-  assert.deepEqual(result, { inspected: 3, removed: 1 });
+  assert.deepEqual(result, { inspected: 3, removed: 1, protectedDraftAssets: 0 });
   assert.deepEqual(removed, ['expired']);
+});
+
+test('prepared cleanup protects media referenced by a route draft stop', async () => {
+  const removed = [];
+  const now = Date.now();
+  const file = (assetId, variant) => ({
+    name: `media/owner/${assetId}/${variant}.webp`,
+    metadata: {
+      metadata: { state: 'prepared' },
+      timeCreated: new Date(now - 25 * 60 * 60 * 1000).toISOString(),
+    },
+    delete: async () => removed.push(`${assetId}:${variant}`),
+  });
+  const files = [file('kept', 'large'), file('kept', 'feed'), file('orphan', 'large')];
+  const admin = {
+    storage: () => ({ bucket: () => ({ getFiles: async () => [files] }) }),
+    firestore: () => ({
+      collectionGroup: () => ({
+        where: () => ({
+          get: async () => ({ docs: [{ data: () => ({ mediaCleanupKeys: ['owner/kept'] }) }] }),
+        }),
+      }),
+    }),
+  };
+  const result = await cleanupPreparedMedia({ admin, mediaBucket: 'media-eu', now });
+  assert.deepEqual(removed, ['orphan:large']);
+  assert.equal(result.protectedDraftAssets, 1);
 });

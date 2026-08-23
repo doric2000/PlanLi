@@ -11,6 +11,13 @@ jest.mock('../src/components/MediaGalleryModal', () => {
     ? ReactModule.createElement(Text, { testID: 'gallery-state' }, `${initialIndex}:${items.map((item) => item.caption).join('|')}`)
     : null;
 });
+jest.mock('../src/components/OpenWithLocationSheet', () => {
+  const ReactModule = require('react');
+  const { Text } = require('react-native');
+  return ({ visible, place }) => visible
+    ? ReactModule.createElement(Text, { testID: 'open-with-sheet' }, `${place?.name || ''}:${place?.coordinates?.lat || ''}`)
+    : null;
+});
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
   const { Text } = require('react-native');
@@ -25,7 +32,7 @@ const days = [{
     id: 'stop-1',
     title: 'התחנה הראשונה',
     description: 'תיאור התחנה',
-    place: { address: 'כתובת', url: 'https://maps.example/stop' },
+    place: { address: 'כתובת', coordinates: { lat: 32.1, lng: 34.8 } },
     media: { large: { url: 'https://img/stop-large.jpg' }, thumb: { url: 'https://img/stop-thumb.jpg' } },
   }],
 }, {
@@ -51,5 +58,11 @@ describe('RouteItinerary', () => {
     const screen = render(<RouteItinerary days={days} />);
     fireEvent.press(screen.getByTestId('route-stop-photo-0-0'));
     expect(screen.getByTestId('gallery-state').props.children).toBe('1:יום 1|התחנה הראשונה');
+  });
+
+  it('opens the shared Maps and Waze chooser for a stop', () => {
+    const screen = render(<RouteItinerary days={days} />);
+    fireEvent.press(screen.getByTestId('route-stop-map-0-0'));
+    expect(screen.getByTestId('open-with-sheet').props.children).toBe('התחנה הראשונה:32.1');
   });
 });
