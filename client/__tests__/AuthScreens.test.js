@@ -351,6 +351,8 @@ describe('authentication screens', () => {
     expect(welcome.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
     expect(welcome.getByTestId('welcome-brand-wordmark')).toBeTruthy();
     expect(welcome.getByTestId('welcome-travel-artwork', { includeHiddenElements: true })).toBeTruthy();
+    expect(welcome.getByTestId('welcome-travel-image', { includeHiddenElements: true }).props.resizeMode).toBe('cover');
+    expect(welcome.getByTestId('welcome-brand-mark', { includeHiddenElements: true }).props.resizeMode).toBe('contain');
     expect(welcome.getByTestId('auth-entry-gradient').props.colors).toEqual(
       ['#FFF0D2', '#F8F5EC', '#DDECF7'].map(processColor)
     );
