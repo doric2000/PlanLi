@@ -11,10 +11,10 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Route destination-fix update group
-`70b6ac10-ddad-476b-a523-8088ba0e7454` was published for iOS and Android on
-2026-08-23 from merge commit `b1736e1`; delivery and application on the physical
-iPhone remain unverified. The backend has 92 active
+runtime `1.1.0`. RTL user-menu update group
+`5f55ca46-87d9-4e86-9a3a-ccacd029277c` was published for iOS and Android on
+2026-08-23 from the RTL user-menu merge commit `f6d7537`; delivery and
+application on the physical iPhone remain unverified. The backend has 92 active
 Node.js 22 v2 Functions in `europe-west1`, including the four route-draft
 callables. No Firestore Rules, indexes, Hosting, production documents, native
 builds, or Apple submissions changed in this release. The deployed Firebase
@@ -199,16 +199,16 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- Source release: route destination-fix PR `#156`, merged as commit `b1736e1`.
-- Preview EAS Update: group `8bb220df-1c37-4ddb-ad66-6e52a4e5c228`, runtime
-  `1.1.0`, iOS update `01a02ba3-40fa-776c-b5ac-24b58ec03f46`, Android update
-  `01a02ba3-40fa-7ea5-907e-6c9d613f9d94`, published from `b1736e1` on
-  2026-08-23 with the `production` EAS environment.
-- Production EAS Update: group `70b6ac10-ddad-476b-a523-8088ba0e7454`, runtime
-  `1.1.0`, iOS update `01a02ba9-bbf9-7a65-a291-54e114115b7b`, Android update
-  `01a02ba9-bbf9-72b8-b5dd-38740287bef7`, published from the same commit on
-  2026-08-23. Roll back by republishing the prior production group
-  `b336e8bf-e86d-437d-89a7-1930d8e2cf0b` to `production`.
+- Source release: RTL user-menu PR `#158`, merged as commit `f6d7537`.
+- Preview EAS Update: group `46339c79-dc6e-46e2-8bce-4a4c28fe5733`, runtime
+  `1.1.0`, iOS update `01a02db5-e559-7f05-8de3-f06ff639e86d`, Android update
+  `01a02db5-e559-7687-8851-dcd559b69609`, published from `f6d7537` at
+  `2026-08-23T08:21:30Z` with the `production` EAS environment.
+- Production EAS Update: group `5f55ca46-87d9-4e86-9a3a-ccacd029277c`, runtime
+  `1.1.0`, iOS update `01a02dbc-b31a-7611-b03b-e1fdb390b0d1`, Android update
+  `01a02dbc-b31a-75d5-9ea6-4c248fe8b5d9`, published from the same commit at
+  `2026-08-23T08:28:56Z`. Roll back by republishing the prior production group
+  `70b6ac10-ddad-476b-a523-8088ba0e7454` to `production`.
 - Firebase release: 92 active Node.js 22 v2 Functions in `europe-west1`.
   `saveRecommendation`, `saveRoute`, and `cleanupExpiredRuntimeScheduled` were
   updated, while `getCurrentRouteDraft`, `saveRouteDraft`, `discardRouteDraft`,
@@ -216,13 +216,12 @@ Current release record:
   `2026-08-22T21:18Z`. `saveRouteDraft`, `publishRouteDraft`, and `saveRoute`
   were updated from `b1736e1` at approximately `2026-08-22T22:32Z`. Firestore
   Rules, indexes, and Hosting were not deployed.
-- Validation: all 135 Client suites (632 tests), all 542 Functions tests (520
-  passed and 22 skipped), all 22 Rules-emulator tests, changed-boundary
-  validation, GitHub checks, and focused route destination security tests
-  passed. The separate
-  `/review` command could not inspect the diff because its Windows sandbox
-  helper returned `Access is denied`; this is recorded as unverified rather
-  than passed.
+- Validation: the five affected Client suites passed all 17 focused tests,
+  changed-boundary validation passed locally, and PR `#158` passed its planner,
+  affected-client, and final PR checks. The drawer and settings screens were
+  also exercised in a local Expo Web runtime. Full Client, Functions, and Rules
+  release suites were not rerun because this update changes only JavaScript UI
+  and styles.
 - OTA device state: Expo serves the iOS update to matching production requests,
   but download/application on the owner's iPhone has not yet been confirmed.
 - Known live-audit exception: two pre-existing recommendation documents
