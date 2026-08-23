@@ -9,6 +9,7 @@ describe('buildRouteDetailPresentation', () => {
       experienceLevel: 'beginner',
       transportModes: ['car'],
       pace: 'balanced',
+      priceNote: 'ללא טיסות',
       facets: {
         audienceScope: 'selected',
         audiences: ['friends'],
@@ -24,12 +25,14 @@ describe('buildRouteDetailPresentation', () => {
     });
 
     expect(result.facts.map((fact) => fact.id)).toEqual([
-      'budget', 'audiences', 'vibes', 'environment',
+      'budget', 'priceNote', 'transport', 'pace', 'audiences', 'seasons',
     ]);
     expect(result.tags.length).toBeGreaterThan(0);
     expect(result.extras.map((group) => group.id)).toEqual([
-      'difficulty', 'experience', 'transport', 'pace', 'seasons', 'travelerStyles',
+      'difficulty', 'experience', 'travelerStyles',
     ]);
+    expect(JSON.stringify(result)).not.toContain('outdoor');
+    expect(JSON.stringify(result)).not.toContain('adventurous');
     expect(JSON.stringify(result)).not.toContain('#');
     expect(JSON.stringify(result)).not.toContain('legacy value');
     expect(result.needs).toHaveLength(1);

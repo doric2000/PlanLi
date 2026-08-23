@@ -12,17 +12,26 @@ import { routeStopMarkerStyles as styles } from '../../../styles';
 export const ROUTE_STOP_MARKER_ANCHOR = { x: 0.5, y: 50 / 64 };
 export const COMPACT_ROUTE_STOP_MARKER_ANCHOR = { x: 0.5, y: 39 / 50 };
 
-export default function RouteStopMarker({ stop, selected = false, compact = false }) {
-  const number = Number(stop?.globalIndex ?? 0) + 1;
-  const imageUrl = getMediaVariantUrl(stop?.media, 'thumb', stop?.image);
-  const label = stop?.title || stop?.place?.name || `תחנה ${number}`;
+export default function RouteStopMarker({
+  stop,
+  selected = false,
+  compact = false,
+  displayNumber,
+  displayDayNumber = null,
+}) {
+	const number = Number(displayNumber ?? stop?.sequence ?? (Number(stop?.globalIndex ?? 0) + 1));
+	const imageUrl = getMediaVariantUrl(stop?.media, 'thumb', stop?.image);
+	const label = stop?.title || stop?.place?.name || `עצירה ${number}`;
+	const accessibilityPrefix = displayDayNumber
+		? `יום ${displayDayNumber}, עצירה ${number}`
+		: `עצירה ${number}`;
 
   return (
     <View
       style={[styles.touchTarget, compact && styles.touchTargetCompact]}
       accessible
-      accessibilityLabel={`תחנה ${number}: ${label}`}
-      testID={`route-stop-marker-${number}`}
+		accessibilityLabel={`${accessibilityPrefix}: ${label}`}
+		testID={`route-stop-marker-${displayDayNumber ? `${displayDayNumber}-` : ''}${number}`}
     >
       <View style={[styles.halo, selected && styles.haloSelected, compact && styles.haloCompact]}>
         <View style={[styles.pinHead, selected && styles.pinHeadSelected, compact && styles.pinHeadCompact]}>
@@ -31,11 +40,16 @@ export default function RouteStopMarker({ stop, selected = false, compact = fals
           ) : (
             <AppText style={[styles.number, compact && styles.numberCompact]}>{number}</AppText>
           )}
-          {imageUrl ? (
-            <View style={[styles.badge, compact && styles.badgeCompact]}>
-              <AppText style={[styles.badgeText, compact && styles.badgeTextCompact]}>{number}</AppText>
-            </View>
-          ) : null}
+			{imageUrl ? (
+				<View style={[styles.badge, compact && styles.badgeCompact]}>
+					<AppText style={[styles.badgeText, compact && styles.badgeTextCompact]}>{number}</AppText>
+				</View>
+			) : null}
+			{displayDayNumber ? (
+				<View style={[styles.dayBadge, compact && styles.dayBadgeCompact]}>
+					<AppText style={[styles.dayBadgeText, compact && styles.dayBadgeTextCompact]}>{displayDayNumber}</AppText>
+				</View>
+			) : null}
         </View>
         <View style={[styles.tail, selected && styles.tailSelected, compact && styles.tailCompact]} />
       </View>
