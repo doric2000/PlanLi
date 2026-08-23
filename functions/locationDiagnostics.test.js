@@ -41,7 +41,7 @@ test('daily quota and provider request ceilings are non-retryable', () => {
     'selection_failed'
   );
   const ceiling = decorateLocationError(
-    new HttpsError('resource-exhausted', 'Location resolution reached its safe Google request limit.'),
+    new HttpsError('resource-exhausted', 'This route contains too many new places to verify at once. Save a section with at most five places.'),
     'loc_1234567890ab',
     'selection_failed'
   );

@@ -1,6 +1,9 @@
+import React from 'react';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { render } from '@testing-library/react-native';
+import { Modal } from 'react-native';
 
-import {
+import ImageCropReviewModal, {
   boundCropTranslation,
   calculateCropRect,
   cropImageForReview,
@@ -16,8 +19,32 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg' },
   manipulateAsync: jest.fn(),
 }));
+jest.mock('react-native-gesture-handler', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const chain = () => {
+    const value = {};
+    ['minDistance', 'shouldCancelWhenOutside', 'onStart', 'onUpdate', 'onEnd'].forEach((name) => {
+      value[name] = () => value;
+    });
+    return value;
+  };
+  return {
+    Gesture: { Pan: chain, Pinch: chain, Simultaneous: () => ({}) },
+    GestureDetector: ({ children }) => <>{children}</>,
+    GestureHandlerRootView: ({ children, ...props }) => <View {...props}>{children}</View>,
+  };
+});
 
 describe('calculateCropRect', () => {
+  it('renders a contained crop review without adding another native modal', () => {
+    const screen = render(
+      <ImageCropReviewModal contained visible uris={[]} onCancel={jest.fn()} onComplete={jest.fn()} />
+    );
+    expect(screen.getByTestId('image-crop-contained')).toBeTruthy();
+    expect(screen.UNSAFE_queryAllByType(Modal)).toHaveLength(0);
+  });
+
   it('allows panning on both axes only as far as the crop still stays covered', () => {
     expect(boundCropTranslation({
       displayWidth: 600,

@@ -761,6 +761,7 @@ async function resolveRoutePlaces({
   assert(uniqueDestinations.size <= MAX_ROUTE_DESTINATIONS, 'invalid-argument', 'Route contains too many destinations.');
   return {
     days: resolvedDays,
+    providerCalls: rawProviderResolutionCount,
     catalogDestinations: Array.from(uniqueDestinations.values()),
     destinations: Array.from(uniqueDestinations.values()).map((destination) => ({
       countryId: destination.countryId,
@@ -773,7 +774,8 @@ async function resolveRoutePlaces({
 
 async function loadTrustedRoutePlaces({ db, routeRef, existingRoute, days }) {
   const trustedStops = days.flatMap((day) => day.stops
-    .filter((stop) => stop.reuseSavedLocation)
+    .filter((stop) => stop.id && stop.locationPrecision === 'exact' &&
+      stop.place?.placeId && !stop.place?.resolvedPlaceToken)
     .map((stop) => ({ dayId: day.id, stop }))
   );
   if (!trustedStops.length) return new Map();
@@ -788,12 +790,13 @@ async function loadTrustedRoutePlaces({ db, routeRef, existingRoute, days }) {
   snapshots.forEach((snapshot, index) => {
     const submitted = trustedStops[index].stop;
     const saved = snapshot.exists ? snapshot.data() || {} : null;
-    assert(
-      saved?.place?.placeId === submitted.place.placeId &&
-        saved?.destination?.countryId && saved?.destination?.cityId,
-      'failed-precondition',
-      'A saved route stop changed. Search for its location again.'
-    );
+    const unchanged = saved?.place?.placeId === submitted.place.placeId &&
+      saved?.destination?.countryId && saved?.destination?.cityId;
+    if (submitted.reuseSavedLocation) {
+      assert(unchanged, 'failed-precondition',
+        'A saved route stop changed. Search for its location again.');
+    }
+    if (!unchanged) return;
     trustedPlaces.set(saved.place.placeId, {
       destination: {
         countryId: saved.destination.countryId,
@@ -1216,6 +1219,7 @@ async function saveRoute({
   console.info('route_place_resolution_timing', {
     durationMs: Date.now() - locationStartedAt,
     stopCount: mediaDays.reduce((sum, day) => sum + day.stops.length, 0),
+    providerCalls: resolved.providerCalls,
   });
   if (transactionOutcome?.replay) {
     if (typeof db.recursiveDelete === 'function') {

@@ -25,6 +25,10 @@ function reasonForLocationError(error, fallback = 'location_resolution_failed') 
     return 'selection_expired';
   }
   if (code === 'resource-exhausted' && message.includes('daily')) return 'daily_limit_reached';
+  if (code === 'resource-exhausted' &&
+    (message.includes('too many new places') || message.includes('at most five places'))) {
+    return 'provider_call_limit_reached';
+  }
   if (code === 'resource-exhausted' && message.includes('safe google request')) return 'provider_call_limit_reached';
   if (code === 'resource-exhausted') return 'temporary_limit_reached';
   if (code === 'deadline-exceeded' || message.includes('too long')) return 'provider_timeout';
