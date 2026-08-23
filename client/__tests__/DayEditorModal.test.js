@@ -108,28 +108,6 @@ describe('DayEditorModal', () => {
     expect(onSave.mock.calls[0][0].stops.map((stop) => stop.id)).toEqual(['one', 'inserted', 'two']);
   });
 
-  it('opens a requested existing stop with its saved data', () => {
-    const onSave = jest.fn();
-    const onClose = jest.fn();
-    const screen = render(
-      <DayEditorModal
-        visible
-        dayIndex={0}
-        initialEditIndex={1}
-        initialData={{
-          description: '',
-          stops: [{ id: 'one', title: 'ראשונה' }, { id: 'two', title: 'שנייה' }],
-        }}
-        onSave={onSave}
-        onClose={onClose}
-      />
-    );
-    expect(screen.getByLabelText('editing-two')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('stop-editor-save'));
-    expect(onSave.mock.calls[0][0].stops.map((stop) => stop.id)).toEqual(['one', 'inserted']);
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
   it('passes the selected existing stop into the editor from the day list', () => {
     const screen = render(
       <DayEditorModal

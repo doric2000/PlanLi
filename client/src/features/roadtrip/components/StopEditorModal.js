@@ -101,6 +101,8 @@ export default function StopEditorModal({
   visible, onClose, onSave, initialData, dayIndex, stopIndex,
   onForgetImage, onPersistImages, mediaForImage, routeDestination, allowImages = true,
 }) {
+  const safeDayIndex = Number.isInteger(dayIndex) && dayIndex >= 0 ? dayIndex : 0;
+  const safeStopIndex = Number.isInteger(stopIndex) && stopIndex >= 0 ? stopIndex : 0;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [mode, setMode] = useState(LOCATION_MODES.exact);
@@ -354,7 +356,7 @@ export default function StopEditorModal({
         ? { reuseSavedLocation: true }
         : {}),
     };
-    onSave?.(nextStop, stopIndex);
+    onSave?.(nextStop, safeStopIndex);
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();
   };
 
@@ -370,7 +372,7 @@ export default function StopEditorModal({
         <UnsavedChangesModal contained visible={unsavedModalVisible} title={UNSAVED_LEAVE_TITLE} message={UNSAVED_LEAVE_MESSAGE} onCancel={dismissUnsavedModal} onConfirm={confirmUnsavedLeave} testID="stop-editor-unsaved-modal" cancelTestID="stop-editor-unsaved-cancel" confirmTestID="stop-editor-unsaved-confirm" />
         <View style={styles.header}>
           <TouchableOpacity onPress={tryClose} disabled={mediaBusy}><AppText style={styles.headerButton}>ביטול</AppText></TouchableOpacity>
-          <AppText style={styles.headerTitle}>יום {dayIndex + 1} · עצירה {stopIndex + 1}</AppText>
+          <AppText style={styles.headerTitle}>יום {safeDayIndex + 1} · עצירה {safeStopIndex + 1}</AppText>
           <TouchableOpacity onPress={handleSave} disabled={mediaBusy || locationBusy}><AppText style={[styles.headerButton, styles.headerButtonStrong]}>שמירה</AppText></TouchableOpacity>
         </View>
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">

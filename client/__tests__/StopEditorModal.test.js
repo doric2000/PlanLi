@@ -146,6 +146,20 @@ describe('StopEditorModal', () => {
     expect(screen.queryByTestId('stop-editor-unsaved-modal')).toBeNull();
   });
 
+  it('uses safe header indices when a caller has not provided them yet', () => {
+    const screen = render(
+      <StopEditorModal
+        visible
+        initialData={{ id: 'saved-stop', title: 'תחנה קיימת' }}
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+        allowImages={false}
+      />
+    );
+    expect(screen.getByText('יום 1 · עצירה 1')).toBeTruthy();
+    expect(screen.queryByText(/NaN/)).toBeNull();
+  });
+
   it('accepts a one-digit hour and saves it in canonical form', () => {
     const onSave = jest.fn();
     const screen = render(
