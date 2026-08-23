@@ -112,19 +112,25 @@ export default function useRecommendationDraftMedia() {
     return { uris, missingCount: Math.max(0, Number(expectedCount || 0) - uris.length) };
   }, []);
 
-  const clearDraft = useCallback(async ({ deleteFiles = true } = {}) => {
+  const clearDraft = useCallback(async ({ deleteFiles = true, keepUris = [] } = {}) => {
     const uid = auth.currentUser?.uid;
-    const entries = Array.from(entriesByUriRef.current.values());
     const manifest = uid ? await readManifest(uid) : null;
+    const entries = [
+      ...Array.from(entriesByUriRef.current.values()),
+      ...(manifest?.entries || []),
+    ];
+    const kept = new Set((keepUris || []).filter(Boolean));
+    const keptMediaIds = new Set(Array.from(entriesByUriRef.current.values())
+      .filter((entry) => kept.has(entry.uri))
+      .map((entry) => entry.mediaId));
     entriesByUriRef.current.clear();
     draftIdRef.current = '';
-    if (deleteFiles) {
-      const references = [...entries, ...(manifest?.entries || [])]
-        .map((entry) => entry.localReference)
-        .filter((reference, index, all) => reference?.key &&
-          all.findIndex((candidate) => candidate?.platform === reference.platform && candidate?.key === reference.key) === index);
-      await Promise.allSettled(references.map((reference) => deleteContentPublishMedia(reference)));
-    }
+    const references = entries
+      .filter((entry) => deleteFiles || !keptMediaIds.has(entry.mediaId))
+      .map((entry) => entry.localReference)
+      .filter((reference, index, all) => reference?.key &&
+        all.findIndex((candidate) => candidate?.platform === reference.platform && candidate?.key === reference.key) === index);
+    await Promise.allSettled(references.map((reference) => deleteContentPublishMedia(reference)));
     if (uid) await AsyncStorage.removeItem(storageKey(uid));
   }, []);
 
