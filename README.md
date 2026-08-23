@@ -11,15 +11,15 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. RoadTrip reliability production update group
-`d051df4d-6c92-4366-a963-a8439cb78a8d` was published for iOS
-(`01a03083-aeb9-73ed-8117-2c4e4e648401`) and Android
-(`01a03083-aeb9-7414-a1ff-9f07786cc9a6`) at `2026-08-23T21:25:31.449Z` from
-PR `#181` merge commit `8d552ea`. Delivery and application on the physical
+runtime `1.1.0`. Recommendation-draft reliability production update group
+`916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9` was published for iOS
+(`01a030b3-919d-7a3b-b0d2-153092878de8`) and Android
+(`01a030b3-919d-793c-9666-558785f53137`) at `2026-08-23T22:17:49.725Z` from
+PR `#183` merge commit `61e1cb0`. Delivery and application on the physical
 iPhone remain unverified. App version and runtime remain `1.1.0`, TestFlight
 build remains `13`, and no native build or Apple submission was created. The
 immediately preceding production group is
-`835dbf49-7cc5-4e04-89b9-7e9ad7be3e12`. `saveRoute` and
+`d051df4d-6c92-4366-a963-a8439cb78a8d`. `saveRoute` and
 `publishRouteDraft` were last deployed from RoadTrip lifecycle commit `3ec0cb1` at
 approximately `2026-08-23T18:41:49Z`; active revisions are
 `saveroute-00039-ban` and `publishroutedraft-00004-tox`. Both remain Node.js 22
@@ -29,7 +29,7 @@ group `58425c2b-993a-42fc-83b5-c244f5cdf7c9` was published from the same commit
 at `2026-08-23T18:53:26.326Z` for runtime `1.1.0`. No signed iOS preview-profile
 build exists, so application and physical-iPhone verification are unverified.
 The production channel now points to group
-`d051df4d-6c92-4366-a963-a8439cb78a8d`. Firestore Rules, indexes, Storage,
+`916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9`. Firestore Rules, indexes, Storage,
 Hosting, production documents, and migrations were unchanged. On
 `2026-08-23T21:53:05Z`, the four recommendation-draft callables were created in
 production and `cleanupExpiredRuntimeScheduled`, `requestAccountDeletion`, and
@@ -217,19 +217,20 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- Source release: RoadTrip reliability PR `#181`, merged as commit `8d552ea`.
+- Source release: recommendation-draft reliability PR `#183`, merged as commit
+  `61e1cb0`.
 - Preview EAS Update: group `58425c2b-993a-42fc-83b5-c244f5cdf7c9`, runtime
   `1.1.0`, iOS update `01a02ff8-71b6-78f1-a711-cdb84adb5b78`, Android update
   `01a02ff8-71b6-7808-a3ef-d86db45dfbaa`, published from `3ec0cb1` at
   `2026-08-23T18:53:26.326Z` with the `production` EAS environment. There is no
   signed iOS preview-profile build, so download, application, and physical-device
   behavior remain unverified.
-- Production EAS Update: group `d051df4d-6c92-4366-a963-a8439cb78a8d`, runtime
-  `1.1.0`, iOS update `01a03083-aeb9-73ed-8117-2c4e4e648401`, Android update
-  `01a03083-aeb9-7414-a1ff-9f07786cc9a6`, published from PR `#181` merge commit
-  `8d552ea` at `2026-08-23T21:25:31.449Z` with the `production` EAS
+- Production EAS Update: group `916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9`, runtime
+  `1.1.0`, iOS update `01a030b3-919d-7a3b-b0d2-153092878de8`, Android update
+  `01a030b3-919d-793c-9666-558785f53137`, published from PR `#183` merge commit
+  `61e1cb0` at `2026-08-23T22:17:49.725Z` with the `production` EAS
   environment. Roll back by republishing the immediately preceding production
-  group `835dbf49-7cc5-4e04-89b9-7e9ad7be3e12` to `production`.
+  group `d051df4d-6c92-4366-a963-a8439cb78a8d` to `production`.
 - Firebase release: 96 active Node.js 22 v2 Functions in `europe-west1`.
   `getCurrentRecommendationDraft`, `saveRecommendationDraft`,
   `discardRecommendationDraft`, and `publishRecommendationDraft` were created,
@@ -253,6 +254,11 @@ Current release record:
   switch, direct stop edit/add/insert/remove/reorder, autosave retry, and
   order-only publish matrix remains unverified because no compatible signed
   preview client exists.
+- Recommendation-draft validation: four focused client suites passed 44 tests;
+  PR `#183` plan, affected-client, and final checks passed. EAS exported and
+  published iOS, Android, and Web bundles successfully. Download, application,
+  and create/resume/discard/media-transfer behavior on the physical TestFlight
+  iPhone remain unverified.
 - Validation: four focused auth/navigation suites passed all 33 tests, the iOS
   release configuration check and export passed, and PR `#169` passed its plan,
   affected-client, and final PR checks. Both EAS exports, project fingerprints,
@@ -262,11 +268,12 @@ Current release record:
 - OTA device state: Expo serves RoadTrip preview group
   `58425c2b-993a-42fc-83b5-c244f5cdf7c9` only to matching preview requests;
   no preview iOS client exists, so it has not been applied. Production now
-  serves group `d051df4d-6c92-4366-a963-a8439cb78a8d`. Download, application,
-  and RoadTrip behavior on the physical TestFlight iPhone remain unverified.
+  serves group `916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9`. Download, application,
+  and recommendation-draft behavior on the physical TestFlight iPhone remain
+  unverified.
   Rollback identifiers are preview group
   `c1bfeede-8577-420a-977b-3ac56f35cdde` and production group
-  `835dbf49-7cc5-4e04-89b9-7e9ad7be3e12`.
+  `d051df4d-6c92-4366-a963-a8439cb78a8d`.
 - Known live-audit exception: two pre-existing recommendation documents
   (`rec_9gXo3omDD7yJ9aIKQ_Yj` and `rec_GiMpMfW5sxBdz0RZ5u7o`) have invalid
   `budget` taxonomy values. No unrelated production data was changed during the
