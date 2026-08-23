@@ -123,4 +123,13 @@ describe('RouteMapScreen', () => {
     expect(screen.getByTestId('route-map-marker-2-2')).toBeTruthy();
     expect(screen.queryByTestId('route-map-open-day')).toBeNull();
   });
+
+  it('shows a recoverable state when route data is missing', async () => {
+    const navigation = { goBack: jest.fn() };
+    const screen = render(<RouteMapScreen route={{ params: {} }} navigation={navigation} />);
+    await act(async () => {});
+    expect(screen.getByTestId('route-map-unavailable')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('חזרה למסלול'));
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
 });

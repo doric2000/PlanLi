@@ -1,8 +1,10 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import RouteDetailScreen from '../src/features/roadtrip/screens/RouteDetailScreen';
 import * as RouteService from '../src/services/RouteService';
+
+let mockRoutePublishVersion = 0;
 
 jest.mock('react-native-maps');
 jest.mock('../src/hooks/useUserData', () => ({
@@ -19,6 +21,9 @@ jest.mock('../src/features/community/hooks/useLikes', () => ({
   useLikes: () => ({ isLiked: false, likeCount: 0, toggleLike: jest.fn() }),
 }));
 jest.mock('../src/features/community/hooks/useCommentsCount', () => ({ useCommentsCount: () => 0 }));
+jest.mock('../src/features/publishing/ContentPublishContext', () => ({
+  useContentPublish: () => ({ completedVersionByType: { route: mockRoutePublishVersion } }),
+}));
 jest.mock('../src/components/Avatar', () => ({ Avatar: () => null }));
 jest.mock('../src/components/CachedImage', () => () => null);
 jest.mock('../src/components/CommentsModal', () => {
@@ -85,6 +90,7 @@ const routeData = {
 describe('RouteDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRoutePublishVersion = 0;
   });
 
   it('uses one elegant destination strip and opens the map through navigation', () => {
@@ -126,5 +132,18 @@ describe('RouteDetailScreen', () => {
     expect(await screen.findByText('מסלול בצפון')).toBeTruthy();
     expect(RouteService.loadRouteDetails).toHaveBeenCalledWith('route-1');
     expect(screen.getByTestId('route-comments-focus').props.children).toBe('comment-4');
+  });
+
+  it('reloads the canonical revision after a RoadTrip publication completes', async () => {
+    const updated = { ...routeData, title: 'מסלול מעודכן' };
+    RouteService.loadRouteDetails.mockResolvedValue(updated);
+    const navigation = { setOptions: jest.fn(), goBack: jest.fn(), navigate: jest.fn() };
+    const screen = render(
+      <RouteDetailScreen route={{ params: { routeData } }} navigation={navigation} />
+    );
+    mockRoutePublishVersion = 1;
+    screen.rerender(<RouteDetailScreen route={{ params: { routeData } }} navigation={navigation} />);
+    await waitFor(() => expect(RouteService.loadRouteDetails).toHaveBeenCalledWith('route-1'));
+    expect(await screen.findByText('מסלול מעודכן')).toBeTruthy();
   });
 });

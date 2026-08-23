@@ -1,9 +1,9 @@
 import React from 'react';
-import { act, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 
 import RoutesScreen from '../src/features/roadtrip/screens/RoutesScreen';
-import { requestRoutes } from '../src/services/RouteService';
+import { loadRouteDetails, requestRoutes } from '../src/services/RouteService';
 import { routesScreenStyles } from '../src/styles';
 
 let mockUser = null;
@@ -88,12 +88,14 @@ jest.mock('../src/components/RoutesFilterModal', () => () => null);
 jest.mock('../src/components/FabButton', () => () => null);
 jest.mock('../src/features/roadtrip/components/RouteCard', () => {
   const ReactModule = require('react');
-  const { Text } = require('react-native');
+  const { Pressable, Text, View } = require('react-native');
   return {
-    RouteCard: ({ item, topContentInset }) => ReactModule.createElement(
-      Text,
+    RouteCard: ({ item, topContentInset, onPress, onEdit }) => ReactModule.createElement(
+      View,
       { testID: `route-${item.id}`, topContentInset },
-      item.id
+      ReactModule.createElement(Text, null, item.id),
+      ReactModule.createElement(Pressable, { testID: `open-${item.id}`, onPress }),
+      ReactModule.createElement(Pressable, { testID: `edit-${item.id}`, onPress: onEdit })
     ),
   };
 });
@@ -112,6 +114,7 @@ describe('RoutesScreen authentication state', () => {
       source: 'network',
       promise: Promise.resolve({ items: [] }),
     }));
+    loadRouteDetails.mockReset();
   });
 
   it.each([
@@ -177,6 +180,22 @@ describe('RoutesScreen authentication state', () => {
     });
     expect(screen.queryByTestId('route-user-1-route')).toBeNull();
     consoleError.mockRestore();
+  });
+
+  it('reports route open failures instead of leaving a dead tap', async () => {
+    const consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    requestRoutes.mockImplementationOnce(() => routeAttempt({ items: [{ id: 'route-1' }] }));
+    loadRouteDetails.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'functions/unavailable' }));
+    const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
+    await act(async () => { await mockFocusEffect(); });
+    await waitFor(() => expect(screen.getByTestId('open-route-1')).toBeTruthy());
+    await act(async () => { fireEvent.press(screen.getByTestId('open-route-1')); });
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(
+      'לא הצלחנו לפתוח את המסלול', 'אפשר לנסות שוב בעוד רגע.'
+    ));
+    consoleWarn.mockRestore();
+    alert.mockRestore();
   });
 
   it('centers the empty state in the available feed body', async () => {

@@ -71,6 +71,10 @@ export default function RouteMapScreen({ route, navigation }) {
     setMapInstance((value) => value + 1);
   }, [routeRegion]);
 
+  useEffect(() => {
+    if (selectedDay !== ALL_DAYS && selectedDay >= days.length) setSelectedDay(0);
+  }, [days.length, selectedDay]);
+
   const openUrl = useCallback(async (url) => {
     if (!url) return;
     try {
@@ -110,6 +114,21 @@ export default function RouteMapScreen({ route, navigation }) {
 
   const fitRoute = useCallback(() => remountAtRegion(routeRegion), [remountAtRegion, routeRegion]);
   const title = routeData?.title || routeData?.Title || 'מפת המסלול';
+
+  if (!routeData || !days.length) {
+    return (
+      <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']} testID="route-map-unavailable">
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton} accessibilityLabel="חזרה למסלול">
+            <Ionicons name="chevron-forward" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <AppText style={styles.headerTitle}>המפה אינה זמינה</AppText>
+          <View style={styles.headerActionSpacer} />
+        </View>
+        <View style={styles.emptyState}><AppText style={styles.emptyTitle}>לא הצלחנו לטעון את פרטי המסלול.</AppText></View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>

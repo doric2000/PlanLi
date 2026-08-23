@@ -49,4 +49,12 @@ describe('RouteMapScreen web', () => {
     expect(screen.getByText('כל המסלול · 3 נקודות מדויקות')).toBeTruthy();
     expect(screen.queryByText(/פתיחת קטע/)).toBeNull();
   });
+
+  it('shows a recoverable state when route data is missing', () => {
+    const navigation = { goBack: jest.fn() };
+    const screen = render(<RouteMapScreenWeb route={{ params: {} }} navigation={navigation} />);
+    expect(screen.getByTestId('route-map-unavailable')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('חזרה למסלול'));
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
 });

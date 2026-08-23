@@ -182,6 +182,7 @@ describe('RecommendationPublishProvider', () => {
     await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
       draftId: 'draft-1',
       expectedVersion: 3,
+      saveRequestId: expect.any(String),
       draft: expect.objectContaining({
         days: [expect.objectContaining({
           stops: [expect.objectContaining({ media: expect.objectContaining({ assetId: expect.any(String) }) })],
@@ -190,6 +191,43 @@ describe('RecommendationPublishProvider', () => {
     })));
     await waitFor(() => expect(mockPublishRouteDraft).toHaveBeenCalledWith('draft-1', 4));
     expect(mockSaveRoute).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('reuses the route media save request after a lost draft-version response', async () => {
+    mockSaveRouteDraft
+      .mockRejectedValueOnce({ code: 'functions/invalid-argument', message: 'lost response' })
+      .mockResolvedValueOnce({ draftId: 'draft-1', version: 4, idempotentReplay: true });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        contentType: 'route',
+        payload: {
+          draftId: 'draft-1', expectedVersion: 3,
+          route: { title: 'Queued route', days: [{ draftId: 'day-1', stops: [{ draftId: 'stop-1' }] }] },
+        },
+        draft: { route: { title: 'Queued route' } },
+        media: [{
+          uri: 'file:///stop.jpg',
+          slot: {
+            type: 'route-stop', dayIndex: 0, stopIndex: 0,
+            dayDraftId: 'day-1', draftId: 'stop-1', mediaIndex: 0,
+          },
+        }],
+      });
+    });
+    await waitFor(() => expect(api.activeJob.status).toBe('failed'));
+    const jobId = api.activeJob.id;
+    const firstRequest = mockSaveRouteDraft.mock.calls[0][0].saveRequestId;
+    expect(firstRequest).toEqual(expect.any(String));
+    await act(async () => { await api.retry(jobId); });
+    await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledTimes(2));
+    expect(mockSaveRouteDraft.mock.calls[1][0].saveRequestId).toBe(firstRequest);
+    await waitFor(() => expect(mockPublishRouteDraft).toHaveBeenCalledWith('draft-1', 4));
+    await waitFor(() => expect(api.activeJob.status).toBe('success'));
     screen.unmount();
   });
 

@@ -218,14 +218,19 @@ export default function StopEditorModal({
         setPhotosBusy(true);
         try {
           await onPersistImages?.(uris);
-          setPhotoItems((current) => [
-            ...current.filter((item) => item.asset),
-            ...(uris || []).map((uri) => ({
+          setPhotoItems((current) => {
+            const combined = [
+              ...current,
+              ...(uris || []).map((uri) => ({
               uri,
               asset: null,
               ...(mediaForImage?.(uri) || {}),
-            })),
-          ].filter((item) => item.uri).slice(0, 3));
+              })),
+            ].filter((item) => item.uri);
+            return combined.filter((item, index) => (
+              combined.findIndex((candidate) => candidate.uri === item.uri) === index
+            )).slice(0, 3);
+          });
         } catch {
           Alert.alert('לא הצלחנו להוסיף את התמונות', 'התמונות לא נשמרו. אפשר לנסות שוב.');
         } finally {

@@ -563,10 +563,23 @@ export function ContentPublishProvider({ children }) {
         if (current.payload?.draftId) {
           let publishVersion = Number(current.payload.expectedVersion);
           if (preparedEntries.length && current.payload.routeDraftMediaSaved !== true) {
+            let mediaSaveRequestId = current.payload.routeDraftMediaSaveRequestId;
+            if (!mediaSaveRequestId) {
+              mediaSaveRequestId = randomUUID();
+              await updateJob(jobId, (job) => ({
+                ...job,
+                payload: {
+                  ...job.payload,
+                  routeDraftMediaSaveRequestId: mediaSaveRequestId,
+                },
+                updatedAt: Date.now(),
+              }));
+            }
             const savedDraft = await saveRouteDraft({
               draftId: current.payload.draftId,
               sourceRouteId: current.payload.sourceRouteId || null,
               expectedVersion: publishVersion,
+              saveRequestId: mediaSaveRequestId,
               draft: routePayload,
             });
             publishVersion = Number(savedDraft.version);

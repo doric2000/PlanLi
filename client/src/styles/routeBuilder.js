@@ -108,6 +108,13 @@ export const routeBuilderStyles = StyleSheet.create({
     borderColor: colors.brandOrange,
     backgroundColor: '#FFF9F0',
   },
+  stopMain: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
+  },
   stopNumber: {
     width: 30,
     height: 30,

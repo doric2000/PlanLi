@@ -49,13 +49,14 @@ function indexedMedia(index) {
 }
 
 test('route drafts accept the minimal destination and day count without publish fields', () => {
-  const draft = sanitizeRouteDraft(partialDraft());
+  const draft = sanitizeRouteDraft(partialDraft({ localMediaCount: 2 }));
   assert.equal(draft.routeSchemaVersion, 2);
   assert.equal(draft.dayCount, 2);
   assert.equal(draft.area.cityId, 'budapest');
   assert.equal(draft.title, 'יומיים בבודפשט');
   assert.equal(draft.description, '');
   assert.equal(draft.attributes.budgetLevel, '');
+  assert.equal(draft.localMediaCount, 2);
   assert.deepEqual(draft.days.map((day) => day.stops.length), [0, 0]);
 });
 
@@ -193,6 +194,32 @@ test('one private pointer per owner rejects silently replacing an existing draft
     (error) => error?.details?.reason === 'ROUTE_DRAFT_EXISTS'
   );
   assert.equal(draftPointerRef(db, 'owner').path, 'system/routeDrafts/owners/owner');
+});
+
+test('retrying the same draft save request returns the committed version', async () => {
+  const saveRequestId = '123e4567-e89b-42d3-a456-426614174099';
+  const db = {
+    doc: (path) => ({
+      path,
+      get: async () => ({
+        exists: path === 'system/routeDrafts/owners/owner',
+        data: () => ({
+          ownerId: 'owner', draftId: 'draft-1', version: 4,
+          sourceRouteId: null, lastSaveRequestId: saveRequestId,
+        }),
+      }),
+    }),
+  };
+  const result = await saveRouteDraft({
+    admin: { firestore: () => db },
+    auth,
+    data: {
+      draftId: 'draft-1', expectedVersion: 3, saveRequestId, draft: partialDraft(),
+    },
+  });
+  assert.deepEqual(result, {
+    draftId: 'draft-1', version: 4, sourceRouteId: null, idempotentReplay: true,
+  });
 });
 
 test('publishing the same saved version is idempotent after draft cleanup', async () => {

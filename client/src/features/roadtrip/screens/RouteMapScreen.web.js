@@ -42,6 +42,21 @@ export default function RouteMapScreen({ route, navigation }) {
     : buildGoogleMapsDaySegments(routeData, selectedDay), [routeData, selectedDay]);
   const hiddenStopCount = selectedStops.length - preciseStops.length;
 
+  if (!routeData || !days.length) {
+    return (
+      <View style={styles.screen} testID="route-map-unavailable">
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconButton} accessibilityLabel="חזרה למסלול">
+            <Ionicons name="chevron-forward" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <AppText style={styles.headerTitle}>המפה אינה זמינה</AppText>
+          <View style={styles.headerActionSpacer} />
+        </View>
+        <View style={styles.emptyState}><AppText style={styles.emptyTitle}>לא הצלחנו לטעון את פרטי המסלול.</AppText></View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen} testID="route-map-web-list">
       <View style={styles.header}>

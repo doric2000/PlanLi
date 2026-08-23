@@ -41,13 +41,16 @@ export const getCurrentRouteDraft = async () => {
   return response.data?.draft || null;
 };
 
-export const saveRouteDraft = async ({ draftId = null, sourceRouteId = null, expectedVersion = null, draft }) => {
+export const saveRouteDraft = async ({
+  draftId = null, sourceRouteId = null, expectedVersion = null, saveRequestId = null, draft,
+}) => {
   saveRouteDraftCallable ||= httpsCallable(cloudFunctions, 'saveRouteDraft');
   const response = await saveRouteDraftCallable({
     draft,
     ...(draftId ? { draftId } : {}),
     ...(sourceRouteId ? { sourceRouteId } : {}),
     ...(expectedVersion != null ? { expectedVersion } : {}),
+    ...(saveRequestId ? { saveRequestId } : {}),
   });
   return response.data;
 };

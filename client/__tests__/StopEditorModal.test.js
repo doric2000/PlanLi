@@ -207,6 +207,35 @@ describe('StopEditorModal', () => {
     expect(saved.image).toBe('file:///one.jpg');
   });
 
+  it('preserves pending photos when they are selected in multiple batches', async () => {
+    const onSave = jest.fn();
+    mockPickImagesForReview
+      .mockImplementationOnce(({ onComplete }) => onComplete(['file:///one.jpg']))
+      .mockImplementationOnce(({ onComplete }) => onComplete(['file:///two.jpg']));
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        onSave={onSave}
+        onClose={jest.fn()}
+        onPersistImages={jest.fn(async (uris) => uris)}
+        mediaForImage={(uri) => ({ uri, mediaId: `media-${uri}` })}
+      />
+    );
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'השוק');
+    fireEvent.press(screen.getByTestId('route-stop-mode-general'));
+    fireEvent.press(screen.getByTestId('route-stop-select-destination'));
+    fireEvent.press(screen.getByTestId('route-stop-photos'));
+    await waitFor(() => expect(screen.getByText('1/3')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-photos'));
+    await waitFor(() => expect(screen.getByText('2/3')).toBeTruthy());
+    fireEvent.press(screen.getByText('שמירה'));
+    expect(onSave.mock.calls[0][0].pendingMedia.map((entry) => entry.uri)).toEqual([
+      'file:///one.jpg', 'file:///two.jpg',
+    ]);
+  });
+
   it('removes stale precise data when an existing stop is changed to a general area', () => {
     const onSave = jest.fn();
     const screen = render(

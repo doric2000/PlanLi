@@ -23,6 +23,7 @@ import { getRouteImageUrls } from '../../../utils/mediaAssets';
 import { recommendationDetailStyles as detailStyles } from '../../community/components/recommendationDetailStyles';
 import { useCommentsCount } from '../../community/hooks/useCommentsCount';
 import { useLikes } from '../../community/hooks/useLikes';
+import { useContentPublish } from '../../publishing/ContentPublishContext';
 import RouteItinerary from '../components/RouteItinerary';
 import RouteMapPreview from '../components/RouteMapPreview';
 import { buildRouteDetailPresentation } from '../utils/routeDetailPresentation';
@@ -70,6 +71,9 @@ export default function RouteDetailScreen({ route, navigation }) {
   const [loadingRoute, setLoadingRoute] = useState(!initialRouteData && !!requestedRouteId);
   const [routeError, setRouteError] = useState('');
   const requestIdRef = useRef(0);
+  const { completedVersionByType = {} } = useContentPublish();
+  const routePublishVersion = Number(completedVersionByType.route || 0);
+  const completedRouteVersionRef = useRef(routePublishVersion);
 
   const loadCanonicalRoute = useCallback(async () => {
     if (!requestedRouteId) {
@@ -110,6 +114,12 @@ export default function RouteDetailScreen({ route, navigation }) {
     loadCanonicalRoute();
     return () => { requestIdRef.current += 1; };
   }, [initialRouteData, loadCanonicalRoute, requestedRouteId]);
+
+  useEffect(() => {
+    if (completedRouteVersionRef.current === routePublishVersion) return;
+    completedRouteVersionRef.current = routePublishVersion;
+    loadCanonicalRoute();
+  }, [loadCanonicalRoute, routePublishVersion]);
 
   const loadedRouteId = routeData?.id || routeData?.routeId || '';
   const routeReady = !!routeData && (!requestedRouteId || loadedRouteId === requestedRouteId);
