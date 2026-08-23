@@ -59,8 +59,14 @@ Preserve these deployment boundaries unless an approved task changes them:
 
 Use the smallest relevant capability; more tools are not automatically better.
 
-- Firebase work: load the applicable official Firebase skill, then use Firebase MCP
-  for authenticated project or deployed state. Inspect code first for local behavior.
+- Firebase work: load the applicable official Firebase skill and inspect code first
+  for local behavior. Use the single official Firebase MCP server for documentation,
+  authenticated read-only project state, logs, and focused validation. Do not use
+  the MCP `firebase_deploy` background-job tool: it can report success with empty
+  logs without applying the requested targets. For an explicitly authorized deploy,
+  verify account/project/source first, run `npx -y firebase-tools@latest deploy` with
+  exact `--only` targets, then independently verify the deployed inventory/state and
+  post-deploy errors through MCP or CLI.
 - Expo/EAS work: inspect installed versions, use Expo MCP for project/build state,
   and use official Expo documentation when no applicable Expo skill is installed.
 - Hosted admin/Web behavior: use the browser skill to exercise the rendered UI.
