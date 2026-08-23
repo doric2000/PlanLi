@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { randomUUID } from 'expo-crypto';
 import {
   NestableDraggableFlatList,
   NestableScrollContainer,
@@ -20,13 +21,12 @@ import {
   TRAVEL_TAXONOMY_VERSION,
 } from '../../../constants/travelTaxonomy';
 import {
-  discardRouteDraft, getCurrentRouteDraft, saveRouteDraft,
+  discardRouteDraft, getCurrentRouteDraft, loadRouteDetails, saveRouteDraft,
 } from '../../../services/RouteService';
 import { colors, routeBuilderStyles as styles } from '../../../styles';
 import NoyaGuide from '../../community/components/NoyaGuide';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
 import { useContentPublish } from '../../publishing/ContentPublishContext';
-import DayEditorModal from '../components/DayEditorModal';
 import StopEditorModal from '../components/StopEditorModal';
 import { extractRoutePublishMedia } from '../utils/routeMedia';
 import {
@@ -47,6 +47,29 @@ export const reorderRouteStops = (stops, from, to) => {
 const emptyDays = (count) => Array.from({ length: count }, (_, index) => ({
   id: `day_${String(index + 1).padStart(3, '0')}`, description: '', media: null, stops: [],
 }));
+
+const comparableDestination = (value) => value?.countryId && value?.cityId ? {
+  countryId: value.countryId,
+  cityId: value.cityId,
+  countryName: value.countryName || '',
+  cityName: value.cityName || value.name || '',
+  providerPlaceId: value.providerPlaceId || '',
+  resolvedPlaceToken: value.resolvedPlaceToken || '',
+} : null;
+
+const comparableCoordinates = (value) => {
+  const lat = Number(value?.lat ?? value?.latitude);
+  const lng = Number(value?.lng ?? value?.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+};
+
+const comparablePlace = (value) => value?.placeId || value?.name || value?.address ? {
+  placeId: value.placeId || '',
+  resolvedPlaceToken: value.resolvedPlaceToken || '',
+  name: value.name || '',
+  address: value.address || '',
+  coordinates: comparableCoordinates(value.coordinates || value.geometry?.location),
+} : null;
 
 export const routeDraftForServer = (draft) => ({
   ...(draft || {}),
@@ -121,6 +144,51 @@ const routeAsDraft = (route) => {
   };
 };
 
+export const routeEditorComparable = (value) => {
+  const draft = routeAsDraft(value);
+  return JSON.stringify({
+    area: comparableDestination(draft.area),
+    dayCount: draft.days.length,
+    title: draft.title.trim(),
+    description: draft.description.trim(),
+    categoryIds: draft.categoryIds,
+    subcategoryIds: draft.subcategoryIds,
+    attributes: draft.attributes,
+    difficulty: draft.difficulty,
+    experienceLevel: draft.experienceLevel,
+    transportModes: draft.transportModes,
+    pace: draft.pace,
+    priceBasis: 'whole_route',
+    priceNote: draft.priceNote.trim(),
+    days: draft.days.map((day) => ({
+      id: day.id,
+      description: (day.description || '').trim(),
+      media: day.media || null,
+      stops: (day.stops || []).map((stop) => ({
+        id: stop.id,
+        title: (stop.title || '').trim(),
+        description: (stop.description || '').trim(),
+        location: (stop.location || '').trim(),
+        country: (stop.country || '').trim(),
+        locationPrecision: stop.locationPrecision || '',
+        destination: comparableDestination(stop.destination || stop.destinationRef),
+        place: comparablePlace(stop.place),
+        coordinates: comparableCoordinates(stop.coordinates || stop.place?.coordinates),
+        sourceRecommendationId: stop.source?.recommendationId || stop.recommendationId || '',
+        startTime: stop.startTime || '',
+        durationMinutes: stop.durationMinutes == null || stop.durationMinutes === ''
+          ? null
+          : Number(stop.durationMinutes),
+        categoryId: stop.categoryId || '',
+        subcategoryIds: stop.subcategoryIds || [],
+        media: stop.media || null,
+        additionalMedia: stop.additionalMedia || [],
+        pendingMedia: stop.pendingMedia || [],
+      })),
+    })),
+  });
+};
+
 function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
   const [focused, setFocused] = useState(false);
   return <FormInput {...props} placeholder={focused ? '' : placeholder} onFocus={(event) => {
@@ -157,21 +225,19 @@ export default function AddRoutesScreen({ navigation, route }) {
   const [priceNote, setPriceNote] = useState('');
   const [transportModes, setTransportModes] = useState([]);
   const [difficulty, setDifficulty] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState('');
   const [pace, setPace] = useState('');
   const [seasons, setSeasons] = useState([]);
   const [categoryIds, setCategoryIds] = useState([]);
   const [subcategoryIds, setSubcategoryIds] = useState([]);
   const [preservedAttributes, setPreservedAttributes] = useState({});
   const [activeDayIndex, setActiveDayIndex] = useState(0);
-  const [dayEditorVisible, setDayEditorVisible] = useState(false);
-  const [requestedStopInsertIndex, setRequestedStopInsertIndex] = useState(null);
-  const [directStopDayIndex, setDirectStopDayIndex] = useState(null);
-  const [directStopIndex, setDirectStopIndex] = useState(null);
-  const [directStopEditorVisible, setDirectStopEditorVisible] = useState(false);
+  const [stopEditorIntent, setStopEditorIntent] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState('saved');
   const [saveError, setSaveError] = useState('');
+  const [sourceComparable, setSourceComparable] = useState('');
   const [publishBusy, setPublishBusy] = useState(false);
   const [validationMessage, setValidationMessage] = useState('');
   const draftIdRef = useRef('');
@@ -180,16 +246,19 @@ export default function AddRoutesScreen({ navigation, route }) {
   const lastSavedComparableRef = useRef('');
   const saveQueueRef = useRef(Promise.resolve());
   const mountedRef = useRef(true);
+  const allowLeaveRef = useRef(false);
+  const latestDraftPayloadRef = useRef(null);
+  const latestDraftComparableRef = useRef('');
   const isEditingRoute = Boolean(sourceRouteId || sourceRouteIdRef.current);
 
-  useBackButton(navigation, { title: isEditingRoute ? 'עריכת מסלול' : 'מסלול חדש' });
-
-  const hydrateDraft = useCallback((draft) => {
+  const hydrateDraft = useCallback((draft, { localSourceRouteId = null } = {}) => {
     const normalized = routeAsDraft(draft);
-    draftIdRef.current = draft.id;
+    const nextDraftId = draft.id || '';
+    const nextSourceRouteId = draft.sourceRouteId || localSourceRouteId || null;
+    draftIdRef.current = nextDraftId;
     versionRef.current = Number(draft.version || 0);
-    sourceRouteIdRef.current = draft.sourceRouteId || null;
-    setDraftId(draft.id);
+    sourceRouteIdRef.current = nextSourceRouteId;
+    setDraftId(nextDraftId);
     setArea(normalized.area);
     setTitle(normalized.title);
     setDescription(normalized.description);
@@ -198,6 +267,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     setPriceNote(normalized.priceNote);
     setTransportModes(normalized.transportModes);
     setDifficulty(normalized.difficulty);
+    setExperienceLevel(normalized.experienceLevel);
     setPace(normalized.pace);
     setSeasons(normalized.attributes.seasons);
     setCategoryIds(normalized.categoryIds);
@@ -210,22 +280,27 @@ export default function AddRoutesScreen({ navigation, route }) {
     return normalized;
   }, []);
 
-  const createEditDraft = useCallback(async () => {
+  const openSourceLocally = useCallback(() => {
     const initial = routeAsDraft(routeToEdit);
     if (!initial.area) {
       setStartError('לא הצלחנו לזהות יעד למסלול הקיים. כדאי להוסיף יעד לפני העריכה.');
-      setMode('start');
-      return;
+      setMode('loadError');
+      return false;
     }
-    const saved = await saveRouteDraft({ sourceRouteId, draft: initial });
-    const normalized = hydrateDraft({ ...initial, id: saved.draftId, version: saved.version, sourceRouteId });
-    lastSavedComparableRef.current = JSON.stringify(normalized);
+    const normalized = hydrateDraft(initial, { localSourceRouteId: sourceRouteId });
+    const comparable = routeEditorComparable(normalized);
+    lastSavedComparableRef.current = comparable;
+    setSourceComparable(comparable);
+    return true;
   }, [hydrateDraft, routeToEdit, sourceRouteId]);
+
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     mountedRef.current = true;
     let active = true;
     const openInitialState = async () => {
+      setStartError('');
       if (publishJobId && typeof loadJobForReview === 'function') {
         const job = await loadJobForReview(publishJobId);
         if (job?.contentType === 'route' && job?.reviewedDraft?.route && job?.payload?.draftId) {
@@ -236,7 +311,7 @@ export default function AddRoutesScreen({ navigation, route }) {
             sourceRouteId: job.payload.sourceRouteId || null,
           };
           const normalized = hydrateDraft(restored);
-          lastSavedComparableRef.current = JSON.stringify(normalized);
+          lastSavedComparableRef.current = routeEditorComparable(normalized);
           return;
         }
       }
@@ -244,47 +319,93 @@ export default function AddRoutesScreen({ navigation, route }) {
       if (!active) return;
       if (current) {
         if (sourceRouteId && current.sourceRouteId === sourceRouteId) {
+          let activeSourceComparable = '';
+          try {
+            const activeSource = await loadRouteDetails(sourceRouteId);
+            activeSourceComparable = activeSource ? routeEditorComparable(activeSource) : '';
+          } catch (error) {
+            console.warn('route_source_compare_failed', { code: error?.code || 'unknown' });
+          }
+          if (!active) return;
           const normalized = hydrateDraft(current);
-          lastSavedComparableRef.current = JSON.stringify(normalized);
+          lastSavedComparableRef.current = routeEditorComparable(normalized);
+          setSourceComparable(activeSourceComparable);
+        } else if (sourceRouteId) {
+          let isLegacyNoOp = false;
+          if (current.sourceRouteId) {
+            try {
+              const activeSource = await loadRouteDetails(current.sourceRouteId);
+              isLegacyNoOp = Boolean(activeSource) &&
+                routeEditorComparable(current) === routeEditorComparable(activeSource);
+            } catch (error) {
+              console.warn('route_legacy_draft_compare_failed', { code: error?.code || 'unknown' });
+            }
+          }
+          if (!active) return;
+          if (isLegacyNoOp) {
+            try {
+              await discardRouteDraft(current.id);
+              if (active) openSourceLocally();
+            } catch (error) {
+              console.warn('route_legacy_draft_discard_failed', { code: error?.code || 'unknown' });
+              if (active) {
+                setExistingDraft(current);
+                setMode('switchChoice');
+                Alert.alert('לא הצלחנו לנקות את העריכה הישנה', 'המסלול החדש לא נפתח. אפשר לנסות שוב.');
+              }
+            }
+          } else {
+            setExistingDraft(current);
+            setMode('switchChoice');
+          }
         } else {
           setExistingDraft(current);
           setMode('choice');
         }
-      } else if (sourceRouteId) await createEditDraft();
+      } else if (sourceRouteId) openSourceLocally();
       else setMode('start');
     };
     openInitialState().catch((error) => {
       console.error('route_draft_load_failed', { code: error?.code || 'unknown' });
       if (active) {
         setStartError('לא הצלחנו לבדוק אם קיים מסלול בתהליך. אפשר לנסות שוב.');
-        setMode('start');
+        setMode('loadError');
       }
     });
     return () => { active = false; mountedRef.current = false; };
-  }, [createEditDraft, hydrateDraft, loadJobForReview, publishJobId, sourceRouteId]);
+  }, [hydrateDraft, loadAttempt, loadJobForReview, openSourceLocally, publishJobId, sourceRouteId]);
 
   const draftPayload = useMemo(() => ({
     area, dayCount: days.length, title, description, categoryIds, subcategoryIds,
     attributes: { ...preservedAttributes, budgetLevel, seasons },
-    difficulty, experienceLevel: '', transportModes, pace,
+    difficulty, experienceLevel, transportModes, pace,
     priceBasis: 'whole_route', priceNote, days,
-  }), [area, budgetLevel, categoryIds, days, description, difficulty, pace, preservedAttributes, priceNote, seasons, subcategoryIds, title, transportModes]);
-  const draftComparable = useMemo(() => JSON.stringify(draftPayload), [draftPayload]);
+  }), [area, budgetLevel, categoryIds, days, description, difficulty, experienceLevel, pace, preservedAttributes, priceNote, seasons, subcategoryIds, title, transportModes]);
+  const draftComparable = useMemo(() => routeEditorComparable(draftPayload), [draftPayload]);
+  const hasUnpublishedEdit = isEditingRoute && (!sourceComparable || draftComparable !== sourceComparable);
+  latestDraftPayloadRef.current = draftPayload;
+  latestDraftComparableRef.current = draftComparable;
 
   const persistSnapshot = useCallback((snapshot, comparable, { force = false } = {}) => {
     saveQueueRef.current = saveQueueRef.current.catch(() => versionRef.current).then(async () => {
-      if (!draftIdRef.current || (!force && comparable === lastSavedComparableRef.current)) return versionRef.current;
+      const canCreateEditDraft = !draftIdRef.current && Boolean(sourceRouteIdRef.current);
+      if ((!draftIdRef.current && !canCreateEditDraft) ||
+        (!force && comparable === lastSavedComparableRef.current)) return versionRef.current;
       if (mountedRef.current) { setSaveStatus('saving'); setSaveError(''); }
       try {
         const saved = await saveRouteDraft({
-          draftId: draftIdRef.current,
+          ...(draftIdRef.current ? { draftId: draftIdRef.current } : {}),
           sourceRouteId: sourceRouteIdRef.current,
-          expectedVersion: versionRef.current,
+          ...(draftIdRef.current ? { expectedVersion: versionRef.current } : {}),
           draft: routeDraftForServer(snapshot),
         });
+        draftIdRef.current = saved.draftId || draftIdRef.current;
         versionRef.current = saved.version;
         lastSavedComparableRef.current = comparable;
-        if (mountedRef.current) setSaveStatus('saved');
+        if (mountedRef.current) {
+          setDraftId(draftIdRef.current);
+          setSaveStatus('saved');
+        }
         return saved.version;
       } catch (error) {
         console.error('route_draft_save_failed', {
@@ -304,10 +425,48 @@ export default function AddRoutesScreen({ navigation, route }) {
   }, []);
 
   useEffect(() => {
-    if (mode !== 'editor' || !draftId || draftComparable === lastSavedComparableRef.current) return undefined;
+    if (mode !== 'editor' || (!draftId && !sourceRouteIdRef.current) ||
+      draftComparable === lastSavedComparableRef.current) return undefined;
     const timer = setTimeout(() => persistSnapshot(draftPayload, draftComparable).catch(() => {}), SAVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [draftComparable, draftId, draftPayload, mode, persistSnapshot]);
+
+  const finishLeave = useCallback((action = null) => {
+    allowLeaveRef.current = true;
+    if (action && typeof navigation.dispatch === 'function') navigation.dispatch(action);
+    else navigation.goBack();
+  }, [navigation]);
+
+  const requestLeave = useCallback(async (action = null) => {
+    try {
+      await persistSnapshot(
+        latestDraftPayloadRef.current,
+        latestDraftComparableRef.current
+      );
+      finishLeave(action);
+    } catch {
+      Alert.alert(
+        'לא הצלחנו לשמור לפני היציאה',
+        'השינויים עדיין מופיעים במסך. אפשר לנסות שוב או לצאת בלי לשמור אותם.',
+        [
+          { text: 'הישארות', style: 'cancel' },
+          { text: 'יציאה ללא שמירה', style: 'destructive', onPress: () => finishLeave(action) },
+          { text: 'ניסיון נוסף', onPress: () => requestLeave(action) },
+        ]
+      );
+    }
+  }, [finishLeave, persistSnapshot]);
+
+  useBackButton(navigation, {
+    title: isEditingRoute ? 'עריכת מסלול' : 'מסלול חדש',
+    onPress: () => requestLeave(),
+  });
+
+  useEffect(() => navigation.addListener?.('beforeRemove', (event) => {
+    if (allowLeaveRef.current || mode !== 'editor') return;
+    event.preventDefault?.();
+    requestLeave(event.data?.action || null);
+  }), [mode, navigation, requestLeave]);
 
   const openNewDraft = async () => {
     if (!startArea?.countryId || !startArea?.cityId) { setStartError('כדאי לבחור עיר או אזור.'); return; }
@@ -326,7 +485,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     try {
       const saved = await saveRouteDraft({ draft: initial });
       const normalized = hydrateDraft({ ...initial, id: saved.draftId, version: saved.version });
-      lastSavedComparableRef.current = JSON.stringify(normalized);
+      lastSavedComparableRef.current = routeEditorComparable(normalized);
     } catch (error) {
       if (error?.details?.reason === 'ROUTE_DRAFT_EXISTS') {
         const current = await getCurrentRouteDraft().catch(() => null);
@@ -341,13 +500,13 @@ export default function AddRoutesScreen({ navigation, route }) {
     try {
       await discardRouteDraft(existingDraft.id);
       setExistingDraft(null);
-      if (sourceRouteId) await createEditDraft(); else setMode('start');
+      if (sourceRouteId) openSourceLocally(); else setMode('start');
     } catch (error) { Alert.alert('לא הצלחנו למחוק את הטיוטה', 'אפשר לנסות שוב בעוד רגע.'); }
     finally { setStartBusy(false); }
   };
   const selectExistingDraft = () => {
     const normalized = hydrateDraft(existingDraft);
-    lastSavedComparableRef.current = JSON.stringify(normalized);
+    lastSavedComparableRef.current = routeEditorComparable(normalized);
     setExistingDraft(null);
   };
   const moveStop = (from, to) => setDays((current) => current.map((day, index) => {
@@ -356,35 +515,49 @@ export default function AddRoutesScreen({ navigation, route }) {
   }));
   const replaceActiveDayStops = (stops) => setDays((current) => current.map((day, index) =>
     index === activeDayIndex ? { ...day, stops } : day));
-  const openDayEditor = ({ insertIndex = null } = {}) => {
-    setRequestedStopInsertIndex(Number.isInteger(insertIndex) ? insertIndex : null);
-    setDayEditorVisible(true);
+  const openStopEditor = ({ stopIndex, mode: intentMode }) => {
+    const dayStops = days[activeDayIndex]?.stops || [];
+    if (!Number.isInteger(stopIndex)) return;
+    if (intentMode === 'edit' && !dayStops[stopIndex]) {
+      Alert.alert('העצירה השתנתה', 'העצירה כבר לא קיימת ביום הזה.');
+      return;
+    }
+    const safeIndex = intentMode === 'insert'
+      ? Math.max(0, Math.min(stopIndex, dayStops.length))
+      : stopIndex;
+    setStopEditorIntent({ dayIndex: activeDayIndex, stopIndex: safeIndex, mode: intentMode });
   };
-  const closeDayEditor = () => {
-    setRequestedStopInsertIndex(null);
-    setDayEditorVisible(false);
-  };
-  const openDirectStopEditor = (stopIndex) => {
-    if (!Number.isInteger(stopIndex) || !days[activeDayIndex]?.stops?.[stopIndex]) return;
-    setDirectStopDayIndex(activeDayIndex);
-    setDirectStopIndex(stopIndex);
-    setDirectStopEditorVisible(true);
-  };
-  const closeDirectStopEditor = () => {
-    setDirectStopEditorVisible(false);
-    setDirectStopDayIndex(null);
-    setDirectStopIndex(null);
-  };
-  const saveDirectStop = (stopData) => setDays((current) => current.map((day, dayIndex) => {
-    if (dayIndex !== directStopDayIndex) return day;
-    return {
-      ...day,
-      stops: (day.stops || []).map((stop, stopIndex) =>
-        stopIndex === directStopIndex ? stopData : stop),
+  const closeStopEditor = () => setStopEditorIntent(null);
+  const saveStop = (stopData) => {
+    const intent = stopEditorIntent;
+    if (!intent || !Number.isInteger(intent.dayIndex) || !Number.isInteger(intent.stopIndex)) return;
+    const nextStop = {
+      ...stopData,
+      id: intent.mode === 'insert' ? randomUUID() : stopData?.id || randomUUID(),
     };
-  }));
-  const saveDay = (value, index) => setDays((current) => current.map((day, dayIndex) =>
-    dayIndex === index ? { ...day, ...value, id: day.id } : day));
+    setDays((current) => current.map((day, dayIndex) => {
+      if (dayIndex !== intent.dayIndex) return day;
+      const stops = [...(day.stops || [])];
+      if (intent.mode === 'insert') stops.splice(Math.min(intent.stopIndex, stops.length), 0, nextStop);
+      else if (stops[intent.stopIndex]) stops[intent.stopIndex] = nextStop;
+      return { ...day, stops };
+    }));
+  };
+  const removeStop = (stopIndex) => {
+    const stop = days[activeDayIndex]?.stops?.[stopIndex];
+    if (!stop) return;
+    Alert.alert('הסרת עצירה', `להסיר את "${stop.title || 'העצירה'}" מהיום?`, [
+      { text: 'ביטול', style: 'cancel' },
+      { text: 'הסרה', style: 'destructive', onPress: () => {
+        (stop.pendingMedia || []).forEach((item) => Promise.resolve(forgetDurableImage(item?.uri)).catch(() => {}));
+        setDays((current) => current.map((day, dayIndex) => dayIndex === activeDayIndex
+          ? { ...day, stops: (day.stops || []).filter((_, index) => index !== stopIndex) }
+          : day));
+      } },
+    ]);
+  };
+  const updateActiveDayDescription = (value) => setDays((current) => current.map((day, dayIndex) =>
+    dayIndex === activeDayIndex ? { ...day, description: value } : day));
   const validatePublish = () => {
     if (!title.trim()) return 'כדאי להוסיף כותרת קצרה למסלול.';
     if (!description.trim()) return 'כדאי להוסיף תיאור למסלול.';
@@ -426,6 +599,7 @@ export default function AddRoutesScreen({ navigation, route }) {
         draft: { route: publishDraft },
       });
       markDurableImagesEnqueued(extracted.media.map((entry) => entry.uri));
+      allowLeaveRef.current = true;
       navigation.goBack();
     } catch (error) {
       Alert.alert(
@@ -435,16 +609,43 @@ export default function AddRoutesScreen({ navigation, route }) {
     } finally { setPublishBusy(false); }
   };
 
+  const selectedStop = stopEditorIntent?.mode === 'edit' &&
+    Number.isInteger(stopEditorIntent.dayIndex) && Number.isInteger(stopEditorIntent.stopIndex)
+    ? days[stopEditorIntent.dayIndex]?.stops?.[stopEditorIntent.stopIndex] || null
+    : null;
+  useEffect(() => {
+    if (stopEditorIntent?.mode !== 'edit' || selectedStop) return;
+    setStopEditorIntent(null);
+    Alert.alert('העצירה השתנתה', 'העצירה שנבחרה כבר אינה זמינה. אפשר לבחור עצירה אחרת.');
+  }, [selectedStop, stopEditorIntent]);
+
   if (mode === 'loading') return <View style={styles.loading}><ActivityIndicator color={colors.primary} /><AppText style={styles.loadingText}>פותחים את בונה המסלול...</AppText></View>;
+  if (mode === 'loadError') return (
+    <View style={styles.loading}>
+      <Ionicons name="alert-circle-outline" size={34} color={colors.error} />
+      <AppText style={styles.loadingText}>{startError}</AppText>
+      <TouchableOpacity style={styles.secondaryButton} onPress={() => { setMode('loading'); setLoadAttempt((value) => value + 1); }} testID="route-draft-load-retry"><AppText style={styles.secondaryButtonText}>ניסיון נוסף</AppText></TouchableOpacity>
+    </View>
+  );
+  if (mode === 'switchChoice') return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <NoyaGuide dismissible message="יש שינויים שעדיין לא פורסמו במסלול אחר. אפשר לשמור אותם ולחזור, או לוותר עליהם ולפתוח את המסלול שנבחר." />
+      <View style={styles.card}>
+        <AppText style={styles.startTitle}>{existingDraft?.title || 'שינויים שלא פורסמו'}</AppText>
+        <TouchableOpacity style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><AppText style={styles.secondaryButtonText}>ביטול ושמירת השינויים</AppText></TouchableOpacity>
+        <TouchableOpacity style={styles.primaryButton} onPress={discardExistingAndContinue} disabled={startBusy} testID="route-switch-discard">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>ויתור על השינויים ופתיחת המסלול</AppText>}</TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
   if (mode === 'choice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide dismissible message="יש מסלול בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרנו, או למחוק ולהתחיל מחדש." />
+      <NoyaGuide dismissible message={existingDraft?.sourceRouteId ? "יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן." : "יש מסלול חדש בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרנו, או למחוק ולהתחיל מחדש."} />
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'מסלול בתהליך'}</AppText>
         <AppText style={styles.body}>{existingDraft?.dayCount || existingDraft?.days?.length || 1} ימים{existingDraft?.area?.cityName ? ` · ${existingDraft.area.cityName}` : ''}</AppText>
         <TouchableOpacity style={styles.primaryButton} onPress={selectExistingDraft} testID="route-draft-continue"><AppText style={styles.primaryButtonText}>המשך המסלול</AppText></TouchableOpacity>
         <TouchableOpacity style={styles.secondaryButton} onPress={discardExistingAndContinue} testID="route-draft-discard">
-          {startBusy ? <ActivityIndicator color={colors.primary} /> : <AppText style={styles.destructiveText}>מחיקה והתחלה מחדש</AppText>}
+          {startBusy ? <ActivityIndicator color={colors.primary} /> : <AppText style={styles.destructiveText}>{existingDraft?.sourceRouteId ? 'ויתור על העריכות' : 'מחיקה והתחלה מחדש'}</AppText>}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -469,9 +670,6 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
 
   const activeDay = days[activeDayIndex] || days[0];
-  const directStop = Number.isInteger(directStopDayIndex) && Number.isInteger(directStopIndex)
-    ? days[directStopDayIndex]?.stops?.[directStopIndex] || null
-    : null;
   const allStops = flattenRouteStops(days);
   const preciseStops = allStops.filter((stop) => stop.locationPrecision !== 'general' && stop.coordinates);
   return (
@@ -494,6 +692,16 @@ export default function AddRoutesScreen({ navigation, route }) {
         </ScrollView>
         <View style={styles.card}>
           <View style={styles.sectionHeader}><AppText style={styles.sectionTitle}>יום {activeDayIndex + 1}</AppText><AppText style={styles.sectionMeta}>{activeDay?.stops?.length || 0} עצירות</AppText></View>
+          <FocusClearingFormInput
+            label="הערה ליום (רשות)"
+            placeholder="למשל: יום רגוע עם הפסקה ארוכה לצהריים"
+            value={activeDay?.description || ''}
+            onChangeText={updateActiveDayDescription}
+            multiline
+            maxLength={1200}
+            rtl
+            testID="route-day-description-input"
+          />
           {!activeDay?.stops?.length ? <AppText style={styles.empty}>עדיין אין עצירות ביום הזה. אפשר להוסיף גם מקום כללי שאין לו נקודה מדויקת במפות.</AppText> : <>
             <AppText style={styles.reorderHint}>לחיצה ארוכה על הידית וגרירה משנה את סדר העצירות</AppText>
             <NestableDraggableFlatList
@@ -506,14 +714,14 @@ export default function AddRoutesScreen({ navigation, route }) {
                 <View>
                   {index > 0 ? <TouchableOpacity
                     style={styles.insertStop}
-                    onPress={() => openDayEditor({ insertIndex: index })}
+                    onPress={() => openStopEditor({ stopIndex: index, mode: 'insert' })}
                     accessibilityRole="button"
                     testID={`route-insert-stop-${index}`}
                   ><Ionicons name="add-circle-outline" size={18} color={colors.brandOrange} /><AppText style={styles.insertStopText}>הוספת עצירה כאן</AppText></TouchableOpacity> : null}
                   <ScaleDecorator activeScale={1.02}>
                     <TouchableOpacity
                       style={[styles.stopCard, isActive && styles.stopCardDragging]}
-                      onPress={() => openDirectStopEditor(index)}
+                      onPress={() => openStopEditor({ stopIndex: index, mode: 'edit' })}
                       accessibilityRole="button"
                       accessibilityLabel={`עריכת העצירה ${stop.title || index + 1}`}
                       disabled={isActive}
@@ -521,6 +729,12 @@ export default function AddRoutesScreen({ navigation, route }) {
                     >
                       {getStopMediaUrls(stop, 'thumb')[0] ? <CachedImage source={{ uri: getStopMediaUrls(stop, 'thumb')[0] }} style={styles.stopThumb} contentFit="cover" priority="low" /> : <View style={styles.stopNumber}><AppText style={styles.stopNumberText}>{index + 1}</AppText></View>}
                       <View style={styles.stopCopy}><AppText style={styles.stopTitle}>{stop.title}</AppText><AppText style={styles.stopMeta}>{stop.locationPrecision === 'general' ? 'מיקום כללי' : stop.location || stop.place?.name || 'נקודה במפה'}{stop.startTime ? ` · ${stop.startTime}` : ''}{stop.durationMinutes ? ` · ${stop.durationMinutes} דק׳` : ''}</AppText></View>
+                      <TouchableOpacity
+                        style={styles.stopAction}
+                        onPress={(event) => { event?.stopPropagation?.(); removeStop(index); }}
+                        accessibilityLabel={`הסרת העצירה ${stop.title || index + 1}`}
+                        testID={`route-stop-remove-${index}`}
+                      ><Ionicons name="trash-outline" size={20} color={colors.error} /></TouchableOpacity>
                       <TouchableOpacity
                         style={styles.dragHandle}
                         onLongPress={drag}
@@ -544,7 +758,7 @@ export default function AddRoutesScreen({ navigation, route }) {
               )}
             />
           </>}
-          <TouchableOpacity style={styles.addStop} onPress={() => openDayEditor({ insertIndex: activeDay?.stops?.length || 0 })} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה בסוף היום</AppText></TouchableOpacity>
+          <TouchableOpacity style={styles.addStop} onPress={() => openStopEditor({ stopIndex: activeDay?.stops?.length || 0, mode: 'insert' })} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה בסוף היום</AppText></TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} testID="route-details-toggle"><AppText style={styles.detailsToggleText}>פרטי המסלול והפרסום</AppText><Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} /></TouchableOpacity>
         {detailsOpen ? <View style={styles.card}>
@@ -558,15 +772,14 @@ export default function AddRoutesScreen({ navigation, route }) {
           {saveError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{saveError}</AppText></View> : null}
         </View> : null}
       </NestableScrollContainer>
-      <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer"><TouchableOpacity style={[styles.primaryButton, publishBusy && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
-      <DayEditorModal visible={dayEditorVisible} onClose={closeDayEditor} onSave={saveDay} initialData={activeDay} initialInsertIndex={requestedStopInsertIndex} dayIndex={activeDayIndex} routeDestination={area} allowStopImages onForgetImage={forgetDurableImage} onPersistImages={persistDurableImages} mediaForImage={durableMediaForUri} />
+      <View style={[styles.footer, routeFooterInsetsStyle(insets.bottom)]} testID="route-footer"><TouchableOpacity style={[styles.primaryButton, (publishBusy || (isEditingRoute && !hasUnpublishedEdit && !publishJobId)) && styles.primaryButtonDisabled]} onPress={handlePublish} disabled={publishBusy || (isEditingRoute && !hasUnpublishedEdit && !publishJobId)} testID="route-submit">{publishBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>{isEditingRoute ? 'שמור שינויים' : 'פרסום המסלול'}</AppText>}</TouchableOpacity></View>
       <StopEditorModal
-        visible={directStopEditorVisible && Boolean(directStop)}
-        onClose={closeDirectStopEditor}
-        onSave={saveDirectStop}
-        initialData={directStop}
-        dayIndex={Number.isInteger(directStopDayIndex) ? directStopDayIndex : 0}
-        stopIndex={Number.isInteger(directStopIndex) ? directStopIndex : 0}
+        visible={Boolean(stopEditorIntent) && (stopEditorIntent?.mode === 'insert' || Boolean(selectedStop))}
+        onClose={closeStopEditor}
+        onSave={saveStop}
+        initialData={stopEditorIntent?.mode === 'edit' ? selectedStop : null}
+        dayIndex={Number.isInteger(stopEditorIntent?.dayIndex) ? stopEditorIntent.dayIndex : 0}
+        stopIndex={Number.isInteger(stopEditorIntent?.stopIndex) ? stopEditorIntent.stopIndex : 0}
         onForgetImage={forgetDurableImage}
         onPersistImages={persistDurableImages}
         mediaForImage={durableMediaForUri}

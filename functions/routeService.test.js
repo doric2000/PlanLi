@@ -59,19 +59,16 @@ test('canonical route input validates required route facets and exact stops', ()
   assert.equal(Object.prototype.hasOwnProperty.call(route, 'destinations'), false);
 });
 
-test('route edits can request reuse of a server-trusted unchanged stop', async () => {
+test('route edits automatically reuse a server-trusted unchanged stop', async () => {
   const route = sanitizeRouteInput(canonicalRoute({
     days: [{
       stops: [{
         id: 'saved-stop',
         title: 'Renamed stop',
-        reuseSavedLocation: true,
         place: { placeId: 'google-place', coordinates: { lat: 32.1, lng: 34.8 } },
       }],
     }],
   }));
-  assert.equal(route.days[0].stops[0].reuseSavedLocation, true);
-
   const savedStop = {
     place: { placeId: 'google-place', name: 'Trusted name', coordinates: { lat: 32.1, lng: 34.8 } },
     destination: { countryId: 'IL', cityId: 'TLV' },
@@ -92,6 +89,66 @@ test('route edits can request reuse of a server-trusted unchanged stop', async (
     destination: { countryId: 'IL', cityId: 'TLV' },
     place: savedStop.place,
   });
+});
+
+test('changed places are not trusted without proof and stale reuse hints are rejected', async () => {
+  const savedStop = {
+    place: { placeId: 'saved-place', coordinates: { lat: 32.1, lng: 34.8 } },
+    destination: { countryId: 'IL', cityId: 'TLV' },
+  };
+  const db = { doc: () => ({ get: async () => ({ exists: true, data: () => savedStop }) }) };
+  const base = {
+    db, routeRef: { id: 'route-1' }, existingRoute: { activeRevisionId: 'revision-1' },
+  };
+  const changedDays = [{ id: 'day_001', stops: [{
+    id: 'saved-stop', locationPrecision: 'exact', place: { placeId: 'changed-place' },
+  }] }];
+  const trusted = await loadTrustedRoutePlaces({ ...base, days: changedDays });
+  assert.equal(trusted.size, 0);
+  changedDays[0].stops[0].reuseSavedLocation = true;
+  await assert.rejects(
+    loadTrustedRoutePlaces({ ...base, days: changedDays }),
+    /changed.*Search/i
+  );
+});
+
+test('an order-only edit with six saved exact stops consumes zero provider budget', async () => {
+  const stops = Array.from({ length: 6 }, (_, index) => ({
+    id: `stop-${index}`,
+    title: `Stop ${index}`,
+    locationPrecision: 'exact',
+    place: { placeId: `place-${index}`, coordinates: { lat: 32.1 + index / 100, lng: 34.8 } },
+  }));
+  const savedById = new Map(stops.map((stop) => [stop.id, {
+    place: stop.place,
+    destination: { countryId: 'IL', cityId: 'TLV' },
+  }]));
+  const db = { doc: (path) => ({
+    get: async () => {
+      const saved = savedById.get(path.split('/').at(-1));
+      return { exists: Boolean(saved), data: () => saved };
+    },
+  }) };
+  const days = [{ id: 'day_001', stops: [...stops].reverse() }];
+  const trustedPlaces = await loadTrustedRoutePlaces({
+    db, routeRef: { id: 'route-1' }, existingRoute: { activeRevisionId: 'revision-1' }, days,
+  });
+  let budgetCalls = 0;
+  const resolved = await resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days,
+    trustedPlaces,
+    consumeBudget: async () => { budgetCalls += 1; },
+    resolveExisting: async () => ({
+      countryId: 'IL', cityId: 'TLV', countryData: { name: 'ישראל' }, cityData: { name: 'תל אביב' },
+      cityRef: { path: 'countries/IL/destinations/TLV' },
+    }),
+    resolveSubmitted: async () => { throw new Error('provider must not be called'); },
+  });
+  assert.equal(budgetCalls, 0);
+  assert.equal(resolved.providerCalls, 0);
+  assert.deepEqual(resolved.days[0].stops.map((stop) => stop.id), days[0].stops.map((stop) => stop.id));
 });
 
 test('route metadata rejects missing required facets, invalid subcategories and missing Place IDs', () => {

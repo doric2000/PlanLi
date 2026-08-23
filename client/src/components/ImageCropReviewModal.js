@@ -111,6 +111,7 @@ export default function ImageCropReviewModal({
   aspect = [1, 1],
   maxLongEdge = 1600,
   compress = 0.94,
+  contained = false,
   onCancel,
   onComplete,
 }) {
@@ -257,15 +258,7 @@ export default function ImageCropReviewModal({
     }
   };
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={onCancel}
-    >
+  const content = (
       <GestureHandlerRootView style={styles.screen}>
       <View
         style={[
@@ -353,6 +346,21 @@ export default function ImageCropReviewModal({
         </View>
       </View>
       </GestureHandlerRootView>
+  );
+  if (contained) {
+    if (!visible) return null;
+    return <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 100 }} testID="image-crop-contained">{content}</View>;
+  }
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onCancel}
+    >
+      {content}
     </Modal>
   );
 }

@@ -405,7 +405,7 @@ export default function StopEditorModal({
           <FocusClearingFormInput label="משך ביקור בדקות (רשות)" placeholder="למשל: 90" value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/\D/g, ''))} keyboardType="numeric" maxLength={4} rtl testID="route-stop-duration" />
           {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map((item) => item.uri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText={mediaBusy ? 'שומר את התמונות...' : 'הוספת עד 3 תמונות'} previewAspectRatio={4 / 3} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
         </ScrollView>
-        <ImageCropReviewModal visible={reviewUris.length > 0} uris={reviewUris} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={cancelReview} onComplete={completeReview} />
+        <ImageCropReviewModal contained visible={reviewUris.length > 0} uris={reviewUris} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={cancelReview} onComplete={completeReview} />
       </View>
     </Modal>
   );

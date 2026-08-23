@@ -126,6 +126,7 @@ export const routeBuilderStyles = StyleSheet.create({
   stopCopy: { flex: 1, alignItems: 'flex-end' },
   stopTitle: { color: colors.textPrimary, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
   stopMeta: { color: colors.textMuted, fontSize: 12, marginTop: 3, textAlign: 'right' },
+  stopAction: { minWidth: 40, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   dragHandle: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   insertStop: {
     minHeight: 38,
