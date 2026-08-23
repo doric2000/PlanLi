@@ -229,7 +229,10 @@ Current release record:
   `1.1.0`, iOS update `01a030b3-919d-7a3b-b0d2-153092878de8`, Android update
   `01a030b3-919d-793c-9666-558785f53137`, published from PR `#183` merge commit
   `61e1cb0` at `2026-08-23T22:17:49.725Z` with the `production` EAS
-  environment. Roll back by republishing the immediately preceding production
+  environment. EAS reports `isGitWorkingTreeDirty: true` because the root-only
+  `AGENTS.md` Firebase workflow documentation change was uncommitted during the
+  publish; the `client/` release input matched `61e1cb0`. Roll back by
+  republishing the immediately preceding production
   group `d051df4d-6c92-4366-a963-a8439cb78a8d` to `production`.
 - Firebase release: 96 active Node.js 22 v2 Functions in `europe-west1`.
   `getCurrentRecommendationDraft`, `saveRecommendationDraft`,
