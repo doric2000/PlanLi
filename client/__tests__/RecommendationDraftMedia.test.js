@@ -94,9 +94,26 @@ describe('useRecommendationDraftMedia', () => {
       await hook.result.current.bindDraft('draft-1');
     });
     const media = hook.result.current.mediaForUri('file:///picked.jpg');
-    await act(async () => { await hook.result.current.clearDraft({ deleteFiles: false }); });
+    await act(async () => {
+      await hook.result.current.clearDraft({ deleteFiles: false, keepUris: ['file:///picked.jpg'] });
+    });
     expect(media.localReference).toEqual(expect.objectContaining({ platform: 'native' }));
     expect(mockPersistMedia).toHaveBeenCalledTimes(1);
     expect(mockDeleteMedia).not.toHaveBeenCalled();
+  });
+
+  it('deletes stale local references that were not transferred to the publish queue', async () => {
+    const hook = renderHook(() => useRecommendationDraftMedia());
+    await act(async () => {
+      await hook.result.current.persistUris(['file:///queued.jpg', 'file:///stale.jpg']);
+      await hook.result.current.bindDraft('draft-1');
+    });
+    const queued = hook.result.current.mediaForUri('file:///queued.jpg').localReference;
+    const stale = hook.result.current.mediaForUri('file:///stale.jpg').localReference;
+    await act(async () => {
+      await hook.result.current.clearDraft({ deleteFiles: false, keepUris: ['file:///queued.jpg'] });
+    });
+    expect(mockDeleteMedia).toHaveBeenCalledWith(stale);
+    expect(mockDeleteMedia).not.toHaveBeenCalledWith(queued);
   });
 });

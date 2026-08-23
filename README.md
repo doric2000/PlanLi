@@ -30,8 +30,14 @@ at `2026-08-23T18:53:26.326Z` for runtime `1.1.0`. No signed iOS preview-profile
 build exists, so application and physical-iPhone verification are unverified.
 The production channel now points to group
 `d051df4d-6c92-4366-a963-a8439cb78a8d`. Firestore Rules, indexes, Storage,
-Hosting, production documents, migrations, and all other Functions were
-unchanged.
+Hosting, production documents, and migrations were unchanged. On
+`2026-08-23T21:53:05Z`, the four recommendation-draft callables were created in
+production and `cleanupExpiredRuntimeScheduled`, `requestAccountDeletion`, and
+`deleteUserAsAdmin` were updated from source commit `546d2d5`. All seven are
+ACTIVE Node.js 22 v2 Functions in `europe-west1`; the post-deploy error query
+returned no matching errors. Their source generations and hashes were recorded
+by Firebase CLI, but exact Cloud Run revision names were unavailable from the
+current tooling. The Firebase project now has 96 active Functions.
 
 ## Run the client
 
@@ -224,14 +230,21 @@ Current release record:
   `8d552ea` at `2026-08-23T21:25:31.449Z` with the `production` EAS
   environment. Roll back by republishing the immediately preceding production
   group `835dbf49-7cc5-4e04-89b9-7e9ad7be3e12` to `production`.
-- Firebase release: 92 active Node.js 22 v2 Functions in `europe-west1`.
+- Firebase release: 96 active Node.js 22 v2 Functions in `europe-west1`.
+  `getCurrentRecommendationDraft`, `saveRecommendationDraft`,
+  `discardRecommendationDraft`, and `publishRecommendationDraft` were created,
+  while `cleanupExpiredRuntimeScheduled`, `requestAccountDeletion`, and
+  `deleteUserAsAdmin` were updated from source commit `546d2d5` at approximately
+  `2026-08-23T21:53:05Z`. All seven report ACTIVE; the post-deploy Function error
+  query returned no matching errors. Exact Cloud Run revision names remain
+  unverified because they were unavailable from the current tooling.
   `saveRoute` and `publishRouteDraft` were deployed from `3ec0cb1` at
   approximately `2026-08-23T18:41:49Z`. Active revisions are
   `saveroute-00039-ban` and `publishroutedraft-00004-tox`; both report ACTIVE,
   Node.js 22, v2, `europe-west1`, successful startup probes, and no errors in the
   post-deploy log page. Firestore Rules, indexes, Storage Rules, Hosting,
-  production documents, and the other 90 Functions were not changed. PR `#181`
-  Function changes have not been deployed by this EAS-only release.
+  production documents, and the other 89 Functions were not changed. The
+  remaining PR `#181` Function changes have not been deployed.
 - RoadTrip validation: 16 focused client suites passed 108 tests and seven
   focused Node.js 22 route/location Function suites passed 50 tests.
   Changed-scope validation and PR `#181` plan, affected-client,

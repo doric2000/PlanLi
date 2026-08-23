@@ -837,6 +837,20 @@ describe('AddRecommendationScreen Integration Test', () => {
     });
 
     expect(preventDefault).toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'ההמלצה עדיין בתהליך',
+      'מה תרצו לעשות לפני היציאה?',
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'המשך עריכה' }),
+        expect.objectContaining({ text: 'ויתור על השינויים ויציאה' }),
+        expect.objectContaining({ text: 'שמירת טיוטה ויציאה' }),
+      ]),
+      expect.objectContaining({ cancelable: true })
+    );
+    const leaveActions = Alert.alert.mock.calls.at(-1)[2];
+    await act(async () => {
+      await leaveActions.find((action) => action.text === 'שמירת טיוטה ויציאה').onPress();
+    });
     await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalled());
     await waitFor(() => expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' }));
   });

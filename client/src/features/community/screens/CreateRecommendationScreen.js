@@ -236,6 +236,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const latestDraftRef = useRef(null);
   const latestComparableRef = useRef('');
   const allowLeaveRef = useRef(false);
+  const leavePromptOpenRef = useRef(false);
+  const pauseAutosaveRef = useRef(false);
   const mountedRef = useRef(true);
   const isEdit = Boolean(sourceRecommendationId);
   const editPostId = sourceRecommendationId || null;
@@ -458,28 +460,73 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, [scrollFocusedInputIntoView]);
 
   const finishLeave = useCallback((action = null) => {
+    leavePromptOpenRef.current = false;
     allowLeaveRef.current = true;
     if (action && typeof navigation.dispatch === 'function') navigation.dispatch(action);
     else navigation.goBack();
   }, [navigation]);
 
-  const requestLeave = useCallback(async (action = null) => {
+  const resumeEditing = useCallback(() => {
+    leavePromptOpenRef.current = false;
+    pauseAutosaveRef.current = false;
+  }, []);
+
+  const discardCurrentDraftAndLeave = useCallback(async (action = null) => {
+    leavePromptOpenRef.current = false;
+    pauseAutosaveRef.current = true;
+    try {
+      await saveQueueRef.current.catch(() => versionRef.current);
+      if (draftIdRef.current) await discardRecommendationDraft(draftIdRef.current);
+      await clearDraftMedia({ deleteFiles: true });
+      draftIdRef.current = '';
+      versionRef.current = 0;
+      setDraftId('');
+      finishLeave(action);
+    } catch {
+      pauseAutosaveRef.current = false;
+      Alert.alert('לא הצלחנו לוותר על השינויים', 'ההמלצה לא נסגרה כדי שהשינויים לא יישארו בטעות. אפשר לנסות שוב.', [
+        { text: 'המשך עריכה', style: 'cancel', onPress: resumeEditing },
+        { text: 'ניסיון נוסף', onPress: () => discardCurrentDraftAndLeave(action) },
+      ]);
+    }
+  }, [clearDraftMedia, finishLeave, resumeEditing]);
+
+  const keepDraftAndLeave = useCallback(async (action = null) => {
+    leavePromptOpenRef.current = false;
+    pauseAutosaveRef.current = true;
+    try {
+      await persistSnapshot(latestDraftRef.current, latestComparableRef.current);
+      finishLeave(action);
+    } catch {
+      pauseAutosaveRef.current = false;
+      Alert.alert('לא הצלחנו לשמור את הטיוטה', 'השינויים עדיין מופיעים במסך. אפשר לנסות שוב או לוותר עליהם.', [
+        { text: 'המשך עריכה', style: 'cancel', onPress: resumeEditing },
+        { text: 'ויתור על השינויים', style: 'destructive', onPress: () => discardCurrentDraftAndLeave(action) },
+        { text: 'ניסיון נוסף', onPress: () => keepDraftAndLeave(action) },
+      ]);
+    }
+  }, [discardCurrentDraftAndLeave, finishLeave, persistSnapshot, resumeEditing]);
+
+  const requestLeave = useCallback((action = null) => {
     Keyboard.dismiss();
     if (mode !== 'editor' || (!draftIdRef.current && !dirty)) {
       finishLeave(action);
       return;
     }
-    try {
-      await persistSnapshot(latestDraftRef.current, latestComparableRef.current);
-      finishLeave(action);
-    } catch {
-      Alert.alert('לא הצלחנו לשמור לפני היציאה', 'השינויים עדיין מופיעים במסך. אפשר לנסות שוב או לצאת בלי לשמור אותם.', [
-        { text: 'הישארות', style: 'cancel' },
-        { text: 'יציאה ללא שמירה', style: 'destructive', onPress: () => finishLeave(action) },
-        { text: 'ניסיון נוסף', onPress: () => requestLeave(action) },
-      ]);
-    }
-  }, [dirty, finishLeave, mode, persistSnapshot]);
+    if (leavePromptOpenRef.current) return;
+    leavePromptOpenRef.current = true;
+    pauseAutosaveRef.current = true;
+    Alert.alert(
+      isEdit ? 'יש שינויים שלא פורסמו' : 'ההמלצה עדיין בתהליך',
+      'מה תרצו לעשות לפני היציאה?',
+      [
+        { text: 'המשך עריכה', style: 'cancel', onPress: resumeEditing },
+        { text: 'ויתור על השינויים ויציאה', style: 'destructive', onPress: () => discardCurrentDraftAndLeave(action) },
+        { text: 'שמירת טיוטה ויציאה', onPress: () => keepDraftAndLeave(action) },
+      ],
+      { cancelable: true, onDismiss: resumeEditing }
+    );
+  }, [dirty, discardCurrentDraftAndLeave, finishLeave, isEdit, keepDraftAndLeave, mode, resumeEditing]);
   useBackButton(navigation, {
     title: isEdit ? 'עריכת המלצה' : 'המלצה חדשה',
     onPress: () => requestLeave(),
@@ -493,7 +540,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   useEffect(() => {
     if (mode !== 'editor' || (!draftId && !dirty) || draftComparable === lastSavedComparableRef.current) return undefined;
-    const timer = setTimeout(() => persistSnapshot(draftPayload, draftComparable).catch(() => {}), SAVE_DELAY_MS);
+    const timer = setTimeout(() => {
+      if (!pauseAutosaveRef.current) persistSnapshot(draftPayload, draftComparable).catch(() => {});
+    }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [dirty, draftComparable, draftId, draftPayload, mode, persistSnapshot]);
 
@@ -642,6 +691,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setEditSnapshotBaseline(nextSourceId ? comparable : null);
     setSaveStatus('saved');
     setSaveError('');
+    pauseAutosaveRef.current = false;
+    leavePromptOpenRef.current = false;
     setMode('editor');
   }, [hydrateSelection, restoreDraftMedia]);
 
@@ -875,7 +926,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         }),
         draft: { ...draftPayload, sourceRecommendationId: sourceRecommendationIdRef.current || null },
       });
-      await clearDraftMedia({ deleteFiles: false });
+      await clearDraftMedia({ deleteFiles: false, keepUris: editableImageUris });
       allowLeaveRef.current = true;
       navigation.goBack();
     } catch (error) {
