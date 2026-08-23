@@ -1,5 +1,5 @@
 import React from 'react';
-import { Keyboard, ScrollView, StyleSheet } from 'react-native';
+import { Keyboard, processColor, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ForgotPasswordScreen from '../src/features/auth/screens/ForgotPasswordScreen';
@@ -350,11 +350,33 @@ describe('authentication screens', () => {
     const welcome = render(<AuthEntryScreen navigation={navigation} />);
     expect(welcome.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
     expect(welcome.getByTestId('welcome-brand-wordmark')).toBeTruthy();
+    expect(welcome.getByTestId('welcome-travel-artwork', { includeHiddenElements: true })).toBeTruthy();
+    expect(welcome.getByTestId('auth-entry-gradient').props.colors).toEqual(
+      ['#FFF0D2', '#F8F5EC', '#DDECF7'].map(processColor)
+    );
+    expect(StyleSheet.flatten(welcome.getByTestId('auth-entry-hero').props.style)).toMatchObject({
+      flex: 0.44,
+      minHeight: 238,
+    });
+    expect(StyleSheet.flatten(welcome.getByTestId('auth-entry-sheet').props.style)).toMatchObject({
+      flex: 0.56,
+      minHeight: 340,
+      backgroundColor: '#FFFFFF',
+    });
     welcome.unmount();
     const login = render(<LoginScreen navigation={navigation} />);
 
     expect(login.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
     expect(login.getByTestId('auth-error-slot')).toBeTruthy();
+    expect(login.getByTestId('auth-form-gradient').props.colors).toEqual(
+      ['#FFFFFF', '#FFFFFF', '#F8FBFE'].map(processColor)
+    );
+    expect(StyleSheet.flatten(login.getByTestId('login-screen').props.style)).toMatchObject({
+      backgroundColor: '#FFFFFF',
+      borderRadius: 0,
+    });
+    expect(login.getByTestId('login-email-embedded-label')).toHaveTextContent('אימייל');
+    expect(login.getByTestId('login-password-embedded-label')).toHaveTextContent('סיסמה');
     expect(StyleSheet.flatten(login.getByTestId('login-password').props.style)).toMatchObject({
       textAlign: 'right',
       writingDirection: 'rtl',
@@ -375,6 +397,8 @@ describe('authentication screens', () => {
     const registration = render(<RegisterScreen navigation={navigation} />);
     expect(registration.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
     expect(registration.getByTestId('auth-error-slot')).toBeTruthy();
+    expect(registration.getByTestId('register-name-embedded-label')).toHaveTextContent('שם מלא');
+    expect(registration.getByTestId('register-email-embedded-label')).toHaveTextContent('אימייל');
     fireEvent.changeText(registration.getByTestId('register-email'), 'person@example.com');
     expect(StyleSheet.flatten(registration.getByTestId('register-email').props.style)).toMatchObject({
       textAlign: 'right',

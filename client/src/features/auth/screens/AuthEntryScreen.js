@@ -45,13 +45,13 @@ export default function AuthEntryScreen({ navigation }) {
 
   const content = (
     <View style={authStyles.welcomeContent}>
-      <View style={authStyles.welcomeHero}>
+      <View style={authStyles.welcomeHero} testID="auth-entry-hero">
         <View style={authStyles.welcomeWordmarkCapsule}>
           <BrandWordmark welcome testID="welcome-brand-wordmark" />
         </View>
         <WelcomeTravelArtwork />
       </View>
-      <View style={authStyles.welcomeSheet}>
+      <View style={authStyles.welcomeSheet} testID="auth-entry-sheet">
         <AppText style={authStyles.welcomeTitle}>הטיול שלך מתחיל כאן</AppText>
         <AppText style={authStyles.welcomeSubtitle}>
           התחברו כדי לשמור יעדים, לבנות מסלולים ולקבל התאמה אישית.
@@ -97,8 +97,12 @@ export default function AuthEntryScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={authStyles.welcomeSafe} edges={['top', 'right', 'bottom', 'left']} testID="auth-entry-screen">
-      <LinearGradient colors={['#FFF0D2', '#F8F5EC', '#E6F2FA']} style={authStyles.welcomeGradient}>
+    <LinearGradient
+      colors={['#FFF0D2', '#F8F5EC', '#DDECF7']}
+      style={authStyles.welcomeGradient}
+      testID="auth-entry-gradient"
+    >
+      <SafeAreaView style={authStyles.welcomeSafe} edges={['top', 'right', 'left']} testID="auth-entry-screen">
         {accessibleOverflow ? (
           <ScrollView
             contentContainerStyle={authStyles.welcomeAccessibleContent}
@@ -108,7 +112,7 @@ export default function AuthEntryScreen({ navigation }) {
             {content}
           </ScrollView>
         ) : content}
-      </LinearGradient>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }

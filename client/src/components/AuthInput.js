@@ -19,37 +19,57 @@ export const AuthInput = forwardRef(function AuthInput({
   compact = false,
   hideLabel = false,
   contentDirection = 'rtl',
+  embeddedLabel = false,
+  showLeadingIcon = true,
   accessibilityLabel = label,
   ...inputProps
 }, ref) {
   const [isSecure, setIsSecure] = useState(isPassword);
   const writingDirection = contentDirection === 'ltr' && value ? 'ltr' : 'rtl';
 
+  const textInput = (
+    <AppTextInput
+      ref={ref}
+      style={[
+        authStyles.input,
+        compact && authStyles.compactInput,
+        embeddedLabel && authStyles.embeddedInput,
+        embeddedLabel && compact && authStyles.compactEmbeddedInput,
+        { writingDirection, textAlign: 'right' },
+      ]}
+      placeholder={placeholder}
+      placeholderTextColor="#9CA3AF"
+      value={value}
+      onChangeText={onChangeText}
+      secureTextEntry={isSecure}
+      keyboardType={keyboardType}
+      autoCapitalize={autoCapitalize}
+      autoCorrect={false}
+      testID={testID}
+      editable={editable}
+      accessibilityLabel={accessibilityLabel}
+      {...inputProps}
+    />
+  );
+
   return (
     <View style={[authStyles.field, compact && authStyles.compactField, hideLabel && authStyles.editingField]}>
-      {!hideLabel ? <AppText style={[authStyles.label, compact && authStyles.compactLabel]}>{label}</AppText> : null}
+      {!embeddedLabel && !hideLabel ? <AppText style={[authStyles.label, compact && authStyles.compactLabel]}>{label}</AppText> : null}
       <View style={[authStyles.inputRow, compact && authStyles.compactInputRow]}>
-        <Ionicons name={iconName} size={19} color="#64748B" style={authStyles.inputIcon} />
-        <AppTextInput
-          ref={ref}
-          style={[
-            authStyles.input,
-            compact && authStyles.compactInput,
-            { writingDirection, textAlign: 'right' },
-          ]}
-          placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={isSecure}
-          keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize}
-          autoCorrect={false}
-          testID={testID}
-          editable={editable}
-          accessibilityLabel={accessibilityLabel}
-          {...inputProps}
-        />
+        {showLeadingIcon && iconName ? <Ionicons name={iconName} size={19} color="#64748B" style={authStyles.inputIcon} /> : null}
+        {embeddedLabel ? (
+          <View style={authStyles.embeddedInputContent}>
+            {!hideLabel ? (
+              <AppText
+                style={[authStyles.embeddedInputLabel, compact && authStyles.compactEmbeddedInputLabel]}
+                testID={testID ? `${testID}-embedded-label` : undefined}
+              >
+                {label}
+              </AppText>
+            ) : null}
+            {textInput}
+          </View>
+        ) : textInput}
         {isPassword && (
           <TouchableOpacity
             onPress={() => setIsSecure(!isSecure)}
