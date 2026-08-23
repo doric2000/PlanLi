@@ -18,11 +18,16 @@ runtime `1.1.0`. Auth welcome and sign-in polish update group
 PR `#169` merge commit `eecff6f`. Delivery, application, and the Google/Apple
 provider handshakes on the physical iPhone remain unverified. App version and
 runtime remain `1.1.0`, TestFlight build remains `13`, and no native build or
-Apple submission was created. The backend has 92 active Node.js 22 v2 Functions
-in `europe-west1`; no Functions, Firestore Rules, indexes, Hosting, production
-documents, migrations, or Firebase resources changed in this client-only
-release. The published EAS update is not evidence that it has already been
-applied on a tester device.
+Apple submission was created. RoadTrip stop-edit follow-up PR `#172` is merged
+as `e9f0927`, but no new EAS Update has been published for it. The backend has
+92 active Node.js 22 v2 Functions in `europe-west1`; `saveRouteDraft` and
+`publishRouteDraft` were deployed from `e9f0927` at
+`2026-08-23T17:04:39.974Z`. The targeted deployment completed successfully,
+the deployed list reports both expected Node.js 22 v2 callables, and no matching
+error logs were present after deployment. Firestore Rules, indexes, Hosting,
+production documents, migrations, and other Firebase resources were unchanged.
+The published EAS update is not evidence that it has already been applied on a
+tester device.
 
 ## Run the client
 
@@ -202,7 +207,9 @@ Current release record:
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- Source release: auth welcome PR `#169`, merged as commit `eecff6f`.
+- Source release: auth welcome PR `#169`, merged as commit `eecff6f`. RoadTrip
+  stop-edit follow-up PR `#172` is merged as `e9f0927`; no EAS Update has been
+  published from that commit.
 - Preview EAS Update: group `c1bfeede-8577-420a-977b-3ac56f35cdde`, runtime
   `1.1.0`, iOS update `01a02f65-fa4a-7f77-9040-1e731c9e60ba`, Android update
   `01a02f65-fa4a-7ecd-8227-4710537f2651`, published from `eecff6f` at
@@ -216,8 +223,18 @@ Current release record:
   `saveRouteDraft`, `publishRouteDraft`, `saveRoute`, and
   `cleanupPreparedMediaScheduled` were updated from `0f6dbfe` at approximately
   `2026-08-23T10:01Z`. Their focused deployment completed successfully and the
-  deployed list reports the expected Node.js 22 v2 targets. Firestore Rules,
+  deployed list reports the expected Node.js 22 v2 targets. `saveRouteDraft`
+  and `publishRouteDraft` were subsequently deployed from merge commit
+  `e9f0927` at `2026-08-23T17:04:39.974Z` so edited routes can preserve
+  server-verified saved locations. Deployment job `1787504655364` completed
+  successfully; both targets remain v2 Node.js 22 callables in `europe-west1`,
+  and no matching error logs were present after deployment. Firestore Rules,
   indexes, Storage Rules, Hosting, and production documents were not changed.
+- RoadTrip validation: 41 focused client tests passed for the route editor,
+  day/stop modals, and stop helpers; PR `#172` passed its plan,
+  affected-client, and final PR checks. The two focused route draft/location
+  Functions suites previously passed all 29 tests. Physical-iPhone verification
+  of direct stop editing and a successful edited-route publication remains open.
 - Validation: four focused auth/navigation suites passed all 33 tests, the iOS
   release configuration check and export passed, and PR `#169` passed its plan,
   affected-client, and final PR checks. Both EAS exports, project fingerprints,
