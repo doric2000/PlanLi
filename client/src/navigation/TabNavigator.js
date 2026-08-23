@@ -1,4 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
 import { useCallback } from 'react';
@@ -13,6 +14,7 @@ import SwipeableTabBarButton from './SwipeableTabBarButton';
 import { navigateToAdjacentSwipeItem } from './horizontalSwipe';
 import { getVisibleMainTabNames } from './mainTabOrder';
 import { MAIN_TAB_TRANSITION_OPTIONS } from './mainTabTransition';
+import { shouldHideMainTabBar } from './tabBarVisibility';
 
 const Tab = createBottomTabNavigator();
 /**
@@ -44,6 +46,10 @@ export default function TabNavigator() {
       initialRouteName="Home"
       screenOptions={({ route, navigation }) => {
         const config = tabConfigs[route.name];
+        const focusedRouteName = route.name === 'Auth'
+          ? getFocusedRouteNameFromRoute(route) || 'AuthEntry'
+          : undefined;
+        const hideTabBar = shouldHideMainTabBar(route.name, focusedRouteName);
         return ({
           tabBarIcon: ({ focused, color, size }) => {
             const showCommunityDot = route.name === 'Community' && !focused;
@@ -109,12 +115,14 @@ export default function TabNavigator() {
               onSwipe={(gestureState) => handleTabBarSwipe(navigation, gestureState)}
             />
           ),
-          tabBarStyle: [
-            styles.tabBar,
-            {
-              bottom: Math.max(insets.bottom, 10),
-            },
-          ],
+          tabBarStyle: hideTabBar
+            ? { display: 'none' }
+            : [
+              styles.tabBar,
+              {
+                bottom: Math.max(insets.bottom, 10),
+              },
+            ],
           tabBarIconStyle: styles.iconSlot,
           tabBarHideOnKeyboard: true,
           ...MAIN_TAB_TRANSITION_OPTIONS,

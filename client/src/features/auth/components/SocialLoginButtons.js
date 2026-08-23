@@ -10,6 +10,7 @@ export const SocialLoginButtons = ({
   onGoogleLogin,
   onAppleLogin,
   disabled = false,
+  compact = false,
 }) => {
   const [appleAvailable, setAppleAvailable] = useState(false);
 
@@ -26,7 +27,7 @@ export const SocialLoginButtons = ({
   if (Platform.OS === 'web') return null;
 
   return (
-    <View style={forms.authSocialContainer} testID="auth-social-buttons">
+    <View style={[forms.authSocialContainer, compact && forms.authSocialContainerCompact]} testID="auth-social-buttons">
       <GoogleSigninButton
         style={forms.authGoogleButton}
         size={GoogleSigninButton.Size.Wide}

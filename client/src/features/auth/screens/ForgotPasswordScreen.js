@@ -29,7 +29,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       <BrandWordmark compact />
       <AppText style={authStyles.title}>איפוס סיסמה</AppText>
       <AppText style={authStyles.subtitle}>נשלח קישור מאובטח למייל. מטעמי פרטיות התשובה זהה בין אם קיים חשבון ובין אם לא.</AppText>
-      <AuthInput label="כתובת אימייל" value={email} onChangeText={setEmail} placeholder="name@example.com" iconName="mail-outline" keyboardType="email-address" testID="reset-email-input" />
+      <AuthInput label="כתובת אימייל" value={email} onChangeText={setEmail} placeholder="name@example.com" iconName="mail-outline" keyboardType="email-address" contentDirection="ltr" testID="reset-email-input" />
       {error ? <AppText style={authStyles.error}>{error}</AppText> : null}
       <TouchableOpacity style={authStyles.primaryButton} onPress={send} disabled={loading} testID="send-reset-link">
         {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>שליחת קישור</AppText>}

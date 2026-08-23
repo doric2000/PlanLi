@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { forwardRef, useState } from 'react';
 import { View, TouchableOpacity } from 'react-native';
 import AppText from "./AppText";
 import AppTextInput from "./AppTextInput";
 import { Ionicons } from '@expo/vector-icons';
-import { forms } from '../styles'; // Adjust path
+import { authStyles } from '../styles';
 
-export const AuthInput = ({ 
+export const AuthInput = forwardRef(function AuthInput({
   label, 
   value, 
   onChangeText, 
@@ -16,16 +16,27 @@ export const AuthInput = ({
   autoCapitalize = 'none',
   testID,
   editable = true,
-}) => {
+  compact = false,
+  hideLabel = false,
+  contentDirection = 'rtl',
+  accessibilityLabel = label,
+  ...inputProps
+}, ref) {
   const [isSecure, setIsSecure] = useState(isPassword);
+  const writingDirection = contentDirection === 'ltr' && value ? 'ltr' : 'rtl';
 
   return (
-    <View style={forms.authInputContainer}>
-      <AppText style={forms.authInputLabel}>{label}</AppText>
-      <View style={forms.authInputWrapper}>
-        <Ionicons name={iconName} size={20} color="#6B7280" style={forms.authInputIcon} />
+    <View style={[authStyles.field, compact && authStyles.compactField, hideLabel && authStyles.editingField]}>
+      {!hideLabel ? <AppText style={[authStyles.label, compact && authStyles.compactLabel]}>{label}</AppText> : null}
+      <View style={[authStyles.inputRow, compact && authStyles.compactInputRow]}>
+        <Ionicons name={iconName} size={19} color="#64748B" style={authStyles.inputIcon} />
         <AppTextInput
-          style={forms.authInput}
+          ref={ref}
+          style={[
+            authStyles.input,
+            compact && authStyles.compactInput,
+            { writingDirection, textAlign: 'right' },
+          ]}
           placeholder={placeholder}
           placeholderTextColor="#9CA3AF"
           value={value}
@@ -36,13 +47,21 @@ export const AuthInput = ({
           autoCorrect={false}
           testID={testID}
           editable={editable}
+          accessibilityLabel={accessibilityLabel}
+          {...inputProps}
         />
         {isPassword && (
-          <TouchableOpacity onPress={() => setIsSecure(!isSecure)} style={forms.authEyeIcon}>
+          <TouchableOpacity
+            onPress={() => setIsSecure(!isSecure)}
+            style={authStyles.eyeButton}
+            accessibilityRole="button"
+            accessibilityLabel={isSecure ? 'הצגת סיסמה' : 'הסתרת סיסמה'}
+            testID={testID ? `${testID}-visibility` : undefined}
+          >
             <Ionicons name={isSecure ? "eye-off-outline" : "eye-outline"} size={20} color="#9CA3AF" />
           </TouchableOpacity>
         )}
       </View>
     </View>
   );
-};
+});

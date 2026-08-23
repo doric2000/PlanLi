@@ -209,6 +209,11 @@ export const forms = {
 		gap: 12,
 		marginBottom: 32,
 	},
+	authSocialContainerCompact: {
+		justifyContent: 'center',
+		gap: 8,
+		marginBottom: 0,
+	},
 	authGoogleButton: {
 		width: 232,
 		height: 48,
