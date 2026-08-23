@@ -58,7 +58,7 @@ export const SocialLoginButtons = ({
         testID="auth-google-button"
       >
         <Image
-          source={require('../../../../assets/google-sign-in-round@3x.png')}
+          source={require('../../../../assets/google-sign-in-round.png')}
           style={forms.authGoogleIcon}
           resizeMode="contain"
           testID="auth-google-icon"
