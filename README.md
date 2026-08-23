@@ -11,12 +11,12 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Auth welcome and sign-in polish update group
-`9602e8f0-0c25-4a5e-9872-b82aaa68a1f4` was published for iOS
-(`01a02f6c-ade0-7ace-a575-6a3fd4f32d55`) and Android
-(`01a02f6c-ade0-771d-ab1f-9c55f3ec8bb9`) at `2026-08-23T16:20:46.688Z` from
-PR `#169` merge commit `eecff6f`. Delivery, application, and the Google/Apple
-provider handshakes on the physical iPhone remain unverified. App version and
+runtime `1.1.0`. Transparent-brand production update group
+`afd8632f-46a4-4f88-aa22-170dc4178d04` was published for iOS
+(`01a02fe2-4be5-7057-b09e-cadb67023cfc`) and Android
+(`01a02fe2-4be5-739a-a98b-87e2884d81e3`) at `2026-08-23T18:29:14.853Z` from
+merge commit `2002f88`. Delivery and application on the physical iPhone remain
+unverified. App version and
 runtime remain `1.1.0`, TestFlight build remains `13`, and no native build or
 Apple submission was created. RoadTrip lifecycle PR `#175` is merged as
 `3ec0cb1`. `saveRoute` and `publishRouteDraft` were deployed from that merge at
@@ -28,7 +28,7 @@ group `58425c2b-993a-42fc-83b5-c244f5cdf7c9` was published from the same commit
 at `2026-08-23T18:53:26.326Z` for runtime `1.1.0`. No signed iOS preview-profile
 build exists, so application and physical-iPhone verification are unverified;
 the production channel remains on group
-`9602e8f0-0c25-4a5e-9872-b82aaa68a1f4`. Firestore Rules, indexes, Storage,
+`afd8632f-46a4-4f88-aa22-170dc4178d04`. Firestore Rules, indexes, Storage,
 Hosting, production documents, migrations, and all other Functions were
 unchanged.
 
@@ -217,11 +217,12 @@ Current release record:
   `2026-08-23T18:53:26.326Z` with the `production` EAS environment. There is no
   signed iOS preview-profile build, so download, application, and physical-device
   behavior remain unverified.
-- Production EAS Update: group `9602e8f0-0c25-4a5e-9872-b82aaa68a1f4`, runtime
-  `1.1.0`, iOS update `01a02f6c-ade0-7ace-a575-6a3fd4f32d55`, Android update
-  `01a02f6c-ade0-771d-ab1f-9c55f3ec8bb9`, published from `eecff6f` at
-  `2026-08-23T16:20:46.688Z`. Roll back by republishing the prior production
-  group `e8c046f1-d428-40ea-b297-dc33ea9a6948` to `production`.
+- Production EAS Update: group `afd8632f-46a4-4f88-aa22-170dc4178d04`, runtime
+  `1.1.0`, iOS update `01a02fe2-4be5-7057-b09e-cadb67023cfc`, Android update
+  `01a02fe2-4be5-739a-a98b-87e2884d81e3`, published from `2002f88` at
+  `2026-08-23T18:29:14.853Z`. This RoadTrip task did not publish it. Roll back
+  by republishing the prior production group
+  `9602e8f0-0c25-4a5e-9872-b82aaa68a1f4` to `production`.
 - Firebase release: 92 active Node.js 22 v2 Functions in `europe-west1`.
   `saveRoute` and `publishRouteDraft` were deployed from `3ec0cb1` at
   approximately `2026-08-23T18:41:49Z`. Active revisions are
@@ -245,10 +246,11 @@ Current release record:
 - OTA device state: Expo serves RoadTrip group
   `58425c2b-993a-42fc-83b5-c244f5cdf7c9` only to matching preview requests.
   No preview iOS client exists, so it has not been applied. Production was not
-  updated and retains group `9602e8f0-0c25-4a5e-9872-b82aaa68a1f4`; rollback
+  updated by this RoadTrip task and retains group
+  `afd8632f-46a4-4f88-aa22-170dc4178d04`; rollback
   identifiers are the previous preview group
   `c1bfeede-8577-420a-977b-3ac56f35cdde` and previous production group
-  `e8c046f1-d428-40ea-b297-dc33ea9a6948`.
+  `9602e8f0-0c25-4a5e-9872-b82aaa68a1f4`.
 - Known live-audit exception: two pre-existing recommendation documents
   (`rec_9gXo3omDD7yJ9aIKQ_Yj` and `rec_GiMpMfW5sxBdz0RZ5u7o`) have invalid
   `budget` taxonomy values. No unrelated production data was changed during the
