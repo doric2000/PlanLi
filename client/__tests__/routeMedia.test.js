@@ -37,6 +37,33 @@ describe("routeMedia", () => {
     expect(restored.days[0].stops[0].media.assetId).toContain('02');
     expect(restored.days[1].media.assetId).toContain('01');
   });
+  it('preserves existing stop media and appends every locally cropped stop image in order', () => {
+    const existing = makeAsset('01');
+    const extracted = extractRoutePublishMedia([{
+      draftId: 'day-a',
+      stops: [{
+        draftId: 'stop-a',
+        media: existing,
+        pendingMedia: [
+          { uri: 'file:///two.jpg', mediaId: 'two', localReference: { key: 'two' } },
+          { uri: 'file:///three.jpg', mediaId: 'three', localReference: { key: 'three' } },
+        ],
+        image: 'file:///two.jpg',
+      }],
+    }]);
+    expect(extracted.media.map((entry) => entry.slot.mediaIndex)).toEqual([1, 2]);
+    expect(extracted.days[0].stops[0].media).toBe(existing);
+    expect(extracted.days[0].stops[0].pendingMedia).toBeUndefined();
+    const restored = applyRoutePublishMedia(
+      { days: extracted.days },
+      extracted.media.map((entry, index) => ({ ...entry, asset: makeAsset(`0${index + 2}`) }))
+    );
+    expect(restored.days[0].stops[0].media).toBe(existing);
+    expect(restored.days[0].stops[0].additionalMedia.map((asset) => asset.assetId)).toEqual([
+      makeAsset('02').assetId,
+      makeAsset('03').assetId,
+    ]);
+  });
   it("recognizes local images without treating remote URLs as pending", () => {
     expect(isLocalImageUri("file:///photo.jpg")).toBe(true);
     expect(isLocalImageUri("blob:https://app.local/123")).toBe(true);

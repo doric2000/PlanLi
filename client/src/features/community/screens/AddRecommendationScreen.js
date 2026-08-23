@@ -1057,6 +1057,7 @@ const handleSubmit = async () => {
           maxImages={5}
           placeholderText="הוספת תמונות"
           imageFit="cover"
+          previewAspectRatio={1}
           style={{ marginBottom: spacing.sm }}
           testID="add-rec-image-picker"
         />

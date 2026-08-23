@@ -18,6 +18,24 @@ const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, v
 const MAX_CROP_VIEWPORT_WIDTH = 640;
 const ZERO_SAFE_AREA_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 
+export function boundCropTranslation({
+  displayWidth = 0,
+  displayHeight = 0,
+  viewportWidth = 0,
+  viewportHeight = 0,
+  zoom = 1,
+  translateX = 0,
+  translateY = 0,
+}) {
+  'worklet';
+  const maximumX = Math.max(0, ((displayWidth || 0) * zoom - (viewportWidth || 0)) / 2);
+  const maximumY = Math.max(0, ((displayHeight || 0) * zoom - (viewportHeight || 0)) / 2);
+  return {
+    x: Math.max(-maximumX, Math.min(maximumX, translateX)),
+    y: Math.max(-maximumY, Math.min(maximumY, translateY)),
+  };
+}
+
 export function fitCropViewport({ containerWidth, containerHeight, aspectRatio }) {
   const width = Math.min(MAX_CROP_VIEWPORT_WIDTH, Math.max(0, Number(containerWidth) || 0));
   const height = Math.max(0, Number(containerHeight) || 0);
@@ -109,6 +127,10 @@ export default function ImageCropReviewModal({
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
   const startZoom = useSharedValue(1);
+  const displayWidth = useSharedValue(0);
+  const displayHeight = useSharedValue(0);
+  const viewportWidth = useSharedValue(0);
+  const viewportHeight = useSharedValue(0);
   const uri = uris[index] || null;
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
   const fittedViewport = useMemo(() => fitCropViewport({
@@ -150,27 +172,30 @@ export default function ImageCropReviewModal({
     };
   }, [sourceSize, viewport]);
 
-  const boundedTranslation = (nextZoom, x, y) => {
-    'worklet';
-    const maximumX = Math.max(0, ((displaySize?.width || 0) * nextZoom - (viewport?.width || 0)) / 2);
-    const maximumY = Math.max(0, ((displaySize?.height || 0) * nextZoom - (viewport?.height || 0)) / 2);
-    return {
-      x: Math.max(-maximumX, Math.min(maximumX, x)),
-      y: Math.max(-maximumY, Math.min(maximumY, y)),
-    };
-  };
+  useEffect(() => {
+    displayWidth.value = displaySize?.width || 0;
+    displayHeight.value = displaySize?.height || 0;
+    viewportWidth.value = viewport?.width || 0;
+    viewportHeight.value = viewport?.height || 0;
+  }, [displayHeight, displaySize, displayWidth, viewport, viewportHeight, viewportWidth]);
 
   const pan = Gesture.Pan()
+    .minDistance(1)
+    .shouldCancelWhenOutside(false)
     .onStart(() => {
       startX.value = translateX.value;
       startY.value = translateY.value;
     })
     .onUpdate((event) => {
-      const bounded = boundedTranslation(
-        zoom.value,
-        startX.value + event.translationX,
-        startY.value + event.translationY
-      );
+      const bounded = boundCropTranslation({
+        displayWidth: displayWidth.value,
+        displayHeight: displayHeight.value,
+        viewportWidth: viewportWidth.value,
+        viewportHeight: viewportHeight.value,
+        zoom: zoom.value,
+        translateX: startX.value + event.translationX,
+        translateY: startY.value + event.translationY,
+      });
       translateX.value = bounded.x;
       translateY.value = bounded.y;
     });
@@ -178,7 +203,15 @@ export default function ImageCropReviewModal({
     .onStart(() => { startZoom.value = zoom.value; })
     .onUpdate((event) => {
       const nextZoom = Math.max(1, Math.min(4, startZoom.value * event.scale));
-      const bounded = boundedTranslation(nextZoom, translateX.value, translateY.value);
+      const bounded = boundCropTranslation({
+        displayWidth: displayWidth.value,
+        displayHeight: displayHeight.value,
+        viewportWidth: viewportWidth.value,
+        viewportHeight: viewportHeight.value,
+        zoom: nextZoom,
+        translateX: translateX.value,
+        translateY: translateY.value,
+      });
       zoom.value = nextZoom;
       translateX.value = bounded.x;
       translateY.value = bounded.y;
@@ -245,7 +278,7 @@ export default function ImageCropReviewModal({
           <Pressable
             onPress={onCancel}
             disabled={saving}
-            style={styles.headerAction}
+            style={[styles.headerAction, styles.headerActionSecondary, saving && styles.headerActionDisabled]}
             testID="image-crop-cancel"
           >
             <AppText style={styles.cancelText}>ביטול</AppText>
@@ -257,7 +290,11 @@ export default function ImageCropReviewModal({
           <Pressable
             onPress={confirmCurrent}
             disabled={saving || !displaySize}
-            style={styles.headerAction}
+            style={[
+              styles.headerAction,
+              styles.headerActionPrimary,
+              (saving || !displaySize) && styles.headerActionDisabled,
+            ]}
             testID="image-crop-confirm"
           >
             <AppText style={styles.confirmText}>{index === uris.length - 1 ? 'סיום' : 'הבא'}</AppText>
@@ -282,14 +319,26 @@ export default function ImageCropReviewModal({
           >
             {displaySize && uri ? (
               <GestureDetector gesture={gesture}>
-                <Animated.View
-                  style={[
-                    styles.imageWrap,
-                    { width: displaySize.width, height: displaySize.height },
-                    animatedImageStyle,
-                  ]}
-                >
-                  <CachedImage source={{ uri }} style={styles.image} contentFit="fill" />
+                <Animated.View style={styles.gestureSurface} collapsable={false}>
+                  <Animated.View
+                    style={[
+                      styles.imageWrap,
+                      {
+                        width: displaySize.width,
+                        height: displaySize.height,
+                        left: (viewport.width - displaySize.width) / 2,
+                        top: (viewport.height - displaySize.height) / 2,
+                      },
+                      animatedImageStyle,
+                    ]}
+                  >
+                    <CachedImage
+                      source={{ uri }}
+                      style={styles.image}
+                      contentFit="fill"
+                      pointerEvents="none"
+                    />
+                  </Animated.View>
                 </Animated.View>
               </GestureDetector>
             ) : (

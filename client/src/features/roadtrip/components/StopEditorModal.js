@@ -68,9 +68,13 @@ function recommendationIdFor(value) {
 
 function photoItemsForStop(stop) {
   const assets = getStopMediaAssets(stop);
-  if (assets.length) {
-    return assets.map((asset) => ({ asset, uri: getMediaVariantUrl(asset, 'feed') })).filter((item) => item.uri);
-  }
+  const canonical = assets
+    .map((asset) => ({ asset, uri: getMediaVariantUrl(asset, 'feed') }))
+    .filter((item) => item.uri);
+  const pending = (Array.isArray(stop?.pendingMedia) ? stop.pendingMedia : [])
+    .filter((item) => item?.uri)
+    .map((item) => ({ ...item, asset: null }));
+  if (canonical.length || pending.length) return [...canonical, ...pending].slice(0, 3);
   return stop?.image ? [{ asset: null, uri: stop.image }] : [];
 }
 
@@ -83,7 +87,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function StopEditorModal({
   visible, onClose, onSave, initialData, dayIndex, stopIndex,
-  onForgetImage, routeDestination, allowImages = true,
+  onForgetImage, onPersistImages, mediaForImage, routeDestination, allowImages = true,
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -105,11 +109,9 @@ export default function StopEditorModal({
   const pendingDiscardRef = useRef(null);
   const {
     pickImagesForReview,
-    uploadImageAssets,
     cancelReview,
     completeReview,
     reviewUris,
-    uploading,
   } = useReviewedImagePicker({
     kind: 'route', quality: 1, maxLongEdge: ROUTE_IMAGE_LONG_EDGE,
     normalizeCompress: TRAVEL_IMAGE_COMPRESSION, processOnSelect: false,
@@ -165,7 +167,7 @@ export default function StopEditorModal({
     photos: photoItems.map((item) => item.asset?.assetId || item.uri),
   }), [description, destination, durationMinutes, exactValue, mode, photoItems, pin, selectedRecommendation, startTime, title]);
   const hasUnsavedChanges = stopBaseline != null && comparable !== stopBaseline;
-  const mediaBusy = uploading || photosBusy;
+  const mediaBusy = photosBusy;
   const dismissUnsavedModal = useCallback(() => {
     setUnsavedModalVisible(false); pendingDiscardRef.current = null;
   }, []);
@@ -200,10 +202,14 @@ export default function StopEditorModal({
       onComplete: async (uris) => {
         setPhotosBusy(true);
         try {
-          const assets = await uploadImageAssets(uris, { limit: remaining });
+          await onPersistImages?.(uris);
           setPhotoItems((current) => [
             ...current.filter((item) => item.asset),
-            ...assets.map((asset) => ({ asset, uri: getMediaVariantUrl(asset, 'feed') })),
+            ...(uris || []).map((uri) => ({
+              uri,
+              asset: null,
+              ...(mediaForImage?.(uri) || {}),
+            })),
           ].filter((item) => item.uri).slice(0, 3));
         } catch {
           Alert.alert('לא הצלחנו להוסיף את התמונות', 'התמונות לא נשמרו. אפשר לנסות שוב.');
@@ -308,7 +314,11 @@ export default function StopEditorModal({
       'reuseSavedLocation',
     ].forEach((field) => delete preservedStop[field]);
     const canonicalMedia = photoItems.map((item) => item.asset).filter(Boolean);
-    const legacyImage = canonicalMedia.length ? null : photoItems[0]?.uri || null;
+    const pendingMedia = photoItems.filter((item) => !item.asset && item.uri).map((item) => ({
+      uri: item.uri,
+      ...(item.mediaId ? { mediaId: item.mediaId } : {}),
+      ...(item.localReference ? { localReference: item.localReference } : {}),
+    }));
     const nextStop = {
       ...preservedStop, ...location,
       id: initialData?.id || createStopId(),
@@ -316,11 +326,12 @@ export default function StopEditorModal({
       description: description.trim(),
       startTime: normalizedStartTime,
       durationMinutes: duration,
-      image: allowImages ? legacyImage : initialData?.image || null,
+      image: allowImages ? pendingMedia[0]?.uri || null : initialData?.image || null,
       media: allowImages ? canonicalMedia[0] || null : initialData?.media || null,
       additionalMedia: allowImages
         ? canonicalMedia.slice(1, 3)
         : initialData?.additionalMedia || [],
+      pendingMedia: allowImages ? pendingMedia : initialData?.pendingMedia || [],
     };
     onSave?.(nextStop, stopIndex);
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();
@@ -369,7 +380,7 @@ export default function StopEditorModal({
           <FocusClearingFormInput label="תיאור העצירה (רשות)" placeholder="למשל: מה כדאי לעשות כאן וכמה זמן להקדיש" value={description} onChangeText={setDescription} multiline style={styles.descriptionInput} rtl />
           <FocusClearingFormInput label="שעת התחלה (רשות)" placeholder="למשל: 09:30" value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" maxLength={5} rtl testID="route-stop-start-time" />
           <FocusClearingFormInput label="משך ביקור בדקות (רשות)" placeholder="למשל: 90" value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/\D/g, ''))} keyboardType="numeric" maxLength={4} rtl testID="route-stop-duration" />
-          {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map((item) => item.uri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText={mediaBusy ? 'מעלה תמונות...' : 'הוספת עד 3 תמונות'} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
+          {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map((item) => item.uri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText={mediaBusy ? 'שומר את התמונות...' : 'הוספת עד 3 תמונות'} previewAspectRatio={4 / 3} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
         </ScrollView>
         <ImageCropReviewModal visible={reviewUris.length > 0} uris={reviewUris} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={cancelReview} onComplete={completeReview} />
       </View>

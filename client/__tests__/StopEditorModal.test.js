@@ -7,7 +7,6 @@ import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal
 const mockGetPersonalizedRecommendations = jest.fn();
 const mockSetImage = jest.fn();
 const mockPickImagesForReview = jest.fn();
-const mockUploadImageAssets = jest.fn();
 
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
@@ -46,7 +45,6 @@ jest.mock('../src/hooks/useReviewedImagePicker', () => ({
     setImageUri: mockSetImage,
     pickOneForReview: jest.fn(),
     pickImagesForReview: (...args) => mockPickImagesForReview(...args),
-    uploadImageAssets: (...args) => mockUploadImageAssets(...args),
     clearImage: jest.fn(),
     cancelReview: jest.fn(),
     completeReview: jest.fn(),
@@ -62,12 +60,6 @@ describe('StopEditorModal', () => {
     mockPickImagesForReview.mockImplementation(({ onComplete }) => onComplete([
       'file:///one.jpg', 'file:///two.jpg', 'file:///three.jpg',
     ]));
-    mockUploadImageAssets.mockImplementation(async (uris) => uris.map((_, index) => ({
-      assetId: `123e4567-e89b-42d3-a456-42661417400${index}`,
-      large: { url: `https://cdn.example/${index}/large.webp`, path: `media/u/${index}/large.webp` },
-      feed: { url: `https://cdn.example/${index}/feed.webp`, path: `media/u/${index}/feed.webp` },
-      thumb: { url: `https://cdn.example/${index}/thumb.webp`, path: `media/u/${index}/thumb.webp` },
-    })));
   });
 
   it('saves a useful general-area stop without requiring a map point', () => {
@@ -162,10 +154,23 @@ describe('StopEditorModal', () => {
     expect(onSave.mock.calls[0][0].startTime).toBe('08:30');
   });
 
-  it('adds up to three optional canonical photos to a stop', async () => {
+  it('keeps up to three cropped photos locally and defers their upload until route publication', async () => {
     const onSave = jest.fn();
+    const onPersistImages = jest.fn(async (uris) => uris);
     const screen = render(
-      <StopEditorModal visible dayIndex={0} stopIndex={0} onSave={onSave} onClose={jest.fn()} />
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        onSave={onSave}
+        onClose={jest.fn()}
+        onPersistImages={onPersistImages}
+        mediaForImage={(uri) => ({
+          uri,
+          mediaId: `media-${uri}`,
+          localReference: { platform: 'native', key: `durable-${uri}` },
+        })}
+      />
     );
     fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'השוק');
     fireEvent.press(screen.getByTestId('route-stop-mode-general'));
@@ -174,8 +179,13 @@ describe('StopEditorModal', () => {
     await waitFor(() => expect(screen.getByText('3/3')).toBeTruthy());
     fireEvent.press(screen.getByText('שמירה'));
     const saved = onSave.mock.calls[0][0];
-    expect(saved.media.assetId).toContain('00');
-    expect(saved.additionalMedia).toHaveLength(2);
+    expect(onPersistImages).toHaveBeenCalledWith([
+      'file:///one.jpg', 'file:///two.jpg', 'file:///three.jpg',
+    ]);
+    expect(saved.media).toBeNull();
+    expect(saved.additionalMedia).toEqual([]);
+    expect(saved.pendingMedia).toHaveLength(3);
+    expect(saved.image).toBe('file:///one.jpg');
   });
 
   it('removes stale precise data when an existing stop is changed to a general area', async () => {

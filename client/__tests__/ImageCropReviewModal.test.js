@@ -1,6 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 
 import {
+  boundCropTranslation,
   calculateCropRect,
   cropImageForReview,
   fitCropViewport,
@@ -17,6 +18,27 @@ jest.mock('expo-image-manipulator', () => ({
 }));
 
 describe('calculateCropRect', () => {
+  it('allows panning on both axes only as far as the crop still stays covered', () => {
+    expect(boundCropTranslation({
+      displayWidth: 600,
+      displayHeight: 500,
+      viewportWidth: 400,
+      viewportHeight: 300,
+      zoom: 1,
+      translateX: 900,
+      translateY: -900,
+    })).toEqual({ x: 100, y: -100 });
+    expect(boundCropTranslation({
+      displayWidth: 400,
+      displayHeight: 300,
+      viewportWidth: 400,
+      viewportHeight: 300,
+      zoom: 2,
+      translateX: -500,
+      translateY: 500,
+    })).toEqual({ x: -200, y: 150 });
+  });
+
   it('fits crop frames inside both compact portrait and landscape stages', () => {
     expect(fitCropViewport({
       containerWidth: 390,

@@ -351,7 +351,7 @@ export const recommendationComposerStyles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.small,
   },
-  previewImage: { width: '100%', height: 170, backgroundColor: colors.surfaceSubtle },
+  previewImage: { width: '100%', aspectRatio: 1, backgroundColor: colors.surfaceSubtle },
   previewPlaceholder: {
     width: '100%',
     height: 140,
