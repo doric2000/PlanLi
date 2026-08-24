@@ -394,6 +394,7 @@ describe('AddRecommendationScreen Integration Test', () => {
   it('freezes autosave while a recommendation is handed to the background publisher', async () => {
     jest.useFakeTimers();
     let finishEnqueue;
+    let beforeRemoveHandler;
     mockGetCurrentRecommendationDraft.mockResolvedValueOnce({
       id: 'recommendation-draft-1',
       version: 7,
@@ -421,7 +422,10 @@ describe('AddRecommendationScreen Integration Test', () => {
     }));
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
-      addListener: jest.fn(() => jest.fn()),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
     };
     const screen = render(
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
@@ -433,6 +437,18 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(screen.getByTestId('recommendation-next'));
     await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(1));
     expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(1);
+
+    const preventDefault = jest.fn();
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
+    });
+    expect(preventDefault).toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'ההמלצה עוברת לפרסום',
+      expect.stringContaining('כבר התחלנו'),
+      expect.any(Array),
+      expect.objectContaining({ cancelable: true })
+    );
 
     fireEvent.press(screen.getByTestId('recommendation-budget-2'));
     await act(async () => {
@@ -933,6 +949,112 @@ describe('AddRecommendationScreen Integration Test', () => {
     });
     await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalled());
     await waitFor(() => expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' }));
+  });
+
+  it('save and exit refreshes a stale recommendation draft version and retries once', async () => {
+    let beforeRemoveHandler;
+    const draft = {
+      ...makeEditItem({ id: undefined, recommendationCatalogVersion: undefined }),
+      id: 'recommendation-draft-1',
+      version: 7,
+      sourceRecommendationId: null,
+      step: 4,
+      locationMode: 'exact',
+      selectedCountry: { id: 'IL', name: 'ישראל' },
+      selectedCity: { id: 'TLV', name: 'תל אביב' },
+      selectedPlace: { placeId: 'p1', name: 'Spot' },
+      locationQuery: 'Spot',
+      media: [],
+      localMediaCount: 0,
+    };
+    mockGetCurrentRecommendationDraft
+      .mockResolvedValueOnce(draft)
+      .mockResolvedValueOnce({ ...draft, version: 8 });
+    mockSaveRecommendationDraft
+      .mockRejectedValueOnce(Object.assign(new Error('stale'), {
+        code: 'functions/aborted',
+        details: { reason: 'RECOMMENDATION_DRAFT_VERSION_CONFLICT' },
+      }))
+      .mockResolvedValueOnce({ draftId: draft.id, version: 9 });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-budget-2')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-budget-2'));
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault: jest.fn(), data: { action: { type: 'POP' } } });
+    });
+    const leaveActions = Alert.alert.mock.calls.at(-1)[2];
+    await act(async () => {
+      await leaveActions.find((action) => action.text === 'שמירת טיוטה ויציאה').onPress();
+    });
+
+    expect(mockGetCurrentRecommendationDraft).toHaveBeenCalledTimes(2);
+    expect(mockSaveRecommendationDraft).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      draftId: draft.id,
+      expectedVersion: 7,
+    }));
+    expect(mockSaveRecommendationDraft).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      draftId: draft.id,
+      expectedVersion: 8,
+      draft: expect.objectContaining({ budget: 'balanced' }),
+    }));
+    expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' });
+  });
+
+  it('finishes leaving when a recommendation draft was already discarded remotely', async () => {
+    let beforeRemoveHandler;
+    mockGetCurrentRecommendationDraft.mockResolvedValueOnce({
+      ...makeEditItem({ id: undefined, recommendationCatalogVersion: undefined }),
+      id: 'recommendation-draft-1',
+      version: 7,
+      sourceRecommendationId: null,
+      step: 4,
+      locationMode: 'destination',
+      selectedCountry: { id: 'IL', name: 'ישראל' },
+      selectedCity: { id: 'TLV', name: 'תל אביב' },
+      media: [],
+      localMediaCount: 0,
+    });
+    mockDiscardRecommendationDraft.mockRejectedValueOnce(Object.assign(new Error('gone'), {
+      code: 'functions/not-found',
+      details: { reason: 'RECOMMENDATION_DRAFT_NOT_FOUND' },
+    }));
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-budget-1')).toBeTruthy());
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault: jest.fn(), data: { action: { type: 'POP' } } });
+    });
+    const leaveActions = Alert.alert.mock.calls.at(-1)[2];
+    await act(async () => {
+      await leaveActions.find((action) => action.text === 'ויתור על השינויים ויציאה').onPress();
+    });
+
+    expect(mockClearRecommendationDraftMedia).toHaveBeenCalledWith({ deleteFiles: true });
+    expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' });
+    expect(Alert.alert.mock.calls.some(([title]) => title === 'לא הצלחנו לוותר על השינויים')).toBe(false);
   });
 
   it('edit mode: beforeRemove shows unsaved alert when dirty; כן dispatches action', async () => {

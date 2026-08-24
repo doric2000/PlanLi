@@ -383,6 +383,72 @@ describe('streamlined route builder', () => {
     expect(nav.goBack).toHaveBeenCalledTimes(1);
   });
 
+  it('save and exit refreshes a stale roadtrip draft version and retries once', async () => {
+    const staleDraft = currentDraft();
+    mockGetCurrentRouteDraft
+      .mockResolvedValueOnce(staleDraft)
+      .mockResolvedValueOnce({ ...staleDraft, version: 3 });
+    mockSaveRouteDraft
+      .mockRejectedValueOnce(Object.assign(new Error('stale'), {
+        code: 'functions/aborted',
+        details: { reason: 'ROUTE_DRAFT_VERSION_CONFLICT' },
+      }))
+      .mockResolvedValueOnce({ draftId: staleDraft.id, version: 4 });
+    const nav = navigation();
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
+
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי לפני יציאה');
+    const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
+    await act(async () => { await backOptions.onPress(); });
+    const leaveAlert = require('react-native').Alert.alert.mock.calls
+      .find(([title]) => title === 'המסלול עדיין בתהליך');
+    await act(async () => {
+      await leaveAlert[2].find((button) => button.text === 'שמירת טיוטה ויציאה').onPress();
+    });
+
+    expect(mockGetCurrentRouteDraft).toHaveBeenCalledTimes(2);
+    expect(mockSaveRouteDraft).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      draftId: staleDraft.id,
+      expectedVersion: 2,
+    }));
+    expect(mockSaveRouteDraft).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      draftId: staleDraft.id,
+      expectedVersion: 3,
+      draft: expect.objectContaining({ description: 'שינוי לפני יציאה' }),
+    }));
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('finishes leaving when a roadtrip draft was already discarded remotely', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValueOnce(currentDraft());
+    mockDiscardRouteDraft.mockRejectedValueOnce(Object.assign(new Error('gone'), {
+      code: 'functions/not-found',
+      details: { reason: 'ROUTE_DRAFT_NOT_FOUND' },
+    }));
+    const nav = navigation();
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
+
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
+    await act(async () => { await backOptions.onPress(); });
+    const leaveAlert = require('react-native').Alert.alert.mock.calls
+      .find(([title]) => title === 'המסלול עדיין בתהליך');
+    await act(async () => {
+      await leaveAlert[2].find((button) => button.text === 'ויתור על השינויים ויציאה').onPress();
+    });
+
+    expect(mockClearRouteDraftMedia).toHaveBeenCalledWith({ deleteFiles: true });
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+    expect(require('react-native').Alert.alert.mock.calls
+      .some(([title]) => title === 'לא הצלחנו לוותר על השינויים')).toBe(false);
+  });
+
   it('discards the private edit draft before leaving when the user rejects changes', async () => {
     const nav = navigation();
     const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
@@ -588,6 +654,15 @@ describe('streamlined route builder', () => {
     fireEvent.press(screen.getByTestId('route-submit'));
     await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(1));
     expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+
+    const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
+    await act(async () => { await backOptions.onPress(); });
+    expect(require('react-native').Alert.alert).toHaveBeenCalledWith(
+      'המסלול עובר לפרסום',
+      expect.stringContaining('כבר התחלנו'),
+      expect.any(Array),
+      expect.objectContaining({ cancelable: true })
+    );
 
     fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי מאוחר בזמן הפרסום');
