@@ -24,9 +24,10 @@ import {
   discardRouteDraft, getCurrentRouteDraft, loadRouteDetails, saveRouteDraft,
 } from '../../../services/RouteService';
 import { colors, routeBuilderStyles as styles } from '../../../styles';
-import NoyaGuide from '../../community/components/NoyaGuide';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
 import { useContentPublish } from '../../publishing/ContentPublishContext';
+import { NoyaTourTarget, useNoyaTour } from '../../noya/NoyaTourContext';
+import { NOYA_CREATOR_TARGETS } from '../../noya/NoyaTourDefinitions';
 import StopEditorModal from '../components/StopEditorModal';
 import { extractRoutePublishMedia } from '../utils/routeMedia';
 import {
@@ -242,6 +243,7 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 export default function AddRoutesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { requestCreatorStep } = useNoyaTour();
   const routeToEdit = route?.params?.routeToEdit || null;
   const sourceRouteId = routeToEdit?.id || routeToEdit?.routeId || null;
   const publishJobId = route?.params?.publishJobId || null;
@@ -302,7 +304,25 @@ export default function AddRoutesScreen({ navigation, route }) {
   const publishHandoffRef = useRef(false);
   const latestDraftPayloadRef = useRef(null);
   const latestDraftComparableRef = useRef('');
+  const builderScrollRef = useRef(null);
+  const publishGuideScrolledRef = useRef(false);
   const isEditingRoute = Boolean(sourceRouteId || sourceRouteIdRef.current);
+
+  useEffect(() => {
+    if (mode !== 'start' || isEditingRoute || publishJobId) return;
+    requestCreatorStep('route', 0);
+  }, [isEditingRoute, mode, publishJobId, requestCreatorStep]);
+
+  useEffect(() => {
+    if (mode !== 'editor' || isEditingRoute || publishJobId || !flattenRouteStops(days).length) return;
+    const shown = requestCreatorStep('route', 2);
+    if (!shown || publishGuideScrolledRef.current) return;
+    publishGuideScrolledRef.current = true;
+    const timer = setTimeout(() => {
+      builderScrollRef.current?.scrollToEnd?.({ animated: true });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [days, isEditingRoute, mode, publishJobId, requestCreatorStep]);
 
   const hydrateDraft = useCallback((draft, { localSourceRouteId = null } = {}) => {
     const normalized = routeAsDraft(draft);
@@ -884,7 +904,6 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   if (mode === 'switchChoice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide dismissible tipId="route-builder" message="יש שינויים שעדיין לא פורסמו במסלול אחר. אפשר לשמור אותם ולחזור, או לוותר עליהם ולפתוח את המסלול שנבחר." />
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'שינויים שלא פורסמו'}</AppText>
         <TouchableOpacity style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><AppText style={styles.secondaryButtonText}>ביטול וחזרה</AppText></TouchableOpacity>
@@ -894,7 +913,6 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   if (mode === 'choice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide dismissible tipId="route-builder" message={existingDraft?.sourceRouteId ? "יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן." : "יש מסלול חדש בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרנו, או למחוק ולהתחיל מחדש."} />
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'מסלול בתהליך'}</AppText>
         <AppText style={styles.body}>{existingDraft?.dayCount || existingDraft?.days?.length || 1} ימים{existingDraft?.area?.cityName ? ` · ${existingDraft.area.cityName}` : ''}</AppText>
@@ -907,7 +925,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   if (mode === 'start') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <NoyaGuide dismissible tipId="route-builder" message="מתחילים בקטן. איפה המסלול וכמה ימים?" />
+      <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.routeBase}>
       <View style={styles.card}>
         <AppText style={styles.startTitle}>פתיחת מסלול</AppText>
         <AppText style={styles.fieldLabel}>עיר או אזור</AppText>
@@ -921,6 +939,7 @@ export default function AddRoutesScreen({ navigation, route }) {
         {startError ? <View style={styles.errorBox}><AppText style={styles.errorText}>{startError}</AppText></View> : null}
         <TouchableOpacity style={[styles.primaryButton, startBusy && styles.primaryButtonDisabled]} onPress={openNewDraft} disabled={startBusy} testID="route-start-open">{startBusy ? <ActivityIndicator color={colors.white} /> : <AppText style={styles.primaryButtonText}>פתיחת המסלול</AppText>}</TouchableOpacity>
       </View>
+      </NoyaTourTarget>
     </ScrollView>
   );
 
@@ -929,7 +948,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   const preciseStops = allStops.filter((stop) => Boolean(getStopCoordinates(stop)));
   return (
     <GestureHandlerRootView style={styles.screen}>
-      <NestableScrollContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <NestableScrollContainer ref={builderScrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.statusRow} accessibilityLiveRegion="polite">
           {saveStatus === 'saving' ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name={saveStatus === 'error' ? 'alert-circle-outline' : 'cloud-done-outline'} size={17} color={saveStatus === 'error' ? colors.error : colors.textMuted} />}
           <AppText style={[styles.statusText, saveStatus === 'error' && styles.statusError]}>{saveStatus === 'saving' ? 'שומר טיוטה...' : saveStatus === 'error' ? 'לא הצלחנו לשמור את הטיוטה' : draftId ? 'הטיוטה נשמרה' : isEditingRoute ? 'אין שינויים שלא פורסמו' : ''}</AppText>
@@ -939,7 +958,6 @@ export default function AddRoutesScreen({ navigation, route }) {
           ><AppText style={styles.retryText}>ניסיון נוסף</AppText></TouchableOpacity> : null}
         </View>
         {missingLocalMediaCount ? <View style={styles.errorBox} testID="route-missing-local-media"><AppText style={styles.errorText}>לא הצלחנו לשחזר {missingLocalMediaCount} תמונות מהטיוטה. אפשר לבחור אותן מחדש לפני הפרסום.</AppText></View> : null}
-        <NoyaGuide dismissible tipId="route-builder" message="אפשר להתחיל מהעצירות שכבר ברורות. את שאר הפרטים משלימים לפני הפרסום." />
         <TouchableOpacity style={styles.mapPeek} onPress={() => navigation.navigate('RouteMap', { routeData: { title, days } })} accessibilityRole="button" testID="route-map-peek">
           <View><AppText style={styles.mapPeekTitle}>מפת המסלול</AppText><AppText style={styles.mapPeekMeta}>{preciseStops.length ? `${preciseStops.length} נקודות מדויקות` : 'המפה תתעדכן כשיתווספו נקודות מדויקות'}</AppText></View><Ionicons name="map-outline" size={28} color={colors.white} />
         </TouchableOpacity>
@@ -1027,7 +1045,9 @@ export default function AddRoutesScreen({ navigation, route }) {
           </>}
           <TouchableOpacity style={styles.addStop} onPress={() => openStopEditor({ mode: 'insert' })} testID="route-add-stop"><AppText style={styles.addStopText}>הוספת עצירה בסוף היום</AppText></TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} testID="route-details-toggle"><AppText style={styles.detailsToggleText}>פרטי המסלול והפרסום</AppText><Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} /></TouchableOpacity>
+        <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.routePublish}>
+          <TouchableOpacity style={styles.detailsToggle} onPress={() => setDetailsOpen((current) => !current)} testID="route-details-toggle"><AppText style={styles.detailsToggleText}>פרטי המסלול והפרסום</AppText><Ionicons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.primary} /></TouchableOpacity>
+        </NoyaTourTarget>
         {detailsOpen ? <View style={styles.card}>
           <FocusClearingFormInput label="כותרת המסלול" required value={title} onChangeText={setTitle} placeholder="למשל: שלושה ימים של אוכל ותרבות בבודפשט" maxLength={120} rtl testID="route-title-input" />
           <FocusClearingFormInput label="תיאור המסלול" required value={description} onChangeText={setDescription} placeholder="למשל: מסלול רגוע שמשלב את השוק, מרכז העיר ושתי עצירות אוכל אהובות." multiline maxLength={5000} rtl testID="route-description-input" />
@@ -1061,6 +1081,7 @@ export default function AddRoutesScreen({ navigation, route }) {
         })}
         routeDestination={area}
         allowImages
+        guideEnabled={!isEditingRoute && !publishJobId}
       />
     </GestureHandlerRootView>
   );

@@ -55,8 +55,9 @@ import {
   saveRecommendationDraft,
 } from '../../../services/RecommendationService';
 import ManualMapPinPicker from '../components/ManualMapPinPicker';
-import NoyaGuide from '../components/NoyaGuide';
 import SingleDestinationPicker from '../components/SingleDestinationPicker';
+import { NoyaTourTarget, useNoyaTour } from '../../noya/NoyaTourContext';
+import { NOYA_CREATOR_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const STEP_COUNT = 4;
 const SAVE_DELAY_MS = 900;
@@ -196,6 +197,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     restoreDraft: restoreDraftMedia,
     waitForMedia: waitForDraftMedia,
   } = useRecommendationDraftMedia();
+  const { requestCreatorStep, setTourSuspended } = useNoyaTour();
 
   const [mode, setMode] = useState('loading');
   const [loadError, setLoadError] = useState('');
@@ -247,6 +249,35 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const mountedRef = useRef(true);
   const isEdit = Boolean(sourceRecommendationId);
   const editPostId = sourceRecommendationId || null;
+
+  useEffect(() => {
+    const reason = 'recommendation-media-composer';
+    setTourSuspended(reason, mediaComposerVisible);
+    return () => setTourSuspended(reason, false);
+  }, [mediaComposerVisible, setTourSuspended]);
+
+  useEffect(() => {
+    if (mode !== 'editor' || isEdit || publishJobId) return;
+    const guideStepIndex = step === 1 ? 0 : step === 2 ? 1 : 2;
+    requestCreatorStep('recommendation', guideStepIndex, {
+      targetId: step >= 4
+        ? NOYA_CREATOR_TARGETS.recommendationFallback
+        : undefined,
+      ...(guideStepIndex === 2 ? {
+        primaryAction: () => setMediaComposerVisible(true),
+        primaryLabel: 'בחירת תמונות',
+        suspendReason: 'recommendation-media-composer',
+      } : {}),
+    });
+  }, [isEdit, mode, publishJobId, requestCreatorStep, step]);
+
+  useEffect(() => {
+    if (mode !== 'editor') return undefined;
+    const timer = setTimeout(() => {
+      scrollViewRef.current?.scrollTo?.({ y: 0, animated: false });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [mode, step]);
 
   const {
     chooseAnotherLocation,
@@ -1043,8 +1074,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   };
 
   const renderLocationStep = () => (
-    <>
-      <NoyaGuide dismissible tipId="create-recommendation" message="אפשר להתחיל ממקום מדויק, מעיר או מאזור. את שאר הפרטים משלימים בקצב שנוח." />
+    <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationLocation}>
       <View style={styles.modeActions}>
         {[
           { id: LOCATION_MODES.exact, label: 'מקום מדויק', icon: 'location-outline' },
@@ -1130,12 +1160,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           </>
         )}
       </View>
-    </>
+    </NoyaTourTarget>
   );
 
   const renderTaxonomyStep = () => (
-    <>
-      <NoyaGuide dismissible tipId="create-recommendation" message={categoryId ? 'מה מתאר הכי טוב את ההמלצה? אפשר לבחור עד שלוש אפשרויות.' : 'על מה ההמלצה?'} />
+    <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationTaxonomy}>
       {primarySuggestion && !categoryId ? (
         <View style={styles.suggestionPanel}>
           <AppText style={styles.suggestionText}>
@@ -1236,12 +1265,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           </TouchableOpacity>
         </>
       )}
-    </>
+    </NoyaTourTarget>
   );
 
   const renderStoryStep = () => (
-    <>
-      <NoyaGuide dismissible tipId="create-recommendation" message="משפט קצר ותמונה טובה מספיקים כדי להבין למה כדאי להגיע." />
+    <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationStory}>
       <View style={styles.fieldStack}>
         <FocusClearingFormInput
           label="איך קוראים למקום או להמלצה?"
@@ -1279,7 +1307,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           testID="recommendation-image-picker"
         />
       </View>
-    </>
+    </NoyaTourTarget>
   );
 
   const renderReviewStep = () => {
@@ -1287,7 +1315,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     const optionalField = OPTIONAL_FIELDS.find((field) => field.id === activeOptionalField);
     return (
       <>
-        <NoyaGuide dismissible tipId="create-recommendation" message="נשאר לבחור רמת מחיר. אחר כך אפשר להוסיף פרט שימושי או לפרסם." />
         <View style={styles.preview}>
           {previewUris[0] ? (
             <Image source={{ uri: previewUris[0] }} style={styles.previewImage} resizeMode="cover" />
@@ -1392,11 +1419,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   );
   if (mode === 'choice' || mode === 'switchChoice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide dismissible tipId="create-recommendation" message={mode === 'switchChoice'
-        ? 'יש המלצה אחרת עם שינויים שעדיין לא פורסמו. אפשר לשמור אותה ולחזור, או לוותר עליה ולפתוח את ההמלצה שבחרת.'
-        : existingDraft?.sourceRecommendationId
-          ? 'יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן.'
-          : 'יש המלצה בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרת, או למחוק ולהתחיל מחדש.'} />
       <View style={styles.draftCard}>
         <AppText style={styles.draftTitle}>{existingDraft?.title || 'המלצה בתהליך'}</AppText>
         {existingDraft?.selectedCity?.name ? <AppText style={styles.draftBody}>{existingDraft.selectedCity.name}</AppText> : null}
@@ -1418,6 +1440,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   return (
     <View style={styles.screen}>
+      <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationFallback}>
       <View style={styles.header} testID="recommendation-composer-header">
         <View style={styles.progressCopy}>
           <AppText style={styles.progressText}>{`שלב ${step} מתוך ${STEP_COUNT}`}</AppText>
@@ -1440,6 +1463,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           ) : null}
         </View>
       </View>
+      </NoyaTourTarget>
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoiding}

@@ -41,6 +41,8 @@ import AuthGateModal from "./src/features/auth/components/AuthGateModal";
 import { CAPABILITIES } from "./src/constants/authPolicy";
 import { addDiagnosticBreadcrumb, setDiagnosticTag } from "./src/services/ErrorReporting";
 import { beginNoyaVisit } from "./src/features/profile/services/NoyaOnboardingStorage";
+import { NoyaTourProvider } from "./src/features/noya/NoyaTourContext";
+import NoyaTourOverlayHost from "./src/features/noya/NoyaTourOverlay";
 
 
 const Stack = createStackNavigator();
@@ -76,6 +78,7 @@ export default function App() {
 	const initialRouteName = process.env.EXPO_PUBLIC_ADMIN_WEB === 'true' ? 'AdminPanel' : 'Main';
 	const previousRouteNameRef = useRef(null);
 	const [navigationReady, setNavigationReady] = useState(false);
+	const [currentRouteName, setCurrentRouteName] = useState('');
 	useEffect(() => {
 		beginNoyaVisit().catch(() => {});
 		const subscription = AppState.addEventListener('change', (state) => {
@@ -84,15 +87,17 @@ export default function App() {
 		return () => subscription.remove();
 	}, []);
 	const recordCurrentRoute = () => {
-		const currentRouteName = navigationRef.getCurrentRoute()?.name;
-		if (!currentRouteName || previousRouteNameRef.current === currentRouteName) return;
-		setDiagnosticTag('screen', currentRouteName);
+		const nextRouteName = navigationRef.getCurrentRoute()?.name;
+		if (!nextRouteName) return;
+		setCurrentRouteName(nextRouteName);
+		if (previousRouteNameRef.current === nextRouteName) return;
+		setDiagnosticTag('screen', nextRouteName);
 		addDiagnosticBreadcrumb({
 			category: 'navigation',
 			message: 'Navigation route changed',
-			data: { from: previousRouteNameRef.current || 'initial', to: currentRouteName },
+			data: { from: previousRouteNameRef.current || 'initial', to: nextRouteName },
 		});
-		previousRouteNameRef.current = currentRouteName;
+		previousRouteNameRef.current = nextRouteName;
 	};
 	return (
 		<AppFontProvider>
@@ -101,6 +106,7 @@ export default function App() {
 				 <BlockedUsersProvider>
 				 <NotificationCenterProvider>
 				 <ContentPublishProvider>
+				 <NoyaTourProvider currentRouteName={currentRouteName} navigationReady={navigationReady} navigationRef={navigationRef}>
 				<NavigationContainer
 					ref={navigationRef}
 					onReady={() => {
@@ -176,6 +182,8 @@ export default function App() {
 						}
 					}}
 				/>
+				<NoyaTourOverlayHost />
+				 </NoyaTourProvider>
 				 </ContentPublishProvider>
 				 </NotificationCenterProvider>
 				 </BlockedUsersProvider>

@@ -58,7 +58,11 @@ import {
 	wasNoyaAccountHandled,
 } from "../../profile/services/NoyaOnboardingStorage";
 import { saveNoyaOnboardingStatus } from "../../../services/ProfileService";
-import NoyaGuide from "../../community/components/NoyaGuide";
+import {
+	NoyaTourTarget,
+	useNoyaMainTabRegistration,
+} from "../../noya/NoyaTourContext";
+import { NOYA_MAIN_TARGETS } from "../../noya/NoyaTourDefinitions";
 
 const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 
@@ -109,6 +113,7 @@ function openPreferenceSetupFrom(navigation, source = 'home') {
 }
 
 export default function HomeScreen({ navigation }) {
+	useNoyaMainTabRegistration(navigation);
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
@@ -395,6 +400,7 @@ export default function HomeScreen({ navigation }) {
 	};
 
 	const renderHeader = () => (
+		<NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Home}>
 		<PageHeader
 			variant="hero"
 			title="לאן נוסעים?"
@@ -438,6 +444,7 @@ export default function HomeScreen({ navigation }) {
 				/>
 			</SearchFilterRow>
 		</PageHeader>
+		</NoyaTourTarget>
 	);
 
 	const dismissNoyaInvitation = () => {
@@ -617,12 +624,6 @@ export default function HomeScreen({ navigation }) {
 					) : (
 						<>
 							{renderPreferencePrompt()}
-							{preferencesCompleted || guestNoyaCompleted ? (
-								<View style={preferenceStyles.homeTipWrap}>
-									<NoyaGuide dismissible tipId="for-you" testID="noya-for-you-tip"
-										message="כאן מתחילה ההתאמה שלך. לייקים, שמירות ופתיחת המלצות יעזרו לי לדייק אותה." />
-								</View>
-							) : null}
 							<View style={styles.body}>
 								{renderFeatured()}
 								{renderDestinations()}

@@ -83,10 +83,6 @@ jest.mock('react-native-safe-area-context', () => ({
   ...jest.requireActual('react-native-safe-area-context'),
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
 }));
-jest.mock('../src/features/community/components/NoyaGuide', () => {
-  const { Text } = require('react-native');
-  return ({ message }) => <Text>{message}</Text>;
-});
 jest.mock('../src/features/community/components/SingleDestinationPicker', () => {
   const { Pressable, Text, View } = require('react-native');
   return ({ value, onChange }) => value ? (
@@ -505,7 +501,7 @@ describe('streamlined route builder', () => {
   it('opens a server draft from only a destination and day count', async () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(
-      () => expect(screen.getByText('מתחילים בקטן. איפה המסלול וכמה ימים?')).toBeTruthy(),
+      () => expect(screen.getByText('פתיחת מסלול')).toBeTruthy(),
       { timeout: 5000 }
     );
     fireEvent.press(screen.getByTestId('destination-select'));
@@ -523,7 +519,7 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-discard'));
     await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
-    expect(screen.getByText('מתחילים בקטן. איפה המסלול וכמה ימים?')).toBeTruthy();
+    expect(screen.getByText('פתיחת מסלול')).toBeTruthy();
   });
 
   it('keeps an existing draft and requires route description, price and useful stops before publish', async () => {

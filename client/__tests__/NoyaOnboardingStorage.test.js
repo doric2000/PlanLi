@@ -8,7 +8,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 import {
   __resetNoyaStorageForTests,
   beginNoyaVisit,
-  claimNoyaTip,
   dismissGuestNoya,
   loadGuestNoyaProfile,
   markNoyaContentViewed,
@@ -51,10 +50,17 @@ describe('NoyaOnboardingStorage', () => {
     await expect(shouldInviteGuestToNoya()).resolves.toBe(false);
   });
 
-  it('shows at most one contextual tip during a visit', async () => {
-    await expect(claimNoyaTip('for-you')).resolves.toBe(true);
-    await expect(claimNoyaTip('save-community')).resolves.toBe(false);
+  it('keeps the guest invitation state independent from the removed contextual tips', async () => {
+    mockStorage.set('@planli/noya-onboarding-v2', JSON.stringify({
+      tipsSeen: ['for-you'],
+      tipsDisabled: true,
+      guestStatus: '',
+    }));
+    __resetNoyaStorageForTests();
     await dismissGuestNoya();
     await expect(shouldInviteGuestToNoya()).resolves.toBe(false);
+    const stored = JSON.parse(mockStorage.get('@planli/noya-onboarding-v2'));
+    expect(stored).not.toHaveProperty('tipsSeen');
+    expect(stored).not.toHaveProperty('tipsDisabled');
   });
 });

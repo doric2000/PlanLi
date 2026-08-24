@@ -51,6 +51,8 @@ import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilter
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { clearPersonalizationDiscoveryCache } from '../../../services/PersonalizationService';
+import { NoyaTourTarget, useNoyaMainTabRegistration } from '../../noya/NoyaTourContext';
+import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 function normalizeMapFocus(input) {
   const recommendationId = String(input?.recommendationId || '').trim();
@@ -83,6 +85,7 @@ function mergeFocusedRecommendation(recommendations, focusedRecommendation, mapF
 }
 
 export default function CommunityScreen({ navigation, route }) {
+  useNoyaMainTabRegistration(navigation);
   const insets = useSafeAreaInsets();
   const { ensureCapability } = useAuthUser();
   // --- State ---
@@ -226,6 +229,7 @@ export default function CommunityScreen({ navigation, route }) {
   );
 
   const renderTopArea = () => (
+    <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Community}>
     <PageHeader
       variant="hero"
       title="קהילה"
@@ -307,6 +311,7 @@ export default function CommunityScreen({ navigation, route }) {
         </View>
       </SearchFilterRow>
     </PageHeader>
+    </NoyaTourTarget>
   );
 
   return (

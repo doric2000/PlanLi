@@ -18,6 +18,12 @@ import ManualMapPinPicker from '../../community/components/ManualMapPinPicker';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
 import { getStopCoordinates, getStopMediaAssets } from '../utils/routeStops';
 import { normalizeRouteTimeInput } from '../utils/routeTime';
+import {
+  NoyaTourTarget,
+  useNoyaTour,
+} from '../../noya/NoyaTourContext';
+import NoyaTourOverlayHost from '../../noya/NoyaTourOverlay';
+import { NOYA_CREATOR_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const createStopId = () => `stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const LOCATION_MODES = { planli: 'planli', exact: 'exact', pin: 'pin', general: 'general' };
@@ -105,7 +111,9 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 export default function StopEditorModal({
   visible, onClose, onSave, initialData, dayIndex, stopIndex,
   onForgetImage, onPersistImages, mediaForImage, routeDestination, allowImages = true,
+  guideEnabled = false,
 }) {
+  const { requestCreatorStep, setTourSuspended } = useNoyaTour();
   const safeDayIndex = Number.isInteger(dayIndex) && dayIndex >= 0 ? dayIndex : 0;
   const safeStopIndex = Number.isInteger(stopIndex) && stopIndex >= 0 ? stopIndex : 0;
   const [title, setTitle] = useState('');
@@ -126,6 +134,22 @@ export default function StopEditorModal({
   const [stopBaseline, setStopBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
   const pendingDiscardRef = useRef(null);
+  useEffect(() => {
+    if (!visible || !guideEnabled) return;
+    requestCreatorStep('route', 1, {
+      primaryAction: () => setMediaComposerVisible(true),
+      primaryLabel: 'בחירת תמונות',
+      scope: 'route-stop-editor',
+      suspendReason: 'route-stop-media-composer',
+    });
+  }, [guideEnabled, requestCreatorStep, visible]);
+
+  useEffect(() => {
+    const reason = 'route-stop-media-composer';
+    setTourSuspended(reason, visible && mediaComposerVisible);
+    return () => setTourSuspended(reason, false);
+  }, [mediaComposerVisible, setTourSuspended, visible]);
+
   useEffect(() => {
     if (!visible) {
       setStopBaseline(null);
@@ -366,10 +390,12 @@ export default function StopEditorModal({
           <TouchableOpacity onPress={handleSave} disabled={mediaBusy || locationBusy}><AppText style={[styles.headerButton, styles.headerButtonStrong]}>שמירה</AppText></TouchableOpacity>
         </View>
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <FocusClearingFormInput label="שם העצירה" placeholder="למשל: השוק המרכזי" value={title} onChangeText={setTitle} rtl testID="route-stop-title-input" />
-          <View style={composer.modeActions}>
-            {modes.map((entry) => <TouchableOpacity key={entry.id} style={[composer.modeButton, mode === entry.id && composer.modeButtonSelected]} onPress={() => setMode(entry.id)} accessibilityRole="radio" accessibilityState={{ checked: mode === entry.id }} testID={`route-stop-mode-${entry.id}`}><Ionicons name={entry.icon} size={18} /><AppText style={composer.modeButtonText}>{entry.label}</AppText></TouchableOpacity>)}
-          </View>
+          <NoyaTourTarget scope="route-stop-editor" targetId={NOYA_CREATOR_TARGETS.routeStop}>
+            <FocusClearingFormInput label="שם העצירה" placeholder="למשל: השוק המרכזי" value={title} onChangeText={setTitle} rtl testID="route-stop-title-input" />
+            <View style={composer.modeActions}>
+              {modes.map((entry) => <TouchableOpacity key={entry.id} style={[composer.modeButton, mode === entry.id && composer.modeButtonSelected]} onPress={() => setMode(entry.id)} accessibilityRole="radio" accessibilityState={{ checked: mode === entry.id }} testID={`route-stop-mode-${entry.id}`}><Ionicons name={entry.icon} size={18} /><AppText style={composer.modeButtonText}>{entry.label}</AppText></TouchableOpacity>)}
+            </View>
+          </NoyaTourTarget>
           <View style={styles.locationWrap}>
             {mode === LOCATION_MODES.exact ? <ExactLocationPicker value={exactValue} onChange={setExactValue} onResolvingChange={setLocationBusy} inputTestID="route-stop-location-input" /> : null}
             {mode === LOCATION_MODES.general || mode === LOCATION_MODES.pin ? <SingleDestinationPicker allowProviderDestinations value={destination} onChange={(value) => { setDestination(value); setPin(null); }} /> : null}
@@ -396,6 +422,7 @@ export default function StopEditorModal({
           {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map(travelMediaUri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText="הוספת עד 3 תמונות" previewAspectRatio={4 / 3} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
         </ScrollView>
         <TravelMediaComposer contained visible={mediaComposerVisible} value={photoItems} maxItems={3} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={() => setMediaComposerVisible(false)} onChange={completeMediaSelection} />
+        {guideEnabled ? <NoyaTourOverlayHost scope="route-stop-editor" /> : null}
       </View>
     </Modal>
   );
