@@ -220,6 +220,9 @@ export const useImagePicker = (options = {}) => {
    * @returns {Promise<boolean>} Whether permission was granted
    */
   const requestGalleryPermission = useCallback(async () => {
+    // Android and Web use their system/document picker, which does not require
+    // broad photo-library access. Keep the permission request iOS-only.
+    if (Platform.OS !== 'ios') return true;
     const result = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!result.granted) {
       Alert.alert("Permission Required", "Please grant access to your photo library.");

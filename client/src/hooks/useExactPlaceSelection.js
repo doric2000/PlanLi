@@ -214,6 +214,7 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
     locationResolveRetryable,
     destinationChoice,
     pendingLocation,
+    resolvingPreview: lastSelection,
     resolutionGenerationRef,
     resolvingLocation,
     retryLocationResolution,

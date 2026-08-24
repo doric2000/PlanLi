@@ -19,8 +19,8 @@ import { FormInput } from '../../../components/FormInput';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
-import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
+import TravelMediaComposer from '../../../components/TravelMediaComposer';
 import {
   RECOMMENDATION_CATEGORIES,
   RECOMMENDATION_SUBCATEGORIES,
@@ -36,7 +36,6 @@ import {
 import useRecommendationDraftMedia from '../../../hooks/useRecommendationDraftMedia';
 import useExactPlaceSelection from '../../../hooks/useExactPlaceSelection';
 import { useBackButton } from '../../../hooks/useBackButton';
-import useReviewedImagePicker from '../../../hooks/useReviewedImagePicker';
 import {
   colors,
   recommendationComposerStyles as styles,
@@ -44,6 +43,11 @@ import {
 } from '../../../styles';
 import { findMediaAssetByUrl, getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
+import {
+  createTravelMediaDescriptor,
+  queueMediaFromDescriptor,
+  travelMediaUri,
+} from '../../../utils/travelMedia';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 import {
   discardRecommendationDraft,
@@ -187,10 +191,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     bindDraft,
     clearDraft: clearDraftMedia,
     clearStaleDraft,
-    forgetUri: forgetDurableImage,
-    mediaForUri: durableMediaForUri,
-    persistUris: persistReviewedImages,
+    forgetMedia: forgetDurableImage,
+    persistMedia: persistDraftMedia,
     restoreDraft: restoreDraftMedia,
+    waitForMedia: waitForDraftMedia,
   } = useRecommendationDraftMedia();
 
   const [mode, setMode] = useState('loading');
@@ -219,7 +223,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [details, setDetails] = useState({});
   const [activeOptionalField, setActiveOptionalField] = useState('');
   const [eventSchedule, setEventSchedule] = useState('');
-  const [editableImageUris, setEditableImageUris] = useState([]);
+  const [editableMedia, setEditableMedia] = useState([]);
+  const [mediaComposerVisible, setMediaComposerVisible] = useState(false);
   const [validationMessage, setValidationMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -244,18 +249,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const editPostId = sourceRecommendationId || null;
 
   const {
-    cancelReview,
-    completeReview,
-    pickImagesForReview,
-    reviewUris,
-  } = useReviewedImagePicker({
-    kind: 'recommendation',
-    aspect: [1, 1],
-    allowsEditing: false,
-    quality: 1,
-  });
-
-  const {
     chooseAnotherLocation,
     chooseDestination,
     confirmPendingLocation,
@@ -267,6 +260,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     locationResolveError,
     locationResolveRetryable,
     pendingLocation,
+    resolvingPreview,
     clearSelectionForTyping: onChangeLocationQuery,
     resolvingLocation,
     retryLocationResolution,
@@ -274,6 +268,14 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     selectedCountry,
     selectedPlace,
   } = useExactPlaceSelection();
+
+  const confirmExactLocationAndAdvance = useCallback(() => {
+    const confirmed = confirmPendingLocation();
+    if (!confirmed) return;
+    Keyboard.dismiss();
+    setValidationMessage('');
+    setStep((current) => current === 1 ? 2 : current);
+  }, [confirmPendingLocation]);
 
   const selectedCategory = categoryById[categoryId] || null;
   const selectedOther = subcategoryIds.some((id) => subcategoryById[id]?.isOther);
@@ -312,10 +314,13 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     return searchRecommendationCatalog(subcategorySearch, { categoryId, limit: 50 });
   }, [allCategorySubcategories, categoryId, popularSubcategories, showAllSubcategories, subcategorySearch]);
 
-  const previewUris = useMemo(() => editableImageUris.map((uri) => {
+  const editableImageUris = useMemo(() => editableMedia.map(travelMediaUri).filter(Boolean), [editableMedia]);
+  const previewUris = useMemo(() => editableMedia.map((item) => {
+    if (item.asset) return getMediaVariantUrl(item.asset, 'feed', travelMediaUri(item));
+    const uri = travelMediaUri(item);
     const asset = findMediaAssetByUrl(sourceMedia, uri);
     return asset ? getMediaVariantUrl(asset, 'feed', uri) : uri;
-  }), [editableImageUris, sourceMedia]);
+  }), [editableMedia, sourceMedia]);
 
   const formComparable = useMemo(() => catalogFormComparable({
     locationMode,
@@ -639,7 +644,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setDetails(initialDetails);
     setEventSchedule(initialSchedule);
     setSourceMedia(Array.isArray(editItem.media) ? editItem.media : []);
-    setEditableImageUris(imageUris);
+    setEditableMedia(imageUris.map((uri) => createTravelMediaDescriptor({
+      uri,
+      asset: findMediaAssetByUrl(editItem.media, uri),
+    })).filter(Boolean));
     hydrateSelection({
       country,
       city,
@@ -677,13 +685,19 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     });
   }, [hydrateSelection, isEdit, route?.params?.prefillLocation]);
 
-  const hydrateServerDraft = useCallback(async (draft, { localUris = null } = {}) => {
+  const hydrateServerDraft = useCallback(async (draft, { localItems = null } = {}) => {
     const remoteMedia = Array.isArray(draft.media) ? draft.media : [];
-    const remoteUris = remoteMedia.map((asset) => getMediaVariantUrl(asset, 'feed')).filter(Boolean);
-    const restored = localUris == null
+    const remoteItems = remoteMedia.map((asset) => createTravelMediaDescriptor({
+      asset,
+      id: asset.assetId,
+      sourceId: asset.assetId,
+      uri: getMediaVariantUrl(asset, 'feed'),
+    })).filter(Boolean);
+    const restored = localItems == null
       ? await restoreDraftMedia(draft.id, draft.localMediaCount)
-      : { uris: localUris, missingCount: 0 };
-    const imageUris = [...remoteUris, ...(restored.uris || [])].slice(0, 5);
+      : { items: localItems, missingCount: 0 };
+    const mediaItems = [...remoteItems, ...(restored.items || [])].slice(0, 5);
+    const imageUris = mediaItems.map(travelMediaUri);
     const nextSourceId = draft.sourceRecommendationId || '';
     draftIdRef.current = draft.id || '';
     versionRef.current = Number(draft.version || 0);
@@ -704,7 +718,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setBudget(draft.budget || '');
     setDetails(draft.details || {});
     setEventSchedule(draft.eventSchedule || '');
-    setEditableImageUris(imageUris);
+    setEditableMedia(mediaItems);
     hydrateSelection({
       country: draft.selectedCountry || null,
       city: draft.selectedCity || null,
@@ -755,9 +769,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             version: job.payload.expectedVersion,
             sourceRecommendationId: job.payload.sourceRecommendationId || job.draft.sourceRecommendationId || null,
           }, {
-            localUris: (job.materializedMedia || [])
+            localItems: (job.materializedMedia || [])
               .filter((entry) => entry.type !== 'remote')
-              .map((entry) => entry.uri)
+              .map((entry) => createTravelMediaDescriptor(entry))
               .filter(Boolean),
           });
           return;
@@ -867,20 +881,20 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setDismissedSuggestion(true);
   };
 
-  const handleAddImages = async () => {
-    const remaining = Math.max(0, 5 - editableImageUris.length);
-    if (!remaining) return;
-    await pickImagesForReview({
-      limit: remaining,
-      onComplete: async (uris) => {
-        await persistReviewedImages(uris);
-        setEditableImageUris((current) => Array.from(new Set([...current, ...(uris || [])])).slice(0, 5));
-      },
+  const handleAddImages = () => setMediaComposerVisible(true);
+
+  const completeMediaSelection = (items) => {
+    const nextItems = (items || []).slice(0, 5);
+    setEditableMedia(nextItems);
+    setMediaComposerVisible(false);
+    setValidationMessage('');
+    persistDraftMedia(nextItems.filter((item) => !item.asset)).catch(() => {
+      setSaveError('לא הצלחנו לשמור תמונה אחת במכשיר. אפשר לבחור אותה מחדש.');
     });
   };
 
   const removeImageAt = (index) => {
-    setEditableImageUris((current) => {
+    setEditableMedia((current) => {
       const next = [...current];
       const [removed] = next.splice(index, 1);
       forgetDurableImage(removed).catch(() => {});
@@ -961,6 +975,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         force: true,
         allowDuringPublish: true,
       });
+      const durableMedia = await waitForDraftMedia(editableMedia);
       await enqueueCreate({
         contentType: 'recommendation',
         sourceJobId: publishJobId,
@@ -971,15 +986,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             ? { sourceRecommendationId: sourceRecommendationIdRef.current }
             : {}),
         },
-        media: editableImageUris.map((uri) => {
-          const asset = findMediaAssetByUrl(sourceMedia, uri);
-          return asset ? { asset } : durableMediaForUri(uri);
-        }),
+        media: durableMedia.map(queueMediaFromDescriptor).filter(Boolean),
         draft: { ...draftPayload, sourceRecommendationId: sourceRecommendationIdRef.current || null },
       });
       handedOff = true;
       try {
-        await clearDraftMedia({ deleteFiles: false, keepUris: editableImageUris });
+        await clearDraftMedia({ deleteFiles: false, keepItems: durableMedia });
       } catch (error) {
         console.warn('recommendation_publish_handoff_cleanup_failed', {
           code: error?.code || 'unknown',
@@ -1067,6 +1079,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               onSelect={(selection) => handleSelectGooglePlace(selection).catch(() => {})}
               googleSearchFn={googleSearchFn}
               explicitSearch
+              variant="form"
+              error={Boolean(locationResolveError)}
               returnSelection
               clearPlaceholderOnFocus
               placeholder="למשל: Café Central, וינה"
@@ -1075,8 +1089,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             <ExactLocationConfirmation
               pendingLocation={pendingLocation}
               destinationChoice={destinationChoice}
+              resolving={resolvingLocation}
+              resolvingPreview={resolvingPreview}
               onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
-              onConfirm={confirmPendingLocation}
+              onConfirm={confirmExactLocationAndAdvance}
               onChooseAnother={chooseAnotherLocation}
             />
             {resolvingLocation ? <AppText style={styles.fieldHint}>בודקים את המיקום...</AppText> : null}
@@ -1510,14 +1526,15 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         </SafeAreaInsetsContext.Consumer>
       </KeyboardAvoidingView>
 
-      <ImageCropReviewModal
-        visible={reviewUris.length > 0}
-        uris={reviewUris}
+      <TravelMediaComposer
+        visible={mediaComposerVisible}
+        value={editableMedia}
+        maxItems={5}
         aspect={[1, 1]}
         maxLongEdge={RECOMMENDATION_IMAGE_LONG_EDGE}
         compress={TRAVEL_IMAGE_COMPRESSION}
-        onCancel={cancelReview}
-        onComplete={completeReview}
+        onCancel={() => setMediaComposerVisible(false)}
+        onChange={completeMediaSelection}
       />
     </View>
   );

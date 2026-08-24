@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
-import { ActivityIndicator, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import AppText from "./AppText";
 
 import GooglePlacesInput from "./GooglePlacesInput";
 import ExactLocationConfirmation from "./ExactLocationConfirmation";
 import useExactPlaceSelection from "../hooks/useExactPlaceSelection";
-import { colors, exactLocationPickerStyles as styles } from "../styles";
+import { exactLocationPickerStyles as styles } from "../styles";
 import { locationCopy } from '../utils/locationCopy';
 
 export default function ExactLocationPicker({
@@ -33,6 +33,7 @@ export default function ExactLocationPicker({
 		locationResolveRetryable,
 		destinationChoice,
 		pendingLocation,
+		resolvingPreview,
 		resolvingLocation,
 		retryLocationResolution,
 		selectedCity,
@@ -64,6 +65,8 @@ export default function ExactLocationPicker({
 				onSelect={selectPlace}
 				googleSearchFn={googleSearchFn}
 				explicitSearch
+				variant="form"
+				error={Boolean(locationResolveError)}
 				returnSelection
 				placeholder={resolvedPlaceholder}
 				inputTestID={inputTestID}
@@ -73,18 +76,13 @@ export default function ExactLocationPicker({
 			<ExactLocationConfirmation
 				pendingLocation={pendingLocation}
 				destinationChoice={destinationChoice}
+				resolving={resolvingLocation}
+				resolvingPreview={resolvingPreview}
 				onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
 				onConfirm={confirmPendingLocation}
 					onChooseAnother={chooseAnotherLocation}
 				locale={locale}
 			/>
-
-			{resolvingLocation && (
-				<View style={styles.statusRow}>
-					<ActivityIndicator size="small" color={colors.primary} />
-					<AppText style={styles.statusText}>{copy.resolving}</AppText>
-				</View>
-			)}
 
 			{!!selectedLabel && !locationResolveError && (
 				<AppText style={styles.selectedText} numberOfLines={2}>

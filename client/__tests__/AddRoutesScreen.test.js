@@ -8,6 +8,7 @@ import AddRoutesScreen, {
   routeDraftForServer,
   routeEditorComparable,
 } from '../src/features/roadtrip/screens/AddRoutesScreen';
+import { extractRoutePublishMedia } from '../src/features/roadtrip/utils/routeMedia';
 
 const mockGetCurrentRouteDraft = jest.fn();
 const mockSaveRouteDraft = jest.fn();
@@ -43,10 +44,14 @@ jest.mock('../src/hooks/useRouteDraftMedia', () => ({
     bindDraft: mockBindRouteDraftMedia,
     clearDraft: mockClearRouteDraftMedia,
     clearStaleDraft: mockClearStaleRouteDraftMedia,
+    forgetMedia: jest.fn(async () => {}),
     forgetUri: jest.fn(async () => {}),
+    mediaForItem: (item) => item,
     mediaForUri: (uri) => ({ uri }),
+    persistMedia: jest.fn(async (items) => items),
     persistUris: jest.fn(async (uris) => uris),
     restoreDraft: mockRestoreRouteDraftMedia,
+    waitForMedia: async (items) => items,
   }),
 }));
 
@@ -178,14 +183,35 @@ describe('streamlined route builder', () => {
   });
 
   it('restores durable local media to the matching stable stop ID', () => {
+    const transform = {
+      version: 1,
+      crop: { originX: 120, originY: 40, width: 1600, height: 1200 },
+      maxLongEdge: 2048,
+      compress: 0.85,
+    };
     const merged = mergeRestoredRouteMedia(currentDraft(), [{
-      dayId: 'day_001', stopId: 'b', uri: 'file:///restored.jpg', mediaId: 'media-1',
+      dayId: 'day_001', stopId: 'b', uri: 'file:///restored.jpg',
+      sourceUri: 'file:///durable/restored.jpg', previewUri: 'file:///restored.jpg',
+      sourceId: 'asset:photo-1', assetId: 'photo-1', width: 4000, height: 3000,
+      mediaId: 'media-1', localReference: { platform: 'native', key: 'durable-1' },
+      persistence: 'ready', transform,
     }]);
     expect(merged.days[0].stops[0].pendingMedia).toBeUndefined();
     expect(merged.days[0].stops[1]).toEqual(expect.objectContaining({
       image: 'file:///restored.jpg',
-      pendingMedia: [expect.objectContaining({ uri: 'file:///restored.jpg', mediaId: 'media-1' })],
+      pendingMedia: [expect.objectContaining({
+        uri: 'file:///restored.jpg', sourceUri: 'file:///durable/restored.jpg',
+        sourceId: 'asset:photo-1', assetId: 'photo-1', width: 4000, height: 3000,
+        mediaId: 'media-1', transform,
+      })],
     }));
+    const extracted = extractRoutePublishMedia(merged.days);
+    expect(extracted.media).toEqual([
+      expect.objectContaining({
+        sourceId: 'asset:photo-1', sourceUri: 'file:///durable/restored.jpg', transform,
+        slot: expect.objectContaining({ type: 'route-stop', draftId: 'b' }),
+      }),
+    ]);
   });
 
   it('keeps the publication action above the iPhone home indicator', () => {

@@ -130,19 +130,19 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
     removeUploadedImage: mockRemoveUploadedImage,
   })
 }));
-jest.mock('../src/hooks/useReviewedImagePicker', () => ({
-  __esModule: true,
-  default: () => ({
-    pickImagesForReview: async ({ onComplete }) => {
-      const uris = await mockPickImages();
-      await onComplete?.(uris);
-    },
-    uploadImageAssets: mockUploadImages,
-    reviewUris: [],
-    cancelReview: jest.fn(),
-    completeReview: jest.fn(),
-  }),
-}));
+jest.mock('../src/components/TravelMediaComposer', () => {
+  const React = require('react');
+  return function MockTravelMediaComposer({ visible, value = [], onChange }) {
+    React.useEffect(() => {
+      if (!visible) return;
+      mockPickImages().then((uris) => onChange?.([
+        ...value,
+        ...uris.map((uri) => ({ uri, previewUri: uri, sourceId: uri, type: 'local' })),
+      ]));
+    }, [visible]);
+    return null;
+  };
+});
 jest.mock('../src/hooks/useDurableDraftMedia', () => ({
   __esModule: true,
   default: () => ({
@@ -165,10 +165,14 @@ jest.mock('../src/hooks/useRecommendationDraftMedia', () => ({
     bindDraft: mockBindRecommendationDraftMedia,
     clearDraft: mockClearRecommendationDraftMedia,
     clearStaleDraft: mockClearStaleRecommendationDraftMedia,
+    forgetMedia: mockForgetRecommendationDraftMedia,
     forgetUri: mockForgetRecommendationDraftMedia,
+    mediaForItem: (item) => item,
     mediaForUri: (uri) => ({ uri }),
+    persistMedia: mockPersistRecommendationDraftMedia,
     persistUris: mockPersistRecommendationDraftMedia,
     restoreDraft: mockRestoreRecommendationDraftMedia,
+    waitForMedia: async (items) => items,
   }),
 }));
 
@@ -636,6 +640,24 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockRememberRecentDestination).not.toHaveBeenCalled();
   }, 15000);
 
+  it('advances exactly once when an exact recommendation place is approved', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+    await waitForCatalogEditor(screen);
+    fireEvent.changeText(screen.getByTestId('recommendation-exact-location-search'), 'Tel Aviv');
+    fireEvent.press(screen.getByTestId('google-result-select'));
+    const confirm = await screen.findByTestId('exact-location-confirm');
+    fireEvent.press(confirm);
+    fireEvent.press(confirm);
+    await waitFor(() => expect(screen.getByText('שלב 2 מתוך 4')).toBeTruthy());
+    expect(screen.queryByTestId('recommendation-title-input')).toBeNull();
+  });
+
   it('creates a recommendation for a general destination without guessing its classification', async () => {
     const navigationMock = {
       goBack: jest.fn(),
@@ -644,7 +666,7 @@ describe('AddRecommendationScreen Integration Test', () => {
       dispatch: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
     };
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
 
@@ -652,6 +674,8 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     fireEvent.press(getByTestId('recommendation-location-mode-destination'));
     fireEvent.press(getByTestId('recommendation-test-select-destination'));
+    expect(getByTestId('recommendation-destination-selected')).toBeTruthy();
+    expect(getByText('שלב 1 מתוך 4')).toBeTruthy();
     fireEvent.press(getByTestId('recommendation-next'));
 
     fireEvent.press(getByTestId('recommendation-category-nature'));

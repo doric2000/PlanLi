@@ -5,7 +5,6 @@ import { Modal } from 'react-native';
 import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal';
 
 const mockGetPersonalizedRecommendations = jest.fn();
-const mockSetImage = jest.fn();
 const mockPickImagesForReview = jest.fn();
 
 jest.mock('@expo/vector-icons', () => {
@@ -43,20 +42,21 @@ jest.mock('../src/features/community/components/ManualMapPinPicker', () => {
   const { View } = require('react-native');
   return () => <View testID="manual-pin-picker" />;
 });
-jest.mock('../src/hooks/useReviewedImagePicker', () => ({
-  __esModule: true,
-  default: () => ({
-    imageUri: null,
-    setImageUri: mockSetImage,
-    pickOneForReview: jest.fn(),
-    pickImagesForReview: (...args) => mockPickImagesForReview(...args),
-    clearImage: jest.fn(),
-    cancelReview: jest.fn(),
-    completeReview: jest.fn(),
-    reviewUris: [],
-    uploading: false,
-  }),
-}));
+jest.mock('../src/components/TravelMediaComposer', () => {
+  const React = require('react');
+  return function MockTravelMediaComposer({ visible, value = [], onChange }) {
+    React.useEffect(() => {
+      if (!visible) return;
+      mockPickImagesForReview({
+        onComplete: (uris) => onChange?.([
+          ...value,
+          ...uris.map((uri) => ({ uri, previewUri: uri, sourceId: uri, type: 'local' })),
+        ]),
+      });
+    }, [visible]);
+    return null;
+  };
+});
 
 describe('StopEditorModal', () => {
   beforeEach(() => {
@@ -199,7 +199,9 @@ describe('StopEditorModal', () => {
     fireEvent.press(screen.getByText('שמירה'));
     const saved = onSave.mock.calls[0][0];
     expect(onPersistImages).toHaveBeenCalledWith([
-      'file:///one.jpg', 'file:///two.jpg', 'file:///three.jpg',
+      expect.objectContaining({ uri: 'file:///one.jpg' }),
+      expect.objectContaining({ uri: 'file:///two.jpg' }),
+      expect.objectContaining({ uri: 'file:///three.jpg' }),
     ]);
     expect(saved.media).toBeNull();
     expect(saved.additionalMedia).toEqual([]);
@@ -234,6 +236,33 @@ describe('StopEditorModal', () => {
     expect(onSave.mock.calls[0][0].pendingMedia.map((entry) => entry.uri)).toEqual([
       'file:///one.jpg', 'file:///two.jpg',
     ]);
+  });
+
+  it('does not block stop saving while untouched source persistence continues', async () => {
+    mockPickImagesForReview.mockImplementationOnce(({ onComplete }) => onComplete(['file:///one.jpg']));
+    const onSave = jest.fn();
+    const onPersistImages = jest.fn(() => new Promise(() => {}));
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        onSave={onSave}
+        onClose={jest.fn()}
+        onPersistImages={onPersistImages}
+        mediaForImage={(item) => item}
+      />
+    );
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'השוק');
+    fireEvent.press(screen.getByTestId('route-stop-mode-general'));
+    fireEvent.press(screen.getByTestId('route-stop-select-destination'));
+    fireEvent.press(screen.getByTestId('route-stop-photos'));
+    await waitFor(() => expect(screen.getByText('1/3')).toBeTruthy());
+    fireEvent.press(screen.getByText('שמירה'));
+    expect(onPersistImages).toHaveBeenCalled();
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      pendingMedia: [expect.objectContaining({ uri: 'file:///one.jpg' })],
+    }), 0);
   });
 
   it('removes stale precise data when an existing stop is changed to a general area', () => {

@@ -30,3 +30,19 @@ test('exact-location confirmation exposes prepared English copy when requested',
   expect(screen.getByText('Confirm location')).toBeTruthy();
   expect(screen.getByText('Choose another result')).toBeTruthy();
 });
+
+test('exact-location confirmation renders copy and controls before place resolution or map readiness', () => {
+  const screen = render(
+    <ExactLocationConfirmation
+      resolving
+      resolvingPreview={{ description: 'Café Central, Vienna' }}
+      onConfirm={jest.fn()}
+      onChooseAnother={jest.fn()}
+    />
+  );
+  expect(screen.getByText('Café Central, Vienna')).toBeTruthy();
+  expect(screen.getByTestId('exact-location-resolving-shell')).toBeTruthy();
+  expect(screen.getByTestId('exact-location-confirm').props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByTestId('exact-location-map-skeleton')).toBeTruthy();
+  expect(screen.queryByTestId('mock-location-map')).toBeNull();
+});

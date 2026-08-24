@@ -27,6 +27,10 @@ import {
 import { applyRoutePublishMedia } from '../../roadtrip/utils/routeMedia';
 import { rememberDiscoveryDestinations } from '../../../utils/recentDiscoveryDestinations';
 import {
+  deletePreparedTravelMedia,
+  prepareTravelMediaSource,
+} from '../../../utils/travelMediaPreparation';
+import {
   deleteRecommendationPublishJobMedia,
   deleteRecommendationPublishMedia,
   loadRecommendationPublishJobs,
@@ -71,7 +75,7 @@ export function normalizedPublishError(error) {
     ...(typeof rawDetails.reason === 'string' ? { reason: rawDetails.reason.slice(0, 80) } : {}),
     ...(typeof rawDetails.incidentId === 'string' ? { incidentId: rawDetails.incidentId.slice(0, 64) } : {}),
     ...(typeof rawDetails.retryable === 'boolean' ? { retryable: rawDetails.retryable } : {}),
-    ...(['uploading', 'processing', 'saving'].includes(rawDetails.publishStage)
+    ...(['preparing', 'uploading', 'processing', 'saving'].includes(rawDetails.publishStage)
       ? { publishStage: rawDetails.publishStage }
       : {}),
   };
@@ -123,11 +127,18 @@ export function recommendationPublishProgress(job) {
   if (job.stage === 'saving') return Math.max(0.88, Number(job.progress || 0));
   const media = Array.isArray(job.media) ? job.media : [];
   if (!media.length) return job.status === 'queued' ? 0 : 0.88;
+  if (job.stage === 'preparing') {
+    const preparationProgress = media.reduce(
+      (sum, entry) => sum + (entry.type === 'remote' ? 1 : Math.max(0, Math.min(1, Number(entry.preparationProgress || 0)))),
+      0
+    ) / media.length;
+    return Math.min(0.18, preparationProgress * 0.18);
+  }
   const mediaProgress = media.reduce(
     (sum, entry) => sum + Math.max(0, Math.min(1, Number(entry.progress || 0))),
     0
   ) / media.length;
-  return Math.min(0.86, mediaProgress * 0.86);
+  return Math.min(0.86, Math.max(0.18, mediaProgress * 0.86));
 }
 
 function remotePreview(asset) {
@@ -140,9 +151,9 @@ export function upgradeRestoredPublishJob(job) {
   const sourceVersion = Number(payloadContent?.taxonomyVersion || 0);
   const base = {
     ...job,
-    version: Number(job?.version || 1) < 2 ? 2 : job.version,
+    version: Number(job?.version || 1) < 3 ? 3 : job.version,
     contentType,
-    ...(['uploading', 'saving'].includes(job?.status)
+    ...(['preparing', 'uploading', 'saving'].includes(job?.status)
       ? { status: 'queued', stage: 'queued', retryAt: 0 }
       : {}),
   };
@@ -322,6 +333,8 @@ export function ContentPublishProvider({ children }) {
           localReference: item.localReference,
           slot: item.slot || null,
           preparedAsset: item.preparedAsset || null,
+          transform: item.transform || null,
+          preparationProgress: item.preparedAsset ? 1 : 0,
           progress: item.preparedAsset ? 1 : 0,
         };
       }
@@ -339,6 +352,8 @@ export function ContentPublishProvider({ children }) {
         localReference,
         slot: item.slot || null,
         preparedAsset: null,
+        transform: item?.transform || null,
+        preparationProgress: 0,
         progress: 0,
       };
     }));
@@ -351,7 +366,7 @@ export function ContentPublishProvider({ children }) {
 
     const now = Date.now();
     const nextJob = {
-      version: 2,
+      version: 3,
       id: jobId,
       publishRequestId,
       contentType,
@@ -476,58 +491,108 @@ export function ContentPublishProvider({ children }) {
     }, { persist: false });
   }, [updateJob]);
 
+  const setMediaPreparationProgress = useCallback((jobId, mediaId, ratio) => {
+    updateJob(jobId, (job) => {
+      const media = (job.media || []).map((entry) => entry.id === mediaId
+        ? { ...entry, preparationProgress: Math.max(entry.preparationProgress || 0, ratio) }
+        : entry);
+      const next = { ...job, media };
+      return { ...next, progress: recommendationPublishProgress(next) };
+    }, { persist: false });
+  }, [updateJob]);
+
   const preparePendingMedia = useCallback(async (jobId) => {
     const initial = jobsRef.current.find((entry) => entry.id === jobId);
     const pendingIds = (initial?.media || [])
       .filter((entry) => entry.type === 'local' && !entry.preparedAsset)
       .map((entry) => entry.id);
+    const preparedSources = [];
     let cursor = 0;
-    const worker = async () => {
+    const prepareWorker = async () => {
       while (cursor < pendingIds.length) {
         const mediaId = pendingIds[cursor];
         cursor += 1;
         const currentJob = jobsRef.current.find((entry) => entry.id === jobId);
         const mediaEntry = currentJob?.media?.find((entry) => entry.id === mediaId);
         if (!mediaEntry || mediaEntry.preparedAsset) continue;
+        setMediaPreparationProgress(jobId, mediaId, 0.1);
         const materialized = await materializeRecommendationPublishMedia(mediaEntry.localReference);
         try {
-          const mediaStartedAt = Date.now();
-          const uploader = uploadersRef.current[currentJob.contentType || 'recommendation'];
-          if (typeof uploader !== 'function') throw new Error('Media publishing is unavailable.');
-          const preparedAsset = await uploader(materialized.uri, {
-            onProgress: (ratio) => setMediaProgress(jobId, mediaId, ratio),
-          });
-          console.info('content_publish_stage_timing', {
-            contentType: currentJob.contentType || 'recommendation',
-            stage: 'media_pipeline',
-            durationMs: Date.now() - mediaStartedAt,
-          });
-          await updateJob(jobId, (job) => {
-            const media = (job.media || []).map((entry) => entry.id === mediaId
-              ? { ...entry, preparedAsset, progress: 1 }
-              : entry);
-            const next = { ...job, media, updatedAt: Date.now() };
-            return { ...next, progress: recommendationPublishProgress(next) };
-          });
-        } finally {
+          const prepared = await prepareTravelMediaSource(materialized.uri, mediaEntry.transform);
+          preparedSources.push({ mediaId, prepared, materialized });
+          setMediaPreparationProgress(jobId, mediaId, 1);
+        } catch (error) {
           materialized.revoke();
+          throw error;
         }
       }
     };
-    const outcomes = await Promise.allSettled(
-      Array.from({ length: Math.min(2, pendingIds.length) }, worker)
+    const preparationOutcomes = await Promise.allSettled(
+      Array.from({ length: Math.min(2, pendingIds.length) }, prepareWorker)
     );
-    const failed = outcomes.find((outcome) => outcome.status === 'rejected');
-    if (failed) throw failed.reason;
-  }, [setMediaProgress, updateJob]);
+    const preparationFailure = preparationOutcomes.find((outcome) => outcome.status === 'rejected');
+    if (preparationFailure) {
+      await Promise.allSettled(preparedSources.map(({ prepared, materialized }) => Promise.all([
+        deletePreparedTravelMedia(prepared),
+        Promise.resolve().then(() => materialized.revoke()),
+      ])));
+      throw preparationFailure.reason;
+    }
+
+    await updateJob(jobId, (job) => ({
+      ...job,
+      status: 'uploading',
+      stage: 'uploading',
+      updatedAt: Date.now(),
+    }));
+    cursor = 0;
+    const uploadWorker = async () => {
+      while (cursor < preparedSources.length) {
+        const source = preparedSources[cursor++];
+        const currentJob = jobsRef.current.find((entry) => entry.id === jobId);
+        const mediaEntry = currentJob?.media?.find((entry) => entry.id === source.mediaId);
+        if (!mediaEntry || mediaEntry.preparedAsset) continue;
+        const mediaStartedAt = Date.now();
+        const uploader = uploadersRef.current[currentJob.contentType || 'recommendation'];
+        if (typeof uploader !== 'function') throw new Error('Media publishing is unavailable.');
+        const preparedAsset = await uploader(source.prepared.uri, {
+          onProgress: (ratio) => setMediaProgress(jobId, source.mediaId, ratio),
+        });
+        console.info('content_publish_stage_timing', {
+          contentType: currentJob.contentType || 'recommendation',
+          stage: 'media_pipeline',
+          durationMs: Date.now() - mediaStartedAt,
+        });
+        await updateJob(jobId, (job) => {
+          const media = (job.media || []).map((entry) => entry.id === source.mediaId
+            ? { ...entry, preparedAsset, preparationProgress: 1, progress: 1 }
+            : entry);
+          const next = { ...job, media, updatedAt: Date.now() };
+          return { ...next, progress: recommendationPublishProgress(next) };
+        });
+      }
+    };
+    try {
+      const uploadOutcomes = await Promise.allSettled(
+        Array.from({ length: Math.min(2, preparedSources.length) }, uploadWorker)
+      );
+      const uploadFailure = uploadOutcomes.find((outcome) => outcome.status === 'rejected');
+      if (uploadFailure) throw uploadFailure.reason;
+    } finally {
+      await Promise.allSettled(preparedSources.map(async ({ prepared, materialized }) => {
+        await deletePreparedTravelMedia(prepared);
+        materialized.revoke();
+      }));
+    }
+  }, [setMediaPreparationProgress, setMediaProgress, updateJob]);
 
   const processJob = useCallback(async (jobId) => {
     const startedAt = Date.now();
     try {
       await updateJob(jobId, (job) => ({
         ...job,
-        status: 'uploading',
-        stage: 'uploading',
+        status: 'preparing',
+        stage: 'preparing',
         error: null,
         retryAt: 0,
         updatedAt: startedAt,
@@ -725,7 +790,7 @@ export function ContentPublishProvider({ children }) {
       const current = jobsRef.current.find((entry) => entry.id === jobId);
       if (!current) return;
       const attempts = Number(current.attempts || 0) + 1;
-      const failedStage = ['uploading', 'processing', 'saving'].includes(error?.details?.publishStage)
+      const failedStage = ['preparing', 'uploading', 'processing', 'saving'].includes(error?.details?.publishStage)
         ? error.details.publishStage
         : current.stage;
       const retryPolicy = publishRetryPolicy(error, attempts);
@@ -803,7 +868,7 @@ export function ContentPublishProvider({ children }) {
     [jobs, user?.uid]
   );
   const activeJob = useMemo(() => {
-    const priority = ['uploading', 'saving', 'failed', 'queued', 'success'];
+    const priority = ['preparing', 'uploading', 'saving', 'failed', 'queued', 'success'];
     for (const status of priority) {
       const match = visibleJobs.find((job) => job.status === status);
       if (match) return { ...match, progress: recommendationPublishProgress(match) };

@@ -87,8 +87,14 @@ export function applyRoutePublishMedia(route, mediaEntries, { preview = false } 
         [target.media, ...(target.additionalMedia || [])].filter(Boolean).length);
       pending[pendingIndex] = {
         uri: entry.uri,
+        ...(entry.sourceUri ? { sourceUri: entry.sourceUri } : {}),
+        ...(entry.sourceId ? { sourceId: entry.sourceId } : {}),
+        ...(entry.assetId ? { assetId: entry.assetId } : {}),
+        ...(entry.width ? { width: entry.width } : {}),
+        ...(entry.height ? { height: entry.height } : {}),
         ...(entry.mediaId ? { mediaId: entry.mediaId } : {}),
         ...(entry.localReference ? { localReference: entry.localReference } : {}),
+        ...(entry.transform ? { transform: entry.transform } : {}),
       };
       target.pendingMedia = pending.filter(Boolean).slice(0, 3);
       target.image = target.pendingMedia[0]?.uri || target.image;

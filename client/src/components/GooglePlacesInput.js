@@ -47,10 +47,13 @@ export default function GooglePlacesInput({
   rightAccessory,
   listContainerStyle,
   explicitSearch = false,
+  variant = 'default',
+  error = false,
   returnSelection = false,
   locale = 'he',
 }) {
   const copy = locationCopy(locale);
+  const formVariant = variant === 'form';
   const isGoogleMode = mode === 'google';
   const isControlled = typeof value === 'string' && typeof onChangeValue === 'function';
 
@@ -419,6 +422,9 @@ export default function GooglePlacesInput({
           common.homeSearchBar,
           googlePlacesInput.inputWrapper,
           explicitSearch && googlePlacesInput.explicitInputWrapper,
+          formVariant && googlePlacesInput.formInputWrapper,
+          formVariant && inputFocused && googlePlacesInput.formInputWrapperFocused,
+          formVariant && (error || searchError) && googlePlacesInput.formInputWrapperError,
           inputWrapperStyle,
         ]}
       >
@@ -454,6 +460,7 @@ export default function GooglePlacesInput({
             common.homeSearchInput,
             googlePlacesInput.input,
             explicitSearch && googlePlacesInput.explicitInput,
+            formVariant && googlePlacesInput.formInput,
             inputStyle,
           ]}
           placeholder={clearPlaceholderOnFocus && inputFocused ? '' : placeholder}
@@ -502,6 +509,7 @@ export default function GooglePlacesInput({
             style={[
               googlePlacesInput.listContainer,
               explicitSearch && googlePlacesInput.explicitListContainer,
+              formVariant && googlePlacesInput.formListContainer,
               listContainerStyle,
             ]}
           >

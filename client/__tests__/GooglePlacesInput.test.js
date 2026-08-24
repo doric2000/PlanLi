@@ -257,6 +257,30 @@ describe('GooglePlacesInput recent destinations', () => {
       textAlign: 'right',
     });
   });
+
+  it('frames the explicit form search and exposes focus/error borders without changing Home', () => {
+    const screen = render(
+      <ControlledInput
+        explicitSearch
+        variant="form"
+        error
+        inputWrapperTestID="form-location-search"
+        googleSearchFn={jest.fn()}
+      />
+    );
+    expect(StyleSheet.flatten(screen.getByTestId('form-location-search').props.style)).toMatchObject({
+      height: 52,
+      backgroundColor: '#FFFFFF',
+      borderWidth: 1,
+      borderColor: '#EF4444',
+      borderRadius: 12,
+    });
+    fireEvent(screen.getByTestId('places-input'), 'focus');
+    const focused = StyleSheet.flatten(screen.getByTestId('form-location-search').props.style);
+    expect(focused.borderWidth).toBe(2);
+    // Error remains the strongest visual state while the field is focused.
+    expect(focused.borderColor).toBe('#EF4444');
+  });
 });
 
 describe('PageHeader overflow', () => {
