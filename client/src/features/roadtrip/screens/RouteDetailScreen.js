@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, ScrollView, Share, StatusBar, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StatusBar, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
@@ -10,6 +10,7 @@ import LikesModal from '../../../components/LikesModal';
 import MetadataLine from '../../../components/MetadataLine';
 import { RecommendationActionBar } from '../../../components/RecommendationActionBar';
 import { RecommendationHero } from '../../../components/RecommendationHero';
+import RtlHorizontalScrollView from '../../../components/RtlHorizontalScrollView';
 import UsefulFactItem from '../../../components/UsefulFactItem';
 import { auth } from '../../../config/firebase';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
@@ -281,16 +282,15 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
             {days.length > 1 ? (
               <View style={styles.dayTabsSection}>
                 <AppText style={styles.dayTabsTitle}>בחירת יום</AppText>
-                <FlatList
-                  horizontal
-                  data={days}
-                  keyExtractor={(day, index) => day?.id || `route-day-tab-${index}`}
-                  showsHorizontalScrollIndicator={false}
+                <RtlHorizontalScrollView
                   contentContainerStyle={styles.dayTabsContent}
-                  renderItem={({ index }) => {
+                  testID="route-day-tabs"
+                >
+                  {days.map((day, index) => {
                     const selected = index === activeDayIndex;
                     return (
                       <Pressable
+                        key={day?.id || `route-day-tab-${index}`}
                         style={[styles.dayTab, selected && styles.dayTabSelected]}
                         onPress={() => setActiveDayIndex(index)}
                         accessibilityRole="tab"
@@ -300,8 +300,8 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
                         <AppText style={[styles.dayTabText, selected && styles.dayTabTextSelected]}>יום {index + 1}</AppText>
                       </Pressable>
                     );
-                  }}
-                />
+                  })}
+                </RtlHorizontalScrollView>
               </View>
             ) : null}
 
