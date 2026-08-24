@@ -11,33 +11,20 @@ not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
 2026-08-22. The production profile uses the `production` EAS Update channel and
-runtime `1.1.0`. Recommendation destination-search production update group
-`76ce4534-be84-4686-a364-d7d79b846c94` was published for iOS
-(`01a030c9-dc16-74d6-86f1-30a0c05d9684`) and Android
-(`01a030c9-dc16-7e3e-b807-e554b1ddb5f2`) at `2026-08-23T22:42:10.582Z` from
-PR `#187` merge commit `1d4b87f`. Delivery and application on the physical
+runtime `1.1.0`. Noya onboarding V2 production update group
+`c049b41d-15b7-473c-aada-afad791682a5` was published for iOS
+(`01a03171-6532-735f-a964-5385ba067724`) and Android
+(`01a03171-6532-732a-99b0-f01ddc5dd64d`) at `2026-08-24T01:45:10.194Z` from
+PR `#189` merge commit `0ed8e88`. Delivery and application on the physical
 iPhone remain unverified. App version and runtime remain `1.1.0`, TestFlight
 build remains `13`, and no native build or Apple submission was created. The
 immediately preceding production group is
-`916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9`. `saveRoute` and
-`publishRouteDraft` were last deployed from RoadTrip lifecycle commit `3ec0cb1` at
-approximately `2026-08-23T18:41:49Z`; active revisions are
-`saveroute-00039-ban` and `publishroutedraft-00004-tox`. Both remain Node.js 22
-v2 callables in `europe-west1`, their rollout startup probes passed, and no
-Function errors were present in the post-deploy log page. Preview EAS Update
-group `58425c2b-993a-42fc-83b5-c244f5cdf7c9` was published from the same commit
-at `2026-08-23T18:53:26.326Z` for runtime `1.1.0`. No signed iOS preview-profile
-build exists, so application and physical-iPhone verification are unverified.
-The production channel now points to group
-`76ce4534-be84-4686-a364-d7d79b846c94`. Firestore Rules, indexes, Storage,
-Hosting, production documents, and migrations were unchanged. On
-`2026-08-23T21:53:05Z`, the four recommendation-draft callables were created in
-production and `cleanupExpiredRuntimeScheduled`, `requestAccountDeletion`, and
-`deleteUserAsAdmin` were updated from source commit `546d2d5`. All seven are
-ACTIVE Node.js 22 v2 Functions in `europe-west1`; the post-deploy error query
-returned no matching errors. Their source generations and hashes were recorded
-by Firebase CLI, but exact Cloud Run revision names were unavailable from the
-current tooling. The Firebase project now has 96 active Functions.
+`76ce4534-be84-4686-a364-d7d79b846c94`. Twenty-eight affected Functions and the
+active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
+`2026-08-24T01:34Z`. The Functions inventory still reports 96 active Node.js 22
+v2 Functions in `europe-west1`, and the post-deploy error query returned no
+matching entries. Firestore Rules, indexes, Hosting, production documents,
+migrations, and the rollback Storage bucket were unchanged.
 
 ## Run the client
 
@@ -225,28 +212,34 @@ Current release record:
   `2026-08-23T18:53:26.326Z` with the `production` EAS environment. There is no
   signed iOS preview-profile build, so download, application, and physical-device
   behavior remain unverified.
-- Production EAS Update: group `76ce4534-be84-4686-a364-d7d79b846c94`, runtime
-  `1.1.0`, iOS update `01a030c9-dc16-74d6-86f1-30a0c05d9684`, Android update
-  `01a030c9-dc16-7e3e-b807-e554b1ddb5f2`, published from PR `#187` merge commit
-  `1d4b87f` at `2026-08-23T22:42:10.582Z` with the `production` EAS
-  environment and a clean working tree. Roll back by republishing the
-  immediately preceding production group
-  `916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9` to `production`.
+- Production EAS Update: group `c049b41d-15b7-473c-aada-afad791682a5`, runtime
+  `1.1.0`, iOS update `01a03171-6532-735f-a964-5385ba067724`, Android update
+  `01a03171-6532-732a-99b0-f01ddc5dd64d`, published from PR `#189` merge commit
+  `0ed8e88` at `2026-08-24T01:45:10.194Z` with the `production` EAS
+  environment. The tracked release source matched the merge commit; EAS marked
+  the workspace dirty because unrelated pre-existing untracked campaign and
+  rendering-script files remained in the workspace. Roll back by republishing
+  the immediately preceding production group
+  `76ce4534-be84-4686-a364-d7d79b846c94` to `production`. Download and
+  application on the physical TestFlight iPhone remain unverified.
 - Firebase release: 96 active Node.js 22 v2 Functions in `europe-west1`.
+  The 28 affected Functions deployed from `0ed8e88` at approximately
+  `2026-08-24T01:34Z` are `saveRecommendation`,
   `getCurrentRecommendationDraft`, `saveRecommendationDraft`,
-  `discardRecommendationDraft`, and `publishRecommendationDraft` were created,
-  while `cleanupExpiredRuntimeScheduled`, `requestAccountDeletion`, and
-  `deleteUserAsAdmin` were updated from source commit `546d2d5` at approximately
-  `2026-08-23T21:53:05Z`. All seven report ACTIVE; the post-deploy Function error
-  query returned no matching errors. Exact Cloud Run revision names remain
-  unverified because they were unavailable from the current tooling.
-  `saveRoute` and `publishRouteDraft` were deployed from `3ec0cb1` at
-  approximately `2026-08-23T18:41:49Z`. Active revisions are
-  `saveroute-00039-ban` and `publishroutedraft-00004-tox`; both report ACTIVE,
-  Node.js 22, v2, `europe-west1`, successful startup probes, and no errors in the
-  post-deploy log page. Firestore Rules, indexes, Storage Rules, Hosting,
-  production documents, and the other 89 Functions were not changed. The
-  remaining PR `#181` Function changes have not been deployed.
+  `discardRecommendationDraft`, `publishRecommendationDraft`,
+  `resolveRecommendationDestination`, `searchPlaces`, `resolvePlaceSelection`,
+  `saveRoute`, `getCurrentRouteDraft`, `saveRouteDraft`, `discardRouteDraft`,
+  `publishRouteDraft`, `saveTrip`, `setFavorite`, `setReaction`,
+  `getReactionState`, `saveComment`, `deleteComment`, `recordDiscoverySignal`,
+  `deleteContent`, `submitReport`, `setBlockedUser`, `prepareMedia`,
+  `updateProfile`, `getPersonalizedRecommendations`, `getPersonalizedRoutes`,
+  and `onPublicProfileSync`. All report v2, Node.js 22, and `europe-west1`; the
+  post-deploy Function error query returned no matching entries. The active
+  media target `planli-f0b12-media-eu` also received the compiled
+  `storage.rules`. Firestore Rules, indexes, Hosting, production documents,
+  migrations, the rollback Storage bucket, and the other 68 Functions were not
+  changed. Exact Cloud Run revision names remain unverified because they were
+  unavailable from the current tooling.
 - RoadTrip validation: 16 focused client suites passed 108 tests and seven
   focused Node.js 22 route/location Function suites passed 50 tests.
   Changed-scope validation and PR `#181` plan, affected-client,
