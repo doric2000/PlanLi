@@ -191,6 +191,29 @@ code. After verification, use the protected `deleteUserAsAdmin` action with a
 recorded reason; do not create a direct public deletion endpoint or client-write
 path.
 
+Account-deletion Hosting release record:
+
+- Source: commit `be649bfb84d06b4de1eec5fd1ee419e2e25e5734` on
+  `docs/google-play-account-deletion`.
+- Firebase project/site: `planli-f0b12` / `planli-f0b12`.
+- Preview: channel `account-deletion-20260825`, version
+  `2fe856a38d6a03e6`, released at `2026-08-24T22:43:04.812Z` and expiring at
+  `2026-08-25T22:42:52.177351646Z`; URL
+  `https://planli-f0b12--account-deletion-20260825-7zp3mzlh.web.app`.
+- Live: version `1dcffdd8324af2cb`, released at
+  `2026-08-24T22:46:57.053Z`; public URL
+  `https://planli-f0b12.web.app/account-deletion`.
+- Live verification completed at `2026-08-24T22:47:16.9579432Z`. The deletion
+  page returned `200` after its canonical trailing-slash redirect, served UTF-8
+  Hebrew RTL content, exposed the expected fixed email pathway, contained no
+  scripts, forms, frames or third-party resources, and returned the committed
+  route-specific CSP, cache, frame, MIME, referrer, resource and permissions
+  headers. `/privacy`, `/support` and `/admin` each returned `200`.
+- The release command targeted Hosting only. Functions, Firestore Rules and
+  indexes, Storage Rules and buckets, IAM, migrations, Android builds, Play
+  submissions and production data were unchanged. Google Play review approval
+  remains unverified until Google processes the Data Safety submission.
+
 Before App Store submission, publish the privacy URL, expose it inside the app,
 complete App Store Connect's data-practice answers, and retain in-app account
 deletion and social-credential revocation. The registration checkbox is a
