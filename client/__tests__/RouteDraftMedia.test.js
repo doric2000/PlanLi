@@ -97,4 +97,92 @@ describe('useRouteDraftMedia', () => {
     expect(mockDeleteMedia).not.toHaveBeenCalledWith(used.localReference);
     expect(AsyncStorage.removeItem).toHaveBeenCalled();
   });
+
+  it('keeps the same source as independent durable media in different stops', async () => {
+    const photo = {
+      sourceId: 'asset:shared-photo',
+      assetId: 'shared-photo',
+      uri: 'file:///shared-photo.jpg',
+      transform: {
+        version: 1,
+        crop: { originX: 100, originY: 0, width: 1800, height: 1350 },
+      },
+    };
+    const hook = renderHook(() => useRouteDraftMedia());
+    await act(async () => {
+      await hook.result.current.persistMedia([photo], { dayId: 'day_001', stopId: 'stop-a' });
+      await hook.result.current.persistMedia([photo], { dayId: 'day_001', stopId: 'stop-b' });
+      await hook.result.current.bindDraft('draft-shared');
+    });
+
+    const first = hook.result.current.mediaForItem(photo, { dayId: 'day_001', stopId: 'stop-a' });
+    const second = hook.result.current.mediaForItem(photo, { dayId: 'day_001', stopId: 'stop-b' });
+    expect(first.mediaId).not.toBe(second.mediaId);
+    expect(first.localReference).not.toEqual(second.localReference);
+    expect(JSON.parse(stored).entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stopId: 'stop-a', sourceId: 'asset:shared-photo' }),
+      expect.objectContaining({ stopId: 'stop-b', sourceId: 'asset:shared-photo' }),
+    ]));
+    let queued;
+    await act(async () => {
+      queued = await hook.result.current.waitForMedia([
+        {
+          ...photo,
+          slot: { type: 'route-stop', dayDraftId: 'day_001', draftId: 'stop-a' },
+        },
+        {
+          ...photo,
+          slot: { type: 'route-stop', dayDraftId: 'day_001', draftId: 'stop-b' },
+        },
+      ]);
+    });
+    expect(queued.map((item) => item.mediaId)).toEqual([first.mediaId, second.mediaId]);
+
+    await act(async () => {
+      await hook.result.current.forgetMedia(photo, { dayId: 'day_001', stopId: 'stop-a' });
+    });
+    expect(mockDeleteMedia).toHaveBeenCalledWith(first.localReference);
+    expect(mockDeleteMedia).not.toHaveBeenCalledWith(second.localReference);
+    expect(hook.result.current.mediaForItem(photo, {
+      dayId: 'day_001', stopId: 'stop-b',
+    })).toEqual(expect.objectContaining({ mediaId: second.mediaId }));
+    expect(JSON.parse(stored).entries).toEqual([
+      expect.objectContaining({ stopId: 'stop-b', mediaId: second.mediaId }),
+    ]);
+  });
+
+  it('preserves stop order metadata and deferred transforms in the upgraded manifest', async () => {
+    const transform = {
+      version: 1,
+      crop: { originX: 0, originY: 0, width: 1600, height: 1200 },
+      maxLongEdge: 1800,
+      compress: 0.94,
+      format: 'jpeg',
+    };
+    const hook = renderHook(() => useRouteDraftMedia());
+    await act(async () => {
+      await hook.result.current.persistMedia([{
+        sourceId: 'route-photo-1', uri: 'file:///raw-route.jpg', transform,
+      }], { dayId: 'day_001', stopId: 'stop-a' });
+      await hook.result.current.bindDraft('draft-2');
+    });
+    expect(JSON.parse(stored)).toEqual(expect.objectContaining({
+      version: 2,
+      entries: [expect.objectContaining({
+        dayId: 'day_001', stopId: 'stop-a', sourceId: 'route-photo-1', transform,
+      })],
+    }));
+    hook.unmount();
+
+    const restoredHook = renderHook(() => useRouteDraftMedia());
+    let restored;
+    await act(async () => {
+      restored = await restoredHook.result.current.restoreDraft('draft-2', 1);
+    });
+    expect(restored.entries).toEqual([
+      expect.objectContaining({
+        dayId: 'day_001', stopId: 'stop-a', sourceId: 'route-photo-1', transform,
+      }),
+    ]);
+  });
 });

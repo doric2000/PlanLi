@@ -5,14 +5,14 @@ import { Ionicons } from '@expo/vector-icons';
 import AppText from '../../../components/AppText';
 import ExactLocationPicker from '../../../components/ExactLocationPicker';
 import { FormInput } from '../../../components/FormInput';
-import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
+import TravelMediaComposer from '../../../components/TravelMediaComposer';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
 import { ROUTE_IMAGE_LONG_EDGE, TRAVEL_IMAGE_COMPRESSION } from '../../../constants/travelMedia';
-import useReviewedImagePicker from '../../../hooks/useReviewedImagePicker';
 import { getPersonalizedRecommendations } from '../../../services/PersonalizationService';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
+import { createTravelMediaDescriptor, travelMediaUri } from '../../../utils/travelMedia';
 import { recommendationComposerStyles as composer, stopEditorModalStyles as styles } from '../../../styles';
 import ManualMapPinPicker from '../../community/components/ManualMapPinPicker';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
@@ -81,13 +81,18 @@ function recommendationIdFor(value) {
 function photoItemsForStop(stop) {
   const assets = getStopMediaAssets(stop);
   const canonical = assets
-    .map((asset) => ({ asset, uri: getMediaVariantUrl(asset, 'feed') }))
-    .filter((item) => item.uri);
+    .map((asset) => createTravelMediaDescriptor({
+      asset,
+      id: asset.assetId,
+      sourceId: asset.assetId,
+      uri: getMediaVariantUrl(asset, 'feed'),
+    }))
+    .filter((item) => item?.uri);
   const pending = (Array.isArray(stop?.pendingMedia) ? stop.pendingMedia : [])
     .filter((item) => item?.uri)
-    .map((item) => ({ ...item, asset: null }));
+    .map((item) => createTravelMediaDescriptor({ ...item, asset: null }));
   if (canonical.length || pending.length) return [...canonical, ...pending].slice(0, 3);
-  return stop?.image ? [{ asset: null, uri: stop.image }] : [];
+  return stop?.image ? [createTravelMediaDescriptor({ asset: null, uri: stop.image })] : [];
 }
 
 function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
@@ -117,24 +122,14 @@ export default function StopEditorModal({
   const [recommendationsError, setRecommendationsError] = useState('');
   const [selectedRecommendation, setSelectedRecommendation] = useState(null);
   const [photoItems, setPhotoItems] = useState([]);
-  const [photosBusy, setPhotosBusy] = useState(false);
+  const [mediaComposerVisible, setMediaComposerVisible] = useState(false);
   const [stopBaseline, setStopBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
   const pendingDiscardRef = useRef(null);
-  const {
-    pickImagesForReview,
-    cancelReview,
-    completeReview,
-    reviewUris,
-  } = useReviewedImagePicker({
-    kind: 'route', quality: 1, maxLongEdge: ROUTE_IMAGE_LONG_EDGE,
-    normalizeCompress: TRAVEL_IMAGE_COMPRESSION, processOnSelect: false,
-  });
-
   useEffect(() => {
     if (!visible) {
       setStopBaseline(null);
-      setPhotosBusy(false);
+      setMediaComposerVisible(false);
       setUnsavedModalVisible(false);
       pendingDiscardRef.current = null;
       return;
@@ -182,7 +177,7 @@ export default function StopEditorModal({
     photos: photoItems.map((item) => item.asset?.assetId || item.uri),
   }), [description, destination, durationMinutes, exactValue, mode, photoItems, pin, selectedRecommendation, startTime, title]);
   const hasUnsavedChanges = stopBaseline != null && comparable !== stopBaseline;
-  const mediaBusy = photosBusy;
+  const mediaBusy = false;
   const dismissUnsavedModal = useCallback(() => {
     setUnsavedModalVisible(false); pendingDiscardRef.current = null;
   }, []);
@@ -207,43 +202,27 @@ export default function StopEditorModal({
   };
 
   const addPhotos = () => {
-    const remaining = 3 - photoItems.length;
-    if (remaining <= 0) {
-      Alert.alert('אפשר עד שלוש תמונות', 'כדי להוסיף תמונה אחרת, אפשר להסיר קודם אחת מהתמונות.');
-      return;
-    }
-    pickImagesForReview({
-      limit: remaining,
-      onComplete: async (uris) => {
-        setPhotosBusy(true);
-        try {
-          await onPersistImages?.(uris);
-          setPhotoItems((current) => {
-            const combined = [
-              ...current,
-              ...(uris || []).map((uri) => ({
-              uri,
-              asset: null,
-              ...(mediaForImage?.(uri) || {}),
-              })),
-            ].filter((item) => item.uri);
-            return combined.filter((item, index) => (
-              combined.findIndex((candidate) => candidate.uri === item.uri) === index
-            )).slice(0, 3);
-          });
-        } catch {
-          Alert.alert('לא הצלחנו להוסיף את התמונות', 'התמונות לא נשמרו. אפשר לנסות שוב.');
-        } finally {
-          setPhotosBusy(false);
-        }
-      },
+    setMediaComposerVisible(true);
+  };
+
+  const completeMediaSelection = (items) => {
+    const nextItems = (items || []).map((item) => {
+      let persisted = mediaForImage?.(item) || null;
+      if (persisted && !travelMediaUri(persisted)) persisted = mediaForImage?.(travelMediaUri(item)) || null;
+      const uri = travelMediaUri(persisted) || travelMediaUri(item);
+      return { ...item, ...(persisted || {}), uri, previewUri: item.previewUri || uri };
+    }).slice(0, 3);
+    setPhotoItems(nextItems);
+    setMediaComposerVisible(false);
+    Promise.resolve(onPersistImages?.(nextItems.filter((item) => !item.asset))).catch(() => {
+      Alert.alert('לא הצלחנו לשמור את התמונות', 'התמונות עדיין מוצגות. אפשר לנסות לבחור אותן מחדש לפני הפרסום.');
     });
   };
 
   const removePhoto = (index) => {
     setPhotoItems((current) => {
       const removed = current[index];
-      if (!removed?.asset) Promise.resolve(onForgetImage?.(removed?.uri)).catch(() => {});
+      if (!removed?.asset) Promise.resolve(onForgetImage?.(removed)).catch(() => {});
       return current.filter((_, itemIndex) => itemIndex !== index);
     });
   };
@@ -338,8 +317,14 @@ export default function StopEditorModal({
     const canonicalMedia = photoItems.map((item) => item.asset).filter(Boolean);
     const pendingMedia = photoItems.filter((item) => !item.asset && item.uri).map((item) => ({
       uri: item.uri,
+      ...(item.sourceUri ? { sourceUri: item.sourceUri } : {}),
+      ...(item.sourceId ? { sourceId: item.sourceId } : {}),
+      ...(item.assetId ? { assetId: item.assetId } : {}),
+      ...(item.width ? { width: item.width } : {}),
+      ...(item.height ? { height: item.height } : {}),
       ...(item.mediaId ? { mediaId: item.mediaId } : {}),
       ...(item.localReference ? { localReference: item.localReference } : {}),
+      ...(item.transform ? { transform: item.transform } : {}),
     }));
     const nextStop = {
       ...preservedStop, ...canonicalLocation,
@@ -408,9 +393,9 @@ export default function StopEditorModal({
           <FocusClearingFormInput label="תיאור העצירה (רשות)" placeholder="למשל: מה כדאי לעשות כאן וכמה זמן להקדיש" value={description} onChangeText={setDescription} multiline style={styles.descriptionInput} rtl />
           <FocusClearingFormInput label="שעת התחלה (רשות)" placeholder="למשל: 09:30" value={startTime} onChangeText={setStartTime} keyboardType="numbers-and-punctuation" maxLength={5} rtl testID="route-stop-start-time" />
           <FocusClearingFormInput label="משך ביקור בדקות (רשות)" placeholder="למשל: 90" value={durationMinutes} onChangeText={(value) => setDurationMinutes(value.replace(/\D/g, ''))} keyboardType="numeric" maxLength={4} rtl testID="route-stop-duration" />
-          {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map((item) => item.uri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText={mediaBusy ? 'שומר את התמונות...' : 'הוספת עד 3 תמונות'} previewAspectRatio={4 / 3} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
+          {allowImages ? <><AppText style={styles.photoLabel}>תמונות לעצירה (רשות)</AppText><ImagePickerBox imageUris={photoItems.map(travelMediaUri)} onPress={addPhotos} onRemove={removePhoto} maxImages={3} placeholderText="הוספת עד 3 תמונות" previewAspectRatio={4 / 3} style={styles.imagePickerSpacing} loading={mediaBusy} testID="route-stop-photos" /></> : null}
         </ScrollView>
-        <ImageCropReviewModal contained visible={reviewUris.length > 0} uris={reviewUris} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={cancelReview} onComplete={completeReview} />
+        <TravelMediaComposer contained visible={mediaComposerVisible} value={photoItems} maxItems={3} aspect={[4, 3]} maxLongEdge={ROUTE_IMAGE_LONG_EDGE} compress={TRAVEL_IMAGE_COMPRESSION} onCancel={() => setMediaComposerVisible(false)} onChange={completeMediaSelection} />
       </View>
     </Modal>
   );

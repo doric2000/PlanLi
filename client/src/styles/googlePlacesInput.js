@@ -21,6 +21,21 @@ export const googlePlacesInput = StyleSheet.create({
 	explicitInputWrapper: {
 		height: 48,
 	},
+	formInputWrapper: {
+		height: 52,
+		backgroundColor: colors.white,
+		borderWidth: 1,
+		borderColor: colors.border,
+		borderRadius: spacing.radiusMedium,
+		overflow: 'hidden',
+	},
+	formInputWrapperFocused: {
+		borderColor: colors.primary,
+		borderWidth: 2,
+	},
+	formInputWrapperError: {
+		borderColor: colors.error,
+	},
 	searchIcon: {
 		position: 'absolute',
 		right: spacing.lg,
@@ -38,6 +53,10 @@ export const googlePlacesInput = StyleSheet.create({
 	},
 	explicitInput: {
 		paddingRight: 92,
+	},
+	formInput: {
+		paddingLeft: spacing.lg,
+		paddingRight: 96,
 	},
 	explicitSearchButton: {
 		position: 'absolute',
@@ -86,6 +105,9 @@ export const googlePlacesInput = StyleSheet.create({
 	},
 	explicitListContainer: {
 		top: 48 + spacing.sm,
+	},
+	formListContainer: {
+		top: 52 + spacing.sm,
 	},
 	dropdownStatusRow: {
 		flexDirection: 'row-reverse',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 
 import AppText from './AppText';
 import ExactLocationMapPreview from './ExactLocationMapPreview';
@@ -12,6 +12,8 @@ export default function ExactLocationConfirmation({
   onChooseDestination,
   onConfirm,
   onChooseAnother,
+  resolving = false,
+  resolvingPreview = null,
   locale = 'he',
 }) {
   const copy = locationCopy(locale);
@@ -47,22 +49,29 @@ export default function ExactLocationConfirmation({
       </View>
     );
   }
-  if (!pendingLocation?.place) return null;
-  const destinationLabel = [pendingLocation.location, pendingLocation.country]
+  if (!pendingLocation?.place && !resolving) return null;
+  const previewPlace = pendingLocation?.place || null;
+  const resolvingLabel = resolvingPreview?.description || resolvingPreview?.name || '';
+  const destinationLabel = [pendingLocation?.location, pendingLocation?.country]
     .filter(Boolean)
     .join(' · ');
   return (
     <View style={styles.previewCard} testID="exact-location-preview">
-      <ExactLocationMapPreview place={pendingLocation.place} title={copy.mapPreview} />
       <View style={styles.previewCopy}>
         <AppText style={styles.previewTitle} numberOfLines={2}>
-          {pendingLocation.place.name || pendingLocation.place.address}
+          {previewPlace?.name || previewPlace?.address || resolvingLabel || copy.resolving}
         </AppText>
-        {!!pendingLocation.place.address && (
+        {!!previewPlace?.address && (
           <AppText style={styles.previewAddress} numberOfLines={2}>
-            {pendingLocation.place.address}
+            {previewPlace.address}
           </AppText>
         )}
+        {resolving ? (
+          <View style={styles.statusRow} testID="exact-location-resolving-shell">
+            <ActivityIndicator size="small" />
+            <AppText style={styles.statusText}>{copy.resolving}</AppText>
+          </View>
+        ) : null}
         {!!destinationLabel && (
           <AppText style={styles.previewDestination}>{destinationLabel}</AppText>
         )}
@@ -71,6 +80,8 @@ export default function ExactLocationConfirmation({
         <TouchableOpacity
           style={styles.confirmButton}
           onPress={onConfirm}
+          disabled={resolving || !previewPlace}
+          accessibilityState={{ disabled: resolving || !previewPlace }}
           accessibilityRole="button"
           accessibilityLabel={copy.confirmLocation}
           testID="exact-location-confirm"
@@ -87,6 +98,13 @@ export default function ExactLocationConfirmation({
           <AppText style={styles.chooseAnotherText}>{copy.chooseAnother}</AppText>
         </TouchableOpacity>
       </View>
+      {previewPlace ? (
+        <ExactLocationMapPreview place={previewPlace} title={copy.mapPreview} />
+      ) : (
+        <View style={[styles.previewMap, styles.mapSkeleton]} testID="exact-location-map-skeleton">
+          <ActivityIndicator />
+        </View>
+      )}
     </View>
   );
 }

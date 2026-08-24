@@ -94,8 +94,16 @@ export const mergeRestoredRouteMedia = (draft, entries = []) => {
     if (!byStopId.has(key)) byStopId.set(key, []);
     byStopId.get(key).push({
       uri: entry.uri,
+      ...(entry.sourceUri ? { sourceUri: entry.sourceUri } : {}),
+      ...(entry.previewUri ? { previewUri: entry.previewUri } : {}),
+      ...(entry.sourceId ? { sourceId: entry.sourceId } : {}),
+      ...(entry.assetId ? { assetId: entry.assetId } : {}),
+      ...(entry.width ? { width: entry.width } : {}),
+      ...(entry.height ? { height: entry.height } : {}),
       ...(entry.mediaId ? { mediaId: entry.mediaId } : {}),
       ...(entry.localReference ? { localReference: entry.localReference } : {}),
+      ...(entry.transform ? { transform: entry.transform } : {}),
+      ...(entry.persistence ? { persistence: entry.persistence } : {}),
     });
   });
   return {
@@ -240,9 +248,10 @@ export default function AddRoutesScreen({ navigation, route }) {
   const { enqueueCreate, loadJobForReview } = useContentPublish();
   const {
     draftJobId,
-    forgetUri: forgetDurableImage,
-    mediaForUri: durableMediaForUri,
-    persistUris: persistDurableImages,
+    forgetMedia: forgetDurableImage,
+    mediaForItem: durableMediaForItem,
+    persistMedia: persistDurableMedia,
+    waitForMedia: waitForDurableMedia,
     bindDraft: bindDraftMedia,
     clearDraft: clearDraftMedia,
     clearStaleDraft: clearStaleDraftMedia,
@@ -757,7 +766,10 @@ export default function AddRoutesScreen({ navigation, route }) {
     Alert.alert('הסרת עצירה', `להסיר את "${stop.title || 'העצירה'}" מהיום?`, [
       { text: 'ביטול', style: 'cancel' },
       { text: 'הסרה', style: 'destructive', onPress: () => {
-        (stop.pendingMedia || []).forEach((item) => Promise.resolve(forgetDurableImage(item?.uri)).catch(() => {}));
+        (stop.pendingMedia || []).forEach((item) => Promise.resolve(forgetDurableImage(item, {
+          dayId,
+          stopId,
+        })).catch(() => {}));
         setDays((current) => current.map((day) => day.id === dayId
           ? { ...day, stops: (day.stops || []).filter((item) => item.id !== stopId) }
           : day));
@@ -793,6 +805,7 @@ export default function AddRoutesScreen({ navigation, route }) {
       });
       if (typeof enqueueCreate !== 'function') throw new Error('Route publishing is unavailable.');
       const extracted = extractRoutePublishMedia(publishDraft.days);
+      const durableMedia = await waitForDurableMedia(extracted.media);
       const queuedRoute = {
         ...publishDraft,
         routeSchemaVersion: 2,
@@ -809,14 +822,14 @@ export default function AddRoutesScreen({ navigation, route }) {
           expectedVersion: version,
           ...(sourceRouteIdRef.current ? { sourceRouteId: sourceRouteIdRef.current } : {}),
         },
-        media: extracted.media,
+        media: durableMedia,
         draft: { route: publishDraft },
       });
       handedOff = true;
       try {
         await clearDraftMedia({
           deleteFiles: false,
-          keepUris: extracted.media.map((entry) => entry.uri),
+          keepItems: durableMedia,
         });
       } catch (error) {
         console.warn('route_publish_handoff_cleanup_failed', {
@@ -1034,12 +1047,18 @@ export default function AddRoutesScreen({ navigation, route }) {
         initialData={stopEditorIntent?.mode === 'edit' ? selectedStop : null}
         dayIndex={selectedDayIndex >= 0 ? selectedDayIndex : 0}
         stopIndex={editorStopIndex >= 0 ? editorStopIndex : 0}
-        onForgetImage={forgetDurableImage}
-        onPersistImages={(uris) => persistDurableImages(uris, {
+        onForgetImage={(item) => forgetDurableImage(item, {
           dayId: stopEditorIntent?.dayId,
           stopId: stopEditorIntent?.stopId,
         })}
-        mediaForImage={durableMediaForUri}
+        onPersistImages={(items) => persistDurableMedia(items, {
+          dayId: stopEditorIntent?.dayId,
+          stopId: stopEditorIntent?.stopId,
+        })}
+        mediaForImage={(item) => durableMediaForItem(item, {
+          dayId: stopEditorIntent?.dayId,
+          stopId: stopEditorIntent?.stopId,
+        })}
         routeDestination={area}
         allowImages
       />

@@ -8,9 +8,13 @@ import {
   materializeContentPublishMedia,
   persistContentPublishMedia,
 } from '../features/publishing/contentPublishStorage';
+import {
+  createTravelMediaDescriptor,
+  travelMediaIdentity,
+  travelMediaUri,
+} from '../utils/travelMedia';
 
 const STORAGE_KEY_PREFIX = '@planli/recommendation-draft-media-v1';
-
 const storageKey = (uid) => `${STORAGE_KEY_PREFIX}:${uid}`;
 
 async function readManifest(uid) {
@@ -29,25 +33,50 @@ async function deleteManifestFiles(manifest) {
   )));
 }
 
+const descriptorForInput = (item) => createTravelMediaDescriptor(item) || null;
+
+function storedIdentity(entries, item) {
+  const descriptor = descriptorForInput(item);
+  const identity = travelMediaIdentity(descriptor);
+  if (entries.has(identity)) return identity;
+  const uri = travelMediaUri(descriptor);
+  for (const [key, entry] of entries) {
+    if ([entry.uri, entry.sourceUri, entry.previewUri, entry.localReference?.key].includes(uri)) return key;
+  }
+  return identity;
+}
+
 export default function useRecommendationDraftMedia() {
   const jobIdRef = useRef(randomUUID());
   const draftIdRef = useRef('');
-  const entriesByUriRef = useRef(new Map());
+  const entriesByIdentityRef = useRef(new Map());
+  const pendingByIdentityRef = useRef(new Map());
+  const forgottenRef = useRef(new Set());
+  const manifestQueueRef = useRef(Promise.resolve());
 
-  const persistManifest = useCallback(async () => {
+  const persistManifest = useCallback(() => {
     const uid = auth.currentUser?.uid;
-    if (!uid || !draftIdRef.current) return;
-    const entries = Array.from(entriesByUriRef.current.values()).map(({ mediaId, localReference }) => ({
-      mediaId,
-      localReference,
-    }));
-    await AsyncStorage.setItem(storageKey(uid), JSON.stringify({
-      version: 1,
-      draftId: draftIdRef.current,
-      jobId: jobIdRef.current,
-      entries,
-      updatedAt: Date.now(),
-    }));
+    if (!uid || !draftIdRef.current) return Promise.resolve();
+    manifestQueueRef.current = manifestQueueRef.current.catch(() => {}).then(() => {
+      const entries = Array.from(entriesByIdentityRef.current.values()).map((entry) => ({
+        sourceId: entry.sourceId,
+        previewUri: entry.previewUri,
+        assetId: entry.assetId || null,
+        width: entry.width || null,
+        height: entry.height || null,
+        mediaId: entry.mediaId,
+        localReference: entry.localReference,
+        transform: entry.transform || null,
+      }));
+      return AsyncStorage.setItem(storageKey(uid), JSON.stringify({
+        version: 2,
+        draftId: draftIdRef.current,
+        jobId: jobIdRef.current,
+        entries,
+        updatedAt: Date.now(),
+      }));
+    });
+    return manifestQueueRef.current;
   }, []);
 
   const bindDraft = useCallback(async (draftId) => {
@@ -55,75 +84,152 @@ export default function useRecommendationDraftMedia() {
     await persistManifest();
   }, [persistManifest]);
 
-  const persistUris = useCallback(async (uris) => {
+  const persistOne = useCallback((item) => {
+    const descriptor = descriptorForInput(item);
+    if (!descriptor || descriptor.type === 'remote') return Promise.resolve(descriptor);
+    const identity = storedIdentity(entriesByIdentityRef.current, descriptor);
+    const existing = entriesByIdentityRef.current.get(identity);
+    if (existing) {
+      const updated = { ...existing, ...descriptor, localReference: existing.localReference, persistence: 'ready' };
+      entriesByIdentityRef.current.set(identity, updated);
+      return persistManifest().then(() => updated);
+    }
+    const pending = pendingByIdentityRef.current.get(identity);
+    if (pending) return pending;
     const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('You must be signed in to keep selected images.');
-    for (const uri of (Array.isArray(uris) ? uris : []).filter(Boolean)) {
-      if (entriesByUriRef.current.has(uri)) continue;
-      const mediaId = randomUUID();
-      const localReference = await persistContentPublishMedia({
+    if (!uid) return Promise.reject(new Error('You must be signed in to keep selected images.'));
+    forgottenRef.current.delete(identity);
+    const promise = (async () => {
+      const mediaId = descriptor.mediaId || randomUUID();
+      const localReference = descriptor.localReference || await persistContentPublishMedia({
         ownerUid: uid,
         jobId: jobIdRef.current,
         mediaId,
-        uri,
+        uri: descriptor.sourceUri || descriptor.uri,
       });
-      entriesByUriRef.current.set(uri, { uri, mediaId, localReference });
-    }
-    await persistManifest();
+      const entry = { ...descriptor, sourceId: identity, mediaId, localReference, persistence: 'ready' };
+      if (forgottenRef.current.has(identity)) {
+        await deleteContentPublishMedia(localReference);
+        return null;
+      }
+      entriesByIdentityRef.current.set(identity, entry);
+      await persistManifest();
+      return entry;
+    })().finally(() => pendingByIdentityRef.current.delete(identity));
+    pendingByIdentityRef.current.set(identity, promise);
+    return promise;
+  }, [persistManifest]);
+
+  const persistMedia = useCallback(async (items) => {
+    const list = (Array.isArray(items) ? items : []).filter(Boolean);
+    const results = new Array(list.length);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < list.length) {
+        const index = cursor++;
+        results[index] = await persistOne(list[index]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(2, list.length) }, worker));
+    return results.filter(Boolean);
+  }, [persistOne]);
+
+  const persistUris = useCallback(async (uris) => {
+    await persistMedia(uris);
     return uris;
-  }, [persistManifest]);
+  }, [persistMedia]);
 
-  const forgetUri = useCallback(async (uri) => {
-    const entry = entriesByUriRef.current.get(uri);
-    if (!entry) return;
-    entriesByUriRef.current.delete(uri);
-    await deleteContentPublishMedia(entry.localReference);
+  const waitForMedia = useCallback(async (items) => {
+    const descriptors = (Array.isArray(items) ? items : []).map(descriptorForInput).filter(Boolean);
+    await Promise.all(descriptors.map((item) => persistOne(item)));
+    return descriptors.map((item) => {
+      if (item.type === 'remote') return item;
+      const entry = entriesByIdentityRef.current.get(travelMediaIdentity(item));
+      if (!entry?.localReference) throw new Error('A selected photo is no longer available.');
+      return { ...item, ...entry, persistence: 'ready' };
+    });
+  }, [persistOne]);
+
+  const forgetMedia = useCallback(async (item) => {
+    const descriptor = descriptorForInput(item);
+    const identity = storedIdentity(entriesByIdentityRef.current, descriptor);
+    if (!identity) return;
+    forgottenRef.current.add(identity);
+    const pending = pendingByIdentityRef.current.get(identity);
+    if (pending) await pending.catch(() => {});
+    const entry = entriesByIdentityRef.current.get(identity);
+    entriesByIdentityRef.current.delete(identity);
+    if (entry?.localReference) await deleteContentPublishMedia(entry.localReference);
     await persistManifest();
   }, [persistManifest]);
 
-  const mediaForUri = useCallback((uri) => {
-    const entry = entriesByUriRef.current.get(uri);
-    return entry ? { uri, mediaId: entry.mediaId, localReference: entry.localReference } : { uri };
+  const forgetUri = useCallback((uri) => forgetMedia(uri), [forgetMedia]);
+
+  const mediaForItem = useCallback((item) => {
+    const descriptor = descriptorForInput(item);
+    if (!descriptor) return item;
+    const entry = entriesByIdentityRef.current.get(storedIdentity(entriesByIdentityRef.current, descriptor));
+    return entry ? { ...descriptor, ...entry } : descriptor;
   }, []);
+  const mediaForUri = useCallback((uri) => mediaForItem(uri), [mediaForItem]);
 
   const restoreDraft = useCallback(async (draftId, expectedCount = 0) => {
     const uid = auth.currentUser?.uid;
     draftIdRef.current = draftId || '';
-    if (!uid || !draftId) return { uris: [], missingCount: Number(expectedCount || 0) };
+    if (!uid || !draftId) return { uris: [], items: [], missingCount: Number(expectedCount || 0) };
     const manifest = await readManifest(uid);
     if (!manifest || manifest.draftId !== draftId) {
       if (manifest) {
         await deleteManifestFiles(manifest);
         await AsyncStorage.removeItem(storageKey(uid));
       }
-      return { uris: [], missingCount: Number(expectedCount || 0) };
+      return { uris: [], items: [], missingCount: Number(expectedCount || 0) };
     }
     jobIdRef.current = manifest.jobId || jobIdRef.current;
-    const uris = [];
+    const items = [];
     for (const entry of manifest.entries) {
       try {
         const materialized = await materializeContentPublishMedia(entry.localReference);
-        entriesByUriRef.current.set(materialized.uri, { ...entry, uri: materialized.uri });
-        uris.push(materialized.uri);
+        const restored = createTravelMediaDescriptor({
+          ...entry,
+          id: entry.sourceId || entry.mediaId,
+          sourceId: entry.sourceId || entry.mediaId,
+          uri: materialized.uri,
+          sourceUri: materialized.uri,
+          previewUri: materialized.uri,
+          persistence: 'ready',
+          transform: Number(manifest.version || 1) >= 2 ? entry.transform || null : null,
+        });
+        entriesByIdentityRef.current.set(travelMediaIdentity(restored), restored);
+        items.push(restored);
       } catch {
         // Missing local files are reported to the composer and omitted.
       }
     }
-    return { uris, missingCount: Math.max(0, Number(expectedCount || 0) - uris.length) };
+    return {
+      items,
+      uris: items.map(travelMediaUri),
+      missingCount: Math.max(0, Number(expectedCount || 0) - items.length),
+    };
   }, []);
 
-  const clearDraft = useCallback(async ({ deleteFiles = true, keepUris = [] } = {}) => {
+  const clearDraft = useCallback(async ({ deleteFiles = true, keepUris = [], keepItems = [] } = {}) => {
     const uid = auth.currentUser?.uid;
     const manifest = uid ? await readManifest(uid) : null;
+    await Promise.allSettled(Array.from(pendingByIdentityRef.current.values()));
     const entries = [
-      ...Array.from(entriesByUriRef.current.values()),
+      ...Array.from(entriesByIdentityRef.current.values()),
       ...(manifest?.entries || []),
     ];
-    const kept = new Set((keepUris || []).filter(Boolean));
-    const keptMediaIds = new Set(Array.from(entriesByUriRef.current.values())
-      .filter((entry) => kept.has(entry.uri))
+    const kept = new Set([
+      ...(keepUris || []).filter(Boolean).map((uri) => storedIdentity(entriesByIdentityRef.current, uri)),
+      ...(keepItems || []).filter(Boolean).map((item) => storedIdentity(entriesByIdentityRef.current, item)),
+    ]);
+    const keptMediaIds = new Set(Array.from(entriesByIdentityRef.current.values())
+      .filter((entry) => kept.has(travelMediaIdentity(entry)))
       .map((entry) => entry.mediaId));
-    entriesByUriRef.current.clear();
+    entriesByIdentityRef.current.clear();
+    pendingByIdentityRef.current.clear();
     draftIdRef.current = '';
     const references = entries
       .filter((entry) => deleteFiles || !keptMediaIds.has(entry.mediaId))
@@ -146,10 +252,14 @@ export default function useRecommendationDraftMedia() {
     bindDraft,
     clearDraft,
     clearStaleDraft,
+    forgetMedia,
     forgetUri,
+    mediaForItem,
     mediaForUri,
+    persistMedia,
     persistUris,
     restoreDraft,
+    waitForMedia,
   };
 }
 

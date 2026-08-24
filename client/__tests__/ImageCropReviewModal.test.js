@@ -9,6 +9,7 @@ import ImageCropReviewModal, {
   cropImageForReview,
   fitCropViewport,
 } from '../src/components/ImageCropReviewModal';
+import { cropRectToViewportTransform } from '../src/utils/cropMath';
 import {
   RECOMMENDATION_IMAGE_LONG_EDGE,
   ROUTE_IMAGE_LONG_EDGE,
@@ -111,6 +112,29 @@ describe('calculateCropRect', () => {
     expect(crop).toEqual({ originX: 500, originY: 667, width: 1333, height: 1000 });
     expect(crop.originX + crop.width).toBeLessThanOrEqual(3000);
     expect(crop.originY + crop.height).toBeLessThanOrEqual(2000);
+  });
+
+  it('rehydrates a saved crop into the same viewport pan and zoom', () => {
+    const dimensions = {
+      sourceWidth: 3000,
+      sourceHeight: 2000,
+      viewportWidth: 400,
+      viewportHeight: 300,
+    };
+    const savedCrop = calculateCropRect({
+      ...dimensions,
+      zoom: 2,
+      translateX: 100,
+      translateY: -50,
+    });
+    const viewportTransform = cropRectToViewportTransform({
+      ...dimensions,
+      crop: savedCrop,
+    });
+    expect(calculateCropRect({
+      ...dimensions,
+      ...viewportTransform,
+    })).toEqual(savedCrop);
   });
 
   it('encodes bounded travel staging JPEGs at the shared quality target', async () => {

@@ -31,6 +31,8 @@ const mockMaterializeMedia = jest.fn();
 const mockDeleteJobMedia = jest.fn();
 const mockAddDiagnosticBreadcrumb = jest.fn();
 const mockCaptureDiagnosticException = jest.fn();
+const mockPrepareTravelMediaSource = jest.fn();
+const mockDeletePreparedTravelMedia = jest.fn();
 
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ user: mockUser, loading: false }),
@@ -55,6 +57,10 @@ jest.mock('../src/services/ErrorReporting', () => ({
 }));
 jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   rememberDiscoveryDestinations: jest.fn(async () => []),
+}));
+jest.mock('../src/utils/travelMediaPreparation', () => ({
+  prepareTravelMediaSource: (...args) => mockPrepareTravelMediaSource(...args),
+  deletePreparedTravelMedia: (...args) => mockDeletePreparedTravelMedia(...args),
 }));
 jest.mock('../src/features/community/publishing/recommendationPublishStorage', () => ({
   deleteRecommendationPublishJobMedia: (...args) => mockDeleteJobMedia(...args),
@@ -86,6 +92,10 @@ describe('RecommendationPublishProvider', () => {
       thumb: { url: 'https://cdn/thumb.webp' },
     });
     mockDeleteJobMedia.mockResolvedValue(undefined);
+    mockPrepareTravelMediaSource.mockImplementation(async (uri, transform) => transform
+      ? { uri: `${uri}.prepared.jpg`, temporary: true }
+      : { uri, temporary: false });
+    mockDeletePreparedTravelMedia.mockResolvedValue(undefined);
     mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
     mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 4 });
     mockPublishRouteDraft.mockResolvedValue({ routeId: 'route-1', published: true });
@@ -127,6 +137,41 @@ describe('RecommendationPublishProvider', () => {
     await waitFor(() => expect(api.activeJob.status).toBe('success'));
     expect(api.completedVersion).toBe(1);
     expect(mockDeleteJobMedia).toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('runs the saved transform once in preparing before upload and cleans the temporary file', async () => {
+    mockSaveRecommendation.mockResolvedValue({ recommendationId: 'rec-1' });
+    const transform = {
+      version: 1,
+      crop: { originX: 100, originY: 0, width: 1200, height: 1200 },
+      maxLongEdge: 1600,
+      compress: 0.94,
+      format: 'jpeg',
+    };
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: { placeId: 'place-1', recommendation: { title: 'Prepared', media: [] } },
+        media: [{ uri: 'file:///source.heic', transform }],
+        draft: { selectedPlace: { placeId: 'place-1' } },
+      });
+    });
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    expect(mockPrepareTravelMediaSource).toHaveBeenCalledTimes(1);
+    expect(mockPrepareTravelMediaSource).toHaveBeenCalledWith('file:///durable.jpg', transform);
+    expect(mockUploadImageAsset).toHaveBeenCalledWith(
+      'file:///durable.jpg.prepared.jpg',
+      expect.objectContaining({ onProgress: expect.any(Function) })
+    );
+    expect(mockPrepareTravelMediaSource.mock.invocationCallOrder[0])
+      .toBeLessThan(mockUploadImageAsset.mock.invocationCallOrder[0]);
+    expect(mockDeletePreparedTravelMedia).toHaveBeenCalledWith({
+      uri: 'file:///durable.jpg.prepared.jpg', temporary: true,
+    });
     screen.unmount();
   });
 

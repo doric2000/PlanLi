@@ -13,77 +13,14 @@ import AppText from './AppText';
 import CachedImage from './CachedImage';
 import { getImageSize } from '../hooks/useImagePicker';
 import { colors, imageCropReviewStyles as styles, spacing } from '../styles';
+import {
+  boundCropTranslation,
+  calculateCropRect,
+  fitCropViewport,
+} from '../utils/cropMath';
 
-const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
-const MAX_CROP_VIEWPORT_WIDTH = 640;
 const ZERO_SAFE_AREA_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
-
-export function boundCropTranslation({
-  displayWidth = 0,
-  displayHeight = 0,
-  viewportWidth = 0,
-  viewportHeight = 0,
-  zoom = 1,
-  translateX = 0,
-  translateY = 0,
-}) {
-  'worklet';
-  const maximumX = Math.max(0, ((displayWidth || 0) * zoom - (viewportWidth || 0)) / 2);
-  const maximumY = Math.max(0, ((displayHeight || 0) * zoom - (viewportHeight || 0)) / 2);
-  return {
-    x: Math.max(-maximumX, Math.min(maximumX, translateX)),
-    y: Math.max(-maximumY, Math.min(maximumY, translateY)),
-  };
-}
-
-export function fitCropViewport({ containerWidth, containerHeight, aspectRatio }) {
-  const width = Math.min(MAX_CROP_VIEWPORT_WIDTH, Math.max(0, Number(containerWidth) || 0));
-  const height = Math.max(0, Number(containerHeight) || 0);
-  const ratio = Math.max(0.01, Number(aspectRatio) || 1);
-  if (!width || !height) return null;
-  const fittedWidth = Math.min(width, height * ratio);
-  return {
-    width: fittedWidth,
-    height: fittedWidth / ratio,
-  };
-}
-
-export function calculateCropRect({
-  sourceWidth,
-  sourceHeight,
-  viewportWidth,
-  viewportHeight,
-  zoom = 1,
-  translateX = 0,
-  translateY = 0,
-}) {
-  const baseScale = Math.max(viewportWidth / sourceWidth, viewportHeight / sourceHeight);
-  const appliedScale = baseScale * Math.max(1, zoom);
-  const displayedWidth = sourceWidth * appliedScale;
-  const displayedHeight = sourceHeight * appliedScale;
-  const maximumX = Math.max(0, (displayedWidth - viewportWidth) / 2);
-  const maximumY = Math.max(0, (displayedHeight - viewportHeight) / 2);
-  const boundedX = clamp(translateX, -maximumX, maximumX);
-  const boundedY = clamp(translateY, -maximumY, maximumY);
-  const width = Math.min(sourceWidth, viewportWidth / appliedScale);
-  const height = Math.min(sourceHeight, viewportHeight / appliedScale);
-  const originX = clamp(
-    (displayedWidth - viewportWidth) / (2 * appliedScale) - boundedX / appliedScale,
-    0,
-    sourceWidth - width
-  );
-  const originY = clamp(
-    (displayedHeight - viewportHeight) / (2 * appliedScale) - boundedY / appliedScale,
-    0,
-    sourceHeight - height
-  );
-  return {
-    originX: Math.round(originX),
-    originY: Math.round(originY),
-    width: Math.max(1, Math.round(width)),
-    height: Math.max(1, Math.round(height)),
-  };
-}
+export { boundCropTranslation, calculateCropRect, fitCropViewport } from '../utils/cropMath';
 
 export async function cropImageForReview(uri, crop, { maxLongEdge, compress = 0.94 } = {}) {
   const cropLongEdge = Math.max(crop.width, crop.height);

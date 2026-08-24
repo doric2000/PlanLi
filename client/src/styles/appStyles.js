@@ -2703,6 +2703,11 @@ export const exactLocationPickerStyles = StyleSheet.create({
 		height: 190,
 		borderWidth: 0,
 	},
+	mapSkeleton: {
+		backgroundColor: colors.surfaceSubtle,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
 	previewCopy: {
 		paddingHorizontal: 14,
 		paddingTop: 12,

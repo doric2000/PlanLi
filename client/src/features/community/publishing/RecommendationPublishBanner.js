@@ -23,6 +23,7 @@ function statusCopy(job, queuedCount) {
     ? 'המסלול פורסם בהצלחה'
     : 'ההמלצה פורסמה בהצלחה';
   if (job.status === 'failed') return `לא הצלחנו לפרסם את ${noun}`;
+  if (job.stage === 'preparing') return `מכין את התמונות של ${noun}…`;
   if (job.stage === 'saving') return `שומר את ${noun}…`;
   if (job.stage === 'retrying') return 'מנסה שוב לפרסם…';
   if (job.stage === 'queued') return queuedCount > 1 ? `${queuedCount} פרסומים ממתינים` : `${noun} ממתין לפרסום…`;

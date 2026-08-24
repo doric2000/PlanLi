@@ -14,7 +14,7 @@ import { FormInput } from '../../../components/FormInput';
 import { ImagePickerBox } from '../../../components/ImagePickerBox';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
-import ImageCropReviewModal from '../../../components/ImageCropReviewModal';
+import TravelMediaComposer from '../../../components/TravelMediaComposer';
 import {
   RECOMMENDATION_IMAGE_LONG_EDGE,
   TRAVEL_IMAGE_COMPRESSION,
@@ -27,7 +27,7 @@ import { guidedFormStyles as guidedStyles } from '../../../components/guidedForm
 // --- Custom Hooks ---
 import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
-import useReviewedImagePicker from '../../../hooks/useReviewedImagePicker';
+import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import useExactPlaceSelection from '../../../hooks/useExactPlaceSelection';
 import useDurableDraftMedia from '../../../hooks/useDurableDraftMedia';
 import { saveRecommendation } from '../../../services/RecommendationService';
@@ -37,6 +37,14 @@ import { useRecommendationPublish } from '../publishing/RecommendationPublishCon
 import { PARENT_CATEGORIES, POST_BUDGETS, TAG_OPTIONS_BY_CATEGORY } from '../../../constants/Constants';
 import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
+import {
+  createTravelMediaDescriptor,
+  travelMediaUri,
+} from '../../../utils/travelMedia';
+import {
+  deletePreparedTravelMedia,
+  prepareTravelMediaBatch,
+} from '../../../utils/travelMediaPreparation';
 import {
   findMediaAssetByUrl,
   getMediaVariantUrl,
@@ -298,6 +306,7 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
     locationResolveRetryable,
     destinationChoice,
     pendingLocation,
+    resolvingPreview,
     clearSelectionForTyping: onChangeQuery,
     resolvingLocation,
     retryLocationResolution,
@@ -308,49 +317,32 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
 
   // --- Image Handling ---
   const {
-    cancelReview,
-    completeReview,
-    pickImagesForReview,
-    reviewUris,
     uploadImageAssets,
-  } = useReviewedImagePicker({
-    kind: 'recommendation',
-    aspect: [1, 1],
-    allowsEditing: false,
-    quality: 1,
-  });
-  const [editableImageUris, setEditableImageUris] = useState([]);
+  } = useImagePickerWithUpload({ kind: 'recommendation' });
+  const [editableMedia, setEditableMedia] = useState([]);
+  const [mediaComposerVisible, setMediaComposerVisible] = useState(false);
+  const editableImageUris = useMemo(() => editableMedia.map(travelMediaUri).filter(Boolean), [editableMedia]);
   const editablePreviewUris = useMemo(() => {
-    return editableImageUris.map((uri) => {
-      const asset = findMediaAssetByUrl(editItem?.media, uri);
+    return editableMedia.map((item) => {
+      const uri = travelMediaUri(item);
+      const asset = item.asset || findMediaAssetByUrl(editItem?.media, uri);
       return asset ? getMediaVariantUrl(asset, 'feed', uri) : uri;
     });
-  }, [editItem, editableImageUris]);
+  }, [editItem, editableMedia]);
 
-  const handleAddImages = async () => {
-    const remaining = Math.max(0, 5 - editableImageUris.length);
-    if (!remaining) return;
-    await pickImagesForReview({
-      limit: remaining,
-      onComplete: async (uris) => {
-        await persistReviewedImages(uris);
-        setEditableImageUris((prev) => {
-          const next = Array.isArray(prev) ? [...prev] : [];
-          for (const uri of uris || []) {
-            if (next.length >= 5) break;
-            if (!next.includes(uri)) next.push(uri);
-          }
-          return next;
-        });
-      },
-    });
+  const handleAddImages = () => setMediaComposerVisible(true);
+  const completeMediaSelection = (items) => {
+    const nextItems = (items || []).slice(0, 5);
+    setEditableMedia(nextItems);
+    setMediaComposerVisible(false);
+    if (!isEdit) persistReviewedImages(nextItems.filter((item) => !item.asset).map(travelMediaUri)).catch(() => {});
   };
 
   const removeImageAt = (index) => {
-    setEditableImageUris((prev) => {
+    setEditableMedia((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       const [removed] = next.splice(index, 1);
-      forgetDurableImage(removed).catch(() => {});
+      forgetDurableImage(travelMediaUri(removed)).catch(() => {});
       return next;
     });
   };
@@ -515,11 +507,14 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
       place: editItem.place || null,
       query: editItem.place?.name || editItem.destination?.cityName || '',
     });
-    setEditableImageUris(
-      (Array.isArray(editItem.media) ? editItem.media : [])
-        .map((asset) => getMediaVariantUrl(asset, 'feed'))
-        .filter(Boolean)
-    );
+    setEditableMedia((Array.isArray(editItem.media) ? editItem.media : [])
+      .map((asset) => createTravelMediaDescriptor({
+        asset,
+        id: asset.assetId,
+        sourceId: asset.assetId,
+        uri: getMediaVariantUrl(asset, 'feed'),
+      }))
+      .filter(Boolean));
     setEditSnapshotBaseline(buildEditComparable(editItem));
     setExpandedSection('place');
     setValidation(emptyValidation());
@@ -575,7 +570,9 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
         place: draft.selectedPlace || null,
         query: draft.locationQuery || draft.selectedPlace?.name || '',
       });
-      setEditableImageUris(Array.isArray(job.imageUris) ? job.imageUris : []);
+      setEditableMedia((job.materializedMedia || job.imageUris || [])
+        .map((item) => createTravelMediaDescriptor(item))
+        .filter(Boolean));
       setExpandedSection('story');
       setValidation(emptyValidation());
       setOptionalFitOpen(Boolean(draft.recommendationNeeds?.length));
@@ -756,7 +753,8 @@ const handleSubmit = async () => {
     setSubmitting(true);
     try {
       // Build final images list: keep existing remote URLs, upload local URIs.
-      const current = Array.isArray(editableImageUris) ? editableImageUris.slice(0, 5) : [];
+      const currentItems = Array.isArray(editableMedia) ? editableMedia.slice(0, 5) : [];
+      const current = currentItems.map(travelMediaUri);
       const isRemote = (uri) => typeof uri === 'string' && /^https?:\/\//i.test(uri);
 
       if (!isEdit) {
@@ -802,8 +800,9 @@ const handleSubmit = async () => {
               },
             },
           },
-          media: current.map((uri) => {
-            const asset = isRemote(uri) ? findMediaAssetByUrl(editItem?.media, uri) : null;
+          media: currentItems.map((item) => {
+            const uri = travelMediaUri(item);
+            const asset = item.asset || (isRemote(uri) ? findMediaAssetByUrl(editItem?.media, uri) : null);
             return asset ? { asset } : durableMediaForUri(uri);
           }),
           draft: {
@@ -834,13 +833,20 @@ const handleSubmit = async () => {
         return;
       }
 
-      const localUris = current.filter((uri) => !isRemote(uri));
-
-      const uploadedLocal = localUris.length ? await uploadImageAssets(localUris) : [];
+      const localItems = currentItems.filter((item) => !item.asset && !isRemote(travelMediaUri(item)));
+      const preparedLocal = await prepareTravelMediaBatch(localItems, { concurrency: 2 });
+      let uploadedLocal;
+      try {
+        uploadedLocal = preparedLocal.length
+          ? await uploadImageAssets(preparedLocal.map((entry) => entry.uri))
+          : [];
+      } finally {
+        await Promise.allSettled(preparedLocal.map(deletePreparedTravelMedia));
+      }
       const uploadedQueue = [...uploadedLocal];
-      const finalMedia = current.map((uri) => {
-        if (!isRemote(uri)) return uploadedQueue.shift();
-        return findMediaAssetByUrl(editItem?.media, uri);
+      const finalMedia = currentItems.map((item) => {
+        if (!item.asset && !isRemote(travelMediaUri(item))) return uploadedQueue.shift();
+        return item.asset || findMediaAssetByUrl(editItem?.media, travelMediaUri(item));
       }).filter(Boolean);
       const destinationPayload = selectedPlace?.resolvedPlaceToken
         ? {
@@ -969,6 +975,8 @@ const handleSubmit = async () => {
             onSelect={(selection) => handleSelectGooglePlace(selection).catch(() => {})}
             googleSearchFn={googleSearchFn}
             explicitSearch
+            variant="form"
+            error={Boolean(locationResolveError)}
             returnSelection
             placeholder={EXACT_LOCATION_COPY.exactLocationPlaceholder}
             inputTestID="add-rec-location-input"
@@ -976,6 +984,8 @@ const handleSubmit = async () => {
           <ExactLocationConfirmation
             pendingLocation={pendingLocation}
             destinationChoice={destinationChoice}
+            resolving={resolvingLocation}
+            resolvingPreview={resolvingPreview}
             onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
             onConfirm={confirmPendingLocation}
             onChooseAnother={chooseAnotherLocation}
@@ -1259,14 +1269,15 @@ const handleSubmit = async () => {
         onConfirm={confirmUnsavedLeave}
       />
 
-      <ImageCropReviewModal
-        visible={reviewUris.length > 0}
-        uris={reviewUris}
+      <TravelMediaComposer
+        visible={mediaComposerVisible}
+        value={editableMedia}
+        maxItems={5}
         aspect={[1, 1]}
         maxLongEdge={RECOMMENDATION_IMAGE_LONG_EDGE}
         compress={TRAVEL_IMAGE_COMPRESSION}
-        onCancel={cancelReview}
-        onComplete={completeReview}
+        onCancel={() => setMediaComposerVisible(false)}
+        onChange={completeMediaSelection}
       />
 
     </View>

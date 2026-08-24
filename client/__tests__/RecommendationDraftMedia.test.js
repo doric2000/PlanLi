@@ -56,7 +56,11 @@ describe('useRecommendationDraftMedia', () => {
     const second = renderHook(() => useRecommendationDraftMedia());
     let restored;
     await act(async () => { restored = await second.result.current.restoreDraft('draft-1', 1); });
-    expect(restored).toEqual({ uris: [reference.key], missingCount: 0 });
+    expect(restored).toEqual({
+      uris: [reference.key],
+      items: [expect.objectContaining({ uri: reference.key, transform: null })],
+      missingCount: 0,
+    });
     await act(async () => { await second.result.current.forgetUri(reference.key); });
     expect(mockDeleteMedia).toHaveBeenCalledWith(reference);
   });
@@ -72,7 +76,7 @@ describe('useRecommendationDraftMedia', () => {
     const hook = renderHook(() => useRecommendationDraftMedia());
     let restored;
     await act(async () => { restored = await hook.result.current.restoreDraft('draft-1', 2); });
-    expect(restored).toEqual({ uris: [], missingCount: 2 });
+    expect(restored).toEqual({ uris: [], items: [], missingCount: 2 });
   });
 
   it('discard deletes manifest files even before the draft was restored', async () => {
@@ -115,5 +119,42 @@ describe('useRecommendationDraftMedia', () => {
     });
     expect(mockDeleteMedia).toHaveBeenCalledWith(stale);
     expect(mockDeleteMedia).not.toHaveBeenCalledWith(queued);
+  });
+
+  it('stores crop transforms additively while legacy manifests restore as already processed', async () => {
+    const transform = {
+      version: 1,
+      crop: { originX: 100, originY: 0, width: 1200, height: 1200 },
+      maxLongEdge: 1600,
+      compress: 0.94,
+      format: 'jpeg',
+    };
+    const hook = renderHook(() => useRecommendationDraftMedia());
+    await act(async () => {
+      await hook.result.current.persistMedia([{
+        sourceId: 'asset:selected-1',
+        assetId: 'selected-1',
+        uri: 'file:///raw.heic',
+        width: 1600,
+        height: 1200,
+        transform,
+      }]);
+      await hook.result.current.bindDraft('draft-2');
+    });
+    expect(JSON.parse(stored)).toEqual(expect.objectContaining({
+      version: 2,
+      entries: [expect.objectContaining({ sourceId: 'asset:selected-1', transform })],
+    }));
+
+    stored = JSON.stringify({
+      version: 1,
+      draftId: 'legacy-draft',
+      jobId: 'legacy-job',
+      entries: [{ mediaId: 'legacy-media', localReference: { platform: 'native', key: 'file:///legacy.jpg' } }],
+    });
+    const legacyHook = renderHook(() => useRecommendationDraftMedia());
+    let restored;
+    await act(async () => { restored = await legacyHook.result.current.restoreDraft('legacy-draft', 1); });
+    expect(restored.items[0].transform).toBeNull();
   });
 });
