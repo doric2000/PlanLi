@@ -391,6 +391,64 @@ describe('AddRecommendationScreen Integration Test', () => {
       .toBe(mockSaveRecommendationDraft.mock.calls[0][0].saveRequestId);
   });
 
+  it('freezes autosave while a recommendation is handed to the background publisher', async () => {
+    jest.useFakeTimers();
+    let finishEnqueue;
+    mockGetCurrentRecommendationDraft.mockResolvedValueOnce({
+      id: 'recommendation-draft-1',
+      version: 7,
+      sourceRecommendationId: null,
+      step: 4,
+      locationMode: 'exact',
+      selectedCountry: { id: 'NI', name: 'ניקרגואה' },
+      selectedCity: { id: 'rivas', name: 'ריוואס' },
+      selectedPlace: { placeId: 'ojo-de-agua', name: 'Ojo de Agua' },
+      locationQuery: 'Ojo de Agua',
+      categoryId: 'food',
+      subcategoryIds: ['restaurant'],
+      title: 'Ojo de Agua',
+      description: 'מעיינות נעימים באומטפה.',
+      budget: 'economy',
+      details: {},
+      media: [],
+      localMediaCount: 0,
+    });
+    mockSaveRecommendationDraft.mockResolvedValueOnce({
+      draftId: 'recommendation-draft-1', version: 8,
+    });
+    mockEnqueueCreate.mockImplementationOnce(() => new Promise((resolve) => {
+      finishEnqueue = resolve;
+    }));
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByText('פרסום ההמלצה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(1));
+    expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(screen.getByTestId('recommendation-budget-2'));
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+    expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishEnqueue('publish-job-1');
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(navigationMock.goBack).toHaveBeenCalledTimes(1));
+    jest.useRealTimers();
+  });
+
   it('keeps a bottom optional field reachable and dismissible while preserving its text', async () => {
     const keyboardListeners = {};
     const dismissSpy = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => {});

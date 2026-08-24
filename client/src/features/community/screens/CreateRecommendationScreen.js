@@ -238,6 +238,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const allowLeaveRef = useRef(false);
   const leavePromptOpenRef = useRef(false);
   const pauseAutosaveRef = useRef(false);
+  const publishHandoffRef = useRef(false);
   const mountedRef = useRef(true);
   const isEdit = Boolean(sourceRecommendationId);
   const editPostId = sourceRecommendationId || null;
@@ -390,8 +391,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   latestDraftRef.current = draftPayload;
   latestComparableRef.current = draftComparable;
 
-  const persistSnapshot = useCallback((snapshot, comparable, { force = false } = {}) => {
+  const persistSnapshot = useCallback((snapshot, comparable, {
+    force = false,
+    allowDuringPublish = false,
+  } = {}) => {
     saveQueueRef.current = saveQueueRef.current.catch(() => versionRef.current).then(async () => {
+      if (publishHandoffRef.current && !allowDuringPublish) return versionRef.current;
       const shouldCreate = !draftIdRef.current && Boolean(sourceRecommendationIdRef.current || comparable);
       if ((!draftIdRef.current && !shouldCreate) || (!force && comparable === lastSavedComparableRef.current)) {
         return versionRef.current;
@@ -691,6 +696,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setEditSnapshotBaseline(nextSourceId ? comparable : null);
     setSaveStatus('saved');
     setSaveError('');
+    publishHandoffRef.current = false;
     pauseAutosaveRef.current = false;
     leavePromptOpenRef.current = false;
     setMode('editor');
@@ -908,8 +914,14 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setValidationMessage(message);
     if (message || submitting) return;
     setSubmitting(true);
+    publishHandoffRef.current = true;
+    pauseAutosaveRef.current = true;
+    let handedOff = false;
     try {
-      const version = await persistSnapshot(draftPayload, draftComparable, { force: true });
+      const version = await persistSnapshot(draftPayload, draftComparable, {
+        force: true,
+        allowDuringPublish: true,
+      });
       await enqueueCreate({
         contentType: 'recommendation',
         sourceJobId: publishJobId,
@@ -926,10 +938,21 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         }),
         draft: { ...draftPayload, sourceRecommendationId: sourceRecommendationIdRef.current || null },
       });
-      await clearDraftMedia({ deleteFiles: false, keepUris: editableImageUris });
+      handedOff = true;
+      try {
+        await clearDraftMedia({ deleteFiles: false, keepUris: editableImageUris });
+      } catch (error) {
+        console.warn('recommendation_publish_handoff_cleanup_failed', {
+          code: error?.code || 'unknown',
+        });
+      }
       allowLeaveRef.current = true;
       navigation.goBack();
     } catch (error) {
+      if (!handedOff) {
+        publishHandoffRef.current = false;
+        pauseAutosaveRef.current = false;
+      }
       console.error('Error queueing recommendation:', error);
       Alert.alert(
         'לא הצלחנו לשמור את ההמלצה',

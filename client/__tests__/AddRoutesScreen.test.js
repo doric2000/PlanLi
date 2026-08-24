@@ -571,4 +571,37 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('הטיוטה נשמרה')).toBeTruthy());
   });
+
+  it('freezes autosave while a roadtrip is handed to the background publisher', async () => {
+    jest.useFakeTimers();
+    let finishEnqueue;
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    mockEnqueueCreate.mockImplementationOnce(() => new Promise((resolve) => {
+      finishEnqueue = resolve;
+    }));
+    const nav = navigation();
+    const screen = render(<AddRoutesScreen navigation={nav} route={{ params: {} }} />);
+
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-submit')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-submit'));
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(1));
+    expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי מאוחר בזמן הפרסום');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+    expect(mockSaveRouteDraft).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishEnqueue('route-job-1');
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(nav.goBack).toHaveBeenCalledTimes(1));
+    jest.useRealTimers();
+  });
 });
