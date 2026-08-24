@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, Mask, Rect } from 'react-native-svg';
 
 import AppText from '../../components/AppText';
+import { fontFamilies } from '../../styles/typography';
 import { NOYA_TOUR_IDS, useNoyaTour } from './NoyaTourContext';
 
 const TARGET_PADDING = 8;
@@ -336,8 +337,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#1E3A5F',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 19,
-    fontWeight: '800',
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -372,8 +373,8 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: '#FFFFFF',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 16,
-    fontWeight: '800',
     textAlign: 'center',
     writingDirection: 'rtl',
   },
@@ -389,8 +390,8 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: '#1E3A5F',
+    fontFamily: fontFamilies.semiBold,
     fontSize: 15,
-    fontWeight: '700',
   },
   skipButton: {
     alignItems: 'center',
