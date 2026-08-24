@@ -1,12 +1,14 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { getDoc } from 'firebase/firestore';
 
 import PreferenceSetupScreen from '../src/features/profile/screens/PreferenceSetupScreen';
-import { getDoc } from 'firebase/firestore';
-import { Alert } from 'react-native';
 
-const mockSaveProfile = jest.fn(() => Promise.resolve());
+const mockSaveProfile = jest.fn();
+const mockSaveStatus = jest.fn();
 const mockSynchronizeUserDocument = jest.fn();
+const mockLoadGuestProfile = jest.fn();
+const mockSaveGuestProfile = jest.fn();
 
 jest.mock('../src/features/auth/AuthContext', () => ({
   useAuth: () => ({ synchronizeUserDocument: mockSynchronizeUserDocument }),
@@ -14,138 +16,112 @@ jest.mock('../src/features/auth/AuthContext', () => ({
 
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
-  const MockIcon = (props) => <mock-icon {...props} />;
-  return { Ionicons: MockIcon };
+  return { Ionicons: (props) => <mock-icon {...props} /> };
+});
+
+jest.mock('../src/components/CachedImage', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return (props) => <View {...props} />;
 });
 
 jest.mock('../src/config/firebase', () => ({
-  auth: { currentUser: { uid: 'legacy-user' } },
+  auth: { currentUser: { uid: 'traveler-1' } },
   db: { kind: 'db' },
 }));
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(() => ({ kind: 'user-ref' })),
-  getDoc: jest.fn(() => Promise.resolve({
-    data: () => ({
-      smartProfile: {
-        setupRequired: false,
-        interests: [
-          'nature', 'museums', 'shopping', 'אוכל רחוב', 'טיול רגלי',
-          'obsolete-1', 'obsolete-2', 'obsolete-3', 'obsolete-4',
-        ],
-        budget: '₪₪',
-        travelStyleTag: 'זוגות',
-      },
-    }),
-  })),
+  getDoc: jest.fn(),
+}));
+
+jest.mock('../src/services/PersonalizationService', () => ({
+  clearPersonalizationDiscoveryCache: jest.fn(),
+  getPersonalizedRecommendations: jest.fn(() => Promise.resolve({ items: [] })),
 }));
 
 jest.mock('../src/services/ProfileService', () => ({
   saveProfile: (...args) => mockSaveProfile(...args),
+  saveNoyaOnboardingStatus: (...args) => mockSaveStatus(...args),
 }));
 
-describe('PreferenceSetupScreen', () => {
+jest.mock('../src/features/profile/services/NoyaOnboardingStorage', () => ({
+  NOYA_ONBOARDING_VERSION: 2,
+  clearGuestNoyaProfile: jest.fn(() => Promise.resolve()),
+  dismissGuestNoya: jest.fn(() => Promise.resolve()),
+  loadGuestNoyaProfile: (...args) => mockLoadGuestProfile(...args),
+  markNoyaAccountHandled: jest.fn(),
+  saveGuestNoyaProfile: (...args) => mockSaveGuestProfile(...args),
+}));
+
+function navigation() {
+  return { canGoBack: () => false, goBack: jest.fn(), navigate: jest.fn(), reset: jest.fn() };
+}
+
+describe('PreferenceSetupScreen V2', () => {
   beforeEach(() => {
-    mockSaveProfile.mockReset();
-    mockSaveProfile.mockResolvedValue();
-    mockSynchronizeUserDocument.mockReset();
-    mockSynchronizeUserDocument.mockReturnValue('ready');
-  });
-
-  it('does not let invisible legacy values consume visible selection slots', async () => {
-    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset: jest.fn() }} />);
-    await waitFor(() => expect(getDoc).toHaveBeenCalledTimes(1));
-    const selectable = await waitFor(
-      () => screen.getByTestId('preference-interest-photography_viewpoints'),
-      { timeout: 5_000 }
-    );
-
-    expect(selectable.props.accessibilityState.checked).toBe(false);
-    fireEvent.press(selectable);
-    expect(screen.getByTestId('preference-interest-photography_viewpoints').props.accessibilityState.checked).toBe(true);
-  });
-
-  it('advances after saving a valid in-progress draft without strict read-back verification', async () => {
-    getDoc.mockResolvedValueOnce({
-      data: () => ({
-        smartProfile: {
-          setupRequired: true,
-          interests: ['food', 'cafes', 'nature_scenery'],
-        },
-      }),
+    jest.clearAllMocks();
+    mockLoadGuestProfile.mockResolvedValue(null);
+    mockSaveStatus.mockResolvedValue({});
+    getDoc.mockResolvedValue({ data: () => ({ smartProfile: { setupRequired: true } }) });
+    mockSaveProfile.mockResolvedValue({
+      userDocument: {
+        smartProfile: { setupRequired: false, completedAt: { seconds: 1 }, onboardingVersion: 2 },
+      },
     });
+  });
 
-    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset: jest.fn() }} />);
-    await waitFor(() => expect(screen.getByTestId('preference-budget-balanced')).toBeTruthy());
+  it('opens with Noa and keeps the flow optional', async () => {
+    const nav = navigation();
+    const screen = render(<PreferenceSetupScreen navigation={nav} route={{ params: { source: 'new-account' } }} />);
+    await waitFor(() => expect(screen.getByTestId('noya-welcome-screen')).toBeTruthy());
+    expect(screen.getByText('נעים להכיר')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('noya-later'));
+    expect(nav.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+    expect(mockSaveStatus).toHaveBeenCalledWith('dismissed', 2);
+  });
 
-    fireEvent.press(screen.getByTestId('preference-budget-balanced'));
-    fireEvent.press(screen.getByTestId('preference-party-solo'));
-    fireEvent.press(screen.getByTestId('preference-next'));
+  it('requires two interests and permits no more than four', async () => {
+    const screen = render(<PreferenceSetupScreen navigation={navigation()} />);
+    await waitFor(() => expect(screen.getByTestId('noya-start')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-start'));
+    expect(screen.getByTestId('noya-next').props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByTestId('noya-interest-food'));
+    fireEvent.press(screen.getByTestId('noya-interest-nature_scenery'));
+    expect(screen.getByTestId('noya-next').props.accessibilityState.disabled).toBe(false);
+    fireEvent.press(screen.getByTestId('noya-interest-beaches_water'));
+    fireEvent.press(screen.getByTestId('noya-interest-culture_history'));
+    fireEvent.press(screen.getByTestId('noya-interest-wellness'));
+    expect(screen.getByText('4 נבחרו')).toBeTruthy();
+  });
 
-    await waitFor(() => expect(screen.getByTestId('preference-review')).toBeTruthy());
-    expect(mockSaveProfile).toHaveBeenCalledWith(
+  it('saves the three core answers and optional needs as onboarding version 2', async () => {
+    const screen = render(<PreferenceSetupScreen navigation={navigation()} />);
+    await waitFor(() => expect(screen.getByTestId('noya-start')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-start'));
+    fireEvent.press(screen.getByTestId('noya-interest-food'));
+    fireEvent.press(screen.getByTestId('noya-interest-nature_scenery'));
+    fireEvent.press(screen.getByTestId('noya-next'));
+    fireEvent.press(screen.getByTestId('noya-budget-balanced'));
+    fireEvent.press(screen.getByTestId('noya-next'));
+    fireEvent.press(screen.getByTestId('noya-party-couple'));
+    fireEvent.press(screen.getByTestId('noya-needs-toggle'));
+    fireEvent.press(screen.getByTestId('noya-need-vegetarian'));
+    fireEvent.press(screen.getByTestId('noya-next'));
+
+    await waitFor(() => expect(mockSaveProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         smartProfile: expect.objectContaining({
+          interests: ['food', 'nature_scenery'],
           budget: 'balanced',
-          travelParties: ['solo'],
+          travelParties: ['couple'],
+          needs: ['vegetarian'],
+          onboardingVersion: 2,
         }),
+        noyaOnboarding: { version: 2, status: 'completed' },
       }),
-      { completeSmartProfile: false, verifySmartProfile: false }
-    );
-  });
-
-  it('does not leave setup when the server read-back reports dropped fields', async () => {
-    getDoc.mockResolvedValueOnce({
-      data: () => ({
-        smartProfile: {
-          setupRequired: true,
-          interests: ['food', 'cafes', 'nature_scenery'],
-          budget: 'balanced',
-          travelParties: ['couple'],
-        },
-      }),
-    });
-    const error = new Error('השרת לא שמר את כל ההעדפות.');
-    error.code = 'profile/persistence-mismatch';
-    mockSaveProfile.mockRejectedValueOnce(error);
-    const reset = jest.fn();
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-
-    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset }} />);
-    await waitFor(() => expect(screen.getByTestId('preference-review')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('preference-next'));
-
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('לא הצלחנו לשמור', error.message));
-    expect(reset).not.toHaveBeenCalled();
-    alert.mockRestore();
-  });
-
-  it('synchronizes the verified completed profile before returning to Main', async () => {
-    const persistedDocument = {
-      displayName: 'Admin',
-      smartProfile: {
-        setupRequired: false,
-        completedAt: { seconds: 1 },
-      },
-    };
-    getDoc.mockResolvedValueOnce({
-      data: () => ({
-        smartProfile: {
-          setupRequired: true,
-          interests: ['food', 'cafes', 'nature_scenery'],
-          budget: 'balanced',
-          travelParties: ['couple'],
-        },
-      }),
-    });
-    mockSaveProfile.mockResolvedValueOnce({ userDocument: persistedDocument });
-    const reset = jest.fn();
-    const screen = render(<PreferenceSetupScreen navigation={{ goBack: jest.fn(), reset }} />);
-
-    await waitFor(() => expect(screen.getByTestId('preference-review')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('preference-next'));
-
-    await waitFor(() => expect(mockSynchronizeUserDocument).toHaveBeenCalledWith(persistedDocument));
-    expect(reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+      { completeSmartProfile: true, verifySmartProfile: true }
+    ));
+    expect(screen.getByTestId('noya-complete-screen')).toBeTruthy();
   });
 });

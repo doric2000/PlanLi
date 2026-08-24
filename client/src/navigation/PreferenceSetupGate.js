@@ -19,8 +19,6 @@ export default function PreferenceSetupGate({ navigation, route }) {
       navigation.reset({ index: 0, routes: [{ name: 'VerifyEmail' }] });
     } else if ([AUTH_STATES.ACCOUNT_SETUP_REQUIRED, AUTH_STATES.LEGAL_CONSENT_REQUIRED].includes(status)) {
       navigation.reset({ index: 0, routes: [{ name: 'CompleteAccount' }] });
-    } else if (status === AUTH_STATES.PREFERENCES_REQUIRED) {
-      navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
     }
   }, [allowIncomplete, allowUnverified, authFlowInProgress, loading, navigation, status]);
 
@@ -29,6 +27,7 @@ export default function PreferenceSetupGate({ navigation, route }) {
   if (loading || (!allowIncomplete && (
     status !== AUTH_STATES.READY
     && status !== AUTH_STATES.GUEST
+    && status !== AUTH_STATES.PREFERENCES_REQUIRED
     && !(status === AUTH_STATES.EMAIL_VERIFICATION_REQUIRED && allowUnverified)
   ))) {
     return (

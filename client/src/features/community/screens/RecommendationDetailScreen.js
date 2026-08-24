@@ -22,6 +22,8 @@ import RecommendationDetailContent from '../components/RecommendationDetailConte
 import { recommendationDetailStyles as styles } from '../components/recommendationDetailStyles';
 import { useCommentsCount } from '../hooks/useCommentsCount';
 import { useLikes } from '../hooks/useLikes';
+import { markNoyaContentViewed } from '../../profile/services/NoyaOnboardingStorage';
+import NoyaGuide from '../components/NoyaGuide';
 
 export default function RecommendationDetailScreen({ route, navigation }) {
   const initialItem = route?.params?.item || route?.params?.recommendation || null;
@@ -90,6 +92,7 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
   })), [item, postId]);
 
   useEffect(() => {
+    markNoyaContentViewed().catch(() => {});
     if (!isActive || !postId) return;
     recordRecommendationOpen(postId).catch(() => {});
   }, [isActive, postId]);
@@ -154,6 +157,12 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
           />
         </ScrollView>
 
+        <NoyaGuide
+          dismissible
+          tipId="save-community"
+          testID="noya-save-community-tip"
+          message="אפשר לשמור את המקום, לסמן לייק או לשתף. כל פעולה גם עוזרת לי לדייק את ההמלצות."
+        />
         <View style={[styles.stickyBar, { paddingBottom: Math.max(insets.bottom || 0, 10) }]}>
           <RecommendationActionBar
             isLiked={isLiked}

@@ -805,7 +805,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   if (mode === 'switchChoice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide dismissible message="יש שינויים שעדיין לא פורסמו במסלול אחר. אפשר לשמור אותם ולחזור, או לוותר עליהם ולפתוח את המסלול שנבחר." />
+      <NoyaGuide dismissible tipId="route-builder" message="יש שינויים שעדיין לא פורסמו במסלול אחר. אפשר לשמור אותם ולחזור, או לוותר עליהם ולפתוח את המסלול שנבחר." />
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'שינויים שלא פורסמו'}</AppText>
         <TouchableOpacity style={styles.secondaryButton} onPress={() => finishLeave()} testID="route-switch-cancel"><AppText style={styles.secondaryButtonText}>ביטול וחזרה</AppText></TouchableOpacity>
@@ -815,7 +815,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   if (mode === 'choice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide dismissible message={existingDraft?.sourceRouteId ? "יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן." : "יש מסלול חדש בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרנו, או למחוק ולהתחיל מחדש."} />
+      <NoyaGuide dismissible tipId="route-builder" message={existingDraft?.sourceRouteId ? "יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן." : "יש מסלול חדש בתהליך. אפשר להמשיך בדיוק מהמקום שבו נעצרנו, או למחוק ולהתחיל מחדש."} />
       <View style={styles.card}>
         <AppText style={styles.startTitle}>{existingDraft?.title || 'מסלול בתהליך'}</AppText>
         <AppText style={styles.body}>{existingDraft?.dayCount || existingDraft?.days?.length || 1} ימים{existingDraft?.area?.cityName ? ` · ${existingDraft.area.cityName}` : ''}</AppText>
@@ -828,7 +828,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   );
   if (mode === 'start') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <NoyaGuide dismissible message="נתחיל בקטן. איפה המסלול וכמה ימים?" />
+      <NoyaGuide dismissible tipId="route-builder" message="מתחילים בקטן. איפה המסלול וכמה ימים?" />
       <View style={styles.card}>
         <AppText style={styles.startTitle}>פתיחת מסלול</AppText>
         <AppText style={styles.fieldLabel}>עיר או אזור</AppText>
@@ -860,7 +860,7 @@ export default function AddRoutesScreen({ navigation, route }) {
           ><AppText style={styles.retryText}>ניסיון נוסף</AppText></TouchableOpacity> : null}
         </View>
         {missingLocalMediaCount ? <View style={styles.errorBox} testID="route-missing-local-media"><AppText style={styles.errorText}>לא הצלחנו לשחזר {missingLocalMediaCount} תמונות מהטיוטה. אפשר לבחור אותן מחדש לפני הפרסום.</AppText></View> : null}
-        <NoyaGuide dismissible message="אפשר להתחיל מהעצירות שכבר ברורות. את שאר הפרטים משלימים לפני הפרסום." />
+        <NoyaGuide dismissible tipId="route-builder" message="אפשר להתחיל מהעצירות שכבר ברורות. את שאר הפרטים משלימים לפני הפרסום." />
         <TouchableOpacity style={styles.mapPeek} onPress={() => navigation.navigate('RouteMap', { routeData: { title, days } })} accessibilityRole="button" testID="route-map-peek">
           <View><AppText style={styles.mapPeekTitle}>מפת המסלול</AppText><AppText style={styles.mapPeekMeta}>{preciseStops.length ? `${preciseStops.length} נקודות מדויקות` : 'המפה תתעדכן כשיתווספו נקודות מדויקות'}</AppText></View><Ionicons name="map-outline" size={28} color={colors.white} />
         </TouchableOpacity>

@@ -107,8 +107,8 @@ export default function EditProfileScreen({ navigation }) {
   useBackButton(navigation, { title: 'העדפות הטיול שלי', color: colors.primary, onPress: handleHeaderBackPress });
 
   const save = async () => {
-    if (profile.interests.length < 3 || !profile.budget || profile.travelParties.length < 1) {
-      Alert.alert('חסר מידע', 'יש לבחור לפחות 3 תחומי עניין, תקציב והרכב מטיילים.');
+    if (profile.interests.length < 2 || profile.interests.length > 4 || !profile.budget || profile.travelParties.length < 1) {
+      Alert.alert('חסר עוד פרט קטן', 'כדי לשמור, צריך לבחור 2 עד 4 תחומי עניין, תקציב והרכב לטיול.');
       return;
     }
     setSaving(true);
@@ -142,7 +142,7 @@ export default function EditProfileScreen({ navigation }) {
     <>
       <SafeAreaView style={common.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {section('תחומי עניין', INTERESTS, profile.interests, (value) => toggle('interests', value, 8), 'edit-interest', `${profile.interests.length}/8 נבחרו`)}
+          {section('תחומי עניין', INTERESTS, profile.interests, (value) => toggle('interests', value, 4), 'edit-interest', `${profile.interests.length}/4 נבחרו`)}
           {section('תקציב מועדף', BUDGETS, profile.budget ? [profile.budget] : [], (value) => setProfile((p) => ({ ...p, budget: value })), 'edit-budget')}
           {section('הרכב מטיילים', TRAVEL_PARTIES, profile.travelParties, (value) => toggle('travelParties', value, 2), 'edit-party', `${profile.travelParties.length}/2 נבחרו`)}
           {section('אווירה', VIBES, profile.vibe, (value) => toggle('vibe', value, 3), 'edit-vibe', 'עד שלוש אפשרויות')}

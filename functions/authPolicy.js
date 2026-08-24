@@ -78,13 +78,6 @@ function assertAccountSetupComplete(auth, userDocument) {
 
 function assertActiveUser(auth, userDocument) {
   assertAccountSetupComplete(auth, userDocument);
-  if (userDocument?.smartProfile?.setupRequired !== false || !userDocument?.smartProfile?.completedAt) {
-    throw policyError(
-      'failed-precondition',
-      'Travel preferences are required.',
-      AUTH_REASONS.PREFERENCES_REQUIRED
-    );
-  }
 }
 
 async function authorizeRequest({

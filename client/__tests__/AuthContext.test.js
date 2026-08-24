@@ -61,11 +61,13 @@ function Harness() {
     openRegistration,
     synchronizeUserDocument,
     refreshUserDocumentFromServer,
+    userDocument,
   } = useAuth();
   return (
     <>
       <Text testID="auth-status">{status}</Text>
       <Text testID="gate-status">{gate?.status || ''}</Text>
+      <Text testID="profile-name">{userDocument?.displayName || ''}</Text>
       <TouchableOpacity
         testID="require-active"
         onPress={() => requireCapability(CAPABILITIES.ACTIVE, {
@@ -92,6 +94,13 @@ function Harness() {
       <TouchableOpacity
         testID="synchronize-profile"
         onPress={() => synchronizeUserDocument(activeDocument)}
+      />
+      <TouchableOpacity
+        testID="synchronize-stale-profile"
+        onPress={() => synchronizeUserDocument(
+          { ...activeDocument, displayName: 'Stale first account' },
+          'user-1'
+        )}
       />
       <TouchableOpacity
         testID="ensure-active"
@@ -292,6 +301,30 @@ describe('AuthProvider capability gate', () => {
     });
 
     expect(screen.getByTestId('auth-status').props.children).toBe(AUTH_STATES.READY);
+  });
+
+  it('does not adopt a callable profile response after the authenticated UID changes', async () => {
+    const screen = render(<AuthProvider><Harness /></AuthProvider>);
+    const firstUser = { uid: 'user-1', emailVerified: true, providerData: [{ providerId: 'password' }] };
+    const secondUser = { uid: 'user-2', emailVerified: true, providerData: [{ providerId: 'password' }] };
+    const secondDocument = { ...activeDocument, displayName: 'Second account' };
+
+    await act(async () => { authListener(firstUser); });
+    getDocFromServer.mockResolvedValueOnce({ exists: () => true, data: () => secondDocument });
+    await act(async () => {
+      authListener(secondUser);
+      profileListener({
+        exists: () => true,
+        data: () => secondDocument,
+        metadata: { fromCache: false },
+      });
+    });
+    await waitFor(() => expect(screen.getByTestId('profile-name').props.children)
+      .toBe('Second account'));
+
+    fireEvent.press(screen.getByTestId('synchronize-stale-profile'));
+
+    expect(screen.getByTestId('profile-name').props.children).toBe('Second account');
   });
 
   it('deduplicates concurrent authoritative profile refreshes for the same UID', async () => {

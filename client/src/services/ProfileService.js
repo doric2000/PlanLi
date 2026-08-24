@@ -20,8 +20,8 @@ let registerUserCallable;
 let completeAccountSetupCallable;
 
 const PROFILE_ARRAY_FIELDS = ['interests', 'travelParties', 'vibe', 'travelerStyles', 'needs'];
-const PROFILE_SCALAR_FIELDS = ['budget', 'pace'];
-const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia'];
+const PROFILE_SCALAR_FIELDS = ['budget', 'pace', 'onboardingVersion'];
+const PROFILE_UPDATE_FIELDS = ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia', 'noyaOnboarding'];
 
 async function runProfileOperation(operation, callback) {
   const startedAt = Date.now();
@@ -86,7 +86,12 @@ export function verifyPersistedSmartProfile(requested, persisted, { complete = f
   }
   if (complete) {
     if (persisted.setupRequired === true || !persisted.completedAt) return false;
-    if (!Array.isArray(persisted.interests) || persisted.interests.length < 3) return false;
+    const isNoyaProfile = Number(persisted.onboardingVersion || 1) >= 2;
+    const minimumInterests = isNoyaProfile ? 2 : 3;
+    const maximumInterests = isNoyaProfile ? 4 : 8;
+    if (!Array.isArray(persisted.interests)
+      || persisted.interests.length < minimumInterests
+      || persisted.interests.length > maximumInterests) return false;
     if (!persisted.budget) return false;
     if (!Array.isArray(persisted.travelParties) || persisted.travelParties.length < 1) return false;
   }
@@ -169,6 +174,12 @@ export const saveProfile = async (
   });
   return { ...(response.data || {}), ...persisted };
 });
+
+export const saveNoyaOnboardingStatus = async (status, version = 2) =>
+  saveProfile(
+    { noyaOnboarding: { status, version } },
+    { completeSmartProfile: false, verifySmartProfile: false }
+  );
 
 export const registerUserDocument = async (fields = {}) => runProfileOperation('register_user', async () => {
   registerUserCallable ||= httpsCallable(cloudFunctions, 'registerUser');

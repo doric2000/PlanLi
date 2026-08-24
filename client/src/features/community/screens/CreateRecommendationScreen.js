@@ -970,7 +970,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const renderLocationStep = () => (
     <>
-      <NoyaGuide message="איפה ההמלצה? אפשר לחפש מקום מדויק. אם הוא לא מופיע, מספיק לבחור עיר או אזור." />
+      <NoyaGuide dismissible tipId="create-recommendation" message="אפשר להתחיל ממקום מדויק, מעיר או מאזור. את שאר הפרטים משלימים בקצב שנוח." />
       <View style={styles.modeActions}>
         {[
           { id: LOCATION_MODES.exact, label: 'מקום מדויק', icon: 'location-outline' },
@@ -1057,7 +1057,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const renderTaxonomyStep = () => (
     <>
-      <NoyaGuide message={categoryId ? 'מה מתאר הכי טוב את ההמלצה? אפשר לבחור עד שלוש אפשרויות.' : 'על מה ההמלצה?'} />
+      <NoyaGuide dismissible tipId="create-recommendation" message={categoryId ? 'מה מתאר הכי טוב את ההמלצה? אפשר לבחור עד שלוש אפשרויות.' : 'על מה ההמלצה?'} />
       {primarySuggestion && !categoryId ? (
         <View style={styles.suggestionPanel}>
           <AppText style={styles.suggestionText}>
@@ -1163,7 +1163,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const renderStoryStep = () => (
     <>
-      <NoyaGuide message="משפט קצר ותמונה טובה מספיקים כדי להבין למה כדאי להגיע." />
+      <NoyaGuide dismissible tipId="create-recommendation" message="משפט קצר ותמונה טובה מספיקים כדי להבין למה כדאי להגיע." />
       <View style={styles.fieldStack}>
         <FocusClearingFormInput
           label="איך קוראים למקום או להמלצה?"
@@ -1209,7 +1209,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     const optionalField = OPTIONAL_FIELDS.find((field) => field.id === activeOptionalField);
     return (
       <>
-        <NoyaGuide message="כמעט סיימנו. מה רמת המחיר? אחר כך אפשר להוסיף עוד פרט שימושי או לפרסם." />
+        <NoyaGuide dismissible tipId="create-recommendation" message="נשאר לבחור רמת מחיר. אחר כך אפשר להוסיף פרט שימושי או לפרסם." />
         <View style={styles.preview}>
           {previewUris[0] ? (
             <Image source={{ uri: previewUris[0] }} style={styles.previewImage} resizeMode="cover" />
@@ -1314,7 +1314,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   );
   if (mode === 'choice' || mode === 'switchChoice') return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <NoyaGuide message={mode === 'switchChoice'
+      <NoyaGuide dismissible tipId="create-recommendation" message={mode === 'switchChoice'
         ? 'יש המלצה אחרת עם שינויים שעדיין לא פורסמו. אפשר לשמור אותה ולחזור, או לוותר עליה ולפתוח את ההמלצה שבחרת.'
         : existingDraft?.sourceRecommendationId
           ? 'יש עריכות שעדיין לא פורסמו. אפשר להמשיך לערוך או לוותר עליהן.'

@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions } from '../config/firebase';
 import { createRequestCoordinator } from '../utils/requestCoordinator';
+import { loadGuestNoyaProfile } from '../features/profile/services/NoyaOnboardingStorage';
 
 const callables = new Map();
 const recentOpenAttempts = new Map();
@@ -32,8 +33,8 @@ function canonicalize(value) {
   }, {});
 }
 
-function discoveryCacheKey(name, payload) {
-  const principal = auth.currentUser?.uid || 'guest';
+function discoveryCacheKey(name, payload, principalUid = auth.currentUser?.uid || null) {
+  const principal = principalUid || 'guest';
   const normalizedPayload = name === DISCOVERY_CALLABLES.map && payload?.viewport
     ? {
       ...payload,
@@ -56,9 +57,48 @@ const call = async (name, payload = {}) => {
   return response?.data || null;
 };
 
-function requestDiscovery(name, payload = {}) {
-  const key = discoveryCacheKey(name, payload);
-  return discoveryCoordinator.request(key, () => call(name, payload));
+function createPrincipalChangedError() {
+  const error = new Error('Authentication identity changed during discovery.');
+  error.code = 'auth/identity-changed';
+  return error;
+}
+
+function requestDiscovery(name, payload = {}, retryIdentityChange = true) {
+  const principalUid = auth.currentUser?.uid || null;
+  const key = discoveryCacheKey(name, payload, principalUid);
+  const assertPrincipalUnchanged = () => {
+    if ((auth.currentUser?.uid || null) !== principalUid) throw createPrincipalChangedError();
+  };
+  const coordinated = discoveryCoordinator.request(key, async () => {
+    const supportsGuestPreferences = [
+      DISCOVERY_CALLABLES.recommendations,
+      DISCOVERY_CALLABLES.routes,
+    ].includes(name);
+    const storedGuestProfile = !principalUid && supportsGuestPreferences
+      ? await loadGuestNoyaProfile()
+      : null;
+    assertPrincipalUnchanged();
+    const guestPreferenceContext = storedGuestProfile ? {
+      interests: storedGuestProfile.interests,
+      budget: storedGuestProfile.budget,
+      travelParties: storedGuestProfile.travelParties,
+      needs: storedGuestProfile.needs,
+      onboardingVersion: storedGuestProfile.onboardingVersion,
+    } : null;
+    const result = await call(name, {
+      ...payload,
+      ...(guestPreferenceContext ? { guestPreferenceContext } : {}),
+    });
+    assertPrincipalUnchanged();
+    return result;
+  });
+  const promise = coordinated.promise.catch((error) => {
+    if (error?.code !== 'auth/identity-changed') throw error;
+    discoveryCoordinator.invalidate(key);
+    if (!retryIdentityChange) throw error;
+    return requestDiscovery(name, payload, false).promise;
+  });
+  return { ...coordinated, promise };
 }
 
 export const requestPersonalizedRecommendations = (payload = {}) =>

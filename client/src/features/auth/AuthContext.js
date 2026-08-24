@@ -231,9 +231,10 @@ export function AuthProvider({ children, navigationRef }) {
   const confirmedUserDocument = profileConfirmedUid === user?.uid ? userDocument : null;
   const status = deriveAuthState(user, confirmedUserDocument, loading);
 
-  const synchronizeUserDocument = useCallback((nextUserDocument) => {
+  const synchronizeUserDocument = useCallback((nextUserDocument, expectedUid = null) => {
     const currentUser = activeUserRef.current;
     if (!currentUser?.uid) return AUTH_STATES.GUEST;
+    if (expectedUid && currentUser.uid !== expectedUid) return AUTH_STATES.LOADING;
     const acceptedDocument = adoptUserDocument(currentUser.uid, nextUserDocument, {
       authoritative: true,
       allowUnversioned: true,

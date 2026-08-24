@@ -413,7 +413,7 @@ describe('streamlined route builder', () => {
   it('opens a server draft from only a destination and day count', async () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(
-      () => expect(screen.getByText('נתחיל בקטן. איפה המסלול וכמה ימים?')).toBeTruthy(),
+      () => expect(screen.getByText('מתחילים בקטן. איפה המסלול וכמה ימים?')).toBeTruthy(),
       { timeout: 5000 }
     );
     fireEvent.press(screen.getByTestId('destination-select'));
@@ -431,7 +431,7 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-discard'));
     await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
-    expect(screen.getByText('נתחיל בקטן. איפה המסלול וכמה ימים?')).toBeTruthy();
+    expect(screen.getByText('מתחילים בקטן. איפה המסלול וכמה ימים?')).toBeTruthy();
   });
 
   it('keeps an existing draft and requires route description, price and useful stops before publish', async () => {

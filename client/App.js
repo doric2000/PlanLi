@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
+import { AppState } from "react-native";
 import AppFontProvider from "./src/components/AppFontProvider";
 
 import VerifyEmailScreen from "./src/features/auth/screens/VerifyEmailScreen";
@@ -39,6 +40,7 @@ import { BlockedUsersProvider } from "./src/features/moderation/BlockedUsersCont
 import AuthGateModal from "./src/features/auth/components/AuthGateModal";
 import { CAPABILITIES } from "./src/constants/authPolicy";
 import { addDiagnosticBreadcrumb, setDiagnosticTag } from "./src/services/ErrorReporting";
+import { beginNoyaVisit } from "./src/features/profile/services/NoyaOnboardingStorage";
 
 
 const Stack = createStackNavigator();
@@ -51,7 +53,6 @@ const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
 const BlockedUsersAuthed = withRequireAuth(BlockedUsersScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
-const PreferenceSetupAuthed = withRequireAuth(PreferenceSetupScreen, CAPABILITIES.PREFERENCES_SETUP);
 const AddRecommendationActive = withRequireAuth(AddRecommendationScreen, CAPABILITIES.ACTIVE);
 const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
 
@@ -75,6 +76,13 @@ export default function App() {
 	const initialRouteName = process.env.EXPO_PUBLIC_ADMIN_WEB === 'true' ? 'AdminPanel' : 'Main';
 	const previousRouteNameRef = useRef(null);
 	const [navigationReady, setNavigationReady] = useState(false);
+	useEffect(() => {
+		beginNoyaVisit().catch(() => {});
+		const subscription = AppState.addEventListener('change', (state) => {
+			if (state === 'active') beginNoyaVisit().catch(() => {});
+		});
+		return () => subscription.remove();
+	}, []);
 	const recordCurrentRoute = () => {
 		const currentRouteName = navigationRef.getCurrentRoute()?.name;
 		if (!currentRouteName || previousRouteNameRef.current === currentRouteName) return;
@@ -111,7 +119,7 @@ export default function App() {
 					<Stack.Screen name='Privacy' component={LegalDocumentScreen} />
 					<Stack.Screen name='CommunityGuidelines' component={LegalDocumentScreen} />
 					<Stack.Screen name='Main' component={PreferenceSetupGate} />
-					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupAuthed} />
+					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupScreen} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
 					<Stack.Screen name="NotificationSettings" component={NotificationSettingsAuthed} />
 					<Stack.Screen name='Settings' component={SettingsAuthed} />

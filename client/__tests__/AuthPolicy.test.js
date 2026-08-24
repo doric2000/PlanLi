@@ -27,15 +27,15 @@ describe('auth state machine', () => {
       .toBe(AUTH_STATES.EMAIL_VERIFICATION_REQUIRED);
   });
 
-  it('requires account details, current consent and preferences in order', () => {
+  it('requires account details and current consent without making preferences a gate', () => {
     const user = passwordUser(true);
     expect(deriveAuthState(user, null, false)).toBe(AUTH_STATES.ACCOUNT_SETUP_REQUIRED);
     expect(deriveAuthState(user, { ...activeDocument, legal: {} }, false))
       .toBe(AUTH_STATES.LEGAL_CONSENT_REQUIRED);
     expect(deriveAuthState(user, { ...activeDocument, smartProfile: { setupRequired: true } }, false))
-      .toBe(AUTH_STATES.PREFERENCES_REQUIRED);
-    expect(deriveAuthState(user, { ...activeDocument, smartProfile: { completedAt: { seconds: 1 } } }, false))
-      .toBe(AUTH_STATES.PREFERENCES_REQUIRED);
+      .toBe(AUTH_STATES.READY);
+    expect(deriveAuthState(user, { ...activeDocument, smartProfile: {} }, false))
+      .toBe(AUTH_STATES.READY);
     expect(deriveAuthState(user, activeDocument, false)).toBe(AUTH_STATES.READY);
   });
 

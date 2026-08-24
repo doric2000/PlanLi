@@ -19,7 +19,11 @@ test('public profile keeps only explicitly public identity and smart-profile fie
     smartProfile: {
       interests: ['food', 'nature_scenery'],
       vibe: ['relaxed'],
-      budget: 'high',
+      budget: 'premium',
+      travelParties: ['couple'],
+      onboardingVersion: 2,
+      setupRequired: false,
+      completedAt: 'time',
       travelStyleTag: 'luxury',
       constraints: ['medical'],
     },
@@ -40,7 +44,7 @@ test('public profile keeps only explicitly public identity and smart-profile fie
   assert.equal('credibilityScore' in result, false);
 });
 
-test('public profiles require current onboarding, legal consent, preferences, and active moderation', () => {
+test('public profiles require current onboarding, legal consent and active moderation without preferences', () => {
   const eligible = {
     displayName: 'Dana',
     onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'time' },
@@ -53,8 +57,39 @@ test('public profiles require current onboarding, legal consent, preferences, an
     moderation: { status: 'active' },
   };
   assert.equal(isPublicProfileEligible(eligible), true);
+  assert.equal(isPublicProfileEligible({ ...eligible, smartProfile: { setupRequired: true } }), true);
   assert.equal(isPublicProfileEligible({ ...eligible, legal: {} }), false);
   assert.equal(isPublicProfileEligible({ ...eligible, moderation: { status: 'suspended' } }), false);
+});
+
+test('public profile keeps incomplete Noa preference drafts private', () => {
+  const incomplete = sanitizePublicProfile('user-incomplete', {
+    displayName: 'Dana',
+    smartProfile: {
+      interests: ['food'],
+      vibe: ['relaxed'],
+      onboardingVersion: 2,
+      setupRequired: true,
+    },
+  });
+  const completed = sanitizePublicProfile('user-complete', {
+    displayName: 'Dana',
+    smartProfile: {
+      interests: ['food', 'nature_scenery'],
+      vibe: ['relaxed'],
+      budget: 'balanced',
+      travelParties: ['couple'],
+      onboardingVersion: 2,
+      setupRequired: false,
+      completedAt: 'time',
+    },
+  });
+
+  assert.equal(incomplete.smartProfile, null);
+  assert.deepEqual(completed.smartProfile, {
+    interests: ['food', 'nature_scenery'],
+    vibe: ['relaxed'],
+  });
 });
 
 test('public profile projection rejects arbitrary remote avatar origins', () => {
@@ -75,8 +110,8 @@ test('private preference and activity updates do not refresh the public projecti
     },
     moderation: { status: 'active' },
     smartProfile: {
-      interests: ['food'], vibe: ['relaxed'], budget: 'balanced', travelParties: ['couple'],
-      setupRequired: false, completedAt: 'time',
+      interests: ['food', 'nature_scenery'], vibe: ['relaxed'], budget: 'balanced',
+      travelParties: ['couple'], onboardingVersion: 2, setupRequired: false, completedAt: 'time',
     },
   };
   const afterPrivateUpdate = {
@@ -86,7 +121,7 @@ test('private preference and activity updates do not refresh the public projecti
   };
   const afterPublicUpdate = {
     ...afterPrivateUpdate,
-    smartProfile: { ...afterPrivateUpdate.smartProfile, interests: ['hiking'] },
+    smartProfile: { ...afterPrivateUpdate.smartProfile, interests: ['beaches_water', 'nature_scenery'] },
   };
 
   assert.equal(publicProfileProjectionChanged('user-1', before, afterPrivateUpdate), false);
@@ -111,10 +146,13 @@ test('public profile includes a short bio but never private account fields', () 
     email: 'private@example.com',
     bio: '  ים, קפה וטיולים 🌊  ',
     smartProfile: {
-      interests: ['food'],
+      interests: ['food', 'nature_scenery'],
       vibe: ['relaxed'],
       budget: 'premium',
       travelParties: ['solo'],
+      onboardingVersion: 2,
+      setupRequired: false,
+      completedAt: 'time',
     },
   });
 
