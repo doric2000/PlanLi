@@ -10,7 +10,14 @@ with an installed, signed EAS Development Build connected to Metro. Expo Go is
 not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
 owner's physical iPhone. It has been submitted for external TestFlight
 distribution and is waiting for Apple's Beta App Review as reported on
-2026-08-22. The production profile uses the `production` EAS Update channel and
+2026-08-22. An internal iOS EAS Development Build `1.1.0 (13)` completed at
+`2026-08-24T17:53:02.788Z` from recommendation/RoadTrip composer PR `#193`
+merge commit `8afdfb3`. Its EAS build ID is
+`ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime is `1.1.0`, and the
+development profile has no update channel. Download, installation, and physical
+iPhone behavior remain unverified; no EAS Update, App Store submission, or
+backend deployment was performed for this build. The production profile uses
+the `production` EAS Update channel and
 runtime `1.1.0`. Noya onboarding V2 production update group
 `c049b41d-15b7-473c-aada-afad791682a5` was published for iOS
 (`01a03171-6532-735f-a964-5385ba067724`) and Android
@@ -201,6 +208,12 @@ remain explicit release operations; merging source code does not perform them.
 Current release record:
 
 - App version/build: `1.1.0 (13)`.
+- iOS Development Build: internal-distribution build
+  `ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime `1.1.0`, completed at
+  `2026-08-24T17:53:02.788Z` from PR `#193` merge commit `8afdfb3`. The
+  development profile has no update channel or Apple review/submission state;
+  the artifact expires on `2026-09-07T17:47:09.652Z`. Download, installation,
+  and physical-iPhone verification remain pending.
 - Installed state: running on the owner's physical iPhone through TestFlight.
 - EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
   center commit `4656434` with the `production` profile and runtime `1.1.0`.
