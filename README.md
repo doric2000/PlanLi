@@ -7,10 +7,14 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 PlanLi has an external TestFlight beta; it has not been publicly released to the
 App Store, Google Play, or a public web domain. Native development is performed
 with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. TestFlight build `1.1.0 (13)` is installed and in use on the
-owner's physical iPhone. It has been submitted for external TestFlight
-distribution and is waiting for Apple's Beta App Review as reported on
-2026-08-22. An internal iOS EAS Development Build `1.1.0 (13)` completed at
+not supported. TestFlight build `1.1.0 (13)` remains installed and in use on
+the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
+commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
+`3c2adff2-a0f7-420d-b1cf-dd5f8725d8cf` then finished successfully and uploaded
+the build to App Store Connect, as verified at `2026-08-24T20:21:18Z`. Apple
+processing, TestFlight availability, installation, and physical-iPhone
+behavior for build 14 remain unverified. An internal iOS EAS Development Build
+`1.1.0 (13)` completed at
 `2026-08-24T17:53:02.788Z` from recommendation/RoadTrip composer PR `#193`
 merge commit `8afdfb3`. Its EAS build ID is
 `ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime is `1.1.0`, and the
@@ -23,8 +27,8 @@ runtime `1.1.0`. Noya onboarding V2 production update group
 (`01a03171-6532-735f-a964-5385ba067724`) and Android
 (`01a03171-6532-732a-99b0-f01ddc5dd64d`) at `2026-08-24T01:45:10.194Z` from
 PR `#189` merge commit `0ed8e88`. Delivery and application on the physical
-iPhone remain unverified. App version and runtime remain `1.1.0`, TestFlight
-build remains `13`, and no native build or Apple submission was created. The
+iPhone remain unverified. App version and runtime remain `1.1.0`; that OTA did
+not create a native build or Apple submission. The
 immediately preceding production group is
 `76ce4534-be84-4686-a364-d7d79b846c94`. Twenty-eight affected Functions and the
 active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
@@ -207,18 +211,26 @@ remain explicit release operations; merging source code does not perform them.
 
 Current release record:
 
-- App version/build: `1.1.0 (13)`.
+- App version/build: `1.1.0 (14)`.
 - iOS Development Build: internal-distribution build
   `ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime `1.1.0`, completed at
   `2026-08-24T17:53:02.788Z` from PR `#193` merge commit `8afdfb3`. The
   development profile has no update channel or Apple review/submission state;
   the artifact expires on `2026-09-07T17:47:09.652Z`. Download, installation,
   and physical-iPhone verification remain pending.
-- Installed state: running on the owner's physical iPhone through TestFlight.
-- EAS build: `6d00f03e-dad3-45cc-9e85-336097f5a420`, created from notification
-  center commit `4656434` with the `production` profile and runtime `1.1.0`.
-- Source release: recommendation provider-destination PR `#187`, merged as
-  commit `1d4b87f`.
+- Installed state: build `1.1.0 (13)` is running on the owner's physical iPhone
+  through TestFlight. Build `1.1.0 (14)` has not yet been installed or exercised
+  on a physical iPhone.
+- EAS build: `34474cb7-e5c0-45b0-8733-bf848e8ee3da`, completed at
+  `2026-08-24T20:07:02.152Z` from commit
+  `f9c7096efbf495244a12d63760e5b39fb2b03f67` with the `production` profile,
+  store distribution, production channel, app/runtime version `1.1.0`, and iOS
+  build number `14`. EAS archived 111 MB from a workspace that also held
+  unrelated pre-existing untracked campaign and rendering-script files; the
+  exact inclusion of those files in the archive was not independently audited.
+- Source release: Noya product-tour PR `#196`, typography release fix PR `#197`,
+  and live-audit alignment PR `#198`; the build source is PR `#198` merge commit
+  `f9c7096`.
 - Preview EAS Update: group `58425c2b-993a-42fc-83b5-c244f5cdf7c9`, runtime
   `1.1.0`, iOS update `01a02ff8-71b6-78f1-a711-cdb84adb5b78`, Android update
   `01a02ff8-71b6-7808-a3ef-d86db45dfbaa`, published from `3ec0cb1` at
@@ -277,25 +289,35 @@ Current release record:
   uploads, publications, and read-only metadata confirmations completed
   successfully. Download/application and the live Google/Apple authentication
   handshakes on a physical iPhone remain the runtime verification gates.
+- Release-candidate validation: all 153 client suites passed 773 tests, all 545
+  runnable Functions tests passed with 22 skipped, all 22 Rules emulator tests
+  passed, the iOS release configuration and export passed, and the final release
+  review found no actionable findings. The locked client dependency audit still
+  reports eight high-severity findings; dependencies were not upgraded during
+  this release. Physical-device behavior remains unverified.
 - OTA device state: Expo serves RoadTrip preview group
   `58425c2b-993a-42fc-83b5-c244f5cdf7c9` only to matching preview requests;
   no preview iOS client exists, so it has not been applied. Production now
-  serves group `76ce4534-be84-4686-a364-d7d79b846c94`. Download, application,
+  serves group `c049b41d-15b7-473c-aada-afad791682a5`. Download, application,
   and recommendation provider-search behavior on the physical TestFlight
   iPhone remain unverified.
   Rollback identifiers are preview group
   `c1bfeede-8577-420a-977b-3ac56f35cdde` and production group
   `916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9`.
-- Known live-audit exception: two pre-existing recommendation documents
-  (`rec_9gXo3omDD7yJ9aIKQ_Yj` and `rec_GiMpMfW5sxBdz0RZ5u7o`) have invalid
-  `budget` taxonomy values. No unrelated production data was changed during the
-  route-builder release. Existing recommendations without a valid price were
-  not guessed or migrated; the client continues to show `מחיר לא צוין`, and
-  editing and republishing requires a valid selection.
-- EAS submission ID: not yet recorded.
-- App Store Connect app: `6801453067`; version `1.1.0` has been submitted for
-  external TestFlight distribution and is waiting for Apple's Beta App Review
-  as reported on 2026-08-22.
+- Production catalog migration: the separately authorized apply run at
+  `2026-08-24T19:49Z` scanned 14 recommendations and migrated exactly one
+  document (`recommendations/rec_CBCFGWNEcxN3Ov6ijXeI`) to category `nature`
+  and subcategory `viewpoint`; 13 were already migrated, with zero blocked
+  records and zero conflicts. The post-migration live audit completed at
+  `2026-08-24T19:50:08.573Z` with 477 documents checked and zero failures. No
+  Firebase deployment accompanied this migration.
+- EAS submission ID: `3c2adff2-a0f7-420d-b1cf-dd5f8725d8cf`, created for build
+  `34474cb7-e5c0-45b0-8733-bf848e8ee3da`. EAS reported `FINISHED` with no
+  submission error at `2026-08-24T20:21:18Z`, confirming upload to App Store
+  Connect. Apple processing remains unverified.
+- App Store Connect app: `6801453067`; build `1.1.0 (14)` was uploaded for
+  TestFlight. External TestFlight availability and any required Beta App Review
+  remain subject to App Store Connect and are not yet verified.
 
 The current release target is an **external TestFlight beta with open PlanLi
 registration**, not an App Store listing. PlanLi does not maintain a Firebase
