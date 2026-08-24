@@ -53,6 +53,8 @@ import { useContentPublish } from '../../publishing/ContentPublishContext';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { waitForRefreshConfirmation } from '../../../utils/refreshFeedback';
 import { invalidateProfileResources } from '../../../utils/profileResourceInvalidation';
+import { NoyaTourTarget, useNoyaMainTabRegistration } from '../../noya/NoyaTourContext';
+import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const text = {
   title: 'מסלולים',
@@ -65,6 +67,7 @@ const text = {
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
+  useNoyaMainTabRegistration(navigation);
   const { ensureCapability, user: currentUser } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
@@ -231,6 +234,7 @@ export default function RoutesScreen({ navigation }) {
   };
 
   const renderTopArea = () => (
+    <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Routes}>
     <PageHeader
       variant="hero"
       title={text.title}
@@ -267,6 +271,7 @@ export default function RoutesScreen({ navigation }) {
         </View>
       </SearchFilterRow>
     </PageHeader>
+    </NoyaTourTarget>
   );
 
   const renderActiveFilters = () => (

@@ -5,7 +5,6 @@ const STORAGE_KEY = '@planli/noya-onboarding-v2';
 const VISIT_GAP_MS = 30 * 60 * 1000;
 
 let memoryState = null;
-let activeTipId = null;
 const handledAccountIds = new Set();
 
 const EMPTY_STATE = Object.freeze({
@@ -15,17 +14,17 @@ const EMPTY_STATE = Object.freeze({
   visitCount: 0,
   lastVisitAtMs: 0,
   hasViewedContent: false,
-  tipsSeen: [],
-  tipsDisabled: false,
 });
 
 function normalizeState(value) {
   const source = value && typeof value === 'object' ? value : {};
+  const current = { ...source };
+  delete current.tipsSeen;
+  delete current.tipsDisabled;
   return {
     ...EMPTY_STATE,
-    ...source,
+    ...current,
     version: NOYA_ONBOARDING_VERSION,
-    tipsSeen: Array.from(new Set(Array.isArray(source.tipsSeen) ? source.tipsSeen : [])),
   };
 }
 
@@ -51,7 +50,6 @@ export async function beginNoyaVisit(nowMs = Date.now()) {
   const current = await readState();
   const isNewVisit = nowMs - Number(current.lastVisitAtMs || 0) >= VISIT_GAP_MS;
   if (!isNewVisit) return current;
-  activeTipId = null;
   return writeState({
     visitCount: Number(current.visitCount || 0) + 1,
     lastVisitAtMs: nowMs,
@@ -100,24 +98,6 @@ export async function clearGuestNoyaProfile() {
   return writeState({ guestProfile: null, guestStatus: '' });
 }
 
-export async function claimNoyaTip(tipId) {
-  if (!tipId || activeTipId) return false;
-  const current = await readState();
-  if (current.tipsDisabled || current.tipsSeen.includes(tipId)) return false;
-  activeTipId = tipId;
-  await writeState({ tipsSeen: [...current.tipsSeen, tipId] });
-  return true;
-}
-
-export async function getNoyaTipsEnabled() {
-  return !(await readState()).tipsDisabled;
-}
-
-export async function setNoyaTipsEnabled(enabled) {
-  if (enabled) activeTipId = null;
-  return writeState({ tipsDisabled: !enabled });
-}
-
 export function markNoyaAccountHandled(uid) {
   if (uid) handledAccountIds.add(uid);
 }
@@ -127,17 +107,13 @@ export function wasNoyaAccountHandled(uid) {
 }
 
 export async function resetNoyaExperience() {
-  activeTipId = null;
   return writeState({
     guestStatus: '',
     hasViewedContent: false,
-    tipsSeen: [],
-    tipsDisabled: false,
   });
 }
 
 export function __resetNoyaStorageForTests() {
   memoryState = null;
-  activeTipId = null;
   handledAccountIds.clear();
 }

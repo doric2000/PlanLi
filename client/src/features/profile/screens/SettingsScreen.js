@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
   Platform,
   ScrollView,
-  Switch,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -32,9 +31,8 @@ import { resetPersonalizationActivity } from '../../../services/PersonalizationS
 import { colors, settingsHubStyles as styles } from '../../../styles';
 import {
   clearGuestNoyaProfile,
-  getNoyaTipsEnabled,
-  setNoyaTipsEnabled,
 } from '../services/NoyaOnboardingStorage';
+import { useNoyaTour } from '../../noya/NoyaTourContext';
 
 function SettingsRow({
   accessibilityRole = 'button',
@@ -92,13 +90,10 @@ export default function SettingsScreen({ navigation }) {
   const [resettingPersonalization, setResettingPersonalization] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [password, setPassword] = useState('');
-  const [tipsEnabled, setTipsEnabled] = useState(true);
+  const [startingTour, setStartingTour] = useState(false);
+  const { restartMainTour } = useNoyaTour();
   const providerIds = useMemo(() => getProviderIds(auth.currentUser), [auth.currentUser]);
   const hasPasswordProvider = providerIds.includes('password');
-
-  useEffect(() => {
-    getNoyaTipsEnabled().then(setTipsEnabled).catch(() => {});
-  }, []);
 
   const resetPersonalization = () => {
     Alert.alert(
@@ -303,28 +298,21 @@ export default function SettingsScreen({ navigation }) {
             testID="settings-open-noya-button"
           />
           <SettingsRow
-            accessibilityRole="switch"
-            checked={tipsEnabled}
-            detail="הסברים קצרים ברגעים שבהם הם יכולים לעזור"
-            icon="chatbubble-ellipses-outline"
-            label="טיפים של נועה"
+            detail="ארבעה צעדים קצרים בין המסכים המרכזיים"
+            disabled={startingTour}
+            icon="compass-outline"
+            label="סיור קצר עם נועה"
             last
-            onPress={() => {
-              const nextValue = !tipsEnabled;
-              setTipsEnabled(nextValue);
-              setNoyaTipsEnabled(nextValue).catch(() => setTipsEnabled(!nextValue));
+            loading={startingTour}
+            onPress={async () => {
+              setStartingTour(true);
+              try {
+                await restartMainTour();
+              } finally {
+                setStartingTour(false);
+              }
             }}
-            testID="settings-noya-tips-row"
-            trailing={(
-              <Switch
-                accessible={false}
-                accessibilityLabel="הצגת טיפים של נועה"
-                pointerEvents="none"
-                trackColor={{ false: '#C9D0D9', true: '#AFC2D9' }}
-                thumbColor={tipsEnabled ? colors.primary : '#FFFFFF'}
-                value={tipsEnabled}
-              />
-            )}
+            testID="settings-noya-tour-row"
           />
         </View>
         <View style={styles.personalizationCard} testID="settings-personalization-section">
