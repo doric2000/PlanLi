@@ -290,6 +290,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   const allowLeaveRef = useRef(false);
   const leavePromptOpenRef = useRef(false);
   const pauseAutosaveRef = useRef(false);
+  const publishHandoffRef = useRef(false);
   const latestDraftPayloadRef = useRef(null);
   const latestDraftComparableRef = useRef('');
   const isEditingRoute = Boolean(sourceRouteId || sourceRouteIdRef.current);
@@ -319,6 +320,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     setActiveDayIndex(0);
     setSaveStatus('saved');
     setSaveError('');
+    publishHandoffRef.current = false;
     pauseAutosaveRef.current = false;
     leavePromptOpenRef.current = false;
     setMode('editor');
@@ -464,8 +466,12 @@ export default function AddRoutesScreen({ navigation, route }) {
   latestDraftPayloadRef.current = draftPayload;
   latestDraftComparableRef.current = draftComparable;
 
-  const persistSnapshot = useCallback((snapshot, comparable, { force = false } = {}) => {
+  const persistSnapshot = useCallback((snapshot, comparable, {
+    force = false,
+    allowDuringPublish = false,
+  } = {}) => {
     saveQueueRef.current = saveQueueRef.current.catch(() => versionRef.current).then(async () => {
+      if (publishHandoffRef.current && !allowDuringPublish) return versionRef.current;
       const canCreateEditDraft = !draftIdRef.current && Boolean(sourceRouteIdRef.current);
       if ((!draftIdRef.current && !canCreateEditDraft) ||
         (!force && comparable === lastSavedComparableRef.current)) return versionRef.current;
@@ -730,12 +736,18 @@ export default function AddRoutesScreen({ navigation, route }) {
     setValidationMessage(message);
     if (message) { setDetailsOpen(true); return; }
     setPublishBusy(true);
+    publishHandoffRef.current = true;
+    pauseAutosaveRef.current = true;
+    let handedOff = false;
     try {
       const publishDraft = isEditingRoute ? {
         ...draftPayload,
         days: markUnchangedRouteLocations(draftPayload.days, routeAsDraft(routeToEdit).days),
       } : draftPayload;
-      const version = await persistSnapshot(publishDraft, draftComparable, { force: isEditingRoute });
+      const version = await persistSnapshot(publishDraft, draftComparable, {
+        force: isEditingRoute,
+        allowDuringPublish: true,
+      });
       if (typeof enqueueCreate !== 'function') throw new Error('Route publishing is unavailable.');
       const extracted = extractRoutePublishMedia(publishDraft.days);
       const queuedRoute = {
@@ -757,13 +769,24 @@ export default function AddRoutesScreen({ navigation, route }) {
         media: extracted.media,
         draft: { route: publishDraft },
       });
-      await clearDraftMedia({
-        deleteFiles: false,
-        keepUris: extracted.media.map((entry) => entry.uri),
-      });
+      handedOff = true;
+      try {
+        await clearDraftMedia({
+          deleteFiles: false,
+          keepUris: extracted.media.map((entry) => entry.uri),
+        });
+      } catch (error) {
+        console.warn('route_publish_handoff_cleanup_failed', {
+          code: error?.code || 'unknown',
+        });
+      }
       allowLeaveRef.current = true;
       navigation.goBack();
     } catch (error) {
+      if (!handedOff) {
+        publishHandoffRef.current = false;
+        pauseAutosaveRef.current = false;
+      }
       Alert.alert(
         isEditingRoute ? 'לא הצלחנו לשמור את השינויים' : 'לא הצלחנו לפרסם את המסלול',
         error?.details?.reason === 'ROUTE_NEW_PLACE_LIMIT'
