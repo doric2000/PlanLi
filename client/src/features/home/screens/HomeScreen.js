@@ -59,8 +59,8 @@ import {
 } from "../../profile/services/NoyaOnboardingStorage";
 import { saveNoyaOnboardingStatus } from "../../../services/ProfileService";
 import {
-	NoyaTourTarget,
 	useNoyaMainTabRegistration,
+	useNoyaTourTargetRegistration,
 } from "../../noya/NoyaTourContext";
 import { NOYA_MAIN_TARGETS } from "../../noya/NoyaTourDefinitions";
 
@@ -114,6 +114,7 @@ function openPreferenceSetupFrom(navigation, source = 'home') {
 
 export default function HomeScreen({ navigation }) {
 	useNoyaMainTabRegistration(navigation);
+	const homeTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Home);
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
@@ -400,8 +401,9 @@ export default function HomeScreen({ navigation }) {
 	};
 
 	const renderHeader = () => (
-		<NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Home}>
 		<PageHeader
+			rootRef={homeTourTarget.ref}
+			onLayout={homeTourTarget.onLayout}
 			variant="hero"
 			title="לאן נוסעים?"
 			overlapNext
@@ -444,7 +446,6 @@ export default function HomeScreen({ navigation }) {
 				/>
 			</SearchFilterRow>
 		</PageHeader>
-		</NoyaTourTarget>
 	);
 
 	const dismissNoyaInvitation = () => {

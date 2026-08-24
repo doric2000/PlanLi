@@ -12,6 +12,11 @@ Applies to `client/**` and supplements the repository guide.
   areas, accessibility, stable test IDs, navigation route names, and 44px targets.
 - Reuse shared components, hooks, providers, services, and tokens before adding
   new abstractions. Never expose raw provider, Firebase, callable, or network errors.
+- The primary-tab `PageHeader` geometry is a protected visual contract. Preserve
+  its direct screen-child hierarchy, safe-area height, full-width layout, lower
+  corner radii, `overlapNext` margin, and `fixedHeader` stacking. Tours and other
+  overlays must register or measure the header by ref and adapt to it; never wrap,
+  resize, clip, or restyle the header to accommodate guidance.
 
 ## Authentication and protected actions
 

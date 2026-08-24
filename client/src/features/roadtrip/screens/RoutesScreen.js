@@ -53,7 +53,7 @@ import { useContentPublish } from '../../publishing/ContentPublishContext';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { waitForRefreshConfirmation } from '../../../utils/refreshFeedback';
 import { invalidateProfileResources } from '../../../utils/profileResourceInvalidation';
-import { NoyaTourTarget, useNoyaMainTabRegistration } from '../../noya/NoyaTourContext';
+import { useNoyaMainTabRegistration, useNoyaTourTargetRegistration } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const text = {
@@ -68,6 +68,7 @@ const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy ===
 
 export default function RoutesScreen({ navigation }) {
   useNoyaMainTabRegistration(navigation);
+  const routesTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Routes);
   const { ensureCapability, user: currentUser } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
@@ -234,8 +235,9 @@ export default function RoutesScreen({ navigation }) {
   };
 
   const renderTopArea = () => (
-    <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Routes}>
     <PageHeader
+      rootRef={routesTourTarget.ref}
+      onLayout={routesTourTarget.onLayout}
       variant="hero"
       title={text.title}
       overlapNext
@@ -271,7 +273,6 @@ export default function RoutesScreen({ navigation }) {
         </View>
       </SearchFilterRow>
     </PageHeader>
-    </NoyaTourTarget>
   );
 
   const renderActiveFilters = () => (

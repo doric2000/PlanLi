@@ -212,7 +212,11 @@ describe('RoutesScreen authentication state', () => {
     expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
     expect(list.props.ListHeaderComponent).toBeTruthy();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
-    expect(screen.getByTestId('routes-tab-header').props.overlapNext).toBe(true);
+    const header = screen.getByTestId('routes-tab-header');
+    expect(header.props.overlapNext).toBe(true);
+    expect(header.props.rootRef).toBeTruthy();
+    expect(header.props.onLayout).toEqual(expect.any(Function));
+    expect(screen.queryByTestId('noya-tour-target-main-routes')).toBeNull();
     expect(within(list).queryByTestId('routes-tab-header')).toBeNull();
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
   });

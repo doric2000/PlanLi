@@ -347,14 +347,20 @@ export function useNoyaMainTabRegistration(navigation) {
   }, [navigation, registerMainTabNavigation]);
 }
 
-export function NoyaTourTarget({ children, scope = ROOT_SCOPE, style, targetId, testID }) {
+export function useNoyaTourTargetRegistration(targetId, scope = ROOT_SCOPE) {
   const ref = useRef(null);
   const { notifyTargetLayout, registerTarget } = useNoyaTour();
   useEffect(() => registerTarget(targetId, ref, scope), [registerTarget, scope, targetId]);
+  const onLayout = useCallback(() => notifyTargetLayout(), [notifyTargetLayout]);
+  return useMemo(() => ({ onLayout, ref }), [onLayout]);
+}
+
+export function NoyaTourTarget({ children, scope = ROOT_SCOPE, style, targetId, testID }) {
+  const { onLayout, ref } = useNoyaTourTargetRegistration(targetId, scope);
   return (
     <View
       collapsable={false}
-      onLayout={notifyTargetLayout}
+      onLayout={onLayout}
       pointerEvents="box-none"
       ref={ref}
       style={style}

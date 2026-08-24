@@ -18,6 +18,8 @@ export default function PageHeader({
   overlapNext = false,
   allowOverflow = false,
   testID,
+  rootRef,
+  onLayout,
 }) {
   const insets = useSafeAreaInsets();
   const hero = variant === 'hero';
@@ -26,6 +28,9 @@ export default function PageHeader({
 
   return (
     <View
+      collapsable={false}
+      ref={rootRef}
+      onLayout={onLayout}
       testID={testID}
       style={[
         styles.shell,

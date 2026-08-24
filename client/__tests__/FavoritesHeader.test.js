@@ -83,6 +83,8 @@ describe('Favorites blue header', () => {
 
     const header = screen.getByTestId('favorites-tab-header');
     const swipeSurface = screen.getByTestId('favorites-swipe-surface');
+    expect(header.props.onLayout).toEqual(expect.any(Function));
+    expect(screen.queryByTestId('noya-tour-target-main-favorites')).toBeNull();
     expect(within(header).getByTestId('favorites-header-tabs')).toBeTruthy();
     expect(within(swipeSurface).queryByTestId('favorites-tab-header')).toBeNull();
     expect(within(header).queryByText('טיולים')).toBeNull();

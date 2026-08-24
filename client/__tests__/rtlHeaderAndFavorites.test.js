@@ -53,6 +53,7 @@ describe('overlapping hero headers', () => {
     );
 
     const style = StyleSheet.flatten(getByTestId('uniform-hero-header').props.style);
+    expect(getByTestId('uniform-hero-header').props.collapsable).toBe(false);
     expect(style.height).toBe(TAB_HERO_BASE_HEIGHT + top);
     expect(style.paddingTop).toBe(top + 8);
   });
