@@ -479,15 +479,26 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const discardCurrentDraftAndLeave = useCallback(async (action = null) => {
     leavePromptOpenRef.current = false;
     pauseAutosaveRef.current = true;
-    try {
-      await saveQueueRef.current.catch(() => versionRef.current);
-      if (draftIdRef.current) await discardRecommendationDraft(draftIdRef.current);
+    const completeDiscard = async () => {
       await clearDraftMedia({ deleteFiles: true });
       draftIdRef.current = '';
       versionRef.current = 0;
       setDraftId('');
       finishLeave(action);
-    } catch {
+    };
+    try {
+      await saveQueueRef.current.catch(() => versionRef.current);
+      if (draftIdRef.current) await discardRecommendationDraft(draftIdRef.current);
+      await completeDiscard();
+    } catch (error) {
+      if (error?.details?.reason === 'RECOMMENDATION_DRAFT_NOT_FOUND') {
+        try {
+          await completeDiscard();
+          return;
+        } catch {
+          // Use the standard retry choices when local cleanup also fails.
+        }
+      }
       pauseAutosaveRef.current = false;
       Alert.alert('לא הצלחנו לוותר על השינויים', 'ההמלצה לא נסגרה כדי שהשינויים לא יישארו בטעות. אפשר לנסות שוב.', [
         { text: 'המשך עריכה', style: 'cancel', onPress: resumeEditing },
@@ -502,7 +513,23 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     try {
       await persistSnapshot(latestDraftRef.current, latestComparableRef.current);
       finishLeave(action);
-    } catch {
+    } catch (error) {
+      if (error?.details?.reason === 'RECOMMENDATION_DRAFT_VERSION_CONFLICT' && draftIdRef.current) {
+        try {
+          const current = await getCurrentRecommendationDraft();
+          const currentVersion = Number(current?.version);
+          const sameDraft = current?.id === draftIdRef.current &&
+            (current?.sourceRecommendationId || '') === (sourceRecommendationIdRef.current || '');
+          if (!sameDraft || !Number.isSafeInteger(currentVersion) || currentVersion < 1) throw error;
+          versionRef.current = currentVersion;
+          pendingSaveRequestRef.current = null;
+          await persistSnapshot(latestDraftRef.current, latestComparableRef.current, { force: true });
+          finishLeave(action);
+          return;
+        } catch {
+          // Fall through to the existing recovery choices without losing screen state.
+        }
+      }
       pauseAutosaveRef.current = false;
       Alert.alert('לא הצלחנו לשמור את הטיוטה', 'השינויים עדיין מופיעים במסך. אפשר לנסות שוב או לוותר עליהם.', [
         { text: 'המשך עריכה', style: 'cancel', onPress: resumeEditing },
@@ -514,6 +541,18 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const requestLeave = useCallback((action = null) => {
     Keyboard.dismiss();
+    if (publishHandoffRef.current) {
+      if (leavePromptOpenRef.current) return;
+      leavePromptOpenRef.current = true;
+      const closeNotice = () => { leavePromptOpenRef.current = false; };
+      Alert.alert(
+        'ההמלצה עוברת לפרסום',
+        'כבר התחלנו לשמור ולפרסם אותה. נחזור לקהילה כשהמסירה תושלם.',
+        [{ text: 'הבנתי', onPress: closeNotice }],
+        { cancelable: true, onDismiss: closeNotice }
+      );
+      return;
+    }
     if (mode !== 'editor' || (!draftIdRef.current && !dirty)) {
       finishLeave(action);
       return;

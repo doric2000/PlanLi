@@ -539,15 +539,26 @@ export default function AddRoutesScreen({ navigation, route }) {
   const discardCurrentDraftAndLeave = useCallback(async (action = null) => {
     leavePromptOpenRef.current = false;
     pauseAutosaveRef.current = true;
-    try {
-      await saveQueueRef.current.catch(() => versionRef.current);
-      if (draftIdRef.current) await discardRouteDraft(draftIdRef.current);
+    const completeDiscard = async () => {
       await clearDraftMedia({ deleteFiles: true });
       draftIdRef.current = '';
       versionRef.current = 0;
       setDraftId('');
       finishLeave(action);
-    } catch {
+    };
+    try {
+      await saveQueueRef.current.catch(() => versionRef.current);
+      if (draftIdRef.current) await discardRouteDraft(draftIdRef.current);
+      await completeDiscard();
+    } catch (error) {
+      if (error?.details?.reason === 'ROUTE_DRAFT_NOT_FOUND') {
+        try {
+          await completeDiscard();
+          return;
+        } catch {
+          // Use the standard retry choices when local cleanup also fails.
+        }
+      }
       pauseAutosaveRef.current = false;
       Alert.alert('לא הצלחנו לוותר על השינויים', 'המסלול לא נסגר כדי שהשינויים לא יישארו בטעות. אפשר לנסות שוב.', [
         { text: 'המשך עריכה', style: 'cancel' },
@@ -565,7 +576,27 @@ export default function AddRoutesScreen({ navigation, route }) {
         latestDraftComparableRef.current
       );
       finishLeave(action);
-    } catch {
+    } catch (error) {
+      if (error?.details?.reason === 'ROUTE_DRAFT_VERSION_CONFLICT' && draftIdRef.current) {
+        try {
+          const current = await getCurrentRouteDraft();
+          const currentVersion = Number(current?.version);
+          const sameDraft = current?.id === draftIdRef.current &&
+            (current?.sourceRouteId || '') === (sourceRouteIdRef.current || '');
+          if (!sameDraft || !Number.isSafeInteger(currentVersion) || currentVersion < 1) throw error;
+          versionRef.current = currentVersion;
+          pendingSaveRequestRef.current = null;
+          await persistSnapshot(
+            latestDraftPayloadRef.current,
+            latestDraftComparableRef.current,
+            { force: true }
+          );
+          finishLeave(action);
+          return;
+        } catch {
+          // Fall through to the existing recovery choices without losing screen state.
+        }
+      }
       pauseAutosaveRef.current = false;
       Alert.alert(
         'לא הצלחנו לשמור את הטיוטה',
@@ -580,6 +611,18 @@ export default function AddRoutesScreen({ navigation, route }) {
   }, [discardCurrentDraftAndLeave, finishLeave, persistSnapshot]);
 
   const requestLeave = useCallback(async (action = null) => {
+    if (publishHandoffRef.current) {
+      if (leavePromptOpenRef.current) return;
+      leavePromptOpenRef.current = true;
+      const closeNotice = () => { leavePromptOpenRef.current = false; };
+      Alert.alert(
+        'המסלול עובר לפרסום',
+        'כבר התחלנו לשמור ולפרסם אותו. נחזור לקהילה כשהמסירה תושלם.',
+        [{ text: 'הבנתי', onPress: closeNotice }],
+        { cancelable: true, onDismiss: closeNotice }
+      );
+      return;
+    }
     if (mode !== 'editor') { finishLeave(action); return; }
     if (isEditingRoute && !hasUnpublishedEdit) {
       if (!draftIdRef.current) { finishLeave(action); return; }
