@@ -19,7 +19,7 @@ import FavoriteCitiesList from '../components/FavoriteCitiesList';
 import FavoriteRecommendationsList from '../components/FavoriteRecommendationsList';
 import FavoriteRoadTripsList from '../components/FavoriteRoadTripsList';
 import { favoritesStyles as styles } from '../components/favoritesStyles';
-import { NoyaTourTarget, useNoyaMainTabRegistration } from '../../noya/NoyaTourContext';
+import { useNoyaMainTabRegistration, useNoyaTourTargetRegistration } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const TABS = [
@@ -34,6 +34,7 @@ const useNativeDriver = Platform.OS !== 'web';
 
 export default function FavoritesScreen({ navigation }) {
   useNoyaMainTabRegistration(navigation);
+  const favoritesTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Favorites);
   const [activeTab, setActiveTab] = useState('destinations');
   const { width } = useWindowDimensions();
   const pageWidth = Math.max(width, 1);
@@ -175,8 +176,13 @@ export default function FavoritesScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
-      <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Favorites}>
-        <PageHeader variant="hero" title="מועדפים" testID="favorites-tab-header">
+      <PageHeader
+        rootRef={favoritesTourTarget.ref}
+        onLayout={favoritesTourTarget.onLayout}
+        variant="hero"
+        title="מועדפים"
+        testID="favorites-tab-header"
+      >
           <SegmentedTabs
             tabs={TABS}
             value={activeTab}
@@ -184,8 +190,7 @@ export default function FavoritesScreen({ navigation }) {
             style={styles.headerTabs}
             testID="favorites-header-tabs"
           />
-        </PageHeader>
-      </NoyaTourTarget>
+      </PageHeader>
       <View style={favoritesSwipeStyles.content}>
         <Animated.View
           style={[favoritesSwipeStyles.page, { transform: [{ translateX }] }]}

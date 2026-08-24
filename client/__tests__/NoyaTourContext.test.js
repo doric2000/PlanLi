@@ -8,7 +8,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -16,6 +16,7 @@ import {
   NoyaTourProvider,
   NoyaTourTarget,
   useNoyaMainTabRegistration,
+  useNoyaTourTargetRegistration,
   useNoyaTour,
 } from '../src/features/noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS, NOYA_CREATOR_TARGETS } from '../src/features/noya/NoyaTourDefinitions';
@@ -34,11 +35,16 @@ function TourFrame({ children }) {
   return <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>{children}</SafeAreaProvider>;
 }
 
+function DirectTourTarget({ targetId, children }) {
+  const target = useNoyaTourTargetRegistration(targetId);
+  return <View ref={target.ref} onLayout={target.onLayout}>{children}</View>;
+}
+
 function MainTourHarness({ tabNavigation }) {
   useNoyaMainTabRegistration(tabNavigation);
   return (
     <>
-      <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Home}><Text>בית</Text></NoyaTourTarget>
+      <DirectTourTarget targetId={NOYA_MAIN_TARGETS.Home}><Text>בית</Text></DirectTourTarget>
       <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Community}><Text>קהילה</Text></NoyaTourTarget>
       <NoyaTourOverlayHost />
     </>

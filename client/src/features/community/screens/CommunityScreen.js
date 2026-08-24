@@ -51,7 +51,7 @@ import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilter
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { clearPersonalizationDiscoveryCache } from '../../../services/PersonalizationService';
-import { NoyaTourTarget, useNoyaMainTabRegistration } from '../../noya/NoyaTourContext';
+import { useNoyaMainTabRegistration, useNoyaTourTargetRegistration } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 function normalizeMapFocus(input) {
@@ -86,6 +86,7 @@ function mergeFocusedRecommendation(recommendations, focusedRecommendation, mapF
 
 export default function CommunityScreen({ navigation, route }) {
   useNoyaMainTabRegistration(navigation);
+  const communityTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Community);
   const insets = useSafeAreaInsets();
   const { ensureCapability } = useAuthUser();
   // --- State ---
@@ -229,8 +230,9 @@ export default function CommunityScreen({ navigation, route }) {
   );
 
   const renderTopArea = () => (
-    <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Community}>
     <PageHeader
+      rootRef={communityTourTarget.ref}
+      onLayout={communityTourTarget.onLayout}
       variant="hero"
       title="קהילה"
       overlapNext
@@ -311,7 +313,6 @@ export default function CommunityScreen({ navigation, route }) {
         </View>
       </SearchFilterRow>
     </PageHeader>
-    </NoyaTourTarget>
   );
 
   return (
