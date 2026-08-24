@@ -310,6 +310,35 @@ function cleanStringArray(value, field, allowed, maximum) {
   return entries;
 }
 
+function cleanGuestPreferenceContext(value) {
+  if (value == null) return null;
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', 'guestPreferenceContext is invalid.');
+  assert(Object.keys(value).every((key) => (
+    ['interests', 'budget', 'travelParties', 'needs', 'onboardingVersion'].includes(key)
+  )), 'invalid-argument', 'guestPreferenceContext contains unsupported fields.');
+  const interests = cleanStringArray(value.interests, 'guestPreferenceContext.interests', INTEREST_IDS, 4);
+  const travelParties = cleanStringArray(
+    value.travelParties,
+    'guestPreferenceContext.travelParties',
+    TRAVEL_PARTY_IDS,
+    2
+  );
+  const needs = cleanStringArray(value.needs, 'guestPreferenceContext.needs', NEED_IDS, NEED_IDS.length);
+  assert(interests.length >= 2, 'invalid-argument', 'guestPreferenceContext.interests is invalid.');
+  assert(travelParties.length >= 1, 'invalid-argument', 'guestPreferenceContext.travelParties is invalid.');
+  assert(BUDGET_IDS.includes(value.budget), 'invalid-argument', 'guestPreferenceContext.budget is invalid.');
+  assert(Number(value.onboardingVersion || 0) === 2,
+    'invalid-argument', 'guestPreferenceContext.onboardingVersion is invalid.');
+  return {
+    interests,
+    budget: value.budget,
+    travelParties,
+    needs,
+    onboardingVersion: 2,
+  };
+}
+
 function cleanRange(value, field) {
   if (value == null) return null;
   assert(value && typeof value === 'object' && !Array.isArray(value), 'invalid-argument', `${field} is invalid.`);
@@ -502,8 +531,11 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
   const userData = userSnapshot?.exists ? userSnapshot.data() : {};
   const blockedUserIds = new Set(blockedSnapshot?.docs?.map((entry) => entry.id) || []);
   const completed = Boolean(auth?.uid && isSmartProfileComplete(userData.smartProfile || {}));
-  const declaredProfile = completed ? normalizeSmartProfile(userData.smartProfile) : {};
-  const shouldPersonalize = completed && ['forYou', 'relevance'].includes(sort);
+  const guestProfile = auth?.uid ? null : cleanGuestPreferenceContext(data?.guestPreferenceContext);
+  const declaredProfile = completed
+    ? normalizeSmartProfile(userData.smartProfile)
+    : guestProfile || {};
+  const shouldPersonalize = Boolean((completed || guestProfile) && ['forYou', 'relevance'].includes(sort));
   let snapshots;
   let fallbackReason = null;
   try {
@@ -649,6 +681,7 @@ module.exports = {
   applyPersonalizationSignal,
   cleanDestinations,
   cleanFilters,
+  cleanGuestPreferenceContext,
   decayFactor,
   getDiscoveryResults,
   getPersonalizedRecommendations,

@@ -16,6 +16,7 @@ const {
   TRAVEL_PARTY_IDS,
   VIBE_IDS,
   taxonomy,
+  isSmartProfileComplete,
   normalizeSmartProfile,
   uniqueAllowed,
 } = require('./travelTaxonomy');
@@ -82,7 +83,7 @@ function assertOnlyAllowed(values, allowed, field, maximum) {
 function sanitizeSmartProfile(value, { complete = false } = {}) {
   if (value == null) return undefined;
   assert(value && typeof value === 'object' && !Array.isArray(value), 'invalid-argument', 'smartProfile is invalid.');
-  const allowedFields = ['interests', 'budget', 'travelParties', 'vibe', 'travelerStyles', 'pace', 'needs'];
+  const allowedFields = ['interests', 'budget', 'travelParties', 'vibe', 'travelerStyles', 'pace', 'needs', 'onboardingVersion'];
   assert(Object.keys(value).every((key) => allowedFields.includes(key)),
     'invalid-argument', 'smartProfile contains unsupported fields.');
   for (const [field, allowed, maximum] of [
@@ -104,6 +105,10 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
     assert(value.pace === '' || PACE_IDS.includes(value.pace),
       'invalid-argument', 'smartProfile.pace is invalid.');
   }
+  if (Object.prototype.hasOwnProperty.call(value, 'onboardingVersion')) {
+    assert(Number.isInteger(value.onboardingVersion) && value.onboardingVersion >= 1 && value.onboardingVersion <= 10,
+      'invalid-argument', 'smartProfile.onboardingVersion is invalid.');
+  }
   const normalized = normalizeSmartProfile(value);
   const interests = assertOnlyAllowed(normalized.interests, INTEREST_IDS, 'smartProfile.interests', 8);
   const travelParties = assertOnlyAllowed(
@@ -123,12 +128,37 @@ function sanitizeSmartProfile(value, { complete = false } = {}) {
   const budget = normalized.budget;
   assert(!budget || BUDGET_IDS.includes(budget), 'invalid-argument', 'smartProfile.budget is invalid.');
   if (complete) {
-    assert(interests.length >= 3, 'invalid-argument', 'Choose at least three interests.');
-    assert(interests.length <= 8, 'invalid-argument', 'Choose no more than eight interests.');
+    const onboardingVersion = Number(value.onboardingVersion || 1);
+    assert(interests.length >= (onboardingVersion >= 2 ? 2 : 3),
+      'invalid-argument', 'Choose more travel interests.');
+    assert(interests.length <= (onboardingVersion >= 2 ? 4 : 8),
+      'invalid-argument', 'Too many travel interests were selected.');
     assert(Boolean(budget), 'invalid-argument', 'Choose a budget preference.');
     assert(travelParties.length >= 1, 'invalid-argument', 'Choose at least one travel party.');
   }
-  return { interests, budget, travelParties, vibe, travelerStyles, pace: normalized.pace, needs };
+  return {
+    interests,
+    budget,
+    travelParties,
+    vibe,
+    travelerStyles,
+    pace: normalized.pace,
+    needs,
+    ...(value.onboardingVersion ? { onboardingVersion: value.onboardingVersion } : {}),
+  };
+}
+
+function sanitizeNoyaOnboarding(value) {
+  if (value == null) return undefined;
+  assert(value && typeof value === 'object' && !Array.isArray(value),
+    'invalid-argument', 'noyaOnboarding is invalid.');
+  assert(Object.keys(value).every((key) => ['version', 'status'].includes(key)),
+    'invalid-argument', 'noyaOnboarding contains unsupported fields.');
+  assert(Number.isInteger(value.version) && value.version >= 1 && value.version <= 10,
+    'invalid-argument', 'noyaOnboarding.version is invalid.');
+  assert(['completed', 'dismissed'].includes(value.status),
+    'invalid-argument', 'noyaOnboarding.status is invalid.');
+  return { version: value.version, status: value.status };
 }
 
 async function updateProfile({ admin, auth, data, mediaBucket }) {
@@ -136,7 +166,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   assert(data && typeof data === 'object' && !Array.isArray(data),
     'invalid-argument', 'Profile update is invalid.');
   assert(Object.keys(data).every((key) => (
-    ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia', 'taxonomyVersion'].includes(key)
+    ['displayName', 'bio', 'smartProfile', 'completeSmartProfile', 'photoMedia', 'taxonomyVersion', 'noyaOnboarding'].includes(key)
   )), 'invalid-argument', 'נשלח שדה שאינו נתמך בעדכון הפרופיל.');
   if (Object.prototype.hasOwnProperty.call(data, 'completeSmartProfile')) {
     assert(typeof data.completeSmartProfile === 'boolean',
@@ -148,6 +178,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   assert(evaluateTextSafety([displayName, bio]).safe, 'invalid-argument', 'Profile text cannot be published.');
   const completeSmartProfile = data?.completeSmartProfile === true;
   const smartProfile = sanitizeSmartProfile(data?.smartProfile, { complete: completeSmartProfile });
+  const noyaOnboarding = sanitizeNoyaOnboarding(data?.noyaOnboarding);
   if (data?.smartProfile && Object.prototype.hasOwnProperty.call(data.smartProfile, 'budget')) {
     assert(Number(data.taxonomyVersion || 0) >= taxonomy.version, 'failed-precondition',
       'Update PlanLi to choose Free or Cheap as separate budget options.');
@@ -156,7 +187,13 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   const userRef = db.doc(`users/${uid}`);
   const existing = await userRef.get();
   const existingData = existing.exists ? existing.data() || {} : {};
-  if (smartProfile !== undefined) {
+  if (noyaOnboarding?.status === 'completed') {
+    assert(
+      (completeSmartProfile && smartProfile !== undefined)
+        || isSmartProfileComplete(existingData.smartProfile || {}),
+      'failed-precondition', 'Complete the travel preferences before finishing the Noa onboarding.');
+  }
+  if (smartProfile !== undefined || noyaOnboarding !== undefined) {
     assertAccountSetupComplete(auth, existing.exists ? existingData : null);
   }
   if (displayName !== undefined) {
@@ -193,7 +230,8 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     }
   }
   assert(
-    displayName !== undefined || bio !== undefined || smartProfile !== undefined || photoMedia !== undefined,
+    displayName !== undefined || bio !== undefined || smartProfile !== undefined
+      || photoMedia !== undefined || noyaOnboarding !== undefined,
     'invalid-argument',
     'No profile fields were provided.'
   );
@@ -217,6 +255,17 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
       ? (bio ? { bio } : { bio: admin.firestore.FieldValue.delete() })
       : {}),
     ...(nextSmartProfile !== undefined ? { smartProfile: nextSmartProfile } : {}),
+    ...(noyaOnboarding !== undefined
+      ? {
+          onboarding: {
+            ...(existingData.onboarding || {}),
+            noya: {
+              ...noyaOnboarding,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+          },
+        }
+      : {}),
     ...(photoMedia !== undefined
       ? {
           photoMedia,
@@ -263,7 +312,7 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
   if (Object.keys(authFields).length) {
     await admin.auth().updateUser(uid, authFields);
   }
-  const persistedSnapshot = smartProfile !== undefined ? await userRef.get() : null;
+  const persistedSnapshot = smartProfile !== undefined || noyaOnboarding !== undefined ? await userRef.get() : null;
   const persistedUserDocument = persistedSnapshot?.exists ? persistedSnapshot.data() || null : null;
   if (smartProfile !== undefined) {
     assert(persistedUserDocument, 'internal', 'The updated profile could not be read back.');
@@ -277,6 +326,9 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
           smartProfile: persistedUserDocument.smartProfile,
           userDocument: persistedUserDocument,
         }
+      : {}),
+    ...(noyaOnboarding !== undefined
+      ? { noyaOnboarding: persistedUserDocument?.onboarding?.noya || noyaOnboarding }
       : {}),
   };
 }

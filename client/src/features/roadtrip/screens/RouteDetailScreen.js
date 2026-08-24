@@ -29,6 +29,7 @@ import RouteMapPreview from '../components/RouteMapPreview';
 import { buildRouteDetailPresentation } from '../utils/routeDetailPresentation';
 import { getRouteDestinationPreviews } from '../utils/routeDestinationPreviews';
 import { flattenRouteStops, getRouteDayStops, hasValidStopLocation } from '../utils/routeStops';
+import { markNoyaContentViewed } from '../../profile/services/NoyaOnboardingStorage';
 
 const EXTRA_ICONS = {
   difficulty: 'terrain',
@@ -191,6 +192,7 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
 
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
+    markNoyaContentViewed().catch(() => {});
     if (isActive && routeId) recordRouteOpen(routeId).catch(() => {});
   }, [isActive, navigation, routeId]);
 

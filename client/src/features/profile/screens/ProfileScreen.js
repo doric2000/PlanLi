@@ -13,7 +13,6 @@ import { saveProfile } from '../../../services/ProfileService';
 import { useProfileContent } from '../hooks/useProfileContent';
 import { useProfileData } from '../hooks/useProfileData';
 import { useProfilePhoto } from '../hooks/useProfilePhoto';
-import { isSmartProfileComplete } from '../../../hooks/useSmartProfile';
 import ProfileView from '../components/ProfileView';
 import SupportModal from '../components/SupportModal';
 import { invalidateProfileResource } from '../services/ProfileResourceService';
@@ -132,12 +131,9 @@ function AuthedProfileScreen({ navigation, route }) {
     setUserData({ bio: result?.bio ?? bio });
   }, [profileUid, setUserData]);
 
-  const preferencesCompleted = isSmartProfileComplete(userData?.smartProfile);
   const openPreferences = useCallback(() => {
-    getRootNavigation(navigation)?.navigate?.(
-      preferencesCompleted ? 'EditProfile' : 'PreferenceSetup'
-    );
-  }, [navigation, preferencesCompleted]);
+    getRootNavigation(navigation)?.navigate?.('PreferenceSetup', { source: 'profile' });
+  }, [navigation]);
 
   if (loading) {
     return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import { AuthInput } from '../../../components/AuthInput';
@@ -22,9 +22,10 @@ export default function CompleteAccountScreen({ navigation }) {
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const submittedRef = useRef(false);
   const isLegalRenewal = status === AUTH_STATES.LEGAL_CONSENT_REQUIRED;
   useEffect(() => {
-    if (status === AUTH_STATES.READY) {
+    if (status === AUTH_STATES.READY && !submittedRef.current) {
       navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     }
   }, [navigation, status]);
@@ -32,6 +33,7 @@ export default function CompleteAccountScreen({ navigation }) {
     setDisplayName(userDocument?.displayName || user?.displayName || '');
   }, [user?.displayName, userDocument?.displayName]);
   const submit = async () => {
+    const expectedUid = user?.uid;
     const name = normalizeDisplayName(displayName);
     if (!isLegalRenewal) {
       const displayNameError = validateDisplayName(name);
@@ -41,11 +43,16 @@ export default function CompleteAccountScreen({ navigation }) {
     setLoading(true); setError('');
     try {
       const result = await completeAccountSetup({ displayName: name, acceptedLegal });
-      const nextStatus = synchronizeUserDocument(result.userDocument);
-      if (nextStatus === AUTH_STATES.PREFERENCES_REQUIRED) {
-        navigation.reset({ index: 0, routes: [{ name: 'PreferenceSetup' }] });
-      } else if (nextStatus === AUTH_STATES.READY) {
-        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      submittedRef.current = true;
+      const nextStatus = synchronizeUserDocument(result.userDocument, expectedUid);
+      if (nextStatus === AUTH_STATES.READY) {
+        navigation.reset({
+          index: 0,
+          routes: [{
+            name: isLegalRenewal ? 'Main' : 'PreferenceSetup',
+            params: isLegalRenewal ? undefined : { source: 'new-account' },
+          }],
+        });
       } else {
         throw new Error('מצב החשבון לא התעדכן. נסו להתנתק ולהתחבר מחדש.');
       }
@@ -76,7 +83,7 @@ export default function CompleteAccountScreen({ navigation }) {
       <TouchableOpacity style={authStyles.primaryButton} onPress={submit} disabled={loading} testID="complete-account-submit">
         {loading ? <ActivityIndicator color="#FFFFFF" /> : (
           <AppText style={authStyles.primaryButtonText}>
-            {isLegalRenewal ? 'אישור והמשך' : 'המשך להתאמה אישית'}
+            {isLegalRenewal ? 'אישור והמשך' : 'המשך להיכרות עם נועה'}
           </AppText>
         )}
       </TouchableOpacity>

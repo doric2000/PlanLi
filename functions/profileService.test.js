@@ -244,6 +244,67 @@ test('completed preferences return the canonical post-write user document', asyn
   assert.equal(result.userDocument.smartProfile.completedAt, 'timestamp');
 });
 
+test('Noa completion is stored privately with the completed version 2 profile', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    displayName: 'Dana Cohen',
+    onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
+    legal: {
+      termsVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-18-beta-observability',
+      acceptedAt: 'timestamp',
+    },
+    smartProfile: { setupRequired: true },
+  });
+  const result = await updateProfile({
+    admin: fixture.admin,
+    auth: { uid: 'user-1', token: { email_verified: true, firebase: { sign_in_provider: 'password' } } },
+    data: {
+      smartProfile: {
+        interests: ['food', 'activities'],
+        budget: 'balanced',
+        travelParties: ['couple'],
+        needs: [],
+        onboardingVersion: 2,
+      },
+      completeSmartProfile: true,
+      taxonomyVersion: 5,
+      noyaOnboarding: { version: 2, status: 'completed' },
+    },
+  });
+
+  assert.equal(result.userDocument.smartProfile.onboardingVersion, 2);
+  assert.equal(result.userDocument.onboarding.noya.status, 'completed');
+  assert.equal(result.userDocument.onboarding.noya.updatedAt, 'timestamp');
+});
+
+test('Noa cannot be marked complete without a complete saved or submitted profile', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    displayName: 'Dana Cohen',
+    onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
+    legal: {
+      termsVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-18-beta-observability',
+      acceptedAt: 'timestamp',
+    },
+    smartProfile: { setupRequired: true },
+  });
+
+  await assert.rejects(
+    updateProfile({
+      admin: fixture.admin,
+      auth: { uid: 'user-1', token: { email_verified: true, firebase: { sign_in_provider: 'password' } } },
+      data: {
+        completeSmartProfile: true,
+        noyaOnboarding: { version: 2, status: 'completed' },
+      },
+    }),
+    (error) => error?.code === 'failed-precondition'
+  );
+  assert.equal(fixture.writes.length, 0);
+});
+
 test('smart budget writes require taxonomy v5 while unrelated profile writes do not', async () => {
   const admin = {
     firestore: Object.assign(() => ({

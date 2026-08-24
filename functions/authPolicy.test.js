@@ -56,13 +56,11 @@ test('authenticated access is open to every signed-in account', async () => {
   }), (error) => error?.details?.reason === AUTH_REASONS.SIGN_IN_REQUIRED);
 });
 
-test('active access returns structured reasons for every incomplete state', async () => {
+test('active access returns structured reasons for incomplete account states', async () => {
   const cases = [
     [null, passwordAuth(), AUTH_REASONS.ACCOUNT_SETUP_REQUIRED],
     [{ ...activeUser, onboarding: {} }, passwordAuth(), AUTH_REASONS.ACCOUNT_SETUP_REQUIRED],
     [{ ...activeUser, legal: {} }, passwordAuth(), AUTH_REASONS.LEGAL_CONSENT_REQUIRED],
-    [{ ...activeUser, smartProfile: { setupRequired: true } }, passwordAuth(), AUTH_REASONS.PREFERENCES_REQUIRED],
-    [{ ...activeUser, smartProfile: { completedAt: 'timestamp' } }, passwordAuth(), AUTH_REASONS.PREFERENCES_REQUIRED],
     [activeUser, passwordAuth(false), AUTH_REASONS.EMAIL_VERIFICATION_REQUIRED],
   ];
   for (const [userDocument, auth, reason] of cases) {
@@ -71,6 +69,14 @@ test('active access returns structured reasons for every incomplete state', asyn
       (error) => error?.details?.reason === reason
     );
   }
+});
+
+test('active access does not require completed travel preferences', async () => {
+  await assert.doesNotReject(authorizeRequest({
+    admin: adminWithUser({ ...activeUser, smartProfile: { setupRequired: true } }),
+    auth: passwordAuth(true),
+    access: ACCESS_LEVELS.ACTIVE,
+  }));
 });
 
 test('active access accepts password and social accounts only after all gates', async () => {

@@ -146,6 +146,10 @@ jest.mock('../src/services/LocationService', () => ({
   resolveDestinationForPlacePreview: (...args) => mockResolveDestinationForPlacePreview(...args),
 }));
 
+jest.mock('../src/services/ProfileService', () => ({
+  saveNoyaOnboardingStatus: jest.fn(),
+}));
+
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({
     user: null,

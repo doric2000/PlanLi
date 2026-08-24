@@ -21,7 +21,21 @@ test('completed smart profiles enforce canonical core fields and limits', () => 
     travelParties: ['couple'],
     vibe: [],
     needs: [],
-  }, { complete: true }), /three interests/);
+  }, { complete: true }), /more travel interests/);
+
+  const noyaProfile = sanitizeSmartProfile({
+    interests: ['food', 'activities'],
+    budget: 'balanced',
+    travelParties: ['couple'],
+    onboardingVersion: 2,
+  }, { complete: true });
+  assert.deepEqual(noyaProfile.interests, ['food', 'activities']);
+  assert.throws(() => sanitizeSmartProfile({
+    interests: ['food'],
+    budget: 'balanced',
+    travelParties: ['couple'],
+    onboardingVersion: 2,
+  }, { complete: true }), /more travel interests/);
 });
 
 test('profile drafts reject unknown enums and server-owned metadata', () => {

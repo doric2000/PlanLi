@@ -4,13 +4,26 @@ import { TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
 import { recommendationComposerStyles as styles } from '../../../styles';
+import { claimNoyaTip } from '../../profile/services/NoyaOnboardingStorage';
 
 const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 
-export default function NoyaGuide({ message, testID = 'noya-guide', dismissible = false }) {
-  const [visible, setVisible] = useState(true);
-  useEffect(() => setVisible(true), [message]);
+export default function NoyaGuide({ message, testID = 'noya-guide', dismissible = false, tipId = '' }) {
+  const [visible, setVisible] = useState(!tipId);
+  useEffect(() => {
+    let active = true;
+    if (!tipId) {
+      setVisible(true);
+      return undefined;
+    }
+    setVisible(false);
+    claimNoyaTip(tipId).then((allowed) => { if (active) setVisible(allowed); }).catch(() => {});
+    return () => { active = false; };
+  }, [tipId]);
   if (!visible) return null;
+  const close = () => {
+    setVisible(false);
+  };
   return (
     <View style={styles.noyaRow} testID={testID}>
       <CachedImage
@@ -24,7 +37,7 @@ export default function NoyaGuide({ message, testID = 'noya-guide', dismissible 
       <View style={styles.noyaBubble}>
         {dismissible ? <TouchableOpacity
           style={styles.noyaClose}
-          onPress={() => setVisible(false)}
+          onPress={close}
           accessibilityRole="button"
           accessibilityLabel="סגירת ההסבר"
           testID={`${testID}-close`}

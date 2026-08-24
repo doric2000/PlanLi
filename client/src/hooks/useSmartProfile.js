@@ -7,7 +7,11 @@ import { normalizeClientSmartProfile } from '../features/profile/utils/preferenc
 export const isSmartProfileComplete = (smartProfile) => {
   if (!smartProfile?.completedAt || smartProfile.setupRequired === true) return false;
   const normalized = normalizeClientSmartProfile(smartProfile);
-  return normalized.interests.length >= 3 && normalized.interests.length <= 8 &&
+  const onboardingVersion = Number(smartProfile.onboardingVersion || 1);
+  const validInterestCount = onboardingVersion >= 2
+    ? normalized.interests.length >= 2 && normalized.interests.length <= 4
+    : normalized.interests.length >= 3 && normalized.interests.length <= 8;
+  return validInterestCount &&
     Boolean(normalized.budget) && normalized.travelParties.length >= 1;
 };
 export const shouldRequirePreferenceSetup = (smartProfile) => (

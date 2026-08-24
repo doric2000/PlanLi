@@ -95,7 +95,7 @@ describe('authentication screens', () => {
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
     mockIsProviderCancellation.mockReturnValue(false);
     mockCompleteAccountSetup.mockResolvedValue({ ok: true, userDocument: { displayName: 'Admin' } });
-    mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.PREFERENCES_REQUIRED);
+    mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.READY);
     mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
     mockUserDocument = { displayName: 'Admin' };
     mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -265,10 +265,10 @@ describe('authentication screens', () => {
       displayName: 'Admin',
       acceptedLegal: true,
     }));
-    expect(mockSynchronizeUserDocument).toHaveBeenCalledWith({ displayName: 'Admin' });
+    expect(mockSynchronizeUserDocument).toHaveBeenCalledWith({ displayName: 'Admin' }, 'user-1');
     expect(navigation.reset).toHaveBeenCalledWith({
       index: 0,
-      routes: [{ name: 'PreferenceSetup' }],
+      routes: [{ name: 'PreferenceSetup', params: { source: 'new-account' } }],
     });
   });
 

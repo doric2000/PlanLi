@@ -50,6 +50,17 @@ import {
 	rememberDiscoveryDestinations,
 } from "../../../utils/recentDiscoveryDestinations";
 import { waitForRefreshConfirmation } from "../../../utils/refreshFeedback";
+import {
+	dismissGuestNoya,
+	loadGuestNoyaProfile,
+	NOYA_ONBOARDING_VERSION,
+	shouldInviteGuestToNoya,
+	wasNoyaAccountHandled,
+} from "../../profile/services/NoyaOnboardingStorage";
+import { saveNoyaOnboardingStatus } from "../../../services/ProfileService";
+import NoyaGuide from "../../community/components/NoyaGuide";
+
+const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 
 const DESTINATION_GRADIENTS = [
 	["#78909C", "#546E7A"],
@@ -87,11 +98,21 @@ function cityToRecentDestination(city) {
 	};
 }
 
+function openPreferenceSetupFrom(navigation, source = 'home') {
+	let rootNavigation = navigation;
+	let parent = rootNavigation?.getParent?.();
+	while (parent) {
+		rootNavigation = parent;
+		parent = rootNavigation?.getParent?.();
+	}
+	rootNavigation?.navigate?.('PreferenceSetup', { source });
+}
+
 export default function HomeScreen({ navigation }) {
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
-	const { ensureCapability, handleCallableAuthError } = useAuth();
+	const { ensureCapability, handleCallableAuthError, userDocument } = useAuth();
 	const { completed: preferencesCompleted, loading: preferencesLoading } = useSmartProfile();
 	const [destinations, setDestinations] = useState([]);
 	const [allDestinationsForSearch, setAllDestinationsForSearch] = useState([]);
@@ -107,10 +128,28 @@ export default function HomeScreen({ navigation }) {
 	const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
 	const [destinationSort, setDestinationSort] = useState("popular");
 	const [savedOnly, setSavedOnly] = useState(false);
+	const [guestNoyaInvitation, setGuestNoyaInvitation] = useState(false);
+	const [guestNoyaCompleted, setGuestNoyaCompleted] = useState(false);
+	const existingNoyaOpenedRef = useRef(false);
 	const destinationSearchRequestRef = useRef(0);
 	const allDestinationsFetchDebounceRef = useRef(null);
 	const mainScrollRef = useRef(null);
 	const favoriteCities = useFavoriteCityIds({ enabled: Boolean(user) && !isGuest });
+
+	useEffect(() => {
+		if (!isFocused) return;
+		if (isGuest) {
+			shouldInviteGuestToNoya().then(setGuestNoyaInvitation).catch(() => {});
+			loadGuestNoyaProfile().then((value) => setGuestNoyaCompleted(Boolean(value))).catch(() => {});
+			return;
+		}
+		setGuestNoyaCompleted(false);
+		const noyaVersion = Number(userDocument?.onboarding?.noya?.version || 0);
+		if (!user?.uid || !userDocument || noyaVersion >= NOYA_ONBOARDING_VERSION
+			|| existingNoyaOpenedRef.current || wasNoyaAccountHandled(user.uid)) return;
+		existingNoyaOpenedRef.current = true;
+		openPreferenceSetupFrom(navigation, 'existing-account');
+	}, [isFocused, isGuest, navigation, user?.uid, userDocument?.onboarding?.noya?.version]);
 
 	const fetchDestinations = async ({ refreshFeedback = false } = {}) => {
 		try {
@@ -401,25 +440,33 @@ export default function HomeScreen({ navigation }) {
 		</PageHeader>
 	);
 
-	const openPreferenceSetup = () => {
-		let rootNavigation = navigation;
-		let parent = rootNavigation?.getParent?.();
-		while (parent) {
-			rootNavigation = parent;
-			parent = rootNavigation?.getParent?.();
-		}
-		rootNavigation?.navigate?.('PreferenceSetup');
+	const dismissNoyaInvitation = () => {
+		setGuestNoyaInvitation(false);
+		if (isGuest) dismissGuestNoya().catch(() => {});
+		else saveNoyaOnboardingStatus('dismissed', NOYA_ONBOARDING_VERSION).catch(() => {});
 	};
 
 	const renderPreferencePrompt = () => {
-		if (isGuest || preferencesLoading || preferencesCompleted) return null;
+		if (preferencesLoading) return null;
+		if (!guestNoyaInvitation && (isGuest || preferencesCompleted)) return null;
 		return (
 			<View style={preferenceStyles.promptCard} testID="home-preferences-prompt">
-				<AppText style={preferenceStyles.promptTitle}>העדפות טיול</AppText>
-				<AppText style={preferenceStyles.promptText}>בחירה קצרה תעזור לסדר את התוכן לפי מה שמעניין אותך.</AppText>
-				<TouchableOpacity style={preferenceStyles.promptButton} onPress={openPreferenceSetup}>
-					<AppText style={preferenceStyles.promptButtonText}>בחירת העדפות</AppText>
-				</TouchableOpacity>
+				<View style={preferenceStyles.promptRow}>
+					<CachedImage source={NOYA_IMAGE} style={preferenceStyles.promptAvatar} contentFit="cover"
+						contentPosition={{ left: '50%', top: '32%' }} transition={0} accessibilityLabel="נועה" />
+					<View style={preferenceStyles.promptCopy}>
+						<AppText style={preferenceStyles.promptTitle}>רוצה המלצות שמתאימות יותר?</AppText>
+						<AppText style={preferenceStyles.promptText}>נועה תסדר לך התחלה טובה בשלוש שאלות קצרות.</AppText>
+					</View>
+				</View>
+				<View style={preferenceStyles.promptActions}>
+					<TouchableOpacity style={preferenceStyles.promptButton} onPress={() => openPreferenceSetupFrom(navigation, 'guest-invitation')}>
+						<AppText style={preferenceStyles.promptButtonText}>היכרות קצרה עם נועה</AppText>
+					</TouchableOpacity>
+					<TouchableOpacity style={preferenceStyles.promptSecondaryButton} onPress={dismissNoyaInvitation}>
+						<AppText style={preferenceStyles.promptSecondaryText}>לא עכשיו</AppText>
+					</TouchableOpacity>
+				</View>
 			</View>
 		);
 	};
@@ -570,6 +617,12 @@ export default function HomeScreen({ navigation }) {
 					) : (
 						<>
 							{renderPreferencePrompt()}
+							{preferencesCompleted || guestNoyaCompleted ? (
+								<View style={preferenceStyles.homeTipWrap}>
+									<NoyaGuide dismissible tipId="for-you" testID="noya-for-you-tip"
+										message="כאן מתחילה ההתאמה שלך. לייקים, שמירות ופתיחת המלצות יעזרו לי לדייק אותה." />
+								</View>
+							) : null}
 							<View style={styles.body}>
 								{renderFeatured()}
 								{renderDestinations()}

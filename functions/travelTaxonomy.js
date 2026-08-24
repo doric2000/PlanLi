@@ -3,7 +3,7 @@ const taxonomy = require('./travelTaxonomy.generated.json');
 const ids = (items = []) => Object.freeze(items.map((item) => item.id));
 const byId = (items = []) => Object.freeze(Object.fromEntries(items.map((item) => [item.id, item])));
 
-const INTEREST_IDS = ids(taxonomy.interests);
+const LEGACY_INTEREST_IDS = ids(taxonomy.interests);
 const BUDGET_IDS = ids(taxonomy.budgets);
 const POST_BUDGET_IDS = Object.freeze(taxonomy.budgets
   .filter((item) => item.postApplicable)
@@ -26,6 +26,11 @@ const deepFreeze = (value) => {
   return Object.freeze(value);
 };
 const RECOMMENDATION_CATALOG = deepFreeze(taxonomy.recommendationCatalog || {});
+const ONBOARDING_INTEREST_IDS = ids(RECOMMENDATION_CATALOG.interests);
+const INTEREST_IDS = Object.freeze(Array.from(new Set([
+  ...LEGACY_INTEREST_IDS,
+  ...ONBOARDING_INTEREST_IDS,
+])));
 const RECOMMENDATION_CATEGORIES = Object.freeze(
   [...(RECOMMENDATION_CATALOG.categories || [])].sort((left, right) => left.order - right.order)
 );
@@ -356,7 +361,11 @@ function normalizeSmartProfile(value = {}) {
 function isSmartProfileComplete(value) {
   if (!value?.completedAt || value.setupRequired === true) return false;
   const profile = normalizeSmartProfile(value);
-  return profile.interests.length >= 3 && profile.interests.length <= 8 &&
+  const onboardingVersion = Number(value.onboardingVersion || 1);
+  const validInterestCount = onboardingVersion >= 2
+    ? profile.interests.length >= 2 && profile.interests.length <= 4
+    : profile.interests.length >= 3 && profile.interests.length <= 8;
+  return validInterestCount &&
     Boolean(profile.budget) && profile.travelParties.length >= 1;
 }
 
@@ -401,6 +410,7 @@ module.exports = {
   CATEGORY_IDS,
   ENVIRONMENT_IDS,
   INTEREST_IDS,
+  ONBOARDING_INTEREST_IDS,
   NEED_IDS,
   PACE_IDS,
   POST_BUDGET_IDS,

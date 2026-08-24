@@ -31,7 +31,6 @@ describe('PreferenceSetupGate auth state routing', () => {
   it.each([
     [AUTH_STATES.EMAIL_VERIFICATION_REQUIRED, 'VerifyEmail'],
     [AUTH_STATES.ACCOUNT_SETUP_REQUIRED, 'CompleteAccount'],
-    [AUTH_STATES.PREFERENCES_REQUIRED, 'PreferenceSetup'],
   ])('routes %s to %s', async (status, routeName) => {
     mockStatus = status;
     const navigation = { reset: jest.fn() };
@@ -43,6 +42,14 @@ describe('PreferenceSetupGate auth state routing', () => {
   });
 
   it('renders public navigation for ready and guest states', () => {
+    const navigation = { reset: jest.fn() };
+    const screen = render(<PreferenceSetupGate navigation={navigation} />);
+    expect(screen.getByTestId('main-navigator')).toBeTruthy();
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
+
+  it('does not block a legacy preferencesRequired state', () => {
+    mockStatus = AUTH_STATES.PREFERENCES_REQUIRED;
     const navigation = { reset: jest.fn() };
     const screen = render(<PreferenceSetupGate navigation={navigation} />);
     expect(screen.getByTestId('main-navigator')).toBeTruthy();

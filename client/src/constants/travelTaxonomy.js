@@ -51,6 +51,9 @@ const deepFreeze = (value) => {
 };
 
 export const RECOMMENDATION_CATALOG = deepFreeze(taxonomy.recommendationCatalog || {});
+export const ONBOARDING_INTERESTS = Object.freeze(
+  (RECOMMENDATION_CATALOG.interests || []).map(asOption)
+);
 export const RECOMMENDATION_CATEGORIES = Object.freeze(
   [...(RECOMMENDATION_CATALOG.categories || [])].sort((left, right) => left.order - right.order)
 );

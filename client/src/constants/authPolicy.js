@@ -68,9 +68,6 @@ export function deriveAuthState(user, userDocument, loading = false) {
   }
   if (!hasCompletedProfileDetails(userDocument)) return AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
   if (!hasAcceptedCurrentLegal(userDocument)) return AUTH_STATES.LEGAL_CONSENT_REQUIRED;
-  if (!hasCompletedPreferences(userDocument)) {
-    return AUTH_STATES.PREFERENCES_REQUIRED;
-  }
   return AUTH_STATES.READY;
 }
 

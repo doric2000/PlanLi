@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
   Platform,
   ScrollView,
+  Switch,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -29,8 +30,15 @@ import {
 import { requestAccountDeletion } from '../../../services/SocialService';
 import { resetPersonalizationActivity } from '../../../services/PersonalizationService';
 import { colors, settingsHubStyles as styles } from '../../../styles';
+import {
+  clearGuestNoyaProfile,
+  getNoyaTipsEnabled,
+  setNoyaTipsEnabled,
+} from '../services/NoyaOnboardingStorage';
 
 function SettingsRow({
+  accessibilityRole = 'button',
+  checked,
   detail,
   danger = false,
   disabled = false,
@@ -40,12 +48,13 @@ function SettingsRow({
   loading = false,
   onPress,
   testID,
+  trailing,
 }) {
   return (
     <TouchableOpacity
       accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ disabled, busy: loading }}
+      accessibilityRole={accessibilityRole}
+      accessibilityState={{ disabled, busy: loading, ...(typeof checked === 'boolean' ? { checked } : {}) }}
       activeOpacity={0.82}
       disabled={disabled}
       onPress={onPress}
@@ -63,7 +72,7 @@ function SettingsRow({
         <AppText style={[styles.rowName, danger && styles.dangerText]}>{label}</AppText>
         {detail ? <AppText style={styles.rowDetail}>{detail}</AppText> : null}
       </View>
-      {loading ? (
+      {trailing || (loading ? (
         <ActivityIndicator color={danger ? '#B42318' : colors.primary} size="small" />
       ) : (
         <Ionicons
@@ -73,7 +82,7 @@ function SettingsRow({
           name="chevron-back"
           size={18}
         />
-      )}
+      ))}
     </TouchableOpacity>
   );
 }
@@ -83,8 +92,13 @@ export default function SettingsScreen({ navigation }) {
   const [resettingPersonalization, setResettingPersonalization] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [password, setPassword] = useState('');
+  const [tipsEnabled, setTipsEnabled] = useState(true);
   const providerIds = useMemo(() => getProviderIds(auth.currentUser), [auth.currentUser]);
   const hasPasswordProvider = providerIds.includes('password');
+
+  useEffect(() => {
+    getNoyaTipsEnabled().then(setTipsEnabled).catch(() => {});
+  }, []);
 
   const resetPersonalization = () => {
     Alert.alert(
@@ -99,6 +113,7 @@ export default function SettingsScreen({ navigation }) {
             setResettingPersonalization(true);
             try {
               await resetPersonalizationActivity();
+              await clearGuestNoyaProfile();
               Alert.alert('הושלם', 'למידת ההתאמה האישית אופסה.');
             } catch (error) {
               Alert.alert('שגיאה', error?.message || 'לא הצלחנו לאפס את ההתאמה.');
@@ -279,6 +294,39 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         <AppText style={styles.sectionTitle}>התאמה אישית</AppText>
+        <View style={styles.group} testID="settings-noya-section">
+          <SettingsRow
+            detail="צפייה ועדכון של ההעדפות שסידרת עם נועה"
+            icon="sparkles-outline"
+            label="ההתאמה שלי עם נועה"
+            onPress={() => navigation.navigate('PreferenceSetup', { source: 'profile' })}
+            testID="settings-open-noya-button"
+          />
+          <SettingsRow
+            accessibilityRole="switch"
+            checked={tipsEnabled}
+            detail="הסברים קצרים ברגעים שבהם הם יכולים לעזור"
+            icon="chatbubble-ellipses-outline"
+            label="טיפים של נועה"
+            last
+            onPress={() => {
+              const nextValue = !tipsEnabled;
+              setTipsEnabled(nextValue);
+              setNoyaTipsEnabled(nextValue).catch(() => setTipsEnabled(!nextValue));
+            }}
+            testID="settings-noya-tips-row"
+            trailing={(
+              <Switch
+                accessible={false}
+                accessibilityLabel="הצגת טיפים של נועה"
+                pointerEvents="none"
+                trackColor={{ false: '#C9D0D9', true: '#AFC2D9' }}
+                thumbColor={tipsEnabled ? colors.primary : '#FFFFFF'}
+                value={tipsEnabled}
+              />
+            )}
+          />
+        </View>
         <View style={styles.personalizationCard} testID="settings-personalization-section">
           <View style={styles.personalizationTop}>
             <View style={styles.personalizationIcon}>

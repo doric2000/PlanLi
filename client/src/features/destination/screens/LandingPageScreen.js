@@ -25,6 +25,7 @@ import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { getDestinationImageUrl } from '../../../utils/destinationImages';
 import { createDestinationStyles } from '../components/destinationStyles';
 import { useDestinationData } from '../hooks/useDestinationData';
+import { markNoyaContentViewed } from '../../profile/services/NoyaOnboardingStorage';
 import {
   availableCommunityFilters,
   buildEssentialRows,
@@ -245,6 +246,10 @@ export default function LandingPageScreen({ navigation, route }) {
   const [activeFilter, setActiveFilter] = useState('all');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+
+  useEffect(() => {
+    markNoyaContentViewed().catch(() => {});
+  }, [cityId, countryId]);
 
   const quickFacts = useMemo(
     () => buildQuickFacts(overview?.quickFacts),

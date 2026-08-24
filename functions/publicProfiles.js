@@ -1,4 +1,8 @@
-const { INTEREST_IDS, VIBE_IDS } = require('./travelTaxonomy');
+const {
+  INTEREST_IDS,
+  VIBE_IDS,
+  isSmartProfileComplete,
+} = require('./travelTaxonomy');
 const {
   PRIVACY_VERSION,
   PROFILE_DETAILS_VERSION,
@@ -74,8 +78,6 @@ function isPublicProfileEligible(data) {
     && data.legal?.termsVersion === TERMS_VERSION
     && data.legal?.privacyVersion === PRIVACY_VERSION
     && data.legal?.acceptedAt
-    && data.smartProfile?.setupRequired === false
-    && data.smartProfile?.completedAt
     && data.moderation?.status === 'active'
   );
 }
@@ -94,7 +96,9 @@ function sanitizePublicProfile(userId, data = {}) {
         : null,
     bio: sanitizePublicBio(data.bio),
     isExpert: data.isExpert === true,
-    smartProfile: sanitizePublicSmartProfile(data.smartProfile),
+    smartProfile: isSmartProfileComplete(data.smartProfile)
+      ? sanitizePublicSmartProfile(data.smartProfile)
+      : null,
   });
 }
 

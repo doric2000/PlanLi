@@ -75,6 +75,18 @@ test.beforeEach(async () => {
       displayName: 'Incomplete user',
       smartProfile: { setupRequired: true },
     });
+    await setDoc(doc(db, 'users', 'noya-skipped'), {
+      uid: 'noya-skipped',
+      email: 'noya-skipped@example.com',
+      displayName: 'Noa skipped',
+      onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: new Date() },
+      legal: {
+        termsVersion: '2026-08-15-community-safety',
+        privacyVersion: '2026-08-18-beta-observability',
+        acceptedAt: new Date(),
+      },
+      moderation: { status: 'active' },
+    });
     await setDoc(doc(db, 'publicProfiles', 'owner'), {
       displayName: 'Public owner', status: 'active',
     });
@@ -514,6 +526,7 @@ test('storage accepts active owned JPEG staging creates without a tester allowli
   const ownerStorage = env.authenticatedContext('owner', verifiedClaims).storage();
   const unverifiedStorage = env.authenticatedContext('owner', unverifiedClaims).storage();
   const incompleteStorage = env.authenticatedContext('incomplete', verifiedClaims).storage();
+  const noyaSkippedStorage = env.authenticatedContext('noya-skipped', verifiedClaims).storage();
   const missingProfileStorage = env.authenticatedContext('missing-profile', verifiedClaims).storage();
   const validPath = 'media-staging/owner/123e4567-e89b-42d3-a456-426614174000.jpg';
   const metadata = {
@@ -521,6 +534,11 @@ test('storage accepts active owned JPEG staging creates without a tester allowli
     customMetadata: { ownerUid: 'owner', variant: 'staging' },
   };
   await assertSucceeds(uploadBytes(ref(ownerStorage, validPath), new Uint8Array([1, 2, 3]), metadata));
+  await assertSucceeds(uploadBytes(
+    ref(noyaSkippedStorage, 'media-staging/noya-skipped/123e4567-e89b-42d3-a456-426614174006.jpg'),
+    new Uint8Array([1]),
+    { contentType: 'image/jpeg', customMetadata: { ownerUid: 'noya-skipped', variant: 'staging' } }
+  ));
   await assertFails(uploadBytes(ref(ownerStorage, validPath), new Uint8Array([4]), metadata));
   await assertFails(uploadBytes(
     ref(missingProfileStorage, 'media-staging/missing-profile/123e4567-e89b-42d3-a456-426614174005.jpg'),

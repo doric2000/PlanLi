@@ -10,6 +10,11 @@ jest.mock('../src/config/firebase', () => ({
   cloudFunctions: { region: 'europe-west1' },
 }));
 
+const mockLoadGuestNoyaProfile = jest.fn(() => Promise.resolve(null));
+jest.mock('../src/features/profile/services/NoyaOnboardingStorage', () => ({
+  loadGuestNoyaProfile: (...args) => mockLoadGuestNoyaProfile(...args),
+}));
+
 import { auth as mockAuth } from '../src/config/firebase';
 import {
   DISCOVERY_CACHE_TTL_MS,
@@ -28,6 +33,8 @@ describe('PersonalizationService discovery cache', () => {
     jest.spyOn(Date, 'now').mockImplementation(() => now);
     mockCallable.mockReset();
     mockHttpsCallable.mockClear();
+    mockLoadGuestNoyaProfile.mockReset();
+    mockLoadGuestNoyaProfile.mockResolvedValue(null);
     mockAuth.currentUser = { uid: 'traveler-1' };
     clearPersonalizationDiscoveryCache();
   });
@@ -171,6 +178,61 @@ describe('PersonalizationService discovery cache', () => {
 
     expect(first.items[0].id).toBe('user-1-rec');
     expect(second.items[0].id).toBe('user-2-rec');
+    expect(mockCallable).toHaveBeenCalledTimes(2);
+  });
+
+  it('adds a completed local preference context only for guests', async () => {
+    mockAuth.currentUser = null;
+    mockLoadGuestNoyaProfile.mockResolvedValueOnce({
+      interests: ['food', 'nature_scenery'],
+      budget: 'balanced',
+      travelParties: ['couple'],
+      needs: [],
+      onboardingVersion: 2,
+      completedAt: 'local-only',
+    });
+    mockCallable.mockResolvedValueOnce({ data: { items: [] } });
+
+    await getPersonalizedRecommendations({ sort: 'forYou' });
+
+    expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
+      guestPreferenceContext: {
+        interests: ['food', 'nature_scenery'],
+        budget: 'balanced',
+        travelParties: ['couple'],
+        needs: [],
+        onboardingVersion: 2,
+      },
+    }));
+  });
+
+  it('restarts discovery under the current account when auth changes during guest loading', async () => {
+    let resolveGuestProfile;
+    mockAuth.currentUser = null;
+    mockLoadGuestNoyaProfile.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveGuestProfile = resolve;
+    }));
+    mockCallable
+      .mockResolvedValueOnce({ data: { items: [{ id: 'account-result' }] } })
+      .mockResolvedValueOnce({ data: { items: [{ id: 'fresh-guest-result' }] } });
+
+    const pending = getPersonalizedRecommendations({ sort: 'forYou' });
+    mockAuth.currentUser = { uid: 'traveler-2' };
+    resolveGuestProfile({
+      interests: ['food', 'nature_scenery'],
+      budget: 'balanced',
+      travelParties: ['couple'],
+      needs: [],
+      onboardingVersion: 2,
+    });
+
+    await expect(pending).resolves.toEqual({ items: [{ id: 'account-result' }] });
+    expect(mockCallable).toHaveBeenCalledTimes(1);
+    expect(mockCallable).toHaveBeenLastCalledWith({ sort: 'forYou' });
+
+    mockAuth.currentUser = null;
+    await expect(getPersonalizedRecommendations({ sort: 'forYou' }))
+      .resolves.toEqual({ items: [{ id: 'fresh-guest-result' }] });
     expect(mockCallable).toHaveBeenCalledTimes(2);
   });
 

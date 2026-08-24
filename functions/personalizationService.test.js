@@ -6,6 +6,7 @@ const {
   applyPersonalizationSignal,
   cleanDestinations,
   cleanFilters,
+  cleanGuestPreferenceContext,
   decayFactor,
   interleaveDiscovery,
   matchesFilters,
@@ -37,6 +38,29 @@ const item = {
     budgetLevel: 'balanced',
   },
 };
+
+test('guest preference context is bounded, canonical and versioned', () => {
+  assert.deepEqual(cleanGuestPreferenceContext({
+    interests: ['food', 'activities'],
+    budget: 'balanced',
+    travelParties: ['couple'],
+    needs: ['vegetarian'],
+    onboardingVersion: 2,
+  }), {
+    interests: ['food', 'activities'],
+    budget: 'balanced',
+    travelParties: ['couple'],
+    needs: ['vegetarian'],
+    onboardingVersion: 2,
+  });
+  assert.throws(() => cleanGuestPreferenceContext({
+    interests: ['food'], budget: 'balanced', travelParties: ['couple'], onboardingVersion: 2,
+  }), /interests is invalid/);
+  assert.throws(() => cleanGuestPreferenceContext({
+    interests: ['food', 'activities'], budget: 'balanced', travelParties: ['couple'],
+    onboardingVersion: 2, uid: 'not-allowed',
+  }), /unsupported fields/);
+});
 
 test('ranking weights add to 100 for a full declared, activity, and quality match', () => {
   const scored = scoreRecommendation(item, profile, {
