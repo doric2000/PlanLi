@@ -176,10 +176,20 @@ firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY --project planli-f0b12
 
 The current legal drafts are available in-app and are configured for Firebase
 Hosting at `https://planli-f0b12.web.app/terms` and
-`https://planli-f0b12.web.app/privacy`. The legal and support pages are already
-reachable on Firebase Hosting; their deployed version must still be compared
-with the release commit before every beta or store submission. They require
-legal review plus final contact details before a public release.
+`https://planli-f0b12.web.app/privacy`. The Google Play account-deletion
+resource is configured at `https://planli-f0b12.web.app/account-deletion`.
+The legal, deletion and support pages must be reachable on Firebase Hosting,
+and their deployed versions must be compared with the release commit before
+every beta or store submission. They require legal review plus final contact
+details before a public release.
+
+The deletion resource offers the existing in-app flow and an external request
+through `planli.travel.il@gmail.com`. For an external request, reply only to the
+email address registered on the account and require explicit confirmation from
+that address. Never request a password, identity document or authentication
+code. After verification, use the protected `deleteUserAsAdmin` action with a
+recorded reason; do not create a direct public deletion endpoint or client-write
+path.
 
 Before App Store submission, publish the privacy URL, expose it inside the app,
 complete App Store Connect's data-practice answers, and retain in-app account
@@ -850,13 +860,16 @@ npm.cmd run bootstrap-admin -- '<uid-or-email>'
 
 Never commit administrator credentials or App Review demo credentials.
 
-## App Store Connect moderation checklist
+## Store submission moderation checklist
 
-These settings are configured manually in App Store Connect and are not
-changed by Firebase deployment:
+These settings are configured manually in App Store Connect or Google Play
+Console and are not changed by Firebase deployment:
 
 - Link the public privacy policy, terms, community guidelines, and support
   pages in the listing and review notes.
+- Link `https://planli-f0b12.web.app/account-deletion` in Google Play's account
+  deletion field and verify that its email request pathway works without the
+  app being installed.
 - Complete the privacy questionnaire for account/profile data, user content,
   location, identifiers, product interaction, diagnostics, and moderation data
   according to the behavior of the submitted build.

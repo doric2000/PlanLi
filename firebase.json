@@ -17,6 +17,20 @@
           { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
           { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://securetoken.googleapis.com https://identitytoolkit.googleapis.com" }
         ]
+      },
+      {
+        "source": "/account-deletion{,/**}",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=300, must-revalidate" },
+          { "key": "Content-Security-Policy", "value": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" },
+          { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+          { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" },
+          { "key": "Permissions-Policy", "value": "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()" },
+          { "key": "Referrer-Policy", "value": "no-referrer" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "X-Frame-Options", "value": "DENY" },
+          { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" }
+        ]
       }
     ],
     "rewrites": [
