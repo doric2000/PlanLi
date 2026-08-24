@@ -33,6 +33,11 @@ test('live audit accepts canonical active recommendations and rejects client-era
   assert.ok(taxonomyContentErrors('recommendations/r1', {
     ...canonical, recommendationCatalogVersion: undefined, subcategoryIds: undefined,
   }).includes('recommendation-catalog-version'));
+  assert.deepEqual(taxonomyContentErrors('recommendations/r1', {
+    ...canonical,
+    budget: undefined,
+    facets: { ...canonical.facets, budgetLevel: undefined },
+  }), []);
 });
 
 test('live audit requires route-only canonical facets and destinations', () => {
@@ -49,12 +54,33 @@ test('live audit requires route-only canonical facets and destinations', () => {
   };
   assert.deepEqual(taxonomyContentErrors('routes/route-1', route), []);
   assert.ok(taxonomyContentErrors('routes/route-1', { ...route, destinations: [] }).includes('destinations'));
+  assert.deepEqual(taxonomyContentErrors('routes/route-2', {
+    ...route,
+    routeSchemaVersion: 2,
+    categoryIds: [],
+    subcategoryIds: [],
+    difficulty: '',
+    transportModes: [],
+    pace: '',
+    facets: {
+      ...route.facets,
+      interests: [],
+      seasons: [],
+      environments: [],
+    },
+  }), []);
 });
 
 test('live audit rejects legacy smart-profile keys without requiring setup completion', () => {
   assert.deepEqual(taxonomyContentErrors('users/u1', {
-    smartProfile: { setupRequired: true, completedAt: null, interests: [], budget: '', travelParties: [], vibe: [], travelerStyles: [], pace: '', needs: [] },
+    smartProfile: {
+      setupRequired: true, completedAt: null, interests: [], budget: '', travelParties: [],
+      vibe: [], travelerStyles: [], pace: '', needs: [], onboardingVersion: 2,
+    },
   }), []);
+  assert.ok(taxonomyContentErrors('users/u1', {
+    smartProfile: { interests: [], onboardingVersion: 1 },
+  }).includes('profile-onboarding-version'));
   assert.ok(taxonomyContentErrors('users/u1', {
     smartProfile: { interests: [], travelStyleTag: 'זוג' },
   }).includes('profile-fields'));

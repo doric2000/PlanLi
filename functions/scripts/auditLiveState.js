@@ -137,8 +137,10 @@ function taxonomyContentErrors(documentPath, data = {}) {
 	if (data.facets?.seasons.length) errors.push('recommendation-seasons');
 	if (data.facets?.needs.length && data.facets?.needsScope !== 'recommendation') errors.push('needs-scope');
 	if (!data.facets?.needs.length && data.facets?.needsScope) errors.push('empty-needs-scope');
-	if (!POST_BUDGET_IDS.includes(data.budget)) errors.push('budget');
-	if (data.budget !== data.facets?.budgetLevel) errors.push('budget-facet-mismatch');
+	const budget = data.budget || '';
+	const facetBudget = data.facets?.budgetLevel || '';
+	if (budget && !POST_BUDGET_IDS.includes(budget)) errors.push('budget');
+	if (budget !== facetBudget) errors.push('budget-facet-mismatch');
     if (!['exact', 'destination', 'pin'].includes(data.locationMode)) errors.push('location-mode');
     if (data.locationMode === 'exact' && !data.place?.placeId) errors.push('exact-place');
     if (data.locationMode === 'destination' && data.place?.placeId) errors.push('general-place-point');
@@ -152,9 +154,10 @@ function taxonomyContentErrors(documentPath, data = {}) {
     if (!canonicalSearchIndex(data.search)) errors.push('search');
   }
   if (/^routes\/[^/]+$/.test(documentPath) && active) {
+    const streamlined = Number(data.routeSchemaVersion || 0) >= 2;
     if (data.taxonomyVersion !== taxonomy.version) errors.push('taxonomy-version');
-	if (!canonicalArray(data.categoryIds, CATEGORY_IDS, { minimum: 1 })) errors.push('categories');
-	if (!canonicalArray(data.subcategoryIds, TAG_IDS, { minimum: 1 })) errors.push('subcategories');
+	if (!canonicalArray(data.categoryIds, CATEGORY_IDS, { minimum: streamlined ? 0 : 1 })) errors.push('categories');
+	if (!canonicalArray(data.subcategoryIds, TAG_IDS, { minimum: streamlined ? 0 : 1 })) errors.push('subcategories');
 	const routeTagCategories = new Set((data.subcategoryIds || []).map(
 		(tagId) => taxonomy.tags.find((tag) => tag.id === tagId)?.categoryId
 	).filter(Boolean));
@@ -162,7 +165,7 @@ function taxonomyContentErrors(documentPath, data = {}) {
 		(data.subcategoryIds || []).some((tagId) => !data.categoryIds?.includes(
 			taxonomy.tags.find((tag) => tag.id === tagId)?.categoryId
 		))) errors.push('subcategory-category-match');
-    if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: 1 })) errors.push('interests');
+	if (!canonicalArray(data.facets?.interests, INTEREST_IDS, { minimum: streamlined ? 0 : 1 })) errors.push('interests');
 	if (!canonicalArray(data.facets?.audiences, TRAVEL_PARTY_IDS)) errors.push('audiences');
     if (!canonicalArray(data.facets?.vibes, VIBE_IDS)) errors.push('vibes');
     if (!canonicalArray(data.facets?.travelerStyles, TRAVELER_STYLE_IDS)) errors.push('traveler-styles');
@@ -175,12 +178,12 @@ function taxonomyContentErrors(documentPath, data = {}) {
 	if (data.facets?.needs.length && data.facets?.needsScope !== 'entire_route') errors.push('needs-scope');
 	if (!data.facets?.needs.length && data.facets?.needsScope) errors.push('empty-needs-scope');
 	if (!POST_BUDGET_IDS.includes(data.facets?.budgetLevel)) errors.push('budget');
-    if (!ROUTE_DIFFICULTY_IDS.includes(data.difficulty)) errors.push('difficulty');
+	if (data.difficulty && !ROUTE_DIFFICULTY_IDS.includes(data.difficulty)) errors.push('difficulty');
     if (data.experienceLevel && !ROUTE_EXPERIENCE_IDS.includes(data.experienceLevel)) errors.push('experience');
-    if (!canonicalArray(data.transportModes, TRANSPORT_MODE_IDS, { minimum: 1 })) errors.push('transport');
-	if (!PACE_IDS.includes(data.pace)) errors.push('pace');
-	if (!data.facets?.seasons.length) errors.push('seasons-required');
-	if (data.facets?.environments.length !== 1) errors.push('environment-required');
+    if (!canonicalArray(data.transportModes, TRANSPORT_MODE_IDS, { minimum: streamlined ? 0 : 1 })) errors.push('transport');
+	if (data.pace && !PACE_IDS.includes(data.pace)) errors.push('pace');
+	if (!streamlined && !data.facets?.seasons.length) errors.push('seasons-required');
+	if (!streamlined && data.facets?.environments.length !== 1) errors.push('environment-required');
     if (!Array.isArray(data.destinations) || !data.destinations.length ||
       data.destinations.some((entry) => !entry?.countryId || !entry?.cityId)) errors.push('destinations');
     if (!canonicalSearchIndex(data.search)) errors.push('search');
@@ -189,8 +192,12 @@ function taxonomyContentErrors(documentPath, data = {}) {
     const profile = data.smartProfile || {};
     const allowedFields = new Set([
       'setupRequired', 'completedAt', 'interests', 'budget', 'travelParties', 'vibe', 'travelerStyles', 'pace', 'needs',
+      'onboardingVersion',
     ]);
     if (Object.keys(profile).some((key) => !allowedFields.has(key))) errors.push('profile-fields');
+    if (profile.onboardingVersion != null && Number(profile.onboardingVersion) !== 2) {
+      errors.push('profile-onboarding-version');
+    }
     if (!canonicalArray(profile.interests || [], INTEREST_IDS)) errors.push('profile-interests');
     if (profile.budget && !BUDGET_IDS.includes(profile.budget)) errors.push('profile-budget');
     if (!canonicalArray(profile.travelParties || [], TRAVEL_PARTY_IDS)) errors.push('profile-parties');
