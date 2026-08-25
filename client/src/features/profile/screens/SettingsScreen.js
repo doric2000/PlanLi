@@ -298,7 +298,7 @@ export default function SettingsScreen({ navigation }) {
             testID="settings-open-noya-button"
           />
           <SettingsRow
-            detail="ארבעה צעדים קצרים בין המסכים המרכזיים"
+            detail="סיור מפורט בחיפוש, בסינון, במיון ובהוספת תוכן"
             disabled={startingTour}
             icon="compass-outline"
             label="סיור קצר עם נועה"

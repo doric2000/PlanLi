@@ -1,10 +1,24 @@
 import { NOYA_TOUR_IDS } from './services/NoyaProductTourStorage';
 
+export const NOYA_MAIN_TAB_TARGETS = Object.freeze({
+  Home: 'main-tab-home',
+  Community: 'main-tab-community',
+  Routes: 'main-tab-routes',
+  Favorites: 'main-tab-favorites',
+});
+
 export const NOYA_MAIN_TARGETS = Object.freeze({
-  Home: 'main-home',
-  Community: 'main-community',
-  Routes: 'main-routes',
-  Favorites: 'main-favorites',
+  homeSearch: 'main-home-search',
+  communitySearch: 'main-community-search',
+  communityFilter: 'main-community-filter',
+  communitySort: 'main-community-sort',
+  communityMap: 'main-community-map',
+  communityAdd: 'main-community-add',
+  routesSearch: 'main-routes-search',
+  routesFilter: 'main-routes-filter',
+  routesSort: 'main-routes-sort',
+  routesAdd: 'main-routes-add',
+  favoritesCategories: 'main-favorites-categories',
 });
 
 export const NOYA_CREATOR_TARGETS = Object.freeze({
@@ -17,52 +31,137 @@ export const NOYA_CREATOR_TARGETS = Object.freeze({
   routePublish: 'route-publish-details',
 });
 
-export const MAIN_TOUR_STEPS = Object.freeze([
+const spotlight = (id, options = {}) => Object.freeze({
+  id,
+  padding: 3,
+  radius: 16,
+  ...options,
+});
+
+const MAIN_TOUR_CONTENT_STEPS = [
   {
-    id: 'intro',
-    title: 'סיור קצר עם נועה',
-    message: 'זה עוד לא הטיול האמיתי. אפילו לא צריך לארוז. אראה לך בארבעה צעדים איפה מוצאים כל דבר.',
-    primaryLabel: 'יאללה, מתחילים',
-  },
-  {
-    id: 'home',
+    id: 'home-search',
     tabName: 'Home',
-    targetId: NOYA_MAIN_TARGETS.Home,
-    title: 'הבית של הטיול הבא',
-    message: 'כאן מחפשים יעד ומתחילים לגלות מקומות שמתאימים לטיול הבא.',
-    progress: { current: 1, total: 4 },
+    anchorTargetId: NOYA_MAIN_TARGETS.homeSearch,
+    targets: [
+      spotlight(NOYA_MAIN_TAB_TARGETS.Home, { radius: 28 }),
+      spotlight(NOYA_MAIN_TARGETS.homeSearch, { anchor: true }),
+    ],
+    title: 'מתחילים מהיעד',
+    message: 'בשדה הזה מחפשים עיר או יעד ופותחים את כל המידע שיעזור להתחיל לתכנן.',
   },
   {
-    id: 'community',
+    id: 'community-search',
     tabName: 'Community',
-    targetId: NOYA_MAIN_TARGETS.Community,
+    anchorTargetId: NOYA_MAIN_TARGETS.communitySearch,
+    targets: [
+      spotlight(NOYA_MAIN_TAB_TARGETS.Community, { radius: 28 }),
+      spotlight(NOYA_MAIN_TARGETS.communitySearch, { anchor: true }),
+    ],
     title: 'המלצות מהקהילה',
-    message: 'כאן מחכות המלצות של מטיילים. אפשר לחפש, לסנן ולפתוח אותן במפה.',
-    progress: { current: 2, total: 4 },
+    message: 'עברנו לקהילה. כאן מחפשים המלצה לפי שם, מקום או מה שמתחשק לעשות.',
   },
   {
-    id: 'routes',
+    id: 'community-filter',
+    tabName: 'Community',
+    anchorTargetId: NOYA_MAIN_TARGETS.communityFilter,
+    targets: [spotlight(NOYA_MAIN_TARGETS.communityFilter, { anchor: true, radius: 24 })],
+    title: 'מסננים את ההמלצות',
+    message: 'כאן מסננים לפי יעד, קטגוריה, קהל, רמת מחיר, אווירה וצרכים חשובים. אפשר גם למלא את הבחירות מההעדפות האישיות.',
+  },
+  {
+    id: 'community-sort',
+    tabName: 'Community',
+    anchorTargetId: NOYA_MAIN_TARGETS.communitySort,
+    targets: [spotlight(NOYA_MAIN_TARGETS.communitySort, { anchor: true, radius: 14 })],
+    title: 'מסדרים בדרך שנוחה לך',
+    message: 'כאן משנים את סדר ההמלצות: בשבילך כשזמין, הכי פופולרי, הכי חדש או הכי קרוב אליי.',
+  },
+  {
+    id: 'community-map',
+    tabName: 'Community',
+    anchorTargetId: NOYA_MAIN_TARGETS.communityMap,
+    targets: [spotlight(NOYA_MAIN_TARGETS.communityMap, { anchor: true, radius: 24 })],
+    title: 'פותחים את ההמלצות במפה',
+    message: 'הכפתור הזה מחליף בין הרשימה למפה, כדי לראות מה נמצא באזור שמעניין אותך.',
+  },
+  {
+    id: 'community-add',
+    tabName: 'Community',
+    anchorTargetId: NOYA_MAIN_TARGETS.communityAdd,
+    targets: [spotlight(NOYA_MAIN_TARGETS.communityAdd, { anchor: true, radius: 32 })],
+    title: 'מוסיפים המלצה משלך',
+    message: 'כפתור הפלוס פותח יצירת המלצה. אם צריך נבקש להתחבר, ובטופס נועה תלווה אותך בתמונות, במיקום, בקטגוריה ובסיפור.',
+  },
+  {
+    id: 'routes-search',
     tabName: 'Routes',
-    targetId: NOYA_MAIN_TARGETS.Routes,
-    title: 'מסלולים לפי הסדר',
-    message: 'כאן מוצאים מסלולים ליום אחד או לכמה ימים, עם העצירות לפי הסדר.',
-    progress: { current: 3, total: 4 },
+    anchorTargetId: NOYA_MAIN_TARGETS.routesSearch,
+    targets: [
+      spotlight(NOYA_MAIN_TAB_TARGETS.Routes, { radius: 28 }),
+      spotlight(NOYA_MAIN_TARGETS.routesSearch, { anchor: true }),
+    ],
+    title: 'מחפשים מסלול',
+    message: 'עברנו למסלולים. כאן מחפשים מסלול לפי מקום, שם או תחום עניין.',
+  },
+  {
+    id: 'routes-filter',
+    tabName: 'Routes',
+    anchorTargetId: NOYA_MAIN_TARGETS.routesFilter,
+    targets: [spotlight(NOYA_MAIN_TARGETS.routesFilter, { anchor: true, radius: 24 })],
+    title: 'מסננים מסלולים',
+    message: 'כאן מצמצמים לפי יעד, קטגוריה, מספר ימים, מרחק, קושי, התניידות, תקציב והעדפות נוספות.',
+  },
+  {
+    id: 'routes-sort',
+    tabName: 'Routes',
+    anchorTargetId: NOYA_MAIN_TARGETS.routesSort,
+    targets: [spotlight(NOYA_MAIN_TARGETS.routesSort, { anchor: true, radius: 14 })],
+    title: 'מסדרים את המסלולים',
+    message: 'כאן בוחרים אם לראות קודם מסלולים בשבילך, את הפופולריים ביותר או את החדשים ביותר.',
+  },
+  {
+    id: 'routes-add',
+    tabName: 'Routes',
+    anchorTargetId: NOYA_MAIN_TARGETS.routesAdd,
+    targets: [spotlight(NOYA_MAIN_TARGETS.routesAdd, { anchor: true, radius: 32 })],
+    title: 'בונים מסלול חדש',
+    message: 'כפתור הפלוס פותח בניית מסלול. אם צריך נבקש להתחבר, ואחר כך נועה תלווה אותך בבחירת האזור, הימים והעצירות.',
   },
   {
     id: 'favorites',
     tabName: 'Favorites',
-    targetId: NOYA_MAIN_TARGETS.Favorites,
+    anchorTargetId: NOYA_MAIN_TARGETS.favoritesCategories,
+    targets: [
+      spotlight(NOYA_MAIN_TAB_TARGETS.Favorites, { radius: 28 }),
+      spotlight(NOYA_MAIN_TARGETS.favoritesCategories, { anchor: true, radius: 24 }),
+    ],
     title: 'כל מה ששמרנו',
-    message: 'כל יעד, המלצה או מסלול ששומרים מחכה כאן.',
-    progress: { current: 4, total: 4 },
+    message: 'במועדפים עוברים בין יעדים, המלצות ומסלולים ששמרת, והכול נשאר מסודר במקום אחד.',
   },
-  {
+];
+
+const MAIN_TOUR_TOTAL = MAIN_TOUR_CONTENT_STEPS.length;
+
+export const MAIN_TOUR_STEPS = Object.freeze([
+  Object.freeze({
+    id: 'intro',
+    tabName: 'Home',
+    title: 'סיור קצר עם נועה',
+    message: 'זה עוד לא הטיול האמיתי. אפילו לא צריך לארוז. אראה לך איפה מחפשים, מסננים, ממיינים, שומרים ומוסיפים תוכן.',
+    primaryLabel: 'יאללה, מתחילים',
+  }),
+  ...MAIN_TOUR_CONTENT_STEPS.map((step, index) => Object.freeze({
+    ...step,
+    progress: Object.freeze({ current: index + 1, total: MAIN_TOUR_TOTAL }),
+  })),
+  Object.freeze({
     id: 'complete',
     tabName: 'Home',
     title: 'מוכנים לצאת לדרך',
-    message: 'זהו, הסיור נגמר. עכשיו אפשר להתחיל לתכנן את הטיול האמיתי.',
+    message: 'זהו, הסיור נגמר. עכשיו אפשר לחפש יעד, למצוא המלצה או להתחיל לבנות מסלול משלך.',
     primaryLabel: 'לדרך',
-  },
+  }),
 ]);
 
 export const CREATOR_GUIDE_STEPS = Object.freeze({

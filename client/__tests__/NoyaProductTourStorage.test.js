@@ -5,9 +5,12 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn((key, value) => { mockStorage.set(key, value); return Promise.resolve(); }),
 }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   __resetNoyaProductTourStorageForTests,
+  NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY,
   NOYA_PRODUCT_TOUR_STORAGE_KEY,
+  NOYA_PRODUCT_TOUR_VERSION,
   NOYA_TOUR_IDS,
   loadNoyaProductTourState,
   resetMainNoyaProductTour,
@@ -17,14 +20,67 @@ import {
 describe('NoyaProductTourStorage', () => {
   beforeEach(() => {
     mockStorage.clear();
+    AsyncStorage.setItem.mockClear();
     __resetNoyaProductTourStorageForTests();
   });
 
   it('starts each tour independently for existing and new installations', async () => {
     await expect(loadNoyaProductTourState()).resolves.toEqual(expect.objectContaining({
+      version: 2,
       mainTour: { status: 'unseen', stepIndex: 0 },
       recommendationGuide: { status: 'unseen', stepIndex: 0 },
       routeGuide: { status: 'unseen', stepIndex: 0 },
+    }));
+  });
+
+  it('keeps migrated creator progress in memory when the v2 write fails', async () => {
+    mockStorage.set(NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      mainTour: { status: 'completed', stepIndex: 5 },
+      recommendationGuide: { status: 'completed', stepIndex: 2 },
+      routeGuide: { status: 'dismissed', stepIndex: 1 },
+    }));
+    AsyncStorage.setItem.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const migrated = await loadNoyaProductTourState();
+
+    expect(migrated).toEqual(expect.objectContaining({
+      mainTour: { status: 'unseen', stepIndex: 0 },
+      recommendationGuide: { status: 'completed', stepIndex: 2 },
+      routeGuide: { status: 'dismissed', stepIndex: 1 },
+    }));
+    await expect(loadNoyaProductTourState()).resolves.toEqual(migrated);
+  });
+
+  it('migrates v1 by rerunning only the main tour and preserving creator guides', async () => {
+    mockStorage.set(NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      mainTour: { status: 'completed', stepIndex: 5 },
+      recommendationGuide: { status: 'completed', stepIndex: 2 },
+      routeGuide: { status: 'dismissed', stepIndex: 1 },
+    }));
+
+    const migrated = await loadNoyaProductTourState();
+
+    expect(NOYA_PRODUCT_TOUR_VERSION).toBe(2);
+    expect(migrated).toEqual({
+      version: 2,
+      mainTour: { status: 'unseen', stepIndex: 0 },
+      recommendationGuide: { status: 'completed', stepIndex: 2 },
+      routeGuide: { status: 'dismissed', stepIndex: 1 },
+    });
+    expect(JSON.parse(mockStorage.get(NOYA_PRODUCT_TOUR_STORAGE_KEY))).toEqual(migrated);
+    expect(mockStorage.has(NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY)).toBe(true);
+  });
+
+  it('preserves completed v2 progress instead of rerunning it again', async () => {
+    mockStorage.set(NOYA_PRODUCT_TOUR_STORAGE_KEY, JSON.stringify({
+      version: 2,
+      mainTour: { status: 'completed', stepIndex: 12 },
+    }));
+
+    await expect(loadNoyaProductTourState()).resolves.toEqual(expect.objectContaining({
+      mainTour: { status: 'completed', stepIndex: 12 },
     }));
   });
 

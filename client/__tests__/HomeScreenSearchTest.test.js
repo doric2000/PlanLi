@@ -405,9 +405,9 @@ describe('HomeScreenSearchTest', () => {
     const header = screen.getByTestId('home-tab-header');
     const scroll = screen.getByTestId('home-scroll');
     expect(header.props.overlapNext).toBe(true);
-    expect(header.props.rootRef).toBeTruthy();
-    expect(header.props.onLayout).toEqual(expect.any(Function));
-    expect(screen.queryByTestId('noya-tour-target-main-home')).toBeNull();
+    expect(header.props.rootRef).toBeUndefined();
+    expect(header.props.onLayout).toBeUndefined();
+    expect(screen.getByTestId('home-search-tour-target').props.onLayout).toEqual(expect.any(Function));
     expect(within(header).getByText('לאן נוסעים?')).toBeTruthy();
     expect(within(header).getByTestId('home-search-input')).toBeTruthy();
     expect(StyleSheet.flatten(within(header).getByTestId('home-search-row').props.style)).toMatchObject({

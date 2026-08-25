@@ -1,5 +1,5 @@
 const mockStorage = new Map();
-jest.setTimeout(20000);
+jest.setTimeout(30000);
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn((key) => Promise.resolve(mockStorage.get(key) || null)),
@@ -7,20 +7,30 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Rect } from 'react-native-svg';
 
 import {
+  MAIN_TOUR_LOADING_TIMEOUT_MS,
   NoyaTourProvider,
-  NoyaTourTarget,
   useNoyaMainTabRegistration,
+  useNoyaMainTabSceneReady,
   useNoyaTourTargetRegistration,
   useNoyaTour,
 } from '../src/features/noya/NoyaTourContext';
-import { NOYA_MAIN_TARGETS, NOYA_CREATOR_TARGETS } from '../src/features/noya/NoyaTourDefinitions';
-import NoyaTourOverlayHost, { bubbleTopForTarget } from '../src/features/noya/NoyaTourOverlay';
+import {
+  MAIN_TOUR_STEPS,
+  NOYA_CREATOR_TARGETS,
+  NOYA_MAIN_TAB_TARGETS,
+  NOYA_MAIN_TARGETS,
+} from '../src/features/noya/NoyaTourDefinitions';
+import NoyaTourOverlayHost, {
+  bubbleTopForTarget,
+  spotlightForTarget,
+} from '../src/features/noya/NoyaTourOverlay';
 import {
   __resetNoyaProductTourStorageForTests,
   NOYA_PRODUCT_TOUR_STORAGE_KEY,
@@ -31,23 +41,83 @@ const SAFE_AREA_METRICS = {
   insets: { top: 47, right: 0, bottom: 34, left: 0 },
 };
 
+const MAIN_TARGET_RECTS = Object.freeze({
+  [NOYA_MAIN_TAB_TARGETS.Home]: { x: 310, y: 760, width: 50, height: 50 },
+  [NOYA_MAIN_TAB_TARGETS.Community]: { x: 220, y: 760, width: 50, height: 50 },
+  [NOYA_MAIN_TARGETS.homeSearch]: { x: 24, y: 118, width: 286, height: 48 },
+  [NOYA_MAIN_TARGETS.communitySearch]: { x: 24, y: 118, width: 286, height: 48 },
+});
+
 function TourFrame({ children }) {
   return <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>{children}</SafeAreaProvider>;
 }
 
-function DirectTourTarget({ targetId, children }) {
-  const target = useNoyaTourTargetRegistration(targetId);
-  return <View ref={target.ref} onLayout={target.onLayout}>{children}</View>;
+function DirectTourTarget({ children, rect, scope, targetId }) {
+  const target = useNoyaTourTargetRegistration(targetId, scope);
+  const measuredRect = rect || { x: 24, y: 120, width: 180, height: 48 };
+  useEffect(() => {
+    const node = {
+      measureInWindow: (callback) => callback(
+        measuredRect.x,
+        measuredRect.y,
+        measuredRect.width,
+        measuredRect.height,
+      ),
+    };
+    target.ref.current = node;
+    target.onLayout();
+    return () => {
+      if (target.ref.current === node) target.ref.current = null;
+    };
+  }, [
+    measuredRect.height,
+    measuredRect.width,
+    measuredRect.x,
+    measuredRect.y,
+    target.onLayout,
+    target.ref,
+  ]);
+  return <View>{children}</View>;
 }
 
-function MainTourHarness({ tabNavigation }) {
+function MainTourHarness({ readiness, tabNavigation }) {
   useNoyaMainTabRegistration(tabNavigation);
+  useNoyaMainTabSceneReady('Home', readiness.Home);
+  useNoyaMainTabSceneReady('Community', readiness.Community);
+  const { pendingMainDefinition } = useNoyaTour();
   return (
     <>
-      <DirectTourTarget targetId={NOYA_MAIN_TARGETS.Home}><Text>בית</Text></DirectTourTarget>
-      <NoyaTourTarget targetId={NOYA_MAIN_TARGETS.Community}><Text>קהילה</Text></NoyaTourTarget>
+      <Text testID="pending-main-definition">{pendingMainDefinition?.id || ''}</Text>
+      {Object.entries(MAIN_TARGET_RECTS).map(([targetId, rect]) => (
+        <DirectTourTarget key={targetId} rect={rect} targetId={targetId}>
+          <Text>{targetId}</Text>
+        </DirectTourTarget>
+      ))}
       <NoyaTourOverlayHost />
     </>
+  );
+}
+
+function MainTourApp({ communityReady = true, navigationRef, onTabNavigate }) {
+  const [currentRouteName, setCurrentRouteName] = useState('Home');
+  const readiness = useMemo(() => ({
+    Home: true,
+    Community: communityReady,
+  }), [communityReady]);
+  const tabNavigation = useMemo(() => ({
+    navigate: (tabName) => {
+      onTabNavigate?.(tabName);
+      setCurrentRouteName(tabName);
+    },
+  }), [onTabNavigate]);
+  return (
+    <NoyaTourProvider
+      currentRouteName={currentRouteName}
+      navigationReady
+      navigationRef={navigationRef}
+    >
+      <MainTourHarness readiness={readiness} tabNavigation={tabNavigation} />
+    </NoyaTourProvider>
   );
 }
 
@@ -65,7 +135,7 @@ function CreatorHarness({ stage = 0, suspended = false }) {
     : NOYA_CREATOR_TARGETS.recommendationTaxonomy;
   return (
     <>
-      <NoyaTourTarget targetId={targetId}><Text>שדה</Text></NoyaTourTarget>
+      <DirectTourTarget targetId={targetId}><Text>שדה</Text></DirectTourTarget>
       <NoyaTourOverlayHost />
     </>
   );
@@ -78,9 +148,9 @@ function RouteStopHarness() {
   }, [requestCreatorStep]);
   return (
     <>
-      <NoyaTourTarget scope="route-stop-editor" targetId={NOYA_CREATOR_TARGETS.routeStop}>
+      <DirectTourTarget scope="route-stop-editor" targetId={NOYA_CREATOR_TARGETS.routeStop}>
         <Text>שם העצירה וסוג המיקום</Text>
-      </NoyaTourTarget>
+      </DirectTourTarget>
       <NoyaTourOverlayHost scope="route-stop-editor" />
     </>
   );
@@ -103,9 +173,9 @@ function CreatorMediaHarness() {
   }, [mediaOpen, setTourSuspended]);
   return (
     <>
-      <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationStory}>
+      <DirectTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationStory}>
         <Text>תוכן ותמונות</Text>
-      </NoyaTourTarget>
+      </DirectTourTarget>
       {mediaOpen ? (
         <TouchableOpacity onPress={() => setMediaOpen(false)} testID="test-close-media">
           <Text>קומפוזר פתוח</Text>
@@ -124,32 +194,107 @@ describe('NoyaTourProvider', () => {
     __resetNoyaProductTourStorageForTests();
   });
 
-  it('offers the main tour once and navigates automatically between its tabs', async () => {
-    const tabNavigation = { navigate: jest.fn() };
+  it('defines the complete 11-step overview with tab and exact-control targets', () => {
+    const contentSteps = MAIN_TOUR_STEPS.filter((step) => step.progress);
+    expect(contentSteps).toHaveLength(11);
+    expect(contentSteps.map((step) => step.id)).toEqual([
+      'home-search',
+      'community-search',
+      'community-filter',
+      'community-sort',
+      'community-map',
+      'community-add',
+      'routes-search',
+      'routes-filter',
+      'routes-sort',
+      'routes-add',
+      'favorites',
+    ]);
+    expect(contentSteps.map((step) => step.progress)).toEqual(
+      contentSteps.map((_, index) => ({ current: index + 1, total: 11 })),
+    );
+    expect(contentSteps[0].targets.map((target) => target.id)).toEqual([
+      NOYA_MAIN_TAB_TARGETS.Home,
+      NOYA_MAIN_TARGETS.homeSearch,
+    ]);
+    expect(contentSteps[1].targets.map((target) => target.id)).toEqual([
+      NOYA_MAIN_TAB_TARGETS.Community,
+      NOYA_MAIN_TARGETS.communitySearch,
+    ]);
+    expect(contentSteps[5].message).toContain('כפתור הפלוס');
+    expect(contentSteps[9].message).toContain('נועה תלווה');
+  });
+
+  it('removes the overlay during navigation, then spotlights the tab and exact control', async () => {
+    const onTabNavigate = jest.fn();
     const navigationRef = { isReady: () => true, navigate: jest.fn() };
     const screen = render(
       <TourFrame>
-        <NoyaTourProvider currentRouteName="Home" navigationReady navigationRef={navigationRef}>
-          <MainTourHarness tabNavigation={tabNavigation} />
-        </NoyaTourProvider>
-      </TourFrame>
+        <MainTourApp navigationRef={navigationRef} onTabNavigate={onTabNavigate} />
+      </TourFrame>,
     );
 
     await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
     fireEvent.press(screen.getByTestId('noya-tour-next'));
-    await waitFor(() => expect(screen.getByText('הבית של הטיול הבא')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('מתחילים מהיעד')).toBeTruthy());
+    expect(screen.getByTestId('noya-tour-progress').props.children).toBe('1 מתוך 11');
+    expect(screen.UNSAFE_getAllByType(Rect).filter((node) => node.props.stroke === '#F5961D')).toHaveLength(2);
+
     fireEvent.press(screen.getByTestId('noya-tour-next'));
-    await waitFor(() => expect(tabNavigation.navigate).toHaveBeenCalledWith('Community'));
-    expect(screen.getByText('המלצות מהקהילה')).toBeTruthy();
+    expect(screen.queryByTestId('noya-tour-bubble')).toBeNull();
+    expect(screen.getByTestId('pending-main-definition').props.children).toBe('community-search');
+    await waitFor(() => expect(onTabNavigate).toHaveBeenCalledWith('Community'));
+    await waitFor(() => expect(screen.getByText('המלצות מהקהילה')).toBeTruthy());
+    expect(screen.getByTestId('noya-tour-progress').props.children).toBe('2 מתוך 11');
+    expect(screen.UNSAFE_getAllByType(Rect).filter((node) => node.props.stroke === '#F5961D')).toHaveLength(2);
+  });
+
+  it('waits for the destination scene to settle before showing its copy', async () => {
+    const onTabNavigate = jest.fn();
+    const screen = render(
+      <TourFrame>
+        <MainTourApp communityReady={false} onTabNavigate={onTabNavigate} />
+      </TourFrame>,
+    );
+    await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-tour-next'));
+    await waitFor(() => expect(screen.getByText('מתחילים מהיעד')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-tour-next'));
+    await waitFor(() => expect(onTabNavigate).toHaveBeenCalledWith('Community'));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 420)));
+    expect(screen.queryByTestId('noya-tour-bubble')).toBeNull();
+
+    screen.rerender(
+      <TourFrame>
+        <MainTourApp communityReady onTabNavigate={onTabNavigate} />
+      </TourFrame>,
+    );
+    await waitFor(() => expect(screen.getByText('המלצות מהקהילה')).toBeTruthy());
+  });
+
+  it('uses the bounded eight-second fallback when loading never settles', async () => {
+    const onTabNavigate = jest.fn();
+    const screen = render(
+      <TourFrame>
+        <MainTourApp communityReady={false} onTabNavigate={onTabNavigate} />
+      </TourFrame>,
+    );
+    await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-tour-next'));
+    await waitFor(() => expect(screen.getByText('מתחילים מהיעד')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-tour-next'));
+    await waitFor(() => expect(onTabNavigate).toHaveBeenCalledWith('Community'));
+    await waitFor(
+      () => expect(screen.getByText('המלצות מהקהילה')).toBeTruthy(),
+      { timeout: MAIN_TOUR_LOADING_TIMEOUT_MS + 2000 },
+    );
   });
 
   it('keeps creator guides independent when the main tour is skipped', async () => {
     const screen = render(
       <TourFrame>
-        <NoyaTourProvider currentRouteName="Home" navigationReady>
-          <MainTourHarness tabNavigation={{ navigate: jest.fn() }} />
-        </NoyaTourProvider>
-      </TourFrame>
+        <MainTourApp />
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
     fireEvent.press(screen.getByTestId('noya-tour-skip'));
@@ -162,7 +307,7 @@ describe('NoyaTourProvider', () => {
 
   it('hides a creator spotlight while media is open and restores it afterwards', async () => {
     mockStorage.set(NOYA_PRODUCT_TOUR_STORAGE_KEY, JSON.stringify({
-      mainTour: { status: 'completed', stepIndex: 5 },
+      mainTour: { status: 'completed', stepIndex: MAIN_TOUR_STEPS.length - 1 },
     }));
     __resetNoyaProductTourStorageForTests();
     const screen = render(
@@ -170,7 +315,7 @@ describe('NoyaTourProvider', () => {
         <NoyaTourProvider navigationReady>
           <CreatorHarness />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.getByText('מתחילים מהמיקום')).toBeTruthy());
     screen.rerender(
@@ -178,7 +323,7 @@ describe('NoyaTourProvider', () => {
         <NoyaTourProvider navigationReady>
           <CreatorHarness suspended />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.queryByTestId('noya-tour-bubble')).toBeNull());
     screen.rerender(
@@ -186,20 +331,20 @@ describe('NoyaTourProvider', () => {
         <NoyaTourProvider navigationReady>
           <CreatorHarness />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.getByText('מתחילים מהמיקום')).toBeTruthy());
-    await act(async () => {});
   });
 
   it('waits until Home is focused before offering the main tour', async () => {
     const tabNavigation = { navigate: jest.fn() };
+    const readiness = { Home: true, Community: true };
     const screen = render(
       <TourFrame>
         <NoyaTourProvider currentRouteName="PreferenceSetup" navigationReady>
-          <MainTourHarness tabNavigation={tabNavigation} />
+          <MainTourHarness readiness={readiness} tabNavigation={tabNavigation} />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(AsyncStorage.getItem).toHaveBeenCalled());
     expect(screen.queryByText('סיור קצר עם נועה')).toBeNull();
@@ -208,16 +353,16 @@ describe('NoyaTourProvider', () => {
     screen.rerender(
       <TourFrame>
         <NoyaTourProvider currentRouteName="Home" navigationReady>
-          <MainTourHarness tabNavigation={tabNavigation} />
+          <MainTourHarness readiness={readiness} tabNavigation={tabNavigation} />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
   });
 
   it('opens media from the creator guide, suspends the overlay, and restores the same step', async () => {
     mockStorage.set(NOYA_PRODUCT_TOUR_STORAGE_KEY, JSON.stringify({
-      mainTour: { status: 'completed', stepIndex: 5 },
+      mainTour: { status: 'completed', stepIndex: MAIN_TOUR_STEPS.length - 1 },
     }));
     __resetNoyaProductTourStorageForTests();
     const screen = render(
@@ -225,7 +370,7 @@ describe('NoyaTourProvider', () => {
         <NoyaTourProvider currentRouteName="Home" navigationReady>
           <CreatorMediaHarness />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.getByText('מספרים למה כדאי להגיע')).toBeTruthy());
     expect(screen.getByText('בחירת תמונות')).toBeTruthy();
@@ -241,7 +386,7 @@ describe('NoyaTourProvider', () => {
 
   it('renders the first stop guide inside the modal scoped host', async () => {
     mockStorage.set(NOYA_PRODUCT_TOUR_STORAGE_KEY, JSON.stringify({
-      mainTour: { status: 'completed', stepIndex: 5 },
+      mainTour: { status: 'completed', stepIndex: MAIN_TOUR_STEPS.length - 1 },
       routeGuide: { status: 'active', stepIndex: 1 },
     }));
     __resetNoyaProductTourStorageForTests();
@@ -250,10 +395,26 @@ describe('NoyaTourProvider', () => {
         <NoyaTourProvider navigationReady>
           <RouteStopHarness />
         </NoyaTourProvider>
-      </TourFrame>
+      </TourFrame>,
     );
     await waitFor(() => expect(screen.getByText('העצירה הראשונה')).toBeTruthy());
     expect(screen.getByTestId('noya-tour-overlay-route-stop-editor')).toBeTruthy();
+  });
+
+  it('uses exact padding and clips spotlights without forced minimum sizing', () => {
+    expect(spotlightForTarget(
+      { x: 1, y: 2, width: 20, height: 18 },
+      390,
+      844,
+      { id: 'small', padding: 3, radius: 7 },
+    )).toEqual({
+      id: 'small',
+      x: 0,
+      y: 0,
+      width: 24,
+      height: 23,
+      radius: 7,
+    });
   });
 
   it('keeps a centered bubble inside the safe area when the target leaves no room', () => {
@@ -265,7 +426,7 @@ describe('NoyaTourProvider', () => {
     });
     expect(top).toBeGreaterThanOrEqual(SAFE_AREA_METRICS.insets.top + 12);
     expect(top + 380).toBeLessThanOrEqual(
-      SAFE_AREA_METRICS.frame.height - SAFE_AREA_METRICS.insets.bottom - 12
+      SAFE_AREA_METRICS.frame.height - SAFE_AREA_METRICS.insets.bottom - 12,
     );
   });
 });

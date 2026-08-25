@@ -53,7 +53,11 @@ import { useContentPublish } from '../../publishing/ContentPublishContext';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { waitForRefreshConfirmation } from '../../../utils/refreshFeedback';
 import { invalidateProfileResources } from '../../../utils/profileResourceInvalidation';
-import { useNoyaMainTabRegistration, useNoyaTourTargetRegistration } from '../../noya/NoyaTourContext';
+import {
+  useNoyaMainTabRegistration,
+  useNoyaMainTabSceneReady,
+  useNoyaTourTargetRegistration,
+} from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const text = {
@@ -68,13 +72,18 @@ const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy ===
 
 export default function RoutesScreen({ navigation }) {
   useNoyaMainTabRegistration(navigation);
-  const routesTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Routes);
+  const routesSearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesSearch);
+  const routesFilterTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesFilter);
+  const routesSortTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesSort);
+  const routesAddTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesAdd);
   const { ensureCapability, user: currentUser } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [requesting, setRequesting] = useState(true);
+  const [settledRequestIdentity, setSettledRequestIdentity] = useState('');
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(createEmptyDiscoveryFilters);
   const [debouncedRequest, setDebouncedRequest] = useState(discoveryRequestFromFilters(filters, { surface: 'routes' }));
@@ -101,6 +110,8 @@ export default function RoutesScreen({ navigation }) {
     setLoading(true);
     setRefreshing(false);
     setConfirming(false);
+    setRequesting(true);
+    setSettledRequestIdentity('');
   }, [principal]);
 
   useEffect(() => {
@@ -115,9 +126,19 @@ export default function RoutesScreen({ navigation }) {
   }, [filters]);
 
   const requestKey = JSON.stringify(debouncedRequest);
+  const requestIdentity = JSON.stringify([principal, sortBy, requestKey]);
+  const personalizationSortReady = !profileLoading
+    && (!personalizationAvailable || sortBy === 'personalized');
+  const requestSettled = !requesting && settledRequestIdentity === requestIdentity;
+  useNoyaMainTabSceneReady(
+    'Routes',
+    personalizationSortReady && requestSettled && !loading && !refreshing && !confirming,
+  );
   const fetchRoutes = useCallback(async ({ showLoader = true, refreshFeedback = false } = {}) => {
     const serial = requestSerial.current + 1;
     requestSerial.current = serial;
+    const requestedIdentity = requestIdentity;
+    setRequesting(true);
     if (showLoader) setLoading(true);
     setError(null);
     try {
@@ -143,11 +164,13 @@ export default function RoutesScreen({ navigation }) {
       setError(error);
     } finally {
       if (requestSerial.current !== serial) return;
+      setSettledRequestIdentity(requestedIdentity);
+      setRequesting(false);
       setLoading(false);
       setRefreshing(false);
       setConfirming(false);
     }
-  }, [requestKey, sortBy, principal]);
+  }, [requestIdentity, requestKey, sortBy, principal]);
 
   useFocusEffect(useCallback(() => {
     fetchRoutes({ showLoader: routes.length === 0 });
@@ -185,6 +208,8 @@ export default function RoutesScreen({ navigation }) {
           setLoading(false);
           setRefreshing(false);
           setConfirming(false);
+          setRequesting(false);
+          setSettledRequestIdentity(requestIdentity);
           setRoutes((current) => current.filter((item) => item.id !== routeId));
         } catch (error) {
           console.error('Error deleting route:', error);
@@ -236,15 +261,21 @@ export default function RoutesScreen({ navigation }) {
 
   const renderTopArea = () => (
     <PageHeader
-      rootRef={routesTourTarget.ref}
-      onLayout={routesTourTarget.onLayout}
       variant="hero"
       title={text.title}
       overlapNext
       style={tabHeroStyles.fixedHeader}
       testID="routes-tab-header"
       renderEnd={() => (
-        <TouchableOpacity style={tabHeroStyles.labelAction} onPress={() => setSortVisible(true)} accessibilityLabel="מיון מסלולים" testID="routes-sort-button">
+        <TouchableOpacity
+          accessibilityLabel="מיון מסלולים"
+          collapsable={false}
+          onLayout={routesSortTourTarget.onLayout}
+          onPress={() => setSortVisible(true)}
+          ref={routesSortTourTarget.ref}
+          style={tabHeroStyles.labelAction}
+          testID="routes-sort-button"
+        >
           <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
           <AppText style={tabHeroStyles.labelText}>{sortLabel}</AppText>
         </TouchableOpacity>
@@ -252,6 +283,11 @@ export default function RoutesScreen({ navigation }) {
     >
       <SearchFilterRow
         style={tabHeroStyles.searchRow}
+        searchTargetRef={routesSearchTourTarget.ref}
+        searchTargetTestID="routes-search-tour-target"
+        onSearchTargetLayout={routesSearchTourTarget.onLayout}
+        filterTargetRef={routesFilterTourTarget.ref}
+        onFilterTargetLayout={routesFilterTourTarget.onLayout}
         onFilterPress={() => setFilterVisible(true)}
         activeFilterCount={activeFilterCount}
         accessibilityLabel="סינון מסלולים"
@@ -325,7 +361,14 @@ export default function RoutesScreen({ navigation }) {
               </View>
             )}
           </View>} showsVerticalScrollIndicator={false} />
-      <FabButton style={{ bottom: getFabBottomInset(insets), zIndex: 10 }} onPress={openCreateRoute} />
+      <FabButton
+        accessibilityLabel="הוספת מסלול"
+        onLayout={routesAddTourTarget.onLayout}
+        onPress={openCreateRoute}
+        rootRef={routesAddTourTarget.ref}
+        style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
+        testID="routes-add-button"
+      />
       <RoutesFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={filters}
         onApply={(next) => { setFilters({ ...createEmptyDiscoveryFilters(), ...next }); setFilterVisible(false); }}
         onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile, { surface: 'routes' })} />

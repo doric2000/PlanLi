@@ -14,6 +14,7 @@ import { navigateToAdjacentSwipeItem } from './horizontalSwipe';
 import { getVisibleMainTabNames } from './mainTabOrder';
 import { MAIN_TAB_TRANSITION_OPTIONS } from './mainTabTransition';
 import { shouldHideMainTabBar } from './tabBarVisibility';
+import { NOYA_MAIN_TAB_TARGETS } from '../features/noya/NoyaTourDefinitions';
 
 const Tab = createBottomTabNavigator();
 /**
@@ -109,6 +110,7 @@ export default function TabNavigator() {
             <SwipeableTabBarButton
               {...props}
               onSwipe={(gestureState) => handleTabBarSwipe(navigation, gestureState)}
+              tourTargetId={NOYA_MAIN_TAB_TARGETS[route.name]}
             />
           ),
           tabBarStyle: hideTabBar

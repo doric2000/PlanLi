@@ -6,9 +6,24 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 import { colors, layout, radii } from '../styles';
 
-export default function SegmentedTabs({ tabs, value, onChange, style, testID }) {
+export default function SegmentedTabs({
+  tabs,
+  value,
+  onChange,
+  style,
+  testID,
+  rootRef,
+  onLayout,
+}) {
   return (
-    <View style={[styles.wrap, style]} accessibilityRole="tablist" testID={testID}>
+    <View
+      accessibilityRole="tablist"
+      collapsable={false}
+      onLayout={onLayout}
+      ref={rootRef}
+      style={[styles.wrap, style]}
+      testID={testID}
+    >
       {tabs.map((tab) => {
         const active = value === tab.key;
         return (

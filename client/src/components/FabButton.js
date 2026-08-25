@@ -12,11 +12,27 @@ import { buttons } from '../styles';
  * @param {string} [props.color] - Icon color (default: '#fff')
  * @param {Object} [props.style] - Additional style for the button
  */
-const FabButton = ({ onPress, icon = 'add', size = 32, color = '#fff', style }) => (
+const FabButton = ({
+  accessibilityLabel = 'הוספה',
+  color = '#fff',
+  icon = 'add',
+  onLayout,
+  onPress,
+  rootRef,
+  size = 32,
+  style,
+  testID,
+}) => (
   <TouchableOpacity
+    accessibilityLabel={accessibilityLabel}
+    accessibilityRole="button"
+    collapsable={false}
+    onLayout={onLayout}
     style={[buttons.fab, style]}
     onPress={onPress}
     activeOpacity={0.8}
+    ref={rootRef}
+    testID={testID}
   >
     <Ionicons name={icon} size={size} color={color} />
   </TouchableOpacity>

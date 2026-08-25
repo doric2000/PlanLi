@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, within } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { FlatList, StyleSheet } from 'react-native';
 
 import CommunityScreen from '../src/features/community/screens/CommunityScreen';
@@ -22,6 +22,16 @@ let mockFilteredData;
 let mockMapItems;
 let mockFocusedRecommendation;
 let mockCommunityMapProps;
+let mockCommunitySceneReady;
+let mockNoyaContextValue;
+let mockSmartProfile;
+
+jest.mock('../src/features/noya/NoyaTourContext', () => ({
+  useNoyaMainTabRegistration: jest.fn(),
+  useNoyaMainTabSceneReady: (_tabName, ready) => { mockCommunitySceneReady = ready; },
+  useNoyaTour: () => mockNoyaContextValue,
+  useNoyaTourTargetRegistration: () => ({ ref: { current: null }, onLayout: jest.fn() }),
+}));
 
 jest.mock('../src/hooks/useRecommendations', () => ({
   useRecommendations: () => mockRecommendationState,
@@ -65,7 +75,7 @@ jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({
   useTabPressScrollOrRefresh: () => ({ onScroll: jest.fn() }),
 }));
 jest.mock('../src/hooks/useSmartProfile', () => ({
-  useSmartProfile: () => ({ smartProfile: {}, completed: false, loading: false }),
+  useSmartProfile: () => mockSmartProfile,
 }));
 jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
   useRecommendationPublish: () => ({ completedVersion: 0 }),
@@ -103,7 +113,11 @@ jest.mock('../src/components/RecommendationCard', () => {
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ ensureCapability: jest.fn(async () => false) }),
 }));
-jest.mock('../src/components/FabButton', () => () => null);
+jest.mock('../src/components/FabButton', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return (props) => ReactModule.createElement(View, props);
+});
 jest.mock('../src/components/ActiveFiltersList', () => () => null);
 jest.mock('../src/features/community/components/SortMenuModal', () => ({ SortMenuModal: () => null }));
 jest.mock('../src/components/CommentsModal', () => ({ CommentsModal: () => null }));
@@ -130,8 +144,12 @@ describe('CommunityScreen map mode', () => {
     mockMapItems = [];
     mockFocusedRecommendation = null;
     mockCommunityMapProps = null;
+    mockCommunitySceneReady = null;
+    mockNoyaContextValue = { activeDefinition: null, pendingMainDefinition: null };
+    mockSmartProfile = { smartProfile: {}, completed: false, loading: false };
     mockRecommendationState = {
       data: [], error: null, loading: false, refreshing: false,
+      confirming: false, requestSettled: true,
       refresh: jest.fn(), removeRecommendation: jest.fn(), setDiscoveryRequest: jest.fn(),
     };
   });
@@ -152,6 +170,37 @@ describe('CommunityScreen map mode', () => {
     expect(screen.getByTestId('mock-community-map')).toBeTruthy();
   });
 
+  it('restores list-only tour targets before a pending Community step appears', async () => {
+    const navigation = { navigate: jest.fn() };
+    const screen = render(<CommunityScreen navigation={navigation} />);
+    fireEvent.press(screen.getByTestId('community-map-toggle'));
+    expect(screen.queryByTestId('community-sort-button')).toBeNull();
+    expect(screen.queryByTestId('community-add-button')).toBeNull();
+
+    mockNoyaContextValue = {
+      activeDefinition: null,
+      pendingMainDefinition: { id: 'community-search', tabName: 'Community' },
+    };
+    screen.rerender(<CommunityScreen navigation={navigation} />);
+
+    await waitFor(() => expect(screen.getByTestId('community-sort-button')).toBeTruthy());
+    expect(screen.getByTestId('community-add-button')).toBeTruthy();
+    expect(screen.queryByTestId('mock-community-map')).toBeNull();
+  });
+
+  it('waits for the personalized recommendation request before marking the scene ready', () => {
+    mockSmartProfile = { smartProfile: {}, completed: true, loading: false };
+    mockRecommendationState.requestSettled = false;
+    const navigation = { navigate: jest.fn() };
+    const screen = render(<CommunityScreen navigation={navigation} />);
+    expect(mockCommunitySceneReady).toBe(false);
+
+    mockRecommendationState.requestSettled = true;
+    screen.rerender(<CommunityScreen navigation={navigation} />);
+
+    expect(mockCommunitySceneReady).toBe(true);
+  });
+
   it('centers empty and error copy in the available feed body', () => {
     mockRecommendationState.error = new Error('load failed');
     const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
@@ -165,9 +214,13 @@ describe('CommunityScreen map mode', () => {
     expect(list.props.stickyHeaderIndices).toBeUndefined();
     const header = screen.getByTestId('community-tab-header');
     expect(header.props.overlapNext).toBe(true);
-    expect(header.props.rootRef).toBeTruthy();
-    expect(header.props.onLayout).toEqual(expect.any(Function));
-    expect(screen.queryByTestId('noya-tour-target-main-community')).toBeNull();
+    expect(header.props.rootRef).toBeUndefined();
+    expect(header.props.onLayout).toBeUndefined();
+    expect(screen.getByTestId('community-search-tour-target').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('community-filter-button').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('community-sort-button').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('community-map-toggle').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('community-add-button').props.onLayout).toEqual(expect.any(Function));
     expect(within(list).queryByTestId('community-tab-header')).toBeNull();
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
   });
