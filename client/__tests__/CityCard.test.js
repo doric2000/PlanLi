@@ -17,6 +17,10 @@ jest.mock('../src/components/CachedImage', () => function MockCachedImage() {
   return ReactModule.createElement(View, { testID: 'city-image' });
 });
 
+jest.mock('../src/components/PreferenceContextLine', () => function MockPreferenceContextLine() {
+  return null;
+});
+
 describe('CityCard', () => {
   it('shows travelers without rendering a legacy score or star', () => {
     const screen = render(
