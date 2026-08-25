@@ -22,6 +22,7 @@ export const NOYA_MAIN_TARGETS = Object.freeze({
 });
 
 export const NOYA_CREATOR_TARGETS = Object.freeze({
+  recommendationPhotos: 'recommendation-photos',
   recommendationLocation: 'recommendation-location',
   recommendationTaxonomy: 'recommendation-taxonomy',
   recommendationStory: 'recommendation-story',
@@ -167,8 +168,13 @@ export const MAIN_TOUR_STEPS = Object.freeze([
 export const CREATOR_GUIDE_STEPS = Object.freeze({
   [NOYA_TOUR_IDS.recommendation]: [
     {
+      targetId: NOYA_CREATOR_TARGETS.recommendationPhotos,
+      title: 'מתחילים מהתמונות',
+      message: 'בוחרים בין תמונה אחת לחמש. אפשר לעבור בין התמונות, להזיז, לקרב ולחתוך כל אחת בנפרד. צריך לפחות תמונה אחת כדי להמשיך.',
+    },
+    {
       targetId: NOYA_CREATOR_TARGETS.recommendationLocation,
-      title: 'מתחילים מהמיקום',
+      title: 'ממשיכים למיקום',
       message: 'אפשר לבחור מקום מדויק, נקודה במפה, או עיר ואזור.',
     },
     {
@@ -179,7 +185,7 @@ export const CREATOR_GUIDE_STEPS = Object.freeze({
     {
       targetId: NOYA_CREATOR_TARGETS.recommendationStory,
       title: 'מספרים למה כדאי להגיע',
-      message: 'כותרת קצרה, תיאור ותמונה טובה עושים את רוב העבודה. אפשר לבחור עד חמש תמונות, להזיז ולקרב כל תמונה ולבדוק בדיוק מה יופיע. לפני הפרסום תתבקש גם רמת מחיר. הבחירה והחיתוך נשמרים, והכנת התמונות לפרסום ממשיכה ברקע.',
+      message: 'מוסיפים כותרת קצרה, תיאור ורמת מחיר, בודקים את התצוגה המקדימה ומשלימים רק פרטים נוספים שרלוונטיים. הכנת התמונות לפרסום ממשיכה ברקע.',
     },
   ],
   [NOYA_TOUR_IDS.route]: [

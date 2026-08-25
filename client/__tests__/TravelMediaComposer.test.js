@@ -3,7 +3,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, Linking } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
-import TravelMediaComposer from '../src/components/TravelMediaComposer';
+import TravelMediaComposer, { isTravelMediaSwipe } from '../src/components/TravelMediaComposer';
 
 jest.mock('expo-image-manipulator', () => ({ manipulateAsync: jest.fn() }));
 jest.mock('../src/components/CachedImage', () => {
@@ -13,17 +13,26 @@ jest.mock('../src/components/CachedImage', () => {
 jest.mock('react-native-gesture-handler', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  const chain = () => {
-    const gesture = {};
-    ['enabled', 'minDistance', 'shouldCancelWhenOutside', 'onStart', 'onUpdate', 'onEnd'].forEach((name) => {
-      gesture[name] = () => gesture;
+  const chain = (type) => {
+    const gesture = { callbacks: {}, type };
+    ['enabled', 'minDistance', 'maxPointers', 'shouldCancelWhenOutside', 'onStart', 'onUpdate', 'onEnd', 'onFinalize'].forEach((name) => {
+      gesture[name] = (value) => {
+        if (typeof value === 'function') gesture.callbacks[name] = value;
+        return gesture;
+      };
     });
+    global.__travelMediaGestures = global.__travelMediaGestures || [];
+    global.__travelMediaGestures.push(gesture);
     return gesture;
   };
   return {
     GestureHandlerRootView: ({ children, ...props }) => <View {...props}>{children}</View>,
     GestureDetector: ({ children }) => <>{children}</>,
-    Gesture: { Pan: chain, Pinch: chain, Simultaneous: (...gestures) => gestures },
+    Gesture: {
+      Pan: () => chain('pan'),
+      Pinch: () => chain('pinch'),
+      Simultaneous: (...gestures) => gestures,
+    },
   };
 });
 jest.mock('react-native-reanimated', () => {
@@ -59,6 +68,12 @@ const sourceAdapter = {
   materialize: jest.fn(async (item) => item),
 };
 
+beforeEach(() => {
+  global.__travelMediaGestures = [];
+});
+
+const latestGesture = (type) => global.__travelMediaGestures.filter((gesture) => gesture.type === type).at(-1);
+
 test('TravelMediaComposer confirms the whole selection without manipulating an image', async () => {
   const onChange = jest.fn();
   const screen = render(
@@ -73,7 +88,7 @@ test('TravelMediaComposer confirms the whole selection without manipulating an i
     />
   );
   fireEvent.press(screen.getByTestId('travel-media-pick-more'));
-  await waitFor(() => expect(screen.getByText('1/5')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('1 מתוך 5')).toBeTruthy());
   expect(ImageManipulator.manipulateAsync).not.toHaveBeenCalled();
   fireEvent.press(screen.getByTestId('travel-media-done'));
   expect(onChange).toHaveBeenCalledWith([
@@ -215,4 +230,130 @@ test('TravelMediaComposer virtualizes the inline gallery and paginates at the li
   }));
   await act(async () => { await grid.props.onEndReached(); });
   expect(inlineSource.loadMore).toHaveBeenCalledTimes(1);
+});
+
+test('TravelMediaComposer selects numbered photos for editing and deletes only the active photo', () => {
+  const onChange = jest.fn();
+  const values = [1, 2, 3].map((index) => ({
+    id: `picker-${index}`,
+    sourceId: `picker-${index}`,
+    uri: `file:///photo-${index}.jpg`,
+    previewUri: `file:///photo-${index}.jpg`,
+    width: 1200,
+    height: 900,
+    persistence: 'ready',
+  }));
+  const screen = render(
+    <TravelMediaComposer
+      visible
+      value={values}
+      maxItems={5}
+      aspect={[1, 1]}
+      onCancel={jest.fn()}
+      onChange={onChange}
+      sourceAdapter={sourceAdapter}
+    />
+  );
+
+  fireEvent.press(screen.getByTestId('travel-media-selected-picker-2'));
+  expect(screen.getByText('2/3')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('travel-media-delete-active'));
+  expect(screen.queryByTestId('travel-media-selected-picker-2')).toBeNull();
+  expect(screen.getByText('2 מתוך 5')).toBeTruthy();
+  fireEvent.press(screen.getByTestId('travel-media-done'));
+  expect(onChange).toHaveBeenCalledWith([
+    expect.objectContaining({ sourceId: 'picker-1' }),
+    expect.objectContaining({ sourceId: 'picker-3' }),
+  ]);
+});
+
+test('TravelMediaComposer reserves only fast dominant horizontal gestures for photo navigation', () => {
+  expect(isTravelMediaSwipe({ translationX: -70, translationY: 10, velocityX: -700 })).toBe(true);
+  expect(isTravelMediaSwipe({ translationX: 70, translationY: 10, velocityX: 300 })).toBe(false);
+  expect(isTravelMediaSwipe({ translationX: 70, translationY: 65, velocityX: 700 })).toBe(false);
+  expect(isTravelMediaSwipe({ translationX: 40, translationY: 4, velocityX: 900 })).toBe(false);
+});
+
+test('TravelMediaComposer navigates on a fast swipe and commits slow, pinched, and cancelled crops', async () => {
+  const onChange = jest.fn();
+  const values = [1, 2].map((index) => ({
+    id: `gesture-${index}`,
+    sourceId: `gesture-${index}`,
+    uri: `file:///gesture-${index}.jpg`,
+    previewUri: `file:///gesture-${index}.jpg`,
+    width: 1200,
+    height: 900,
+    persistence: 'ready',
+    transform: {
+      crop: { originX: 150, originY: 0, width: 900, height: 900 },
+      aspect: [1, 1],
+      maxLongEdge: 1600,
+      compress: 0.94,
+      format: 'jpeg',
+    },
+  }));
+  const screen = render(
+    <TravelMediaComposer
+      visible
+      value={values}
+      maxItems={5}
+      aspect={[1, 1]}
+      onCancel={jest.fn()}
+      onChange={onChange}
+      sourceAdapter={sourceAdapter}
+    />
+  );
+
+  await act(async () => {
+    fireEvent(screen.getByTestId('travel-media-crop-stage'), 'layout', {
+      nativeEvent: { layout: { width: 300, height: 300 } },
+    });
+  });
+  await act(async () => {
+    fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
+      nativeEvent: { layout: { width: 300, height: 300 } },
+    });
+  });
+
+  let pan = latestGesture('pan');
+  act(() => {
+    pan.callbacks.onStart({});
+    pan.callbacks.onEnd({ translationX: -70, translationY: 8, velocityX: -700 });
+  });
+  expect(screen.getByText('2/2')).toBeTruthy();
+
+  await act(async () => {
+    fireEvent(screen.getByTestId('travel-media-crop-stage'), 'layout', {
+      nativeEvent: { layout: { width: 300, height: 300 } },
+    });
+  });
+  await act(async () => {
+    fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
+      nativeEvent: { layout: { width: 300, height: 300 } },
+    });
+  });
+
+  pan = latestGesture('pan');
+  act(() => {
+    pan.callbacks.onStart({});
+    pan.callbacks.onUpdate({ translationX: 30, translationY: 0 });
+    pan.callbacks.onFinalize({}, false);
+  });
+  const pinch = latestGesture('pinch');
+  act(() => {
+    pinch.callbacks.onStart({});
+    pinch.callbacks.onUpdate({ scale: 2 });
+    pinch.callbacks.onEnd({});
+  });
+  fireEvent.press(screen.getByTestId('travel-media-done'));
+
+  expect(onChange).toHaveBeenCalledWith([
+    expect.objectContaining({ sourceId: 'gesture-1' }),
+    expect.objectContaining({
+      sourceId: 'gesture-2',
+      transform: expect.objectContaining({
+        crop: expect.objectContaining({ width: 450, height: 450 }),
+      }),
+    }),
+  ]);
 });

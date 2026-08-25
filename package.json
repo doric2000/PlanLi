@@ -2,7 +2,9 @@
   "scripts": {
     "sync:travel-taxonomy": "node scripts/syncTravelTaxonomy.js",
     "test:travel-taxonomy": "node scripts/syncTravelTaxonomy.js --check",
+    "test:eas-production-preflight": "node --test scripts/easProductionPreflight.test.js",
     "test:validation-plan": "node --test scripts/validationPlan.test.js",
+    "preflight:eas-production": "node scripts/easProductionPreflight.js",
     "validate:changed": "node scripts/validationPlan.js run"
   },
   "devDependencies": {

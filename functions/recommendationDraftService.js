@@ -348,6 +348,12 @@ function publishData(pointer, draft) {
   return data;
 }
 
+function assertPublishableRecommendationDraft(draft) {
+  assert(Array.isArray(draft?.media) && draft.media.length >= 1,
+    'invalid-argument', 'RECOMMENDATION_PHOTO_REQUIRED', 'A recommendation requires at least one image.');
+  return draft;
+}
+
 async function publishRecommendationDraft(options) {
   const {
     admin,
@@ -378,6 +384,7 @@ async function publishRecommendationDraft(options) {
     'aborted', 'RECOMMENDATION_DRAFT_VERSION_CONFLICT', 'The recommendation draft changed. Reload it and try again.');
   await assertEditableSource({ admin, auth, sourceRecommendationId: pointer.sourceRecommendationId || '' });
   const loaded = await readVersion(db, pointer);
+  assertPublishableRecommendationDraft(loaded.version.draft || {});
   const publicationRef = receiptRef(db, auth.uid, draftId);
   const claim = await db.runTransaction(async (transaction) => {
     const [latestSnapshot, receiptSnapshot] = await Promise.all([
@@ -501,6 +508,7 @@ async function cleanupRecommendationDraftArtifacts({ admin, limit = 100, now = n
 }
 
 module.exports = {
+  assertPublishableRecommendationDraft,
   assertEditableSource,
   cleanupRecommendationDraftArtifacts,
   discardRecommendationDraft,

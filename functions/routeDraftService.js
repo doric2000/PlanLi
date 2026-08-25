@@ -235,6 +235,8 @@ function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
   const localMediaCount = Number(draft.localMediaCount || 0);
   assert(Number.isSafeInteger(localMediaCount) && localMediaCount >= 0 && localMediaCount <= MAX_ROUTE_MEDIA,
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'localMediaCount is invalid.');
+  assert(mediaCount + localMediaCount <= MAX_ROUTE_MEDIA,
+    'invalid-argument', 'ROUTE_DRAFT_INVALID', `A route supports up to ${MAX_ROUTE_MEDIA} images.`);
   const attributes = draft.attributes && typeof draft.attributes === 'object' ? draft.attributes : {};
   return {
     routeSchemaVersion: 2,

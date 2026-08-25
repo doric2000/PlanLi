@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  assertPublishableRecommendationDraft,
   assertEditableSource,
   cleanupRecommendationDraftArtifacts,
   discardRecommendationDraft,
@@ -288,6 +289,15 @@ test('publish payload distinguishes new and edit exact-location publication', ()
   assert.equal(edit.placeId, undefined);
 });
 
+test('publishing requires at least one canonical recommendation image', () => {
+  assert.throws(() => assertPublishableRecommendationDraft(partialDraft()), (error) => (
+    error?.details?.reason === 'RECOMMENDATION_PHOTO_REQUIRED'
+  ));
+  assert.doesNotThrow(() => assertPublishableRecommendationDraft(partialDraft({
+    media: [media('asset-1')],
+  })));
+});
+
 test('publishing saves the exact version, falls back from an expired token, and leaves an idempotent receipt', async () => {
   const ownerPath = 'system/recommendationDrafts/owners/owner';
   const versionPath = `${ownerPath}/draftVersions/version-5`;
@@ -312,6 +322,7 @@ test('publishing saves the exact version, falls back from an expired token, and 
               locationMode: 'exact',
               selectedPlace: { placeId: 'place-1', resolvedPlaceToken: 'expired-token' },
               title: 'כותרת', description: 'תיאור', budget: 'economy',
+              media: [media('asset-1')],
             })),
           }) }
         : { exists: false, data: () => ({}) },
@@ -386,7 +397,7 @@ test('publication refuses to acknowledge success if the claimed pointer no longe
     get: async () => path === ownerPath
       ? { exists: true, data: () => pointer }
       : path === versionPath
-      ? { exists: true, ref: refFor(path), data: () => ({ ownerId: 'owner', state: 'draft', draft: partialDraft({ title: 'כותרת', description: 'תיאור', budget: 'economy' }) }) }
+        ? { exists: true, ref: refFor(path), data: () => ({ ownerId: 'owner', state: 'draft', draft: partialDraft({ title: 'כותרת', description: 'תיאור', budget: 'economy', media: [media('asset-1')] }) }) }
       : { exists: false },
   });
   const db = {

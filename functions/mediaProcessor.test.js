@@ -9,6 +9,7 @@ const {
   consumeMediaProcessingBudget,
   createPlaceholder,
   encodeVariant,
+  MEDIA_MINUTE_MAXIMUM,
 } = require('./mediaProcessor');
 
 test('canonical media uses a bounded cache so moderation takedowns can converge', () => {
@@ -39,7 +40,8 @@ test('media processing enforces aggregate per-user job and byte budgets', async 
   const admin = {
     firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'time' } }),
   };
-  for (let count = 0; count < 6; count += 1) {
+  assert.equal(MEDIA_MINUTE_MAXIMUM, 40);
+  for (let count = 0; count < MEDIA_MINUTE_MAXIMUM; count += 1) {
     await consumeMediaProcessingBudget({ admin, uid: 'user-1', sourceBytes: 1, nowMs: 1_000 });
   }
   await assert.rejects(
