@@ -1021,3 +1021,24 @@ Remove-Item Env:PLANLI_ENFORCE_APP_CHECK
 Do not enable enforcement before every Web, Android and iOS build can attach a
 valid App Check token; otherwise all callable requests from that client are
 rejected.
+
+## iOS gallery recovery OTA release
+
+- Source: PR `#202`, merge commit
+  `32f32a75dc42f30563e5d5fea92b71183450fdff` on `main`.
+- App/runtime: `1.1.0`; production EAS channel and branch; iOS only.
+- EAS Update group: `1b08576e-26c9-4ffb-8566-e7dd845130e6`; iOS update
+  `01a03820-4f06-7d69-88ad-aaa771fe6499`, published at
+  `2026-08-25T08:53:56.614Z` with message
+  `Fix iOS gallery loading and permission recovery (#202)`.
+- The update replaced production group
+  `b0112239-3ce4-46a8-8019-674338a8e409` for compatible iOS runtime `1.1.0`
+  clients. The export uploaded one app bundle, found 52 iOS assets, and uploaded
+  no new assets.
+- The publishing checkout also contained unrelated uncommitted README and
+  campaign-rendering files; they were preserved, and the published manifest
+  reports the exact merge commit above. No native build, App Store submission,
+  Firebase deployment, backend change, migration, Android update, or production
+  data write was performed.
+- Download, application, gallery permission recovery, PhotoKit thumbnail loading,
+  and crop behavior on the physical iPhone remain unverified.
