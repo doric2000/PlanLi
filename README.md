@@ -14,7 +14,10 @@ Android map smoke test on `2026-08-25` found that exact-location place resolutio
 succeeded but its preview stayed loading, while the Community map mounted with a
 Google watermark but no map tiles. Google Maps Android key authorization for the
 Play App Signing certificate was corrected at `2026-08-25T14:01:48+03:00`; the
-corrective client update and physical tablet re-test remain pending.
+Android-only production EAS Update
+`dd0b91d8-b5b7-4a73-94d4-d08d31a449f5` was published from PR `#206` merge
+commit `e954e3e` at `2026-08-25T11:19:04.856Z`. Download, application, and the
+physical tablet re-test remain pending.
 TestFlight build `1.1.0 (13)` remains installed and
 in use on the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
 commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
@@ -285,22 +288,38 @@ Current Android release record:
   details have not been independently verified. On `2026-08-25`, exact-location
   place resolution returned the selected place but its embedded preview remained
   in a loading state. The Community map mounted and showed the Google watermark
-  plus the empty-area message, but no basemap tiles. Source work to bound native
-  map loading and expose retry states is on `fix/android-location-map-loading`.
+  plus the empty-area message, but no basemap tiles. PR `#206` added bounded
+  native map loading, retry states, and Community basemap/result separation.
   Google Cloud project `planli-f0b12` was verified to have a paid billing account
   and Maps SDK for Android enabled. At `2026-08-25T14:01:48+03:00`, the existing
   `PlanLi Android Maps SDK` key remained restricted to Maps SDK for Android and
   gained the Google Play App Signing SHA-1 for `com.planli.planlitravels`, while
   retaining the EAS/upload signer restriction. Google Cloud confirmed the key was
-  restricted; propagation can take up to five minutes. A compatible Android
-  preview build, EAS Update, and post-fix tablet smoke test remain pending.
+  restricted; propagation can take up to five minutes. No compatible Android
+  preview build was available, so preview-channel device validation was not
+  performed before the authorized internal-test production-channel update. The
+  post-fix tablet smoke test remains pending.
 - Android map-loading source validation on `2026-08-25`: seven focused client
   suites passed 57 tests. Changed-scope validation passed its 17 selected tests,
   admin Web export/verification, iOS release-config check, and iOS export. Expo
   prebuild config confirmed that the Android package receives its native Maps
   key, and a separate Android Expo export completed successfully. The Google
-  Cloud credential correction above does not require a replacement AAB. No EAS
-  build/update, Play upload, or physical post-fix verification was performed.
+  Cloud credential correction above does not require a replacement AAB. No new
+  EAS build or Play upload was performed.
+- Android map-loading EAS Update: group
+  `dd0b91d8-b5b7-4a73-94d4-d08d31a449f5`, Android update
+  `01a038a5-2f98-7305-bd82-6afe8dd12f9a`, production channel/branch, runtime
+  `1.1.0`, published at `2026-08-25T11:19:04.856Z` with message
+  `Fix Android location map loading (#206)`. The source is PR `#206` merge commit
+  `e954e3e11e511ddadbfc5bc0d15a3d1f7b948c26`. EAS uploaded one Android app
+  bundle, found 51 Android assets, and uploaded no new assets. The publishing
+  checkout preserved unrelated pre-existing untracked campaign/rendering files;
+  the update manifest reports the exact merge commit. This Android-only update
+  did not alter iOS, create an AAB, submit to Google Play, deploy Firebase, or
+  write production data. Download, application, exact-location confirmation,
+  Community tiles/empty state, manual-pin, and route-map behavior on the physical
+  tablet remain unverified. Roll back by republishing the preceding compatible
+  Android production group `b0112239-3ce4-46a8-8019-674338a8e409`.
 
 ## Open-registration TestFlight beta release
 
