@@ -350,42 +350,37 @@ Current release record:
 - Source release: Noya product-tour PR `#196`, typography release fix PR `#197`,
   and live-audit alignment PR `#198`; the build source is PR `#198` merge commit
   `f9c7096`.
-- Preview EAS Update: Noya first-tour group
-  `b63e0183-d8e8-41a0-9e16-d083b8bb2379`, runtime `1.1.0`, iOS update
-  `01a039c6-3ae2-735c-8f4c-31b6d94efed3`, Android update
-  `01a039c6-3ae2-7641-a854-c6873bfb4ac7`, published from PR `#208` merge
-  commit `313ebe3` at `2026-08-25T16:34:47.650Z` with the `production` EAS
-  environment. There is no signed iOS preview-profile build, so download,
-  application, and physical-device behavior remain unverified.
-- Production EAS Update: Noya first-tour group
-  `b21002fa-5510-42bb-8c22-75ac24499260`, runtime `1.1.0`, iOS update
-  `01a039d6-3555-7cbe-922d-659d340fb457`, Android update
-  `01a039d6-3555-74e6-a679-2de282732daf`, published from PR `#208` merge
-  commit `313ebe3` at `2026-08-25T16:52:14.805Z` with the `production` EAS
-  environment. EAS read-back confirmed both manifests and the production branch
-  point to this group and exact commit. The workspace was marked dirty only
-  because unrelated pre-existing untracked campaign and rendering files were
-  preserved. Roll back by republishing production group
-  `151b7748-1189-406e-8b7c-a10336fe4a9b`. Download and application on the
+- Preview EAS Update: combined photo editor, Noya creator flow, and For You v2
+  group `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025`, runtime `1.1.0`, iOS update
+  `01a03ac7-6651-70bf-8579-627e3e7f3364`, and Android update
+  `01a03ac7-6651-71cc-ba0e-7c5f6e52da60`, published from `main` commit
+  `4766903a1a40481a6b3019159d14934e9c41d551` at
+  `2026-08-25T21:15:41.521Z` with the `production` EAS environment. EAS
+  read-back confirmed both manifests, the `preview` branch, runtime, and exact
+  commit. There is no signed iOS preview-profile build, so download and
+  physical-device behavior remain unverified.
+- Production EAS Update: exact republish of that preview bundle as group
+  `1184a492-317b-4a5a-be48-12374b98bc8a`, runtime `1.1.0`, iOS update
+  `01a03acb-43cc-74d6-b5ad-c0056c688c3c`, and Android update
+  `01a03acb-43cc-7631-8bac-e7f9009a6c27`, published at
+  `2026-08-25T21:19:54.828Z`. EAS read-back confirmed both manifests and the
+  production branch point to this group and exact commit, with a clean Git
+  working tree. Roll back by republishing the preceding production group
+  `b21002fa-5510-42bb-8c22-75ac24499260`. Download and application on the
   physical TestFlight iPhone and Android tablet remain unverified.
-- Firebase release: 96 active Node.js 22 v2 Functions in `europe-west1`.
-  The 28 affected Functions deployed from `0ed8e88` at approximately
-  `2026-08-24T01:34Z` are `saveRecommendation`,
-  `getCurrentRecommendationDraft`, `saveRecommendationDraft`,
-  `discardRecommendationDraft`, `publishRecommendationDraft`,
-  `resolveRecommendationDestination`, `searchPlaces`, `resolvePlaceSelection`,
-  `saveRoute`, `getCurrentRouteDraft`, `saveRouteDraft`, `discardRouteDraft`,
-  `publishRouteDraft`, `saveTrip`, `setFavorite`, `setReaction`,
-  `getReactionState`, `saveComment`, `deleteComment`, `recordDiscoverySignal`,
-  `deleteContent`, `submitReport`, `setBlockedUser`, `prepareMedia`,
+- Firebase release: 99 active Node.js 22 v2 Functions in `europe-west1`.
+  Twelve affected Functions deployed from clean `main` commit `4766903` at
+  approximately `2026-08-25T20:49Z`: `prepareMedia`,
+  `publishRecommendationDraft`, `saveRouteDraft`, `publishRouteDraft`,
   `updateProfile`, `getPersonalizedRecommendations`, `getPersonalizedRoutes`,
-  and `onPublicProfileSync`. All report v2, Node.js 22, and `europe-west1`; the
-  post-deploy Function error query returned no matching entries. The active
-  media target `planli-f0b12-media-eu` also received the compiled
-  `storage.rules`. Firestore Rules, indexes, Hosting, production documents,
-  migrations, the rollback Storage bucket, and the other 68 Functions were not
-  changed. Exact Cloud Run revision names remain unverified because they were
-  unavailable from the current tooling.
+  `recordDiscoverySignal`, `setPersonalizationFeedback`,
+  `mergeGuestPersonalization`, `setPersonalizationBehavior`, and
+  `resetPersonalizationActivity`. The last three were created; the other nine
+  were updated. CLI inventory independently confirmed all twelve as active v2
+  Node.js 22 Functions in `europe-west1`, and the post-deploy logs contained
+  rollout health starts with no Function error entries. Firestore Rules,
+  Storage Rules, indexes, Hosting, production documents, migrations, IAM, and
+  the other 87 Functions were unchanged.
 - RoadTrip validation: 16 focused client suites passed 108 tests and seven
   focused Node.js 22 route/location Function suites passed 50 tests.
   Changed-scope validation and PR `#181` plan, affected-client,
@@ -416,15 +411,15 @@ Current release record:
   review found no actionable findings. The locked client dependency audit still
   reports eight high-severity findings; dependencies were not upgraded during
   this release. Physical-device behavior remains unverified.
-- OTA device state: Expo serves Noya first-tour preview group
-  `b63e0183-d8e8-41a0-9e16-d083b8bb2379` only to matching preview requests;
+- OTA device state: Expo serves combined preview group
+  `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` only to matching preview requests;
   no preview iOS client exists, so it has not been applied. Production now
-  serves group `b21002fa-5510-42bb-8c22-75ac24499260` for Android and iOS.
-  Download, application, and full Noya first-tour behavior on the physical
-  TestFlight iPhone and Android tablet remain unverified.
-  Rollback identifiers are preview group
-  `e2490214-0532-4777-b1a2-eca3519eac85` and production group
-  `151b7748-1189-406e-8b7c-a10336fe4a9b`.
+  serves group `1184a492-317b-4a5a-be48-12374b98bc8a` for Android and iOS.
+  Download, application, multi-photo gestures, recommendation creation, RoadTrip
+  editing, Noya guidance, and For You v2 behavior remain unverified on the
+  physical TestFlight iPhone and Android tablet. The immediate rollback groups
+  are preview `b63e0183-d8e8-41a0-9e16-d083b8bb2379` and production
+  `b21002fa-5510-42bb-8c22-75ac24499260`.
 - Production catalog migration: the separately authorized apply run at
   `2026-08-24T19:49Z` scanned 14 recommendations and migrated exactly one
   document (`recommendations/rec_CBCFGWNEcxN3Ov6ijXeI`) to category `nature`
@@ -1209,3 +1204,49 @@ rejected.
 - Roll back preview by republishing group
   `e2490214-0532-4777-b1a2-eca3519eac85`; roll back production by republishing
   group `151b7748-1189-406e-8b7c-a10336fe4a9b`.
+
+## Photo editor restoration and For You v2 OTA release
+
+- Source: photo-editor integration PR `#211`, CityCard release-test isolation PR
+  `#212`, and Windows preflight repair PR `#213`; released from clean `main`
+  commit `4766903a1a40481a6b3019159d14934e9c41d551`. The release also contains
+  previously merged For You v2 PR `#210` and Noya first-tour PR `#208`.
+- Scope: restores independently editable multi-photo recommendation and RoadTrip
+  media, the photo-first four-stage recommendation flow and matching Noya guide,
+  the RoadTrip media limits, and the For You v2 client/backend behavior. The
+  authenticated media-processing minute allowance is 40; existing file-size,
+  pixel, ownership, staging, concurrency, bandwidth, and security controls remain.
+- Preview EAS Update: group `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025`, Android
+  update `01a03ac7-6651-71cc-ba0e-7c5f6e52da60`, and iOS update
+  `01a03ac7-6651-70bf-8579-627e3e7f3364`, published at
+  `2026-08-25T21:15:41.521Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `1184a492-317b-4a5a-be48-12374b98bc8a`, Android update
+  `01a03acb-43cc-7631-8bac-e7f9009a6c27`, and iOS update
+  `01a03acb-43cc-74d6-b5ad-c0056c688c3c`, published at
+  `2026-08-25T21:19:54.828Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed the production branch's newest group contains both
+  platforms and exact commit `4766903` with a clean working tree.
+- Firebase deployment: the twelve affected Functions listed in the current
+  release record were deployed to `planli-f0b12` in `europe-west1`; inventory
+  reports 99 active v2 Node.js 22 Functions. No Rules, Hosting, migration,
+  production-document, IAM, native-build, or store-submission change accompanied
+  this release.
+- Validation: release-readiness run `32897877416` passed production lineage,
+  locked installs, all client and Functions tests, iOS release configuration and
+  export, Firestore/Storage Rules emulator tests, and release dependency audits.
+  The live EAS preflight passed immediately before production promotion, and EAS
+  uploaded two app bundles with no new assets.
+- Prevention: `scripts/easProductionPreflight.js` enforces clean `main`, exact
+  `origin/main`, and ancestry of the currently deployed production commit;
+  `scripts/easProductionPreflight.test.js` covers the policy and Windows launcher.
+  Root `package.json` exposes `preflight:eas-production`, PR tooling tests it in
+  `.github/workflows/pr-validation.yml`, and
+  `.github/workflows/release-readiness.yml` blocks client/Functions release gates
+  until the operator-provided live production commit passes lineage validation.
+- Physical download, application, gestures, photo add/delete/crop restoration,
+  recommendation/RoadTrip creation and editing, Noya guide behavior, and For You
+  v2 remain unverified on the TestFlight iPhone and Android tablet. Force-close
+  and reopen the production app up to twice to download and apply the update.
+  Roll back preview to `b63e0183-d8e8-41a0-9e16-d083b8bb2379` or production to
+  `b21002fa-5510-42bb-8c22-75ac24499260` if required.
