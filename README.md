@@ -1042,3 +1042,27 @@ rejected.
   data write was performed.
 - Download, application, gallery permission recovery, PhotoKit thumbnail loading,
   and crop behavior on the physical iPhone remain unverified.
+
+## Mobile photo picker stability OTA release
+
+- Source: PR `#204`, merge commit
+  `0fbba80ddb5e324a1cc5f39e01cda050f7ce3c57` on `main`.
+- App/runtime: `1.1.0`; production EAS channel and branch; iOS only.
+- EAS Update group: `d98875c3-ccf5-4ea7-b91f-734a802e4602`; iOS update
+  `01a0384f-3b3b-7ccb-a51a-0b3828ceecf3`, published at
+  `2026-08-25T09:45:11.739Z` with message
+  `Stabilize mobile photo selection (#204)`.
+- The update replaced production group
+  `1b08576e-26c9-4ffb-8566-e7dd845130e6` for compatible iOS runtime `1.1.0`
+  clients. The export uploaded one app bundle, found 52 iOS assets, and uploaded
+  no new assets.
+- Validation passed 53 focused client tests, iOS and Android Expo exports, the
+  generated Android media-permission removal check, and all PR `#204` checks.
+  Android was validated but did not receive this update.
+- The publishing checkout preserved unrelated uncommitted README and campaign
+  files, and the published manifest reports the exact merge commit above. No
+  native build, App Store submission, Firebase deployment, backend change,
+  migration, Android update, or production data write was performed.
+- Download, application, system-picker presentation, photo loading, crop review,
+  and watchdog-memory behavior on the physical TestFlight iPhone remain
+  unverified.
