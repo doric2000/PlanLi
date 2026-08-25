@@ -15,8 +15,6 @@ describe('DestinationFilterModal saved-only option', () => {
   const baseProps = {
     visible: true,
     onClose: jest.fn(),
-    sortBy: 'popular',
-    onSortChange: jest.fn(),
     savedOnly: false,
     onSavedOnlyChange: jest.fn(),
     favoritesAvailable: true,

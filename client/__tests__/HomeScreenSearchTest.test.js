@@ -1,11 +1,6 @@
 /**
- * Purpose: Verify HomeScreen search filtering and navigation behavior.
- *
- * What this test does:
- * - Renders HomeScreen with mocked data/services.
- * - Types a query and checks the list filters to matching cities.
- * - Presses a result card and verifies navigation to LandingPage.
- * - Types a non-matching query and checks the empty-state message.
+ * Purpose: Verify the Home planning hub, its independent discovery modules,
+ * destination search, refresh behavior, and navigation entry points.
  */
 import React from 'react';
 import { RefreshControl, StyleSheet } from 'react-native';
@@ -15,11 +10,27 @@ import { NavigationContext } from '@react-navigation/native';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
 
 const mockSearchDestinations = jest.fn();
-const mockRequestDestinations = jest.fn();
 const mockLoadRecentDestinations = jest.fn();
 const mockRememberRecentDestinations = jest.fn();
 const mockResolveDestinationForPlacePreview = jest.fn();
 const mockEnsureCapability = jest.fn();
+const mockRequestPersonalizedRoutes = jest.fn();
+const mockRequestPersonalizedRecommendations = jest.fn();
+const mockGetCurrentRouteDraft = jest.fn();
+const mockFocusSearchInput = jest.fn();
+const mockWaitForRefreshConfirmation = jest.fn(() => (
+  new Promise((resolve) => setTimeout(resolve, 300))
+));
+const mockAuthUserState = {
+  user: null,
+  loading: false,
+  isGuest: true,
+  isActive: false,
+};
+const mockSmartProfileState = {
+  completed: false,
+  loading: false,
+};
 const deferred = () => {
   let resolve;
   let reject;
@@ -28,7 +39,6 @@ const deferred = () => {
 };
 jest.mock('../src/services/DestinationService', () => ({
   searchDestinations: (...args) => mockSearchDestinations(...args),
-  requestDestinations: (...args) => mockRequestDestinations(...args),
   destinationCatalogItemToCity: (item, placeholderColor) => {
     const data = item.data?.() || item;
     const countryId = item.countryId || item.ref?.parent?.parent?.id;
@@ -46,6 +56,19 @@ jest.mock('../src/services/DestinationService', () => ({
       placeholderColor,
     };
   },
+}));
+
+jest.mock('../src/services/PersonalizationService', () => ({
+  requestPersonalizedRoutes: (...args) => mockRequestPersonalizedRoutes(...args),
+  requestPersonalizedRecommendations: (...args) => mockRequestPersonalizedRecommendations(...args),
+}));
+
+jest.mock('../src/services/RouteService', () => ({
+  getCurrentRouteDraft: (...args) => mockGetCurrentRouteDraft(...args),
+}));
+
+jest.mock('../src/utils/refreshFeedback', () => ({
+  waitForRefreshConfirmation: (...args) => mockWaitForRefreshConfirmation(...args),
 }));
 
 jest.mock('firebase/firestore', () => ({
@@ -74,9 +97,10 @@ jest.mock('../src/components/GooglePlacesInput', () => {
   return ({
     value, onChangeValue, rightAccessory, idleLocalResults = [], onSelectLocal,
     onSelect, returnSelection, inputWrapperStyle, inputWrapperTestID,
-    inputStyle, searchIconSize, searchIconStyle,
+    inputStyle, inputRef, searchIconSize, searchIconStyle,
   }) => {
     const [focused, setFocused] = React.useState(false);
+    React.useImperativeHandle(inputRef, () => ({ focus: mockFocusSearchInput }), [inputRef]);
     return (
       <View>
         <View testID={inputWrapperTestID} style={inputWrapperStyle}>
@@ -151,15 +175,27 @@ jest.mock('../src/services/ProfileService', () => ({
 }));
 
 jest.mock('../src/hooks/useAuthUser', () => ({
-  useAuthUser: () => ({
-    user: null,
-    loading: false,
-    isGuest: true,
-  }),
+  useAuthUser: () => mockAuthUserState,
+}));
+
+jest.mock('../src/hooks/useSmartProfile', () => ({
+  useSmartProfile: () => mockSmartProfileState,
 }));
 
 jest.mock('../src/features/auth/AuthContext', () => ({
-  useAuth: () => ({ ensureCapability: (...args) => mockEnsureCapability(...args) }),
+  useAuth: () => ({
+    ensureCapability: (...args) => mockEnsureCapability(...args),
+    handleCallableAuthError: jest.fn(),
+    userDocument: null,
+  }),
+}));
+
+jest.mock('../src/features/profile/services/NoyaOnboardingStorage', () => ({
+  dismissGuestNoya: jest.fn(async () => undefined),
+  loadGuestNoyaProfile: jest.fn(async () => null),
+  NOYA_ONBOARDING_VERSION: 2,
+  shouldInviteGuestToNoya: jest.fn(async () => false),
+  wasNoyaAccountHandled: jest.fn(() => true),
 }));
 
 describe('HomeScreenSearchTest', () => {
@@ -171,9 +207,27 @@ describe('HomeScreenSearchTest', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    Object.assign(mockAuthUserState, {
+      user: null,
+      loading: false,
+      isGuest: true,
+      isActive: false,
+    });
+    Object.assign(mockSmartProfileState, { completed: false, loading: false });
     mockLoadRecentDestinations.mockResolvedValue([]);
     mockRememberRecentDestinations.mockImplementation(async (items) => items);
     mockEnsureCapability.mockResolvedValue(false);
+    mockGetCurrentRouteDraft.mockResolvedValue(null);
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ mode: 'generic', items: [] }),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ mode: 'generic', items: [] }),
+    }));
     mockSearchDestinations.mockResolvedValue({
       items: [
         makeDoc('athens', 'gr', {
@@ -188,11 +242,222 @@ describe('HomeScreenSearchTest', () => {
         }),
       ],
     });
-    mockRequestDestinations.mockImplementation((...args) => ({
+  });
+
+  it('opens as a useful planning hub without requesting popularity-ranked destinations', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('home-continuation-new')).toBeTruthy());
+    expect(screen.getByText('מה אפשר לעשות עכשיו?')).toBeTruthy();
+    expect(screen.getByText('מסלולים חדשים')).toBeTruthy();
+    expect(screen.getByText('חדש מהקהילה')).toBeTruthy();
+    expect(mockRequestPersonalizedRoutes).toHaveBeenCalledWith({ sort: 'newest', limit: 4 });
+    expect(mockRequestPersonalizedRecommendations).toHaveBeenCalledWith({ sort: 'newest', limit: 4 });
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
+    expect(screen.queryByText('יעדים פופולריים')).toBeNull();
+  });
+
+  it('focuses destination search when there is no trip or recent destination to continue', async () => {
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('home-continuation-new')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('home-continuation-action'));
+    expect(mockFocusSearchInput).toHaveBeenCalledTimes(1);
+  });
+
+  it('prioritizes an active draft and uses personalized rails for a completed account', async () => {
+    Object.assign(mockAuthUserState, {
+      user: { uid: 'user-1' },
+      isGuest: false,
+      isActive: true,
+    });
+    Object.assign(mockSmartProfileState, { completed: true, loading: false });
+    mockEnsureCapability.mockResolvedValue(true);
+    mockGetCurrentRouteDraft.mockResolvedValue({
+      id: 'draft-1',
+      title: 'סוף שבוע בבודפשט',
+      area: { cityName: 'בודפשט', countryName: 'הונגריה' },
+      dayCount: 2,
+      days: [{ stops: [{ id: 'a' }, { id: 'b' }] }, { stops: [] }],
+    });
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
       requested: true,
       source: 'network',
-      promise: mockSearchDestinations(...args),
+      promise: Promise.resolve({ mode: 'personalized', items: [] }),
     }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ mode: 'personalized', items: [] }),
+    }));
+    const navigationMock = { navigate: jest.fn() };
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={navigationMock} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('home-continuation-draft')).toBeTruthy());
+    expect(screen.getByText('סוף שבוע בבודפשט')).toBeTruthy();
+    expect(screen.getByText(/2 ימים/)).toBeTruthy();
+    expect(screen.getByText('מסלולים שמתאימים לך')).toBeTruthy();
+    expect(screen.getByText('המלצות בשבילך')).toBeTruthy();
+    expect(mockRequestPersonalizedRoutes).toHaveBeenCalledWith({ sort: 'forYou', limit: 4 });
+
+    fireEvent.press(screen.getByTestId('home-continuation-action'));
+    await waitFor(() => expect(navigationMock.navigate).toHaveBeenCalledWith('AddRoutesScreen'));
+  });
+
+  it('keeps a loaded route draft available when a refresh cannot update it', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    Object.assign(mockAuthUserState, {
+      user: { uid: 'user-1' },
+      isGuest: false,
+      isActive: true,
+    });
+    Object.assign(mockSmartProfileState, { completed: true, loading: false });
+    mockGetCurrentRouteDraft.mockResolvedValue({
+      id: 'draft-1',
+      title: 'סוף שבוע בבודפשט',
+      area: { cityName: 'בודפשט', countryName: 'הונגריה' },
+      dayCount: 2,
+      days: [{ stops: [{ id: 'a' }] }, { stops: [] }],
+    });
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('home-continuation-draft')).toBeTruthy());
+    mockGetCurrentRouteDraft.mockRejectedValueOnce(new Error('offline'));
+    let refreshPromise;
+    act(() => {
+      refreshPromise = screen.UNSAFE_getByType(RefreshControl).props.onRefresh();
+    });
+    await act(async () => refreshPromise);
+
+    expect(screen.getByTestId('home-continuation-draft')).toBeTruthy();
+    expect(screen.getByText('סוף שבוע בבודפשט')).toBeTruthy();
+    expect(screen.getByTestId('home-continuation-stale-error')).toBeTruthy();
+    consoleSpy.mockRestore();
+  });
+
+  it('keeps one discovery rail useful when the other rail fails', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.reject(new Error('offline')),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({
+        mode: 'generic',
+        items: [{ id: 'rec-1', title: 'בית קפה קטן בפירנצה', destination: { cityName: 'פירנצה' } }],
+      }),
+    }));
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('home-route-error')).toBeTruthy());
+    expect(screen.getByTestId('home-recommendation-card-rec-1')).toBeTruthy();
+    consoleSpy.mockRestore();
+  });
+
+  it('preserves loaded discovery cards and avoids a false success when refresh fails', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({
+        mode: 'generic',
+        items: [{ id: 'route-1', title: 'יומיים בצפון איטליה', dayCount: 2 }],
+      }),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({
+        mode: 'generic',
+        items: [{ id: 'rec-1', title: 'בית קפה קטן בפירנצה' }],
+      }),
+    }));
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('home-route-card-route-1')).toBeTruthy());
+    expect(screen.getByTestId('home-recommendation-card-rec-1')).toBeTruthy();
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.reject(new Error('offline')),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.reject(new Error('offline')),
+    }));
+
+    let refreshPromise;
+    act(() => {
+      refreshPromise = screen.UNSAFE_getByType(RefreshControl).props.onRefresh();
+    });
+    expect(screen.getByTestId('home-refresh-state')).toBeTruthy();
+    await act(async () => refreshPromise);
+
+    expect(mockWaitForRefreshConfirmation).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('home-refresh-confirmation')).toBeNull();
+    expect(screen.getByTestId('home-route-card-route-1')).toBeTruthy();
+    expect(screen.getByTestId('home-recommendation-card-rec-1')).toBeTruthy();
+    expect(screen.getByTestId('home-route-stale-error')).toBeTruthy();
+    expect(screen.getByTestId('home-recommendation-stale-error')).toBeTruthy();
+    consoleSpy.mockRestore();
   });
 
   it('preserves the resolved exact venue and save token when Home prefills a recommendation', async () => {
@@ -269,7 +534,6 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockLoadRecentDestinations).toHaveBeenCalledTimes(1));
     fireEvent(screen.getByTestId('home-search-input'), 'focus');
     fireEvent.press(await screen.findByTestId('mock-recent-FR-paris'));
@@ -285,7 +549,7 @@ describe('HomeScreenSearchTest', () => {
         name: 'פריז',
       })]);
     });
-    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
   });
 
   it('filters destinations when searching by text', async () => {
@@ -301,10 +565,8 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    // Wait for initial destinations to load.
-    await waitFor(() => {
-      expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
-    });
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
 
     // Search for "יוון" and expect the list to change.
     fireEvent.changeText(getByTestId('home-search-input'), 'יוון');
@@ -315,8 +577,8 @@ describe('HomeScreenSearchTest', () => {
     });
     expect(getByTestId('home-results-title')).toHaveTextContent('תוצאות חיפוש');
     expect(queryByTestId('home-preferences-prompt')).toBeNull();
-    expect(queryByText('מומלצים עכשיו')).toBeNull();
-    expect(queryByText('יעדים פופולריים')).toBeNull();
+    expect(queryByText('מה אפשר לעשות עכשיו?')).toBeNull();
+    expect(queryByText('מסלולים חדשים')).toBeNull();
 
     fireEvent.press(getByTestId('city-card-athens'));
     expect(navigationMock.navigate).toHaveBeenCalledWith('LandingPage', {
@@ -329,8 +591,8 @@ describe('HomeScreenSearchTest', () => {
     fireEvent.changeText(getByTestId('home-search-input'), '!@#');
     await waitFor(() => expect(queryByTestId('home-results-title')).toBeNull());
     expect(mockSearchDestinations).toHaveBeenCalledTimes(callsBeforePunctuation);
-    expect(queryByText('מומלצים עכשיו')).toBeTruthy();
-    expect(queryByText('יעדים פופולריים')).toBeTruthy();
+    expect(queryByText('מה אפשר לעשות עכשיו?')).toBeTruthy();
+    expect(queryByText('מסלולים חדשים')).toBeTruthy();
   });
 
   it('shows a remote catalog destination when punctuation and spacing differ', async () => {
@@ -354,7 +616,8 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
     fireEvent.changeText(screen.getByTestId('home-search-input'), 'st johns');
 
     await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledWith(expect.objectContaining({
@@ -363,7 +626,7 @@ describe('HomeScreenSearchTest', () => {
     await waitFor(() => expect(screen.getByTestId('city-card-st-johns')).toBeTruthy());
   });
 
-  it('opens a destination-only filter with real sort controls', async () => {
+  it('opens a destination-only filter without unsupported popularity controls', async () => {
     const screen = render(
       <SafeAreaProvider
         initialMetrics={{
@@ -375,18 +638,17 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('לאן נוסעים?')).toBeTruthy();
-    expect(screen.getByText('מומלצים עכשיו')).toBeTruthy();
-    expect(screen.queryByText('חם עכשיו')).toBeNull();
-    expect(screen.queryByText('בחירת הקהילה')).toBeNull();
-    expect(screen.queryByText('חדש')).toBeNull();
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('מה מתכננים היום?')).toBeTruthy();
+    expect(screen.getByText('מה אפשר לעשות עכשיו?')).toBeTruthy();
+    expect(screen.queryByText('יעדים פופולריים')).toBeNull();
     fireEvent.press(screen.getByLabelText('סינון יעדים'));
     expect(screen.getByText('סינון יעדים')).toBeTruthy();
-    expect(screen.getByText('הכי פופולריים')).toBeTruthy();
-    expect(screen.getByText('לפי שם א–ת')).toBeTruthy();
+    expect(screen.getByText('יעדים שמורים')).toBeTruthy();
+    expect(screen.queryByText('הכי פופולריים')).toBeNull();
+    expect(screen.queryByText('לפי שם א–ת')).toBeNull();
     expect(screen.getByText('מועדפים בלבד')).toBeTruthy();
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(2));
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
   });
 
   it('keeps the shared Home hero outside the scrolling body', async () => {
@@ -401,14 +663,14 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
     const header = screen.getByTestId('home-tab-header');
     const scroll = screen.getByTestId('home-scroll');
     expect(header.props.overlapNext).toBe(true);
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
     expect(screen.getByTestId('home-search-tour-target').props.onLayout).toEqual(expect.any(Function));
-    expect(within(header).getByText('לאן נוסעים?')).toBeTruthy();
+    expect(within(header).getByText('מה מתכננים היום?')).toBeTruthy();
     expect(within(header).getByTestId('home-search-input')).toBeTruthy();
     expect(StyleSheet.flatten(within(header).getByTestId('home-search-row').props.style)).toMatchObject({
       width: '100%',
@@ -466,9 +728,10 @@ describe('HomeScreenSearchTest', () => {
       </NavigationContext.Provider>
     );
 
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
     act(() => handleTabPress());
-    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
+    expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1);
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
   });
 
   it('lets the hero own the top safe area without an automatic iOS inset', async () => {
@@ -483,7 +746,7 @@ describe('HomeScreenSearchTest', () => {
       </SafeAreaProvider>
     );
 
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
     const scroll = screen.getByTestId('home-scroll');
     expect(scroll.props.contentInsetAdjustmentBehavior).toBe('never');
     expect(scroll.props.automaticallyAdjustContentInsets).toBe(false);
@@ -505,10 +768,14 @@ describe('HomeScreenSearchTest', () => {
         <HomeScreen navigation={{ navigate: jest.fn() }} />
       </SafeAreaProvider>
     );
-    await waitFor(() => expect(screen.getByText('מומלצים עכשיו')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('home-continuation-new')).toBeTruthy());
 
     const pendingRefresh = deferred();
-    mockSearchDestinations.mockReturnValueOnce(pendingRefresh.promise);
+    mockRequestPersonalizedRoutes.mockReturnValueOnce({
+      requested: true,
+      source: 'network',
+      promise: pendingRefresh.promise,
+    });
     const control = screen.UNSAFE_getByType(RefreshControl);
     let refreshPromise;
     act(() => {
@@ -517,10 +784,10 @@ describe('HomeScreenSearchTest', () => {
 
     expect(screen.getByTestId('home-tab-header')).toBeTruthy();
     expect(screen.getByTestId('home-refresh-state')).toBeTruthy();
-    expect(screen.queryByText('מומלצים עכשיו')).toBeNull();
+    expect(screen.queryByText('מה אפשר לעשות עכשיו?')).toBeNull();
 
     await act(async () => {
-      pendingRefresh.resolve({ items: [] });
+      pendingRefresh.resolve({ mode: 'generic', items: [] });
       await refreshPromise;
     });
     expect(screen.queryByTestId('home-refresh-state')).toBeNull();
@@ -537,23 +804,28 @@ describe('HomeScreenSearchTest', () => {
         <HomeScreen navigation={{ navigate: jest.fn() }} />
       </SafeAreaProvider>
     );
-    await waitFor(() => expect(mockSearchDestinations).toHaveBeenCalledTimes(1));
-    const cached = await mockSearchDestinations.mock.results[0].value;
-    mockRequestDestinations.mockImplementation(() => ({
+    await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRequestPersonalizedRecommendations).toHaveBeenCalledTimes(1));
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
       requested: false,
       source: 'fresh-cache',
-      promise: Promise.resolve(cached),
+      promise: Promise.resolve({ mode: 'generic', items: [] }),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: false,
+      source: 'fresh-cache',
+      promise: Promise.resolve({ mode: 'generic', items: [] }),
     }));
 
     let refreshPromise;
     act(() => {
       refreshPromise = screen.UNSAFE_getByType(RefreshControl).props.onRefresh();
     });
-    expect(screen.getByTestId('home-refresh-confirmation')).toBeTruthy();
-    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByTestId('home-refresh-confirmation')).toBeTruthy());
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
 
     await act(async () => refreshPromise);
     expect(screen.queryByTestId('home-refresh-confirmation')).toBeNull();
-    expect(mockSearchDestinations).toHaveBeenCalledTimes(1);
+    expect(mockSearchDestinations).not.toHaveBeenCalled();
   });
 });

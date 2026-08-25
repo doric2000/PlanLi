@@ -34,6 +34,7 @@ export default function GooglePlacesInput({
   placeholder = 'חפש עיר...',
   clearPlaceholderOnFocus = false,
   inputTestID,
+  inputRef,
   containerStyle,
   inputWrapperStyle,
   inputStyle,
@@ -456,6 +457,7 @@ export default function GooglePlacesInput({
           />
         )}
         <AppTextInput
+          ref={inputRef}
           style={[
             common.homeSearchInput,
             googlePlacesInput.input,
