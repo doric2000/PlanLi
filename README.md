@@ -7,7 +7,18 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 PlanLi has an external TestFlight beta; it has not been publicly released to the
 App Store, Google Play, or a public web domain. Native development is performed
 with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. A signed Android production App Bundle `1.1.0 (5)` completed at
+not supported. The photo-first recommendation and independent multi-photo editor
+release was published from commit `fb53c75` to production EAS Update group
+`151b7748-1189-406e-8b7c-a10336fe4a9b` for iOS and Android at
+`2026-08-25T14:30:34.142Z`, runtime `1.1.0`, after publishing and reading back
+preview group `e2490214-0532-4777-b1a2-eca3519eac85`. The production group was
+republished from that preview group so both channels use the same uploaded
+bundles. Download, application, and physical-device behavior remain unverified.
+The three affected Functions (`prepareMedia`, `publishRecommendationDraft`, and
+`saveRouteDraft`) were deployed from the same commit at approximately
+`2026-08-25T14:08Z` and independently report active Node.js 22 services in
+`europe-west1`; the post-deploy log check returned no new errors. A signed
+Android production App Bundle `1.1.0 (5)` completed at
 `2026-08-24T23:49:14.951Z` from commit `5c06d10`; it was uploaded to Google Play
 internal testing and installed on the owner's Android tablet. The first physical
 Android map smoke test on `2026-08-25` found that exact-location place resolution
@@ -345,6 +356,41 @@ Current release record:
 - Source release: Noya product-tour PR `#196`, typography release fix PR `#197`,
   and live-audit alignment PR `#198`; the build source is PR `#198` merge commit
   `f9c7096`.
+- Photo-editor preview EAS Update: group
+  `e2490214-0532-4777-b1a2-eca3519eac85`, runtime `1.1.0`, iOS update
+  `01a0394f-1478-7d78-8296-2a734d97a339`, and Android update
+  `01a0394f-1478-7502-bf8e-bb96907b9ab7`, published at
+  `2026-08-25T14:24:39.032Z` from commit `fb53c75` with the `production` EAS
+  environment. Readback confirmed both platforms, the runtime, and the exact
+  source commit. No compatible signed preview client is currently available, so
+  application and physical-device behavior remain unverified.
+- Photo-editor production EAS Update: group
+  `151b7748-1189-406e-8b7c-a10336fe4a9b`, runtime `1.1.0`, iOS update
+  `01a03954-7f9e-72cb-8d5c-ef6f2acca1f5`, and Android update
+  `01a03954-7f9e-7d68-a930-68d1e3732a29`, republished at
+  `2026-08-25T14:30:34.142Z` from the verified preview group above to the
+  `production` branch. The manifest records commit `fb53c75` and the production
+  environment. EAS marked the workspace dirty only because unrelated untracked
+  campaign, store-art, and rendering-script files remained present; tracked
+  release sources matched the commit. Download and application remain
+  unverified. Roll back iOS by republishing group
+  `c049b41d-15b7-473c-aada-afad791682a5` and Android by republishing group
+  `dd0b91d8-b5b7-4a73-94d4-d08d31a449f5` to `production`.
+- Photo-editor Firebase release: `prepareMedia`,
+  `publishRecommendationDraft`, and `saveRouteDraft` deployed from commit
+  `fb53c75` at approximately `2026-08-25T14:08Z`. Independent inventory readback
+  reports all three active on Node.js 22 in `europe-west1`, and the post-deploy
+  log check returned no new errors. Firestore and Storage Rules, indexes,
+  Hosting, schemas, callable contracts, Storage paths, migrations, production
+  documents, and the other 93 Functions were unchanged.
+- Photo-editor release validation: all 153 client suites passed 790 tests, all
+  547 runnable Functions tests passed with 22 skipped, all 22 Rules emulator
+  tests passed, the iOS release configuration and export passed, and the
+  read-only live audit checked 504 Firestore documents, 96 Functions, and both
+  media buckets with zero failures. The locked client dependency audit still
+  reports eight high-severity advisories; dependencies were not changed. The
+  authenticated recommendation/RoadTrip flows and crop gestures remain
+  unverified on physical iPhone and Android devices.
 - Preview EAS Update: group `58425c2b-993a-42fc-83b5-c244f5cdf7c9`, runtime
   `1.1.0`, iOS update `01a02ff8-71b6-78f1-a711-cdb84adb5b78`, Android update
   `01a02ff8-71b6-7808-a3ef-d86db45dfbaa`, published from `3ec0cb1` at
