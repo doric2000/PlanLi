@@ -2,10 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  easExecOptions,
   parseArgs,
   validateDeployedCommit,
   validateRepositoryState,
 } = require('./easProductionPreflight');
+
+test('uses the Windows command shell for the npx.cmd launcher', () => {
+  assert.equal(easExecOptions('win32').shell, true);
+  assert.equal(easExecOptions('linux').shell, false);
+});
 
 test('accepts a clean main checkout synchronized with origin', () => {
   assert.doesNotThrow(() => validateRepositoryState({

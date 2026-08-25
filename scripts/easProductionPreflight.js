@@ -45,12 +45,20 @@ function git(repoRoot, args) {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
 }
 
+function easExecOptions(platform = process.platform) {
+  return {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+    shell: platform === 'win32',
+    windowsHide: true,
+  };
+}
+
 function runEas(clientRoot, args) {
   const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   return execFileSync(executable, ['-y', `eas-cli@${EAS_CLI_VERSION}`, ...args], {
     cwd: clientRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
+    ...easExecOptions(),
   });
 }
 
@@ -108,6 +116,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  easExecOptions,
   parseArgs,
   validateDeployedCommit,
   validateRepositoryState,
