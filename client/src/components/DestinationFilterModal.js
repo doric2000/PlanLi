@@ -6,12 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { colors, layout, radii, spacing } from '../styles';
 
-const SORTS = [
-  { key: 'popular', label: 'הכי פופולריים' },
-  { key: 'name', label: 'לפי שם א–ת' },
-];
-
-export default function DestinationFilterModal({ visible, onClose, sortBy, onSortChange, savedOnly, onSavedOnlyChange, favoritesAvailable }) {
+export default function DestinationFilterModal({
+  visible,
+  onClose,
+  savedOnly,
+  onSavedOnlyChange,
+  favoritesAvailable,
+}) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose} accessibilityRole="button">
@@ -24,18 +25,7 @@ export default function DestinationFilterModal({ visible, onClose, sortBy, onSor
             <AppText style={styles.title}>סינון יעדים</AppText>
             <View style={styles.close} />
           </View>
-          <AppText style={styles.sectionTitle}>מיון</AppText>
-          <View style={styles.options}>
-            {SORTS.map((option) => {
-              const selected = sortBy === option.key;
-              return (
-                <TouchableOpacity key={option.key} style={[styles.option, selected && styles.optionSelected]} onPress={() => onSortChange(option.key)}>
-                  <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? colors.brand : colors.textMuted} />
-                  <AppText style={[styles.optionText, selected && styles.optionTextSelected]}>{option.label}</AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <AppText style={styles.sectionTitle}>יעדים שמורים</AppText>
           <TouchableOpacity
             testID="destination-saved-only-filter"
             style={[
@@ -86,7 +76,6 @@ const styles = StyleSheet.create({
   close: { width: layout.touchTarget, height: layout.touchTarget, alignItems: 'center', justifyContent: 'center' },
   title: { color: colors.textPrimary, fontSize: 20, fontFamily: fontFamilies.semiBold, writingDirection: 'rtl' },
   sectionTitle: { marginTop: spacing.lg, marginBottom: 2, color: colors.textSecondary, fontSize: 13, fontFamily: fontFamilies.medium, textAlign: 'right', writingDirection: 'rtl' },
-  options: {},
   option: { minHeight: 54, paddingHorizontal: 2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   optionSelected: { backgroundColor: '#F8FAFC' },
   optionText: { flex: 1, color: colors.textPrimary, fontSize: 15, fontFamily: fontFamilies.medium, textAlign: 'right', writingDirection: 'rtl' },
