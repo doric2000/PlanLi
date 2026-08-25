@@ -18,6 +18,14 @@ Android-only production EAS Update
 `dd0b91d8-b5b7-4a73-94d4-d08d31a449f5` was published from PR `#206` merge
 commit `e954e3e` at `2026-08-25T11:19:04.856Z`. Download, application, and the
 physical tablet re-test remain pending.
+The latest compatible production EAS Update is Noya first-tour group
+`b21002fa-5510-42bb-8c22-75ac24499260`, published for Android
+(`01a039d6-3555-74e6-a679-2de282732daf`) and iOS
+(`01a039d6-3555-7cbe-922d-659d340fb457`) at
+`2026-08-25T16:52:14.805Z` from PR `#208` merge commit `313ebe3`. EAS
+read-back confirms that both production manifests use runtime `1.1.0` and the
+exact merge commit. Download, application, and full guest/signed-in tour
+behavior on the physical Android tablet and TestFlight iPhone remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and
 in use on the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
 commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
@@ -32,16 +40,13 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and
-runtime `1.1.0`. Noya onboarding V2 production update group
-`c049b41d-15b7-473c-aada-afad791682a5` was published for iOS
-(`01a03171-6532-735f-a964-5385ba067724`) and Android
-(`01a03171-6532-732a-99b0-f01ddc5dd64d`) at `2026-08-24T01:45:10.194Z` from
-PR `#189` merge commit `0ed8e88`. Delivery and application on the physical
-iPhone remain unverified. App version and runtime remain `1.1.0`; that OTA did
-not create a native build or Apple submission. The
-immediately preceding production group is
-`76ce4534-be84-4686-a364-d7d79b846c94`. Twenty-eight affected Functions and the
+the `production` EAS Update channel and runtime `1.1.0`. The matching Noya
+first-tour preview group is `b63e0183-d8e8-41a0-9e16-d083b8bb2379`; the
+immediately preceding compatible groups are preview
+`e2490214-0532-4777-b1a2-eca3519eac85` and production
+`151b7748-1189-406e-8b7c-a10336fe4a9b`. This OTA did not create a native build,
+submit to either store, deploy Firebase, or write production data. Twenty-eight
+affected Functions and the
 active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
 `2026-08-24T01:34Z`. The Functions inventory still reports 96 active Node.js 22
 v2 Functions in `europe-west1`, and the post-deploy error query returned no
@@ -345,22 +350,24 @@ Current release record:
 - Source release: Noya product-tour PR `#196`, typography release fix PR `#197`,
   and live-audit alignment PR `#198`; the build source is PR `#198` merge commit
   `f9c7096`.
-- Preview EAS Update: group `58425c2b-993a-42fc-83b5-c244f5cdf7c9`, runtime
-  `1.1.0`, iOS update `01a02ff8-71b6-78f1-a711-cdb84adb5b78`, Android update
-  `01a02ff8-71b6-7808-a3ef-d86db45dfbaa`, published from `3ec0cb1` at
-  `2026-08-23T18:53:26.326Z` with the `production` EAS environment. There is no
-  signed iOS preview-profile build, so download, application, and physical-device
-  behavior remain unverified.
-- Production EAS Update: group `c049b41d-15b7-473c-aada-afad791682a5`, runtime
-  `1.1.0`, iOS update `01a03171-6532-735f-a964-5385ba067724`, Android update
-  `01a03171-6532-732a-99b0-f01ddc5dd64d`, published from PR `#189` merge commit
-  `0ed8e88` at `2026-08-24T01:45:10.194Z` with the `production` EAS
-  environment. The tracked release source matched the merge commit; EAS marked
-  the workspace dirty because unrelated pre-existing untracked campaign and
-  rendering-script files remained in the workspace. Roll back by republishing
-  the immediately preceding production group
-  `76ce4534-be84-4686-a364-d7d79b846c94` to `production`. Download and
-  application on the physical TestFlight iPhone remain unverified.
+- Preview EAS Update: Noya first-tour group
+  `b63e0183-d8e8-41a0-9e16-d083b8bb2379`, runtime `1.1.0`, iOS update
+  `01a039c6-3ae2-735c-8f4c-31b6d94efed3`, Android update
+  `01a039c6-3ae2-7641-a854-c6873bfb4ac7`, published from PR `#208` merge
+  commit `313ebe3` at `2026-08-25T16:34:47.650Z` with the `production` EAS
+  environment. There is no signed iOS preview-profile build, so download,
+  application, and physical-device behavior remain unverified.
+- Production EAS Update: Noya first-tour group
+  `b21002fa-5510-42bb-8c22-75ac24499260`, runtime `1.1.0`, iOS update
+  `01a039d6-3555-7cbe-922d-659d340fb457`, Android update
+  `01a039d6-3555-74e6-a679-2de282732daf`, published from PR `#208` merge
+  commit `313ebe3` at `2026-08-25T16:52:14.805Z` with the `production` EAS
+  environment. EAS read-back confirmed both manifests and the production branch
+  point to this group and exact commit. The workspace was marked dirty only
+  because unrelated pre-existing untracked campaign and rendering files were
+  preserved. Roll back by republishing production group
+  `151b7748-1189-406e-8b7c-a10336fe4a9b`. Download and application on the
+  physical TestFlight iPhone and Android tablet remain unverified.
 - Firebase release: 96 active Node.js 22 v2 Functions in `europe-west1`.
   The 28 affected Functions deployed from `0ed8e88` at approximately
   `2026-08-24T01:34Z` are `saveRecommendation`,
@@ -409,15 +416,15 @@ Current release record:
   review found no actionable findings. The locked client dependency audit still
   reports eight high-severity findings; dependencies were not upgraded during
   this release. Physical-device behavior remains unverified.
-- OTA device state: Expo serves RoadTrip preview group
-  `58425c2b-993a-42fc-83b5-c244f5cdf7c9` only to matching preview requests;
+- OTA device state: Expo serves Noya first-tour preview group
+  `b63e0183-d8e8-41a0-9e16-d083b8bb2379` only to matching preview requests;
   no preview iOS client exists, so it has not been applied. Production now
-  serves group `c049b41d-15b7-473c-aada-afad791682a5`. Download, application,
-  and recommendation provider-search behavior on the physical TestFlight
-  iPhone remain unverified.
+  serves group `b21002fa-5510-42bb-8c22-75ac24499260` for Android and iOS.
+  Download, application, and full Noya first-tour behavior on the physical
+  TestFlight iPhone and Android tablet remain unverified.
   Rollback identifiers are preview group
-  `c1bfeede-8577-420a-977b-3ac56f35cdde` and production group
-  `916cd4fb-1bd4-49c2-96a1-d1758a7ccdc9`.
+  `e2490214-0532-4777-b1a2-eca3519eac85` and production group
+  `151b7748-1189-406e-8b7c-a10336fe4a9b`.
 - Production catalog migration: the separately authorized apply run at
   `2026-08-24T19:49Z` scanned 14 recommendations and migrated exactly one
   document (`recommendations/rec_CBCFGWNEcxN3Ov6ijXeI`) to category `nature`
@@ -1147,3 +1154,45 @@ rejected.
 - Download, application, system-picker presentation, photo loading, crop review,
   and watchdog-memory behavior on the physical TestFlight iPhone remain
   unverified.
+
+## Noya first-tour repair OTA release
+
+- Source: PR `#208`, merge commit
+  `313ebe320592a539b3c6a9771e17db85b09aabd1` on `main`.
+- Scope: the JavaScript-only Noya first tour now waits for visible tab navigation,
+  scene loading, and stable measurements; spotlights exact tabs and controls; and
+  covers search, filters, sorting, maps, recommendation/route creation, and
+  favorites in 11 Hebrew/RTL steps. Main-tour storage migrated to V2 while
+  preserving independent creator-guide progress.
+- App/runtime: `1.1.0`; `production` EAS environment; Android and iOS; no native
+  dependency, permission, entitlement, plugin, or app-config change.
+- Preview EAS Update: group `b63e0183-d8e8-41a0-9e16-d083b8bb2379`, Android
+  update `01a039c6-3ae2-7641-a854-c6873bfb4ac7`, iOS update
+  `01a039c6-3ae2-735c-8f4c-31b6d94efed3`, published at
+  `2026-08-25T16:34:47.650Z`. EAS read-back confirmed branch `preview`, runtime
+  `1.1.0`, and the exact source commit for both manifests.
+- Production EAS Update: group `b21002fa-5510-42bb-8c22-75ac24499260`, Android
+  update `01a039d6-3555-74e6-a679-2de282732daf`, iOS update
+  `01a039d6-3555-7cbe-922d-659d340fb457`, published at
+  `2026-08-25T16:52:14.805Z`. EAS read-back confirmed branch `production`,
+  runtime `1.1.0`, the exact source commit for both manifests, and this group as
+  the newest production update for both platforms.
+- Validation: 11 focused Noa/Home/Community/Routes/storage/control suites passed
+  66 tests. `npm run validate:changed` passed its related client tests, admin Web
+  export/verification, iOS release-config check, and iOS export. PR `#208` plan,
+  affected-client, and final validation checks passed. A guest Web smoke test
+  exercised all 11 steps before the final review fixes; regression tests cover
+  the reviewed map-mode, personalization-loading, and migration-write cases.
+- Both publishes exported matching Web, iOS, and Android bundle filenames, found
+  52 iOS and 51 Android assets, uploaded both native app bundles, and uploaded no
+  new assets. EAS marked the workspace dirty because unrelated pre-existing
+  untracked campaign/rendering files were preserved; both manifests report the
+  exact merge commit above.
+- No EAS build, App Store/TestFlight or Google Play submission, Firebase deploy,
+  migration, backend change, or production data write was performed. Download,
+  application, exact spotlight geometry, slow/failed-loading behavior, and the
+  complete guest/signed-in tour remain unverified on physical Android and iOS
+  devices.
+- Roll back preview by republishing group
+  `e2490214-0532-4777-b1a2-eca3519eac85`; roll back production by republishing
+  group `151b7748-1189-406e-8b7c-a10336fe4a9b`.
