@@ -109,6 +109,24 @@ test('route drafts keep general, pin, recommendation and optional timing fields 
   assert.deepEqual(untrustedDescriptor.days[0].stops[0].mediaCleanupKeys, []);
 });
 
+test('route drafts apply the 40-image limit to canonical and local media together', () => {
+  const canonicalStops = Array.from({ length: 13 }, (_, index) => ({
+    title: `תחנה ${index + 1}`,
+    media: indexedMedia(index * 3),
+    additionalMedia: [indexedMedia(index * 3 + 1), indexedMedia(index * 3 + 2)],
+  }));
+  assert.equal(sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: canonicalStops }],
+    localMediaCount: 1,
+  }), { ownerUid: auth.uid }).localMediaCount, 1);
+  assert.throws(() => sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: canonicalStops }],
+    localMediaCount: 2,
+  }), { ownerUid: auth.uid }), /up to 40 images/);
+});
+
 test('route drafts keep provider proof private for a destination not yet in the catalog', () => {
   const draft = sanitizeRouteDraft(partialDraft({
     area: {

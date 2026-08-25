@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import AddRoutesScreen, {
+  countRouteMedia,
   mergeRestoredRouteMedia,
   reorderRouteStops,
   routeFooterInsetsStyle,
@@ -219,6 +220,17 @@ describe('streamlined route builder', () => {
     const stops = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
     expect(reorderRouteStops(stops, 0, 2).map((stop) => stop.id)).toEqual(['b', 'c', 'a']);
     expect(stops.map((stop) => stop.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('counts canonical and staged route images together', () => {
+    expect(countRouteMedia([{
+      media: { assetId: 'day-cover' },
+      stops: [{
+        media: { assetId: 'main' },
+        additionalMedia: [{ assetId: 'second' }],
+        pendingMedia: [{ uri: 'file:///third.jpg' }],
+      }],
+    }])).toBe(4);
   });
 
   it('shows drag handles and can start a new stop between existing stops', async () => {

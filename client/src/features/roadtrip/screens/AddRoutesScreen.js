@@ -35,6 +35,7 @@ import {
 } from '../utils/routeStops';
 
 const SAVE_DELAY_MS = 900;
+export const MAX_ROUTE_MEDIA = 40;
 export const routeFooterInsetsStyle = (bottomInset) => ({
   paddingBottom: Math.max(14, Number(bottomInset) || 0),
 });
@@ -127,6 +128,15 @@ export const mergeRestoredRouteMedia = (draft, entries = []) => {
 const countPendingRouteMedia = (days = []) => (days || []).reduce((total, day) => (
   total + (day?.stops || []).reduce((stopTotal, stop) => (
     stopTotal + (Array.isArray(stop?.pendingMedia) ? stop.pendingMedia.length : 0)
+  ), 0)
+), 0);
+
+export const countRouteMedia = (days = []) => (days || []).reduce((total, day) => (
+  total + (day?.media ? 1 : 0) + (day?.stops || []).reduce((stopTotal, stop) => (
+    stopTotal
+      + (stop?.media ? 1 : 0)
+      + (Array.isArray(stop?.additionalMedia) ? stop.additionalMedia.length : 0)
+      + (Array.isArray(stop?.pendingMedia) ? stop.pendingMedia.length : 0)
   ), 0)
 ), 0);
 
@@ -763,7 +773,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     const intent = stopEditorIntent;
     if (!intent?.dayId || !intent?.stopId) return;
     const nextStop = { ...stopData, id: intent.stopId };
-    setDays((current) => current.map((day) => {
+    const nextDays = days.map((day) => {
       if (day.id !== intent.dayId) return day;
       const stops = [...(day.stops || [])];
       if (intent.mode === 'insert') {
@@ -778,7 +788,13 @@ export default function AddRoutesScreen({ navigation, route }) {
         stops[stopIndex] = nextStop;
       }
       return { ...day, stops };
-    }));
+    });
+    if (countRouteMedia(nextDays) > MAX_ROUTE_MEDIA) {
+      Alert.alert('יותר מדי תמונות במסלול', `אפשר להוסיף עד ${MAX_ROUTE_MEDIA} תמונות בכל המסלול.`);
+      return false;
+    }
+    setDays(nextDays);
+    return true;
   };
   const removeStop = (dayId, stopId) => {
     const stop = days.find((day) => day.id === dayId)?.stops?.find((item) => item.id === stopId);
@@ -804,6 +820,7 @@ export default function AddRoutesScreen({ navigation, route }) {
     if (!budgetLevel) return 'כדאי לבחור רמת מחיר למסלול כולו.';
     if (days.some((day) => !day.stops?.length)) return 'כדאי להוסיף לפחות עצירה אחת לכל יום.';
     if (flattenRouteStops(days).filter((stop) => stop.title?.trim()).length < 2) return 'כדאי להוסיף לפחות שתי עצירות שימושיות.';
+    if (countRouteMedia(days) > MAX_ROUTE_MEDIA) return `אפשר לפרסם עד ${MAX_ROUTE_MEDIA} תמונות בכל המסלול.`;
     return '';
   };
   const handlePublish = async () => {

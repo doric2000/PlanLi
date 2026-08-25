@@ -46,6 +46,7 @@ import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import {
   createTravelMediaDescriptor,
   queueMediaFromDescriptor,
+  removedTravelMediaItems,
   travelMediaUri,
 } from '../../../utils/travelMedia';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
@@ -116,6 +117,22 @@ function normalizeManualCoordinate(value) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat, lng };
+}
+
+export function recommendationDraftResumeStep(draft, mediaItems = []) {
+  if (!mediaItems.length) return 1;
+  const locationMode = draft?.locationMode || LOCATION_MODES.exact;
+  const hasDestination = Boolean(draft?.selectedCountry?.id && draft?.selectedCity?.id);
+  const hasValidLocation = locationMode === LOCATION_MODES.exact
+    ? hasDestination && Boolean(draft?.selectedPlace?.placeId)
+    : hasDestination && (locationMode !== LOCATION_MODES.pin || Boolean(normalizeManualCoordinate(draft?.manualCoordinate)));
+  if (!hasValidLocation) return 2;
+  if (!isRecommendationClassificationValid({
+    categoryId: draft?.categoryId || '',
+    subcategoryIds: Array.isArray(draft?.subcategoryIds) ? draft.subcategoryIds : [],
+    customSubcategoryLabel: draft?.customSubcategoryLabel || '',
+  })) return 3;
+  return 4;
 }
 
 function classificationSummary(categoryId, subcategoryIds) {
@@ -258,12 +275,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   useEffect(() => {
     if (mode !== 'editor' || isEdit || publishJobId) return;
-    const guideStepIndex = step === 1 ? 0 : step === 2 ? 1 : 2;
+    const guideStepIndex = Math.max(0, Math.min(3, step - 1));
     requestCreatorStep('recommendation', guideStepIndex, {
-      targetId: step >= 4
-        ? NOYA_CREATOR_TARGETS.recommendationFallback
-        : undefined,
-      ...(guideStepIndex === 2 ? {
+      ...(guideStepIndex === 0 ? {
         primaryAction: () => setMediaComposerVisible(true),
         primaryLabel: 'בחירת תמונות',
         suspendReason: 'recommendation-media-composer',
@@ -305,7 +319,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     if (!confirmed) return;
     Keyboard.dismiss();
     setValidationMessage('');
-    setStep((current) => current === 1 ? 2 : current);
+    setStep((current) => current === 2 ? 3 : current);
   }, [confirmPendingLocation]);
 
   const selectedCategory = categoryById[categoryId] || null;
@@ -737,7 +751,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setSourceRecommendationId(nextSourceId);
     setSourceMedia(remoteMedia);
     setMissingLocalMediaCount(restored.missingCount || 0);
-    setStep(Math.max(1, Math.min(STEP_COUNT, Number(draft.step || 1))));
+    const resumeStep = recommendationDraftResumeStep(draft, mediaItems);
+    setStep(resumeStep);
     setLocationMode(draft.locationMode || LOCATION_MODES.exact);
     setGeneralDestination(draft.generalDestination || null);
     setManualCoordinate(draft.manualCoordinate || null);
@@ -773,7 +788,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       imageUris,
     });
     lastSavedComparableRef.current = draftSnapshotComparable(comparable, {
-      step: Math.max(1, Math.min(STEP_COUNT, Number(draft.step || 1))),
+      step: resumeStep,
       generalDestination: draft.generalDestination || null,
       locationQuery: draft.locationQuery || draft.selectedPlace?.name || '',
     });
@@ -916,6 +931,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const completeMediaSelection = (items) => {
     const nextItems = (items || []).slice(0, 5);
+    removedTravelMediaItems(editableMedia, nextItems)
+      .filter((item) => !item.asset)
+      .forEach((item) => forgetDurableImage(item).catch(() => {}));
     setEditableMedia(nextItems);
     setMediaComposerVisible(false);
     setValidationMessage('');
@@ -924,23 +942,19 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     });
   };
 
-  const removeImageAt = (index) => {
-    setEditableMedia((current) => {
-      const next = [...current];
-      const [removed] = next.splice(index, 1);
-      forgetDurableImage(removed).catch(() => {});
-      return next;
-    });
-  };
-
   const validateStep = useCallback((targetStep) => {
     if (targetStep === 1) {
+      if (!editableMedia.length) return 'כדאי לבחור לפחות תמונה אחת כדי להמשיך.';
+    }
+    if (targetStep === 2) {
       if (resolvingLocation || pendingLocation || destinationChoice) return 'כדאי להשלים את בחירת המיקום.';
-      if (locationMode === LOCATION_MODES.exact && !selectedPlace?.placeId) return 'כדאי לבחור תוצאה מדויקת מהחיפוש.';
+      if (locationMode === LOCATION_MODES.exact && (
+        !selectedPlace?.placeId || !selectedCountry?.id || !selectedCity?.id
+      )) return 'כדאי לבחור תוצאה מדויקת מהחיפוש.';
       if (locationMode !== LOCATION_MODES.exact && (!selectedCountry?.id || !selectedCity?.id)) return 'כדאי לבחור עיר או אזור.';
       if (locationMode === LOCATION_MODES.pin && !normalizeManualCoordinate(manualCoordinate)) return 'כדאי לסמן נקודה תקינה במפה.';
     }
-    if (targetStep === 2 && !isRecommendationClassificationValid({
+    if (targetStep === 3 && !isRecommendationClassificationValid({
       categoryId,
       subcategoryIds,
       customSubcategoryLabel,
@@ -950,11 +964,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       if (selectedOther) return 'כדאי לכתוב שם קצר וברור לאפשרות האחרת.';
       return 'אפשר לבחור עד שלוש אפשרויות מאותה קטגוריה.';
     }
-    if (targetStep === 3) {
+    if (targetStep === 4) {
       if (!title.trim()) return 'כדאי להוסיף שם קצר וברור.';
       if (!description.trim()) return 'כדאי לכתוב במשפט או שניים למה ההמלצה שווה.';
-    }
-    if (targetStep === 4) {
       if (!budget) return 'כדאי לבחור את רמת המחיר.';
       if (categoryId === 'events' && !eventSchedule.trim()) {
         return 'באירוע כדאי לציין מתי הוא מתקיים.';
@@ -978,6 +990,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     description,
     eventSchedule,
     budget,
+    editableMedia.length,
   ]);
 
   const goNext = () => {
@@ -1072,6 +1085,26 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       setSubmitting(false);
     }
   };
+
+  const renderPhotoStep = () => (
+    <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationPhotos}>
+      <View style={styles.fieldStack}>
+        <AppText style={styles.fieldLabel}>תמונות (חובה)</AppText>
+        <AppText style={[styles.fieldHint, styles.photoHint]}>
+          בוחרים בין תמונה אחת לחמש. אפשר לעבור בין התמונות ולשמור חיתוך נפרד לכל אחת.
+        </AppText>
+        <ImagePickerBox
+          imageUris={previewUris}
+          onPress={handleAddImages}
+          maxImages={5}
+          placeholderText="בחירת תמונות"
+          imageFit="cover"
+          previewAspectRatio={1}
+          testID="recommendation-image-picker"
+        />
+      </View>
+    </NoyaTourTarget>
+  );
 
   const renderLocationStep = () => (
     <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationLocation}>
@@ -1268,7 +1301,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     </NoyaTourTarget>
   );
 
-  const renderStoryStep = () => (
+  const renderDetailsStep = () => (
     <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationStory}>
       <View style={styles.fieldStack}>
         <FocusClearingFormInput
@@ -1294,18 +1327,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           rtl
           testID="recommendation-description-input"
         />
-        <AppText style={styles.fieldLabel}>תמונות</AppText>
-        <AppText style={[styles.fieldHint, styles.photoHint]}>אפשר להוסיף עד חמש תמונות. זה מומלץ, אבל לא חובה.</AppText>
-        <ImagePickerBox
-          imageUris={previewUris}
-          onPress={handleAddImages}
-          onRemove={removeImageAt}
-          maxImages={5}
-          placeholderText="הוספת תמונות"
-          imageFit="cover"
-          previewAspectRatio={1}
-          testID="recommendation-image-picker"
-        />
+        {renderReviewStep()}
       </View>
     </NoyaTourTarget>
   );
@@ -1483,10 +1505,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               <AppText style={styles.missingMediaText}>חלק מהתמונות נשמרו רק במכשיר שבו נבחרו ולא זמינות כאן. אפשר לבחור אותן שוב לפני הפרסום.</AppText>
             </View>
           ) : null}
-          {step === 1 ? renderLocationStep() : null}
-          {step === 2 ? renderTaxonomyStep() : null}
-          {step === 3 ? renderStoryStep() : null}
-          {step === 4 ? renderReviewStep() : null}
+          {step === 1 ? renderPhotoStep() : null}
+          {step === 2 ? renderLocationStep() : null}
+          {step === 3 ? renderTaxonomyStep() : null}
+          {step === 4 ? renderDetailsStep() : null}
           {validationMessage ? (
             <AppText
               style={styles.fieldError}

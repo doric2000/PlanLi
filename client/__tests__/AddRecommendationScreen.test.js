@@ -1,7 +1,10 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
-import { scrollFocusedRecommendationInputIntoView } from '../src/features/community/screens/CreateRecommendationScreen';
+import {
+  recommendationDraftResumeStep,
+  scrollFocusedRecommendationInputIntoView,
+} from '../src/features/community/screens/CreateRecommendationScreen';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { ENVIRONMENTS, VIBES } from '../src/constants/travelTaxonomy';
 
@@ -262,6 +265,15 @@ function makeEditItem(overrides = {}) {
   };
 }
 
+function canonicalMedia(assetId = '123e4567-e89b-42d3-a456-426614174999') {
+  return {
+    assetId,
+    large: { url: `https://cdn/${assetId}/large.webp` },
+    feed: { url: `https://cdn/${assetId}/feed.webp` },
+    thumb: { url: `https://cdn/${assetId}/thumb.webp` },
+  };
+}
+
 describe('AddRecommendationScreen Integration Test', () => {
 
   beforeEach(() => {
@@ -274,12 +286,17 @@ describe('AddRecommendationScreen Integration Test', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     Alert.alert.mockRestore?.();
   });
 
-  const waitForCatalogEditor = (screen) => waitFor(() =>
-    expect(screen.getByTestId('recommendation-exact-location-search')).toBeTruthy()
-  );
+  const waitForCatalogEditor = async (screen) => {
+    await waitFor(() => expect(screen.getByTestId('recommendation-image-picker')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-image-picker'));
+    await waitFor(() => expect(mockPersistRecommendationDraftMedia).toHaveBeenCalled());
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-exact-location-search')).toBeTruthy());
+  };
 
   it('scrolls a focused native input above the keyboard with composer clearance', () => {
     const scrollResponderScrollNativeHandleToKeyboard = jest.fn();
@@ -290,6 +307,51 @@ describe('AddRecommendationScreen Integration Test', () => {
     }, 42)).toBe(true);
     expect(scrollResponderScrollNativeHandleToKeyboard).toHaveBeenCalledWith(42, 16, true);
     expect(scrollFocusedRecommendationInputIntoView(null, 42)).toBe(false);
+  });
+
+  it('requires a photo first and a resolved location before category selection', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await screen.findByTestId('recommendation-image-picker');
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    expect(screen.getByText('כדאי לבחור לפחות תמונה אחת כדי להמשיך.')).toBeTruthy();
+    expect(screen.queryByTestId('recommendation-exact-location-search')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('recommendation-image-picker'));
+    await waitFor(() => expect(mockPersistRecommendationDraftMedia).toHaveBeenCalled());
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    await screen.findByTestId('recommendation-exact-location-search');
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+    expect(screen.getByText('כדאי לבחור תוצאה מדויקת מהחיפוש.')).toBeTruthy();
+    expect(screen.queryByTestId('recommendation-category-food')).toBeNull();
+  });
+
+  it('restores drafts at the earliest incomplete photo-first stage', () => {
+    const mediaItems = [{ uri: 'file:///photo.jpg' }];
+    const validLocation = {
+      locationMode: 'exact',
+      selectedPlace: { placeId: 'place-1' },
+      selectedCountry: { id: 'IL' },
+      selectedCity: { id: 'TLV' },
+    };
+    expect(recommendationDraftResumeStep(validLocation, [])).toBe(1);
+    expect(recommendationDraftResumeStep({}, mediaItems)).toBe(2);
+    expect(recommendationDraftResumeStep({
+      locationMode: 'exact',
+      selectedPlace: { placeId: 'place-1' },
+    }, mediaItems)).toBe(2);
+    expect(recommendationDraftResumeStep(validLocation, mediaItems)).toBe(3);
+    expect(recommendationDraftResumeStep({
+      ...validLocation,
+      categoryId: 'food',
+      subcategoryIds: ['restaurant'],
+    }, mediaItems)).toBe(4);
   });
 
   it('offers continue or discard when a recommendation draft already exists', async () => {
@@ -306,6 +368,10 @@ describe('AddRecommendationScreen Integration Test', () => {
       locationMode: 'destination',
       selectedCountry: { id: 'IL', name: 'ישראל' },
       selectedCity: { id: 'TLV', name: 'תל אביב' },
+      generalDestination: {
+        key: 'city:IL:TLV', kind: 'city', countryId: 'IL', cityId: 'TLV',
+        countryName: 'ישראל', name: 'תל אביב',
+      },
       media: [],
       localMediaCount: 1,
     });
@@ -321,14 +387,19 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
     expect(screen.getByTestId('recommendation-draft-discard')).toBeTruthy();
     fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
-    await waitFor(() => expect(screen.getByTestId('recommendation-title-input').props.value).toBe('המלצה שנשמרה'));
     expect(mockRestoreRecommendationDraftMedia).toHaveBeenCalledWith('draft-existing', 1);
-    expect(screen.getByTestId('recommendation-missing-local-media')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('recommendation-missing-local-media')).toBeTruthy());
+    expect(screen.getByTestId('recommendation-image-picker')).toBeTruthy();
+    expect(screen.queryByTestId('recommendation-title-input')).toBeNull();
+    fireEvent.press(screen.getByTestId('recommendation-image-picker'));
+    await waitFor(() => expect(mockPersistRecommendationDraftMedia).toHaveBeenCalled());
+    fireEvent.press(await screen.findByTestId('recommendation-next'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-destination-selected')).toBeTruthy());
     fireEvent.press(screen.getByTestId('recommendation-back'));
     await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
       draftId: 'draft-existing',
       expectedVersion: 4,
-      draft: expect.objectContaining({ step: 2 }),
+      draft: expect.objectContaining({ step: 1 }),
     })), { timeout: 2500 });
   });
 
@@ -355,7 +426,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockDiscardRecommendationDraft).not.toHaveBeenCalled();
   });
 
-  it('creates the draft only after the first meaningful change and autosaves after the debounce', async () => {
+  it('creates the draft after the required photo and autosaves later location changes', async () => {
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
       addListener: jest.fn(() => jest.fn()),
@@ -364,7 +435,9 @@ describe('AddRecommendationScreen Integration Test', () => {
       <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
     );
     await waitForCatalogEditor(screen);
-    expect(mockSaveRecommendationDraft).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draft: expect.objectContaining({ localMediaCount: 1 }),
+    })), { timeout: 2500 });
 
     fireEvent.changeText(screen.getByTestId('recommendation-exact-location-search'), 'טיוטה ראשונה');
     await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
@@ -415,7 +488,7 @@ describe('AddRecommendationScreen Integration Test', () => {
       description: 'מעיינות נעימים באומטפה.',
       budget: 'economy',
       details: {},
-      media: [],
+      media: [canonicalMedia()],
       localMediaCount: 0,
     });
     mockSaveRecommendationDraft.mockResolvedValueOnce({
@@ -493,6 +566,7 @@ describe('AddRecommendationScreen Integration Test', () => {
         locationQuery: 'Queued place',
       },
       imageUris: [],
+      materializedMedia: [{ type: 'local', uri: 'file:///keyboard-photo.jpg' }],
     });
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
@@ -592,11 +666,9 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(getByText('כן, מתאים'));
     fireEvent.press(getByTestId('recommendation-next'));
 
-    // 3. Add the short story and an optional image.
+    // 3. Add the short story; the required image was selected in stage one.
     fireEvent.changeText(getByTestId('recommendation-title-input'), 'Best Pizza Ever');
     fireEvent.changeText(getByTestId('recommendation-description-input'), 'Great cheese and crust!');
-    fireEvent.press(getByTestId('recommendation-image-picker'));
-    await waitFor(() => expect(mockPickImages).toHaveBeenCalled());
     fireEvent.press(getByTestId('recommendation-next'));
 
     // 4. Price is required, while exact contact details stay optional.
@@ -654,7 +726,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     const confirm = await screen.findByTestId('exact-location-confirm');
     fireEvent.press(confirm);
     fireEvent.press(confirm);
-    await waitFor(() => expect(screen.getByText('שלב 2 מתוך 4')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('שלב 3 מתוך 4')).toBeTruthy());
     expect(screen.queryByTestId('recommendation-title-input')).toBeNull();
   });
 
@@ -675,7 +747,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(getByTestId('recommendation-location-mode-destination'));
     fireEvent.press(getByTestId('recommendation-test-select-destination'));
     expect(getByTestId('recommendation-destination-selected')).toBeTruthy();
-    expect(getByText('שלב 1 מתוך 4')).toBeTruthy();
+    expect(getByText('שלב 2 מתוך 4')).toBeTruthy();
     fireEvent.press(getByTestId('recommendation-next'));
 
     fireEvent.press(getByTestId('recommendation-category-nature'));
@@ -748,8 +820,8 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockSaveRecommendationDraft).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId('recommendation-next'));
     fireEvent.press(screen.getByTestId('recommendation-next'));
-    fireEvent.changeText(screen.getByTestId('recommendation-title-input'), 'Original updated');
     fireEvent.press(screen.getByTestId('recommendation-next'));
+    fireEvent.changeText(screen.getByTestId('recommendation-title-input'), 'Original updated');
     fireEvent.press(screen.getByTestId('recommendation-next'));
 
     await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
@@ -805,6 +877,7 @@ describe('AddRecommendationScreen Integration Test', () => {
       subcategoryIds: ['restaurant'],
       locationMode: 'destination',
       place: null,
+      media: [canonicalMedia('123e4567-e89b-42d3-a456-426614174998')],
     });
     const screen = render(
       <AddRecommendationScreen
@@ -813,6 +886,7 @@ describe('AddRecommendationScreen Integration Test', () => {
       />
     );
 
+    fireEvent.press(await screen.findByTestId('recommendation-next'));
     await waitFor(() => expect(screen.getByTestId('recommendation-destination-selected')).toBeTruthy());
     fireEvent.press(screen.getByTestId('recommendation-location-mode-pin'));
 
@@ -988,7 +1062,8 @@ describe('AddRecommendationScreen Integration Test', () => {
       selectedCity: { id: 'TLV', name: 'תל אביב' },
       selectedPlace: { placeId: 'p1', name: 'Spot' },
       locationQuery: 'Spot',
-      media: [],
+      subcategoryIds: ['restaurant'],
+      media: [canonicalMedia()],
       localMediaCount: 0,
     };
     mockGetCurrentRecommendationDraft
@@ -1047,7 +1122,8 @@ describe('AddRecommendationScreen Integration Test', () => {
       locationMode: 'destination',
       selectedCountry: { id: 'IL', name: 'ישראל' },
       selectedCity: { id: 'TLV', name: 'תל אביב' },
-      media: [],
+      subcategoryIds: ['restaurant'],
+      media: [canonicalMedia()],
       localMediaCount: 0,
     });
     mockDiscardRecommendationDraft.mockRejectedValueOnce(Object.assign(new Error('gone'), {

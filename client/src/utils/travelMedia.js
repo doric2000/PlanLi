@@ -108,6 +108,14 @@ export function updateTravelMediaCrop(item, crop) {
   };
 }
 
+export function removedTravelMediaItems(current, next) {
+  const nextIdentities = new Set((next || []).map(travelMediaIdentity).filter(Boolean));
+  return (current || []).filter((item) => {
+    const identity = travelMediaIdentity(item);
+    return identity && !nextIdentities.has(identity);
+  });
+}
+
 export function queueMediaFromDescriptor(item) {
   if (!item) return null;
   if (item.asset) return {

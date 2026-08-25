@@ -564,13 +564,26 @@ and bundled assets so the installed `1.1.0` binary can receive beta changes
 without another binary upload. Keeping the marketing version does not guarantee
 that Apple will waive TestFlight review for a later build.
 Test an update on the `preview` channel before publishing the same commit to
-production. Publish only JavaScript, styling, and bundled-asset changes that are
-compatible with the installed native runtime:
+production. Production releases must run from a clean `main` checkout that
+exactly matches `origin/main` and contains the Git commit recorded by the latest
+production update group. The preflight queries EAS and blocks the release if a
+newer update came from work that is not in the candidate. This prevents a later
+feature branch from silently replacing previously deployed JavaScript. Publish
+only JavaScript, styling, and bundled-asset changes that are compatible with the
+installed native runtime:
 
 ```powershell
-cd C:\Users\doric\Documents\PlanLi\PlanLi\client
+cd C:\Users\doric\Documents\PlanLi\PlanLi
+npm run preflight:eas-production
+
+cd .\client
 eas update --channel preview --environment production --message '<summary>'
-eas update --channel production --environment production --message '<summary>'
+
+# Read back the preview group, then promote those exact bundles.
+cd ..
+npm run preflight:eas-production
+cd .\client
+eas update:republish --group '<preview-group-id>' --destination-channel production --message '<summary>'
 ```
 
 An EAS Update is a release action and requires explicit authorization. Native

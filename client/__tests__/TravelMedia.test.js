@@ -3,6 +3,7 @@ import {
   defaultTravelMediaCrop,
   mergeTravelMediaSelection,
   queueMediaFromDescriptor,
+  removedTravelMediaItems,
   updateTravelMediaCrop,
 } from '../src/utils/travelMedia';
 
@@ -56,5 +57,14 @@ describe('travel media descriptors', () => {
     });
     expect(descriptor.transform).toBeUndefined();
     expect(queueMediaFromDescriptor(descriptor)).toEqual({ asset });
+  });
+
+  it('finds durable items removed from a completed editor selection', () => {
+    const current = [
+      { sourceId: 'one', uri: 'file:///one.jpg' },
+      { sourceId: 'two', uri: 'file:///two.jpg' },
+      { sourceId: 'three', uri: 'file:///three.jpg' },
+    ];
+    expect(removedTravelMediaItems(current, [current[0], current[2]])).toEqual([current[1]]);
   });
 });

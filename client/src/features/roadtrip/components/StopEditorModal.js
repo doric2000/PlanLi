@@ -12,7 +12,11 @@ import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/u
 import { ROUTE_IMAGE_LONG_EDGE, TRAVEL_IMAGE_COMPRESSION } from '../../../constants/travelMedia';
 import { getPersonalizedRecommendations } from '../../../services/PersonalizationService';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
-import { createTravelMediaDescriptor, travelMediaUri } from '../../../utils/travelMedia';
+import {
+  createTravelMediaDescriptor,
+  removedTravelMediaItems,
+  travelMediaUri,
+} from '../../../utils/travelMedia';
 import { recommendationComposerStyles as composer, stopEditorModalStyles as styles } from '../../../styles';
 import ManualMapPinPicker from '../../community/components/ManualMapPinPicker';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
@@ -236,6 +240,9 @@ export default function StopEditorModal({
       const uri = travelMediaUri(persisted) || travelMediaUri(item);
       return { ...item, ...(persisted || {}), uri, previewUri: item.previewUri || uri };
     }).slice(0, 3);
+    removedTravelMediaItems(photoItems, nextItems)
+      .filter((item) => !item.asset)
+      .forEach((item) => Promise.resolve(onForgetImage?.(item)).catch(() => {}));
     setPhotoItems(nextItems);
     setMediaComposerVisible(false);
     Promise.resolve(onPersistImages?.(nextItems.filter((item) => !item.asset))).catch(() => {
@@ -370,7 +377,8 @@ export default function StopEditorModal({
         ? { reuseSavedLocation: true }
         : {}),
     };
-    onSave?.(nextStop, safeStopIndex);
+    const saved = onSave?.(nextStop, safeStopIndex);
+    if (saved === false) return;
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();
   };
 

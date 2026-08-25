@@ -76,15 +76,20 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
   }, [onChange]);
 
   const clearSelectionForTyping = useCallback((text) => {
+    const hadConfirmedSelection = Boolean(selectedCountry || selectedCity || selectedPlace);
     resolutionGenerationRef.current += 1;
     setLocationQuery(text);
+    setSelectedCountry(null);
+    setSelectedCity(null);
+    setSelectedPlace(null);
     setPendingLocation(null);
     setDestinationChoice(null);
     setLastSelection(null);
     setLocationResolveError(null);
     setLocationResolveRetryable(false);
     setResolvingLocation(false);
-  }, []);
+    if (hadConfirmedSelection) onChange?.(null);
+  }, [onChange, selectedCity, selectedCountry, selectedPlace]);
 
   const handleSelectGooglePlace = useCallback(async (selection) => {
     const generation = ++resolutionGenerationRef.current;
