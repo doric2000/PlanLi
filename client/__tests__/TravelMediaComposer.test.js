@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { FlatList } from 'react-native';
+import { FlatList, Linking } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 import TravelMediaComposer from '../src/components/TravelMediaComposer';
@@ -122,6 +122,57 @@ test('TravelMediaComposer keeps an unavailable iCloud photo open for retry or re
   expect(ImageManipulator.manipulateAsync).not.toHaveBeenCalled();
 });
 
+test('TravelMediaComposer sends a previously denied iOS photo permission to Settings', async () => {
+  const openSettings = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
+  const deniedSource = {
+    ...sourceAdapter,
+    kind: 'inline-library',
+    permission: { granted: false, canAskAgain: false, status: 'denied' },
+  };
+  const screen = render(
+    <TravelMediaComposer
+      visible
+      value={[]}
+      maxItems={5}
+      aspect={[1, 1]}
+      onCancel={jest.fn()}
+      onChange={jest.fn()}
+      sourceAdapter={deniedSource}
+    />
+  );
+  expect(screen.getByTestId('travel-media-permission-panel')).toBeTruthy();
+  expect(screen.getByText('פתיחת הגדרות')).toBeTruthy();
+  expect(screen.queryByTestId('travel-media-grid')).toBeNull();
+  fireEvent.press(screen.getByTestId('travel-media-permission-action'));
+  expect(openSettings).toHaveBeenCalledTimes(1);
+  openSettings.mockRestore();
+});
+
+test('TravelMediaComposer retries the iOS permission prompt when the system still allows it', async () => {
+  const loadInitial = jest.fn(async () => []);
+  const deniedSource = {
+    ...sourceAdapter,
+    kind: 'inline-library',
+    permission: { granted: false, canAskAgain: true, status: 'denied' },
+    loadInitial,
+  };
+  const screen = render(
+    <TravelMediaComposer
+      visible
+      value={[]}
+      maxItems={5}
+      aspect={[1, 1]}
+      onCancel={jest.fn()}
+      onChange={jest.fn()}
+      sourceAdapter={deniedSource}
+    />
+  );
+  await waitFor(() => expect(loadInitial).toHaveBeenCalledTimes(1));
+  fireEvent.press(screen.getByTestId('travel-media-permission-action'));
+  expect(loadInitial).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('מתן גישה לתמונות')).toBeTruthy();
+});
+
 test('TravelMediaComposer virtualizes the inline gallery and paginates at the list boundary', async () => {
   const inlineSource = {
     ...sourceAdapter,
@@ -130,8 +181,8 @@ test('TravelMediaComposer virtualizes the inline gallery and paginates at the li
       id: `asset:${index}`,
       sourceId: `asset:${index}`,
       assetId: String(index),
-      uri: `ph://${index}`,
-      previewUri: `ph://${index}`,
+      uri: `ph://${index}/L0/001`,
+      previewUri: `ph://${index}/L0/001`,
       width: 1200,
       height: 900,
       persistence: 'selected',
@@ -158,6 +209,10 @@ test('TravelMediaComposer virtualizes the inline gallery and paginates at the li
   expect(grid.props.initialNumToRender).toBe(18);
   expect(grid.props.maxToRenderPerBatch).toBe(18);
   expect(grid.props.windowSize).toBe(7);
+  expect(screen.getByTestId('travel-media-thumbnail-asset:0').props).toEqual(expect.objectContaining({
+    resizeMode: 'cover',
+    source: { uri: 'ph://0/L0/001' },
+  }));
   await act(async () => { await grid.props.onEndReached(); });
   expect(inlineSource.loadMore).toHaveBeenCalledTimes(1);
 });

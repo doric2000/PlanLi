@@ -1,7 +1,10 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
+  Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -36,6 +39,21 @@ import {
 } from '../utils/travelMedia';
 
 const ZERO_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+
+function MediaImage({ uri, contentFit = 'cover', ...props }) {
+  if (uri?.startsWith('ph://')) {
+    // The Expo SDK 54 image loader drops PhotoKit's /L0/001 identifier suffix.
+    // expo-media-library registers a React Native Image loader that preserves it.
+    return (
+      <Image
+        {...props}
+        source={{ uri }}
+        resizeMode={contentFit === 'fill' ? 'stretch' : contentFit}
+      />
+    );
+  }
+  return <CachedImage {...props} source={{ uri }} contentFit={contentFit} />;
+}
 
 function CropPage({ item, aspect, onCropChange }) {
   const uri = travelMediaUri(item);
@@ -177,7 +195,7 @@ function CropPage({ item, aspect, onCropChange }) {
   if (!canCrop) {
     return (
       <View style={styles.uncroppedPage} testID="travel-media-existing-preview">
-        <CachedImage source={{ uri }} style={styles.uncroppedImage} contentFit="contain" />
+        <MediaImage uri={uri} style={styles.uncroppedImage} contentFit="contain" />
         <AppText style={styles.existingHint}>תמונה שכבר פורסמה נשארת ללא שינוי</AppText>
       </View>
     );
@@ -211,7 +229,7 @@ function CropPage({ item, aspect, onCropChange }) {
                   },
                   animatedStyle,
                 ]}>
-                  <CachedImage source={{ uri }} style={styles.cropImage} contentFit="fill" />
+                  <MediaImage uri={uri} style={styles.cropImage} contentFit="fill" />
                 </Animated.View>
               </Animated.View>
             </GestureDetector>
@@ -347,7 +365,25 @@ export default function TravelMediaComposer({
 
   const pending = working.some((item) => item.persistence === 'materializing');
   const failed = working.some((item) => item.persistence === 'failed');
+  const permissionBlocked = sourceAdapter.kind === 'inline-library'
+    && sourceAdapter.permission
+    && !sourceAdapter.permission.granted;
   const gridItems = sourceAdapter.kind === 'inline-library' ? sourceAdapter.assets : working;
+
+  useEffect(() => {
+    if (!visible || !permissionBlocked || sourceAdapter.permission.canAskAgain !== false) return undefined;
+    let openedSettings = false;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'inactive' || nextState === 'background') {
+        openedSettings = true;
+      } else if (nextState === 'active' && openedSettings) {
+        openedSettings = false;
+        sourceAdapter.loadInitial().catch(() => {});
+      }
+    });
+    return () => subscription.remove();
+  }, [permissionBlocked, sourceAdapter, visible]);
+
   const content = (
     <GestureHandlerRootView style={styles.screen}>
       <View style={[styles.screen, {
@@ -419,7 +455,7 @@ export default function TravelMediaComposer({
           ) : null}
         </View>
 
-        {sourceAdapter.kind === 'inline-library' && sourceAdapter.albums?.length ? (
+        {!permissionBlocked && sourceAdapter.kind === 'inline-library' && sourceAdapter.albums?.length ? (
           <RtlHorizontalScrollView style={styles.albums} contentContainerStyle={styles.albumsContent}>
             <Pressable style={[styles.albumChip, !sourceAdapter.selectedAlbum && styles.albumChipSelected]} onPress={() => sourceAdapter.chooseAlbum(null).catch(() => {})}>
               <AppText style={styles.albumChipText}>אחרונות</AppText>
@@ -432,20 +468,47 @@ export default function TravelMediaComposer({
           </RtlHorizontalScrollView>
         ) : null}
 
-        {sourceAdapter.permission?.accessPrivileges === 'limited' ? (
+        {!permissionBlocked && sourceAdapter.permission?.accessPrivileges === 'limited' ? (
           <Pressable style={styles.limitedButton} onPress={() => sourceAdapter.requestMoreAccess().catch(() => {})}>
             <AppText style={styles.limitedText}>בחירת תמונות נוספות מהספרייה</AppText>
           </Pressable>
         ) : null}
 
-        {(composerError || sourceAdapter.error) ? (
+        {permissionBlocked ? (
+          <View style={styles.permissionPanel} testID="travel-media-permission-panel">
+            <Ionicons name="images-outline" size={34} color={colors.primary} />
+            <AppText style={styles.permissionTitle}>נדרשת גישה לתמונות</AppText>
+            <AppText style={styles.permissionText}>
+              {sourceAdapter.permission.canAskAgain === false
+                ? 'כדי להציג את הגלריה, אפשרו ל־PlanLi גישה לתמונות בהגדרות של ה־iPhone.'
+                : 'כדי להציג את הגלריה, אפשרו ל־PlanLi גישה לתמונות.'}
+            </AppText>
+            <Pressable
+              style={styles.permissionButton}
+              onPress={() => {
+                if (sourceAdapter.permission.canAskAgain === false) {
+                  Linking.openSettings().catch(() => {});
+                  return;
+                }
+                sourceAdapter.loadInitial().catch(() => {});
+              }}
+              testID="travel-media-permission-action"
+            >
+              <AppText style={styles.permissionButtonText}>
+                {sourceAdapter.permission.canAskAgain === false ? 'פתיחת הגדרות' : 'מתן גישה לתמונות'}
+              </AppText>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {(composerError || (sourceAdapter.error && !permissionBlocked)) ? (
           <View style={styles.errorRow} testID="travel-media-error">
             <AppText style={styles.errorText}>{composerError || sourceAdapter.error}</AppText>
             {failed ? <Pressable onPress={retryFailed}><AppText style={styles.retryText}>ניסיון נוסף</AppText></Pressable> : null}
           </View>
         ) : null}
 
-        <FlatList
+        {!permissionBlocked ? <FlatList
           data={gridItems}
           extraData={working}
           keyExtractor={travelMediaIdentity}
@@ -463,9 +526,15 @@ export default function TravelMediaComposer({
           renderItem={({ item }) => {
             const identity = travelMediaIdentity(item);
             const selectedIndex = working.findIndex((selected) => travelMediaIdentity(selected) === identity);
+            const uri = travelMediaUri(item);
             return (
               <Pressable style={styles.gridTile} onPress={() => toggleAsset(item)} testID={`travel-media-item-${identity}`}>
-                <CachedImage source={{ uri: travelMediaUri(item) }} style={styles.gridImage} contentFit="cover" />
+                <MediaImage
+                  uri={uri}
+                  style={styles.gridImage}
+                  contentFit="cover"
+                  testID={`travel-media-thumbnail-${identity}`}
+                />
                 <SelectionBadge number={selectedIndex >= 0 ? selectedIndex + 1 : 0} />
                 {item.persistence === 'materializing' ? <View style={styles.tileLoading}><ActivityIndicator color={colors.white} /></View> : null}
                 {item.persistence === 'failed' ? <View style={styles.tileLoading}><Ionicons name="alert-circle" size={24} color={colors.white} /></View> : null}
@@ -476,7 +545,7 @@ export default function TravelMediaComposer({
             ? <ActivityIndicator style={styles.gridLoader} color={colors.primary} />
             : null}
           testID="travel-media-grid"
-        />
+        /> : null}
       </View>
     </GestureHandlerRootView>
   );
@@ -538,6 +607,11 @@ const styles = StyleSheet.create({
   errorRow: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, backgroundColor: colors.errorLight, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   errorText: { flex: 1, color: colors.error, textAlign: 'right', fontSize: 13 },
   retryText: { color: colors.primary, marginRight: spacing.md },
+  permissionPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl, gap: spacing.sm, backgroundColor: colors.white },
+  permissionTitle: { color: colors.textPrimary, fontSize: 17, textAlign: 'center' },
+  permissionText: { color: colors.textSecondary, fontSize: 14, lineHeight: 21, textAlign: 'center', writingDirection: 'rtl' },
+  permissionButton: { marginTop: spacing.sm, borderRadius: spacing.radiusSmall, backgroundColor: colors.primary, paddingHorizontal: spacing.xl, paddingVertical: spacing.md },
+  permissionButtonText: { color: colors.white, fontSize: 14 },
   grid: { padding: 1, paddingBottom: spacing.xxl },
   gridRow: { flexDirection: 'row-reverse' },
   gridTile: { flex: 1 / 3, maxWidth: '33.333%', aspectRatio: 1, padding: 1 },
