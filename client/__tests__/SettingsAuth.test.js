@@ -32,6 +32,10 @@ jest.mock('../src/config/firebase', () => ({
   auth: { currentUser: { uid: 'user-1' } },
 }));
 
+jest.mock('../src/features/auth/AuthContext', () => ({
+  useAuth: () => ({ userDocument: { personalization: { behaviorEnabled: true } } }),
+}));
+
 jest.mock('../src/services/AuthService', () => ({
   formatAuthError: (error) => error?.message || 'שגיאה',
   getProviderIds: () => mockProviderIds,
@@ -49,6 +53,7 @@ jest.mock('../src/services/SocialService', () => ({
 
 jest.mock('../src/services/PersonalizationService', () => ({
   resetPersonalizationActivity: jest.fn(),
+  setBehavioralPersonalizationEnabled: jest.fn(() => Promise.resolve()),
 }));
 
 describe('Settings authentication behavior', () => {
@@ -139,7 +144,7 @@ describe('Settings authentication behavior', () => {
     expect(screen.getByTestId('settings-personalization-section')).toBeTruthy();
     expect(screen.getByTestId('settings-legal-section')).toBeTruthy();
     expect(screen.getByTestId('settings-danger-section')).toBeTruthy();
-    expect(screen.getByText('ההתאמה האישית פעילה')).toBeTruthy();
+    expect(screen.getByText('למידה מהפעילות פעילה')).toBeTruthy();
     expect(
       screen.getByTestId('settings-personalization-section').findByProps({ name: 'options-outline' })
     ).toBeTruthy();

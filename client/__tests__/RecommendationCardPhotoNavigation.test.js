@@ -76,6 +76,9 @@ jest.mock('../src/components/ActionMenu', () => ({ ActionMenu: () => null }));
 jest.mock('../src/components/ActionBar', () => () => null);
 jest.mock('../src/components/FavoriteButton', () => () => null);
 jest.mock('../src/components/PreferenceContextLine', () => () => null);
+jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
+  usePersonalizationFeedback: () => ({ isHidden: () => false }),
+}));
 
 const recommendation = {
   id: 'recommendation-1',

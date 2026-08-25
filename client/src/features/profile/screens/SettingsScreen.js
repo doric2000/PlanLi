@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
   Platform,
   ScrollView,
+  Switch,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -27,12 +28,13 @@ import {
   signOutCentral,
 } from '../../../services/AuthService';
 import { requestAccountDeletion } from '../../../services/SocialService';
-import { resetPersonalizationActivity } from '../../../services/PersonalizationService';
-import { colors, settingsHubStyles as styles } from '../../../styles';
 import {
-  clearGuestNoyaProfile,
-} from '../services/NoyaOnboardingStorage';
+  resetPersonalizationActivity,
+  setBehavioralPersonalizationEnabled,
+} from '../../../services/PersonalizationService';
+import { colors, settingsHubStyles as styles } from '../../../styles';
 import { useNoyaTour } from '../../noya/NoyaTourContext';
+import { useAuth } from '../../auth/AuthContext';
 
 function SettingsRow({
   accessibilityRole = 'button',
@@ -91,14 +93,37 @@ export default function SettingsScreen({ navigation }) {
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [password, setPassword] = useState('');
   const [startingTour, setStartingTour] = useState(false);
+  const [updatingLearning, setUpdatingLearning] = useState(false);
+  const { userDocument } = useAuth();
+  const serverLearningEnabled = userDocument?.personalization?.behaviorEnabled !== false;
+  const [learningEnabled, setLearningEnabled] = useState(serverLearningEnabled);
   const { restartMainTour } = useNoyaTour();
   const providerIds = useMemo(() => getProviderIds(auth.currentUser), [auth.currentUser]);
   const hasPasswordProvider = providerIds.includes('password');
 
+  useEffect(() => {
+    setLearningEnabled(serverLearningEnabled);
+  }, [serverLearningEnabled]);
+
+  const updateLearning = async (enabled) => {
+    if (updatingLearning) return;
+    const previous = learningEnabled;
+    setLearningEnabled(enabled);
+    setUpdatingLearning(true);
+    try {
+      await setBehavioralPersonalizationEnabled(enabled);
+    } catch (error) {
+      setLearningEnabled(previous);
+      Alert.alert('לא הצלחנו לעדכן', error?.message || 'כדאי לנסות שוב בעוד רגע.');
+    } finally {
+      setUpdatingLearning(false);
+    }
+  };
+
   const resetPersonalization = () => {
     Alert.alert(
       'איפוס התאמה אישית',
-      'למחוק את הלמידה מלייקים, שמירות ופתיחת המלצות? העדפות הפרופיל יישמרו.',
+      'למחוק את הלמידה מצפיות, לייקים, שמירות ומשוב? ההעדפות שבחרת יישמרו.',
       [
         { text: 'ביטול', style: 'cancel' },
         {
@@ -108,7 +133,6 @@ export default function SettingsScreen({ navigation }) {
             setResettingPersonalization(true);
             try {
               await resetPersonalizationActivity();
-              await clearGuestNoyaProfile();
               Alert.alert('הושלם', 'למידת ההתאמה האישית אופסה.');
             } catch (error) {
               Alert.alert('שגיאה', error?.message || 'לא הצלחנו לאפס את ההתאמה.');
@@ -291,10 +315,10 @@ export default function SettingsScreen({ navigation }) {
         <AppText style={styles.sectionTitle}>התאמה אישית</AppText>
         <View style={styles.group} testID="settings-noya-section">
           <SettingsRow
-            detail="צפייה ועדכון של ההעדפות שסידרת עם נועה"
+            detail="תחומי עניין, רמת מחיר, הרכב נסיעה וצרכים"
             icon="sparkles-outline"
-            label="ההתאמה שלי עם נועה"
-            onPress={() => navigation.navigate('PreferenceSetup', { source: 'profile' })}
+            label="עריכת ההעדפות שלי"
+            onPress={() => navigation.navigate('EditProfile')}
             testID="settings-open-noya-button"
           />
           <SettingsRow
@@ -321,11 +345,25 @@ export default function SettingsScreen({ navigation }) {
               <Ionicons name="options-outline" size={20} color={colors.white} />
             </View>
             <View style={styles.personalizationCopy}>
-              <AppText style={styles.personalizationTitle}>ההתאמה האישית פעילה</AppText>
+              <AppText style={styles.personalizationTitle}>
+                {learningEnabled ? 'למידה מהפעילות פעילה' : 'הלמידה מהפעילות כבויה'}
+              </AppText>
               <AppText style={styles.personalizationText}>
-                לייקים, שמירות ופתיחת המלצות משפרים את סדר התוצאות עבורך.
+                {learningEnabled
+                  ? 'צפייה ממושכת, לייקים ושמירות עוזרים לסדר את בשבילך בצורה מדויקת יותר.'
+                  : 'ההעדפות שבחרת עדיין משפיעות, אבל הפעילות שלך לא משנה את הסדר.'}
               </AppText>
             </View>
+            <Switch
+              accessibilityLabel="למידה מהפעילות"
+              disabled={updatingLearning}
+              ios_backgroundColor={colors.border}
+              onValueChange={updateLearning}
+              thumbColor={colors.white}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              value={learningEnabled}
+              testID="settings-personalization-learning-switch"
+            />
           </View>
           <TouchableOpacity
             accessibilityLabel="איפוס הלמידה"

@@ -2,9 +2,16 @@ import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions } from '../config/firebase';
 import { createRequestCoordinator } from '../utils/requestCoordinator';
 import { loadGuestNoyaProfile } from '../features/profile/services/NoyaOnboardingStorage';
+import {
+  clearGuestPersonalizationAfterMerge,
+  loadGuestBehaviorContext,
+  loadPendingGuestPersonalizationMerge,
+  recordGuestPersonalizationEvent,
+  resetGuestPersonalization,
+} from '../features/profile/services/GuestPersonalizationStorage';
 
 const callables = new Map();
-const recentOpenAttempts = new Map();
+const recentViewAttempts = new Map();
 const discoveryVersions = new Map();
 
 export const DISCOVERY_CACHE_TTL_MS = 30 * 1000;
@@ -77,6 +84,9 @@ function requestDiscovery(name, payload = {}, retryIdentityChange = true) {
     const storedGuestProfile = !principalUid && supportsGuestPreferences
       ? await loadGuestNoyaProfile()
       : null;
+    const guestBehaviorContext = !principalUid && supportsGuestPreferences
+      ? await loadGuestBehaviorContext()
+      : null;
     assertPrincipalUnchanged();
     const guestPreferenceContext = storedGuestProfile ? {
       interests: storedGuestProfile.interests,
@@ -88,6 +98,7 @@ function requestDiscovery(name, payload = {}, retryIdentityChange = true) {
     const result = await call(name, {
       ...payload,
       ...(guestPreferenceContext ? { guestPreferenceContext } : {}),
+      ...(guestBehaviorContext ? { guestBehaviorContext } : {}),
     });
     assertPrincipalUnchanged();
     return result;
@@ -134,28 +145,76 @@ export function clearPersonalizationDiscoveryCache(kind) {
   ));
 }
 
-export const recordRecommendationOpen = (recommendationId) => {
+async function recordMeaningfulView(type, item) {
+  const id = item?.id;
+  if (!id) return { recorded: false };
+  const key = `${type}:${id}`;
   const now = Date.now();
-  if (now - Number(recentOpenAttempts.get(recommendationId) || 0) < 5_000) {
+  if (now - Number(recentViewAttempts.get(key) || 0) < 5_000) {
     return Promise.resolve({ recorded: false });
   }
-  recentOpenAttempts.set(recommendationId, now);
-  return call('recordDiscoverySignal', {
-    action: 'open',
-    target: { type: 'recommendation', id: recommendationId },
-  });
-};
+  recentViewAttempts.set(key, now);
+  const target = { type, id };
+  const result = auth.currentUser?.uid
+    ? await call('recordDiscoverySignal', { action: 'meaningful_view', target })
+    : await recordGuestPersonalizationEvent({ action: 'meaningful_view', target, item, nowMs: now });
+  if (result?.recorded) clearPersonalizationDiscoveryCache(type === 'route' ? 'routes' : 'recommendations');
+  return result;
+}
 
-export const recordRouteOpen = (routeId) => {
-  const key = `route:${routeId}`;
-  const now = Date.now();
-  if (now - Number(recentOpenAttempts.get(key) || 0) < 5_000) return Promise.resolve({ recorded: false });
-  recentOpenAttempts.set(key, now);
-  return call('recordDiscoverySignal', {
-    action: 'open',
-    target: { type: 'route', id: routeId },
-  });
-};
+export const recordRecommendationView = (item) => recordMeaningfulView('recommendation', item);
+export const recordRouteView = (item) => recordMeaningfulView('route', item);
 
-export const resetPersonalizationActivity = () =>
-  call('resetPersonalizationActivity');
+// Kept for older consumers during the V2 rollout. New screens wait eight seconds
+// and pass the full item to the meaningful-view functions above.
+export const recordRecommendationOpen = (recommendationId) =>
+  recordRecommendationView({ id: recommendationId });
+
+export const recordRouteOpen = (routeId) =>
+  recordRouteView({ id: routeId });
+
+export async function setPersonalizationFeedback({ target, item, value, requestId }) {
+  const action = value === 'undo' ? 'undo_less' : 'less';
+  const result = auth.currentUser?.uid
+    ? await call('setPersonalizationFeedback', { target, value, requestId })
+    : await recordGuestPersonalizationEvent({ action, target, item });
+  clearPersonalizationDiscoveryCache(target.type === 'route' ? 'routes' : 'recommendations');
+  return result;
+}
+
+export async function mergePendingGuestPersonalization() {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return { merged: 0, alreadyMerged: false };
+  let merged = 0;
+  let alreadyMerged = false;
+  let completedBatches = 0;
+  for (let index = 0; index < 3; index += 1) {
+    if (auth.currentUser?.uid !== uid) break;
+    const pending = await loadPendingGuestPersonalizationMerge();
+    if (!pending) break;
+    if (auth.currentUser?.uid !== uid) break;
+    const result = await call('mergeGuestPersonalization', pending);
+    const cleared = await clearGuestPersonalizationAfterMerge(pending.mergeId);
+    if (!cleared) break;
+    merged += Number(result?.merged || 0);
+    alreadyMerged = alreadyMerged || result?.alreadyMerged === true;
+    completedBatches += 1;
+  }
+  if (completedBatches) clearPersonalizationDiscoveryCache();
+  return { merged, alreadyMerged };
+}
+
+export async function setBehavioralPersonalizationEnabled(enabled) {
+  const result = await call('setPersonalizationBehavior', { enabled });
+  clearPersonalizationDiscoveryCache();
+  return result;
+}
+
+export async function resetPersonalizationActivity() {
+  const result = auth.currentUser?.uid
+    ? await call('resetPersonalizationActivity')
+    : { reset: true };
+  await resetGuestPersonalization();
+  clearPersonalizationDiscoveryCache();
+  return result;
+}

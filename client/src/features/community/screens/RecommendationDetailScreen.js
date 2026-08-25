@@ -14,7 +14,8 @@ import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useRecommendationById } from '../../../hooks/useRecommendationById';
 import { useUserData } from '../../../hooks/useUserData';
-import { recordRecommendationOpen } from '../../../services/PersonalizationService';
+import { useMeaningfulPersonalizationView } from '../../../hooks/useMeaningfulPersonalizationView';
+import { recordRecommendationView } from '../../../services/PersonalizationService';
 import { colors } from '../../../styles';
 import { canManageRecommendation } from '../../../utils/contentPermissions';
 import { findMediaAssetByUrl, getRecommendationImageUrls } from '../../../utils/mediaAssets';
@@ -90,11 +91,16 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
     caption: item.title,
   })), [item, postId]);
 
+  const personalizationItem = useMemo(() => ({ ...item, id: postId }), [item, postId]);
+  useMeaningfulPersonalizationView({
+    item: personalizationItem,
+    navigation,
+    record: recordRecommendationView,
+  });
+
   useEffect(() => {
     markNoyaContentViewed().catch(() => {});
-    if (!isActive || !postId) return;
-    recordRecommendationOpen(postId).catch(() => {});
-  }, [isActive, postId]);
+  }, []);
 
   useEffect(() => {
     if (initialCommentsOpen) setCommentsModalVisible(true);

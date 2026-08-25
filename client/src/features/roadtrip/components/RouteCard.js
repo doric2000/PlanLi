@@ -33,6 +33,7 @@ import {
 import { getRouteDestinationPreviews } from "../utils/routeDestinationPreviews";
 import { useAuthUser } from "../../../hooks/useAuthUser";
 import { CAPABILITIES } from "../../../constants/authPolicy";
+import { usePersonalizationFeedback } from "../../profile/context/PersonalizationFeedbackContext";
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
@@ -55,6 +56,8 @@ export const RouteCard = ({
 }) => {
 	const navigation = useNavigation();
 	const { isActive, ensureCapability } = useAuthUser();
+	const personalizationTarget = { type: 'route', id: item?.id };
+	const { isHidden } = usePersonalizationFeedback();
 	const isFeed = variant === "feed";
 	const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
 	const {
@@ -360,6 +363,9 @@ export const RouteCard = ({
 
 				<PreferenceContextLine
 					reasonCode={personalizationReasonCode}
+					personalization={item?.personalization}
+					target={personalizationTarget}
+					item={item}
 					style={styles.locationRow}
 					textStyle={cards.recLocationText}
 				/>
@@ -377,6 +383,8 @@ export const RouteCard = ({
 
 		return content;
 	};
+
+	if (isHidden(personalizationTarget)) return null;
 
 	if (isFeed) {
 		return (

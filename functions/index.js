@@ -35,8 +35,11 @@ const { authorizeRequest } = require('./authPolicy');
 const {
   getPersonalizedRecommendations,
   getPersonalizedRoutes,
+  mergeGuestPersonalization,
   recordDiscoverySignal,
   resetPersonalizationActivity,
+  setPersonalizationBehavior,
+  setPersonalizationFeedback,
 } = require('./personalizationService');
 const { getMapRecommendations } = require('./mapRecommendationsService');
 const { consumePublicReadBudget } = require('./publicRateLimitService');
@@ -592,6 +595,18 @@ exports.searchDestinations = callable(
 
 exports.recordDiscoverySignal = callable({ access: 'active' }, (request) =>
   recordDiscoverySignal({ admin, auth: request.auth, data: request.data })
+);
+
+exports.setPersonalizationFeedback = callable({ access: 'active' }, (request) =>
+  setPersonalizationFeedback({ admin, auth: request.auth, data: request.data })
+);
+
+exports.mergeGuestPersonalization = callable({ access: 'active' }, (request) =>
+  mergeGuestPersonalization({ admin, auth: request.auth, data: request.data })
+);
+
+exports.setPersonalizationBehavior = callable({ access: 'active' }, (request) =>
+  setPersonalizationBehavior({ admin, auth: request.auth, data: request.data })
 );
 
 exports.resetPersonalizationActivity = callable({ access: 'signedIn' }, (request) =>

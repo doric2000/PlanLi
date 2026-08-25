@@ -19,10 +19,10 @@ import { useBackButton } from '../../../hooks/useBackButton';
 import { useUnsavedLeaveGuard } from '../../../hooks/useUnsavedLeaveGuard';
 import UnsavedChangesModal from '../../../components/UnsavedChangesModal';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
-import { BUDGETS, INTERESTS, NEEDS, PACES, TRAVELER_STYLES, TRAVEL_PARTIES, VIBES } from '../constants/smartProfileOptions';
-import { normalizeClientSmartProfile } from '../utils/preferenceSetup';
+import { BUDGETS, NEEDS, ONBOARDING_INTERESTS, TRAVEL_PARTIES } from '../constants/smartProfileOptions';
+import { normalizeNoyaSmartProfile } from '../utils/preferenceSetup';
 
-const EMPTY = { interests: [], budget: '', travelParties: [], vibe: [], travelerStyles: [], pace: '', needs: [] };
+const EMPTY = { interests: [], budget: '', travelParties: [], needs: [], onboardingVersion: 2 };
 
 function Chip({ option, selected, onPress, testID }) {
   return (
@@ -41,8 +41,6 @@ function comparable(profile) {
     ...profile,
     interests: [...profile.interests].sort(),
     travelParties: [...profile.travelParties].sort(),
-    vibe: [...profile.vibe].sort(),
-    travelerStyles: [...profile.travelerStyles].sort(),
     needs: [...profile.needs].sort(),
   });
 }
@@ -61,7 +59,14 @@ export default function EditProfileScreen({ navigation }) {
       if (!uid) return;
       const snapshot = await getDoc(doc(db, 'users', uid));
       const current = snapshot.data()?.smartProfile || {};
-      const next = normalizeClientSmartProfile(current);
+      const normalized = normalizeNoyaSmartProfile(current);
+      const next = {
+        interests: normalized.interests,
+        budget: normalized.budget,
+        travelParties: normalized.travelParties,
+        needs: normalized.needs,
+        onboardingVersion: 2,
+      };
       if (active) {
         setProfile(next);
         setBaseline(comparable(next));
@@ -142,13 +147,10 @@ export default function EditProfileScreen({ navigation }) {
     <>
       <SafeAreaView style={common.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {section('תחומי עניין', INTERESTS, profile.interests, (value) => toggle('interests', value, 4), 'edit-interest', `${profile.interests.length}/4 נבחרו`)}
-          {section('תקציב מועדף', BUDGETS, profile.budget ? [profile.budget] : [], (value) => setProfile((p) => ({ ...p, budget: value })), 'edit-budget')}
-          {section('הרכב מטיילים', TRAVEL_PARTIES, profile.travelParties, (value) => toggle('travelParties', value, 2), 'edit-party', `${profile.travelParties.length}/2 נבחרו`)}
-          {section('אווירה', VIBES, profile.vibe, (value) => toggle('vibe', value, 3), 'edit-vibe', 'עד שלוש אפשרויות')}
-          {section('סגנון טיול', TRAVELER_STYLES, profile.travelerStyles, (value) => toggle('travelerStyles', value, 3), 'edit-traveler-style', 'עד שלוש אפשרויות')}
-          {section('קצב מועדף', PACES, profile.pace ? [profile.pace] : [], (value) => setProfile((p) => ({ ...p, pace: p.pace === value ? '' : value })), 'edit-pace')}
-          {section('צרכים והעדפות', NEEDS, profile.needs, (value) => toggle('needs', value, NEEDS.length), 'edit-need')}
+          {section('מה מעניין אותך?', ONBOARDING_INTERESTS, profile.interests, (value) => toggle('interests', value, 4), 'edit-interest', `אפשר לבחור 2 עד 4 תחומים · נבחרו ${profile.interests.length}`)}
+          {section('איזו רמת מחיר מתאימה בדרך כלל?', BUDGETS, profile.budget ? [profile.budget] : [], (value) => setProfile((p) => ({ ...p, budget: value })), 'edit-budget')}
+          {section('מה הרכב הנסיעה בדרך כלל?', TRAVEL_PARTIES, profile.travelParties, (value) => toggle('travelParties', value, 2), 'edit-party', `אפשר לבחור עד שתי אפשרויות · נבחרו ${profile.travelParties.length}`)}
+          {section('יש משהו שחשוב לקחת בחשבון?', NEEDS, profile.needs, (value) => toggle('needs', value, NEEDS.length), 'edit-need', 'לא חובה לבחור כאן דבר')}
           <TouchableOpacity testID="edit-preferences-save" style={[buttons.submit, saving && buttons.disabled]} onPress={save} disabled={saving}>
             {saving ? <ActivityIndicator color={colors.white} /> : <AppText style={buttons.submitText}>שמור העדפות</AppText>}
           </TouchableOpacity>

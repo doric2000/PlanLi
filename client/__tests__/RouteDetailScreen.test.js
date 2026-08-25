@@ -16,6 +16,7 @@ jest.mock('../src/config/firebase', () => ({ auth: { currentUser: null } }));
 jest.mock('../src/services/RouteService', () => ({
   loadRouteDetails: jest.fn(),
   recordRouteOpen: jest.fn(() => Promise.resolve()),
+  recordRouteView: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../src/features/community/hooks/useLikes', () => ({
   useLikes: () => ({ isLiked: false, likeCount: 0, toggleLike: jest.fn() }),

@@ -165,6 +165,91 @@ export function getPreferencePresentation(kind, value) {
 }
 
 export function getPersonalizationReasonPresentation(reasonCode) {
+  if (reasonCode && typeof reasonCode === 'object') {
+    const { code, value, evidence = {} } = reasonCode;
+    const interest = value ? getPreferencePresentation('interest', value) : null;
+    if (code === 'declared_interest' && interest?.label) {
+      return {
+        label: `כי בחרת בתחום ${interest.label}`,
+        detail: `הפריט מתאים לתחום העניין ${interest.label} שבחרת בהעדפות.`,
+        icon: interest.icon || 'auto-awesome',
+      };
+    }
+    if (code === 'budget_exact') return {
+      label: 'מתאים לרמת המחיר שבחרת',
+      detail: 'רמת המחיר של הפריט תואמת להעדפה ששמרת.',
+      icon: 'account-balance-wallet',
+    };
+    if (code === 'budget_near') return {
+      label: 'קרוב לרמת המחיר שבחרת',
+      detail: 'רמת המחיר של הפריט קרובה להעדפה ששמרת.',
+      icon: 'account-balance-wallet',
+    };
+    if (code === 'travel_party') return {
+      label: 'מתאים להרכב הנסיעה שבחרת',
+      detail: 'הפריט מסומן כמתאים להרכב הנסיעה ששמרת בהעדפות.',
+      icon: 'groups',
+    };
+    if (code === 'need_match') return {
+      label: 'מתאים לצורך שסימנת',
+      detail: 'המידע המאומת בפריט תואם לצורך שבחרת בהעדפות.',
+      icon: 'verified',
+    };
+    if (code === 'learned_interest' && interest?.label) {
+      const evidenceSource = evidence.source
+        || (Number(evidence.favorites || 0) > 0 ? 'favorite' : '')
+        || (Number(evidence.likes || 0) > 0 ? 'like' : '')
+        || (Number(evidence.meaningfulViews || 0) > 0 ? 'meaningful_view' : '');
+      const label = evidenceSource === 'favorite'
+        ? 'כי שמרת מקומות דומים'
+        : evidenceSource === 'like'
+          ? 'כי אהבת מקומות דומים'
+          : evidenceSource === 'meaningful_view'
+            ? 'כי צפית במקומות דומים'
+            : 'כי הפעילות שלך במקומות דומים';
+      return {
+        label,
+        detail: `הפעילות שלך מרמזת ש${interest.label} עשוי לעניין אותך. אפשר לכבות את הלמידה בהגדרות.`,
+        icon: 'history',
+      };
+    }
+    if (code === 'learned_destination') return {
+      label: 'כי התעניינת לאחרונה ביעד הזה',
+      detail: 'פתיחות, לייקים או שמירות ביעד הזה עזרו לבחור את הפריט.',
+      icon: 'location-on',
+    };
+    if (code === 'exploration_popular') return {
+      label: 'פופולרי עכשיו ב־PlanLi',
+      detail: 'הוספנו בחירה פופולרית כדי לאפשר לגלות משהו מעבר להעדפות הקבועות.',
+      icon: 'trending-up',
+    };
+    if (code === 'exploration_new') return {
+      label: 'משהו חדש שכדאי להכיר',
+      detail: 'הוספנו בחירה חדשה כדי לגוון את ההמלצות שמופיעות לך.',
+      icon: 'auto-awesome',
+    };
+    if (code === 'search_match') return {
+      label: 'מתאים לחיפוש שלך',
+      detail: 'המילים שחיפשת מופיעות בפרטי הפריט.',
+      icon: 'search',
+    };
+    if (code === 'generic_popular') return {
+      label: 'פופולרי בקרב מטיילים',
+      detail: 'הפריט בולט לפי הפעילות של קהילת PlanLi.',
+      icon: 'trending-up',
+    };
+    if (code === 'generic_new') return {
+      label: 'חדש ב־PlanLi',
+      detail: 'זה פריט חדש שעשוי לעזור בתכנון הטיול הבא.',
+      icon: 'auto-awesome',
+    };
+    if (code === 'community_pick') return {
+      label: 'מקהילת המטיילים של PlanLi',
+      detail: 'הפריט פורסם בקהילת PlanLi ומשתלב בתוצאות בלי להסתמך על מידע שלא נמסר.',
+      icon: 'people',
+    };
+    return null;
+  }
   if (typeof reasonCode !== 'string' || !reasonCode.trim()) return null;
   if (reasonCode === 'budget') {
     return { label: 'תקציב מועדף', icon: 'account-balance-wallet' };

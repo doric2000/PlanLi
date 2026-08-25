@@ -15,6 +15,19 @@ jest.mock('../src/features/profile/services/NoyaOnboardingStorage', () => ({
   loadGuestNoyaProfile: (...args) => mockLoadGuestNoyaProfile(...args),
 }));
 
+const mockLoadGuestBehaviorContext = jest.fn(() => Promise.resolve(null));
+const mockRecordGuestPersonalizationEvent = jest.fn(() => Promise.resolve({ recorded: true }));
+const mockLoadPendingGuestMerge = jest.fn(() => Promise.resolve(null));
+const mockClearGuestAfterMerge = jest.fn(() => Promise.resolve(true));
+const mockResetGuestPersonalization = jest.fn(() => Promise.resolve());
+jest.mock('../src/features/profile/services/GuestPersonalizationStorage', () => ({
+  loadGuestBehaviorContext: (...args) => mockLoadGuestBehaviorContext(...args),
+  recordGuestPersonalizationEvent: (...args) => mockRecordGuestPersonalizationEvent(...args),
+  loadPendingGuestPersonalizationMerge: (...args) => mockLoadPendingGuestMerge(...args),
+  clearGuestPersonalizationAfterMerge: (...args) => mockClearGuestAfterMerge(...args),
+  resetGuestPersonalization: (...args) => mockResetGuestPersonalization(...args),
+}));
+
 import { auth as mockAuth } from '../src/config/firebase';
 import {
   DISCOVERY_CACHE_TTL_MS,
@@ -23,6 +36,9 @@ import {
   getPersonalizedMapRecommendations,
   getPersonalizedRecommendations,
   getPersonalizedRoutes,
+  mergePendingGuestPersonalization,
+  resetPersonalizationActivity,
+  setPersonalizationFeedback,
 } from '../src/services/PersonalizationService';
 
 describe('PersonalizationService discovery cache', () => {
@@ -35,6 +51,16 @@ describe('PersonalizationService discovery cache', () => {
     mockHttpsCallable.mockClear();
     mockLoadGuestNoyaProfile.mockReset();
     mockLoadGuestNoyaProfile.mockResolvedValue(null);
+    mockLoadGuestBehaviorContext.mockReset();
+    mockLoadGuestBehaviorContext.mockResolvedValue(null);
+    mockRecordGuestPersonalizationEvent.mockReset();
+    mockRecordGuestPersonalizationEvent.mockResolvedValue({ recorded: true });
+    mockLoadPendingGuestMerge.mockReset();
+    mockLoadPendingGuestMerge.mockResolvedValue(null);
+    mockClearGuestAfterMerge.mockReset();
+    mockClearGuestAfterMerge.mockResolvedValue(true);
+    mockResetGuestPersonalization.mockReset();
+    mockResetGuestPersonalization.mockResolvedValue();
     mockAuth.currentUser = { uid: 'traveler-1' };
     clearPersonalizationDiscoveryCache();
   });
@@ -204,6 +230,63 @@ describe('PersonalizationService discovery cache', () => {
         onboardingVersion: 2,
       },
     }));
+  });
+
+  it('adds bounded local behavior only for guest discovery', async () => {
+    mockAuth.currentUser = null;
+    mockLoadGuestBehaviorContext.mockResolvedValueOnce({
+      facetScores: { interests: { food: 1 } },
+      negativeFacetScores: { interests: {} },
+      facetEvidence: { interests: { food: { meaningfulViews: 1 } } },
+      destinations: [],
+      suppressedPaths: [],
+    });
+    mockCallable.mockResolvedValueOnce({ data: { items: [] } });
+
+    await getPersonalizedRoutes({ sort: 'forYou' });
+
+    expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
+      guestBehaviorContext: expect.objectContaining({
+        facetScores: { interests: { food: 1 } },
+      }),
+    }));
+  });
+
+  it('keeps guest negative feedback local and includes the content snapshot', async () => {
+    mockAuth.currentUser = null;
+    const item = { id: 'rec-1', facets: { interests: ['food'] } };
+    await setPersonalizationFeedback({
+      target: { type: 'recommendation', id: 'rec-1' }, item, value: 'less', requestId: 'request-1',
+    });
+    expect(mockRecordGuestPersonalizationEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'less',
+      item,
+      target: { type: 'recommendation', id: 'rec-1' },
+    }));
+  });
+
+  it('drains separately frozen guest batches without deleting later activity', async () => {
+    mockLoadPendingGuestMerge
+      .mockResolvedValueOnce({ mergeId: 'merge-1', events: [{ id: 'event-1' }] })
+      .mockResolvedValueOnce({ mergeId: 'merge-2', events: [{ id: 'event-2' }] })
+      .mockResolvedValueOnce(null);
+    mockCallable
+      .mockResolvedValueOnce({ data: { merged: 1, alreadyMerged: false } })
+      .mockResolvedValueOnce({ data: { merged: 1, alreadyMerged: false } });
+
+    await expect(mergePendingGuestPersonalization()).resolves.toEqual({
+      merged: 2, alreadyMerged: false,
+    });
+    expect(mockClearGuestAfterMerge).toHaveBeenNthCalledWith(1, 'merge-1');
+    expect(mockClearGuestAfterMerge).toHaveBeenNthCalledWith(2, 'merge-2');
+  });
+
+  it('clears pending guest activity when a signed-in account resets learning', async () => {
+    mockCallable.mockResolvedValueOnce({ data: { reset: true } });
+
+    await expect(resetPersonalizationActivity()).resolves.toEqual({ reset: true });
+
+    expect(mockResetGuestPersonalization).toHaveBeenCalledTimes(1);
   });
 
   it('restarts discovery under the current account when auth changes during guest loading', async () => {

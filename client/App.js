@@ -43,6 +43,8 @@ import { addDiagnosticBreadcrumb, setDiagnosticTag } from "./src/services/ErrorR
 import { beginNoyaVisit } from "./src/features/profile/services/NoyaOnboardingStorage";
 import { NoyaTourProvider } from "./src/features/noya/NoyaTourContext";
 import NoyaTourOverlayHost from "./src/features/noya/NoyaTourOverlay";
+import GuestPersonalizationBridge from "./src/features/profile/components/GuestPersonalizationBridge";
+import { PersonalizationFeedbackProvider } from "./src/features/profile/context/PersonalizationFeedbackContext";
 
 
 const Stack = createStackNavigator();
@@ -103,6 +105,7 @@ export default function App() {
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<AuthProvider navigationRef={navigationRef}>
+				 <PersonalizationFeedbackProvider>
 				 <BlockedUsersProvider>
 				 <NotificationCenterProvider>
 				 <ContentPublishProvider>
@@ -183,10 +186,12 @@ export default function App() {
 					}}
 				/>
 				<NoyaTourOverlayHost />
+				<GuestPersonalizationBridge />
 				 </NoyaTourProvider>
 				 </ContentPublishProvider>
 				 </NotificationCenterProvider>
 				 </BlockedUsersProvider>
+				 </PersonalizationFeedbackProvider>
 				</AuthProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>

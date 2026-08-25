@@ -278,6 +278,51 @@ test('Noa completion is stored privately with the completed version 2 profile', 
   assert.equal(result.userDocument.onboarding.noya.updatedAt, 'timestamp');
 });
 
+test('editing the compact V2 preferences preserves legacy profile fields', async () => {
+  const fixture = createRegistrationAdmin({
+    uid: 'user-1',
+    displayName: 'Dana Cohen',
+    onboarding: { profileDetailsVersion: 1, profileDetailsCompletedAt: 'timestamp' },
+    legal: {
+      termsVersion: '2026-08-15-community-safety',
+      privacyVersion: '2026-08-18-beta-observability',
+      acceptedAt: 'timestamp',
+    },
+    smartProfile: {
+      interests: ['museums_art'],
+      budget: 'balanced',
+      travelParties: ['couple'],
+      vibe: ['romantic'],
+      travelerStyles: ['city_break'],
+      pace: 'slow',
+      needs: [],
+      setupRequired: false,
+      completedAt: 'previous-completion',
+    },
+  });
+
+  const result = await updateProfile({
+    admin: fixture.admin,
+    auth: { uid: 'user-1', token: { email_verified: true, firebase: { sign_in_provider: 'password' } } },
+    data: {
+      smartProfile: {
+        interests: ['food', 'activities'],
+        budget: 'economy',
+        travelParties: ['couple'],
+        needs: ['vegetarian'],
+        onboardingVersion: 2,
+      },
+      completeSmartProfile: true,
+      taxonomyVersion: 5,
+    },
+  });
+
+  assert.deepEqual(result.userDocument.smartProfile.vibe, ['romantic']);
+  assert.deepEqual(result.userDocument.smartProfile.travelerStyles, ['city_break']);
+  assert.equal(result.userDocument.smartProfile.pace, 'slow');
+  assert.deepEqual(result.userDocument.smartProfile.interests, ['food', 'activities']);
+});
+
 test('Noa cannot be marked complete without a complete saved or submitted profile', async () => {
   const fixture = createRegistrationAdmin({
     uid: 'user-1',
