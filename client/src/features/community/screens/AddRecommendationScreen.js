@@ -39,6 +39,7 @@ import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import {
   createTravelMediaDescriptor,
+  removedTravelMediaItems,
   travelMediaUri,
 } from '../../../utils/travelMedia';
 import {
@@ -333,6 +334,9 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
   const handleAddImages = () => setMediaComposerVisible(true);
   const completeMediaSelection = (items) => {
     const nextItems = (items || []).slice(0, 5);
+    removedTravelMediaItems(editableMedia, nextItems)
+      .filter((item) => !item.asset)
+      .forEach((item) => forgetDurableImage(travelMediaUri(item)).catch(() => {}));
     setEditableMedia(nextItems);
     setMediaComposerVisible(false);
     if (!isEdit) persistReviewedImages(nextItems.filter((item) => !item.asset).map(travelMediaUri)).catch(() => {});
@@ -342,7 +346,7 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
     setEditableMedia((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       const [removed] = next.splice(index, 1);
-      forgetDurableImage(travelMediaUri(removed)).catch(() => {});
+      if (!removed?.asset) forgetDurableImage(travelMediaUri(removed)).catch(() => {});
       return next;
     });
   };

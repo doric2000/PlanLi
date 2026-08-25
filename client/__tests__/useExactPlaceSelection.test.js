@@ -50,7 +50,7 @@ describe('useExactPlaceSelection', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ cityId: 'chiang-mai' }));
   });
 
-  it('preserves a confirmed selection while the user searches for a replacement', async () => {
+  it('clears a confirmed selection while the user searches for a replacement', async () => {
     mockResolve.mockResolvedValue(resolved);
     const onChange = jest.fn();
     const { result } = renderHook(() => useExactPlaceSelection({ onChange }));
@@ -58,10 +58,10 @@ describe('useExactPlaceSelection', () => {
     act(() => result.current.confirmPendingLocation());
 
     act(() => result.current.clearSelectionForTyping('Wat Phra'));
-    expect(result.current.selectedCity?.id).toBe('chiang-mai');
-    expect(result.current.selectedPlace?.placeId).toBe('wat-doi-kham');
+    expect(result.current.selectedCity).toBeNull();
+    expect(result.current.selectedPlace).toBeNull();
     expect(result.current.resolvingLocation).toBe(false);
-    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(null);
   });
 
   it('ignores a stale place response after further typing', async () => {

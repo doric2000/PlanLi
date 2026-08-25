@@ -5,7 +5,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const CACHE_CONTROL = 'public,max-age=300,must-revalidate';
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_PIXELS = 40 * 1000 * 1000;
-const MEDIA_MINUTE_MAXIMUM = 6;
+const MEDIA_MINUTE_MAXIMUM = 40;
 const MEDIA_DAY_MAXIMUM = 40;
 const MEDIA_DAY_BYTES_MAXIMUM = 250 * 1024 * 1024;
 const STAGING_PATH_PATTERN =

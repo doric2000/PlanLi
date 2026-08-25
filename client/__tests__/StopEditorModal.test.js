@@ -48,8 +48,8 @@ jest.mock('../src/components/TravelMediaComposer', () => {
     React.useEffect(() => {
       if (!visible) return;
       mockPickImagesForReview({
-        onComplete: (uris) => onChange?.([
-          ...value,
+        onComplete: (uris, { replace = false } = {}) => onChange?.([
+          ...(replace ? [] : value),
           ...uris.map((uri) => ({ uri, previewUri: uri, sourceId: uri, type: 'local' })),
         ]),
       });
@@ -236,6 +236,37 @@ describe('StopEditorModal', () => {
     expect(onSave.mock.calls[0][0].pendingMedia.map((entry) => entry.uri)).toEqual([
       'file:///one.jpg', 'file:///two.jpg',
     ]);
+  });
+
+  it('forgets local stop photos removed inside the completed editor selection', async () => {
+    const onForgetImage = jest.fn(async () => {});
+    mockPickImagesForReview.mockImplementationOnce(({ onComplete }) => onComplete([
+      'file:///one.jpg',
+    ], { replace: true }));
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+        onForgetImage={onForgetImage}
+        onPersistImages={jest.fn(async (items) => items)}
+        initialData={{
+          id: 'existing-stop',
+          title: 'השוק',
+          locationPrecision: 'general',
+          destination: { countryId: 'HU', cityId: 'budapest' },
+          pendingMedia: [{ uri: 'file:///one.jpg' }, { uri: 'file:///two.jpg' }],
+        }}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId('route-stop-photos'));
+    await waitFor(() => expect(onForgetImage).toHaveBeenCalledWith(expect.objectContaining({
+      uri: 'file:///two.jpg',
+    })));
+    expect(screen.getByText('1/3')).toBeTruthy();
   });
 
   it('does not block stop saving while untouched source persistence continues', async () => {

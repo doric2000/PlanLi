@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, TouchableOpacity, Platform, useWindowDimensions, Pressable } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
@@ -63,6 +63,10 @@ export const ImagePickerBox = ({
   const pageWidth = containerWidth || windowWidth || 0;
   const canSwipe = count > 1;
   const frameStyle = imagePickerFrameStyle({ height, previewAspectRatio });
+
+  useEffect(() => {
+    setActiveIndex((current) => Math.max(0, Math.min(current, Math.max(0, count - 1))));
+  }, [count]);
 
   const scrollToIndex = (nextIndex) => {
     if (!count) return;
