@@ -47,7 +47,7 @@ describe('TravelMedia platform sources', () => {
       .toEqual(expect.objectContaining({ uri: 'file:///picked.jpg', persistence: 'ready' }));
   });
 
-  it('loads and paginates iOS Recents/albums and materializes an iCloud asset', async () => {
+  it('keeps the legacy inline iOS source available only when explicitly enabled', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     MediaLibrary.requestPermissionsAsync.mockResolvedValue({ granted: true, accessPrivileges: 'limited' });
     MediaLibrary.getAlbumsAsync.mockResolvedValue([{ id: 'album-1', title: 'Favorites' }]);
@@ -67,7 +67,7 @@ describe('TravelMedia platform sources', () => {
     MediaLibrary.getAssetInfoAsync.mockResolvedValue({
       localUri: 'file:///icloud/asset-1.heic', width: 4000, height: 3000,
     });
-    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5 }));
+    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5, inlineLibraryEnabled: true }));
     await act(async () => { await hook.result.current.loadInitial(); });
     expect(hook.result.current.kind).toBe('inline-library');
     expect(hook.result.current.assets.map((item) => item.assetId)).toEqual(['asset-1']);
@@ -82,22 +82,64 @@ describe('TravelMedia platform sources', () => {
     expect(hook.result.current.assets.map((item) => item.assetId)).toEqual(['asset-3']);
   });
 
+  it('uses the system picker on iOS without enumerating or requesting the photo library', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///picker/ios-photo.jpg', width: 1600, height: 1200 }],
+    });
+    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5 }));
+    let picked;
+    await act(async () => { picked = await hook.result.current.pickMore(4); });
+    expect(hook.result.current.kind).toBe('system-picker');
+    expect(picked).toEqual([expect.objectContaining({
+      uri: 'file:///picker/ios-photo.jpg',
+      persistence: 'ready',
+    })]);
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({
+      allowsMultipleSelection: true,
+      orderedSelection: true,
+      selectionLimit: 4,
+    }));
+    expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(MediaLibrary.getAssetsAsync).not.toHaveBeenCalled();
+  });
+
   it('uses the system picker on Android without requesting broad library access', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///picker/photo.jpg', width: 1600, height: 1200 }],
+      assets: [{
+        assetId: 'android-picker-asset',
+        uri: 'file:///data/user/0/com.planli/cache/ImagePicker/photo.jpg',
+        width: 1600,
+        height: 1200,
+      }],
     });
     const hook = renderHook(() => useTravelMediaSource({ maxItems: 3 }));
     let picked;
     await act(async () => { picked = await hook.result.current.pickMore(2); });
     expect(hook.result.current.kind).toBe('system-picker');
-    expect(picked).toEqual([expect.objectContaining({ uri: 'file:///picker/photo.jpg' })]);
+    expect(picked).toEqual([expect.objectContaining({
+      assetId: 'android-picker-asset',
+      uri: 'file:///data/user/0/com.planli/cache/ImagePicker/photo.jpg',
+      sourceUri: 'file:///data/user/0/com.planli/cache/ImagePicker/photo.jpg',
+      previewUri: 'file:///data/user/0/com.planli/cache/ImagePicker/photo.jpg',
+      persistence: 'ready',
+    })]);
+    let materialized;
+    await act(async () => { materialized = await hook.result.current.materialize(picked[0]); });
+    expect(materialized).toEqual(expect.objectContaining({
+      sourceUri: 'file:///data/user/0/com.planli/cache/ImagePicker/photo.jpg',
+      persistence: 'ready',
+    }));
     expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith(expect.objectContaining({
       allowsMultipleSelection: true,
+      orderedSelection: true,
       selectionLimit: 2,
     }));
     expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(MediaLibrary.getAssetInfoAsync).not.toHaveBeenCalled();
   });
 
   it('ignores an older album response that resolves after the selected album', async () => {
@@ -109,7 +151,7 @@ describe('TravelMedia platform sources', () => {
     MediaLibrary.getAssetsAsync.mockImplementation(({ album }) => (
       album?.id === albumA.id ? pageA.promise : pageB.promise
     ));
-    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5 }));
+    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5, inlineLibraryEnabled: true }));
     let requestA;
     let requestB;
     act(() => {
@@ -156,7 +198,7 @@ describe('TravelMedia platform sources', () => {
         hasNextPage: false,
       });
     });
-    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5 }));
+    const hook = renderHook(() => useTravelMediaSource({ maxItems: 5, inlineLibraryEnabled: true }));
     await act(async () => { await hook.result.current.chooseAlbum(albumA); });
     let paginationRequest;
     act(() => { paginationRequest = hook.result.current.loadMore(); });

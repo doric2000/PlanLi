@@ -206,9 +206,9 @@ test('TravelMediaComposer virtualizes the inline gallery and paginates at the li
     .find((list) => list.props.testID === 'travel-media-grid');
   expect(grid).toBeTruthy();
   expect(grid.props.numColumns).toBe(3);
-  expect(grid.props.initialNumToRender).toBe(18);
-  expect(grid.props.maxToRenderPerBatch).toBe(18);
-  expect(grid.props.windowSize).toBe(7);
+  expect(grid.props.initialNumToRender).toBe(3);
+  expect(grid.props.maxToRenderPerBatch).toBe(3);
+  expect(grid.props.windowSize).toBe(3);
   expect(screen.getByTestId('travel-media-thumbnail-asset:0').props).toEqual(expect.objectContaining({
     resizeMode: 'cover',
     source: { uri: 'ph://0/L0/001' },
