@@ -16,6 +16,7 @@ import { normalizeRecommendationMapItems } from '../utils/recommendationMap';
 const TERMINAL_LOCATION_STATUSES = new Set(['denied', 'timeout', 'error']);
 const MAX_NATIVE_MARKERS = 500;
 const FOCUSED_RECOMMENDATION_ZOOM = 16;
+const MAP_LOAD_TIMEOUT_MS = 10000;
 const noLocationAction = async () => null;
 const noLocationCleanup = () => {};
 
@@ -132,6 +133,7 @@ export default function CommunityInlineMap({
   const handledFocusRequestRef = useRef(null);
   const pendingFocusIdRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(0);
+  const [mapLoadStatus, setMapLoadStatus] = useState('loading');
   const [selectedRecommendationId, setSelectedRecommendationId] = useState(null);
   const [iconFontReady, setIconFontReady] = useState(false);
   const [searchAreaVisible, setSearchAreaVisible] = useState(false);
@@ -169,6 +171,7 @@ export default function CommunityInlineMap({
     initialRegionRef.current = regionForLocation(null, DEFAULT_MAP_ZOOM);
     currentRegionRef.current = initialRegionRef.current;
   }
+  const nativeMapMounted = Boolean(initialRegionRef.current) || !awaitingFirstFix;
 
   const mapItems = useMemo(
     () => normalizeRecommendationMapItems(recommendations).slice(0, MAX_NATIVE_MARKERS),
@@ -197,6 +200,17 @@ export default function CommunityInlineMap({
   }, [startTracking, stopTracking]);
 
   useEffect(() => {
+    if (!nativeMapMounted) return;
+    setMapLoadStatus('loading');
+  }, [mapInstance, nativeMapMounted]);
+
+  useEffect(() => {
+    if (!nativeMapMounted || mapLoadStatus !== 'loading') return undefined;
+    const timer = setTimeout(() => setMapLoadStatus('error'), MAP_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [mapInstance, mapLoadStatus, nativeMapMounted]);
+
+  useEffect(() => {
     if (selectedRecommendationId && !selectedMapItem) setSelectedRecommendationId(null);
   }, [selectedMapItem, selectedRecommendationId]);
 
@@ -213,6 +227,7 @@ export default function CommunityInlineMap({
     setSearchAreaVisible(false);
     setSelectedRecommendationId(null);
     pendingFocusIdRef.current = pendingRecommendationId;
+    setMapLoadStatus('loading');
     setMapInstance((value) => value + 1);
   }, []);
 
@@ -280,6 +295,11 @@ export default function CommunityInlineMap({
     moveToLocation(nextLocation);
   }, [location, moveToLocation, startTracking]);
 
+  const retryMapLoad = useCallback(() => {
+    setMapLoadStatus('loading');
+    setMapInstance((value) => value + 1);
+  }, []);
+
   if (!initialRegionRef.current && awaitingFirstFix) {
     return (
       <View style={community.inlineMapEmpty} testID="map-awaiting-location">
@@ -307,6 +327,7 @@ export default function CommunityInlineMap({
         showsUserLocation
         showsMyLocationButton={false}
         onMapReady={handleMapReady}
+        onMapLoaded={() => setMapLoadStatus('ready')}
         onPanDrag={() => {
           userGestureRef.current = true;
           userMovedMapRef.current = true;
@@ -348,6 +369,29 @@ export default function CommunityInlineMap({
           />
         ))}
       </MapView>
+
+      {mapLoadStatus === 'loading' && (
+        <View style={community.mapLoadOverlay} pointerEvents="none" testID="community-map-loading">
+          <ActivityIndicator size="large" color="#1E3A5F" />
+          <AppText style={community.mapLoadTitle}>טוען את המפה…</AppText>
+        </View>
+      )}
+
+      {mapLoadStatus === 'error' && (
+        <View style={community.mapLoadOverlay} testID="community-map-load-error">
+          <Ionicons name="map-outline" size={28} color="#1E3A5F" />
+          <AppText style={community.mapLoadTitle}>לא הצלחנו להציג את המפה</AppText>
+          <AppText style={community.mapLoadText}>בדקו את החיבור ונסו שוב.</AppText>
+          <TouchableOpacity
+            style={community.mapLoadRetry}
+            onPress={retryMapLoad}
+            accessibilityRole="button"
+            testID="community-map-load-retry"
+          >
+            <AppText style={community.mapLoadRetryText}>ניסיון נוסף</AppText>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View
         style={[
@@ -395,14 +439,14 @@ export default function CommunityInlineMap({
         </View>
       )}
 
-      {loading && (
+      {mapLoadStatus === 'ready' && loading && (
         <View style={community.mapLoadingPill} pointerEvents="none">
           <ActivityIndicator size="small" color="#1E3A5F" />
           <AppText style={community.mapLoadingText}>טוען המלצות באזור…</AppText>
         </View>
       )}
 
-      {!!error && !loading && (
+      {mapLoadStatus === 'ready' && !!error && !loading && (
         <TouchableOpacity
           style={community.mapErrorPill}
           onPress={() => searchRegion(currentRegionRef.current, { forceRefresh: true })}
@@ -412,7 +456,7 @@ export default function CommunityInlineMap({
         </TouchableOpacity>
       )}
 
-      {!loading && !error && searchedRef.current && mapItems.length === 0 && !zoomInRequired && (
+      {mapLoadStatus === 'ready' && !loading && !error && searchedRef.current && mapItems.length === 0 && !zoomInRequired && (
         <View style={community.mapEmptyPill} pointerEvents="none">
           <AppText style={community.mapEmptyPillText}>אין המלצות באזור המוצג</AppText>
         </View>

@@ -16,6 +16,7 @@ export const LOCATION_COPY = Object.freeze({
     destinationChoiceHelper: 'מצאנו כמה יעדים מתאימים. הבחירה לא מפעילה חיפוש נוסף.',
     confirmLocation: 'אישור המיקום',
     mapPreview: 'תצוגה מקדימה של המיקום',
+    mapUnavailable: 'לא הצלחנו להציג את המפה. אפשר עדיין לאשר את המיקום.',
     supportCode: 'קוד תמיכה',
     errors: Object.freeze({
       dailyQuota: 'מגבלת המיקום היומית הושגה. אפשר לנסות שוב לאחר האיפוס מחר.',
@@ -45,6 +46,7 @@ export const LOCATION_COPY = Object.freeze({
     destinationChoiceHelper: 'We found several matches. Choosing one will not run another search.',
     confirmLocation: 'Confirm location',
     mapPreview: 'Location preview',
+    mapUnavailable: 'We could not display the map. You can still confirm this location.',
     supportCode: 'Support code',
     errors: Object.freeze({
       dailyQuota: 'Your daily location limit has been reached. Try again after the reset tomorrow.',
