@@ -18,14 +18,15 @@ Android-only production EAS Update
 `dd0b91d8-b5b7-4a73-94d4-d08d31a449f5` was published from PR `#206` merge
 commit `e954e3e` at `2026-08-25T11:19:04.856Z`. Download, application, and the
 physical tablet re-test remain pending.
-The latest compatible production EAS Update is Noya first-tour group
-`b21002fa-5510-42bb-8c22-75ac24499260`, published for Android
-(`01a039d6-3555-74e6-a679-2de282732daf`) and iOS
-(`01a039d6-3555-7cbe-922d-659d340fb457`) at
-`2026-08-25T16:52:14.805Z` from PR `#208` merge commit `313ebe3`. EAS
-read-back confirms that both production manifests use runtime `1.1.0` and the
-exact merge commit. Download, application, and full guest/signed-in tour
-behavior on the physical Android tablet and TestFlight iPhone remain unverified.
+The latest compatible production EAS Update is Home planning hub group
+`43a873d8-282c-4e6a-986d-fcd014047c2c`, published for Android
+(`01a03b51-cc08-7328-8f2d-71f26f5953b2`) and iOS
+(`01a03b51-cc08-727f-88f1-93b17c27e092`) at
+`2026-08-25T23:46:51.528Z` from PR `#215` merge commit `e1ba08d`. EAS
+read-back confirms that both production manifests use runtime `1.1.0`, the
+exact merge commit, the production environment, and a clean working tree.
+Download, application, and Home planning-hub behavior on the physical Android
+tablet and TestFlight iPhone remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and
 in use on the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
 commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
@@ -40,11 +41,11 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and runtime `1.1.0`. The matching Noya
-first-tour preview group is `b63e0183-d8e8-41a0-9e16-d083b8bb2379`; the
+the `production` EAS Update channel and runtime `1.1.0`. The matching Home
+planning-hub preview group is `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`; the
 immediately preceding compatible groups are preview
-`e2490214-0532-4777-b1a2-eca3519eac85` and production
-`151b7748-1189-406e-8b7c-a10336fe4a9b`. This OTA did not create a native build,
+`cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` and production
+`1184a492-317b-4a5a-be48-12374b98bc8a`. This OTA did not create a native build,
 submit to either store, deploy Firebase, or write production data. Twenty-eight
 affected Functions and the
 active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
@@ -350,23 +351,23 @@ Current release record:
 - Source release: Noya product-tour PR `#196`, typography release fix PR `#197`,
   and live-audit alignment PR `#198`; the build source is PR `#198` merge commit
   `f9c7096`.
-- Preview EAS Update: combined photo editor, Noya creator flow, and For You v2
-  group `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025`, runtime `1.1.0`, iOS update
-  `01a03ac7-6651-70bf-8579-627e3e7f3364`, and Android update
-  `01a03ac7-6651-71cc-ba0e-7c5f6e52da60`, published from `main` commit
-  `4766903a1a40481a6b3019159d14934e9c41d551` at
-  `2026-08-25T21:15:41.521Z` with the `production` EAS environment. EAS
+- Preview EAS Update: Home planning hub group
+  `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`, runtime `1.1.0`, iOS update
+  `01a03b4e-b151-7955-887a-b24f9ded8f1d`, and Android update
+  `01a03b4e-b151-7faa-bde7-d23de24d37a1`, published from PR `#215` merge
+  commit `e1ba08d9255c90c1c22ed93b5d9da90c5d392d74` at
+  `2026-08-25T23:43:28.081Z` with the `production` EAS environment. EAS
   read-back confirmed both manifests, the `preview` branch, runtime, and exact
   commit. There is no signed iOS preview-profile build, so download and
   physical-device behavior remain unverified.
 - Production EAS Update: exact republish of that preview bundle as group
-  `1184a492-317b-4a5a-be48-12374b98bc8a`, runtime `1.1.0`, iOS update
-  `01a03acb-43cc-74d6-b5ad-c0056c688c3c`, and Android update
-  `01a03acb-43cc-7631-8bac-e7f9009a6c27`, published at
-  `2026-08-25T21:19:54.828Z`. EAS read-back confirmed both manifests and the
+  `43a873d8-282c-4e6a-986d-fcd014047c2c`, runtime `1.1.0`, iOS update
+  `01a03b51-cc08-727f-88f1-93b17c27e092`, and Android update
+  `01a03b51-cc08-7328-8f2d-71f26f5953b2`, published at
+  `2026-08-25T23:46:51.528Z`. EAS read-back confirmed both manifests and the
   production branch point to this group and exact commit, with a clean Git
   working tree. Roll back by republishing the preceding production group
-  `b21002fa-5510-42bb-8c22-75ac24499260`. Download and application on the
+  `1184a492-317b-4a5a-be48-12374b98bc8a`. Download and application on the
   physical TestFlight iPhone and Android tablet remain unverified.
 - Firebase release: 99 active Node.js 22 v2 Functions in `europe-west1`.
   Twelve affected Functions deployed from clean `main` commit `4766903` at
@@ -411,15 +412,16 @@ Current release record:
   review found no actionable findings. The locked client dependency audit still
   reports eight high-severity findings; dependencies were not upgraded during
   this release. Physical-device behavior remains unverified.
-- OTA device state: Expo serves combined preview group
-  `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` only to matching preview requests;
+- OTA device state: Expo serves Home planning hub preview group
+  `48a9c9ef-4c32-4030-adb0-0ad7bcecb111` only to matching preview requests;
   no preview iOS client exists, so it has not been applied. Production now
-  serves group `1184a492-317b-4a5a-be48-12374b98bc8a` for Android and iOS.
-  Download, application, multi-photo gestures, recommendation creation, RoadTrip
-  editing, Noya guidance, and For You v2 behavior remain unverified on the
-  physical TestFlight iPhone and Android tablet. The immediate rollback groups
-  are preview `b63e0183-d8e8-41a0-9e16-d083b8bb2379` and production
-  `b21002fa-5510-42bb-8c22-75ac24499260`.
+  serves group `43a873d8-282c-4e6a-986d-fcd014047c2c` for Android and iOS.
+  Download, application, Home continuation/search/actions/discovery behavior,
+  multi-photo gestures, recommendation creation, RoadTrip editing, Noya
+  guidance, and For You v2 behavior remain unverified on the physical
+  TestFlight iPhone and Android tablet. The immediate rollback groups are
+  preview `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` and production
+  `1184a492-317b-4a5a-be48-12374b98bc8a`.
 - Production catalog migration: the separately authorized apply run at
   `2026-08-24T19:49Z` scanned 14 recommendations and migrated exactly one
   document (`recommendations/rec_CBCFGWNEcxN3Ov6ijXeI`) to category `nature`
@@ -1250,3 +1252,45 @@ rejected.
   and reopen the production app up to twice to download and apply the update.
   Roll back preview to `b63e0183-d8e8-41a0-9e16-d083b8bb2379` or production to
   `b21002fa-5510-42bb-8c22-75ac24499260` if required.
+
+## Home planning hub OTA release
+
+- Source: PR `#215`, merge commit
+  `e1ba08d9255c90c1c22ed93b5d9da90c5d392d74` on clean `main`.
+- Scope: replaces unsupported popularity-metric Home content with a Hebrew/RTL
+  planning hub containing trip continuation, destination search and saved-only
+  filtering, quick planning actions, Noya onboarding, personalized-or-newest
+  routes, and community recommendations. Refresh failures preserve previously
+  loaded drafts and discovery cards and do not show false success feedback.
+- App/runtime: JavaScript-only `1.1.0`; `production` EAS environment; Android and
+  iOS; no native dependency, permission, entitlement, plugin, or app-config
+  change.
+- Preview EAS Update: group `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`, Android
+  update `01a03b4e-b151-7faa-bde7-d23de24d37a1`, and iOS update
+  `01a03b4e-b151-7955-887a-b24f9ded8f1d`, published at
+  `2026-08-25T23:43:28.081Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `43a873d8-282c-4e6a-986d-fcd014047c2c`, Android update
+  `01a03b51-cc08-7328-8f2d-71f26f5953b2`, and iOS update
+  `01a03b51-cc08-727f-88f1-93b17c27e092`, published at
+  `2026-08-25T23:46:51.528Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed this as the newest production group, both platforms, the
+  exact merge commit, the production environment, and a clean working tree.
+- Validation: 4 focused Home/search/filter suites passed 42 tests; all 159
+  client suites passed 823 tests; Web rendering was checked at mobile and
+  desktop viewport sizes; PR `#215` validation passed; release-readiness run
+  `32910178977` passed production lineage, locked installs, client and Functions
+  tests, iOS release configuration/export, Firestore and Storage Rules emulator
+  tests, and dependency audits. The EAS production preflight passed immediately
+  before preview publication and again before production promotion.
+- The preview publish exported Web, iOS, and Android bundles, uploaded two app
+  bundles, found 52 iOS and 51 Android assets, and uploaded no new assets. The
+  production release republished those exact preview artifacts.
+- No EAS native build, App Store/TestFlight or Google Play submission, Firebase
+  deployment, migration, backend change, IAM change, or production-data write
+  was performed. Download, application, visual layout, navigation, refresh
+  recovery, and personalized/generic content on physical Android and iOS devices
+  remain unverified. Force-close and reopen the production app up to twice to
+  download and apply the update. Roll back preview to
+  `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` or production to
+  `1184a492-317b-4a5a-be48-12374b98bc8a` if required.
