@@ -6,11 +6,13 @@ import { doc, getDoc } from 'firebase/firestore';
 
 import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
+import PreferenceContextLine from '../../../components/PreferenceContextLine';
 import { auth, db } from '../../../config/firebase';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { clearPersonalizationDiscoveryCache, getPersonalizedRecommendations } from '../../../services/PersonalizationService';
 import { saveNoyaOnboardingStatus, saveProfile } from '../../../services/ProfileService';
 import { useAuth } from '../../auth/AuthContext';
+import { usePersonalizationFeedback } from '../context/PersonalizationFeedbackContext';
 import { preferenceSetupStyles as styles } from '../../../styles';
 import { BUDGETS, NEEDS, ONBOARDING_INTERESTS, TRAVEL_PARTIES } from '../constants/smartProfileOptions';
 import {
@@ -21,7 +23,7 @@ import {
   NOYA_ONBOARDING_VERSION,
   saveGuestNoyaProfile,
 } from '../services/NoyaOnboardingStorage';
-import { normalizeClientSmartProfile, normalizeNoyaSmartProfile } from '../utils/preferenceSetup';
+import { normalizeNoyaSmartProfile } from '../utils/preferenceSetup';
 
 const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 const EMPTY_PROFILE = {
@@ -95,7 +97,10 @@ function ChoiceTile({ icon, label, onPress, selected, testID, wide = false, sing
 }
 
 function PreviewCard({ item, onPress }) {
+  const target = { type: 'recommendation', id: item?.id };
+  const { isHidden } = usePersonalizationFeedback();
   const imageUrl = getRecommendationImageUrls(item, 'thumb')[0] || null;
+  if (isHidden(target)) return null;
   return (
     <Pressable accessibilityLabel={`צפייה בהמלצה ${item.title || ''}`} accessibilityRole="button"
       onPress={onPress} style={styles.previewCard}>
@@ -104,6 +109,12 @@ function PreviewCard({ item, onPress }) {
       ) : (
         <View style={styles.previewFallback}><Ionicons name="image-outline" size={22} color="#6F7E91" /></View>
       )}
+      <PreferenceContextLine
+        personalization={item?.personalization}
+        reasonCode={item?.personalization?.reasonCodes?.[0]}
+        target={target}
+        item={item}
+      />
       <AppText numberOfLines={2} style={styles.previewTitle}>{item.title || 'המלצה בשבילך'}</AppText>
     </Pressable>
   );
@@ -184,7 +195,7 @@ export default function PreferenceSetupScreen({ navigation, route }) {
   const complete = useCallback(async () => {
     if (!canContinue || saving) return;
     setSaving(true);
-    const nextProfile = { ...normalizeClientSmartProfile(profile), interests: profile.interests,
+    const nextProfile = { interests: profile.interests,
       budget: profile.budget, travelParties: profile.travelParties, needs: profile.needs,
       onboardingVersion: NOYA_ONBOARDING_VERSION };
     try {
@@ -243,7 +254,7 @@ export default function PreferenceSetupScreen({ navigation, route }) {
         <CachedImage source={NOYA_IMAGE} style={styles.finishAvatar} contentFit="cover"
           contentPosition={{ left: '50%', top: '32%' }} transition={0} accessibilityLabel="נועה" />
         <AppText style={styles.finishTitle}>סידרתי לך התחלה טובה</AppText>
-        <AppText style={styles.finishText}>ככל ששומרים, מסמנים לייק ופותחים המלצות, ההתאמה ממשיכה להשתפר.</AppText>
+        <AppText style={styles.finishText}>שמירות, לייקים וצפייה ממושכת עוזרים לי לדייק את בשבילך.</AppText>
         <View style={styles.previewRow} testID="noya-preview">
           {previewLoading ? [0, 1, 2].map((value) => <View key={value} style={styles.previewSkeleton} />) : null}
           {!previewLoading && previewItems.map((item) => <PreviewCard key={item.id} item={item}
@@ -285,7 +296,7 @@ export default function PreferenceSetupScreen({ navigation, route }) {
               onPress={() => setProfile((previous) => ({ ...previous, budget: option.value }))}
               selected={profile.budget === option.value} single testID={`noya-budget-${option.value}`} />)}</View></> : null}
 
-          {step === 3 ? <><NoyaPrompt title="עם מי בדרך כלל יוצאים לטייל?" helper="אפשר לבחור עד שתי אפשרויות." />
+          {step === 3 ? <><NoyaPrompt title="מה הרכב הנסיעה בדרך כלל?" helper="אפשר לבחור עד שתי אפשרויות." />
             <View style={styles.choiceGrid}>{TRAVEL_PARTIES.map((option) => <ChoiceTile key={option.value}
               label={option.label} onPress={() => toggleArray('travelParties', option.value, 2)}
               selected={profile.travelParties.includes(option.value)} testID={`noya-party-${option.value}`}

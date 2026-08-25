@@ -5,6 +5,7 @@ import {
   getPersonalizedRoutes,
   requestPersonalizedRoutes,
   recordRouteOpen,
+  recordRouteView,
 } from './PersonalizationService';
 
 let saveRouteCallable;
@@ -74,5 +75,5 @@ export const requestRoutes = (payload = {}) => requestPersonalizedRoutes(payload
 
 export const clearRouteDiscoveryCache = () => clearPersonalizationDiscoveryCache('routes');
 
-export { recordRouteOpen };
+export { recordRouteOpen, recordRouteView };
 

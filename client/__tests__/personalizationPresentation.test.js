@@ -34,4 +34,28 @@ describe('personalization reason presentation', () => {
     const screen = render(<PreferenceContextLine reasonCode="unknown:value" />);
     expect(screen.queryByTestId('preference-context-line')).toBeNull();
   });
+
+  it('explains declared and learned reasons in plain Hebrew without exposing scores', () => {
+    expect(getPersonalizationReasonPresentation({
+      code: 'declared_interest', value: 'food',
+    })).toEqual(expect.objectContaining({
+      label: 'כי בחרת בתחום אוכל וקולינריה',
+      icon: 'restaurant',
+    }));
+    const learned = getPersonalizationReasonPresentation({
+      code: 'learned_interest', value: 'food', evidence: { favorites: 1 },
+    });
+    expect(learned.label).toBe('כי שמרת מקומות דומים');
+    expect(JSON.stringify(learned)).not.toMatch(/score|ציון/iu);
+    expect(getPersonalizationReasonPresentation({
+      code: 'learned_interest', value: 'food',
+    }).label).toBe('כי הפעילות שלך במקומות דומים');
+    expect(getPersonalizationReasonPresentation({
+      code: 'learned_interest', value: 'food', evidence: { source: 'meaningful_view' },
+    }).label).toBe('כי צפית במקומות דומים');
+  });
 });
+
+jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
+  usePersonalizationFeedback: () => ({ hide: jest.fn(), isHidden: () => false }),
+}));

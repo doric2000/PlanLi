@@ -3,14 +3,20 @@ const assert = require('node:assert/strict');
 
 const {
   AFFINITY_HALF_LIFE_MS,
+  applyLessFeedback,
   applyPersonalizationSignal,
+  canonicalInterestIds,
   cleanDestinations,
   cleanFilters,
   cleanGuestPreferenceContext,
+  cleanGuestBehaviorContext,
   decayFactor,
+  expandCanonicalInterestQueryIds,
   interleaveDiscovery,
+  isGuestEventAfterActivityReset,
   matchesFilters,
   normalizePersonalization,
+  personalizationCandidateInterestIds,
   rankPersonalizedResults,
   resetPersonalizationActivity,
   scoreRecommendation,
@@ -72,17 +78,145 @@ test('ranking weights add to 100 for a full declared, activity, and quality matc
   assert.equal(scored.behaviorScore, 25);
   assert.equal(scored.qualityScore, 20);
   assert.equal(scored.score, 100);
-  assert.deepEqual(scored.reasons, ['interest:food']);
+  assert.deepEqual(scored.reasons.map((reason) => reason.code), [
+    'declared_interest', 'budget_exact', 'learned_destination',
+  ]);
+  assert.equal(scored.reasons[0].value, 'food');
 });
 
-test('missing ordinary facets are neutral while unknown practical needs add no boost', () => {
+test('missing recommendation facets do not create false matches', () => {
   const scored = scoreRecommendation({
     ...item,
     facets: {},
     stats: { likeCount: 0 },
   }, profile, {}, { nowMs: NOW, maxLikes: 100 });
 
-  assert.equal(scored.explicitScore, 25);
+  assert.equal(scored.explicitScore, 9);
+});
+
+test('legacy interests collapse into the eight onboarding interests', () => {
+  assert.deepEqual(canonicalInterestIds([
+    'hiking', 'freshwater_nature', 'cafes', 'music_events', 'unknown',
+  ]), ['nature_scenery', 'food', 'nightlife']);
+});
+
+test('candidate queries keep every declared canonical interest before legacy aliases', () => {
+  const expanded = expandCanonicalInterestQueryIds([
+    'nature_scenery', 'culture_history', 'activities', 'wellness',
+  ]);
+  assert.deepEqual(expanded.slice(0, 4), [
+    'nature_scenery', 'culture_history', 'activities', 'wellness',
+  ]);
+});
+
+test('disabled behavioral learning never contributes candidate interests', () => {
+  assert.deepEqual(personalizationCandidateInterestIds({
+    interests: ['culture_history', 'wellness'],
+  }, {
+    behaviorEnabled: false,
+    facetScores: { interests: { food: 20, nightlife: 10 } },
+  }), ['culture_history', 'wellness']);
+});
+
+test('less feedback suppresses the exact item, learns negatively, and undo is exact', () => {
+  const hidden = applyLessFeedback({
+    existing: {},
+    path: 'recommendations/rec-a',
+    feedbackId: 'feedback-a',
+    targetData: item,
+    nowMs: NOW,
+  });
+  assert.equal(hidden.changed, true);
+  assert.equal(hidden.personalization.suppressedTargets[0].path, 'recommendations/rec-a');
+  assert.equal(hidden.personalization.negativeFacetScores.interests.food, 5);
+
+  const undone = applyLessFeedback({
+    existing: hidden.personalization,
+    path: 'recommendations/rec-a',
+    feedbackId: 'feedback-a',
+    targetData: item,
+    undo: true,
+    nowMs: NOW + 1,
+  });
+  assert.equal(undone.personalization.suppressedTargets.length, 0);
+  assert.equal(undone.personalization.negativeFacetScores.interests.food, undefined);
+});
+
+test('stale undo cannot remove newer less feedback for the same item', () => {
+  const hidden = applyLessFeedback({
+    existing: {},
+    path: 'recommendations/rec-a',
+    feedbackId: 'feedback-new',
+    targetData: item,
+    nowMs: NOW,
+  });
+  const staleUndo = applyLessFeedback({
+    existing: hidden.personalization,
+    path: 'recommendations/rec-a',
+    feedbackId: 'feedback-old',
+    targetData: item,
+    undo: true,
+    nowMs: NOW + 1,
+  });
+
+  assert.equal(staleUndo.changed, false);
+  assert.equal(staleUndo.personalization.suppressedTargets[0].feedbackId, 'feedback-new');
+  assert.equal(staleUndo.personalization.negativeFacetScores.interests.food, 5);
+});
+
+test('behavior can be disabled without removing declared preferences or suppression', () => {
+  const existing = {
+    behaviorEnabled: false,
+    facetScores: { interests: { food: 8 } },
+    suppressedTargets: [{
+      path: 'recommendations/rec-a', feedbackId: 'feedback-a', createdAtMs: NOW,
+    }],
+    updatedAtMs: NOW,
+  };
+  const signal = applyPersonalizationSignal({
+    existing,
+    target: { type: 'recommendation', id: 'rec-a' },
+    targetData: item,
+    delta: 1,
+    action: 'meaningful_view',
+    nowMs: NOW,
+  });
+  assert.equal(signal.changed, false);
+  assert.equal(signal.personalization.facetScores.interests.food, 8);
+  assert.equal(signal.personalization.suppressedTargets.length, 1);
+
+  const scored = scoreRecommendation({
+    ...item,
+    facets: { ...item.facets, interests: ['activities'] },
+  }, {}, {
+    ...existing,
+    facetScores: { interests: { activities: 20 } },
+    facetEvidence: { interests: { activities: { likes: 1 } } },
+    destinations: [{ countryId: 'country-a', cityId: 'city-a', score: 20 }],
+  }, { nowMs: NOW, maxLikes: 100 });
+  assert.equal(scored.behaviorScore, 0);
+  assert.equal(scored.reasons.some((reason) => reason.code.startsWith('learned_')), false);
+});
+
+test('guest activity recorded before a reset is never replayed afterward', () => {
+  const personalization = { activityResetAtMs: NOW };
+  assert.equal(isGuestEventAfterActivityReset(personalization, { createdAtMs: NOW - 1 }), false);
+  assert.equal(isGuestEventAfterActivityReset(personalization, { createdAtMs: NOW }), false);
+  assert.equal(isGuestEventAfterActivityReset(personalization, { createdAtMs: NOW + 1 }), true);
+});
+
+test('guest behavior context is bounded and cannot inject unsupported interests', () => {
+  const context = cleanGuestBehaviorContext({
+    facetScores: { interests: { food: 2 } },
+    negativeFacetScores: { interests: { nightlife: 5 } },
+    destinations: [{ countryId: 'thailand', cityId: 'chiang-mai', score: 1, negativeScore: 0 }],
+    suppressedPaths: ['recommendations/rec-a'],
+  });
+  assert.equal(context.facetScores.interests.food, 2);
+  assert.equal(context.suppressedTargets[0].path, 'recommendations/rec-a');
+  assert.throws(() => cleanGuestBehaviorContext({
+    facetScores: { interests: { injected: 20 } },
+  }), /facetScores.interests is invalid/);
 });
 
 test('affinity uses a lazy 90-day half-life and undo never drops below zero', () => {
@@ -133,10 +267,22 @@ test('every fifth result is the best eligible discovery candidate with determini
   assert.equal(new Set(result.map((entry) => entry.item.id)).size, 10);
 });
 
+test('a small candidate set never labels a personalized fallback as exploration', () => {
+  const scored = Array.from({ length: 5 }, (_, index) => ({
+    item: { id: `rec-${index}`, createdAt: index },
+    score: 100 - index,
+    qualityScore: index,
+  }));
+
+  const result = interleaveDiscovery(scored, 30);
+
+  assert.equal(result[4].placementMode, 'personalized');
+});
+
 test('text search keeps strict relevance order and does not inject discovery slots', () => {
   const scored = Array.from({ length: 6 }, (_, index) => ({
     item: { id: `rec-${index}` },
-    rankingScore: 100 - index,
+    rankingScore: index === 5 ? 10_000 : 100 - index,
     textScore: 10 - index,
     qualityScore: index === 5 ? 100 : 0,
   }));
@@ -226,6 +372,7 @@ test('reset clears learned activity while preserving declared preferences and se
             smartProfile: existingProfile,
             personalization: {
               historySeedVersion: 'travel-taxonomy-v3',
+              processedGuestMergeIds: ['merge-already-applied'],
               facetScores: { interests: { food: 9 } },
               destinations: [{ countryId: 'country-a', score: 5 }],
             },
@@ -252,5 +399,9 @@ test('reset clears learned activity while preserving declared preferences and se
   });
   assert.deepEqual(writtenPatch.personalization.destinations, []);
   assert.deepEqual(writtenPatch.personalization.recentOpens, []);
+  assert.deepEqual(writtenPatch.personalization.negativeFacetScores, { interests: {} });
+  assert.deepEqual(writtenPatch.personalization.suppressedTargets, []);
+  assert.deepEqual(writtenPatch.personalization.processedGuestMergeIds, ['merge-already-applied']);
+  assert.equal(writtenPatch.personalization.activityResetAtMs > 0, true);
   assert.equal(writtenPatch.personalization.historySeedVersion, 'travel-taxonomy-v3');
 });

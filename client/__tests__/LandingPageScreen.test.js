@@ -34,6 +34,10 @@ jest.mock('../src/components/FavoriteButton', () => {
   return () => <View testID="favorite-button" />;
 });
 
+jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
+  usePersonalizationFeedback: () => ({ hide: jest.fn(), isHidden: () => false }),
+}));
+
 jest.mock('../src/components/RecommendationCard', () => {
   const { Text, View } = require('react-native');
   return ({ item }) => (

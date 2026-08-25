@@ -21,6 +21,7 @@ jest.mock('../src/hooks/useRecommendationById', () => ({
 jest.mock('../src/hooks/useUserData', () => ({ useUserData: () => ({ displayName: 'Dana' }) }));
 jest.mock('../src/services/PersonalizationService', () => ({
   recordRecommendationOpen: jest.fn(() => Promise.resolve()),
+  recordRecommendationView: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../src/features/community/hooks/useLikes', () => ({
   useLikes: () => ({ isLiked: false, likeCount: 0, toggleLike: jest.fn() }),

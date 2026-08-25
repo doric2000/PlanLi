@@ -26,6 +26,7 @@ import { getDestinationImageUrl } from '../../../utils/destinationImages';
 import { createDestinationStyles } from '../components/destinationStyles';
 import { useDestinationData } from '../hooks/useDestinationData';
 import { markNoyaContentViewed } from '../../profile/services/NoyaOnboardingStorage';
+import { usePersonalizationFeedback } from '../../profile/context/PersonalizationFeedbackContext';
 import {
   availableCommunityFilters,
   buildEssentialRows,
@@ -180,10 +181,13 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
 }
 
 function RecommendationPreview({ item, navigation, styles }) {
+  const target = { type: 'recommendation', id: item?.postId || item?.id };
+  const { isHidden } = usePersonalizationFeedback();
   const imageUrl = getRecommendationImageUrls(item, 'thumb')[0] || null;
   const legacyCategory = item.category || (item.tags?.includes?.('sim_esim') ? 'SIM וגלישה' : '');
   const category = getTravelCategoryPresentation(item.categoryId, legacyCategory);
   const reasonCode = item?.personalization?.reasonCodes?.[0];
+  if (isHidden(target)) return null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -215,7 +219,12 @@ function RecommendationPreview({ item, navigation, styles }) {
         <View style={styles.recommendationCategory}>
           <AppText style={styles.recommendationCategoryText}>{category.label}</AppText>
         </View>
-        <PreferenceContextLine reasonCode={reasonCode} />
+        <PreferenceContextLine
+          reasonCode={reasonCode}
+          personalization={item?.personalization}
+          target={target}
+          item={item}
+        />
         <AppText style={styles.recommendationTitle} numberOfLines={1}>
           {item.title}
         </AppText>

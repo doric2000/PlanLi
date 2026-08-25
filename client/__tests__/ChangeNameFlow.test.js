@@ -81,6 +81,7 @@ jest.mock('../src/services/SocialService', () => ({
 
 jest.mock('../src/services/PersonalizationService', () => ({
   resetPersonalizationActivity: jest.fn(() => Promise.resolve()),
+  setBehavioralPersonalizationEnabled: jest.fn(() => Promise.resolve()),
 }));
 
 const { auth: mockedAuth } = require('../src/config/firebase');

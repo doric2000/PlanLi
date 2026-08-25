@@ -236,10 +236,18 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
     'No profile fields were provided.'
   );
   const existingSmartProfile = existingData.smartProfile || {};
+  const submittedSmartProfile = data?.smartProfile || {};
+  const preservedLegacyProfile = smartProfile === undefined
+    ? {}
+    : Object.fromEntries(['vibe', 'travelerStyles', 'pace'].filter((field) => (
+        !Object.prototype.hasOwnProperty.call(submittedSmartProfile, field)
+        && Object.prototype.hasOwnProperty.call(existingSmartProfile, field)
+      )).map((field) => [field, existingSmartProfile[field]]));
   const nextSmartProfile = smartProfile === undefined
     ? undefined
     : {
         ...smartProfile,
+        ...preservedLegacyProfile,
         setupRequired: completeSmartProfile
           ? false
           : existingSmartProfile.setupRequired === true,

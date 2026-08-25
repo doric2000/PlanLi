@@ -16,7 +16,8 @@ import { auth } from '../../../config/firebase';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useUserData } from '../../../hooks/useUserData';
-import { loadRouteDetails, recordRouteOpen } from '../../../services/RouteService';
+import { useMeaningfulPersonalizationView } from '../../../hooks/useMeaningfulPersonalizationView';
+import { loadRouteDetails, recordRouteView } from '../../../services/RouteService';
 import { colors, routeDetailScreenStyles as styles } from '../../../styles';
 import { getBudgetLabel } from '../../../constants/travelTaxonomy';
 import { canManageContent } from '../../../utils/contentPermissions';
@@ -186,6 +187,8 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
   const [commentsVisible, setCommentsVisible] = useState(initialCommentsOpen);
   const canEdit = isActive && canManageContent({ user: auth.currentUser, ownerId: routeData?.ownerId, isAdmin });
   const destinationLabel = destinations.map((item) => item.name).filter(Boolean).join(' · ');
+  const personalizationItem = useMemo(() => ({ ...routeData, id: routeId }), [routeData, routeId]);
+  useMeaningfulPersonalizationView({ item: personalizationItem, navigation, record: recordRouteView });
 
   useEffect(() => {
     if (activeDayIndex >= days.length) setActiveDayIndex(Math.max(0, days.length - 1));
@@ -194,8 +197,7 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
     markNoyaContentViewed().catch(() => {});
-    if (isActive && routeId) recordRouteOpen(routeId).catch(() => {});
-  }, [isActive, navigation, routeId]);
+  }, [navigation]);
 
   useEffect(() => {
     if (initialCommentsOpen) setCommentsVisible(true);

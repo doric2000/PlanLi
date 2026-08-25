@@ -9,14 +9,24 @@ const mockSaveStatus = jest.fn();
 const mockSynchronizeUserDocument = jest.fn();
 const mockLoadGuestProfile = jest.fn();
 const mockSaveGuestProfile = jest.fn();
+const mockGetPersonalizedRecommendations = jest.fn();
+let mockHiddenRecommendationIds = new Set();
 
 jest.mock('../src/features/auth/AuthContext', () => ({
   useAuth: () => ({ synchronizeUserDocument: mockSynchronizeUserDocument }),
 }));
 
+jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
+  usePersonalizationFeedback: () => ({
+    hide: jest.fn(),
+    isHidden: (target) => mockHiddenRecommendationIds.has(target?.id),
+  }),
+}));
+
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
-  return { Ionicons: (props) => <mock-icon {...props} /> };
+  const MockIcon = (props) => <mock-icon {...props} />;
+  return { Ionicons: MockIcon, MaterialIcons: MockIcon };
 });
 
 jest.mock('../src/components/CachedImage', () => {
@@ -37,7 +47,7 @@ jest.mock('firebase/firestore', () => ({
 
 jest.mock('../src/services/PersonalizationService', () => ({
   clearPersonalizationDiscoveryCache: jest.fn(),
-  getPersonalizedRecommendations: jest.fn(() => Promise.resolve({ items: [] })),
+  getPersonalizedRecommendations: (...args) => mockGetPersonalizedRecommendations(...args),
 }));
 
 jest.mock('../src/services/ProfileService', () => ({
@@ -63,6 +73,9 @@ describe('PreferenceSetupScreen V2', () => {
     jest.clearAllMocks();
     mockLoadGuestProfile.mockResolvedValue(null);
     mockSaveStatus.mockResolvedValue({});
+    mockGetPersonalizedRecommendations.mockReset();
+    mockGetPersonalizedRecommendations.mockResolvedValue({ items: [] });
+    mockHiddenRecommendationIds = new Set();
     getDoc.mockResolvedValue({ data: () => ({ smartProfile: { setupRequired: true } }) });
     mockSaveProfile.mockResolvedValue({
       userDocument: {
@@ -123,5 +136,32 @@ describe('PreferenceSetupScreen V2', () => {
       { completeSmartProfile: true, verifySmartProfile: true }
     ));
     expect(screen.getByTestId('noya-complete-screen')).toBeTruthy();
+  });
+
+  it('removes a hidden recommendation from the completion preview immediately', async () => {
+    mockGetPersonalizedRecommendations.mockResolvedValue({
+      items: [{
+        id: 'preview-1',
+        title: 'המלצה לבדיקה',
+        personalization: { reasons: [{ code: 'declared_interest', value: 'food' }] },
+      }],
+    });
+    const props = { navigation: navigation() };
+    const screen = render(<PreferenceSetupScreen {...props} />);
+    await waitFor(() => expect(screen.getByTestId('noya-start')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-start'));
+    fireEvent.press(screen.getByTestId('noya-interest-food'));
+    fireEvent.press(screen.getByTestId('noya-interest-nature_scenery'));
+    fireEvent.press(screen.getByTestId('noya-next'));
+    fireEvent.press(screen.getByTestId('noya-budget-balanced'));
+    fireEvent.press(screen.getByTestId('noya-next'));
+    fireEvent.press(screen.getByTestId('noya-party-couple'));
+    fireEvent.press(screen.getByTestId('noya-next'));
+    await waitFor(() => expect(screen.getByText('המלצה לבדיקה')).toBeTruthy());
+
+    mockHiddenRecommendationIds = new Set(['preview-1']);
+    screen.rerender(<PreferenceSetupScreen {...props} />);
+
+    expect(screen.queryByText('המלצה לבדיקה')).toBeNull();
   });
 });

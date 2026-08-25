@@ -26,6 +26,7 @@ import {
 import { deleteContent } from '../services/SocialService';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { CAPABILITIES } from '../constants/authPolicy';
+import { usePersonalizationFeedback } from '../features/profile/context/PersonalizationFeedbackContext';
 
 
 /**
@@ -48,6 +49,8 @@ const RecommendationCard = ({
 }) => {
   const navigation = useNavigation();
   const { user, isActive, ensureCapability } = useAuthUser();
+  const personalizationTarget = { type: 'recommendation', id: item?.id };
+  const { isHidden } = usePersonalizationFeedback();
 
   const isFeed = variant === 'feed';
   const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
@@ -256,6 +259,8 @@ const RecommendationCard = ({
     </View>
   );
 
+  if (isHidden(personalizationTarget)) return null;
+
   return (
     <View style={[isFeed ? styles.feedCard : cards.recommendation, style]}>
       {/* Header */}
@@ -433,6 +438,9 @@ const RecommendationCard = ({
         <View style={[cards.recContent, isFeed && styles.feedContent]}>
         <PreferenceContextLine
           reasonCode={personalizationReasonCode}
+          personalization={item?.personalization}
+          target={personalizationTarget}
+          item={item}
           style={cards.recLocationRow}
           textStyle={cards.recLocationText}
         />
