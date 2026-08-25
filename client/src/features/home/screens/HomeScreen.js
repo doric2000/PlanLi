@@ -60,6 +60,7 @@ import {
 import { saveNoyaOnboardingStatus } from "../../../services/ProfileService";
 import {
 	useNoyaMainTabRegistration,
+	useNoyaMainTabSceneReady,
 	useNoyaTourTargetRegistration,
 } from "../../noya/NoyaTourContext";
 import { NOYA_MAIN_TARGETS } from "../../noya/NoyaTourDefinitions";
@@ -114,7 +115,7 @@ function openPreferenceSetupFrom(navigation, source = 'home') {
 
 export default function HomeScreen({ navigation }) {
 	useNoyaMainTabRegistration(navigation);
-	const homeTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Home);
+	const homeSearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.homeSearch);
 	const insets = useSafeAreaInsets();
 	const isFocused = useIsFocused();
 	const { user, isGuest } = useAuthUser();
@@ -129,6 +130,10 @@ export default function HomeScreen({ navigation }) {
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [confirming, setConfirming] = useState(false);
+	useNoyaMainTabSceneReady(
+		'Home',
+		!preferencesLoading && !loading && !refreshing && !confirming,
+	);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [recentDestinations, setRecentDestinations] = useState([]);
 	const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
@@ -402,8 +407,6 @@ export default function HomeScreen({ navigation }) {
 
 	const renderHeader = () => (
 		<PageHeader
-			rootRef={homeTourTarget.ref}
-			onLayout={homeTourTarget.onLayout}
 			variant="hero"
 			title="לאן נוסעים?"
 			overlapNext
@@ -413,6 +416,9 @@ export default function HomeScreen({ navigation }) {
 		>
 			<SearchFilterRow
 				style={tabHeroStyles.searchRow}
+				searchTargetRef={homeSearchTourTarget.ref}
+				searchTargetTestID="home-search-tour-target"
+				onSearchTargetLayout={homeSearchTourTarget.onLayout}
 				onFilterPress={openDestinationFilters}
 				activeFilterCount={(savedOnly ? 1 : 0) + (destinationSort !== "popular" ? 1 : 0)}
 				accessibilityLabel="סינון יעדים"

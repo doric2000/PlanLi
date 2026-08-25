@@ -9,6 +9,8 @@ import { routesScreenStyles } from '../src/styles';
 let mockUser = null;
 let mockFocusEffect = null;
 let mockTabRefresh = null;
+let mockRoutesSceneReady = null;
+let mockSmartProfile = null;
 
 const deferred = () => {
   let resolve;
@@ -52,8 +54,14 @@ jest.mock('../src/hooks/useTabPressScrollOrRefresh', () => ({
   },
 }));
 
+jest.mock('../src/features/noya/NoyaTourContext', () => ({
+  useNoyaMainTabRegistration: jest.fn(),
+  useNoyaMainTabSceneReady: (_tabName, ready) => { mockRoutesSceneReady = ready; },
+  useNoyaTourTargetRegistration: () => ({ ref: { current: null }, onLayout: jest.fn() }),
+}));
+
 jest.mock('../src/hooks/useSmartProfile', () => ({
-  useSmartProfile: () => ({ smartProfile: null, completed: false, loading: false }),
+  useSmartProfile: () => mockSmartProfile,
 }));
 
 jest.mock('../src/features/publishing/ContentPublishContext', () => ({
@@ -85,7 +93,11 @@ jest.mock('../src/components/PageHeader', () => {
 });
 
 jest.mock('../src/components/RoutesFilterModal', () => () => null);
-jest.mock('../src/components/FabButton', () => () => null);
+jest.mock('../src/components/FabButton', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return (props) => ReactModule.createElement(View, props);
+});
 jest.mock('../src/features/roadtrip/components/RouteCard', () => {
   const ReactModule = require('react');
   const { Pressable, Text, View } = require('react-native');
@@ -108,6 +120,8 @@ describe('RoutesScreen authentication state', () => {
     mockUser = null;
     mockFocusEffect = null;
     mockTabRefresh = null;
+    mockRoutesSceneReady = null;
+    mockSmartProfile = { smartProfile: null, completed: false, loading: false };
     requestRoutes.mockReset();
     requestRoutes.mockImplementation(() => ({
       requested: true,
@@ -123,6 +137,28 @@ describe('RoutesScreen authentication state', () => {
   ])('renders for a %s without relying on a global auth variable', (_label, user) => {
     mockUser = user;
     expect(() => render(<RoutesScreen navigation={{ navigate: jest.fn() }} />)).not.toThrow();
+  });
+
+  it('waits for the personalized route request before marking the scene ready', async () => {
+    const pendingRequest = deferred();
+    mockSmartProfile = { smartProfile: {}, completed: true, loading: false };
+    requestRoutes.mockImplementation(() => routeAttempt(pendingRequest.promise));
+    render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
+
+    await waitFor(() => expect(mockFocusEffect).toEqual(expect.any(Function)));
+    expect(mockRoutesSceneReady).toBe(false);
+    let requestPromise;
+    act(() => { requestPromise = mockFocusEffect(); });
+    await waitFor(() => expect(requestRoutes).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: 'forYou', limit: 30 }),
+    ));
+    expect(mockRoutesSceneReady).toBe(false);
+
+    await act(async () => {
+      pendingRequest.resolve({ items: [] });
+      await requestPromise;
+    });
+    await waitFor(() => expect(mockRoutesSceneReady).toBe(true));
   });
 
   it('uses the shared request path on focus and refresh, and preserves rendered routes on error', async () => {
@@ -214,9 +250,12 @@ describe('RoutesScreen authentication state', () => {
     expect(list.props.stickyHeaderIndices).toBeUndefined();
     const header = screen.getByTestId('routes-tab-header');
     expect(header.props.overlapNext).toBe(true);
-    expect(header.props.rootRef).toBeTruthy();
-    expect(header.props.onLayout).toEqual(expect.any(Function));
-    expect(screen.queryByTestId('noya-tour-target-main-routes')).toBeNull();
+    expect(header.props.rootRef).toBeUndefined();
+    expect(header.props.onLayout).toBeUndefined();
+    expect(screen.getByTestId('routes-search-tour-target').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('routes-filter-button').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('routes-sort-button').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('routes-add-button').props.onLayout).toEqual(expect.any(Function));
     expect(within(list).queryByTestId('routes-tab-header')).toBeNull();
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
   });

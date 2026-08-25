@@ -17,25 +17,26 @@ import AppText from '../../components/AppText';
 import { fontFamilies } from '../../styles/typography';
 import { NOYA_TOUR_IDS, useNoyaTour } from './NoyaTourContext';
 
-const TARGET_PADDING = 8;
 const BUBBLE_GAP = 14;
 const BUBBLE_ESTIMATED_HEIGHT = 286;
+const MEASUREMENT_RETRY_MS = 80;
+const MEASUREMENT_STABILITY_DELTA = 1;
 
-function paddedTarget(rect, width, height) {
+export function spotlightForTarget(rect, width, height, options = {}) {
   if (!rect) return null;
-  if (
-    rect.x + rect.width <= 0
-    || rect.y + rect.height <= 0
-    || rect.x >= width
-    || rect.y >= height
-  ) return null;
-  const x = Math.max(8, Math.min(width - 52, rect.x - TARGET_PADDING));
-  const y = Math.max(8, Math.min(height - 52, rect.y - TARGET_PADDING));
+  const padding = Math.max(0, Number(options.padding) || 0);
+  const left = Math.max(0, rect.x - padding);
+  const top = Math.max(0, rect.y - padding);
+  const right = Math.min(width, rect.x + rect.width + padding);
+  const bottom = Math.min(height, rect.y + rect.height + padding);
+  if (right <= left || bottom <= top) return null;
   return {
-    x,
-    y,
-    width: Math.max(44, Math.min(width - x - 8, rect.width + (TARGET_PADDING * 2))),
-    height: Math.max(44, Math.min(height - y - 8, rect.height + (TARGET_PADDING * 2))),
+    id: options.id || '',
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    radius: Math.max(0, Number(options.radius) || 0),
   };
 }
 
@@ -61,6 +62,63 @@ export function bubbleTopForTarget({
   return centered;
 }
 
+function rectsAreStable(previous, next) {
+  if (!previous || previous.length !== next.length) return false;
+  return previous.every((rect, index) => {
+    const candidate = next[index];
+    return ['x', 'y', 'width', 'height'].every((field) => (
+      Math.abs(rect[field] - candidate[field]) <= MEASUREMENT_STABILITY_DELTA
+    ));
+  });
+}
+
+function measureTargetNode(node, targetId) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const commit = (x, y, width, height) => {
+      const values = [x, y, width, height].map(Number);
+      if (values.every(Number.isFinite) && values[2] > 0 && values[3] > 0) {
+        finish({ x: values[0], y: values[1], width: values[2], height: values[3] });
+      } else {
+        finish(null);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const element = typeof node?.getBoundingClientRect === 'function'
+        ? node
+        : document.querySelector(`[data-testid="noya-tour-target-${targetId}"]`);
+      const rect = element?.getBoundingClientRect?.();
+      if (rect) {
+        commit(rect.x, rect.y, rect.width, rect.height);
+        return;
+      }
+    }
+    if (node?.measureInWindow) {
+      node.measureInWindow(commit);
+      return;
+    }
+    if (node?.measure) {
+      node.measure((_x, _y, width, height, pageX, pageY) => {
+        commit(pageX, pageY, width, height);
+      });
+      return;
+    }
+    finish(null);
+  });
+}
+
+function descriptorsForStep(activeStep, activeDefinition) {
+  if (Array.isArray(activeDefinition?.targets)) return activeDefinition.targets;
+  const targetId = activeStep?.targetId || activeDefinition?.targetId;
+  return targetId ? [{ id: targetId, padding: 3, radius: 16, anchor: true }] : [];
+}
+
 export default function NoyaTourOverlayHost({ scope = 'root' }) {
   const {
     acknowledgeCreatorStep,
@@ -79,10 +137,17 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
   const [bubbleHeight, setBubbleHeight] = useState(BUBBLE_ESTIMATED_HEIGHT);
-  const [targetRect, setTargetRect] = useState(null);
+  const [measuredTargets, setMeasuredTargets] = useState([]);
+  const [targetsMeasured, setTargetsMeasured] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const visible = Boolean(activeStep && activeDefinition && activeStep.scope === scope && !isSuspended);
-  const targetId = activeStep?.targetId || activeDefinition?.targetId || '';
+  const targetDescriptors = useMemo(
+    () => descriptorsForStep(activeStep, activeDefinition),
+    [activeDefinition, activeStep],
+  );
+  const targetsKey = targetDescriptors.map((target) => (
+    `${target.id}:${target.padding || 0}:${target.radius || 0}:${target.anchor ? 1 : 0}`
+  )).join('|');
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
@@ -94,52 +159,65 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
     if (!visible) {
       opacity.setValue(0);
       translateY.setValue(8);
-      setTargetRect(null);
+      setMeasuredTargets([]);
+      setTargetsMeasured(false);
       return undefined;
     }
-    if (!targetId) {
-      setTargetRect(null);
+    if (!targetDescriptors.length) {
+      setMeasuredTargets([]);
+      setTargetsMeasured(true);
       return undefined;
     }
-    setTargetRect(null);
+
+    setMeasuredTargets([]);
+    setTargetsMeasured(false);
     let cancelled = false;
-    const timers = [];
-    const commitMeasurement = (x, y, measuredWidth, measuredHeight) => {
+    let timer = null;
+    let previousRects = null;
+
+    const measure = async () => {
+      const rawRects = await Promise.all(targetDescriptors.map((target) => (
+        measureTargetNode(getTargetNode(target.id, scope), target.id)
+      )));
       if (cancelled) return;
-      if ([x, y, measuredWidth, measuredHeight].every(Number.isFinite) && measuredWidth > 0 && measuredHeight > 0) {
-        setTargetRect({ x, y, width: measuredWidth, height: measuredHeight });
-      }
-    };
-    const measure = () => {
-      const node = getTargetNode(targetId, scope);
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        const element = document.querySelector(`[data-testid="noya-tour-target-${targetId}"]`);
-        const rect = element?.getBoundingClientRect?.();
-        if (rect) {
-          commitMeasurement(rect.x, rect.y, rect.width, rect.height);
+      const spotlights = rawRects.map((rect, index) => (
+        spotlightForTarget(rect, width, height, targetDescriptors[index])
+      ));
+      if (rawRects.every(Boolean) && spotlights.every(Boolean)) {
+        if (rectsAreStable(previousRects, rawRects)) {
+          setMeasuredTargets(spotlights);
+          setTargetsMeasured(true);
           return;
         }
+        previousRects = rawRects;
+      } else {
+        previousRects = null;
       }
-      if (node?.measureInWindow) {
-        node.measureInWindow(commitMeasurement);
-        return;
-      }
-      if (node?.measure) {
-        node.measure((_x, _y, measuredWidth, measuredHeight, pageX, pageY) => {
-          commitMeasurement(pageX, pageY, measuredWidth, measuredHeight);
-        });
-        return;
-      }
+      timer = setTimeout(measure, MEASUREMENT_RETRY_MS);
     };
-    [0, 80, 180, 360].forEach((delay) => timers.push(setTimeout(measure, delay)));
+
+    measure();
     return () => {
       cancelled = true;
-      timers.forEach(clearTimeout);
+      if (timer) clearTimeout(timer);
     };
-  }, [getTargetNode, scope, targetId, targetRevision, visible, width, height]);
+  }, [
+    getTargetNode,
+    height,
+    opacity,
+    scope,
+    targetDescriptors,
+    targetRevision,
+    targetsKey,
+    translateY,
+    visible,
+    width,
+  ]);
+
+  const renderReady = visible && (targetDescriptors.length === 0 || targetsMeasured);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!renderReady) return;
     AccessibilityInfo.announceForAccessibility?.(`${activeDefinition.title}. ${activeDefinition.message}`);
     if (reduceMotion) {
       opacity.setValue(1);
@@ -152,13 +230,18 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
       Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 220, useNativeDriver: true }),
     ]).start();
-  }, [activeDefinition, activeStep, opacity, reduceMotion, translateY, visible]);
+  }, [activeDefinition, activeStep, opacity, reduceMotion, renderReady, translateY]);
 
-  const spotlight = useMemo(() => paddedTarget(targetRect, width, height), [height, targetRect, width]);
-  const bubbleTop = bubbleTopForTarget({ bubbleHeight, height, insets, target: spotlight });
+  const anchorTargetId = activeDefinition?.anchorTargetId
+    || targetDescriptors.find((target) => target.anchor)?.id
+    || targetDescriptors[0]?.id;
+  const anchorSpotlight = measuredTargets.find((target) => target.id === anchorTargetId)
+    || measuredTargets[0]
+    || null;
+  const bubbleTop = bubbleTopForTarget({ bubbleHeight, height, insets, target: anchorSpotlight });
   const safeBottom = Math.max(insets.bottom + 12, 18);
   const bubbleMaxHeight = Math.max(160, height - bubbleTop - safeBottom);
-  if (!visible) return null;
+  if (!renderReady) return null;
 
   const isMain = activeStep.tourId === NOYA_TOUR_IDS.main;
   const canGoBack = isMain && activeStep.stepIndex > 0;
@@ -184,16 +267,17 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
         <Defs>
           <Mask id={`noya-spotlight-mask-${scope}`}>
             <Rect fill="#FFFFFF" height={height} width={width} x={0} y={0} />
-            {spotlight ? (
+            {measuredTargets.map((target) => (
               <Rect
                 fill="#000000"
-                height={spotlight.height}
-                rx={18}
-                width={spotlight.width}
-                x={spotlight.x}
-                y={spotlight.y}
+                height={target.height}
+                key={`mask-${target.id}`}
+                rx={target.radius}
+                width={target.width}
+                x={target.x}
+                y={target.y}
               />
-            ) : null}
+            ))}
           </Mask>
         </Defs>
         <Rect
@@ -204,18 +288,19 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
           x={0}
           y={0}
         />
-        {spotlight ? (
+        {measuredTargets.map((target) => (
           <Rect
             fill="transparent"
-            height={spotlight.height}
-            rx={18}
+            height={target.height}
+            key={`outline-${target.id}`}
+            rx={target.radius}
             stroke="#F5961D"
             strokeWidth={3}
-            width={spotlight.width}
-            x={spotlight.x}
-            y={spotlight.y}
+            width={target.width}
+            x={target.x}
+            y={target.y}
           />
-        ) : null}
+        ))}
       </Svg>
 
       <Animated.View
@@ -243,55 +328,55 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
           contentContainerStyle={styles.bubbleContent}
           showsVerticalScrollIndicator={false}
         >
-        <View style={styles.noyaRow}>
-          <Image
-            accessibilityIgnoresInvertColors
-            accessible={false}
-            resizeMode="cover"
-            source={require('../../../assets/noya-assistant.png')}
-            style={styles.noyaImage}
-          />
-          <View style={styles.copy}>
-            <AppText style={styles.title}>{activeDefinition.title}</AppText>
-            {activeDefinition.progress ? (
-              <AppText style={styles.progress} testID="noya-tour-progress">
-                {`${activeDefinition.progress.current} מתוך ${activeDefinition.progress.total}`}
-              </AppText>
-            ) : null}
+          <View style={styles.noyaRow}>
+            <Image
+              accessibilityIgnoresInvertColors
+              accessible={false}
+              resizeMode="cover"
+              source={require('../../../assets/noya-assistant.png')}
+              style={styles.noyaImage}
+            />
+            <View style={styles.copy}>
+              <AppText style={styles.title}>{activeDefinition.title}</AppText>
+              {activeDefinition.progress ? (
+                <AppText style={styles.progress} testID="noya-tour-progress">
+                  {`${activeDefinition.progress.current} מתוך ${activeDefinition.progress.total}`}
+                </AppText>
+              ) : null}
+            </View>
           </View>
-        </View>
-        <AppText style={styles.message}>{activeDefinition.message}</AppText>
-        <View style={styles.actions}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            activeOpacity={0.84}
-            onPress={onPrimary}
-            style={styles.primaryButton}
-            testID="noya-tour-next"
-          >
-            <AppText style={styles.primaryText}>{primaryLabel}</AppText>
-          </TouchableOpacity>
-          {canGoBack || hasCreatorAction ? (
+          <AppText style={styles.message}>{activeDefinition.message}</AppText>
+          <View style={styles.actions}>
             <TouchableOpacity
               accessibilityRole="button"
-              activeOpacity={0.78}
-              onPress={canGoBack ? backMainTour : acknowledgeCreatorStep}
-              style={styles.secondaryButton}
-              testID="noya-tour-back"
+              activeOpacity={0.84}
+              onPress={onPrimary}
+              style={styles.primaryButton}
+              testID="noya-tour-next"
             >
-              <AppText style={styles.secondaryText}>{canGoBack ? 'חזרה' : 'הבנתי'}</AppText>
+              <AppText style={styles.primaryText}>{primaryLabel}</AppText>
             </TouchableOpacity>
-          ) : null}
-        </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          activeOpacity={0.75}
-          onPress={dismissActiveTour}
-          style={styles.skipButton}
-          testID="noya-tour-skip"
-        >
-          <AppText style={styles.skipText}>{isMain ? 'דילוג על הסיור' : 'דילוג על ההדרכה'}</AppText>
-        </TouchableOpacity>
+            {canGoBack || hasCreatorAction ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                activeOpacity={0.78}
+                onPress={canGoBack ? backMainTour : acknowledgeCreatorStep}
+                style={styles.secondaryButton}
+                testID="noya-tour-back"
+              >
+                <AppText style={styles.secondaryText}>{canGoBack ? 'חזרה' : 'הבנתי'}</AppText>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            activeOpacity={0.75}
+            onPress={dismissActiveTour}
+            style={styles.skipButton}
+            testID="noya-tour-skip"
+          >
+            <AppText style={styles.skipText}>{isMain ? 'דילוג על הסיור' : 'דילוג על ההדרכה'}</AppText>
+          </TouchableOpacity>
         </ScrollView>
       </Animated.View>
     </View>

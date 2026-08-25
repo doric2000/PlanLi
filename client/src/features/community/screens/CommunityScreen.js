@@ -51,7 +51,12 @@ import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilter
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import { clearPersonalizationDiscoveryCache } from '../../../services/PersonalizationService';
-import { useNoyaMainTabRegistration, useNoyaTourTargetRegistration } from '../../noya/NoyaTourContext';
+import {
+  useNoyaMainTabRegistration,
+  useNoyaMainTabSceneReady,
+  useNoyaTour,
+  useNoyaTourTargetRegistration,
+} from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 function normalizeMapFocus(input) {
@@ -86,7 +91,12 @@ function mergeFocusedRecommendation(recommendations, focusedRecommendation, mapF
 
 export default function CommunityScreen({ navigation, route }) {
   useNoyaMainTabRegistration(navigation);
-  const communityTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Community);
+  const { activeDefinition, pendingMainDefinition } = useNoyaTour();
+  const communitySearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communitySearch);
+  const communityFilterTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communityFilter);
+  const communitySortTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communitySort);
+  const communityMapTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communityMap);
+  const communityAddTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communityAdd);
   const insets = useSafeAreaInsets();
   const { ensureCapability } = useAuthUser();
   // --- State ---
@@ -107,6 +117,7 @@ export default function CommunityScreen({ navigation, route }) {
     loading,
     refreshing,
     confirming,
+    requestSettled,
     refresh,
     removeRecommendation,
     setDiscoveryRequest,
@@ -127,6 +138,12 @@ export default function CommunityScreen({ navigation, route }) {
   const { location: userLocation, requestLocation } = useUserLocation();
   const mapLocationState = useLiveUserLocation();
   const { smartProfile, completed: personalizationAvailable, loading: profileLoading } = useSmartProfile();
+  const personalizationSortReady = !profileLoading
+    && (!personalizationAvailable || sortBy === 'personalized');
+  useNoyaMainTabSceneReady(
+    'Community',
+    personalizationSortReady && requestSettled && !loading && !refreshing && !confirming,
+  );
   const { completedVersionByType = {} } = useRecommendationPublish();
   const normalizedProfile = useMemo(() => normalizeClientSmartProfile(smartProfile || {}), [smartProfile]);
   const feedListRef = useRef(null);
@@ -147,6 +164,14 @@ export default function CommunityScreen({ navigation, route }) {
     setSortMenuVisible(false);
     navigation.setParams?.({ mapFocus: undefined });
   }, [navigation, route?.params?.mapFocus]);
+
+  const communityTourListRequired = activeDefinition?.tabName === 'Community'
+    || pendingMainDefinition?.tabName === 'Community';
+  useEffect(() => {
+    if (!communityTourListRequired) return;
+    setMapOpen(false);
+    setSortMenuVisible(false);
+  }, [communityTourListRequired, route?.params?.mapFocus]);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -231,8 +256,6 @@ export default function CommunityScreen({ navigation, route }) {
 
   const renderTopArea = () => (
     <PageHeader
-      rootRef={communityTourTarget.ref}
-      onLayout={communityTourTarget.onLayout}
       variant="hero"
       title="קהילה"
       overlapNext
@@ -240,6 +263,9 @@ export default function CommunityScreen({ navigation, route }) {
       testID="community-tab-header"
       renderStart={() => (
         <TouchableOpacity
+          collapsable={false}
+          onLayout={communityMapTourTarget.onLayout}
+          ref={communityMapTourTarget.ref}
           style={tabHeroStyles.iconAction}
           onPress={() => setMapOpen((previous) => {
             if (!previous) setSortMenuVisible(false);
@@ -268,6 +294,9 @@ export default function CommunityScreen({ navigation, route }) {
           </View>
         ) : (
           <TouchableOpacity
+            collapsable={false}
+            onLayout={communitySortTourTarget.onLayout}
+            ref={communitySortTourTarget.ref}
             style={tabHeroStyles.labelAction}
             onPress={() => setSortMenuVisible(true)}
             testID="community-sort-button"
@@ -281,6 +310,11 @@ export default function CommunityScreen({ navigation, route }) {
 
       <SearchFilterRow
         style={tabHeroStyles.searchRow}
+        searchTargetRef={communitySearchTourTarget.ref}
+        searchTargetTestID="community-search-tour-target"
+        onSearchTargetLayout={communitySearchTourTarget.onLayout}
+        filterTargetRef={communityFilterTourTarget.ref}
+        onFilterTargetLayout={communityFilterTourTarget.onLayout}
         onFilterPress={() => setFilterModalVisible(true)}
         activeFilterCount={activeFilterCount}
         accessibilityLabel="סינון המלצות"
@@ -399,6 +433,10 @@ export default function CommunityScreen({ navigation, route }) {
 
       {!mapOpen && (
         <FabButton
+          accessibilityLabel="הוספת המלצה"
+          rootRef={communityAddTourTarget.ref}
+          onLayout={communityAddTourTarget.onLayout}
+          testID="community-add-button"
           style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
           onPress={async () => {
             if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'AddRecommendation' })) return;

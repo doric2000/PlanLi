@@ -22,6 +22,8 @@ export const useRecommendations = (sortBy = 'popularity') => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [requesting, setRequesting] = useState(true);
+  const [settledRequestIdentity, setSettledRequestIdentity] = useState('');
   const [error, setError] = useState(null);
   const [discoveryRequest, setDiscoveryRequest] = useState({});
   const [debouncedRequest, setDebouncedRequest] = useState({});
@@ -34,6 +36,8 @@ export const useRecommendations = (sortBy = 'popularity') => {
     setLoading(true);
     setRefreshing(false);
     setConfirming(false);
+    setRequesting(true);
+    setSettledRequestIdentity('');
   }, [principal]);
 
   useEffect(() => {
@@ -42,9 +46,13 @@ export const useRecommendations = (sortBy = 'popularity') => {
   }, [JSON.stringify(discoveryRequest)]);
 
   const requestKey = JSON.stringify(debouncedRequest);
+  const discoveryRequestKey = JSON.stringify(discoveryRequest);
+  const requestIdentity = JSON.stringify([principal, sortBy, requestKey]);
   const fetchRecommendations = useCallback(async ({ showLoader = true, refreshFeedback = false } = {}) => {
     const serial = requestSerial.current + 1;
     requestSerial.current = serial;
+    const requestedIdentity = requestIdentity;
+    setRequesting(true);
     if (showLoader) setLoading(true);
     setError(null);
     try {
@@ -74,11 +82,13 @@ export const useRecommendations = (sortBy = 'popularity') => {
       setError(error);
     } finally {
       if (requestSerial.current !== serial) return;
+      setSettledRequestIdentity(requestedIdentity);
+      setRequesting(false);
       setLoading(false);
       setRefreshing(false);
       setConfirming(false);
     }
-  }, [requestKey, sortBy, isBlocked, principal]);
+  }, [requestIdentity, requestKey, sortBy, isBlocked, principal]);
 
   useFocusEffect(useCallback(() => {
     fetchRecommendations({ showLoader: data.length === 0 });
@@ -94,7 +104,22 @@ export const useRecommendations = (sortBy = 'popularity') => {
     setLoading(false);
     setRefreshing(false);
     setConfirming(false);
+    setRequesting(false);
+    setSettledRequestIdentity(requestIdentity);
     setData((previous) => previous.filter((item) => item.id !== id));
   };
-  return { data, error, loading, refreshing, confirming, refresh, removeRecommendation, setDiscoveryRequest };
+  const requestSettled = !requesting
+    && discoveryRequestKey === requestKey
+    && settledRequestIdentity === requestIdentity;
+  return {
+    data,
+    error,
+    loading,
+    refreshing,
+    confirming,
+    requestSettled,
+    refresh,
+    removeRecommendation,
+    setDiscoveryRequest,
+  };
 };

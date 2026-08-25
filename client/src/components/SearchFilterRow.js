@@ -12,6 +12,11 @@ export default function SearchFilterRow({
   style,
   testID,
   filterTestID,
+  searchTargetRef,
+  searchTargetTestID,
+  onSearchTargetLayout,
+  filterTargetRef,
+  onFilterTargetLayout,
 }) {
   const active = activeFilterCount > 0;
   const resolvedAccessibilityLabel = active
@@ -20,9 +25,20 @@ export default function SearchFilterRow({
 
   return (
     <View style={[styles.row, style]} testID={testID}>
-      <View style={styles.searchSlot}>{children}</View>
+      <View
+        collapsable={false}
+        onLayout={onSearchTargetLayout}
+        ref={searchTargetRef}
+        style={styles.searchSlot}
+        testID={searchTargetTestID}
+      >
+        {children}
+      </View>
       <TouchableOpacity
+        collapsable={false}
         onPress={onFilterPress}
+        onLayout={onFilterTargetLayout}
+        ref={filterTargetRef}
         activeOpacity={0.65}
         hitSlop={4}
         style={styles.filterButton}

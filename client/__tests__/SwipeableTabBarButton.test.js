@@ -16,6 +16,7 @@ describe('SwipeableTabBarButton', () => {
           onLongPress={onLongPress}
           testID="swipeable-bottom-tab"
           role="tab"
+          tourTargetId="main-tab-home"
         >
           <Text>Tab</Text>
         </SwipeableTabBarButton>
@@ -32,5 +33,7 @@ describe('SwipeableTabBarButton', () => {
       (node) => typeof node.props.onMoveShouldSetResponderCapture === 'function',
     );
     expect(gestureSurface).toBeTruthy();
+    expect(gestureSurface.props.collapsable).toBe(false);
+    expect(gestureSurface.props.onLayout).toEqual(expect.any(Function));
   });
 });

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const NOYA_PRODUCT_TOUR_VERSION = 1;
-export const NOYA_PRODUCT_TOUR_STORAGE_KEY = '@planli/noya-product-tour-v1';
+export const NOYA_PRODUCT_TOUR_VERSION = 2;
+export const NOYA_PRODUCT_TOUR_STORAGE_KEY = '@planli/noya-product-tour-v2';
+export const NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY = '@planli/noya-product-tour-v1';
 
 export const NOYA_TOUR_IDS = Object.freeze({
   main: 'mainTour',
@@ -39,6 +40,16 @@ function normalizeProgress(value) {
   };
 }
 
+function parseStoredState(serialized) {
+  if (!serialized) return null;
+  try {
+    const value = JSON.parse(serialized);
+    return value && typeof value === 'object' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeNoyaProductTourState(value) {
   const source = value && typeof value === 'object' ? value : {};
   return {
@@ -49,14 +60,36 @@ export function normalizeNoyaProductTourState(value) {
   };
 }
 
+function migrateLegacyState(value) {
+  return normalizeNoyaProductTourState({
+    [NOYA_TOUR_IDS.main]: EMPTY_PROGRESS,
+    [NOYA_TOUR_IDS.recommendation]: value?.[NOYA_TOUR_IDS.recommendation],
+    [NOYA_TOUR_IDS.route]: value?.[NOYA_TOUR_IDS.route],
+  });
+}
+
 export async function loadNoyaProductTourState() {
   if (memoryState) return memoryState;
   try {
     const serialized = await AsyncStorage.getItem(NOYA_PRODUCT_TOUR_STORAGE_KEY);
-    memoryState = normalizeNoyaProductTourState(serialized ? JSON.parse(serialized) : null);
-  } catch {
-    memoryState = normalizeNoyaProductTourState(null);
-  }
+    const stored = parseStoredState(serialized);
+    if (stored) {
+      memoryState = normalizeNoyaProductTourState(stored);
+      return memoryState;
+    }
+
+    const legacySerialized = await AsyncStorage.getItem(NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY);
+    const legacy = parseStoredState(legacySerialized);
+    if (legacy) {
+      memoryState = migrateLegacyState(legacy);
+      try {
+        await AsyncStorage.setItem(NOYA_PRODUCT_TOUR_STORAGE_KEY, JSON.stringify(memoryState));
+      } catch {}
+      return memoryState;
+    }
+  } catch {}
+
+  memoryState = normalizeNoyaProductTourState(null);
   return memoryState;
 }
 

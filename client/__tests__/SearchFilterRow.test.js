@@ -19,11 +19,16 @@ jest.mock('@expo/vector-icons', () => {
 describe('SearchFilterRow', () => {
   it('keeps an unwrapped filter action on the RTL search row', () => {
     const onFilterPress = jest.fn();
+    const onFilterTargetLayout = jest.fn();
+    const onSearchTargetLayout = jest.fn();
     const screen = render(
       <SearchFilterRow
         onFilterPress={onFilterPress}
+        onFilterTargetLayout={onFilterTargetLayout}
+        onSearchTargetLayout={onSearchTargetLayout}
         accessibilityLabel="סינון המלצות"
         filterTestID="filter-action"
+        searchTargetTestID="search-target"
         testID="search-filter-row"
       >
         <TextInput testID="search-input" />
@@ -42,6 +47,12 @@ describe('SearchFilterRow', () => {
     expect(buttonStyle.elevation).toBeUndefined();
     expect(button.props.accessibilityState).toEqual({ selected: false });
     expect(screen.getByTestId('icon-options-outline')).toBeTruthy();
+    expect(screen.getByTestId('search-target').props.collapsable).toBe(false);
+
+    fireEvent(screen.getByTestId('search-target'), 'layout', { nativeEvent: { layout: {} } });
+    fireEvent(button, 'layout', { nativeEvent: { layout: {} } });
+    expect(onSearchTargetLayout).toHaveBeenCalledTimes(1);
+    expect(onFilterTargetLayout).toHaveBeenCalledTimes(1);
 
     fireEvent.press(button);
     expect(onFilterPress).toHaveBeenCalledTimes(1);

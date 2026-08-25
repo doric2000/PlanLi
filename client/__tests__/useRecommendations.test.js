@@ -61,6 +61,46 @@ describe('useRecommendations request behavior', () => {
     );
   });
 
+  it('reports the current sort request as unsettled until its response completes', async () => {
+    let resolvePopular;
+    let resolvePersonalized;
+    requestPersonalizedRecommendations
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: new Promise((resolve) => { resolvePopular = resolve; }),
+      }))
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: new Promise((resolve) => { resolvePersonalized = resolve; }),
+      }));
+    const { result, rerender } = renderHook(
+      ({ sortBy }) => useRecommendations(sortBy),
+      { initialProps: { sortBy: 'popularity' } },
+    );
+
+    expect(result.current.requestSettled).toBe(false);
+    let popularRequest;
+    act(() => { popularRequest = focusEffect(); });
+    expect(result.current.requestSettled).toBe(false);
+    await act(async () => {
+      resolvePopular({ items: [] });
+      await popularRequest;
+    });
+    expect(result.current.requestSettled).toBe(true);
+
+    rerender({ sortBy: 'personalized' });
+    expect(result.current.requestSettled).toBe(false);
+    let personalizedRequest;
+    act(() => { personalizedRequest = focusEffect(); });
+    await act(async () => {
+      resolvePersonalized({ items: [] });
+      await personalizedRequest;
+    });
+    expect(result.current.requestSettled).toBe(true);
+  });
+
   it('preserves rendered data when an explicit refresh fails', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {});

@@ -12,7 +12,6 @@ import { View } from 'react-native';
 import {
   CREATOR_GUIDE_STEPS,
   MAIN_TOUR_STEPS,
-  NOYA_MAIN_TARGETS,
 } from './NoyaTourDefinitions';
 import {
   NOYA_TOUR_IDS,
@@ -23,6 +22,9 @@ import {
 } from './services/NoyaProductTourStorage';
 
 const ROOT_SCOPE = 'root';
+export const MAIN_TOUR_LOADING_TIMEOUT_MS = 8000;
+export const MAIN_TOUR_TAB_REVEAL_DELAY_MS = 300;
+
 const noop = () => {};
 const NOOP_CONTEXT = Object.freeze({
   acknowledgeCreatorStep: noop,
@@ -32,14 +34,17 @@ const NOOP_CONTEXT = Object.freeze({
   backMainTour: noop,
   dismissActiveTour: noop,
   getTargetNode: () => null,
+  isMainTransitionPending: false,
   isSuspended: false,
   loaded: false,
   notifyTargetLayout: noop,
+  pendingMainDefinition: null,
   registerMainTabNavigation: () => noop,
   registerTarget: () => noop,
   requestCreatorStep: () => false,
   restartMainTour: () => Promise.resolve(),
   runActiveCreatorAction: noop,
+  setMainTabSceneReady: noop,
   setTourSuspended: noop,
   suspendedRevision: 0,
   targetRevision: 0,
@@ -53,6 +58,11 @@ const storageIdFor = (tourId) => {
   return tourId;
 };
 
+function definitionTargetIds(definition) {
+  if (!Array.isArray(definition?.targets)) return [];
+  return definition.targets.map((target) => target?.id).filter(Boolean);
+}
+
 export function NoyaTourProvider({
   children,
   currentRouteName = '',
@@ -62,11 +72,17 @@ export function NoyaTourProvider({
   const [tourState, setTourState] = useState(emptyNoyaProductTourState);
   const [loaded, setLoaded] = useState(false);
   const [activeStep, setActiveStep] = useState(null);
+  const [pendingStep, setPendingStep] = useState(null);
   const [targetRevision, setTargetRevision] = useState(0);
+  const [sceneRevision, setSceneRevision] = useState(0);
+  const [transitionRevision, setTransitionRevision] = useState(0);
   const [suspendedRevision, setSuspendedRevision] = useState(0);
   const targetRefs = useRef(new Map());
+  const mainTabSceneReadiness = useRef(new Map());
   const suspendedReasons = useRef(new Set());
   const tabNavigationRef = useRef(null);
+  const navigationScheduleRef = useRef(null);
+  const transitionIdRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -113,6 +129,13 @@ export function NoyaTourProvider({
     targetRefs.current.get(`${scope}:${targetId}`)?.current || null
   ), []);
 
+  const setMainTabSceneReady = useCallback((tabName, ready) => {
+    if (!tabName) return;
+    if (ready == null) mainTabSceneReadiness.current.delete(tabName);
+    else mainTabSceneReadiness.current.set(tabName, Boolean(ready));
+    setSceneRevision((value) => value + 1);
+  }, []);
+
   const registerMainTabNavigation = useCallback((navigation) => {
     if (navigation) tabNavigationRef.current = navigation;
     return () => {
@@ -132,36 +155,139 @@ export function NoyaTourProvider({
     setTimeout(navigate, 40);
   }, [navigationRef]);
 
+  const cancelScheduledNavigation = useCallback(() => {
+    const scheduled = navigationScheduleRef.current;
+    if (!scheduled) return;
+    if (scheduled.kind === 'frame' && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(scheduled.id);
+    } else {
+      clearTimeout(scheduled.id);
+    }
+    navigationScheduleRef.current = null;
+  }, []);
+
+  useEffect(() => cancelScheduledNavigation, [cancelScheduledNavigation]);
+
+  const scheduleMainTabNavigation = useCallback((tabName) => {
+    cancelScheduledNavigation();
+    const navigate = () => {
+      navigationScheduleRef.current = null;
+      navigateToMainTab(tabName);
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      navigationScheduleRef.current = { kind: 'frame', id: requestAnimationFrame(navigate) };
+    } else {
+      navigationScheduleRef.current = { kind: 'timeout', id: setTimeout(navigate, 0) };
+    }
+  }, [cancelScheduledNavigation, navigateToMainTab]);
+
+  const queueMainStep = useCallback((stepIndex) => {
+    const boundedIndex = Math.max(0, Math.min(stepIndex, MAIN_TOUR_STEPS.length - 1));
+    const definition = MAIN_TOUR_STEPS[boundedIndex];
+    const requestedAt = Date.now();
+    const requiresNavigation = Boolean(
+      definition?.tabName && currentRouteName !== definition.tabName,
+    );
+    const next = {
+      tourId: NOYA_TOUR_IDS.main,
+      stepIndex: boundedIndex,
+      scope: ROOT_SCOPE,
+      transitionId: transitionIdRef.current + 1,
+      requestedAt,
+      routeReadyAt: requiresNavigation ? 0 : requestedAt,
+      requiresNavigation,
+    };
+    transitionIdRef.current = next.transitionId;
+    setActiveStep(null);
+    setPendingStep(next);
+    if (requiresNavigation) scheduleMainTabNavigation(definition.tabName);
+    return updateProgress(NOYA_TOUR_IDS.main, {
+      status: NOYA_TOUR_STATUSES.active,
+      stepIndex: boundedIndex,
+    });
+  }, [currentRouteName, scheduleMainTabNavigation, updateProgress]);
+
   const mainProgress = tourState[NOYA_TOUR_IDS.main];
-  const homeTargetReady = targetRefs.current.has(`${ROOT_SCOPE}:${NOYA_MAIN_TARGETS.Home}`);
 
   useEffect(() => {
-    if (!loaded || !navigationReady || currentRouteName !== 'Home' || !homeTargetReady || activeStep) return;
+    if (
+      !loaded
+      || !navigationReady
+      || currentRouteName !== 'Home'
+      || activeStep
+      || pendingStep
+    ) return;
     if (mainProgress.status === NOYA_TOUR_STATUSES.unseen) {
-      const next = { tourId: NOYA_TOUR_IDS.main, stepIndex: 0, scope: ROOT_SCOPE };
-      setActiveStep(next);
-      updateProgress(NOYA_TOUR_IDS.main, {
-        status: NOYA_TOUR_STATUSES.active,
-        stepIndex: 0,
-      }).catch(() => {});
+      queueMainStep(0).catch(() => {});
       return;
     }
     if (mainProgress.status === NOYA_TOUR_STATUSES.active) {
-      const stepIndex = Math.min(mainProgress.stepIndex, MAIN_TOUR_STEPS.length - 1);
-      const step = MAIN_TOUR_STEPS[stepIndex];
-      if (step?.tabName) navigateToMainTab(step.tabName);
-      setActiveStep({ tourId: NOYA_TOUR_IDS.main, stepIndex, scope: ROOT_SCOPE });
+      queueMainStep(Math.min(mainProgress.stepIndex, MAIN_TOUR_STEPS.length - 1)).catch(() => {});
     }
   }, [
     activeStep,
     currentRouteName,
-    homeTargetReady,
     loaded,
     mainProgress.status,
     mainProgress.stepIndex,
-    navigateToMainTab,
     navigationReady,
-    updateProgress,
+    pendingStep,
+    queueMainStep,
+  ]);
+
+  useEffect(() => {
+    if (!pendingStep || pendingStep.tourId !== NOYA_TOUR_IDS.main) return undefined;
+    const definition = MAIN_TOUR_STEPS[pendingStep.stepIndex];
+    if (!definition) return undefined;
+
+    if (definition.tabName && currentRouteName !== definition.tabName) return undefined;
+    if (!pendingStep.routeReadyAt) {
+      setPendingStep((current) => (
+        current?.transitionId === pendingStep.transitionId
+          ? { ...current, routeReadyAt: Date.now() }
+          : current
+      ));
+      return undefined;
+    }
+
+    const now = Date.now();
+    if (pendingStep.requiresNavigation) {
+      const revealDelay = pendingStep.routeReadyAt + MAIN_TOUR_TAB_REVEAL_DELAY_MS - now;
+      if (revealDelay > 0) {
+        const timer = setTimeout(() => setTransitionRevision((value) => value + 1), revealDelay);
+        return () => clearTimeout(timer);
+      }
+    }
+
+    const sceneReady = !definition.tabName
+      || mainTabSceneReadiness.current.get(definition.tabName) === true;
+    const loadingElapsed = now - pendingStep.routeReadyAt;
+    if (!sceneReady && loadingElapsed < MAIN_TOUR_LOADING_TIMEOUT_MS) {
+      const timer = setTimeout(
+        () => setTransitionRevision((value) => value + 1),
+        MAIN_TOUR_LOADING_TIMEOUT_MS - loadingElapsed,
+      );
+      return () => clearTimeout(timer);
+    }
+
+    const targetsRegistered = definitionTargetIds(definition).every((targetId) => (
+      Boolean(targetRefs.current.get(`${ROOT_SCOPE}:${targetId}`)?.current)
+    ));
+    if (!targetsRegistered) return undefined;
+
+    setActiveStep({
+      tourId: NOYA_TOUR_IDS.main,
+      stepIndex: pendingStep.stepIndex,
+      scope: ROOT_SCOPE,
+    });
+    setPendingStep(null);
+    return undefined;
+  }, [
+    currentRouteName,
+    pendingStep,
+    sceneRevision,
+    targetRevision,
+    transitionRevision,
   ]);
 
   const advanceMainTour = useCallback(() => {
@@ -169,6 +295,7 @@ export function NoyaTourProvider({
     const currentIndex = activeStep.stepIndex;
     if (currentIndex >= MAIN_TOUR_STEPS.length - 1) {
       setActiveStep(null);
+      setPendingStep(null);
       updateProgress(NOYA_TOUR_IDS.main, {
         status: NOYA_TOUR_STATUSES.completed,
         stepIndex: MAIN_TOUR_STEPS.length - 1,
@@ -176,32 +303,19 @@ export function NoyaTourProvider({
       navigateToMainTab('Home');
       return;
     }
-    const stepIndex = currentIndex + 1;
-    const step = MAIN_TOUR_STEPS[stepIndex];
-    if (step?.tabName) navigateToMainTab(step.tabName);
-    setActiveStep({ tourId: NOYA_TOUR_IDS.main, stepIndex, scope: ROOT_SCOPE });
-    updateProgress(NOYA_TOUR_IDS.main, {
-      status: NOYA_TOUR_STATUSES.active,
-      stepIndex,
-    }).catch(() => {});
-  }, [activeStep, navigateToMainTab, updateProgress]);
+    queueMainStep(currentIndex + 1).catch(() => {});
+  }, [activeStep, navigateToMainTab, queueMainStep, updateProgress]);
 
   const backMainTour = useCallback(() => {
     if (activeStep?.tourId !== NOYA_TOUR_IDS.main || activeStep.stepIndex <= 0) return;
-    const stepIndex = activeStep.stepIndex - 1;
-    const step = MAIN_TOUR_STEPS[stepIndex];
-    if (step?.tabName) navigateToMainTab(step.tabName);
-    setActiveStep({ tourId: NOYA_TOUR_IDS.main, stepIndex, scope: ROOT_SCOPE });
-    updateProgress(NOYA_TOUR_IDS.main, {
-      status: NOYA_TOUR_STATUSES.active,
-      stepIndex,
-    }).catch(() => {});
-  }, [activeStep, navigateToMainTab, updateProgress]);
+    queueMainStep(activeStep.stepIndex - 1).catch(() => {});
+  }, [activeStep, queueMainStep]);
 
   const dismissActiveTour = useCallback(() => {
     if (!activeStep?.tourId) return;
     const tourId = activeStep.tourId;
     setActiveStep(null);
+    setPendingStep(null);
     updateProgress(tourId, {
       status: NOYA_TOUR_STATUSES.dismissed,
       stepIndex: activeStep.stepIndex,
@@ -210,13 +324,10 @@ export function NoyaTourProvider({
   }, [activeStep, navigateToMainTab, updateProgress]);
 
   const restartMainTour = useCallback(() => {
-    navigateToMainTab('Home');
-    setActiveStep({ tourId: NOYA_TOUR_IDS.main, stepIndex: 0, scope: ROOT_SCOPE });
-    return updateProgress(NOYA_TOUR_IDS.main, {
-      status: NOYA_TOUR_STATUSES.active,
-      stepIndex: 0,
-    });
-  }, [navigateToMainTab, updateProgress]);
+    setActiveStep(null);
+    setPendingStep(null);
+    return queueMainStep(0);
+  }, [queueMainStep]);
 
   const requestCreatorStep = useCallback((requestedTourId, requestedStepIndex, options = {}) => {
     const tourId = storageIdFor(requestedTourId);
@@ -226,7 +337,7 @@ export function NoyaTourProvider({
     const progress = tourState[tourId];
     if ([NOYA_TOUR_STATUSES.completed, NOYA_TOUR_STATUSES.dismissed].includes(progress.status)) return false;
     if (progress.status === NOYA_TOUR_STATUSES.active && progress.stepIndex > stepIndex) return false;
-    if (activeStep?.tourId === NOYA_TOUR_IDS.main) return false;
+    if (activeStep?.tourId === NOYA_TOUR_IDS.main || pendingStep?.tourId === NOYA_TOUR_IDS.main) return false;
     if (activeStep?.tourId === tourId && activeStep.stepIndex === stepIndex) return true;
     if (activeStep && activeStep.tourId !== tourId) return false;
     const definition = definitions[stepIndex];
@@ -245,7 +356,7 @@ export function NoyaTourProvider({
       stepIndex,
     }).catch(() => {});
     return true;
-  }, [activeStep, loaded, tourState, updateProgress]);
+  }, [activeStep, loaded, pendingStep, tourState, updateProgress]);
 
   const runActiveCreatorAction = useCallback(() => {
     if (typeof activeStep?.primaryAction !== 'function') return;
@@ -292,6 +403,12 @@ export function NoyaTourProvider({
     return CREATOR_GUIDE_STEPS[activeStep.tourId]?.[activeStep.stepIndex] || null;
   }, [activeStep]);
 
+  const pendingMainDefinition = useMemo(() => (
+    pendingStep?.tourId === NOYA_TOUR_IDS.main
+      ? MAIN_TOUR_STEPS[pendingStep.stepIndex] || null
+      : null
+  ), [pendingStep]);
+
   const value = useMemo(() => ({
     acknowledgeCreatorStep,
     activeDefinition,
@@ -300,14 +417,17 @@ export function NoyaTourProvider({
     backMainTour,
     dismissActiveTour,
     getTargetNode,
+    isMainTransitionPending: Boolean(pendingStep?.tourId === NOYA_TOUR_IDS.main),
     isSuspended: suspendedReasons.current.size > 0,
     loaded,
     notifyTargetLayout,
+    pendingMainDefinition,
     registerMainTabNavigation,
     registerTarget,
     requestCreatorStep,
     restartMainTour,
     runActiveCreatorAction,
+    setMainTabSceneReady,
     setTourSuspended,
     suspendedRevision,
     targetRevision,
@@ -322,11 +442,14 @@ export function NoyaTourProvider({
     getTargetNode,
     loaded,
     notifyTargetLayout,
+    pendingMainDefinition,
+    pendingStep,
     registerMainTabNavigation,
     registerTarget,
     requestCreatorStep,
     restartMainTour,
     runActiveCreatorAction,
+    setMainTabSceneReady,
     setTourSuspended,
     suspendedRevision,
     targetRevision,
@@ -342,9 +465,17 @@ export function useNoyaTour() {
 
 export function useNoyaMainTabRegistration(navigation) {
   const { registerMainTabNavigation } = useNoyaTour();
+  useEffect(() => registerMainTabNavigation(navigation), [navigation, registerMainTabNavigation]);
+}
+
+export function useNoyaMainTabSceneReady(tabName, ready) {
+  const { setMainTabSceneReady } = useNoyaTour();
   useEffect(() => {
-    registerMainTabNavigation(navigation);
-  }, [navigation, registerMainTabNavigation]);
+    setMainTabSceneReady(tabName, Boolean(ready));
+  }, [ready, setMainTabSceneReady, tabName]);
+  useEffect(() => () => {
+    setMainTabSceneReady(tabName, null);
+  }, [setMainTabSceneReady, tabName]);
 }
 
 export function useNoyaTourTargetRegistration(targetId, scope = ROOT_SCOPE) {

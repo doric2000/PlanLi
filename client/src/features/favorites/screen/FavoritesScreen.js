@@ -19,7 +19,11 @@ import FavoriteCitiesList from '../components/FavoriteCitiesList';
 import FavoriteRecommendationsList from '../components/FavoriteRecommendationsList';
 import FavoriteRoadTripsList from '../components/FavoriteRoadTripsList';
 import { favoritesStyles as styles } from '../components/favoritesStyles';
-import { useNoyaMainTabRegistration, useNoyaTourTargetRegistration } from '../../noya/NoyaTourContext';
+import {
+  useNoyaMainTabRegistration,
+  useNoyaMainTabSceneReady,
+  useNoyaTourTargetRegistration,
+} from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 
 const TABS = [
@@ -34,7 +38,7 @@ const useNativeDriver = Platform.OS !== 'web';
 
 export default function FavoritesScreen({ navigation }) {
   useNoyaMainTabRegistration(navigation);
-  const favoritesTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.Favorites);
+  const favoritesCategoriesTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.favoritesCategories);
   const [activeTab, setActiveTab] = useState('destinations');
   const { width } = useWindowDimensions();
   const pageWidth = Math.max(width, 1);
@@ -49,6 +53,7 @@ export default function FavoritesScreen({ navigation }) {
   const citiesFull = useFavoriteCityIds({ enabled: visitedTabs.has('destinations') });
   const recsFull = useFavoriteRecommendationsFull({ enabled: visitedTabs.has('recommendations') });
   const roadFull = useFavoriteRoadTripsFull({ enabled: visitedTabs.has('roadtrips') });
+  useNoyaMainTabSceneReady('Favorites', !citiesFull.loading && !refreshing && !confirming);
 
   useEffect(() => {
     setVisitedTabs((current) => {
@@ -177,13 +182,13 @@ export default function FavoritesScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <PageHeader
-        rootRef={favoritesTourTarget.ref}
-        onLayout={favoritesTourTarget.onLayout}
         variant="hero"
         title="מועדפים"
         testID="favorites-tab-header"
       >
           <SegmentedTabs
+            rootRef={favoritesCategoriesTourTarget.ref}
+            onLayout={favoritesCategoriesTourTarget.onLayout}
             tabs={TABS}
             value={activeTab}
             onChange={changeTab}
