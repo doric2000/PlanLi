@@ -513,9 +513,9 @@ export default function TravelMediaComposer({
           extraData={working}
           keyExtractor={travelMediaIdentity}
           numColumns={3}
-          initialNumToRender={18}
-          maxToRenderPerBatch={18}
-          windowSize={7}
+          initialNumToRender={3}
+          maxToRenderPerBatch={3}
+          windowSize={3}
           removeClippedSubviews={Platform.OS !== 'web'}
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.gridRow}

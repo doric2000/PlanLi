@@ -36,8 +36,10 @@ export function imagePickerAssetDescriptor(asset) {
   };
 }
 
-export default function useTravelMediaSource({ maxItems = 5 } = {}) {
-  const isInlineLibrary = Platform.OS === 'ios';
+export default function useTravelMediaSource({ maxItems = 5, inlineLibraryEnabled = false } = {}) {
+  // Native system pickers own thumbnail decoding on both mobile platforms. The
+  // inline iOS library remains available only for controlled follow-up testing.
+  const isInlineLibrary = Platform.OS === 'ios' && inlineLibraryEnabled;
   const [permission, setPermission] = useState(null);
   const [albums, setAlbums] = useState([]);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
