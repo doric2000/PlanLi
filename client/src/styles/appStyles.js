@@ -2708,6 +2708,33 @@ export const exactLocationPickerStyles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
+	mapFailure: {
+		backgroundColor: colors.surfaceSubtle,
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingHorizontal: 24,
+		gap: 12,
+	},
+	mapFailureText: {
+		fontSize: 13,
+		color: colors.textSecondary,
+		textAlign: 'center',
+		writingDirection: 'rtl',
+	},
+	mapFailureRetry: {
+		minHeight: 44,
+		borderRadius: 10,
+		borderWidth: 1,
+		borderColor: colors.primary,
+		alignItems: 'center',
+		justifyContent: 'center',
+		paddingHorizontal: 18,
+	},
+	mapFailureRetryText: {
+		fontSize: 13,
+		fontFamily: fontFamilies.semiBold,
+		color: colors.primary,
+	},
 	previewCopy: {
 		paddingHorizontal: 14,
 		paddingTop: 12,

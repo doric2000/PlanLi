@@ -91,6 +91,41 @@ describe('CommunityInlineMap', () => {
     };
   });
 
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it('waits for native tiles before showing an empty recommendation result', async () => {
+    const screen = render(<MapUnderTest recommendations={[]} />);
+
+    expect(screen.getByTestId('community-map-loading')).toBeTruthy();
+    expect(screen.queryByText('אין המלצות באזור המוצג')).toBeNull();
+
+    act(() => screen.getByTestId('community-inline-map').props.onMapLoaded());
+    await act(async () => {});
+    expect(screen.queryByTestId('community-map-loading')).toBeNull();
+    expect(screen.getByText('אין המלצות באזור המוצג')).toBeTruthy();
+  });
+
+  it('times out a blank basemap and remounts it for an explicit retry', async () => {
+    jest.useFakeTimers();
+    const screen = render(<MapUnderTest recommendations={[]} />);
+
+    act(() => jest.advanceTimersByTime(10000));
+    expect(screen.getByTestId('community-map-load-error')).toBeTruthy();
+    expect(screen.queryByText('אין המלצות באזור המוצג')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('community-map-load-retry'));
+    expect(screen.queryByTestId('community-map-load-error')).toBeNull();
+    expect(screen.getByTestId('community-map-loading')).toBeTruthy();
+
+    act(() => screen.getByTestId('community-inline-map').props.onMapLoaded());
+    await act(async () => {});
+    expect(screen.queryByTestId('community-map-loading')).toBeNull();
+    expect(screen.getByText('אין המלצות באזור המוצג')).toBeTruthy();
+  });
+
   it('opens directly on the first precise location at approximately zoom 15', async () => {
     const onSearchViewport = jest.fn();
     const screen = render(

@@ -99,7 +99,7 @@ export default function ExactLocationConfirmation({
         </TouchableOpacity>
       </View>
       {previewPlace ? (
-        <ExactLocationMapPreview place={previewPlace} title={copy.mapPreview} />
+        <ExactLocationMapPreview place={previewPlace} title={copy.mapPreview} locale={locale} />
       ) : (
         <View style={[styles.previewMap, styles.mapSkeleton]} testID="exact-location-map-skeleton">
           <ActivityIndicator />

@@ -7,8 +7,16 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 PlanLi has an external TestFlight beta; it has not been publicly released to the
 App Store, Google Play, or a public web domain. Native development is performed
 with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. TestFlight build `1.1.0 (13)` remains installed and in use on
-the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
+not supported. A signed Android production App Bundle `1.1.0 (5)` completed at
+`2026-08-24T23:49:14.951Z` from commit `5c06d10`; it was uploaded to Google Play
+internal testing and installed on the owner's Android tablet. The first physical
+Android map smoke test on `2026-08-25` found that exact-location place resolution
+succeeded but its preview stayed loading, while the Community map mounted with a
+Google watermark but no map tiles. Google Maps Android key authorization for the
+Play App Signing certificate was corrected at `2026-08-25T14:01:48+03:00`; the
+corrective client update and physical tablet re-test remain pending.
+TestFlight build `1.1.0 (13)` remains installed and
+in use on the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
 commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
 `3c2adff2-a0f7-420d-b1cf-dd5f8725d8cf` then finished successfully and uploaded
 the build to App Store Connect, as verified at `2026-08-24T20:21:18Z`. Apple
@@ -239,6 +247,60 @@ The account-deletion callable exchanges and revokes a fresh Apple authorization
 code before deleting the user's data. Deploy the updated Functions before
 distributing a client build that exposes Apple sign-in. Build and submission
 remain explicit release operations; merging source code does not perform them.
+
+## Google Play internal beta release
+
+Current Android release record:
+
+- App version/build: `1.1.0 (5)`, package `com.planli.planlitravels`, runtime
+  `1.1.0`.
+- EAS build: `958e7d06-8173-4f82-aecf-d9e8f6603d1a`, completed at
+  `2026-08-24T23:49:14.951Z` from commit
+  `5c06d1081422923fb70ab7413d44bac40f43f8bc` with the `production` profile,
+  store distribution, and production update channel. The signed `.aab` is
+  available from EAS at
+  `https://expo.dev/artifacts/eas/JEjn3jZ6WiVKJoM-6kOdntzztoaedVDJ6wBn6Ky3RgQ.aab`.
+- Local artifact: `C:\Users\doric\Downloads\PlanLi-1.1.0-5-google-play.aab`,
+  89,016,605 bytes, SHA-256
+  `69B09B498AF749B5CA2A7C59EE224D5B1667643C6832F32466F2CA2034966BA0`.
+  ZIP inventory verification found the base Android manifest and JavaScript
+  bundle.
+- Validation: `npm ci`, Expo Doctor (18/18), and an Android Expo export passed.
+  The remote Gradle `bundleRelease` build completed, signing validation passed,
+  and EAS copied 50 application assets. The locked client dependency audit still
+  reports eight high-severity findings; dependencies were not upgraded during
+  this release.
+- Build recovery: production build
+  `bc583e95-85d7-4e8b-a76e-91940c5f2d86` (`1.1.0 (3)`) failed before Gradle
+  because EAS CLI 18 preserved Windows read-only directory modes in the upload
+  archive. EAS CLI was updated locally to `22.3.0`, whose portable archive
+  handling resolved extraction. Version code `4` was reserved while diagnosing
+  the archive and no corresponding EAS build was queued.
+- EAS archived 111 MB from a workspace that also held unrelated pre-existing
+  untracked campaign and rendering-script files; exact archive inclusion was not
+  independently audited. The generated application bundle contained the
+  expected runtime asset set rather than the campaign source directory.
+- Google Play state: the App Bundle was uploaded to internal testing and installed
+  on the owner's Android tablet; the upload timestamp and reviewer-processing
+  details have not been independently verified. On `2026-08-25`, exact-location
+  place resolution returned the selected place but its embedded preview remained
+  in a loading state. The Community map mounted and showed the Google watermark
+  plus the empty-area message, but no basemap tiles. Source work to bound native
+  map loading and expose retry states is on `fix/android-location-map-loading`.
+  Google Cloud project `planli-f0b12` was verified to have a paid billing account
+  and Maps SDK for Android enabled. At `2026-08-25T14:01:48+03:00`, the existing
+  `PlanLi Android Maps SDK` key remained restricted to Maps SDK for Android and
+  gained the Google Play App Signing SHA-1 for `com.planli.planlitravels`, while
+  retaining the EAS/upload signer restriction. Google Cloud confirmed the key was
+  restricted; propagation can take up to five minutes. A compatible Android
+  preview build, EAS Update, and post-fix tablet smoke test remain pending.
+- Android map-loading source validation on `2026-08-25`: seven focused client
+  suites passed 57 tests. Changed-scope validation passed its 17 selected tests,
+  admin Web export/verification, iOS release-config check, and iOS export. Expo
+  prebuild config confirmed that the Android package receives its native Maps
+  key, and a separate Android Expo export completed successfully. The Google
+  Cloud credential correction above does not require a replacement AAB. No EAS
+  build/update, Play upload, or physical post-fix verification was performed.
 
 ## Open-registration TestFlight beta release
 

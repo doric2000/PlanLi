@@ -1,3 +1,5 @@
+import { StyleSheet } from "react-native";
+
 import { fontFamilies } from "./typography";
 import { colors } from "./colors";
 import { shadows } from "./shadows";
@@ -170,6 +172,42 @@ export const community = {
 		...typography.h4,
 		color: colors.textPrimary,
 		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	mapLoadOverlay: {
+		...StyleSheet.absoluteFillObject,
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: "rgba(247,248,252,0.96)",
+		paddingHorizontal: spacing.lg,
+		gap: spacing.sm,
+		zIndex: 50,
+	},
+	mapLoadTitle: {
+		...typography.h4,
+		color: colors.textPrimary,
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	mapLoadText: {
+		...typography.caption,
+		color: colors.textSecondary,
+		textAlign: "center",
+		writingDirection: "rtl",
+	},
+	mapLoadRetry: {
+		minHeight: 44,
+		borderRadius: 12,
+		borderWidth: 1,
+		borderColor: colors.primary,
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: 18,
+	},
+	mapLoadRetryText: {
+		color: colors.primary,
+		fontSize: 13,
+		fontFamily: fontFamilies.semiBold,
 		writingDirection: "rtl",
 	},
 	mapControls: {

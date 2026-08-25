@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import ExactLocationConfirmation from '../src/components/ExactLocationConfirmation';
 
 jest.mock('../src/components/ExactLocationMapPreview', () => function MapPreview() {
@@ -8,6 +8,7 @@ jest.mock('../src/components/ExactLocationMapPreview', () => function MapPreview
 });
 
 test('exact-location confirmation exposes prepared English copy when requested', () => {
+  const onConfirm = jest.fn();
   const screen = render(
     <ExactLocationConfirmation
       locale="en"
@@ -21,7 +22,7 @@ test('exact-location confirmation exposes prepared English copy when requested',
           coordinates: { lat: 40.4146, lng: 19.4812 },
         },
       }}
-      onConfirm={jest.fn()}
+      onConfirm={onConfirm}
       onChooseAnother={jest.fn()}
     />
   );
@@ -29,6 +30,9 @@ test('exact-location confirmation exposes prepared English copy when requested',
   expect(screen.getByTestId('mock-location-map')).toBeTruthy();
   expect(screen.getByText('Confirm location')).toBeTruthy();
   expect(screen.getByText('Choose another result')).toBeTruthy();
+  expect(screen.getByTestId('exact-location-confirm').props.accessibilityState.disabled).toBe(false);
+  fireEvent.press(screen.getByTestId('exact-location-confirm'));
+  expect(onConfirm).toHaveBeenCalledTimes(1);
 });
 
 test('exact-location confirmation renders copy and controls before place resolution or map readiness', () => {
