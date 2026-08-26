@@ -71,12 +71,23 @@ function cleanCity(value) {
 function cleanDestination(value) {
   if (!value) return null;
   const coordinate = cleanCoordinate(value.coordinates || value.geometry?.location);
+  const providerPlaceId = cleanString(
+    value.providerPlaceId || '', 'destination.providerPlaceId', { max: 300 }
+  );
+  const resolvedPlaceToken = providerPlaceId
+    ? cleanString(value.resolvedPlaceToken || '', 'destination.resolvedPlaceToken', { max: 500 })
+    : '';
   return {
     countryId: cleanId(value.countryId, 'destination.countryId', false),
     cityId: cleanId(value.cityId, 'destination.cityId', false),
     countryName: cleanString(value.countryName || '', 'destination.countryName', { max: 200 }),
     name: cleanString(value.name || value.cityName || '', 'destination.name', { max: 200 }),
     label: cleanString(value.label || '', 'destination.label', { max: 300 }),
+    ...(providerPlaceId ? {
+      provider: 'google',
+      providerPlaceId,
+      ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
+    } : {}),
     ...(coordinate ? { coordinates: coordinate } : {}),
   };
 }
@@ -314,6 +325,30 @@ async function discardRecommendationDraft({ admin, auth, data }) {
   return { discarded: true };
 }
 
+function destinationRefForDraft(draft, { includeProvider = false } = {}) {
+  const destinationRef = {
+    countryId: draft.selectedCountry?.id,
+    cityId: draft.selectedCity?.id,
+  };
+  const generalDestination = draft.generalDestination;
+  if (!includeProvider || !generalDestination?.providerPlaceId) return destinationRef;
+  assert(
+    generalDestination.countryId === destinationRef.countryId &&
+      generalDestination.cityId === destinationRef.cityId,
+    'invalid-argument',
+    'RECOMMENDATION_DRAFT_INVALID',
+    'The provider destination does not match the selected destination.'
+  );
+  return {
+    ...destinationRef,
+    provider: 'google',
+    providerPlaceId: generalDestination.providerPlaceId,
+    ...(generalDestination.resolvedPlaceToken
+      ? { resolvedPlaceToken: generalDestination.resolvedPlaceToken }
+      : {}),
+  };
+}
+
 function publishData(pointer, draft) {
   const details = { ...draft.details, ...(draft.eventSchedule ? { eventSchedule: draft.eventSchedule } : {}) };
   const data = {
@@ -336,13 +371,13 @@ function publishData(pointer, draft) {
   };
   if (draft.locationMode === 'exact') {
     if (pointer.sourceRecommendationId && !draft.selectedPlace?.resolvedPlaceToken) {
-      data.destinationRef = { countryId: draft.selectedCountry?.id, cityId: draft.selectedCity?.id };
+      data.destinationRef = destinationRefForDraft(draft);
     } else {
       if (draft.selectedPlace?.resolvedPlaceToken) data.resolvedPlaceToken = draft.selectedPlace.resolvedPlaceToken;
       if (draft.selectedPlace?.placeId) data.placeId = draft.selectedPlace.placeId;
     }
   } else {
-    data.destinationRef = { countryId: draft.selectedCountry?.id, cityId: draft.selectedCity?.id };
+    data.destinationRef = destinationRefForDraft(draft, { includeProvider: true });
     if (draft.locationMode === 'pin') data.manualLocation = { coordinates: draft.manualCoordinate };
   }
   return data;

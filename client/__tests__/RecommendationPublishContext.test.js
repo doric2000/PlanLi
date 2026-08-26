@@ -419,6 +419,133 @@ describe('RecommendationPublishProvider', () => {
     screen.unmount();
   });
 
+  it('re-saves provider metadata before retrying an already-failed destination draft', async () => {
+    const canonicalMedia = {
+      assetId: '123e4567-e89b-42d3-a456-426614174000',
+      large: { url: 'https://cdn/large.webp' },
+      feed: { url: 'https://cdn/feed.webp' },
+      thumb: { url: 'https://cdn/thumb.webp' },
+    };
+    mockLoadJobs.mockResolvedValue([{
+      version: 3,
+      id: 'provider-destination-job',
+      publishRequestId: '123e4567-e89b-42d3-a456-426614174020',
+      ownerUid: 'owner-1',
+      contentType: 'recommendation',
+      createdAt: 1,
+      updatedAt: 1,
+      status: 'failed',
+      stage: 'failed',
+      attempts: 1,
+      retryAt: 0,
+      progress: 0.9,
+      payload: {
+        draftId: 'recommendation-draft-1',
+        expectedVersion: 8,
+        recommendationDraftMediaSaved: true,
+        recommendationDraftIdSynced: true,
+      },
+      draft: {
+        locationMode: 'destination',
+        generalDestination: {
+          countryId: 'GR',
+          cityId: 'dst_mykonos',
+          providerPlaceId: 'google-mykonos',
+          resolvedPlaceToken: 'resolved-token-1',
+        },
+        media: [canonicalMedia],
+        localMediaCount: 0,
+      },
+      media: [{ id: 'media-1', type: 'remote', asset: canonicalMedia, progress: 1 }],
+      timings: { queuedAt: 1 },
+      error: {
+        code: 'functions/not-found',
+        details: { reason: 'place_not_found', retryable: false },
+      },
+    }]);
+    mockSaveRecommendationDraft.mockResolvedValue({
+      draftId: 'recommendation-draft-1', version: 9,
+    });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api.activeJob?.id).toBe('provider-destination-job'));
+    await act(async () => { await api.retry('provider-destination-job'); });
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'recommendation-draft-1',
+      expectedVersion: 8,
+      saveRequestId: expect.any(String),
+      draft: expect.objectContaining({
+        generalDestination: expect.objectContaining({
+          providerPlaceId: 'google-mykonos',
+          resolvedPlaceToken: 'resolved-token-1',
+        }),
+      }),
+    })));
+    await waitFor(() => expect(mockPublishRecommendationDraft)
+      .toHaveBeenCalledWith('recommendation-draft-1', 9));
+    expect(api.jobs[0].payload.recommendationDraftProviderDestinationSaved).toBe(true);
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    screen.unmount();
+  });
+
+  it('reuses the provider destination save request after an interrupted retry', async () => {
+    const canonicalMedia = {
+      assetId: '123e4567-e89b-42d3-a456-426614174000',
+      large: { url: 'https://cdn/large.webp' },
+      feed: { url: 'https://cdn/feed.webp' },
+      thumb: { url: 'https://cdn/thumb.webp' },
+    };
+    mockLoadJobs.mockResolvedValue([{
+      version: 3,
+      id: 'provider-replay-job',
+      publishRequestId: '123e4567-e89b-42d3-a456-426614174021',
+      ownerUid: 'owner-1',
+      contentType: 'recommendation',
+      createdAt: 1,
+      updatedAt: 1,
+      status: 'failed',
+      stage: 'failed',
+      attempts: 1,
+      retryAt: 0,
+      progress: 0.9,
+      payload: {
+        draftId: 'recommendation-draft-1',
+        expectedVersion: 8,
+        recommendationDraftMediaSaved: true,
+        recommendationDraftIdSynced: true,
+      },
+      draft: {
+        locationMode: 'destination',
+        generalDestination: {
+          countryId: 'IT', cityId: 'dst_venice', providerPlaceId: 'google-venice',
+        },
+        media: [canonicalMedia],
+        localMediaCount: 0,
+      },
+      media: [{ id: 'media-1', type: 'remote', asset: canonicalMedia, progress: 1 }],
+      timings: { queuedAt: 1 },
+      error: { code: 'functions/not-found', details: { reason: 'place_not_found', retryable: false } },
+    }]);
+    mockSaveRecommendationDraft
+      .mockRejectedValueOnce({ code: 'functions/internal', message: 'lost response', details: { retryable: false } })
+      .mockResolvedValueOnce({ draftId: 'recommendation-draft-1', version: 9, idempotentReplay: true });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api.activeJob?.id).toBe('provider-replay-job'));
+    await act(async () => { await api.retry('provider-replay-job'); });
+    await waitFor(() => expect(api.activeJob?.status).toBe('failed'));
+    const firstRequestId = mockSaveRecommendationDraft.mock.calls[0][0].saveRequestId;
+    await act(async () => { await api.retry('provider-replay-job'); });
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(2));
+    expect(mockSaveRecommendationDraft.mock.calls[1][0].saveRequestId).toBe(firstRequestId);
+    await waitFor(() => expect(mockPublishRecommendationDraft)
+      .toHaveBeenCalledWith('recommendation-draft-1', 9));
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    screen.unmount();
+  });
+
   it('hides a failed banner while its job is being reviewed and restores it on exit', async () => {
     mockPublishRecommendationDraft.mockRejectedValue({
       code: 'functions/invalid-argument', message: 'Could not publish.', details: { retryable: false },
@@ -594,7 +721,7 @@ describe('RecommendationPublishProvider', () => {
           recommendation: { title: 'Retry', description: 'Retry save', media: [] },
         },
         media: [{ uri: 'file:///source.jpg' }],
-        draft: { selectedPlace: { placeId: 'place-1' } },
+        draft: { locationMode: 'exact', selectedPlace: { placeId: 'place-1' } },
       });
     });
     await waitFor(() => expect(api.activeJob.status).toBe('failed'));
@@ -608,7 +735,11 @@ describe('RecommendationPublishProvider', () => {
     }));
     expect(mockCaptureDiagnosticException).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'ContentPublishError' }),
-      { operation: 'publish_recommendation_saving', code: 'functions/invalid-argument' }
+      {
+        operation: 'publish_recommendation_saving',
+        code: 'functions/invalid-argument',
+        contentMode: 'exact',
+      }
     );
     const jobId = api.activeJob.id;
     await act(async () => { await api.retry(jobId); });

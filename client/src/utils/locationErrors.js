@@ -11,6 +11,7 @@ export function locationErrorKind(error) {
   const reason = String(error?.details?.reason || '').toLowerCase();
   const message = String(error?.message || '').toLowerCase();
   if (reason === 'selection_expired' || message.includes('expired')) return 'expired';
+  if (reason === 'destination_not_found') return 'destinationNotFound';
   if (reason === 'place_not_found') return 'placeNotFound';
   if (reason === 'provider_timeout' || code === 'deadline-exceeded') return 'timeout';
   if (reason === 'ambiguous_destination' || message.includes('ambiguous')) return 'ambiguous';
@@ -41,6 +42,7 @@ export function locationErrorMessage(error, locale = 'he') {
     case 'requestCeiling': message = copy.errors.requestCeiling; break;
     case 'timeout': message = copy.errors.timeout; break;
     case 'expired': message = copy.errors.expired; break;
+    case 'destinationNotFound': message = copy.errors.destinationNotFound; break;
     case 'placeNotFound': message = copy.errors.placeNotFound; break;
     case 'ambiguous': message = copy.errors.ambiguous; break;
     case 'network': message = copy.errors.network; break;

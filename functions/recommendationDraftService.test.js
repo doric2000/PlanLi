@@ -58,6 +58,15 @@ test('recommendation drafts sanitize bounded partial composer state without loca
   const draft = sanitizeRecommendationDraft(partialDraft({
     step: 3,
     details: { phone: '  +972 50 123 4567  ' },
+    generalDestination: {
+      countryId: 'GR',
+      cityId: 'dst_mykonos',
+      countryName: 'יוון',
+      name: 'מיקונוס',
+      provider: 'untrusted-provider',
+      providerPlaceId: 'google-mykonos',
+      resolvedPlaceToken: 'resolved-token-1',
+    },
     selectedPlace: { placeId: 'place-1', name: 'מקום', localUri: 'file:///private.jpg' },
     media: [media('asset-1')],
     localMediaCount: 1,
@@ -65,6 +74,16 @@ test('recommendation drafts sanitize bounded partial composer state without loca
   }));
   assert.equal(draft.composerKind, 'catalog-v1');
   assert.equal(draft.details.phone, '+972 50 123 4567');
+  assert.deepEqual(draft.generalDestination, {
+    countryId: 'GR',
+    cityId: 'dst_mykonos',
+    countryName: 'יוון',
+    name: 'מיקונוס',
+    label: '',
+    provider: 'google',
+    providerPlaceId: 'google-mykonos',
+    resolvedPlaceToken: 'resolved-token-1',
+  });
   assert.equal(draft.selectedPlace.localUri, undefined);
   assert.equal(draft.localUris, undefined);
   assert.equal(draft.localMediaCount, 1);
@@ -313,6 +332,53 @@ test('publish payload distinguishes new and edit exact-location publication', ()
   assert.equal(edit.recommendationId, 'rec-1');
   assert.deepEqual(edit.destinationRef, { countryId: 'HU', cityId: 'budapest' });
   assert.equal(edit.placeId, undefined);
+});
+
+test('publish payload preserves verified provider destinations for destination and pin modes', () => {
+  const providerDraft = sanitizeRecommendationDraft(partialDraft({
+    selectedCountry: { id: 'GR', name: 'יוון' },
+    selectedCity: { id: 'dst_mykonos', name: 'מיקונוס' },
+    generalDestination: {
+      countryId: 'GR',
+      cityId: 'dst_mykonos',
+      countryName: 'יוון',
+      name: 'מיקונוס',
+      providerPlaceId: 'google-mykonos',
+      resolvedPlaceToken: 'resolved-token-1',
+    },
+  }));
+  const destination = publishData({
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174000',
+  }, providerDraft);
+  assert.deepEqual(destination.destinationRef, {
+    countryId: 'GR',
+    cityId: 'dst_mykonos',
+    provider: 'google',
+    providerPlaceId: 'google-mykonos',
+    resolvedPlaceToken: 'resolved-token-1',
+  });
+
+  const pin = publishData({
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174001',
+  }, {
+    ...providerDraft,
+    locationMode: 'pin',
+    manualCoordinate: { lat: 37.45, lng: 25.33 },
+  });
+  assert.deepEqual(pin.destinationRef, destination.destinationRef);
+  assert.deepEqual(pin.manualLocation, { coordinates: { lat: 37.45, lng: 25.33 } });
+
+  const catalog = publishData({
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174002',
+  }, sanitizeRecommendationDraft(partialDraft()));
+  assert.deepEqual(catalog.destinationRef, { countryId: 'HU', cityId: 'budapest' });
+
+  assert.throws(() => publishData({
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174003',
+  }, {
+    ...providerDraft,
+    selectedCity: { id: 'dst_santorini', name: 'סנטוריני' },
+  }), (error) => error?.details?.reason === 'RECOMMENDATION_DRAFT_INVALID');
 });
 
 test('publishing requires at least one canonical recommendation image', () => {

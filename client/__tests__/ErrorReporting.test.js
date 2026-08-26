@@ -186,10 +186,12 @@ describe('error reporting privacy', () => {
       operation: 'publish_recommendation_saving',
       code: 'functions/not-found',
       reason: 'RECOMMENDATION_DRAFT_NOT_FOUND',
+      contentMode: 'destination',
     });
     expect(mockScope.setTag).toHaveBeenCalledWith(
       'error_reason',
       'RECOMMENDATION_DRAFT_NOT_FOUND'
     );
+    expect(mockScope.setTag).toHaveBeenCalledWith('content_mode', 'destination');
   });
 });
