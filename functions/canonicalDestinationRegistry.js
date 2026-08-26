@@ -1,0 +1,187 @@
+const crypto = require('crypto');
+
+const { compactDestinationSearchText } = require('./destinationCatalogService');
+const { distanceKm } = require('./destinationIdentityService');
+
+const REGISTRY_PATH = 'system/destinationRegistry/entries';
+const REGISTRY_VERSION = 1;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const DESTINATION_KINDS = Object.freeze(['city_hub', 'island', 'tourism_region', 'province']);
+const GROUPING_POLICIES = Object.freeze(['self', 'parent', 'approved_children']);
+
+// These policies are deliberately small and ship with the resolver so the known
+// failures are fixed before the private registry seed is applied. The seed tool
+// enriches the full researched catalog with Google identity and viewport data.
+const BUILTIN_POLICIES = Object.freeze([
+  { id: 'in-munnar', countryCode: 'IN', names: { he: 'מונאר', en: 'Munnar' }, aliases: ['Munnar', 'Kannan Devan Hills', 'Rajamalai'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 10.0889, lng: 77.0595 }, radiusKm: 32 },
+  { id: 'in-goa', countryCode: 'IN', names: { he: 'גואה', en: 'Goa' }, aliases: ['Goa', 'North Goa', 'South Goa'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 15.2993, lng: 74.124 }, radiusKm: 85 },
+  { id: 'in-dharamshala', countryCode: 'IN', names: { he: 'דרמסלה', en: 'Dharamshala' }, aliases: ['Dharamshala', 'McLeod Ganj', 'Mcleodganj'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 32.219, lng: 76.3234 }, radiusKm: 18 },
+  { id: 'in-manali', countryCode: 'IN', names: { he: 'מנאלי', en: 'Manali' }, aliases: ['Manali', 'Old Manali'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 32.2432, lng: 77.1892 }, radiusKm: 22 },
+  { id: 'in-rishikesh', countryCode: 'IN', names: { he: 'רישיקש', en: 'Rishikesh' }, aliases: ['Rishikesh'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 30.0869, lng: 78.2676 }, radiusKm: 20 },
+  { id: 'in-parvati-valley', countryCode: 'IN', names: { he: 'עמק פרוואטי', en: 'Parvati Valley' }, aliases: ['Parvati Valley', 'Kasol', 'Tosh', 'Manikaran'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 32.01, lng: 77.31 }, radiusKm: 42 },
+  { id: 'ni-ometepe', countryCode: 'NI', names: { he: 'אומטפה', en: 'Ometepe' }, aliases: ['Ometepe', 'Isla de Ometepe', 'Moyogalpa', 'Altagracia', 'Tilgue'], kind: 'island', groupingPolicy: 'self', center: { lat: 11.514, lng: -85.583 }, radiusKm: 35 },
+  { id: 'gr-corfu', countryCode: 'GR', names: { he: 'קורפו', en: 'Corfu' }, aliases: ['Corfu', 'Kerkyra', 'Perama'], kind: 'island', groupingPolicy: 'self', center: { lat: 39.6243, lng: 19.9217 }, radiusKm: 42 },
+  { id: 'th-chiang-mai', countryCode: 'TH', names: { he: 'צ׳יאנג מאי', en: 'Chiang Mai' }, aliases: ['Chiang Mai', 'Chiang Mai Province'], kind: 'province', groupingPolicy: 'self', center: { lat: 18.7883, lng: 98.9853 }, radiusKm: 115 },
+  { id: 'th-chiang-rai', countryCode: 'TH', names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' }, aliases: ['Chiang Rai', 'Chiang Rai Province'], kind: 'province', groupingPolicy: 'self', center: { lat: 19.9105, lng: 99.8406 }, radiusKm: 105 },
+  { id: 'cy-cyprus', countryCode: 'CY', names: { he: 'קפריסין', en: 'Cyprus' }, aliases: ['Cyprus'], kind: 'island', groupingPolicy: 'approved_children', center: { lat: 35.1264, lng: 33.4299 }, radiusKm: 125 },
+  { id: 'cy-paphos', countryCode: 'CY', names: { he: 'פאפוס', en: 'Paphos' }, aliases: ['Paphos'], kind: 'city_hub', parentId: 'cy-cyprus', groupingPolicy: 'self', center: { lat: 34.7754, lng: 32.4245 }, radiusKm: 25 },
+  { id: 'cy-larnaca', countryCode: 'CY', names: { he: 'לרנקה', en: 'Larnaca' }, aliases: ['Larnaca'], kind: 'city_hub', parentId: 'cy-cyprus', groupingPolicy: 'self', center: { lat: 34.9003, lng: 33.6232 }, radiusKm: 24 },
+  { id: 'cy-ayia-napa', countryCode: 'CY', names: { he: 'איה נאפה', en: 'Ayia Napa' }, aliases: ['Ayia Napa', 'Agia Napa'], kind: 'city_hub', parentId: 'cy-cyprus', groupingPolicy: 'self', center: { lat: 34.9923, lng: 34.014 }, radiusKm: 20 },
+  { id: 'ph-palawan', countryCode: 'PH', names: { he: 'פלאוון', en: 'Palawan' }, aliases: ['Palawan'], kind: 'island', groupingPolicy: 'approved_children', center: { lat: 9.8349, lng: 118.7384 }, radiusKm: 260 },
+  { id: 'ph-el-nido', countryCode: 'PH', names: { he: 'אל נידו', en: 'El Nido' }, aliases: ['El Nido'], kind: 'city_hub', parentId: 'ph-palawan', groupingPolicy: 'self', center: { lat: 11.2027, lng: 119.4166 }, radiusKm: 42 },
+  { id: 'ph-coron', countryCode: 'PH', names: { he: 'קורון', en: 'Coron' }, aliases: ['Coron'], kind: 'city_hub', parentId: 'ph-palawan', groupingPolicy: 'self', center: { lat: 12.0, lng: 120.204 }, radiusKm: 48 },
+]);
+
+let cache = new Map();
+
+function normalizedAliases(entry) {
+  return Array.from(new Set([
+    entry?.names?.he,
+    entry?.names?.en,
+    ...(Array.isArray(entry?.aliases) ? entry.aliases : []),
+  ].map(compactDestinationSearchText).filter(Boolean)));
+}
+
+function canonicalDestinationId(countryId, registryId) {
+  const digest = crypto.createHash('sha256').update(`${countryId}:${registryId}`).digest('base64url');
+  return `dst_${digest.slice(0, 20)}`;
+}
+
+function normalizeEntry(entry) {
+  const countryCode = String(entry?.countryCode || '').trim().toUpperCase();
+  return {
+    ...entry,
+    countryCode,
+    aliasesNormalized: normalizedAliases(entry),
+    status: entry?.status || 'active',
+    registryVersion: Number(entry?.registryVersion || REGISTRY_VERSION),
+  };
+}
+
+function validateRegistryEntry(entry, { requireProviderIdentity = true } = {}) {
+  const normalized = normalizeEntry(entry);
+  const errors = [];
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(String(normalized.id || ''))) errors.push('invalid_id');
+  if (!/^[A-Z]{2}$/.test(normalized.countryCode)) errors.push('invalid_country_code');
+  if (!normalized.names?.he || !/[\u0590-\u05ff]/.test(normalized.names.he)) errors.push('invalid_hebrew_name');
+  if (!normalized.names?.en) errors.push('missing_english_name');
+  if (!DESTINATION_KINDS.includes(normalized.kind)) errors.push('invalid_kind');
+  if (!GROUPING_POLICIES.includes(normalized.groupingPolicy)) errors.push('invalid_grouping_policy');
+  if (!normalized.aliasesNormalized.length) errors.push('missing_aliases');
+  if (requireProviderIdentity && !normalized.providerRefs?.googlePlaceId) errors.push('missing_google_place_id');
+  const viewportCoordinates = [
+    normalized.viewport?.southwest?.lat,
+    normalized.viewport?.southwest?.lng,
+    normalized.viewport?.northeast?.lat,
+    normalized.viewport?.northeast?.lng,
+  ];
+  const validViewport = viewportCoordinates.every((value) => Number.isFinite(Number(value)));
+  const validRadius = Number.isFinite(Number(normalized.center?.lat)) &&
+    Number.isFinite(Number(normalized.center?.lng)) &&
+    Number.isFinite(Number(normalized.radiusKm)) && Number(normalized.radiusKm) > 0;
+  if (requireProviderIdentity && !validViewport && !validRadius) errors.push('missing_geometry');
+  const sources = Array.isArray(normalized.researchSources) ? normalized.researchSources : [];
+  if (normalized.approval?.approvedByAdmin !== true && new Set(sources.map((source) => source?.url).filter(Boolean)).size < 2) errors.push('insufficient_research_sources');
+  return { valid: errors.length === 0, errors, entry: normalized };
+}
+
+function pointInsideViewport(point, viewport) {
+  const lat = Number(point?.lat);
+  const lng = Number(point?.lng);
+  const south = Number(viewport?.southwest?.lat);
+  const west = Number(viewport?.southwest?.lng);
+  const north = Number(viewport?.northeast?.lat);
+  const east = Number(viewport?.northeast?.lng);
+  if (![lat, lng, south, west, north, east].every(Number.isFinite)) return false;
+  return lat >= Math.min(south, north) && lat <= Math.max(south, north) &&
+    (west <= east ? lng >= west && lng <= east : lng >= west || lng <= east);
+}
+
+function entryContainsPoint(entry, coordinates) {
+  if (entry.viewport && pointInsideViewport(coordinates, entry.viewport)) return true;
+  return entry.center && Number.isFinite(Number(entry.radiusKm)) &&
+    distanceKm(entry.center, coordinates) <= Number(entry.radiusKm);
+}
+
+function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = [], coordinates }) {
+  const code = String(countryCode || '').toUpperCase();
+  const candidates = entries.map(normalizeEntry)
+    .filter((entry) => entry.status === 'active' && entry.countryCode === code);
+  if (providerPlaceId) {
+    const exact = candidates.find((entry) => entry.providerRefs?.googlePlaceId === providerPlaceId ||
+      (entry.providerRefs?.googlePlaceIds || []).includes(providerPlaceId));
+    if (exact) return { entry: exact, source: 'canonical_google_place_id' };
+  }
+  const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
+  const aliasMatches = candidates.filter((entry) => entry.aliasesNormalized.some((alias) => aliasKeys.has(alias)));
+  const containing = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
+  if (aliasMatches.length === 1) {
+    return {
+      entry: aliasMatches[0],
+      source: containing.includes(aliasMatches[0]) ? 'canonical_alias_and_geometry' : 'canonical_alias',
+    };
+  }
+  if (aliasMatches.length > 1) {
+    const containedAliasMatches = aliasMatches.filter((entry) => containing.includes(entry));
+    if (containedAliasMatches.length === 1) {
+      return { entry: containedAliasMatches[0], source: 'canonical_alias_and_geometry' };
+    }
+    if (!containedAliasMatches.length) return { ambiguity: aliasMatches.slice(0, 3) };
+  }
+  const eligible = containing.filter((entry) => aliasMatches.includes(entry));
+  const pool = eligible.length ? eligible : containing;
+  if (!pool.length) return null;
+  const children = pool.filter((entry) => entry.parentId);
+  const preferred = children.length ? children : pool;
+  const sorted = preferred.sort((left, right) => {
+    const leftDistance = left.center ? distanceKm(left.center, coordinates) : 0;
+    const rightDistance = right.center ? distanceKm(right.center, coordinates) : 0;
+    return leftDistance - rightDistance || left.id.localeCompare(right.id);
+  });
+  if (sorted.length > 1) {
+    const firstDistance = sorted[0].center ? distanceKm(sorted[0].center, coordinates) : 0;
+    const secondDistance = sorted[1].center ? distanceKm(sorted[1].center, coordinates) : 0;
+    if (Math.abs(firstDistance - secondDistance) < 3 && sorted[0].parentId === sorted[1].parentId) {
+      return { ambiguity: sorted.slice(0, 3) };
+    }
+  }
+  return { entry: sorted[0], source: aliasMatches.includes(sorted[0]) ? 'canonical_alias_and_geometry' : 'canonical_geometry' };
+}
+
+async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
+  const code = String(countryCode || '').toUpperCase();
+  const cached = cache.get(code);
+  if (cached && cached.expiresAt > now) return cached.entries;
+  let persisted = [];
+  try {
+    const snapshot = await db.collection(REGISTRY_PATH).where('countryCode', '==', code).get();
+    persisted = snapshot.docs.map((document) => normalizeEntry({ id: document.id, ...document.data() }));
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+  }
+  const merged = new Map(BUILTIN_POLICIES.filter((entry) => entry.countryCode === code)
+    .map((entry) => [entry.id, normalizeEntry(entry)]));
+  persisted.forEach((entry) => merged.set(entry.id, entry));
+  const entries = Array.from(merged.values());
+  cache.set(code, { expiresAt: now + CACHE_TTL_MS, entries });
+  return entries;
+}
+
+function clearRegistryCache() {
+  cache = new Map();
+}
+
+module.exports = {
+  BUILTIN_POLICIES,
+  DESTINATION_KINDS,
+  GROUPING_POLICIES,
+  REGISTRY_PATH,
+  REGISTRY_VERSION,
+  canonicalDestinationId,
+  clearRegistryCache,
+  entryContainsPoint,
+  matchCanonicalEntry,
+  normalizeEntry,
+  registryEntriesForCountry,
+  validateRegistryEntry,
+};

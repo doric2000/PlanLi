@@ -38,6 +38,7 @@ function reasonForLocationError(error, fallback = 'location_resolution_failed') 
   if (message.includes('trustworthy destination') || message.includes('containing destination')) {
     return 'destination_not_resolved';
   }
+  if (message.includes('approved planli destination')) return 'destination_not_resolved';
   if (code === 'unavailable') return 'provider_unavailable';
   if (code === 'invalid-argument') return 'invalid_selection';
   return fallback;

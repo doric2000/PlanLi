@@ -3,12 +3,44 @@ const assert = require('node:assert/strict');
 
 const {
   deleteAccountInternal,
+  deleteContentInternal,
   deleteDocumentStrict,
   deleteNotificationDevicesForUser,
   deleteRecommendationDraftsForUser,
   removeReporterModerationData,
   requestAccountDeletion,
 } = require('./deletionService');
+
+test('recommendation deletion waits while its destination is being reassigned', async () => {
+  const recommendationRef = { path: 'recommendations/recommendation-1' };
+  const cityRef = { path: 'countries/IL/destinations/source' };
+  let mutated = false;
+  const snapshots = new Map([
+    [recommendationRef.path, {
+      ownerId: 'owner', status: 'active', destination: { countryId: 'IL', cityId: 'source' },
+    }],
+    [cityRef.path, {
+      status: 'active', reassignment: { state: 'reassigning', jobId: 'job-1' },
+    }],
+  ]);
+  const db = {
+    doc: (path) => path === recommendationRef.path ? recommendationRef : cityRef,
+    runTransaction: async (handler) => handler({
+      get: async (ref) => ({ exists: snapshots.has(ref.path), data: () => snapshots.get(ref.path) }),
+      update: () => { mutated = true; },
+    }),
+  };
+  const firestore = Object.assign(() => db, {
+    FieldValue: { serverTimestamp: () => 'time' },
+  });
+
+  await assert.rejects(deleteContentInternal({
+    admin: { firestore },
+    target: { type: 'recommendation', id: 'recommendation-1' },
+    actorUid: 'owner',
+  }), /being reassigned/);
+  assert.equal(mutated, false);
+});
 
 test('account deletion cannot deactivate the last active administrator', async () => {
   let userMarkedDeleting = false;

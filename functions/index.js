@@ -126,6 +126,7 @@ const {
   getAirportCandidates,
   getDestinationImageCandidates,
   getDestinationRenameJob,
+  getDestinationReassignmentJob,
   getDestinationReview,
   listDestinationReviews,
   onDestinationCreated,
@@ -134,9 +135,13 @@ const {
   selectDestinationImageCandidate,
   setDestinationAirport,
   setDestinationHebrewName,
+  startDestinationReassignment,
+  previewDestinationReassignment,
+  updateDestinationPolicy,
   setDestinationUploadedImage,
 } = require('./destinationAdminService');
 const { processDestinationRenameJob } = require('./destinationRenameService');
+const { processDestinationReassignmentJob } = require('./destinationReassignmentService');
 const { syncCountryMetadata } = require('./countryMetadata');
 const { syncAirportFacts } = require('./airportFacts');
 const { getDestinationOverview } = require('./destinationOverviewService');
@@ -787,6 +792,18 @@ exports.setDestinationHebrewName = callable({ access: 'signedIn', timeoutSeconds
 exports.getDestinationRenameJob = callable({ access: 'signedIn' }, (request) =>
   getDestinationRenameJob({ admin, auth: request.auth, data: request.data })
 );
+exports.updateDestinationPolicy = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
+  updateDestinationPolicy({ admin, auth: request.auth, data: request.data })
+);
+exports.previewDestinationReassignment = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
+  previewDestinationReassignment({ admin, auth: request.auth, data: request.data })
+);
+exports.startDestinationReassignment = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
+  startDestinationReassignment({ admin, auth: request.auth, data: request.data })
+);
+exports.getDestinationReassignmentJob = callable({ access: 'signedIn' }, (request) =>
+  getDestinationReassignmentJob({ admin, auth: request.auth, data: request.data })
+);
 exports.deactivateDestination = callable({ access: 'signedIn', timeoutSeconds: 300 }, (request) =>
   deactivateDestination({ admin, auth: request.auth, data: request.data })
 );
@@ -1342,6 +1359,14 @@ exports.onDestinationRenameJobWritten = firestoreWritten(
     return result;
   },
   { timeoutSeconds: 300 }
+);
+
+exports.onDestinationReassignmentJobWritten = firestoreWritten(
+  'system/runtime/destinationReassignmentJobs/{jobId}',
+  async (event) => {
+    if (event.data?.after?.data()?.status !== 'queued') return null;
+    return processDestinationReassignmentJob({ admin, jobId: event.params.jobId });
+  }
 );
 
 exports.onCountryDestinationCatalogSync = firestoreWritten(

@@ -36,7 +36,10 @@ const NEW_SELECTION_DETAILS_FIELD_MASK = [
   'location',
   'types',
   'movedPlaceId',
+  'addressDescriptor',
 ].join(',');
+
+const NEW_CONTAINING_PLACES_FIELD_MASK = 'containingPlaces';
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -228,7 +231,30 @@ function parseNewLocalizedPlace(details) {
     ])).filter((type) => typeof type === 'string'),
     businessStatus: details.businessStatus || null,
     url: '',
+    addressDescriptorCandidates: [
+      ...(details?.addressDescriptor?.areas || []),
+      ...(details?.addressDescriptor?.landmarks || []).filter((entry) => entry?.spatialRelationship === 'WITHIN'),
+    ].map((entry) => ({
+      placeId: String(entry?.placeId || '').trim(),
+      name: String(entry?.displayName?.text || '').trim(),
+      containment: entry?.containment || entry?.spatialRelationship || null,
+    })).filter((entry) => entry.placeId || entry.name),
   };
+}
+
+async function fetchNewContainingPlaces(options) {
+  const details = await fetchNewPlaceDetails({
+    ...options,
+    language: 'en',
+    fieldMask: NEW_CONTAINING_PLACES_FIELD_MASK,
+  });
+  return (Array.isArray(details?.containingPlaces) ? details.containingPlaces : [])
+    .map((entry) => ({
+      placeId: String(entry?.id || entry?.placeId || '').trim(),
+      name: String(entry?.displayName?.text || '').trim(),
+      types: Array.isArray(entry?.types) ? entry.types : [],
+    }))
+    .filter((entry) => entry.placeId || entry.name);
 }
 
 async function fetchNewPlaceDetails({
@@ -686,11 +712,13 @@ module.exports = {
   NEW_AUTOCOMPLETE_FIELD_MASK,
   NEW_DETAILS_FIELD_MASK,
   NEW_SELECTION_DETAILS_FIELD_MASK,
+  NEW_CONTAINING_PLACES_FIELD_MASK,
   MAX_PROVIDER_REQUESTS_PER_ATTEMPT,
   autocompletePlaces,
   fetchBilingualPlace,
   fetchLocalityPlaceId,
   fetchNewBilingualPlace,
+  fetchNewContainingPlaces,
   fetchNewPlaceDetails,
   fetchNewSelectionPlace,
   fetchPlaceSelection,

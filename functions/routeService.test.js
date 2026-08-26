@@ -9,6 +9,7 @@ const {
   loadTrustedRecommendationSources,
   cleanupRouteRevisions,
   collectMedia,
+  deletePreparedRevision,
   loadRouteDetails,
   loadTrustedRoutePlaces,
   preservedRouteStatus,
@@ -540,6 +541,34 @@ test('revision cleanup deletes only expired non-active route revisions', async (
   const result = await cleanupRouteRevisions({ admin: { firestore } });
   assert.deepEqual(deleted, ['routes/route-1/revisions/prepared']);
   assert.deepEqual(result, { scanned: 3, deleted: 1 });
+});
+
+test('a rejected route publication removes its prepared revision tree', async () => {
+  const deleted = [];
+  const revisionRef = {
+    path: 'routes/route-1/revisions/prepared-race',
+    get: async () => ({ exists: true, data: () => ({ state: 'prepared' }) }),
+  };
+  const removed = await deletePreparedRevision({
+    recursiveDelete: async (ref) => deleted.push(ref.path),
+  }, revisionRef, 'test_cleanup_failed');
+
+  assert.equal(removed, true);
+  assert.deepEqual(deleted, [revisionRef.path]);
+});
+
+test('ambiguous transaction errors never delete a revision that became active', async () => {
+  const deleted = [];
+  const revisionRef = {
+    path: 'routes/route-1/revisions/active-race',
+    get: async () => ({ exists: true, data: () => ({ state: 'active' }) }),
+  };
+  const removed = await deletePreparedRevision({
+    recursiveDelete: async (ref) => deleted.push(ref.path),
+  }, revisionRef, 'test_cleanup_failed');
+
+  assert.equal(removed, false);
+  assert.deepEqual(deleted, []);
 });
 
 test('public route loading rejects more than 60 days before loading stops', async () => {

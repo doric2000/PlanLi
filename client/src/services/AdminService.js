@@ -17,6 +17,9 @@ export const ADMIN_CALLABLE_TIMEOUTS = Object.freeze({
   getAirportCandidates: 140000,
   setDestinationAirport: 140000,
   setDestinationHebrewName: 320000,
+  updateDestinationPolicy: 320000,
+  previewDestinationReassignment: 320000,
+  startDestinationReassignment: 320000,
   deactivateDestination: 320000,
 });
 const call = async (name, payload = {}) => {
@@ -67,4 +70,8 @@ export const getAirportCandidates = (countryId, cityId) => call('getAirportCandi
 export const setDestinationAirport = (countryId, cityId, iataCode, reason) => call('setDestinationAirport', { countryId, cityId, iataCode, reason });
 export const setDestinationHebrewName = (countryId, cityId, nameHe, reason) => call('setDestinationHebrewName', { countryId, cityId, nameHe, reason });
 export const getDestinationRenameJob = (jobId) => call('getDestinationRenameJob', { jobId });
+export const updateDestinationPolicy = (countryId, cityId, policy, reason) => call('updateDestinationPolicy', { countryId, cityId, ...policy, reason });
+export const previewDestinationReassignment = (source, target) => call('previewDestinationReassignment', { source, target });
+export const startDestinationReassignment = (source, target, expectedImpactHash, reason) => call('startDestinationReassignment', { source, target, expectedImpactHash, reason });
+export const getDestinationReassignmentJob = (jobId) => call('getDestinationReassignmentJob', { jobId });
 export const deactivateDestination = (countryId, cityId, reason) => call('deactivateDestination', { countryId, cityId, reason });
