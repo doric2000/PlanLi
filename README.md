@@ -20,9 +20,11 @@ verification on Android remain pending.
 The current iOS production binary is `1.1.0 (15)`, EAS build
 `d9e78de5-6f97-4371-b223-245862ec4fbb`, built from the same source commit and
 completed at `2026-08-26T15:00:19.672Z`. EAS submission
-`b67ba705-93eb-4438-86dd-5b058134000a` was scheduled for App Store Connect app
-`6801453067`; completion of the upload, Apple processing, TestFlight availability,
-installation, and physical Hebrew/Arabic RTL verification remain unverified.
+`c25a5130-e7fd-464c-a41c-ff62288b65df` finished at
+`2026-08-26T16:38:56.039Z` and uploaded the build to App Store Connect app
+`6801453067`. App Store Connect reports build 15 as in beta testing for internal
+and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
+remain unverified.
 The latest compatible production EAS Update is Noya component-geometry group
 `1a691933-e4b6-4003-9d3d-111315a88549`, published for Android
 (`01a03e64-1c50-7500-bfe5-9e4fc2aea1e4`) and iOS
@@ -436,13 +438,16 @@ Current release record:
   records and zero conflicts. The post-migration live audit completed at
   `2026-08-24T19:50:08.573Z` with 477 documents checked and zero failures. No
   Firebase deployment accompanied this migration.
-- EAS submission ID: `b67ba705-93eb-4438-86dd-5b058134000a`, scheduled for build
-  `d9e78de5-6f97-4371-b223-245862ec4fbb`. The local EAS submit session confirmed
-  scheduling with the remote App Store Connect API key, but final upload status
-  could not be read back from the available CLI or unsigned Expo Web session.
-- App Store Connect app: `6801453067`; upload completion for build `1.1.0 (15)`,
-  Apple processing, TestFlight availability, and any required Beta App Review
-  remain unverified.
+- Successful EAS submission ID: `c25a5130-e7fd-464c-a41c-ff62288b65df`, created
+  for build `d9e78de5-6f97-4371-b223-245862ec4fbb` and completed at
+  `2026-08-26T16:38:56.039Z`. The initial submission
+  `b67ba705-93eb-4438-86dd-5b058134000a` and its server-side retry
+  `fad0f28f-356b-44ef-bb4d-be3d689c633e` errored without upload logs during the
+  Expo incident `iOS submissions failing on upload to App Store Connect`. A fresh
+  submission of the same signed IPA succeeded without rebuilding.
+- App Store Connect app: `6801453067`; authenticated EAS status read-back reports
+  build `1.1.0 (15)` as in beta testing for both internal and external TestFlight.
+  Installation and physical-device behavior remain unverified.
 
 The current release target is an **external TestFlight beta with open PlanLi
 registration**, not an App Store listing. PlanLi does not maintain a Firebase
