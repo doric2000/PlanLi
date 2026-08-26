@@ -4,20 +4,25 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 
 ## Current environment status
 
-PlanLi has an external TestFlight beta; it has not been publicly released to the
-App Store, Google Play, or a public web domain. Native development is performed
-with an installed, signed EAS Development Build connected to Metro. Expo Go is
-not supported. A signed Android production App Bundle `1.1.0 (5)` completed at
-`2026-08-24T23:49:14.951Z` from commit `5c06d10`; it was uploaded to Google Play
-internal testing and installed on the owner's Android tablet. The first physical
-Android map smoke test on `2026-08-25` found that exact-location place resolution
-succeeded but its preview stayed loading, while the Community map mounted with a
-Google watermark but no map tiles. Google Maps Android key authorization for the
-Play App Signing certificate was corrected at `2026-08-25T14:01:48+03:00`; the
-Android-only production EAS Update
-`dd0b91d8-b5b7-4a73-94d4-d08d31a449f5` was published from PR `#206` merge
-commit `e954e3e` at `2026-08-25T11:19:04.856Z`. Download, application, and the
-physical tablet re-test remain pending.
+PlanLi has an external TestFlight beta and an active Google Play internal-testing
+track; it has not been publicly released to the App Store, Google Play, or a
+public web domain. Native development is performed with an installed, signed EAS
+Development Build connected to Metro. Expo Go is not supported.
+
+The current Android internal release is `1.1.0 (6)`, EAS build
+`6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
+`5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` and completed at
+`2026-08-26T15:46:09.341Z`. Google Play reports release
+`PlanLi 1.1.0 (6) – RTL Navigation` as available to internal testers, released at
+`2026-08-26T18:58+03:00`. Download, installation, and physical Hebrew/Arabic RTL
+verification on Android remain pending.
+
+The current iOS production binary is `1.1.0 (15)`, EAS build
+`d9e78de5-6f97-4371-b223-245862ec4fbb`, built from the same source commit and
+completed at `2026-08-26T15:00:19.672Z`. EAS submission
+`b67ba705-93eb-4438-86dd-5b058134000a` was scheduled for App Store Connect app
+`6801453067`; completion of the upload, Apple processing, TestFlight availability,
+installation, and physical Hebrew/Arabic RTL verification remain unverified.
 The latest compatible production EAS Update is Noya component-geometry group
 `1a691933-e4b6-4003-9d3d-111315a88549`, published for Android
 (`01a03e64-1c50-7500-bfe5-9e4fc2aea1e4`) and iOS
@@ -27,13 +32,9 @@ read-back confirms that both production manifests use runtime `1.1.0`, the
 exact merge commit, the production environment, and a clean working tree.
 Download, application, and exact tour geometry on the physical Android tablet
 and TestFlight iPhone remain unverified.
-TestFlight build `1.1.0 (13)` remains installed and
-in use on the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
-commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
-`3c2adff2-a0f7-420d-b1cf-dd5f8725d8cf` then finished successfully and uploaded
-the build to App Store Connect, as verified at `2026-08-24T20:21:18Z`. Apple
-processing, TestFlight availability, installation, and physical-iPhone
-behavior for build 14 remain unverified. An internal iOS EAS Development Build
+TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
+iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
+internal iOS EAS Development Build
 `1.1.0 (13)` completed at
 `2026-08-24T17:53:02.788Z` from recommendation/RoadTrip composer PR `#193`
 merge commit `8afdfb3`. Its EAS build ID is
@@ -45,8 +46,8 @@ the `production` EAS Update channel and runtime `1.1.0`. The matching Noya
 component-geometry preview group is `31df8f49-77fb-4151-85fb-245e594a81d7`;
 the immediately preceding compatible groups are preview
 `48a9c9ef-4c32-4030-adb0-0ad7bcecb111` and production
-`43a873d8-282c-4e6a-986d-fcd014047c2c`. This OTA did not create a native build,
-submit to either store, deploy Firebase, or write production data. Twenty-eight
+`43a873d8-282c-4e6a-986d-fcd014047c2c`. The RTL native builds and store actions
+did not deploy Firebase or write production data. Twenty-eight
 affected Functions and the
 active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
 `2026-08-24T01:34Z`. The Functions inventory still reports 96 active Node.js 22
@@ -261,24 +262,28 @@ remain explicit release operations; merging source code does not perform them.
 
 Current Android release record:
 
-- App version/build: `1.1.0 (5)`, package `com.planli.planlitravels`, runtime
+- App version/build: `1.1.0 (6)`, package `com.planli.planlitravels`, runtime
   `1.1.0`.
-- EAS build: `958e7d06-8173-4f82-aecf-d9e8f6603d1a`, completed at
-  `2026-08-24T23:49:14.951Z` from commit
-  `5c06d1081422923fb70ab7413d44bac40f43f8bc` with the `production` profile,
+- EAS build: `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, completed at
+  `2026-08-26T15:46:09.341Z` from clean `main` commit
+  `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` with the `production` profile,
   store distribution, and production update channel. The signed `.aab` is
   available from EAS at
-  `https://expo.dev/artifacts/eas/JEjn3jZ6WiVKJoM-6kOdntzztoaedVDJ6wBn6Ky3RgQ.aab`.
-- Local artifact: `C:\Users\doric\Downloads\PlanLi-1.1.0-5-google-play.aab`,
-  89,016,605 bytes, SHA-256
-  `69B09B498AF749B5CA2A7C59EE224D5B1667643C6832F32466F2CA2034966BA0`.
-  ZIP inventory verification found the base Android manifest and JavaScript
-  bundle.
-- Validation: `npm ci`, Expo Doctor (18/18), and an Android Expo export passed.
-  The remote Gradle `bundleRelease` build completed, signing validation passed,
-  and EAS copied 50 application assets. The locked client dependency audit still
-  reports eight high-severity findings; dependencies were not upgraded during
-  this release.
+  `https://expo.dev/artifacts/eas/oPxirTbUSZSoziOa2xLG7H-y4aAdKBKFo2uAEYdmIc8.aab`.
+- Verified local artifact: `.codex_tmp/validation/planli-1.1.0-6.aab`, 89,081,301
+  bytes, SHA-256
+  `84AE2043C191C4AE0D02B633B0027D085323F0796DFFC2B38DF4C9E7090B29C7`.
+- Native RTL root cause and fix: PlanLi already implements its Hebrew-first RTL
+  layout in JavaScript, while native OS RTL auto-mirroring mirrored navigation a
+  second time. PR `#217` disabled native auto-mirroring through the
+  `expo-localization` config plugin and added a regression test. The build source
+  contains PR `#217` merge commit `0511cf110642fb1811cb717b5a80fd9d11e19510`.
+- Release validation: all 161 client suites passed 841 tests; all 585 runnable
+  Functions tests passed with 22 intentional skips; all 22 Rules emulator tests
+  passed; iOS release configuration and both Android/iOS Expo exports passed. A
+  live read-only audit at `2026-08-26T14:45:26.864Z` returned `ok: true` with no
+  failures. The locked client dependency audit still reports eight high-severity
+  findings; dependencies were not upgraded during this release.
 - Build recovery: production build
   `bc583e95-85d7-4e8b-a76e-91940c5f2d86` (`1.1.0 (3)`) failed before Gradle
   because EAS CLI 18 preserved Windows read-only directory modes in the upload
@@ -289,9 +294,12 @@ Current Android release record:
   untracked campaign and rendering-script files; exact archive inclusion was not
   independently audited. The generated application bundle contained the
   expected runtime asset set rather than the campaign source directory.
-- Google Play state: the App Bundle was uploaded to internal testing and installed
-  on the owner's Android tablet; the upload timestamp and reviewer-processing
-  details have not been independently verified. On `2026-08-25`, exact-location
+- Google Play state: release `PlanLi 1.1.0 (6) – RTL Navigation`, containing only
+  version code 6, was published to the active internal-testing track at
+  `2026-08-26T18:58+03:00`. Play Console reports it as available to internal
+  testers with no supported-device changes. Play emitted one non-blocking warning
+  that no deobfuscation file is associated with the bundle. Installation and
+  physical RTL behavior remain unverified. On `2026-08-25`, exact-location
   place resolution returned the selected place but its embedded preview remained
   in a loading state. The Community map mounted and showed the Google watermark
   plus the empty-area message, but no basemap tiles. PR `#206` added bounded
@@ -331,7 +339,7 @@ Current Android release record:
 
 Current release record:
 
-- App version/build: `1.1.0 (14)`.
+- App version/build: `1.1.0 (15)`.
 - iOS Development Build: internal-distribution build
   `ff0fc01a-890b-4668-b9a1-5d60891e9545`, runtime `1.1.0`, completed at
   `2026-08-24T17:53:02.788Z` from PR `#193` merge commit `8afdfb3`. The
@@ -339,18 +347,17 @@ Current release record:
   the artifact expires on `2026-09-07T17:47:09.652Z`. Download, installation,
   and physical-iPhone verification remain pending.
 - Installed state: build `1.1.0 (13)` is running on the owner's physical iPhone
-  through TestFlight. Build `1.1.0 (14)` has not yet been installed or exercised
-  on a physical iPhone.
-- EAS build: `34474cb7-e5c0-45b0-8733-bf848e8ee3da`, completed at
-  `2026-08-24T20:07:02.152Z` from commit
-  `f9c7096efbf495244a12d63760e5b39fb2b03f67` with the `production` profile,
+  through TestFlight. Builds `1.1.0 (14)` and `(15)` have not been confirmed as
+  installed or exercised on a physical iPhone.
+- EAS build: `d9e78de5-6f97-4371-b223-245862ec4fbb`, completed at
+  `2026-08-26T15:00:19.672Z` from clean `main` commit
+  `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` with the `production` profile,
   store distribution, production channel, app/runtime version `1.1.0`, and iOS
-  build number `14`. EAS archived 111 MB from a workspace that also held
-  unrelated pre-existing untracked campaign and rendering-script files; the
-  exact inclusion of those files in the archive was not independently audited.
-- Source release: Noya product-tour PR `#196`, typography release fix PR `#197`,
-  and live-audit alignment PR `#198`; the build source is PR `#198` merge commit
-  `f9c7096`.
+  build number `15`. The IPA artifact is
+  `https://expo.dev/artifacts/eas/2jQYWEvqtwhLx2V5wFAP4qGz3odwPGh0kac1AmqfMlo.ipa`.
+- Source release: the build contains the native RTL correction from PR `#217`
+  merge commit `0511cf110642fb1811cb717b5a80fd9d11e19510`; its exact source is
+  `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5`.
 - Preview EAS Update: Home planning hub group
   `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`, runtime `1.1.0`, iOS update
   `01a03b4e-b151-7955-887a-b24f9ded8f1d`, and Android update
@@ -429,13 +436,13 @@ Current release record:
   records and zero conflicts. The post-migration live audit completed at
   `2026-08-24T19:50:08.573Z` with 477 documents checked and zero failures. No
   Firebase deployment accompanied this migration.
-- EAS submission ID: `3c2adff2-a0f7-420d-b1cf-dd5f8725d8cf`, created for build
-  `34474cb7-e5c0-45b0-8733-bf848e8ee3da`. EAS reported `FINISHED` with no
-  submission error at `2026-08-24T20:21:18Z`, confirming upload to App Store
-  Connect. Apple processing remains unverified.
-- App Store Connect app: `6801453067`; build `1.1.0 (14)` was uploaded for
-  TestFlight. External TestFlight availability and any required Beta App Review
-  remain subject to App Store Connect and are not yet verified.
+- EAS submission ID: `b67ba705-93eb-4438-86dd-5b058134000a`, scheduled for build
+  `d9e78de5-6f97-4371-b223-245862ec4fbb`. The local EAS submit session confirmed
+  scheduling with the remote App Store Connect API key, but final upload status
+  could not be read back from the available CLI or unsigned Expo Web session.
+- App Store Connect app: `6801453067`; upload completion for build `1.1.0 (15)`,
+  Apple processing, TestFlight availability, and any required Beta App Review
+  remain unverified.
 
 The current release target is an **external TestFlight beta with open PlanLi
 registration**, not an App Store listing. PlanLi does not maintain a Firebase
