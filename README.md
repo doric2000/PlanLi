@@ -53,10 +53,10 @@ did not deploy Firebase or write production data. The recommendation release
 deployed `saveRecommendation`, `saveRecommendationDraft`, and
 `publishRecommendationDraft` from `cbb6aa61` at
 `2026-08-26T19:50:18Z`. The Functions inventory reports 99 active Node.js 22 v2
-Functions in `europe-west1`; post-deploy Cloud Logging readback was unavailable
-from both Firebase MCP and CLI and remains unverified. Firestore Rules, indexes,
-Hosting, production documents, migrations, and the rollback Storage bucket were
-unchanged.
+Functions in `europe-west1`; a post-deploy Firebase MCP query returned no
+`ERROR` entries for the three targets through `2026-08-26T20:18:00Z`.
+Firestore Rules, indexes, Hosting, production documents, migrations, and the
+rollback Storage bucket were unchanged.
 
 ## Run the client
 
@@ -1389,9 +1389,10 @@ rejected.
 - Observability: Sentry issue `PLANLI-MOBILE-9` remains unresolved with 15
   historical events; its last event was `2026-08-26T18:23:36Z`, before this
   rollout, and no later event was returned. Firebase inventory reports all 99
-  Functions active. Post-deploy Cloud Logging queries failed in both Firebase
-  MCP and CLI, so new `place_not_found`/`destination_not_found` log entries and
-  Cloud Run revision names remain unverified.
+  Functions active. A Firebase MCP Cloud Logging query covering
+  `2026-08-26T19:50:18Z` through `2026-08-26T20:18:00Z` returned no `ERROR`
+  entries for the three deployed targets. Cloud Run revision names remain
+  unverified; deployed source hashes and generations are recorded above.
 - No native build, TestFlight/App Store or Google Play submission, Rules,
   indexes, Hosting, migration, IAM, or production-document mutation accompanied
   this release. Mykonos/Venice city-or-region and exact-place publication,
