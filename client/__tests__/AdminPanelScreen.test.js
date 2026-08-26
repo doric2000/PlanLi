@@ -1,18 +1,46 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, RefreshControl } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
 
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
 
 jest.mock('../src/services/AdminService', () => ({
-  approveDestination: jest.fn(), deactivateDestination: jest.fn(), deleteUserAsAdmin: jest.fn(),
-  getAirportCandidates: jest.fn(), getDestinationImageCandidates: jest.fn(), getDestinationRenameJob: jest.fn(), getDestinationReview: jest.fn(),
-  getModerationCase: jest.fn(), getModerationDashboard: jest.fn(), listAdminUsers: jest.fn(),
-  listDestinationReviews: jest.fn(), listHeldContent: jest.fn(), listModerationAudit: jest.fn(),
-  listModerationCases: jest.fn(), moderateContent: jest.fn(), recheckDestination: jest.fn(),
-  selectDestinationImageCandidate: jest.fn(), setDestinationAirport: jest.fn(), setDestinationHebrewName: jest.fn(), setDestinationUploadedImage: jest.fn(),
-  setUserAdmin: jest.fn(), setUserEmailVerified: jest.fn(), setUserSuspension: jest.fn(),
+  approveDestination: jest.fn(),
+  bulkUpdateModerationCases: jest.fn(),
+  deactivateDestination: jest.fn(),
+  deleteAdminSavedView: jest.fn(),
+  deleteUserAsAdmin: jest.fn(),
+  getAdminResource: jest.fn(),
+  getAirportCandidates: jest.fn(),
+  getDestinationImageCandidates: jest.fn(),
+  getDestinationRenameJob: jest.fn(),
+  getDestinationReview: jest.fn(),
+  getModerationCase: jest.fn(),
+  getModerationDashboard: jest.fn(),
+  getModerationPolicy: jest.fn(),
+  listAdminSavedViews: jest.fn(),
+  listAdminUsers: jest.fn(),
+  listDestinationReviews: jest.fn(),
+  listModerationAudit: jest.fn(),
+  listModerationCases: jest.fn(),
+  recheckDestination: jest.fn(),
+  resolveModerationCase: jest.fn(),
+  saveAdminSavedView: jest.fn(),
+  searchAdminResources: jest.fn(),
+  selectDestinationImageCandidate: jest.fn(),
+  setDestinationAirport: jest.fn(),
+  setDestinationHebrewName: jest.fn(),
+  setDestinationUploadedImage: jest.fn(),
+  setUserAdmin: jest.fn(),
+  setUserEmailVerified: jest.fn(),
+  setUserSuspension: jest.fn(),
+  updateAdminAttachedPlace: jest.fn(),
+  updateModerationCase: jest.fn(),
+}));
+jest.mock('../src/services/LocationService', () => ({
+  searchPlaces: jest.fn(),
+  resolveDestinationForPlacePreview: jest.fn(),
 }));
 jest.mock('../src/hooks/useAdminClaim', () => ({ useAdminClaim: () => ({ isAdmin: true, loading: false }) }));
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
@@ -28,342 +56,258 @@ jest.mock('@expo/vector-icons', () => ({
     return ReactModule.createElement(View, props);
   },
 }));
-jest.mock('../src/features/admin/components/ModerationTargetPreview', () => {
-  const ReactModule = require('react');
-  const { View } = require('react-native');
-  return ({ preview }) => ReactModule.createElement(View, { testID: `preview-${preview?.title || 'missing'}` });
+
+const navigation = { setOptions: jest.fn(), setParams: jest.fn(), goBack: jest.fn() };
+const dashboard = {
+  openCases: 8,
+  urgentCases: 2,
+  myCases: 3,
+  unassignedCases: 4,
+  overdueCases: 1,
+  heldContent: 5,
+  pendingDestinations: 6,
+  failedJobs: 0,
+};
+const queueCase = (id, overrides = {}) => ({
+  id,
+  revision: 2,
+  target: { type: 'recommendation', id: `rec-${id}`, path: `recommendations/rec-${id}` },
+  targetPreview: { available: true, title: `תוכן ${id}`, status: 'active', author: { displayName: 'מטיילת' } },
+  status: 'open',
+  priority: 'normal',
+  reportCount: 2,
+  categoryCounts: { spam_scam_commercial: 2 },
+  assignmentUid: '',
+  dueAtMs: Date.now() + 3600000,
+  ...overrides,
+});
+const detailsFor = (item) => ({
+  ...item,
+  reports: [{ id: 'anonymous-report', category: 'spam_scam_commercial', details: 'קישור מסחרי חוזר' }],
+  events: [],
+  enforcements: [],
+  recentContent: [],
+  subjectUser: { uid: 'owner-1', displayName: 'מטיילת', status: 'active' },
 });
 
-const navigation = { setOptions: jest.fn(), goBack: jest.fn() };
-const deferred = () => {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
-  return { promise, resolve, reject };
-};
-const user = (uid) => ({ uid, displayName: `User ${uid}`, email: `${uid}@example.com`, disabled: false, emailVerified: false, admin: false });
-
-describe('AdminPanelScreen request and action isolation', () => {
+describe('Admin console end-to-end surface', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    AdminService.getModerationDashboard.mockResolvedValue({ openCases: 1, urgentCases: 0, heldContent: 0, pendingDestinations: 2 });
+    AdminService.getModerationDashboard.mockResolvedValue(dashboard);
     AdminService.listModerationCases.mockResolvedValue({ items: [], nextCursor: null });
-    AdminService.listHeldContent.mockResolvedValue({ items: [], nextCursor: null });
+    AdminService.getModerationPolicy.mockResolvedValue({
+      reasons: [
+        { id: 'no_violation', label: 'לא נמצאה הפרה', userMessage: 'לא נמצאה הפרה' },
+        { id: 'spam_scam_commercial', label: 'ספאם', userMessage: 'הפרת ספאם' },
+      ],
+    });
+    AdminService.listAdminSavedViews.mockResolvedValue({ items: [] });
     AdminService.listDestinationReviews.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.listAdminUsers.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.listModerationAudit.mockResolvedValue({ items: [], nextCursor: null });
-    AdminService.getDestinationRenameJob.mockResolvedValue({ status: 'complete', updatedCounts: {} });
-    Alert.prompt = jest.fn((_title, _message, callback) => callback('סיבה תקינה'));
+    AdminService.bulkUpdateModerationCases.mockResolvedValue({ results: [] });
+    AdminService.resolveModerationCase.mockResolvedValue({ success: true });
   });
 
-  it('shows a scoped error and retries only the active tab', async () => {
-    AdminService.getModerationDashboard
-      .mockRejectedValueOnce(new Error('private backend detail'))
-      .mockResolvedValueOnce({ openCases: 4, urgentCases: 1, heldContent: 2 });
+  it('opens each workload metric as its matching filtered queue', async () => {
     const screen = render(<AdminPanelScreen navigation={navigation} />);
+    expect(await screen.findByTestId('admin-metric-openCases')).toBeTruthy();
+    expect(await screen.findByTestId('admin-metric-urgentCases')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('admin-metric-urgentCases'));
+    await waitFor(() => expect(AdminService.listModerationCases).toHaveBeenCalledWith(expect.objectContaining({ view: 'urgent' })));
+    expect(screen.getByTestId('admin-queue-view-urgent').props.accessibilityState.selected).toBe(true);
+  }, 20000);
 
-    expect(await screen.findByTestId('admin-overview-error')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('admin-overview-retry'));
-    expect(await screen.findByText('4')).toBeTruthy();
-    expect(AdminService.getModerationDashboard).toHaveBeenCalledTimes(2);
+  it('moves from a compact queue row to a contextual mobile decision screen', async () => {
+    const item = queueCase('one');
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    const row = await screen.findByTestId('admin-case-one');
+    expect(screen.queryByText('קישור מסחרי חוזר')).toBeNull();
+    fireEvent.press(row);
+    expect(await screen.findByText('קישור מסחרי חוזר')).toBeTruthy();
+    expect(screen.getByTestId('admin-case-decision-one')).toBeTruthy();
+    expect(screen.getByTestId('admin-case-back')).toBeTruthy();
+    expect(screen.queryByTestId('admin-case-one')).toBeNull();
   });
 
-  it('keeps admin chrome and replaces the active tab body while refreshing', async () => {
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
+  it('keeps the queue and case context side by side on a wide screen', async () => {
+    const originalWindow = Dimensions.get('window');
+    const originalScreen = Dimensions.get('screen');
+    Dimensions.set({ window: { ...originalWindow, width: 1280, height: 900 }, screen: { ...originalScreen, width: 1280, height: 900 } });
+    const item = queueCase('wide');
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    try {
+      fireEvent.press(await screen.findByTestId('admin-case-wide'));
+      expect(await screen.findByTestId('admin-case-decision-wide')).toBeTruthy();
+      expect(screen.getByTestId('admin-case-wide')).toBeTruthy();
+      expect(screen.queryByTestId('admin-case-back')).toBeNull();
+    } finally {
+      screen.unmount();
+      Dimensions.set({ window: originalWindow, screen: originalScreen });
+    }
+  });
 
-    const pendingRefresh = deferred();
-    AdminService.getModerationDashboard.mockReturnValueOnce(pendingRefresh.promise);
-    const control = screen.UNSAFE_getByType(RefreshControl);
-    let refreshPromise;
-    act(() => {
-      refreshPromise = control.props.onRefresh();
+  it('submits one structured decision with the loaded revision and Hebrew policy reason', async () => {
+    const item = queueCase('decision');
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-decision'));
+    fireEvent.press(await screen.findByTestId('admin-decision-reason-no_violation'));
+    fireEvent.press(screen.getByTestId('admin-decision-submit'));
+    await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+      caseId: 'decision',
+      expectedRevision: 2,
+      contentAction: 'dismiss',
+      reasonCode: 'no_violation',
+      accountAction: { type: 'none' },
+    })));
+  });
+
+  it('can close a destination case as no violation without inventing a content action', async () => {
+    const item = queueCase('destination', {
+      target: { type: 'destination', id: 'haifa', countryId: 'il', path: 'countries/il/destinations/haifa' },
+      targetPreview: { available: true, title: 'חיפה', status: 'active' },
     });
-
-    expect(screen.getByTestId('admin-tab-overview')).toBeTruthy();
-    expect(screen.getByTestId('admin-overview-loading')).toBeTruthy();
-    expect(screen.queryByText('1')).toBeNull();
-
-    await act(async () => {
-      pendingRefresh.resolve({ openCases: 3, urgentCases: 0, heldContent: 0, pendingDestinations: 0 });
-      await refreshPromise;
-    });
-    expect(screen.getByText('3')).toBeTruthy();
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue({ ...detailsFor(item), subjectUser: null });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-destination'));
+    fireEvent.press(await screen.findByTestId('admin-decision-reason-no_violation'));
+    fireEvent.press(screen.getByTestId('admin-decision-submit'));
+    await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+      caseId: 'destination',
+      contentAction: 'dismiss',
+      accountAction: { type: 'none' },
+      reasonCode: 'no_violation',
+    })));
   });
 
-  it('executes the same user search every time it is submitted', async () => {
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-users'));
-    await waitFor(() => expect(AdminService.listAdminUsers).toHaveBeenCalledWith({}));
-
-    fireEvent.changeText(screen.getByTestId('admin-user-search-input'), 'user@example.com');
-    fireEvent.press(screen.getByTestId('admin-user-search'));
-    await waitFor(() => expect(AdminService.listAdminUsers).toHaveBeenCalledWith({ query: 'user@example.com' }));
-    fireEvent.press(screen.getByTestId('admin-user-search'));
-    await waitFor(() => {
-      const matching = AdminService.listAdminUsers.mock.calls.filter(([payload]) => payload?.query === 'user@example.com');
-      expect(matching).toHaveLength(2);
-    });
-
-    fireEvent.changeText(screen.getByTestId('admin-user-search-input'), " !–' ");
-    fireEvent.press(screen.getByTestId('admin-user-search'));
-    await waitFor(() => expect(AdminService.listAdminUsers).toHaveBeenLastCalledWith({}));
-  });
-
-  it('keeps a slow user action local and patches the row without reloading the tab', async () => {
-    AdminService.listAdminUsers.mockResolvedValue({ items: [user('one'), user('two')], nextCursor: null });
-    const slowSuspension = deferred();
-    AdminService.setUserSuspension.mockReturnValue(slowSuspension.promise);
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-users'));
-    await screen.findByText('User one');
-
-    fireEvent.press(screen.getByTestId('admin-user-suspend-one'));
-    await waitFor(() => expect(screen.getByTestId('admin-user-suspend-one').props.accessibilityState.busy).toBe(true));
-    expect(screen.getByTestId('admin-user-verify-one').props.accessibilityState.disabled).toBe(true);
-    expect(screen.getByTestId('admin-user-delete-one').props.accessibilityState.disabled).toBe(true);
-    expect(screen.getByTestId('admin-user-suspend-two').props.accessibilityState.disabled).toBe(false);
-    expect(screen.getByTestId('admin-tab-reports').props.accessibilityState.selected).toBe(false);
-
-    await act(async () => slowSuspension.resolve({ uid: 'one', suspended: true }));
-    await waitFor(() => expect(screen.getByText(/User one/)).toBeTruthy());
-    expect(screen.getAllByText(/מושעה/)).toHaveLength(1);
-    expect(AdminService.listAdminUsers).toHaveBeenCalledTimes(1);
-  });
-
-  it('discards an older response when the same tab is loaded again', async () => {
-    const oldRequest = deferred();
-    AdminService.listModerationCases
-      .mockReturnValueOnce(oldRequest.promise)
-      .mockResolvedValueOnce({ items: [{ id: 'new', target: { type: 'route', id: 'new' }, targetPreview: { title: 'חדש' } }], nextCursor: null });
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
-    await screen.findByTestId('admin-reports-loading');
-    fireEvent.press(screen.getByTestId('admin-tab-users'));
-    await screen.findByTestId('admin-users-empty');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
-    expect(await screen.findByTestId('admin-case-new')).toBeTruthy();
-
-    await act(async () => oldRequest.resolve({ items: [{ id: 'old', target: { type: 'route', id: 'old' }, targetPreview: { title: 'ישן' } }], nextCursor: null }));
-    expect(screen.queryByTestId('admin-case-old')).toBeNull();
-    expect(screen.getByTestId('admin-case-new')).toBeTruthy();
-  });
-
-  it('shows only meaningful actions for content that is already held', async () => {
-    AdminService.listHeldContent.mockResolvedValue({
-      items: [{ id: 'content_one', target: { type: 'recommendation', id: 'one' }, targetPreview: { title: 'ממתין' } }],
-      nextCursor: null,
-    });
-    AdminService.moderateContent.mockResolvedValue({ success: true });
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-content'));
-    await screen.findByTestId('admin-case-content_one');
-
-    expect(screen.getByTestId('admin-case-restore-content_one')).toBeTruthy();
-    expect(screen.getByTestId('admin-case-delete-content_one')).toBeTruthy();
-    expect(screen.queryByTestId('admin-case-hold-content_one')).toBeNull();
-  });
-
-  it('clears stale load-more progress when the tab is refreshed', async () => {
-    const staleLoadMore = deferred();
-    AdminService.listModerationCases
-      .mockResolvedValueOnce({ items: [{ id: 'first', target: { type: 'route', id: 'first' }, targetPreview: { title: 'ראשון' } }], nextCursor: 'cursor-1' })
-      .mockReturnValueOnce(staleLoadMore.promise)
-      .mockResolvedValueOnce({ items: [{ id: 'fresh', target: { type: 'route', id: 'fresh' }, targetPreview: { title: 'עדכני' } }], nextCursor: 'cursor-2' });
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
+  it('offers only safe bulk operations and limits selection to queue metadata', async () => {
+    const first = queueCase('first');
+    const second = queueCase('second');
+    AdminService.listModerationCases.mockResolvedValue({ items: [first, second], nextCursor: null });
+    AdminService.bulkUpdateModerationCases.mockResolvedValue({ results: [
+      { caseId: 'first', success: true }, { caseId: 'second', success: true },
+    ] });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
     await screen.findByTestId('admin-case-first');
-
-    fireEvent.press(screen.getByTestId('admin-reports-load-more'));
-    await waitFor(() => expect(screen.getByTestId('admin-reports-load-more').props.accessibilityState.busy).toBe(true));
-    fireEvent.press(screen.getByTestId('admin-tab-users'));
-    await screen.findByTestId('admin-users-empty');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
-
-    expect(await screen.findByTestId('admin-case-fresh')).toBeTruthy();
-    expect(screen.getByTestId('admin-reports-load-more').props.accessibilityState.busy).toBe(false);
-    expect(screen.getByTestId('admin-reports-load-more').props.accessibilityState.disabled).toBe(false);
-    await act(async () => staleLoadMore.resolve({ items: [], nextCursor: null }));
-    expect(screen.getByTestId('admin-reports-load-more').props.accessibilityState.disabled).toBe(false);
-  });
-
-  it('renders report details inline and never opens an alert', async () => {
-    AdminService.listModerationCases.mockResolvedValue({
-      items: [{ id: 'case-1', target: { type: 'recommendation', id: 'rec-1' }, targetPreview: { available: true, status: 'active', title: 'פוסט' }, reportCount: 1 }],
-      nextCursor: null,
-    });
-    AdminService.getModerationCase.mockResolvedValue({
-      reports: [{ id: 'report-1', category: 'spam_scam_commercial', details: 'קישור מסחרי חוזר' }],
-    });
-    const alertSpy = jest.spyOn(Alert, 'alert');
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
-    await screen.findByTestId('admin-case-case-1');
-
-    fireEvent.press(screen.getByTestId('admin-case-details-case-1'));
-    expect(await screen.findByTestId('admin-case-details-panel-case-1')).toBeTruthy();
-    expect(screen.getByText('קישור מסחרי חוזר')).toBeTruthy();
-    expect(alertSpy).not.toHaveBeenCalled();
-
-    AdminService.getModerationCase.mockResolvedValue({
-      reports: [{ id: 'report-2', category: 'other', details: 'דיווח חדש לאחר הרענון' }],
-    });
-    fireEvent.press(screen.getByTestId('admin-tab-users'));
-    await screen.findByTestId('admin-users-empty');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
-    await waitFor(() => expect(AdminService.listModerationCases).toHaveBeenCalledTimes(2));
-    await screen.findByTestId('admin-case-case-1');
-    fireEvent.press(screen.getByTestId('admin-case-details-case-1'));
-    expect(await screen.findByText('דיווח חדש לאחר הרענון')).toBeTruthy();
-    expect(AdminService.getModerationCase).toHaveBeenCalledTimes(2);
-  });
-
-  it('dismisses a report on published content without offering a redundant restore action', async () => {
-    AdminService.listModerationCases.mockResolvedValue({
-      items: [{ id: 'case-1', target: { type: 'recommendation', id: 'rec-1' }, targetPreview: { available: true, status: 'active', title: 'פוסט' }, reportCount: 1 }],
-      nextCursor: null,
-    });
-    AdminService.moderateContent.mockResolvedValue({ success: true, action: 'dismiss' });
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-reports'));
-    await screen.findByTestId('admin-case-case-1');
-
-    expect(screen.queryByTestId('admin-case-restore-case-1')).toBeNull();
-    fireEvent.press(screen.getByTestId('admin-case-dismiss-case-1'));
-    await waitFor(() => expect(AdminService.moderateContent).toHaveBeenCalledWith({
-      caseId: 'case-1', target: { type: 'recommendation', id: 'rec-1' }, action: 'dismiss', reason: 'סיבה תקינה',
-    }));
-    await waitFor(() => expect(screen.queryByTestId('admin-case-case-1')).toBeNull());
-  });
-
-  it('sorts cities awaiting approval before approved cities', async () => {
-    AdminService.listDestinationReviews.mockResolvedValue({
-      items: [
-        { id: 'approved', status: 'approved', cityId: 'approved', names: { he: 'עיר מאושרת' }, updatedAt: '2026-08-16T12:00:00Z' },
-        { id: 'pending', status: 'open', cityId: 'pending', names: { he: 'עיר ממתינה' }, updatedAt: '2026-08-15T12:00:00Z' },
-      ],
-      nextCursor: null,
-    });
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-destinations'));
-    await screen.findByTestId('admin-destination-pending');
-    let rows = screen.getAllByTestId(/^admin-destination-(pending|approved)$/);
-    expect(rows.map((row) => row.props.testID)).toEqual(['admin-destination-pending', 'admin-destination-approved']);
-
-    AdminService.approveDestination.mockResolvedValue({ success: true });
-    AdminService.getDestinationReview.mockResolvedValue({
-      countryId: 'country', cityId: 'pending', city: { status: 'active', googleCache: { names: { he: 'עיר ממתינה' } } },
-      country: {}, review: { status: 'approved' }, issues: [],
-    });
-    fireEvent.press(screen.getByTestId('admin-destination-approve-pending'));
-    await waitFor(() => expect(AdminService.getDestinationReview).toHaveBeenCalled());
-    rows = screen.getAllByTestId(/^admin-destination-(pending|approved)$/);
-    expect(rows.map((row) => row.props.testID)).toEqual(['admin-destination-approved', 'admin-destination-pending']);
-  });
-
-  it('renames a destination in Hebrew without approving it', async () => {
-    AdminService.listDestinationReviews.mockResolvedValue({
-      items: [{
-        id: 'sapa', countryId: 'VN', cityId: 'sa-pa', status: 'blocked',
-        names: { he: 'Sa Pa', en: 'Sa Pa' }, issues: [{ code: 'missing_hebrew_name', severity: 'error', label: 'חסר שם בעברית' }],
-      }],
-      nextCursor: null,
-    });
-    AdminService.setDestinationHebrewName.mockResolvedValue({
-      jobId: 'job-1', status: 'complete', progress: { recommendations: 1, routesAndStops: 0, trips: 0 },
-    });
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByText('1');
-    fireEvent.press(screen.getByTestId('admin-tab-destinations'));
-    await screen.findByTestId('admin-destination-sapa');
-
-    fireEvent.press(screen.getByTestId('admin-destination-rename-sapa'));
-    fireEvent.changeText(screen.getByTestId('admin-destination-rename-name-sapa'), 'סאפה');
-    fireEvent.changeText(screen.getByTestId('admin-destination-rename-reason-sapa'), 'תיקון שם היעד');
-    fireEvent.press(screen.getByTestId('admin-destination-rename-save-sapa'));
-
-    await waitFor(() => expect(AdminService.setDestinationHebrewName).toHaveBeenCalledWith(
-      'VN', 'sa-pa', 'סאפה', 'תיקון שם היעד'
-    ));
-    expect(await screen.findByText('השם עודכן בכל התוכן המקושר.')).toBeTruthy();
-    expect(AdminService.approveDestination).not.toHaveBeenCalled();
-  });
-
-  it('shows the admin name in the activity log and the pending-city metric in overview', async () => {
-    const screen = render(<AdminPanelScreen navigation={navigation} />);
-    expect(await screen.findByText('ערים ממתינות לאישור')).toBeTruthy();
-    AdminService.listModerationAudit.mockResolvedValue({
-      items: [{ id: 'audit-1', action: 'content_hold', reason: 'בדיקה', actorUid: 'uid-hidden', actorName: 'מנהלת פלאן לי' }],
-      nextCursor: null,
-    });
-    fireEvent.press(screen.getByTestId('admin-tab-audit'));
-    expect(await screen.findByText('מנהל: מנהלת פלאן לי')).toBeTruthy();
-    expect(screen.queryByText('מנהל: uid-hidden')).toBeNull();
-  });
-
-  it('fetches, expands, and highlights the exact report opened from an admin notification', async () => {
-    AdminService.getModerationCase.mockResolvedValue({
-      id: 'case-focus',
-      target: { type: 'recommendation', id: 'rec-1' },
-      targetPreview: { title: 'המלצה ממוקדת', available: true },
+    fireEvent.press(screen.getByTestId('admin-case-select-first'));
+    fireEvent.press(screen.getByTestId('admin-case-select-second'));
+    expect(screen.getByTestId('admin-bulk-claim')).toBeTruthy();
+    expect(screen.getByTestId('admin-bulk-priority')).toBeTruthy();
+    expect(screen.getByTestId('admin-bulk-dismiss')).toBeTruthy();
+    expect(screen.queryByText('מחיקה מרובה')).toBeNull();
+    fireEvent.press(screen.getByTestId('admin-bulk-priority'));
+    await waitFor(() => expect(AdminService.bulkUpdateModerationCases).toHaveBeenCalledWith({
+      operation: 'set_priority',
       priority: 'urgent',
-      reports: [{ id: 'report-1', category: 'other', details: 'פרט מאושר להצגת מנהל' }],
-    });
-    const screen = render(
-      <AdminPanelScreen
-        navigation={navigation}
-        route={{ params: { tab: 'reports', caseId: 'case-focus' } }}
-      />
-    );
-
-    const focused = await screen.findByTestId('admin-case-case-focus');
-    expect(AdminService.getModerationCase).toHaveBeenCalledWith('case-focus');
-    expect(focused.props.accessibilityLabel).toBe('הדיווח שנפתח מההתראה');
-    expect(screen.getByTestId('admin-case-details-panel-case-focus')).toBeTruthy();
+      cases: [
+        { caseId: 'first', expectedRevision: 2 },
+        { caseId: 'second', expectedRevision: 2 },
+      ],
+    }));
   });
 
-  it('fetches and highlights the exact destination review opened from an admin notification', async () => {
-    AdminService.listDestinationReviews.mockResolvedValue({
-      items: [{
-        id: 'blocked-first-by-default',
-        countryId: 'IT',
-        cityId: 'rome',
-        status: 'blocked',
-        updatedAt: '2026-08-21T00:00:00.000Z',
-      }],
+  it('keeps account authority in the separate advanced users area', async () => {
+    AdminService.listAdminUsers.mockResolvedValue({
+      items: [{ uid: 'user-1', displayName: 'נועה', email: 'noya@example.com', disabled: false, emailVerified: true, admin: false }],
       nextCursor: null,
     });
-    AdminService.getDestinationReview.mockResolvedValue({
-      countryId: 'IL',
-      cityId: 'haifa',
-      city: { status: 'active', identity: { names: { he: 'חיפה' } }, stats: { recommendationCount: 3 } },
-      country: { names: { he: 'ישראל' } },
-      review: { status: 'open' },
-      job: {},
-      issues: [],
-    });
-    const screen = render(
-      <AdminPanelScreen
-        navigation={navigation}
-        route={{ params: { tab: 'destinations', countryId: 'IL', cityId: 'haifa' } }}
-      />
-    );
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content');
+    fireEvent.press(screen.getByTestId('admin-tab-users'));
+    fireEvent.press(await screen.findByTestId('admin-user-user-1'));
+    expect(screen.queryByTestId('admin-user-admin-user-1')).toBeNull();
+    fireEvent.press(screen.getByTestId('admin-users-advanced-toggle'));
+    expect(screen.getByTestId('admin-user-admin-user-1')).toBeTruthy();
+    expect(screen.getByTestId('admin-user-delete-user-1')).toBeTruthy();
+  });
 
-    const focused = await screen.findByTestId('admin-destination-notification_IL_haifa');
-    expect(AdminService.getDestinationReview).toHaveBeenCalledWith('IL', 'haifa');
-    const rows = screen.getAllByTestId(/^admin-destination-(notification_IL_haifa|blocked-first-by-default)$/);
-    expect(rows.map((row) => row.props.testID)).toEqual([
-      'admin-destination-notification_IL_haifa',
-      'admin-destination-blocked-first-by-default',
-    ]);
-    expect(focused.props.accessibilityLabel).toBe('בקרת העיר שנפתחה מההתראה');
+  it('searches private admin projections and opens an existing case without exposing raw status codes', async () => {
+    AdminService.searchAdminResources.mockResolvedValue({
+      items: [{ id: 'result-1', type: 'recommendation', status: 'active', title: 'מסעדה בחיפה', target: { type: 'recommendation', id: 'rec-1' } }],
+    });
+    AdminService.getAdminResource.mockResolvedValue({
+      preview: { title: 'מסעדה בחיפה', available: true },
+      case: { id: 'case-search', status: 'open' },
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content');
+    fireEvent.press(screen.getByTestId('admin-tab-search'));
+    fireEvent.changeText(screen.getByTestId('admin-resource-search-input'), 'חיפה');
+    fireEvent.press(screen.getByTestId('admin-resource-search'));
+    fireEvent.press(await screen.findByTestId('admin-search-result-result-1'));
+    expect(await screen.findByTestId('admin-search-open-case')).toBeTruthy();
+    expect(screen.queryByText('active')).toBeNull();
+  });
+
+  it('loads additional admin search pages with the returned cursor', async () => {
+    AdminService.searchAdminResources
+      .mockResolvedValueOnce({
+        items: [{ id: 'result-1', type: 'recommendation', status: 'active', title: 'תוצאה ראשונה', target: { type: 'recommendation', id: 'rec-1' } }],
+        nextCursor: 'cursor-1',
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'result-2', type: 'recommendation', status: 'active', title: 'תוצאה שנייה', target: { type: 'recommendation', id: 'rec-2' } }],
+        nextCursor: null,
+      });
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content');
+    fireEvent.press(screen.getByTestId('admin-tab-search'));
+    fireEvent.changeText(screen.getByTestId('admin-resource-search-input'), 'חיפה');
+    fireEvent.press(screen.getByTestId('admin-resource-search'));
+    fireEvent.press(await screen.findByTestId('admin-search-load-more'));
+    expect(await screen.findByTestId('admin-search-result-result-2')).toBeTruthy();
+    expect(AdminService.searchAdminResources).toHaveBeenLastCalledWith({ query: 'חיפה', cursor: 'cursor-1' });
+  });
+
+  it('shows a retryable local error when moderation policy loading fails', async () => {
+    const item = queueCase('policy');
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
+    AdminService.getModerationPolicy.mockRejectedValueOnce(new Error('unavailable'));
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-policy'));
+    expect(await screen.findByTestId('admin-case-policy-error')).toBeTruthy();
+    AdminService.getModerationPolicy.mockResolvedValue({
+      reasons: [{ id: 'no_violation', label: 'לא נמצאה הפרה', userMessage: 'לא נמצאה הפרה' }],
+    });
+    fireEvent.press(screen.getByTestId('admin-case-policy-retry'));
+    expect(await screen.findByTestId('admin-case-decision-policy')).toBeTruthy();
+  });
+
+  it('moves from a search result without reports to a documented decision', async () => {
+    const target = { type: 'recommendation', id: 'rec-new', path: 'recommendations/rec-new' };
+    AdminService.searchAdminResources.mockResolvedValue({
+      items: [{ id: 'result-new', type: 'recommendation', status: 'active', title: 'תוכן ללא דיווח', target }],
+    });
+    AdminService.getAdminResource.mockResolvedValue({
+      target,
+      preview: { title: 'תוכן ללא דיווח', available: true },
+      case: null,
+    });
+    AdminService.resolveModerationCase.mockResolvedValue({ caseId: 'case-created', revision: 2 });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(queueCase('case-created', { target })));
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content');
+    fireEvent.press(screen.getByTestId('admin-tab-search'));
+    fireEvent.changeText(screen.getByTestId('admin-resource-search-input'), 'תוכן');
+    fireEvent.press(screen.getByTestId('admin-resource-search'));
+    fireEvent.press(await screen.findByTestId('admin-search-result-result-new'));
+    fireEvent.press(await screen.findByTestId('admin-decision-reason-no_violation'));
+    fireEvent.press(screen.getByTestId('admin-decision-submit'));
+    await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+      target,
+      expectedRevision: 0,
+      contentAction: 'dismiss',
+      accountAction: { type: 'none' },
+      reasonCode: 'no_violation',
+    })));
+    expect(await screen.findByTestId('admin-case-decision-case-created')).toBeTruthy();
   });
 });

@@ -3,6 +3,7 @@ import {
   ADMIN_CALLABLE_TIMEOUTS,
   deleteUserAsAdmin,
   getModerationDashboard,
+  resolveModerationCase,
   setUserSuspension,
 } from '../src/services/AdminService';
 
@@ -19,6 +20,7 @@ describe('AdminService callable deadlines', () => {
     await setUserSuspension('user-1', true, 'reason');
     await deleteUserAsAdmin('user-2', 'reason');
     await getModerationDashboard();
+    await resolveModerationCase({ caseId: 'case-1' });
 
     expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'setUserSuspension', {
       timeout: ADMIN_CALLABLE_TIMEOUTS.setUserSuspension,
@@ -28,6 +30,9 @@ describe('AdminService callable deadlines', () => {
     });
     expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'getModerationDashboard', {
       timeout: 70000,
+    });
+    expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'resolveModerationCase', {
+      timeout: ADMIN_CALLABLE_TIMEOUTS.resolveModerationCase,
     });
     expect(ADMIN_CALLABLE_TIMEOUTS.setUserSuspension).toBeGreaterThan(300000);
     expect(ADMIN_CALLABLE_TIMEOUTS.deleteUserAsAdmin).toBeGreaterThan(540000);

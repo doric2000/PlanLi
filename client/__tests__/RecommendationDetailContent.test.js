@@ -38,6 +38,15 @@ jest.mock('../src/components/OpenWithLocationSheet', () => {
   };
 });
 
+jest.mock('../src/features/moderation/components/ReportButton', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return ({ target, subjectLabel }) => ReactModule.createElement(View, {
+    testID: 'attached-place-report',
+    accessibilityLabel: `${subjectLabel}:${target?.subject?.kind}`,
+  });
+});
+
 describe('RecommendationDetailContent', () => {
   const item = {
     id: 'rec-1',
@@ -91,6 +100,7 @@ describe('RecommendationDetailContent', () => {
     expect(tagsMetadataStyle.backgroundColor).toBeUndefined();
     expect(tagsMetadataStyle.borderWidth).toBeUndefined();
     expect(screen.getByText('פתיחה באמצעות')).toBeTruthy();
+    expect(screen.getByTestId('attached-place-report').props.accessibilityLabel).toBe('המקום המחובר:attached_place');
     expect(screen.queryByText('פתיחה ב-Waze')).toBeNull();
     expect(screen.queryByText('פתח בגוגל מפות')).toBeNull();
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-exact-map').props.style)).toMatchObject({

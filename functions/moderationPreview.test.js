@@ -62,6 +62,27 @@ test('comment previews include the reported text and parent post context', () =>
   assert.equal(preview.imageUrl, 'https://img.example/route.webp');
 });
 
+test('destination and attached-place previews expose bounded location context', () => {
+  const destination = buildModerationPreview({
+    target: { type: 'destination', id: 'haifa', cityId: 'haifa', countryId: 'IL' },
+    data: { status: 'active', identity: { names: { he: 'חיפה' } }, countryName: 'ישראל' },
+  });
+  assert.equal(destination.title, 'חיפה');
+  assert.equal(destination.author, null);
+  const attached = buildModerationPreview({
+    target: {
+      type: 'recommendation', id: 'rec-1',
+      subject: { kind: 'attached_place', field: 'place' },
+    },
+    data: {
+      title: 'המלצה', ownerId: 'owner-1',
+      place: { name: 'מקום מדווח', address: 'רחוב 1', coordinates: { lat: 32.1, lng: 34.8 } },
+    },
+  });
+  assert.equal(attached.place.name, 'מקום מדווח');
+  assert.equal(attached.subject.kind, 'attached_place');
+});
+
 test('legacy cases hydrate from live content and deleted targets stay recognizable', async () => {
   const admin = fakeAdmin({
     'trips/trip-1': { ownerId: 'owner-1', title: 'טיול קיץ', description: 'פרטי הטיול', status: 'active' },

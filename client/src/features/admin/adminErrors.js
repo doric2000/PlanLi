@@ -13,6 +13,10 @@ export function safeAdminError(error, { operationMayContinue = false } = {}) {
   if (reason === 'content_not_held') return 'התוכן כבר מפורסם ולכן אין צורך להחזיר אותו לפרסום.';
   if (reason === 'content_not_active') return 'מצב התוכן השתנה והוא כבר אינו מפורסם. יש לרענן ולבחור פעולה מתאימה.';
   if (reason === 'content_missing') return 'התוכן כבר אינו זמין. יש לרענן את רשימת הדיווחים.';
+  if (reason === 'case_revision_conflict') return 'מנהל אחר עדכן את התיק. המצב העדכני נטען ויש לבדוק אותו מחדש לפני החלטה.';
+  if (reason === 'admin_account_protected') return 'אי אפשר להפעיל אכיפה על מנהל פעיל. יש להסיר קודם את הרשאת המנהל באזור המתקדם.';
+  if (reason === 'target_owner_missing') return 'לתיק הזה אין חשבון משתמש שאפשר להפעיל עליו אכיפה.';
+  if (reason === 'place_destination_mismatch') return 'המקום המאומת אינו שייך לעיר של התוכן. יש לבחור מועמד אחר.';
   const code = String(error?.code || error?.name || '').toLowerCase();
   if (operationMayContinue && (code.includes('deadline-exceeded') || code.includes('timeout') || code.includes('unavailable'))) {
     return 'הפעולה אורכת זמן רב. ייתכן שהיא עדיין מתבצעת בשרת; אין להפעיל אותה שוב לפני רענון ובדיקת המצב.';

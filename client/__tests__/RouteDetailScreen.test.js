@@ -39,6 +39,7 @@ jest.mock('../src/components/CommentsModal', () => {
 jest.mock('../src/components/LikesModal', () => () => null);
 jest.mock('../src/components/RecommendationHero', () => ({ RecommendationHero: () => null }));
 jest.mock('../src/components/RecommendationActionBar', () => ({ RecommendationActionBar: () => null }));
+jest.mock('../src/features/moderation/components/ReportButton', () => () => null);
 jest.mock('../src/components/MediaGalleryModal', () => () => null);
 jest.mock('react-native-safe-area-context', () => {
   const ReactModule = require('react');

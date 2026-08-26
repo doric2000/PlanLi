@@ -8,7 +8,7 @@ const {
   cleanupRemovedMedia,
   collectManagedMediaPaths,
 } = require('./mediaCleanup');
-const { publicProfileProjectionChanged, syncPublicProfile } = require('./publicProfiles');
+const { publicProfileProjectionChanged, syncCurrentPublicProfile } = require('./publicProfiles');
 const {
   finalizeDestinationChoice,
   resolveRecommendationDestination,
@@ -94,19 +94,31 @@ const {
   submitReport,
 } = require('./moderationService');
 const {
+  bulkUpdateModerationCases,
+  deleteAdminSavedView,
   deleteUserAsAdmin,
+  getAdminResource,
   getAdminUser,
   getModerationCase,
   getModerationDashboard,
+  getModerationPolicy,
+  listAdminSavedViews,
   listAdminUsers,
   listHeldContent,
   listModerationAudit,
   listModerationCases,
   moderateContent,
+  processExpiredModerationSuspensions,
+  resolveModerationCase,
+  saveAdminSavedView,
+  searchAdminResources,
   setUserAdmin,
   setUserEmailVerified,
   setUserSuspension,
+  updateModerationCase,
+  updateAdminAttachedPlace,
 } = require('./adminService');
+const { handleAdminSearchProjectionWrite } = require('./adminSearchProjection');
 const {
   approveDestination,
   deactivateDestination,
@@ -651,6 +663,59 @@ exports.listModerationCases = callable({ access: 'signedIn' }, (request) =>
 exports.getModerationCase = callable({ access: 'signedIn' }, (request) =>
   getModerationCase({ admin, auth: request.auth, data: request.data })
 );
+exports.updateModerationCase = callable({ access: 'signedIn' }, (request) =>
+  updateModerationCase({ admin, auth: request.auth, data: request.data })
+);
+exports.resolveModerationCase = callable(
+  { access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => resolveModerationCase({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    mediaBucket: mediaStorageBucket.value(),
+  })
+);
+exports.bulkUpdateModerationCases = callable(
+  { access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
+  (request) => bulkUpdateModerationCases({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    mediaBucket: mediaStorageBucket.value(),
+  })
+);
+exports.searchAdminResources = callable({ access: 'signedIn' }, (request) =>
+  searchAdminResources({ admin, auth: request.auth, data: request.data })
+);
+exports.getAdminResource = callable({ access: 'signedIn' }, (request) =>
+  getAdminResource({ admin, auth: request.auth, data: request.data })
+);
+exports.listAdminSavedViews = callable({ access: 'signedIn' }, (request) =>
+  listAdminSavedViews({ admin, auth: request.auth })
+);
+exports.saveAdminSavedView = callable({ access: 'signedIn' }, (request) =>
+  saveAdminSavedView({ admin, auth: request.auth, data: request.data })
+);
+exports.deleteAdminSavedView = callable({ access: 'signedIn' }, (request) =>
+  deleteAdminSavedView({ admin, auth: request.auth, data: request.data })
+);
+exports.getModerationPolicy = callable({ access: 'signedIn' }, (request) =>
+  getModerationPolicy({ admin, auth: request.auth })
+);
+exports.updateAdminAttachedPlace = callable(
+  {
+    access: 'signedIn',
+    timeoutSeconds: 180,
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+    secrets: [publicRateLimitKey],
+  },
+  (request) => updateAdminAttachedPlace({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    providerRateLimitKey: publicRateLimitKey.value(),
+  })
+);
 exports.listHeldContent = callable({ access: 'signedIn' }, (request) =>
   listHeldContent({ admin, auth: request.auth, data: request.data })
 );
@@ -901,6 +966,25 @@ exports.checkNotificationPushReceiptsScheduled = onSchedule(
   }
 );
 
+exports.expireModerationSuspensionsScheduled = onSchedule(
+  {
+    schedule: 'every 15 minutes',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    memory: '1GiB',
+    serviceAccount: MEDIA_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const result = await processExpiredModerationSuspensions({
+      admin,
+      mediaBucket: mediaStorageBucket.value(),
+      limit: 100,
+    });
+    console.log('Expired moderation suspension scan complete.', result);
+  }
+);
+
 async function handleMediaCleanup(event, collectionName) {
   const change = event.data;
   if (!change) return;
@@ -1090,7 +1174,7 @@ exports.onPublicProfileSync = firestoreWritten(
     const before = event.data?.before.exists ? event.data.before.data() : null;
     const after = event.data?.after.exists ? event.data.after.data() : null;
     if (!publicProfileProjectionChanged(event.params.userId, before, after)) return;
-    await syncPublicProfile(admin, event.params.userId, after);
+    await syncCurrentPublicProfile(admin, event.params.userId);
     const publicSnapshot = await admin.firestore().doc(
       `publicProfiles/${event.params.userId}`
     ).get();
@@ -1197,6 +1281,39 @@ exports.onCityFavoriteProjection = firestoreWritten(
       data: after && hasUsableDestinationCache(after) ? after : null,
     });
   }
+);
+
+function adminSearchProjectionHandler(event) {
+  return handleAdminSearchProjectionWrite({ admin, event });
+}
+
+exports.onRecommendationAdminSearchWritten = firestoreWritten(
+  'recommendations/{recommendationId}',
+  adminSearchProjectionHandler
+);
+exports.onRouteAdminSearchWritten = firestoreWritten(
+  'routes/{routeId}',
+  adminSearchProjectionHandler
+);
+exports.onTripAdminSearchWritten = firestoreWritten(
+  'trips/{tripId}',
+  adminSearchProjectionHandler
+);
+exports.onPublicProfileAdminSearchWritten = firestoreWritten(
+  'publicProfiles/{userId}',
+  adminSearchProjectionHandler
+);
+exports.onCommentAdminSearchWritten = firestoreWritten(
+  '{parentCollection}/{parentId}/comments/{commentId}',
+  adminSearchProjectionHandler
+);
+exports.onRouteStopAdminSearchWritten = firestoreWritten(
+  'routes/{routeId}/revisions/{revisionId}/days/{dayId}/stops/{stopId}',
+  adminSearchProjectionHandler
+);
+exports.onDestinationAdminSearchWritten = firestoreWritten(
+  'countries/{countryId}/destinations/{cityId}',
+  adminSearchProjectionHandler
 );
 
 exports.onDestinationCatalogSync = firestoreWritten(

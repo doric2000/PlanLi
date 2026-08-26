@@ -45,6 +45,7 @@
     "backfill-public-profiles": "node scripts/backfillPublicProfiles.js",
     "backfill-comment-status": "node scripts/backfillCommentStatus.js",
     "backfill-comment-threads": "node scripts/backfillCommentThreads.js",
+    "backfill-moderation-console": "node scripts/backfillModerationConsole.js",
     "sync-country-metadata": "node scripts/syncCountryMetadata.js",
     "sync-airport-facts": "node scripts/syncAirportFacts.js",
     "build-country-geo": "node scripts/buildCountryGeoData.js"

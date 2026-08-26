@@ -342,6 +342,8 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
                   day={activeDay}
                   dayIndex={activeDayIndex}
                   dayCount={days.length}
+                  routeId={routeId}
+                  ownerId={routeData?.ownerId}
                   onPreviousDay={() => setActiveDayIndex((index) => Math.max(0, index - 1))}
                   onNextDay={() => setActiveDayIndex((index) => Math.min(days.length - 1, index + 1))}
                   onOpenRecommendation={(postId) => navigation.navigate('RecommendationDetail', { postId })}

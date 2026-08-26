@@ -9,6 +9,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 import ContentDetailAuthorRow from '../../../components/ContentDetailAuthorRow';
 import NavigationChevron from '../../../components/NavigationChevron';
+import ReportButton from '../../moderation/components/ReportButton';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
 import { getPlaceCoordinates } from '../../../utils/distance';
@@ -106,6 +107,16 @@ export default function RecommendationDetailContent({
             <View
               style={styles.locationRow}
             >
+              <ReportButton
+                target={{
+                  type: 'recommendation',
+                  id: recommendationId,
+                  subject: { kind: 'attached_place', field: 'place' },
+                }}
+                ownerId={item?.ownerId}
+                compact
+                subjectLabel="המקום המחובר"
+              />
               <Ionicons name="map-outline" size={19} color={colors.textMuted} />
               <AppText style={[styles.locationText, styles.placeText]} numberOfLines={2}>
                 {[placeLabel, item?.place?.address].filter((value, index, all) => value && all.indexOf(value) === index).join(' · ')}

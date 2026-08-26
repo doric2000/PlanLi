@@ -75,6 +75,9 @@ export function createDestinationStyles(width = 390, insets = {}) {
       left: 14,
       padding: 0,
     },
+    reportButton: {
+      left: 70,
+    },
     summaryCard: {
       width: wide ? 720 : '94%',
       maxWidth: '94%',

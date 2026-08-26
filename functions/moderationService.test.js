@@ -6,14 +6,22 @@ const {
   buildAdminNotificationProjection,
   buildHeldMediaProjection,
   caseIdForPath,
+  caseIdForTarget,
   caseStatusForReport,
   evaluateTextSafety,
   handleModerationCaseNotificationWrite,
   normalizeReportInput,
   normalizeReportTarget,
+  reportLeaseMutation,
   setBlockedUser,
   submitReport,
 } = require('./moderationService');
+
+test('a report invalidates an in-flight moderation decision lease', () => {
+  const deleted = Symbol('deleted');
+  assert.deepEqual(reportLeaseMutation('resolving', deleted), { decisionLease: deleted });
+  assert.deepEqual(reportLeaseMutation('open', deleted), {});
+});
 
 test('normalizes every supported moderation target to a canonical path', () => {
   assert.deepEqual(normalizeReportTarget({ type: 'recommendation', id: 'rec-1' }), {
@@ -26,6 +34,17 @@ test('normalizes every supported moderation target to a canonical path', () => {
     path: 'routes/route-1/comments/comment-1',
   });
   assert.equal(normalizeReportTarget({ type: 'profile', id: 'user-1' }).path, 'publicProfiles/user-1');
+  assert.deepEqual(normalizeReportTarget({ type: 'destination', countryId: 'IL', cityId: 'haifa' }), {
+    type: 'destination', id: 'haifa', countryId: 'IL', cityId: 'haifa',
+    path: 'countries/IL/destinations/haifa',
+  });
+  assert.deepEqual(normalizeReportTarget({
+    type: 'route', id: 'route-1',
+    subject: { kind: 'attached_place', field: 'place', dayId: 'day-1', stopId: 'stop-1' },
+  }).subject, { kind: 'attached_place', field: 'place', dayId: 'day-1', stopId: 'stop-1' });
+  assert.throws(() => normalizeReportTarget({
+    type: 'route', id: 'route-1', subject: { kind: 'attached_place' },
+  }), (error) => error.details?.reason === 'invalid_target');
 });
 
 test('requires useful details for accuracy, rights and other reports', () => {
@@ -42,6 +61,11 @@ test('case ids are stable and do not expose the target path', () => {
   assert.equal(first, caseIdForPath('recommendations/abc'));
   assert.notEqual(first, caseIdForPath('recommendations/def'));
   assert.equal(first.includes('recommendations'), false);
+  const root = normalizeReportTarget({ type: 'recommendation', id: 'abc' });
+  const place = normalizeReportTarget({
+    type: 'recommendation', id: 'abc', subject: { kind: 'attached_place', field: 'place' },
+  });
+  assert.notEqual(caseIdForTarget(root), caseIdForTarget(place));
 });
 
 test('a new report reopens resolved cases while preserving unresolved states', () => {

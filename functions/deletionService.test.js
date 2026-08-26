@@ -2,12 +2,79 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  deleteAccountInternal,
   deleteDocumentStrict,
   deleteNotificationDevicesForUser,
   deleteRecommendationDraftsForUser,
   removeReporterModerationData,
   requestAccountDeletion,
 } = require('./deletionService');
+
+test('account deletion cannot deactivate the last active administrator', async () => {
+  let userMarkedDeleting = false;
+  const userRef = { path: 'users/admin-1' };
+  const registryRef = { path: 'system/moderation/admins/admin-1' };
+  const db = {
+    doc(path) {
+      if (path === userRef.path) return userRef;
+      if (path === registryRef.path) return registryRef;
+      return { path, set: async () => {} };
+    },
+    collection(path) {
+      assert.equal(path, 'system/moderation/admins');
+      return { where: () => ({ kind: 'active-admin-query' }) };
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => {
+        if (ref === userRef) return { exists: true, data: () => ({ moderation: { status: 'active' } }) };
+        if (ref.kind === 'active-admin-query') return { size: 1, docs: [{ id: 'admin-1' }] };
+        throw new Error(`Unexpected transaction read ${ref.path || ref.kind}`);
+      },
+      set: () => { userMarkedDeleting = true; },
+    }),
+  };
+  const firestore = Object.assign(() => db, {
+    FieldValue: { serverTimestamp: () => 'time' },
+  });
+  await assert.rejects(deleteAccountInternal({
+    admin: { firestore },
+    uid: 'admin-1',
+  }), (error) => error.details?.reason === 'last_admin');
+  assert.equal(userMarkedDeleting, false);
+});
+
+test('self-service deletion rejects an admin granted during the deletion preflight', async () => {
+  let userMarkedDeleting = false;
+  const userRef = { path: 'users/admin-2' };
+  const registryRef = { path: 'system/moderation/admins/admin-2' };
+  const db = {
+    doc(path) {
+      if (path === userRef.path) return userRef;
+      if (path === registryRef.path) return registryRef;
+      return { path, set: async () => {} };
+    },
+    collection: () => ({ where: () => ({ kind: 'active-admin-query' }) }),
+    runTransaction: async (handler) => handler({
+      get: async (ref) => {
+        if (ref === userRef) return { exists: true, data: () => ({ moderation: { status: 'active' } }) };
+        if (ref.kind === 'active-admin-query') {
+          return { size: 2, docs: [{ id: 'admin-1' }, { id: 'admin-2' }] };
+        }
+        throw new Error(`Unexpected transaction read ${ref.path || ref.kind}`);
+      },
+      set: () => { userMarkedDeleting = true; },
+    }),
+  };
+  const firestore = Object.assign(() => db, {
+    FieldValue: { serverTimestamp: () => 'time' },
+  });
+  await assert.rejects(deleteAccountInternal({
+    admin: { firestore },
+    uid: 'admin-2',
+    rejectActiveAdminTarget: true,
+  }), (error) => error.details?.reason === 'admin_access_active');
+  assert.equal(userMarkedDeleting, false);
+});
 
 test('account cleanup includes durable owner-notification outboxes', () => {
   const source = require('node:fs').readFileSync(require.resolve('./deletionService'), 'utf8');
@@ -150,6 +217,27 @@ test('account deletion still requires a recent Firebase authentication', async (
     auth: { uid: 'firebase-user-1', token: { auth_time: 1 } },
     data: {},
   }), (error) => error.code === 'failed-precondition');
+});
+
+test('an active administrator must have access removed before self-service deletion', async () => {
+  let authReads = 0;
+  const admin = {
+    firestore: () => ({
+      doc: () => ({ get: async () => ({ exists: true, data: () => ({ active: true }) }) }),
+    }),
+    auth: () => ({
+      getUser: async () => { authReads += 1; return { providerData: [] }; },
+    }),
+  };
+  await assert.rejects(requestAccountDeletion({
+    admin,
+    auth: {
+      uid: 'admin-1',
+      token: { admin: true, auth_time: Math.floor(Date.now() / 1000) },
+    },
+    data: {},
+  }), (error) => error.code === 'failed-precondition');
+  assert.equal(authReads, 0);
 });
 
 test('reporter moderation records are removed and aggregate counters are decremented', async () => {
