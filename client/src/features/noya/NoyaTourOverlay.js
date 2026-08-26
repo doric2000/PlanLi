@@ -22,6 +22,55 @@ const BUBBLE_ESTIMATED_HEIGHT = 286;
 const MEASUREMENT_RETRY_MS = 80;
 const MEASUREMENT_STABILITY_DELTA = 1;
 
+function finiteRect(rect) {
+  if (!rect) return null;
+  const values = [rect.x, rect.y, rect.width, rect.height].map(Number);
+  if (!values.every(Number.isFinite) || values[2] <= 0 || values[3] <= 0) return null;
+  return { x: values[0], y: values[1], width: values[2], height: values[3] };
+}
+
+export function rectInOverlay(targetRect, overlayWindowRect, overlayLayoutRect) {
+  const target = finiteRect(targetRect);
+  const overlayWindow = finiteRect(overlayWindowRect);
+  const overlayLayout = finiteRect(overlayLayoutRect);
+  if (!target || !overlayWindow || !overlayLayout) return null;
+  const scaleX = overlayLayout.width / overlayWindow.width;
+  const scaleY = overlayLayout.height / overlayWindow.height;
+  if (![scaleX, scaleY].every(Number.isFinite) || scaleX <= 0 || scaleY <= 0) return null;
+  return {
+    x: (target.x - overlayWindow.x) * scaleX,
+    y: (target.y - overlayWindow.y) * scaleY,
+    width: target.width * scaleX,
+    height: target.height * scaleY,
+  };
+}
+
+export function safeInsetsInOverlay({
+  insets,
+  overlayLayoutRect,
+  overlayWindowRect,
+  windowHeight,
+  windowWidth,
+}) {
+  const overlayWindow = finiteRect(overlayWindowRect);
+  const overlayLayout = finiteRect(overlayLayoutRect);
+  if (!overlayWindow || !overlayLayout) return insets;
+  const scaleX = overlayLayout.width / overlayWindow.width;
+  const scaleY = overlayLayout.height / overlayWindow.height;
+  const safeLeft = Math.max(0, Number(insets?.left) || 0);
+  const safeTop = Math.max(0, Number(insets?.top) || 0);
+  const safeRight = Math.max(safeLeft, windowWidth - Math.max(0, Number(insets?.right) || 0));
+  const safeBottom = Math.max(safeTop, windowHeight - Math.max(0, Number(insets?.bottom) || 0));
+  const overlayRight = overlayWindow.x + overlayWindow.width;
+  const overlayBottom = overlayWindow.y + overlayWindow.height;
+  return {
+    left: Math.max(0, Math.min(overlayLayout.width, (safeLeft - overlayWindow.x) * scaleX)),
+    top: Math.max(0, Math.min(overlayLayout.height, (safeTop - overlayWindow.y) * scaleY)),
+    right: Math.max(0, Math.min(overlayLayout.width, (overlayRight - safeRight) * scaleX)),
+    bottom: Math.max(0, Math.min(overlayLayout.height, (overlayBottom - safeBottom) * scaleY)),
+  };
+}
+
 export function spotlightForTarget(rect, width, height, options = {}) {
   if (!rect) return null;
   const padding = Math.max(0, Number(options.padding) || 0);
@@ -72,7 +121,7 @@ function rectsAreStable(previous, next) {
   });
 }
 
-function measureTargetNode(node, targetId) {
+function measureNodeInWindow(node, testID) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -92,7 +141,7 @@ function measureTargetNode(node, targetId) {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const element = typeof node?.getBoundingClientRect === 'function'
         ? node
-        : document.querySelector(`[data-testid="noya-tour-target-${targetId}"]`);
+        : document.querySelector(`[data-testid="${testID}"]`);
       const rect = element?.getBoundingClientRect?.();
       if (rect) {
         commit(rect.x, rect.y, rect.width, rect.height);
@@ -101,12 +150,6 @@ function measureTargetNode(node, targetId) {
     }
     if (node?.measureInWindow) {
       node.measureInWindow(commit);
-      return;
-    }
-    if (node?.measure) {
-      node.measure((_x, _y, width, height, pageX, pageY) => {
-        commit(pageX, pageY, width, height);
-      });
       return;
     }
     finish(null);
@@ -119,7 +162,7 @@ function descriptorsForStep(activeStep, activeDefinition) {
   return targetId ? [{ id: targetId, padding: 3, radius: 16, anchor: true }] : [];
 }
 
-export default function NoyaTourOverlayHost({ scope = 'root' }) {
+export default function NoyaTourOverlayHost({ measureOverlayRect, scope = 'root' }) {
   const {
     acknowledgeCreatorStep,
     activeDefinition,
@@ -132,11 +175,14 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
     runActiveCreatorAction,
     targetRevision,
   } = useNoyaTour();
-  const { width, height } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const overlayRef = useRef(null);
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
   const [bubbleHeight, setBubbleHeight] = useState(BUBBLE_ESTIMATED_HEIGHT);
+  const [overlayLayout, setOverlayLayout] = useState(null);
+  const [overlayMetrics, setOverlayMetrics] = useState(null);
   const [measuredTargets, setMeasuredTargets] = useState([]);
   const [targetsMeasured, setTargetsMeasured] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -159,16 +205,14 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
     if (!visible) {
       opacity.setValue(0);
       translateY.setValue(8);
+      setOverlayLayout(null);
+      setOverlayMetrics(null);
       setMeasuredTargets([]);
       setTargetsMeasured(false);
       return undefined;
     }
-    if (!targetDescriptors.length) {
-      setMeasuredTargets([]);
-      setTargetsMeasured(true);
-      return undefined;
-    }
 
+    setOverlayMetrics(null);
     setMeasuredTargets([]);
     setTargetsMeasured(false);
     let cancelled = false;
@@ -176,20 +220,51 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
     let previousRects = null;
 
     const measure = async () => {
+      const overlayWindowRect = finiteRect(
+        typeof measureOverlayRect === 'function'
+          ? await measureOverlayRect()
+          : await measureNodeInWindow(
+            overlayRef.current,
+            `noya-tour-overlay-${scope}`,
+          ),
+      );
       const rawRects = await Promise.all(targetDescriptors.map((target) => (
-        measureTargetNode(getTargetNode(target.id, scope), target.id)
+        measureNodeInWindow(
+          getTargetNode(target.id, scope),
+          `noya-tour-target-${target.id}`,
+        )
       )));
       if (cancelled) return;
-      const spotlights = rawRects.map((rect, index) => (
-        spotlightForTarget(rect, width, height, targetDescriptors[index])
+      const layoutRect = finiteRect({
+        x: 0,
+        y: 0,
+        width: overlayLayout?.width || overlayWindowRect?.width,
+        height: overlayLayout?.height || overlayWindowRect?.height,
+      });
+      const localRects = rawRects.map((rect) => (
+        rectInOverlay(rect, overlayWindowRect, layoutRect)
       ));
-      if (rawRects.every(Boolean) && spotlights.every(Boolean)) {
-        if (rectsAreStable(previousRects, rawRects)) {
+      const spotlights = localRects.map((rect, index) => (
+        spotlightForTarget(rect, layoutRect?.width, layoutRect?.height, targetDescriptors[index])
+      ));
+      const complete = Boolean(
+        overlayWindowRect
+        && layoutRect
+        && rawRects.every(Boolean)
+        && localRects.every(Boolean)
+        && spotlights.every(Boolean),
+      );
+      const nextRects = complete
+        ? [overlayWindowRect, layoutRect, ...rawRects]
+        : null;
+      if (complete) {
+        if (rectsAreStable(previousRects, nextRects)) {
+          setOverlayMetrics({ layoutRect, windowRect: overlayWindowRect });
           setMeasuredTargets(spotlights);
           setTargetsMeasured(true);
           return;
         }
-        previousRects = rawRects;
+        previousRects = nextRects;
       } else {
         previousRects = null;
       }
@@ -203,7 +278,13 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
     };
   }, [
     getTargetNode,
-    height,
+    insets.bottom,
+    insets.left,
+    insets.right,
+    insets.top,
+    measureOverlayRect,
+    overlayLayout?.height,
+    overlayLayout?.width,
     opacity,
     scope,
     targetDescriptors,
@@ -211,10 +292,11 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
     targetsKey,
     translateY,
     visible,
-    width,
+    windowHeight,
+    windowWidth,
   ]);
 
-  const renderReady = visible && (targetDescriptors.length === 0 || targetsMeasured);
+  const renderReady = visible && Boolean(overlayMetrics) && targetsMeasured;
 
   useEffect(() => {
     if (!renderReady) return;
@@ -238,10 +320,27 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
   const anchorSpotlight = measuredTargets.find((target) => target.id === anchorTargetId)
     || measuredTargets[0]
     || null;
-  const bubbleTop = bubbleTopForTarget({ bubbleHeight, height, insets, target: anchorSpotlight });
-  const safeBottom = Math.max(insets.bottom + 12, 18);
-  const bubbleMaxHeight = Math.max(160, height - bubbleTop - safeBottom);
-  if (!renderReady) return null;
+  const surfaceWidth = overlayMetrics?.layoutRect.width || overlayLayout?.width || windowWidth;
+  const surfaceHeight = overlayMetrics?.layoutRect.height || overlayLayout?.height || windowHeight;
+  const localInsets = overlayMetrics
+    ? safeInsetsInOverlay({
+      insets,
+      overlayLayoutRect: overlayMetrics.layoutRect,
+      overlayWindowRect: overlayMetrics.windowRect,
+      windowHeight,
+      windowWidth,
+    })
+    : insets;
+  const bubbleTop = bubbleTopForTarget({
+    bubbleHeight,
+    height: surfaceHeight,
+    insets: localInsets,
+    target: anchorSpotlight,
+  });
+  const safeBottom = Math.max(localInsets.bottom + 12, 18);
+  const bubbleMaxHeight = Math.max(160, surfaceHeight - bubbleTop - safeBottom);
+
+  if (!visible) return null;
 
   const isMain = activeStep.tourId === NOYA_TOUR_IDS.main;
   const canGoBack = isMain && activeStep.stepIndex > 0;
@@ -257,16 +356,31 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
 
   return (
     <View
-      accessibilityViewIsModal
-      importantForAccessibility="yes"
-      pointerEvents="auto"
+      accessibilityElementsHidden={!renderReady}
+      accessibilityViewIsModal={renderReady}
+      importantForAccessibility={renderReady ? 'yes' : 'no-hide-descendants'}
+      onLayout={(event) => {
+        const nextWidth = Number(event.nativeEvent.layout.width || 0);
+        const nextHeight = Number(event.nativeEvent.layout.height || 0);
+        if (nextWidth <= 0 || nextHeight <= 0) return;
+        setOverlayLayout((current) => (
+          current
+          && Math.abs(current.width - nextWidth) <= MEASUREMENT_STABILITY_DELTA
+          && Math.abs(current.height - nextHeight) <= MEASUREMENT_STABILITY_DELTA
+            ? current
+            : { width: nextWidth, height: nextHeight }
+        ));
+      }}
+      pointerEvents={renderReady ? 'auto' : 'none'}
+      ref={overlayRef}
       style={[StyleSheet.absoluteFill, styles.overlay]}
       testID={`noya-tour-overlay-${scope}`}
     >
-      <Svg height={height} pointerEvents="none" style={StyleSheet.absoluteFill} width={width}>
+      {renderReady ? <>
+      <Svg height={surfaceHeight} pointerEvents="none" style={StyleSheet.absoluteFill} width={surfaceWidth}>
         <Defs>
           <Mask id={`noya-spotlight-mask-${scope}`}>
-            <Rect fill="#FFFFFF" height={height} width={width} x={0} y={0} />
+            <Rect fill="#FFFFFF" height={surfaceHeight} width={surfaceWidth} x={0} y={0} />
             {measuredTargets.map((target) => (
               <Rect
                 fill="#000000"
@@ -282,9 +396,9 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
         </Defs>
         <Rect
           fill="rgba(10, 31, 55, 0.88)"
-          height={height}
+          height={surfaceHeight}
           mask={`url(#noya-spotlight-mask-${scope})`}
-          width={width}
+          width={surfaceWidth}
           x={0}
           y={0}
         />
@@ -312,7 +426,10 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
             opacity,
             top: bubbleTop,
             transform: [{ translateY }],
-            width: Math.min(width - 32, 410),
+            width: Math.min(
+              surfaceWidth - localInsets.left - localInsets.right - 32,
+              410,
+            ),
           },
         ]}
         onLayout={(event) => {
@@ -379,6 +496,7 @@ export default function NoyaTourOverlayHost({ scope = 'root' }) {
           </TouchableOpacity>
         </ScrollView>
       </Animated.View>
+      </> : null}
     </View>
   );
 }

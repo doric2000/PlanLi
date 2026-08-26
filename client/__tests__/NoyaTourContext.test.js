@@ -30,6 +30,8 @@ import {
 } from '../src/features/noya/NoyaTourDefinitions';
 import NoyaTourOverlayHost, {
   bubbleTopForTarget,
+  rectInOverlay,
+  safeInsetsInOverlay,
   spotlightForTarget,
 } from '../src/features/noya/NoyaTourOverlay';
 import {
@@ -42,6 +44,9 @@ const SAFE_AREA_METRICS = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, right: 0, bottom: 34, left: 0 },
 };
+
+let mockOverlayWindowRect = { x: 0, y: 0, width: 390, height: 844 };
+const measureMockOverlay = () => mockOverlayWindowRect;
 
 const MAIN_TARGET_RECTS = Object.freeze({
   [NOYA_MAIN_TAB_TARGETS.Home]: { x: 310, y: 760, width: 50, height: 50 },
@@ -95,7 +100,7 @@ function MainTourHarness({ readiness, tabNavigation }) {
           <Text>{targetId}</Text>
         </DirectTourTarget>
       ))}
-      <NoyaTourOverlayHost />
+      <NoyaTourOverlayHost measureOverlayRect={measureMockOverlay} />
     </>
   );
 }
@@ -140,7 +145,7 @@ function CreatorHarness({ stage = 0, suspended = false }) {
   return (
     <>
       <DirectTourTarget targetId={targetId}><Text>שדה</Text></DirectTourTarget>
-      <NoyaTourOverlayHost />
+      <NoyaTourOverlayHost measureOverlayRect={measureMockOverlay} />
     </>
   );
 }
@@ -155,7 +160,7 @@ function RouteStopHarness() {
       <DirectTourTarget scope="route-stop-editor" targetId={NOYA_CREATOR_TARGETS.routeStop}>
         <Text>שם העצירה וסוג המיקום</Text>
       </DirectTourTarget>
-      <NoyaTourOverlayHost scope="route-stop-editor" />
+      <NoyaTourOverlayHost measureOverlayRect={measureMockOverlay} scope="route-stop-editor" />
     </>
   );
 }
@@ -185,7 +190,7 @@ function CreatorMediaHarness() {
           <Text>קומפוזר פתוח</Text>
         </TouchableOpacity>
       ) : null}
-      <NoyaTourOverlayHost />
+      <NoyaTourOverlayHost measureOverlayRect={measureMockOverlay} />
     </>
   );
 }
@@ -195,6 +200,7 @@ describe('NoyaTourProvider', () => {
     jest.useRealTimers();
     jest.clearAllMocks();
     mockStorage.clear();
+    mockOverlayWindowRect = { x: 0, y: 0, width: 390, height: 844 };
     __resetNoyaProductTourStorageForTests();
   });
 
@@ -435,6 +441,73 @@ describe('NoyaTourProvider', () => {
       width: 24,
       height: 23,
       radius: 7,
+    });
+  });
+
+  it('converts component window measurements into a non-zero overlay coordinate space', () => {
+    expect(rectInOverlay(
+      { x: 42, y: 150, width: 120, height: 48 },
+      { x: 10, y: 80, width: 370, height: 720 },
+      { x: 0, y: 0, width: 370, height: 720 },
+    )).toEqual({ x: 32, y: 70, width: 120, height: 48 });
+  });
+
+  it('normalizes Web-scaled component measurements into overlay layout units', () => {
+    expect(rectInOverlay(
+      { x: 70, y: 160, width: 200, height: 80 },
+      { x: 20, y: 40, width: 780, height: 1688 },
+      { x: 0, y: 0, width: 390, height: 844 },
+    )).toEqual({ x: 25, y: 60, width: 100, height: 40 });
+  });
+
+  it('converts window safe areas to modal-local insets', () => {
+    expect(safeInsetsInOverlay({
+      insets: SAFE_AREA_METRICS.insets,
+      overlayLayoutRect: { x: 0, y: 0, width: 350, height: 640 },
+      overlayWindowRect: { x: 20, y: 204, width: 350, height: 640 },
+      windowHeight: 844,
+      windowWidth: 390,
+    })).toEqual({ left: 0, top: 0, right: 0, bottom: 34 });
+  });
+
+  it('draws spotlights from component refs relative to an offset overlay host', async () => {
+    mockOverlayWindowRect = { x: 12, y: 40, width: 366, height: 780 };
+    const screen = render(
+      <TourFrame>
+        <MainTourApp />
+      </TourFrame>,
+    );
+    await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-tour-next'));
+    await waitFor(() => expect(screen.getByText('מתחילים מהיעד')).toBeTruthy());
+    const outlines = screen.UNSAFE_getAllByType(Rect)
+      .filter((node) => node.props.stroke === '#F5961D');
+    expect(outlines).toHaveLength(2);
+    expect(outlines[0].props).toEqual(expect.objectContaining({ x: 295, y: 717 }));
+    expect(outlines[1].props).toEqual(expect.objectContaining({ x: 9, y: 75 }));
+  });
+
+  it('remeasures component spotlights when the overlay host layout changes', async () => {
+    const screen = render(
+      <TourFrame>
+        <MainTourApp />
+      </TourFrame>,
+    );
+    await waitFor(() => expect(screen.getByText('סיור קצר עם נועה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('noya-tour-next'));
+    await waitFor(() => expect(screen.getByText('מתחילים מהיעד')).toBeTruthy());
+    let outlines = screen.UNSAFE_getAllByType(Rect)
+      .filter((node) => node.props.stroke === '#F5961D');
+    expect(outlines[0].props).toEqual(expect.objectContaining({ x: 307, y: 757 }));
+
+    mockOverlayWindowRect = { x: 12, y: 40, width: 366, height: 780 };
+    fireEvent(screen.getByTestId('noya-tour-overlay-root'), 'layout', {
+      nativeEvent: { layout: { width: 366, height: 780 } },
+    });
+    await waitFor(() => {
+      outlines = screen.UNSAFE_getAllByType(Rect)
+        .filter((node) => node.props.stroke === '#F5961D');
+      expect(outlines[0].props).toEqual(expect.objectContaining({ x: 295, y: 717 }));
     });
   });
 
