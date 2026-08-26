@@ -92,7 +92,7 @@ const MAIN_TOUR_CONTENT_STEPS = [
     anchorTargetId: NOYA_MAIN_TARGETS.communityAdd,
     targets: [spotlight(NOYA_MAIN_TARGETS.communityAdd, { anchor: true, radius: 32 })],
     title: 'מוסיפים המלצה משלך',
-    message: 'כפתור הפלוס פותח יצירת המלצה. אם צריך נבקש להתחבר, ובטופס נועה תלווה אותך בתמונות, במיקום, בקטגוריה ובסיפור.',
+    message: 'כפתור הפלוס פותח יצירת המלצה. אם צריך נבקש להתחבר, ובטופס אני אלווה אותך בתמונות, במיקום, בקטגוריה ובסיפור.',
   },
   {
     id: 'routes-search',
