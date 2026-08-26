@@ -5,6 +5,7 @@ export const HORIZONTAL_SWIPE_ACTIVATION_DISTANCE = 12;
 export const HORIZONTAL_SWIPE_COMMIT_DISTANCE = 48;
 export const HORIZONTAL_SWIPE_COMMIT_VELOCITY = 0.45;
 export const HORIZONTAL_SWIPE_DOMINANCE_RATIO = 1.25;
+export const SWIPE_NAVIGATION_PENDING_TIMEOUT_MS = 750;
 
 export function shouldCaptureHorizontalSwipe({ dx = 0, dy = 0 } = {}) {
   const horizontalDistance = Math.abs(dx);
@@ -60,19 +61,75 @@ export function getAdjacentSwipeItem({
   return targetIndex === activeIndex ? null : items?.[targetIndex] || null;
 }
 
-export function navigateToAdjacentSwipeItem({ navigation, gestureState }) {
+export function getAdjacentSwipeNavigationTarget({ navigation, gestureState }) {
   if (typeof navigation?.getState !== 'function' || typeof navigation?.navigate !== 'function') {
     return null;
   }
   const state = navigation.getState();
-  const targetItem = getAdjacentSwipeItem({
+  return getAdjacentSwipeItem({
     items: state?.routes,
     activeIndex: state?.index,
     gestureState,
   });
+}
+
+export function navigateToAdjacentSwipeItem({ navigation, gestureState }) {
+  const targetItem = getAdjacentSwipeNavigationTarget({ navigation, gestureState });
   if (!targetItem) return null;
   navigation.navigate(targetItem.name, targetItem.params);
   return targetItem;
+}
+
+function getSwipeTargetIdentity(item) {
+  return item?.key || item?.name || null;
+}
+
+export function createSwipeNavigationCoordinator({
+  pendingTimeoutMs = SWIPE_NAVIGATION_PENDING_TIMEOUT_MS,
+  schedule = setTimeout,
+  cancel = clearTimeout,
+} = {}) {
+  let pendingTargetIdentity = null;
+  let pendingTimeout = null;
+
+  const clearPending = () => {
+    if (pendingTimeout !== null) cancel(pendingTimeout);
+    pendingTimeout = null;
+    pendingTargetIdentity = null;
+  };
+
+  return {
+    navigate({ navigation, gestureState }) {
+      if (pendingTargetIdentity) return null;
+
+      const targetItem = getAdjacentSwipeNavigationTarget({ navigation, gestureState });
+      const targetIdentity = getSwipeTargetIdentity(targetItem);
+      if (!targetItem || !targetIdentity) return null;
+
+      pendingTargetIdentity = targetIdentity;
+      pendingTimeout = schedule(clearPending, pendingTimeoutMs);
+      try {
+        navigation.navigate(targetItem.name, targetItem.params);
+      } catch (error) {
+        clearPending();
+        throw error;
+      }
+      return targetItem;
+    },
+
+    confirmState(state) {
+      const focusedItem = state?.routes?.[state?.index];
+      if (getSwipeTargetIdentity(focusedItem) === pendingTargetIdentity) clearPending();
+    },
+
+    reset: clearPending,
+
+    dispose: clearPending,
+
+    hasPendingNavigation() {
+      return pendingTargetIdentity !== null;
+    },
+  };
 }
 
 export function useHorizontalSwipeResponder({
