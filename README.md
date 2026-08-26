@@ -18,15 +18,15 @@ Android-only production EAS Update
 `dd0b91d8-b5b7-4a73-94d4-d08d31a449f5` was published from PR `#206` merge
 commit `e954e3e` at `2026-08-25T11:19:04.856Z`. Download, application, and the
 physical tablet re-test remain pending.
-The latest compatible production EAS Update is Home planning hub group
-`43a873d8-282c-4e6a-986d-fcd014047c2c`, published for Android
-(`01a03b51-cc08-7328-8f2d-71f26f5953b2`) and iOS
-(`01a03b51-cc08-727f-88f1-93b17c27e092`) at
-`2026-08-25T23:46:51.528Z` from PR `#215` merge commit `e1ba08d`. EAS
+The latest compatible production EAS Update is Noya component-geometry group
+`1a691933-e4b6-4003-9d3d-111315a88549`, published for Android
+(`01a03e64-1c50-7500-bfe5-9e4fc2aea1e4`) and iOS
+(`01a03e64-1c50-7709-96ac-f922c1842eae`) at
+`2026-08-26T14:05:43.376Z` from PR `#221` merge commit `408c8e94`. EAS
 read-back confirms that both production manifests use runtime `1.1.0`, the
 exact merge commit, the production environment, and a clean working tree.
-Download, application, and Home planning-hub behavior on the physical Android
-tablet and TestFlight iPhone remain unverified.
+Download, application, and exact tour geometry on the physical Android tablet
+and TestFlight iPhone remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and
 in use on the owner's physical iPhone. Production iOS build `1.1.0 (14)` completed from
 commit `f9c7096` at `2026-08-24T20:07:02.152Z`. EAS submission
@@ -41,11 +41,11 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and runtime `1.1.0`. The matching Home
-planning-hub preview group is `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`; the
-immediately preceding compatible groups are preview
-`cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` and production
-`1184a492-317b-4a5a-be48-12374b98bc8a`. This OTA did not create a native build,
+the `production` EAS Update channel and runtime `1.1.0`. The matching Noya
+component-geometry preview group is `31df8f49-77fb-4151-85fb-245e594a81d7`;
+the immediately preceding compatible groups are preview
+`48a9c9ef-4c32-4030-adb0-0ad7bcecb111` and production
+`43a873d8-282c-4e6a-986d-fcd014047c2c`. This OTA did not create a native build,
 submit to either store, deploy Firebase, or write production data. Twenty-eight
 affected Functions and the
 active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
@@ -1294,3 +1294,47 @@ rejected.
   download and apply the update. Roll back preview to
   `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` or production to
   `1184a492-317b-4a5a-be48-12374b98bc8a` if required.
+
+## Noya component-geometry OTA release
+
+- Source: PR `#221`, merge commit
+  `408c8e94c97b6eaee83777170130972e4b5f6fda` on clean `main`.
+- Scope: converts all Noya guide targets from viewport coordinates to the live
+  overlay coordinate space, including nonzero overlay origins, Web scaling,
+  safe-area clipping, modal sheets, rotation, and layout changes. The overlay
+  waits for two stable complete component measurements before drawing; the main
+  tour storage migrated to V3 so everyone receives the repaired tour once while
+  recommendation and route creator-guide progress remains intact.
+- App/runtime: JavaScript-only `1.1.0`; `production` EAS environment; Android and
+  iOS; no native dependency, permission, entitlement, plugin, or app-config
+  change.
+- Preview EAS Update: group `31df8f49-77fb-4151-85fb-245e594a81d7`, Android
+  update `01a03e60-ab2c-71c0-8f71-4d214e86962b`, and iOS update
+  `01a03e60-ab2c-7f94-b4d1-9c43b538b785`, published at
+  `2026-08-26T14:01:57.804Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `1a691933-e4b6-4003-9d3d-111315a88549`, Android update
+  `01a03e64-1c50-7500-bfe5-9e4fc2aea1e4`, and iOS update
+  `01a03e64-1c50-7709-96ac-f922c1842eae`, published at
+  `2026-08-26T14:05:43.376Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed this as the newest production group, both platforms, and
+  the exact source commit.
+- Validation: 10 focused Noya/Home/Community/Routes/Favorites/control suites
+  passed 67 tests; `npm run validate:changed` passed; PR `#221` plan, affected
+  client, and final validation checks passed; and the requested final review
+  reported no findings. Web smoke testing exercised all 11 tour steps at
+  390-by-844 and 1280-by-720 viewports; every spotlight matched its live target
+  with the intended three-pixel padding, including simultaneous tab/control
+  spotlights and automatic tab navigation.
+- The preview publish exported Web, iOS, and Android bundles, uploaded two app
+  bundles, found 52 iOS and 51 Android assets, and uploaded no new assets. The
+  production release republished those exact preview artifacts. The production
+  preflight passed before preview publication and again before promotion.
+- No EAS native build, App Store/TestFlight or Google Play submission, Firebase
+  deployment, migration, backend change, IAM change, or production-data write
+  was performed. Download, application, exact spotlight geometry, slow/failed
+  loading, and the complete guest/signed-in tour remain unverified on physical
+  Android and iOS devices because no native device bridge was available. Force-
+  close and reopen the production app up to twice to download and apply the
+  update. Roll back preview to `48a9c9ef-4c32-4030-adb0-0ad7bcecb111` or
+  production to `43a873d8-282c-4e6a-986d-fcd014047c2c` if required.
