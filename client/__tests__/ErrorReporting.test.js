@@ -179,4 +179,17 @@ describe('error reporting privacy', () => {
       message: 'network failed',
     }));
   });
+
+  it('tags a bounded structured backend reason for issue diagnosis', () => {
+    const { captureDiagnosticException } = require('../src/services/ErrorReporting');
+    captureDiagnosticException(new Error('publish failed'), {
+      operation: 'publish_recommendation_saving',
+      code: 'functions/not-found',
+      reason: 'RECOMMENDATION_DRAFT_NOT_FOUND',
+    });
+    expect(mockScope.setTag).toHaveBeenCalledWith(
+      'error_reason',
+      'RECOMMENDATION_DRAFT_NOT_FOUND'
+    );
+  });
 });

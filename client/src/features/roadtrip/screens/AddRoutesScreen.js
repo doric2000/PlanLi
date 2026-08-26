@@ -257,7 +257,7 @@ export default function AddRoutesScreen({ navigation, route }) {
   const routeToEdit = route?.params?.routeToEdit || null;
   const sourceRouteId = routeToEdit?.id || routeToEdit?.routeId || null;
   const publishJobId = route?.params?.publishJobId || null;
-  const { enqueueCreate, loadJobForReview } = useContentPublish();
+  const { endReview, enqueueCreate, loadJobForReview } = useContentPublish();
   const {
     draftJobId,
     forgetMedia: forgetDurableImage,
@@ -316,6 +316,12 @@ export default function AddRoutesScreen({ navigation, route }) {
   const latestDraftComparableRef = useRef('');
   const builderScrollRef = useRef(null);
   const publishGuideScrolledRef = useRef(false);
+
+  useEffect(() => () => {
+    if (publishJobId && !publishHandoffRef.current && typeof endReview === 'function') {
+      endReview(publishJobId);
+    }
+  }, [endReview, publishJobId]);
   const isEditingRoute = Boolean(sourceRouteId || sourceRouteIdRef.current);
 
   useEffect(() => {

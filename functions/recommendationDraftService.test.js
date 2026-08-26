@@ -172,6 +172,32 @@ test('a repeated save request returns the exact committed version without anothe
   assert.equal(rateCalls, 1);
 });
 
+test('a repeated recovery save returns the rotated draft id after its response was lost', async () => {
+  const ownerPath = 'system/recommendationDrafts/owners/owner';
+  const pointer = {
+    ownerId: 'owner', draftId: 'rotated-draft', version: 1,
+    versionPath: `${ownerPath}/draftVersions/version-1`,
+    sourceRecommendationId: null, state: 'draft',
+    lastSaveRequestId: '123e4567-e89b-42d3-a456-426614174002',
+  };
+  const result = await saveRecommendationDraft({
+    admin: firestoreAdmin({
+      doc: () => ({ get: async () => ({ exists: true, data: () => pointer }) }),
+    }),
+    auth,
+    data: {
+      draftId: 'missing-draft',
+      expectedVersion: 7,
+      saveRequestId: pointer.lastSaveRequestId,
+      draft: partialDraft({ title: 'Recovered' }),
+    },
+    consumeRateLimitImpl: async () => assert.fail('idempotent recovery must not charge rate limit'),
+  });
+  assert.deepEqual(result, {
+    draftId: 'rotated-draft', version: 1, sourceRecommendationId: null, idempotentReplay: true,
+  });
+});
+
 test('source edits require ownership or an active registered admin', async () => {
   const recommendation = { ownerId: 'another-owner', status: 'moderation_hold' };
   const db = {

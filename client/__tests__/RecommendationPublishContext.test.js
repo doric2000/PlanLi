@@ -315,6 +315,135 @@ describe('RecommendationPublishProvider', () => {
     screen.unmount();
   });
 
+  it('publishes the draft id returned by the media save when recovery rotates it', async () => {
+    mockSaveRecommendationDraft.mockResolvedValue({ draftId: 'rotated-draft', version: 1 });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: { draftId: 'missing-draft', expectedVersion: 7 },
+        draft: { title: 'Recovered', media: [], localMediaCount: 1 },
+        media: [{ uri: 'file:///recommendation.jpg' }],
+      });
+    });
+    await waitFor(() => expect(mockPublishRecommendationDraft).toHaveBeenCalledWith('rotated-draft', 1));
+    expect(api.jobs[0].payload.draftId).toBe('rotated-draft');
+    screen.unmount();
+  });
+
+  it('rebuilds a missing recommendation draft once and publishes the recovered id', async () => {
+    mockSaveRecommendationDraft
+      .mockResolvedValueOnce({ draftId: 'recommendation-draft-1', version: 8 })
+      .mockResolvedValueOnce({ draftId: 'recovered-draft', version: 1 });
+    mockPublishRecommendationDraft
+      .mockRejectedValueOnce({
+        code: 'functions/not-found',
+        message: 'Recommendation draft does not exist.',
+        details: { reason: 'RECOMMENDATION_DRAFT_NOT_FOUND', retryable: false },
+      })
+      .mockResolvedValueOnce({ recommendationId: 'rec-recovered', published: true });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: { draftId: 'recommendation-draft-1', expectedVersion: 7 },
+        draft: { title: 'Recovered', media: [], localMediaCount: 1 },
+        media: [{ uri: 'file:///recommendation.jpg' }],
+      });
+    });
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(2));
+    expect(mockSaveRecommendationDraft.mock.calls[1][0]).toEqual(expect.objectContaining({
+      draftId: 'recommendation-draft-1',
+      expectedVersion: 8,
+      saveRequestId: expect.any(String),
+    }));
+    await waitFor(() => expect(mockPublishRecommendationDraft).toHaveBeenLastCalledWith('recovered-draft', 1));
+    await waitFor(() => expect(api.activeJob.status).toBe('success'));
+    screen.unmount();
+  });
+
+  it('repairs a persisted failed job whose completed media save rotated the draft id', async () => {
+    const canonicalMedia = {
+      assetId: '123e4567-e89b-42d3-a456-426614174000',
+      large: { url: 'https://cdn/large.webp' },
+      feed: { url: 'https://cdn/feed.webp' },
+      thumb: { url: 'https://cdn/thumb.webp' },
+    };
+    mockLoadJobs.mockResolvedValue([{
+      version: 3,
+      id: 'legacy-stale-draft-job',
+      publishRequestId: '123e4567-e89b-42d3-a456-426614174010',
+      ownerUid: 'owner-1',
+      contentType: 'recommendation',
+      createdAt: 1,
+      updatedAt: 1,
+      status: 'failed',
+      stage: 'failed',
+      attempts: 1,
+      retryAt: 0,
+      progress: 0.9,
+      payload: {
+        draftId: 'stale-draft',
+        expectedVersion: 8,
+        recommendationDraftMediaSaved: true,
+        recommendationDraftMediaSaveRequestId: '123e4567-e89b-42d3-a456-426614174011',
+        recommendation: { taxonomyVersion: 999, budget: 'midrange' },
+      },
+      draft: { title: 'Persisted failure', media: [canonicalMedia], localMediaCount: 0 },
+      media: [{ id: 'media-1', type: 'remote', asset: canonicalMedia, progress: 1 }],
+      timings: { queuedAt: 1 },
+      error: {
+        code: 'functions/permission-denied',
+        details: { reason: 'RECOMMENDATION_DRAFT_FORBIDDEN', retryable: false },
+      },
+    }]);
+    mockSaveRecommendationDraft.mockResolvedValue({
+      draftId: 'rotated-draft', version: 1, idempotentReplay: true,
+    });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api.activeJob?.id).toBe('legacy-stale-draft-job'));
+    await act(async () => { await api.retry('legacy-stale-draft-job'); });
+    await waitFor(() => expect(mockSaveRecommendationDraft).toHaveBeenCalledWith(expect.objectContaining({
+      draftId: 'stale-draft',
+      expectedVersion: 8,
+      saveRequestId: '123e4567-e89b-42d3-a456-426614174011',
+    })));
+    await waitFor(() => expect(mockPublishRecommendationDraft).toHaveBeenCalledWith('rotated-draft', 1));
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    screen.unmount();
+  });
+
+  it('hides a failed banner while its job is being reviewed and restores it on exit', async () => {
+    mockPublishRecommendationDraft.mockRejectedValue({
+      code: 'functions/invalid-argument', message: 'Could not publish.', details: { retryable: false },
+    });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: { draftId: 'recommendation-draft-1', expectedVersion: 7 },
+        draft: { title: 'Review', media: [], localMediaCount: 1 },
+        media: [{ uri: 'file:///recommendation.jpg' }],
+      });
+    });
+    await waitFor(() => expect(api.activeJob?.status).toBe('failed'));
+    const jobId = api.activeJob.id;
+    act(() => api.beginReview(jobId));
+    expect(api.activeJob).toBeNull();
+    expect(api.jobs).toHaveLength(1);
+    act(() => api.endReview(jobId));
+    expect(api.activeJob?.id).toBe(jobId);
+    screen.unmount();
+  });
+
   it('reuses the persisted save request after a lost media-version response', async () => {
     mockSaveRecommendationDraft
       .mockRejectedValueOnce({ code: 'functions/invalid-argument', message: 'lost response' })

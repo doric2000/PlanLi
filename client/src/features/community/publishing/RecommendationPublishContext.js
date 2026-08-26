@@ -58,9 +58,12 @@ const MANUAL_RETRY_CODES = new Set([
 
 const defaultValue = {
   activeJob: null,
+  bannerJobCount: 0,
   completedVersion: 0,
   completedVersionByType: { recommendation: 0, route: 0 },
+  beginReview: () => {},
   discard: async () => {},
+  endReview: () => {},
   enqueueCreate: null,
   jobs: [],
   loadJobForReview: async () => null,
@@ -119,6 +122,13 @@ function isExpiredPlaceTokenError(error) {
     ['functions/deadline-exceeded', 'functions/not-found', 'functions/failed-precondition'].includes(code) &&
     /place|search|token|expired/.test(message)
   );
+}
+
+function isMissingRecommendationDraftError(error) {
+  const reason = String(error?.details?.reason || '').toUpperCase();
+  const message = String(error?.message || '').toLowerCase();
+  return reason === 'RECOMMENDATION_DRAFT_NOT_FOUND' ||
+    message.includes('recommendation draft does not exist');
 }
 
 export function recommendationPublishProgress(job) {
@@ -222,6 +232,7 @@ export function ContentPublishProvider({ children }) {
     route: 0,
   });
   const [wakeSerial, setWakeSerial] = useState(0);
+  const [reviewingJobIds, setReviewingJobIds] = useState(() => new Set());
   const [appActive, setAppActive] = useState(
     !['background', 'inactive'].includes(AppState.currentState)
   );
@@ -263,6 +274,24 @@ export function ContentPublishProvider({ children }) {
     (current) => current.map((job) => job.id === jobId ? updater(job) : job),
     options
   ), [commitJobs]);
+
+  const beginReview = useCallback((jobId) => {
+    if (!jobsRef.current.some((job) => job.id === jobId && job.status === 'failed')) return;
+    setReviewingJobIds((current) => {
+      const next = new Set(current);
+      next.add(jobId);
+      return next;
+    });
+  }, []);
+
+  const endReview = useCallback((jobId) => {
+    setReviewingJobIds((current) => {
+      if (!current.has(jobId)) return current;
+      const next = new Set(current);
+      next.delete(jobId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -412,9 +441,10 @@ export function ContentPublishProvider({ children }) {
     }
     reviewSource?.revokes?.forEach((revoke) => revoke());
     reviewSourcesRef.current.delete(jobId);
+    endReview(jobId);
     setWakeSerial((value) => value + 1);
     return jobId;
-  }, [persistSnapshot, publishSnapshot, user?.uid]);
+  }, [endReview, persistSnapshot, publishSnapshot, user?.uid]);
 
   const loadJobForReview = useCallback(async (jobId) => {
     const ownerUid = user?.uid || auth.currentUser?.uid;
@@ -478,8 +508,9 @@ export function ContentPublishProvider({ children }) {
     const reviewSource = reviewSourcesRef.current.get(jobId);
     reviewSource?.revokes?.forEach((revoke) => revoke());
     reviewSourcesRef.current.delete(jobId);
+    endReview(jobId);
     await deleteRecommendationPublishJobMedia(job);
-  }, [commitJobs, user?.uid]);
+  }, [commitJobs, endReview, user?.uid]);
 
   const setMediaProgress = useCallback((jobId, mediaId, ratio) => {
     updateJob(jobId, (job) => {
@@ -669,6 +700,7 @@ export function ContentPublishProvider({ children }) {
         }
       } else {
         if (current.payload?.draftId) {
+          let publishDraftId = current.payload.draftId;
           let publishVersion = Number(current.payload.expectedVersion);
           const hasPreparedLocalMedia = (current.media || []).some((entry) => entry.type === 'local');
           if (hasPreparedLocalMedia && current.payload.recommendationDraftMediaSaved !== true) {
@@ -691,19 +723,86 @@ export function ContentPublishProvider({ children }) {
               saveRequestId: mediaSaveRequestId,
               draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
             });
+            publishDraftId = savedDraft.draftId;
             publishVersion = Number(savedDraft.version);
             await updateJob(jobId, (job) => ({
               ...job,
               draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
               payload: {
                 ...job.payload,
+                draftId: publishDraftId,
                 expectedVersion: publishVersion,
+                recommendationDraftIdSynced: true,
                 recommendationDraftMediaSaved: true,
               },
               updatedAt: Date.now(),
             }));
           }
-          result = await publishRecommendationDraft(current.payload.draftId, publishVersion);
+          if (current.payload.recommendationDraftMediaSaved === true &&
+              current.payload.recommendationDraftIdSynced !== true &&
+              current.payload.recommendationDraftMediaSaveRequestId) {
+            const replayedMediaSave = await saveRecommendationDraft({
+              draftId: publishDraftId,
+              sourceRecommendationId: current.payload.sourceRecommendationId || null,
+              expectedVersion: publishVersion,
+              saveRequestId: current.payload.recommendationDraftMediaSaveRequestId,
+              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+            });
+            publishDraftId = replayedMediaSave.draftId;
+            publishVersion = Number(replayedMediaSave.version);
+            await updateJob(jobId, (job) => ({
+              ...job,
+              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              payload: {
+                ...job.payload,
+                draftId: publishDraftId,
+                expectedVersion: publishVersion,
+                recommendationDraftIdSynced: true,
+              },
+              updatedAt: Date.now(),
+            }));
+          }
+          try {
+            result = await publishRecommendationDraft(publishDraftId, publishVersion);
+          } catch (error) {
+            if (!isMissingRecommendationDraftError(error)) throw error;
+
+            let recoverySaveRequestId = current.payload.recommendationDraftRecoverySaveRequestId;
+            if (!recoverySaveRequestId) {
+              recoverySaveRequestId = randomUUID();
+              await updateJob(jobId, (job) => ({
+                ...job,
+                payload: {
+                  ...job.payload,
+                  recommendationDraftRecoverySaveRequestId: recoverySaveRequestId,
+                },
+                updatedAt: Date.now(),
+              }));
+            }
+            const recoveredDraft = await saveRecommendationDraft({
+              draftId: publishDraftId,
+              sourceRecommendationId: current.payload.sourceRecommendationId || null,
+              expectedVersion: publishVersion,
+              saveRequestId: recoverySaveRequestId,
+              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+            });
+            publishDraftId = recoveredDraft.draftId;
+            publishVersion = Number(recoveredDraft.version);
+            await updateJob(jobId, (job) => ({
+              ...job,
+              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              payload: {
+                ...job.payload,
+                draftId: publishDraftId,
+                expectedVersion: publishVersion,
+                recommendationDraftIdSynced: true,
+                recommendationDraftMediaSaved: true,
+                recommendationDraftRecovered: true,
+              },
+              updatedAt: Date.now(),
+            }));
+            result = await publishRecommendationDraft(publishDraftId, publishVersion);
+          }
         } else {
           let savePayload = {
             ...current.payload,
@@ -802,6 +901,7 @@ export function ContentPublishProvider({ children }) {
           operation: `publish_${current.contentType || 'recommendation'}`,
           status: failedStage,
           code: String(error?.code || 'unknown'),
+          reason: String(error?.details?.reason || 'unknown'),
           attempt: attempts,
           durationMs: Date.now() - startedAt,
         },
@@ -819,6 +919,7 @@ export function ContentPublishProvider({ children }) {
         captureDiagnosticException(diagnosticError, {
           operation: `publish_${current.contentType || 'recommendation'}_${failedStage}`,
           code: String(error?.code || 'unknown'),
+          ...(error?.details?.reason ? { reason: String(error.details.reason) } : {}),
         });
       }
       await updateJob(jobId, (job) => ({
@@ -867,25 +968,32 @@ export function ContentPublishProvider({ children }) {
     () => jobs.filter((job) => job.ownerUid === user?.uid),
     [jobs, user?.uid]
   );
+  const bannerJobs = useMemo(
+    () => visibleJobs.filter((job) => !reviewingJobIds.has(job.id)),
+    [reviewingJobIds, visibleJobs]
+  );
   const activeJob = useMemo(() => {
     const priority = ['preparing', 'uploading', 'saving', 'failed', 'queued', 'success'];
     for (const status of priority) {
-      const match = visibleJobs.find((job) => job.status === status);
+      const match = bannerJobs.find((job) => job.status === status);
       if (match) return { ...match, progress: recommendationPublishProgress(match) };
     }
     return null;
-  }, [visibleJobs]);
+  }, [bannerJobs]);
 
   const value = useMemo(() => ({
     activeJob,
+    bannerJobCount: bannerJobs.length,
+    beginReview,
     completedVersion,
     completedVersionByType,
     discard,
+    endReview,
     enqueueCreate,
     jobs: visibleJobs,
     loadJobForReview,
     retry,
-  }), [activeJob, completedVersion, completedVersionByType, discard, enqueueCreate, loadJobForReview, retry, visibleJobs]);
+  }), [activeJob, bannerJobs.length, beginReview, completedVersion, completedVersionByType, discard, endReview, enqueueCreate, loadJobForReview, retry, visibleJobs]);
 
   return (
     <ContentPublishContext.Provider value={value}>
