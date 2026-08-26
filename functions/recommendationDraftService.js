@@ -233,7 +233,7 @@ async function saveRecommendationDraft({
   const currentSnapshot = await ownerRef.get();
   const current = currentSnapshot.exists ? currentSnapshot.data() || {} : null;
   if (current && saveRequestId && current.lastSaveRequestId === saveRequestId) {
-    assert(current.ownerId === auth.uid && (!incomingDraftId || current.draftId === incomingDraftId),
+    assert(current.ownerId === auth.uid,
       'permission-denied', 'RECOMMENDATION_DRAFT_FORBIDDEN', 'Recommendation draft is unavailable.');
     assert((current.sourceRecommendationId || '') === (sourceRecommendationId || ''),
       'failed-precondition', 'RECOMMENDATION_DRAFT_SOURCE_MISMATCH', 'Recommendation draft belongs to another recommendation.');
@@ -354,6 +354,31 @@ function assertPublishableRecommendationDraft(draft) {
   return draft;
 }
 
+async function releaseRecommendationPublishClaim({ db, auth, ownerRef, draftId, expectedVersion }) {
+  try {
+    await db.runTransaction(async (transaction) => {
+      const latestSnapshot = await transaction.get(ownerRef);
+      const latest = latestSnapshot.exists ? latestSnapshot.data() || {} : null;
+      if (latest?.ownerId === auth.uid && latest?.draftId === draftId &&
+          latest?.version === expectedVersion && latest?.state === 'publishing' &&
+          latest?.publishingVersion === expectedVersion) {
+        transaction.set(ownerRef, {
+          state: 'draft',
+          publishingVersion: null,
+          publishingAt: null,
+        }, { merge: true });
+      }
+    });
+  } catch (releaseError) {
+    console.error('recommendation_draft_publish_claim_release_failed', {
+      uid: auth.uid,
+      draftId,
+      expectedVersion,
+      code: releaseError?.code || 'unknown',
+    });
+  }
+}
+
 async function publishRecommendationDraft(options) {
   const {
     admin,
@@ -430,56 +455,41 @@ async function publishRecommendationDraft(options) {
       result = await saveRecommendationImpl({ admin, auth, ...providerOptions, data: requestData });
     }
   } catch (error) {
-    try {
-      await db.runTransaction(async (transaction) => {
-        const latestSnapshot = await transaction.get(ownerRef);
-        const latest = latestSnapshot.exists ? latestSnapshot.data() || {} : null;
-        if (latest?.ownerId === auth.uid && latest?.draftId === draftId &&
-            latest?.version === expectedVersion && latest?.state === 'publishing' &&
-            latest?.publishingVersion === expectedVersion) {
-          transaction.set(ownerRef, {
-            state: 'draft',
-            publishingVersion: null,
-            publishingAt: null,
-          }, { merge: true });
-        }
-      });
-    } catch (releaseError) {
-      console.error('recommendation_draft_publish_claim_release_failed', {
-        uid: auth.uid,
-        draftId,
-        expectedVersion,
-        code: releaseError?.code || 'unknown',
-      });
-    }
+    await releaseRecommendationPublishClaim({ db, auth, ownerRef, draftId, expectedVersion });
     throw error;
   }
-  const publication = await db.runTransaction(async (transaction) => {
-    const [latestSnapshot, receiptSnapshot] = await Promise.all([
-      transaction.get(ownerRef),
-      transaction.get(publicationRef),
-    ]);
-    if (receiptSnapshot.exists) {
-      const stored = receiptSnapshot.data() || {};
-      assert(stored.ownerId === auth.uid && stored.version === expectedVersion,
+  let publication;
+  try {
+    publication = await db.runTransaction(async (transaction) => {
+      const [latestSnapshot, receiptSnapshot] = await Promise.all([
+        transaction.get(ownerRef),
+        transaction.get(publicationRef),
+      ]);
+      if (receiptSnapshot.exists) {
+        const stored = receiptSnapshot.data() || {};
+        assert(stored.ownerId === auth.uid && stored.version === expectedVersion,
+          'aborted', 'RECOMMENDATION_DRAFT_VERSION_CONFLICT', 'The recommendation draft changed. Reload it and try again.');
+        return stored.result || {};
+      }
+      assert(latestSnapshot.exists, 'not-found', 'RECOMMENDATION_DRAFT_NOT_FOUND', 'Recommendation draft does not exist.');
+      const latest = latestSnapshot.data() || {};
+      assert(latest.ownerId === auth.uid && latest.draftId === draftId,
+        'permission-denied', 'RECOMMENDATION_DRAFT_FORBIDDEN', 'Recommendation draft is unavailable.');
+      assert(latest.version === expectedVersion && latest.state === 'publishing' && latest.publishingVersion === expectedVersion,
         'aborted', 'RECOMMENDATION_DRAFT_VERSION_CONFLICT', 'The recommendation draft changed. Reload it and try again.');
-      return stored.result || {};
-    }
-    assert(latestSnapshot.exists, 'not-found', 'RECOMMENDATION_DRAFT_NOT_FOUND', 'Recommendation draft does not exist.');
-    const latest = latestSnapshot.data() || {};
-    assert(latest.ownerId === auth.uid && latest.draftId === draftId,
-      'permission-denied', 'RECOMMENDATION_DRAFT_FORBIDDEN', 'Recommendation draft is unavailable.');
-    assert(latest.version === expectedVersion && latest.state === 'publishing' && latest.publishingVersion === expectedVersion,
-      'aborted', 'RECOMMENDATION_DRAFT_VERSION_CONFLICT', 'The recommendation draft changed. Reload it and try again.');
-    transaction.set(publicationRef, {
-      ownerId: auth.uid, draftId, version: expectedVersion, result,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      expireAt: new Date(Date.now() + PUBLICATION_RECEIPT_TTL_MS),
+      transaction.set(publicationRef, {
+        ownerId: auth.uid, draftId, version: expectedVersion, result,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt: new Date(Date.now() + PUBLICATION_RECEIPT_TTL_MS),
+      });
+      transaction.update(loaded.ref, { expireAt: new Date(), publishedAt: admin.firestore.FieldValue.serverTimestamp() });
+      transaction.delete(ownerRef);
+      return result;
     });
-    transaction.update(loaded.ref, { expireAt: new Date(), publishedAt: admin.firestore.FieldValue.serverTimestamp() });
-    transaction.delete(ownerRef);
-    return result;
-  });
+  } catch (error) {
+    await releaseRecommendationPublishClaim({ db, auth, ownerRef, draftId, expectedVersion });
+    throw error;
+  }
   try {
     await db.recursiveDelete(loaded.ref);
   } catch (error) {

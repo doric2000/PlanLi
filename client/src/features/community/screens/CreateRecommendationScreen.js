@@ -145,6 +145,7 @@ function placeFingerprint(place) {
   const coordinate = normalizeManualCoordinate(place.coordinates || place.geometry?.location);
   return [
     place.placeId || place.place_id || '',
+    place.resolvedPlaceToken || '',
     place.name || '',
     coordinate?.lat ?? '',
     coordinate?.lng ?? '',
@@ -204,7 +205,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const requestedIsEdit = route?.params?.mode === 'edit' && Number(editItem?.recommendationCatalogVersion || 0) > 0;
   const requestedEditPostId = requestedIsEdit ? route?.params?.postId || editItem?.id || null : null;
   const publishJobId = requestedIsEdit ? null : route?.params?.publishJobId || null;
-  const { enqueueCreate, loadJobForReview } = useRecommendationPublish();
+  const { endReview, enqueueCreate, loadJobForReview } = useRecommendationPublish();
   const {
     bindDraft,
     clearDraft: clearDraftMedia,
@@ -640,7 +641,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     return () => clearTimeout(timer);
   }, [dirty, draftComparable, draftId, draftPayload, mode, persistSnapshot]);
 
-  useEffect(() => () => { mountedRef.current = false; }, []);
+  useEffect(() => () => {
+    mountedRef.current = false;
+    if (publishJobId && !publishHandoffRef.current && typeof endReview === 'function') {
+      endReview(publishJobId);
+    }
+  }, [endReview, publishJobId]);
 
   useEffect(() => {
     if (!isEdit || !editItem || !editPostId || hydratedEditIdRef.current === editPostId) return;

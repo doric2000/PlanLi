@@ -7,6 +7,7 @@ const PROVIDER_ENDPOINTS = new Set([
   'legacy_details', 'geocode', 'google_provider',
 ]);
 const PROVIDER_STATUSES = new Set(['timeout', 'network_error', 'unknown']);
+const SAFE_REASON_PATTERN = /^(?:[A-Z][A-Z0-9_]{2,79}|[a-z][a-z0-9_]{2,79})$/;
 
 function createIncidentId(value) {
   const supplied = String(value || '').trim();
@@ -47,6 +48,11 @@ function retryableLocationError(error) {
   return ['temporary_limit_reached', 'provider_timeout', 'provider_unavailable'].includes(reason);
 }
 
+function preservedErrorReason(error) {
+  const reason = String(error?.details?.reason || '').trim();
+  return SAFE_REASON_PATTERN.test(reason) ? reason : '';
+}
+
 function decorateLocationError(error, incidentId, fallbackReason) {
   const code = normalizedCode(error);
   const safeCode = [
@@ -57,11 +63,14 @@ function decorateLocationError(error, incidentId, fallbackReason) {
   const message = error instanceof HttpsError
     ? error.message
     : 'The location request could not be completed.';
-  const reason = reasonForLocationError(error, fallbackReason);
+  const reason = preservedErrorReason(error) || reasonForLocationError(error, fallbackReason);
+  const retryable = typeof error?.details?.retryable === 'boolean'
+    ? error.details.retryable
+    : retryableLocationError({ ...error, details: { reason } });
   return new HttpsError(safeCode, message, {
     reason,
     incidentId,
-    retryable: retryableLocationError({ ...error, details: { reason } }),
+    retryable,
   });
 }
 

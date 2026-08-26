@@ -26,6 +26,17 @@ describe('location error presentation', () => {
     })).toBe('expired');
   });
 
+  it('does not describe unrelated not-found errors as an expired place search', () => {
+    expect(locationErrorKind({
+      code: 'functions/not-found',
+      details: { reason: 'RECOMMENDATION_DRAFT_NOT_FOUND' },
+    })).toBe('unknown');
+    expect(locationErrorKind({
+      code: 'functions/not-found',
+      details: { reason: 'place_not_found' },
+    })).toBe('placeNotFound');
+  });
+
   it('shows a short privacy-safe incident code when supplied by the backend', () => {
     expect(locationErrorMessage({
       code: 'functions/unavailable',

@@ -11,6 +11,9 @@ import { useContentPublish } from './RecommendationPublishContext';
 
 export function publishErrorMessage(job) {
   const error = job?.error;
+  if (error?.details?.reason === 'RECOMMENDATION_DRAFT_NOT_FOUND') {
+    return 'לא הצלחנו לשחזר את טיוטת הפרסום. פתחו עריכה ונסו לפרסם מחדש.';
+  }
   if (locationErrorKind(error) !== 'unknown') return locationErrorMessage(error);
   return travelMediaErrorMessage(error) ||
     error?.message ||
@@ -31,7 +34,7 @@ function statusCopy(job, queuedCount) {
 }
 export default function RecommendationPublishBanner({ onReview }) {
   const insets = useSafeAreaInsets();
-  const { activeJob, jobs, retry, discard } = useContentPublish();
+  const { activeJob, bannerJobCount, beginReview, retry, discard } = useContentPublish();
   if (!activeJob) return null;
 
   const failed = activeJob.status === 'failed';
@@ -64,7 +67,7 @@ export default function RecommendationPublishBanner({ onReview }) {
           color={failed ? colors.error : success ? '#177245' : colors.primary}
         />
         <View style={styles.copy}>
-          <AppText style={styles.title}>{statusCopy(activeJob, jobs.length)}</AppText>
+          <AppText style={styles.title}>{statusCopy(activeJob, bannerJobCount)}</AppText>
           {failed ? (
             <AppText style={styles.errorText} numberOfLines={2}>
               {publishErrorMessage(activeJob)}
@@ -89,7 +92,14 @@ export default function RecommendationPublishBanner({ onReview }) {
               <AppText style={styles.primaryActionText}>נסו שוב</AppText>
             </TouchableOpacity>
           ) : null}
-          <TouchableOpacity style={styles.action} onPress={() => onReview?.(activeJob.id, activeJob.contentType)} testID="publish-review">
+          <TouchableOpacity
+            style={styles.action}
+            onPress={() => {
+              beginReview(activeJob.id);
+              onReview?.(activeJob.id, activeJob.contentType);
+            }}
+            testID="publish-review"
+          >
             <AppText style={styles.actionText}>עריכה</AppText>
           </TouchableOpacity>
           <TouchableOpacity style={styles.action} onPress={confirmDiscard} testID="publish-discard">

@@ -33,6 +33,7 @@ const ALLOWED_TAGS = new Set([
   'auth_state',
   'build',
   'error_code',
+  'error_reason',
   'feature',
   'operation',
   'screen',
@@ -216,7 +217,7 @@ export function isExpectedDiagnosticCancellation(error) {
   return code === 'err_request_canceled' || code === 'auth/provider-cancelled';
 }
 
-export function captureDiagnosticException(error, { operation, code } = {}) {
+export function captureDiagnosticException(error, { operation, code, reason } = {}) {
   if (isExpectedDiagnosticCancellation(error)) return;
   if (error && typeof error === 'object') {
     if (capturedErrors.has(error)) return;
@@ -225,6 +226,7 @@ export function captureDiagnosticException(error, { operation, code } = {}) {
   Sentry.withScope((scope) => {
     if (operation) scope.setTag('operation', sanitizeDiagnosticText(String(operation)).slice(0, 64));
     if (code) scope.setTag('error_code', sanitizeDiagnosticText(String(code)).slice(0, 64));
+    if (reason) scope.setTag('error_reason', sanitizeDiagnosticText(String(reason)).slice(0, 80));
     Sentry.captureException(error);
   });
 }

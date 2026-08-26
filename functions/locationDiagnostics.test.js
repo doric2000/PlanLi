@@ -34,6 +34,19 @@ test('expired sessions remain distinct from provider timeouts', () => {
   assert.equal(decorated.details.retryable, false);
 });
 
+test('callable domain reasons survive location decoration', () => {
+  const decorated = decorateLocationError(
+    new HttpsError('not-found', 'Recommendation draft does not exist.', {
+      reason: 'RECOMMENDATION_DRAFT_NOT_FOUND',
+      retryable: false,
+    }),
+    'loc_1234567890ab',
+    'publishRecommendationDraft'
+  );
+  assert.equal(decorated.details.reason, 'RECOMMENDATION_DRAFT_NOT_FOUND');
+  assert.equal(decorated.details.retryable, false);
+});
+
 test('daily quota and provider request ceilings are non-retryable', () => {
   const daily = decorateLocationError(
     new HttpsError('resource-exhausted', 'The daily location limit has been reached.'),

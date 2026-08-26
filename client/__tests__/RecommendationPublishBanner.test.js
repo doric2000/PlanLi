@@ -6,6 +6,7 @@ import RecommendationPublishBanner from '../src/features/community/publishing/Re
 
 const mockRetry = jest.fn();
 const mockDiscard = jest.fn();
+const mockBeginReview = jest.fn();
 let mockPublishState;
 
 jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
@@ -25,6 +26,8 @@ describe('RecommendationPublishBanner', () => {
     jest.clearAllMocks();
     mockPublishState = {
       activeJob: { id: 'job-1', status: 'uploading', stage: 'uploading', progress: 0.42 },
+      bannerJobCount: 1,
+      beginReview: mockBeginReview,
       jobs: [{ id: 'job-1' }],
       retry: mockRetry,
       discard: mockDiscard,
@@ -56,6 +59,7 @@ describe('RecommendationPublishBanner', () => {
     fireEvent.press(screen.getByTestId('publish-discard'));
 
     expect(mockRetry).toHaveBeenCalledWith('job-1');
+    expect(mockBeginReview).toHaveBeenCalledWith('job-1');
     expect(onReview).toHaveBeenCalledWith('job-1', undefined);
     expect(mockDiscard).toHaveBeenCalledWith('job-1');
     Alert.alert.mockRestore();
