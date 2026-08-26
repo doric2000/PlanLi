@@ -28,6 +28,7 @@ firestore-debug.log
 storage-debug.log
 .env
 .DS_Store
+__pycache__/
 dist/
 coverage/
 .expo/
@@ -44,3 +45,9 @@ OPENAI.md
 /docs/agent-rules/
 /graphify-out
 /*.zip
+
+# Local campaign rendering tools
+client/scripts/render_destination_series.py
+client/scripts/render_destination_series_editorial.py
+client/scripts/render_destination_sketch_v*.py
+client/scripts/render_travel_mistakes_cover.py
