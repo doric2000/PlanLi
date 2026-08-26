@@ -25,15 +25,15 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible production EAS Update is Noya component-geometry group
-`1a691933-e4b6-4003-9d3d-111315a88549`, published for Android
-(`01a03e64-1c50-7500-bfe5-9e4fc2aea1e4`) and iOS
-(`01a03e64-1c50-7709-96ac-f922c1842eae`) at
-`2026-08-26T14:05:43.376Z` from PR `#221` merge commit `408c8e94`. EAS
+The latest compatible production EAS Update is recommendation destination-
+publishing group `2b8fe998-103e-4d9f-8080-ad01301b6cb8`, published for Android
+(`01a03fb3-eeb4-7379-9d28-4b48cf0aff7b`) and iOS
+(`01a03fb3-eeb4-7718-ac45-7271f9864282`) at
+`2026-08-26T20:12:31.796Z` from clean `main` commit `cbb6aa61`. EAS
 read-back confirms that both production manifests use runtime `1.1.0`, the
 exact merge commit, the production environment, and a clean working tree.
-Download, application, and exact tour geometry on the physical Android tablet
-and TestFlight iPhone remain unverified.
+Download, application, and recommendation publication on the physical Android
+tablet and TestFlight iPhone remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
 internal iOS EAS Development Build
@@ -44,18 +44,19 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and runtime `1.1.0`. The matching Noya
-component-geometry preview group is `31df8f49-77fb-4151-85fb-245e594a81d7`;
-the immediately preceding compatible groups are preview
-`48a9c9ef-4c32-4030-adb0-0ad7bcecb111` and production
-`43a873d8-282c-4e6a-986d-fcd014047c2c`. The RTL native builds and store actions
-did not deploy Firebase or write production data. Twenty-eight
-affected Functions and the
-active media-bucket Storage Rules were deployed from `0ed8e88` at approximately
-`2026-08-24T01:34Z`. The Functions inventory still reports 96 active Node.js 22
-v2 Functions in `europe-west1`, and the post-deploy error query returned no
-matching entries. Firestore Rules, indexes, Hosting, production documents,
-migrations, and the rollback Storage bucket were unchanged.
+the `production` EAS Update channel and runtime `1.1.0`. The matching
+recommendation destination-publishing preview group is
+`1a3c69c6-fc05-4666-b3df-da528b00facf`; the immediately preceding compatible
+groups are preview `31df8f49-77fb-4151-85fb-245e594a81d7` and production
+`1a691933-e4b6-4003-9d3d-111315a88549`. The RTL native builds and store actions
+did not deploy Firebase or write production data. The recommendation release
+deployed `saveRecommendation`, `saveRecommendationDraft`, and
+`publishRecommendationDraft` from `cbb6aa61` at
+`2026-08-26T19:50:18Z`. The Functions inventory reports 99 active Node.js 22 v2
+Functions in `europe-west1`; post-deploy Cloud Logging readback was unavailable
+from both Firebase MCP and CLI and remains unverified. Firestore Rules, indexes,
+Hosting, production documents, migrations, and the rollback Storage bucket were
+unchanged.
 
 ## Run the client
 
@@ -1350,3 +1351,52 @@ rejected.
   close and reopen the production app up to twice to download and apply the
   update. Roll back preview to `48a9c9ef-4c32-4030-adb0-0ad7bcecb111` or
   production to `43a873d8-282c-4e6a-986d-fcd014047c2c` if required.
+
+## Recommendation provider-destination publication release
+
+- Source: recommendation fix PR `#226`, merge commit
+  `92331f87a9600ce8ac59e19616573c826361c1a0`; released from clean `main`
+  commit `cbb6aa61afe4e41f66e1e0afd6dbf6d3ca372ec7`, which also includes the
+  approved Noya copy and campaign-ignore follow-ups in PRs `#227` and `#228`.
+- Scope: preserves Google provider identity through recommendation drafts,
+  materializes new city/region destinations during publication, validates the
+  canonical destination IDs, keeps destination/pin/exact semantics distinct,
+  repairs durable failed queues idempotently, adds destination-specific error
+  copy, and tags failures only with the privacy-safe content mode.
+- Firebase deployment: only `saveRecommendation`, `saveRecommendationDraft`,
+  and `publishRecommendationDraft` were deployed to `planli-f0b12` in
+  `europe-west1` at `2026-08-26T19:50:18Z`. All are active Node.js 22 v2
+  Functions. Their deployed source hashes/generations are respectively
+  `66d353305cc5bd0d3c181eb567c0ba69e7f34c89`/`1787773818476342`,
+  `2f759a7e3eccf844a050dd77cad92cacd06e55b6`/`1787773818505072`, and
+  `66d353305cc5bd0d3c181eb567c0ba69e7f34c89`/`1787773818504460`.
+- Preview EAS Update: group `1a3c69c6-fc05-4666-b3df-da528b00facf`, Android
+  update `01a03fb1-241f-7185-beb7-e5fbbd3b3b23`, and iOS update
+  `01a03fb1-241f-7241-afc2-51225a3ed294`, published at
+  `2026-08-26T20:09:28.863Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `2b8fe998-103e-4d9f-8080-ad01301b6cb8`, Android update
+  `01a03fb3-eeb4-7379-9d28-4b48cf0aff7b`, and iOS update
+  `01a03fb3-eeb4-7718-ac45-7271f9864282`, published at
+  `2026-08-26T20:12:31.796Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `cbb6aa61`; the production
+  release reused the preview bundles and uploaded no new assets.
+- Validation: focused Functions tests passed 63 tests, focused client tests
+  passed 39 tests, `npm run validate:changed` passed, PR `#226` checks passed,
+  and the final shared-contract review found no blocking issue. Both clean-main
+  EAS production-lineage preflights passed. The preview export found 52 iOS and
+  51 Android assets and uploaded two app bundles with no new assets.
+- Observability: Sentry issue `PLANLI-MOBILE-9` remains unresolved with 15
+  historical events; its last event was `2026-08-26T18:23:36Z`, before this
+  rollout, and no later event was returned. Firebase inventory reports all 99
+  Functions active. Post-deploy Cloud Logging queries failed in both Firebase
+  MCP and CLI, so new `place_not_found`/`destination_not_found` log entries and
+  Cloud Run revision names remain unverified.
+- No native build, TestFlight/App Store or Google Play submission, Rules,
+  indexes, Hosting, migration, IAM, or production-document mutation accompanied
+  this release. Mykonos/Venice city-or-region and exact-place publication,
+  one-tap recovery of a failed queue, and banner dismissal remain unverified on
+  physical devices. Force-close and reopen the production app up to twice to
+  download and apply the update. Roll back preview to
+  `31df8f49-77fb-4151-85fb-245e594a81d7` or production to
+  `1a691933-e4b6-4003-9d3d-111315a88549` if required.
