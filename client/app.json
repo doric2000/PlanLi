@@ -53,6 +53,12 @@
       "favicon": "./assets/brand-favicon.png"
     },
     "plugins": [
+      [
+        "expo-localization",
+        {
+          "supportsRTL": false
+        }
+      ],
       "expo-apple-authentication",
       "@react-native-google-signin/google-signin",
       "expo-notifications",
