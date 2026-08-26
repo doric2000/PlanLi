@@ -835,7 +835,7 @@ async function validateMediaAssets({
   );
 }
 
-async function resolveExistingDestination(db, destinationRef) {
+function cleanRecommendationDestinationRef(destinationRef) {
   assert(
     destinationRef &&
       typeof destinationRef.countryId === 'string' &&
@@ -853,18 +853,51 @@ async function resolveExistingDestination(db, destinationRef) {
     min: 1,
     max: 180,
   });
+  const provider = cleanOptionalString(destinationRef.provider, {
+    field: 'destinationRef.provider',
+    max: 40,
+  });
+  assert(!provider || provider === 'google', 'invalid-argument', 'destinationRef.provider is invalid.');
+  const providerPlaceId = cleanOptionalString(destinationRef.providerPlaceId, {
+    field: 'destinationRef.providerPlaceId',
+    max: 300,
+  });
+  const resolvedPlaceToken = providerPlaceId
+    ? cleanOptionalString(destinationRef.resolvedPlaceToken, {
+        field: 'destinationRef.resolvedPlaceToken',
+        max: 500,
+      })
+    : '';
+  return {
+    countryId,
+    cityId,
+    ...(providerPlaceId ? {
+      provider: 'google',
+      providerPlaceId,
+      ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
+    } : {}),
+  };
+}
+
+function destinationUnavailable(message) {
+  throw new HttpsError('not-found', message, {
+    reason: 'destination_not_found',
+    retryable: false,
+  });
+}
+
+async function resolveExistingDestination(db, destinationRef) {
+  const { countryId, cityId } = cleanRecommendationDestinationRef(destinationRef);
   const countryRef = db.doc(`countries/${countryId}`);
   const cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
   const [countrySnap, citySnap] = await Promise.all([
     countryRef.get(),
     cityRef.get(),
   ]);
-  assert(countrySnap.exists && citySnap.exists, 'not-found', 'Destination does not exist.');
-  assert(
-    countrySnap.data()?.status === 'active' && citySnap.data()?.status === 'active',
-    'failed-precondition',
-    'Destination is not active.'
-  );
+  if (!countrySnap.exists || !citySnap.exists) destinationUnavailable('Destination does not exist.');
+  if (countrySnap.data()?.status !== 'active' || citySnap.data()?.status !== 'active') {
+    destinationUnavailable('Destination is not active.');
+  }
   return normalizeDestinationForUse({
     countryRef,
     cityRef,
@@ -876,6 +909,41 @@ async function resolveExistingDestination(db, destinationRef) {
     createCity: false,
     place: null,
   }, countrySnap.data()?.code || countryId);
+}
+
+async function resolveRecommendationDestinationRef({
+  admin,
+  auth,
+  destinationRef,
+  mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
+  restCountriesKey,
+  providerRateLimitKey,
+  resolveExisting = resolveExistingDestination,
+  resolveSubmitted = resolveSubmittedPlaceDestination,
+}) {
+  const cleaned = cleanRecommendationDestinationRef(destinationRef);
+  if (!cleaned.providerPlaceId) {
+    return resolveExisting(admin.firestore(), cleaned);
+  }
+  const destination = await resolveSubmitted({
+    admin,
+    auth,
+    placeId: cleaned.providerPlaceId,
+    resolvedPlaceToken: cleaned.resolvedPlaceToken || null,
+    mapsKey,
+    newPlacesKey,
+    placesProvider,
+    restCountriesKey,
+    providerRateLimitKey,
+  });
+  assert(
+    destination.countryId === cleaned.countryId && destination.cityId === cleaned.cityId,
+    'failed-precondition',
+    'The provider destination does not match the selected destination. Search again.'
+  );
+  return destination;
 }
 
 function destinationContainsCoordinates(destination, coordinates) {
@@ -1823,6 +1891,7 @@ async function saveRecommendation({
   restCountriesKey,
   mediaBucket,
   providerRateLimitKey,
+  resolveDestinationRef = resolveRecommendationDestinationRef,
 }) {
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -1955,7 +2024,16 @@ async function saveRecommendation({
     'invalid-argument', 'locationMode is required.');
   let destination;
   if (data?.destinationRef) {
-    destination = await resolveExistingDestination(db, data.destinationRef);
+    destination = await resolveDestinationRef({
+      admin,
+      auth,
+      destinationRef: data.destinationRef,
+      mapsKey,
+      newPlacesKey,
+      placesProvider,
+      restCountriesKey,
+      providerRateLimitKey,
+    });
     if (usesRecommendationCatalog && locationMode === 'pin') {
       assert(data?.manualLocation, 'invalid-argument', 'A map pin is required for pin mode.');
     }
@@ -1980,6 +2058,9 @@ async function saveRecommendation({
       previousData?.destination?.cityId === destination.cityId
     ) {
       destination.place = previousData.place;
+    }
+    if (usesRecommendationCatalog && locationMode === 'destination') {
+      destination.place = null;
     }
   } else {
     assert(!usesRecommendationCatalog || locationMode === 'exact',
@@ -2263,6 +2344,7 @@ module.exports = {
   resolveGoogleDestination,
   resolveDestinationFromToken,
   resolveSubmittedPlaceDestination,
+  resolveRecommendationDestinationRef,
   resolveRecommendationDestination,
   resolveExistingDestination,
   sanitizeRecommendationContent,

@@ -131,6 +131,11 @@ function isMissingRecommendationDraftError(error) {
     message.includes('recommendation draft does not exist');
 }
 
+function hasProviderDestinationDraft(draft) {
+  return ['destination', 'pin'].includes(draft?.locationMode) &&
+    Boolean(draft?.generalDestination?.providerPlaceId);
+}
+
 export function recommendationPublishProgress(job) {
   if (!job) return 0;
   if (job.status === 'success') return 1;
@@ -703,7 +708,33 @@ export function ContentPublishProvider({ children }) {
           let publishDraftId = current.payload.draftId;
           let publishVersion = Number(current.payload.expectedVersion);
           const hasPreparedLocalMedia = (current.media || []).some((entry) => entry.type === 'local');
-          if (hasPreparedLocalMedia && current.payload.recommendationDraftMediaSaved !== true) {
+          const hasProviderDestination = hasProviderDestinationDraft(current.draft);
+          let mediaSaved = current.payload.recommendationDraftMediaSaved === true;
+          let providerDestinationSaved = current.payload.recommendationDraftProviderDestinationSaved === true;
+          if (mediaSaved && current.payload.recommendationDraftIdSynced !== true &&
+              current.payload.recommendationDraftMediaSaveRequestId) {
+            const replayedMediaSave = await saveRecommendationDraft({
+              draftId: publishDraftId,
+              sourceRecommendationId: current.payload.sourceRecommendationId || null,
+              expectedVersion: publishVersion,
+              saveRequestId: current.payload.recommendationDraftMediaSaveRequestId,
+              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+            });
+            publishDraftId = replayedMediaSave.draftId;
+            publishVersion = Number(replayedMediaSave.version);
+            await updateJob(jobId, (job) => ({
+              ...job,
+              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              payload: {
+                ...job.payload,
+                draftId: publishDraftId,
+                expectedVersion: publishVersion,
+                recommendationDraftIdSynced: true,
+              },
+              updatedAt: Date.now(),
+            }));
+          }
+          if (hasPreparedLocalMedia && !mediaSaved) {
             let mediaSaveRequestId = current.payload.recommendationDraftMediaSaveRequestId;
             if (!mediaSaveRequestId) {
               mediaSaveRequestId = randomUUID();
@@ -725,6 +756,8 @@ export function ContentPublishProvider({ children }) {
             });
             publishDraftId = savedDraft.draftId;
             publishVersion = Number(savedDraft.version);
+            mediaSaved = true;
+            if (hasProviderDestination) providerDestinationSaved = true;
             await updateJob(jobId, (job) => ({
               ...job,
               draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
@@ -734,22 +767,36 @@ export function ContentPublishProvider({ children }) {
                 expectedVersion: publishVersion,
                 recommendationDraftIdSynced: true,
                 recommendationDraftMediaSaved: true,
+                ...(hasProviderDestination
+                  ? { recommendationDraftProviderDestinationSaved: true }
+                  : {}),
               },
               updatedAt: Date.now(),
             }));
           }
-          if (current.payload.recommendationDraftMediaSaved === true &&
-              current.payload.recommendationDraftIdSynced !== true &&
-              current.payload.recommendationDraftMediaSaveRequestId) {
-            const replayedMediaSave = await saveRecommendationDraft({
+          if (hasProviderDestination && !providerDestinationSaved) {
+            let providerDestinationSaveRequestId =
+              current.payload.recommendationDraftProviderDestinationSaveRequestId;
+            if (!providerDestinationSaveRequestId) {
+              providerDestinationSaveRequestId = randomUUID();
+              await updateJob(jobId, (job) => ({
+                ...job,
+                payload: {
+                  ...job.payload,
+                  recommendationDraftProviderDestinationSaveRequestId: providerDestinationSaveRequestId,
+                },
+                updatedAt: Date.now(),
+              }));
+            }
+            const syncedDestinationDraft = await saveRecommendationDraft({
               draftId: publishDraftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
               expectedVersion: publishVersion,
-              saveRequestId: current.payload.recommendationDraftMediaSaveRequestId,
+              saveRequestId: providerDestinationSaveRequestId,
               draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
             });
-            publishDraftId = replayedMediaSave.draftId;
-            publishVersion = Number(replayedMediaSave.version);
+            publishDraftId = syncedDestinationDraft.draftId;
+            publishVersion = Number(syncedDestinationDraft.version);
             await updateJob(jobId, (job) => ({
               ...job,
               draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
@@ -758,6 +805,7 @@ export function ContentPublishProvider({ children }) {
                 draftId: publishDraftId,
                 expectedVersion: publishVersion,
                 recommendationDraftIdSynced: true,
+                recommendationDraftProviderDestinationSaved: true,
               },
               updatedAt: Date.now(),
             }));
@@ -920,6 +968,9 @@ export function ContentPublishProvider({ children }) {
           operation: `publish_${current.contentType || 'recommendation'}_${failedStage}`,
           code: String(error?.code || 'unknown'),
           ...(error?.details?.reason ? { reason: String(error.details.reason) } : {}),
+          ...(current.contentType !== 'route' && current.draft?.locationMode
+            ? { contentMode: current.draft.locationMode }
+            : {}),
         });
       }
       await updateJob(jobId, (job) => ({

@@ -35,6 +35,14 @@ describe('location error presentation', () => {
       code: 'functions/not-found',
       details: { reason: 'place_not_found' },
     })).toBe('placeNotFound');
+    expect(locationErrorKind({
+      code: 'functions/not-found',
+      details: { reason: 'destination_not_found' },
+    })).toBe('destinationNotFound');
+    expect(locationErrorMessage({
+      code: 'functions/not-found',
+      details: { reason: 'destination_not_found' },
+    })).toContain('עיר או אזור');
   });
 
   it('shows a short privacy-safe incident code when supplied by the backend', () => {

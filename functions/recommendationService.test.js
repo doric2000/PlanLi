@@ -10,6 +10,7 @@ const {
   parsePlaceDetails,
   resolveGoogleDestination,
   resolvePlaceCountry,
+	resolveRecommendationDestinationRef,
 	resolveRecommendationDestination,
 	sanitizeRecommendationAttributes,
   sanitizeRecommendationCatalogContent,
@@ -1168,6 +1169,124 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
 });
 
+test('provider destination references use the submitted resolver and reject canonical mismatches', async () => {
+  const admin = createFakeAdmin();
+  let submittedRequest;
+  const resolved = {
+    countryId: 'GR',
+    cityId: 'dst_mykonos',
+    place: { placeId: 'google-mykonos' },
+  };
+  const result = await resolveRecommendationDestinationRef({
+    admin,
+    auth: verifiedAuth,
+    destinationRef: {
+      countryId: 'GR',
+      cityId: 'dst_mykonos',
+      provider: 'google',
+      providerPlaceId: 'google-mykonos',
+      resolvedPlaceToken: 'resolved-token-1',
+    },
+    resolveExisting: async () => assert.fail('provider destinations must not require an existing catalog document'),
+    resolveSubmitted: async (request) => {
+      submittedRequest = request;
+      return resolved;
+    },
+  });
+  assert.equal(result, resolved);
+  assert.equal(submittedRequest.placeId, 'google-mykonos');
+  assert.equal(submittedRequest.resolvedPlaceToken, 'resolved-token-1');
+
+  await assert.rejects(() => resolveRecommendationDestinationRef({
+    admin,
+    auth: verifiedAuth,
+    destinationRef: {
+      countryId: 'IT',
+      cityId: 'dst_venice',
+      providerPlaceId: 'google-venice',
+    },
+    resolveSubmitted: async () => ({ countryId: 'IT', cityId: 'dst_rome' }),
+  }), /does not match/);
+});
+
+test('provider destination publication strips the provider place and keeps only a manual pin', async () => {
+  const destinationDocuments = {
+    'countries/GR': { name: 'יוון', names: { he: 'יוון', en: 'Greece' }, code: 'GR', status: 'active' },
+    'countries/GR/destinations/dst_mykonos': {
+      name: 'מיקונוס',
+      names: { he: 'מיקונוס', en: 'Mykonos' },
+      status: 'active',
+      stats: { recommendationCount: 0 },
+      googleCache: {
+        coordinates: { lat: 37.45, lng: 25.33 },
+        viewport: {
+          southwest: { lat: 37.3, lng: 25.1 },
+          northeast: { lat: 37.6, lng: 25.5 },
+        },
+      },
+    },
+  };
+  const catalogContent = {
+    taxonomyVersion: 5,
+    recommendationCatalogVersion: 1,
+    title: 'מיקונוס',
+    description: 'המלצה חדשה באי.',
+    categoryId: 'nature',
+    subcategoryIds: ['beach'],
+    budget: 'balanced',
+    details: {},
+    media: [],
+  };
+  const providerDestination = (admin) => async () => ({
+    countryId: 'GR',
+    cityId: 'dst_mykonos',
+    countryRef: admin.firestore().doc('countries/GR'),
+    cityRef: admin.firestore().doc('countries/GR/destinations/dst_mykonos'),
+    countryData: destinationDocuments['countries/GR'],
+    cityData: destinationDocuments['countries/GR/destinations/dst_mykonos'],
+    createCountry: false,
+    createCity: false,
+    place: { placeId: 'google-mykonos', coordinates: { lat: 37.45, lng: 25.33 } },
+  });
+  const destinationRef = {
+    countryId: 'GR',
+    cityId: 'dst_mykonos',
+    provider: 'google',
+    providerPlaceId: 'google-mykonos',
+    resolvedPlaceToken: 'resolved-token-1',
+  };
+
+  const generalAdmin = createFakeAdmin(destinationDocuments);
+  const generalResult = await saveRecommendation({
+    admin: generalAdmin,
+    auth: verifiedAuth,
+    data: { destinationRef, locationMode: 'destination', recommendation: catalogContent },
+    resolveDestinationRef: providerDestination(generalAdmin),
+  });
+  const generalSaved = generalAdmin.documents.get(`recommendations/${generalResult.recommendationId}`);
+  assert.equal(generalSaved.locationMode, 'destination');
+  assert.equal(generalSaved.place, null);
+  assert.equal(generalSaved.mapLocation, null);
+
+  const pinAdmin = createFakeAdmin(destinationDocuments);
+  const pinResult = await saveRecommendation({
+    admin: pinAdmin,
+    auth: verifiedAuth,
+    data: {
+      destinationRef,
+      locationMode: 'pin',
+      manualLocation: { coordinates: { lat: 37.46, lng: 25.34 } },
+      recommendation: catalogContent,
+    },
+    resolveDestinationRef: providerDestination(pinAdmin),
+  });
+  const pinSaved = pinAdmin.documents.get(`recommendations/${pinResult.recommendationId}`);
+  assert.equal(pinSaved.locationMode, 'pin');
+  assert.equal(pinSaved.place.source, 'manual_pin');
+  assert.equal(pinSaved.place.placeId, undefined);
+  assert.deepEqual(pinSaved.place.coordinates, { lat: 37.46, lng: 25.34 });
+});
+
 test('catalog recommendations support a general destination and a nearby manual pin', async () => {
   const destinationDocuments = {
     'countries/HU': {
@@ -1453,7 +1572,9 @@ test('existing destinations under inactive countries cannot be reused', async ()
         recommendation: validContent,
       },
     }),
-    /Destination is not active/
+    (error) => error?.message === 'Destination is not active.' &&
+      error?.details?.reason === 'destination_not_found' &&
+      error?.details?.retryable === false
   );
 });
 
