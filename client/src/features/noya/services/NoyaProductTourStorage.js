@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const NOYA_PRODUCT_TOUR_VERSION = 2;
-export const NOYA_PRODUCT_TOUR_STORAGE_KEY = '@planli/noya-product-tour-v2';
+export const NOYA_PRODUCT_TOUR_VERSION = 3;
+export const NOYA_PRODUCT_TOUR_STORAGE_KEY = '@planli/noya-product-tour-v3';
+export const NOYA_PRODUCT_TOUR_V2_STORAGE_KEY = '@planli/noya-product-tour-v2';
 export const NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY = '@planli/noya-product-tour-v1';
 
 export const NOYA_TOUR_IDS = Object.freeze({
@@ -78,8 +79,11 @@ export async function loadNoyaProductTourState() {
       return memoryState;
     }
 
-    const legacySerialized = await AsyncStorage.getItem(NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY);
-    const legacy = parseStoredState(legacySerialized);
+    const v2Serialized = await AsyncStorage.getItem(NOYA_PRODUCT_TOUR_V2_STORAGE_KEY);
+    const v2 = parseStoredState(v2Serialized);
+    const legacy = v2 || parseStoredState(
+      await AsyncStorage.getItem(NOYA_PRODUCT_TOUR_LEGACY_STORAGE_KEY),
+    );
     if (legacy) {
       memoryState = migrateLegacyState(legacy);
       try {
