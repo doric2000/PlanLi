@@ -132,6 +132,26 @@ async function syncPublicProfile(admin, userId, afterData) {
   );
 }
 
+async function syncCurrentPublicProfile(admin, userId) {
+  const db = admin.firestore();
+  const userRef = db.doc(`users/${userId}`);
+  const publicRef = db.doc(`publicProfiles/${userId}`);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+    const current = snapshot.exists ? snapshot.data() : null;
+    if (!isPublicProfileEligible(current)) {
+      transaction.delete(publicRef);
+      return { published: false };
+    }
+    transaction.set(publicRef, {
+      ...sanitizePublicProfile(userId, current),
+      status: 'active',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: false });
+    return { published: true };
+  });
+}
+
 module.exports = {
   PUBLIC_SMART_PROFILE_FIELDS,
   isPublicProfileEligible,
@@ -140,5 +160,6 @@ module.exports = {
   sanitizePublicBio,
   sanitizePublicPhotoURL,
   sanitizePublicSmartProfile,
+  syncCurrentPublicProfile,
   syncPublicProfile,
 };

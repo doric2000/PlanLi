@@ -6,6 +6,7 @@ import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
 import MediaGalleryModal from '../../../components/MediaGalleryModal';
 import OpenWithLocationSheet from '../../../components/OpenWithLocationSheet';
+import ReportButton from '../../moderation/components/ReportButton';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { colors, routeItineraryStyles as styles } from '../../../styles';
 import {
@@ -50,6 +51,8 @@ export default function RouteItinerary({
   onPreviousDay,
   onNextDay,
   onOpenRecommendation,
+  routeId,
+  ownerId,
 }) {
   const stops = Array.isArray(day?.stops) ? day.stops : [];
   const [expandedStopKey, setExpandedStopKey] = useState(null);
@@ -180,6 +183,23 @@ export default function RouteItinerary({
                           </ScrollView>
                         ) : null}
                         <View style={styles.stopActions}>
+                          {routeId && day?.id && stop?.id ? (
+                            <ReportButton
+                              target={{
+                                type: 'route',
+                                id: routeId,
+                                subject: {
+                                  kind: 'attached_place',
+                                  field: 'place',
+                                  dayId: day.id,
+                                  stopId: stop.id,
+                                },
+                              }}
+                              ownerId={ownerId}
+                              compact
+                              subjectLabel="המקום המחובר"
+                            />
+                          ) : null}
                           {recommendationId ? (
                             <Pressable
                               style={styles.secondaryAction}

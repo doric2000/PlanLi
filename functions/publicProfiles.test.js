@@ -6,7 +6,36 @@ const {
   sanitizePublicProfile,
   sanitizePublicSmartProfile,
   publicProfileProjectionChanged,
+  syncCurrentPublicProfile,
 } = require('./publicProfiles');
+
+test('current-profile sync ignores a stale active event after suspension', async () => {
+  let deleted = false;
+  const userRef = { path: 'users/user-1' };
+  const publicRef = { path: 'publicProfiles/user-1' };
+  const db = {
+    doc(path) {
+      if (path === userRef.path) return userRef;
+      if (path === publicRef.path) return publicRef;
+      throw new Error(`Unexpected path ${path}`);
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => {
+        assert.equal(ref, userRef);
+        return {
+          exists: true,
+          data: () => ({ displayName: 'Dana', moderation: { status: 'suspended' } }),
+        };
+      },
+      delete: (ref) => { assert.equal(ref, publicRef); deleted = true; },
+    }),
+  };
+  const admin = {
+    firestore: () => db,
+  };
+  await syncCurrentPublicProfile(admin, 'user-1');
+  assert.equal(deleted, true);
+});
 
 test('public profile keeps only explicitly public identity and smart-profile fields', () => {
   const result = sanitizePublicProfile('user-1', {

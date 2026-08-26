@@ -41,6 +41,11 @@ function canonicalTargetPath(target) {
   const id = cleanId(target?.id);
   if (!id) return null;
   if (type === 'profile') return `publicProfiles/${id}`;
+  if (type === 'destination') {
+    const countryId = cleanId(target?.countryId);
+    const cityId = cleanId(target?.cityId || target?.id);
+    return countryId && cityId ? `countries/${countryId}/destinations/${cityId}` : null;
+  }
   if (type === 'comment') {
     const parentType = String(target?.parentType || '').trim().toLowerCase();
     const parentId = cleanId(target?.parentId);
@@ -87,6 +92,24 @@ function previewDestination(data) {
   return compact({ cityName: cityName || undefined, countryName: countryName || undefined });
 }
 
+function previewPlace(data) {
+  const place = data?.place;
+  if (!place || typeof place !== 'object') return null;
+  const name = cleanText(place.name, 140);
+  const address = cleanText(place.address, 220);
+  const coordinates = place.coordinates && typeof place.coordinates === 'object'
+    && Number.isFinite(Number(place.coordinates.lat))
+    && Number.isFinite(Number(place.coordinates.lng))
+    ? { lat: Number(place.coordinates.lat), lng: Number(place.coordinates.lng) }
+    : null;
+  if (!name && !address && !coordinates) return null;
+  return compact({
+    name: name || undefined,
+    address: address || undefined,
+    coordinates: coordinates || undefined,
+  });
+}
+
 function previewAuthor(target, data, ownerProfile) {
   const uid = target?.type === 'profile'
     ? cleanId(target?.id)
@@ -121,9 +144,12 @@ function buildModerationPreview({ target, data, parentData = null, ownerProfile 
 
   const isComment = type === 'comment';
   const isProfile = type === 'profile';
+  const isDestination = type === 'destination';
   const parentTitle = cleanText(parentData?.title, MAX_TITLE_LENGTH);
   const title = cleanText(
-    isProfile
+    isDestination
+      ? data.identity?.names?.he || data.googleCache?.names?.he || data.identity?.names?.en || target?.cityId
+      : isProfile
       ? data.displayName
       : isComment
         ? parentTitle
@@ -131,7 +157,9 @@ function buildModerationPreview({ target, data, parentData = null, ownerProfile 
     MAX_TITLE_LENGTH
   );
   const text = cleanText(
-    isProfile ? data.bio : isComment ? data.text : data.description,
+    isDestination
+      ? data.googleCache?.formattedAddress || data.identity?.formattedAddress || ''
+      : isProfile ? data.bio : isComment ? data.text : data.description,
     MAX_TEXT_LENGTH
   );
   const sourceForImage = isComment && parentData ? parentData : data;
@@ -152,8 +180,12 @@ function buildModerationPreview({ target, data, parentData = null, ownerProfile 
     text,
     imageUrl: mediaUrl(sourceForImage) || undefined,
     mediaCount: mediaEntries(sourceForImage).length,
-    author: previewAuthor(target, data, ownerProfile),
-    destination: previewDestination(isComment ? parentData : data),
+    author: isDestination ? null : previewAuthor(target, data, ownerProfile),
+    destination: isDestination
+      ? compact({ cityName: title || undefined, countryName: cleanText(data.countryName, 120) || undefined })
+      : previewDestination(isComment ? parentData : data),
+    place: target?.subject?.kind === 'attached_place' ? previewPlace(data) : null,
+    subject: target?.subject || null,
     parent,
   });
 }

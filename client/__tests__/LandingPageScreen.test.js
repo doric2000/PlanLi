@@ -34,6 +34,11 @@ jest.mock('../src/components/FavoriteButton', () => {
   return () => <View testID="favorite-button" />;
 });
 
+jest.mock('../src/features/moderation/components/ReportButton', () => {
+  const { View } = require('react-native');
+  return (props) => <View testID="report-destination" {...props} />;
+});
+
 jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
   usePersonalizationFeedback: () => ({ hide: jest.fn(), isHidden: () => false }),
 }));
@@ -109,6 +114,9 @@ test('renders the approved neutral destination hierarchy without unsupported pla
   expect(screen.queryByText('מלון מומלץ')).toBeNull();
   expect(screen.queryByText('נהג מומלץ')).toBeNull();
   expect(screen.queryByText('תכנון טיול')).toBeNull();
+  expect(screen.getByTestId('report-destination').props.target).toEqual({
+    type: 'destination', id: 'mykonos', cityId: 'mykonos', countryId: 'gr',
+  });
   const weatherFact = StyleSheet.flatten(screen.getByTestId('quick-fact-weather').props.style);
   const airportFact = StyleSheet.flatten(screen.getByTestId('quick-fact-airport').props.style);
   expect(weatherFact.backgroundColor).toBeUndefined();

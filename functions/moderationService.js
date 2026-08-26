@@ -3,6 +3,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { buildModerationPreview, preserveReportedPreview } = require('./moderationPreview');
 const { setMediaAvailability } = require('./mediaModeration');
 const { collectCanonicalMediaAssets, FINAL_PATH_PATTERN } = require('./mediaProcessor');
+const { REPORT_CATEGORIES } = require('./moderationPolicy');
 const {
   buildNotificationTarget,
   detachBlockedActorLikeContributions,
@@ -16,18 +17,6 @@ const {
   systemNotificationId,
 } = require('./notificationService');
 
-const REPORT_CATEGORIES = Object.freeze([
-  'inaccurate_or_unsafe_travel_info',
-  'spam_scam_commercial',
-  'harassment_hate_threat',
-  'nudity_sexual',
-  'child_safety',
-  'violence_dangerous_illegal',
-  'privacy_personal_data',
-  'copyright_image_rights',
-  'impersonation',
-  'other',
-]);
 const DETAILS_REQUIRED = new Set([
   'inaccurate_or_unsafe_travel_info',
   'copyright_image_rights',
@@ -59,6 +48,29 @@ function cleanId(value, field) {
   return result;
 }
 
+function normalizeReportSubject(input, targetType) {
+  if (!input) return null;
+  if (input?.kind !== 'attached_place' || !POST_TYPES.has(targetType)) {
+    fail('invalid-argument', 'Invalid report subject.', 'invalid_target');
+  }
+  const field = String(input.field || 'place').trim().toLowerCase();
+  if (field !== 'place') fail('invalid-argument', 'Invalid report subject.', 'invalid_target');
+  const dayId = input.dayId ? cleanId(input.dayId, 'target.subject.dayId') : null;
+  const stopId = input.stopId ? cleanId(input.stopId, 'target.subject.stopId') : null;
+  if (targetType === 'route' && (!dayId || !stopId)) {
+    fail('invalid-argument', 'A route place report requires a day and stop.', 'invalid_target');
+  }
+  if (targetType !== 'route' && (dayId || stopId)) {
+    fail('invalid-argument', 'The report subject does not match its target.', 'invalid_target');
+  }
+  return {
+    kind: 'attached_place',
+    field,
+    ...(dayId ? { dayId } : {}),
+    ...(stopId ? { stopId } : {}),
+  };
+}
+
 function normalizeReportTarget(input) {
   const type = String(input?.type || '').trim().toLowerCase();
   if (type === 'comment') {
@@ -66,26 +78,56 @@ function normalizeReportTarget(input) {
     if (!POST_TYPES.has(parentType)) fail('invalid-argument', 'Invalid comment target.', 'invalid_target');
     const parentId = cleanId(input.parentId, 'target.parentId');
     const id = cleanId(input.id, 'target.id');
+    const subject = normalizeReportSubject(input?.subject, type);
     return {
       type,
       id,
       parentType,
       parentId,
       path: `${TARGET_COLLECTIONS[parentType]}/${parentId}/comments/${id}`,
+      ...(subject ? { subject } : {}),
+    };
+  }
+  if (type === 'destination') {
+    const countryId = cleanId(input?.countryId, 'target.countryId');
+    const cityId = cleanId(input?.cityId || input?.id, 'target.cityId');
+    return {
+      type,
+      id: cityId,
+      countryId,
+      cityId,
+      path: `countries/${countryId}/destinations/${cityId}`,
     };
   }
   if (!TARGET_COLLECTIONS[type]) fail('invalid-argument', 'Unsupported report target.', 'invalid_target');
   const id = cleanId(input?.id, 'target.id');
-  return { type, id, path: `${TARGET_COLLECTIONS[type]}/${id}` };
+  const subject = normalizeReportSubject(input?.subject, type);
+  return {
+    type,
+    id,
+    path: `${TARGET_COLLECTIONS[type]}/${id}`,
+    ...(subject ? { subject } : {}),
+  };
 }
 
 function caseIdForPath(path) {
   return crypto.createHash('sha256').update(path).digest('base64url');
 }
 
+function caseIdForTarget(target) {
+  const subject = target?.subject?.kind === 'attached_place'
+    ? `#attached_place:${target.subject.dayId || 'root'}:${target.subject.stopId || target.subject.field}`
+    : '';
+  return caseIdForPath(`${target.path}${subject}`);
+}
+
 function caseStatusForReport(previousStatus, held) {
   if (held) return 'auto_held';
   return ['open', 'auto_held'].includes(previousStatus) ? previousStatus : 'open';
+}
+
+function reportLeaseMutation(previousStatus, deleteField) {
+  return previousStatus === 'resolving' ? { decisionLease: deleteField } : {};
 }
 
 function normalizeReportInput(data) {
@@ -103,6 +145,7 @@ function normalizeReportInput(data) {
 }
 
 function targetOwner(target, data) {
+  if (target.type === 'destination') return null;
   return target.type === 'profile' ? target.id : data?.ownerId || data?.authorId || null;
 }
 
@@ -276,7 +319,7 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
     });
   });
   const targetRef = db.doc(target.path);
-  const caseId = caseIdForPath(target.path);
+  const caseId = caseIdForTarget(target);
   const caseRef = db.doc(`system/moderation/cases/${caseId}`);
   const reportRef = caseRef.collection('reports').doc(auth.uid);
   let held = false;
@@ -293,19 +336,37 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
     ]);
     if (!targetSnapshot.exists) fail('not-found', 'The reported item no longer exists.', 'target_missing');
     const targetData = targetSnapshot.data() || {};
-    if (target.type !== 'profile' && targetData.status !== 'active') {
+    if (!['profile', 'destination'].includes(target.type) && targetData.status !== 'active') {
       fail('failed-precondition', 'The reported item is unavailable.', 'target_inactive');
     }
+    if (target.type === 'destination' && targetData.status === 'inactive') {
+      fail('failed-precondition', 'The reported destination is unavailable.', 'target_inactive');
+    }
+    let subjectData = null;
+    if (target.type === 'route' && target.subject?.kind === 'attached_place') {
+      const revisionId = cleanId(targetData.activeRevisionId, 'target.activeRevisionId');
+      const subjectSnapshot = await transaction.get(db.doc(
+        `routes/${target.id}/revisions/${revisionId}/days/${target.subject.dayId}/stops/${target.subject.stopId}`
+      ));
+      if (!subjectSnapshot.exists) {
+        fail('not-found', 'The reported place is no longer attached to the route.', 'target_missing');
+      }
+      subjectData = subjectSnapshot.data() || {};
+    }
     const ownerId = targetOwner(target, targetData);
-    if (!ownerId) fail('failed-precondition', 'The reported item has no owner.', 'target_owner_missing');
+    if (!ownerId && target.type !== 'destination') {
+      fail('failed-precondition', 'The reported item has no owner.', 'target_owner_missing');
+    }
     if (ownerId === auth.uid) fail('failed-precondition', 'You cannot report your own content.', 'self_report');
 
     const ownerProfileSnapshot = target.type === 'profile'
       ? targetSnapshot
-      : await transaction.get(db.doc(`publicProfiles/${ownerId}`));
+      : ownerId
+        ? await transaction.get(db.doc(`publicProfiles/${ownerId}`))
+        : null;
     const targetPreview = buildModerationPreview({
       target,
-      data: targetData,
+      data: subjectData ? { ...targetData, place: subjectData.place, attachedPlace: subjectData } : targetData,
       parentData: parentSnapshot?.exists ? parentSnapshot.data() : null,
       ownerProfile: ownerProfileSnapshot?.exists ? ownerProfileSnapshot.data() : null,
     });
@@ -363,10 +424,13 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
     transaction.set(caseRef, {
       caseId,
       target,
-      targetOwnerId: ownerId,
+      ...(ownerId ? { targetOwnerId: ownerId } : {}),
       targetPreview: preserveReportedPreview(previous.targetPreview, targetPreview),
       status: caseStatusForReport(previousStatus, held),
       priority: notificationPriority,
+      source: previous.source || 'report',
+      revision: Math.max(0, Number(previous.revision || 0)) + 1,
+      assignmentUid: previous.assignmentUid || '',
       reportCount,
       uniqueCount24h,
       recentReporters,
@@ -376,20 +440,23 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
       },
       firstReportedAt: previous.firstReportedAt || admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       dueAtMs: nowMs + (['child_safety', 'violence_dangerous_illegal'].includes(category) ? 4 : 24) * 60 * 60 * 1000,
       ...(adminNotification ? { adminNotification } : {}),
       ...(mediaModeration ? { mediaModeration } : {}),
+      ...reportLeaseMutation(previousStatus, admin.firestore.FieldValue.delete()),
       ...(reopening ? {
         resolvedAt: admin.firestore.FieldValue.delete(),
         resolvedBy: admin.firestore.FieldValue.delete(),
         resolutionReason: admin.firestore.FieldValue.delete(),
+        resolution: admin.firestore.FieldValue.delete(),
       } : {}),
     }, { merge: true });
     transaction.set(reportRef, {
       reporterId: auth.uid,
       category,
       details,
-      targetOwnerId: ownerId,
+      ...(ownerId ? { targetOwnerId: ownerId } : {}),
       createdAt: existingReport.exists
         ? existingReport.data().createdAt
         : admin.firestore.FieldValue.serverTimestamp(),
@@ -536,13 +603,16 @@ module.exports = {
   REPORT_CATEGORIES,
   REPORT_WINDOW_MS,
   caseIdForPath,
+  caseIdForTarget,
   caseStatusForReport,
+  reportLeaseMutation,
   buildAdminNotificationProjection,
   buildHeldMediaProjection,
   evaluateTextSafety,
   handleModerationCaseNotificationWrite,
   handleBlockedUserNotificationWrite,
   normalizeReportInput,
+  normalizeReportSubject,
   normalizeReportTarget,
   setBlockedUser,
   submitReport,

@@ -10,7 +10,14 @@ const NOTIFICATION_PRIORITIES = Object.freeze(['normal', 'urgent']);
 const NOTIFICATION_SUBTYPES = Object.freeze({
   like: Object.freeze(['grouped_likes']),
   comment: Object.freeze(['new_comment', 'new_reply']),
-  system: Object.freeze(['content_held', 'content_restored', 'content_deleted']),
+  system: Object.freeze([
+    'content_held',
+    'content_restored',
+    'content_deleted',
+    'moderation_warning',
+    'account_suspended',
+    'account_reinstated',
+  ]),
   moderation: Object.freeze([
     'report_received',
     'urgent_escalation',
@@ -300,6 +307,7 @@ function buildNotificationDocument({
   actorId,
   count = 1,
   commentExcerpt,
+  message,
   generation,
   createdAt,
   pushVersion = 1,
@@ -341,6 +349,7 @@ function buildNotificationDocument({
     ...(commentExcerpt !== undefined
       ? { commentExcerpt: cleanText(commentExcerpt, MAX_COMMENT_EXCERPT) }
       : {}),
+    ...(message !== undefined ? { message: cleanText(message, 240) } : {}),
     ...(generation ? { generation: cleanId(generation, 'generation') } : {}),
     push: { version: Math.max(1, Math.trunc(Number(pushVersion) || 1)) },
   });

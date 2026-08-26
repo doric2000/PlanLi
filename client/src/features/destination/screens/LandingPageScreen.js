@@ -18,6 +18,7 @@ import CachedImage from '../../../components/CachedImage';
 import FavoriteButton from '../../../components/FavoriteButton';
 import PhotoAttribution from '../../../components/PhotoAttribution';
 import PreferenceContextLine from '../../../components/PreferenceContextLine';
+import ReportButton from '../../moderation/components/ReportButton';
 import NavigationChevron from '../../../components/NavigationChevron';
 import { getTravelCategoryPresentation } from '../../../constants/travelPresentation';
 import { colors } from '../../../styles';
@@ -370,6 +371,14 @@ export default function LandingPageScreen({ navigation, route }) {
               style={[styles.actionButton, styles.favoriteButton]}
               snapshotData={snapshotData}
             />
+            <View style={[styles.actionButton, styles.reportButton]}>
+              <ReportButton
+                target={{ type: 'destination', id: cityId, cityId, countryId }}
+                compact
+                subjectLabel="המקום"
+                color={colors.primary}
+              />
+            </View>
           </View>
 
           <View style={styles.summaryCard}>

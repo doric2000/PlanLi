@@ -10,7 +10,7 @@ import { setBlockedUser, submitReport } from '../../../services/SocialService';
 import { colors, moderationStyles as styles } from '../../../styles';
 import { REPORT_CATEGORIES } from '../constants/reportCategories';
 
-export default function ReportButton({ target, ownerId, compact = false, color = colors.textSecondary }) {
+export default function ReportButton({ target, ownerId, compact = false, color = colors.textSecondary, subjectLabel = 'תוכן' }) {
   const { user, status, ensureCapability, handleCallableAuthError } = useAuth();
   const [visible, setVisible] = useState(false);
   const [category, setCategory] = useState(null);
@@ -70,7 +70,7 @@ export default function ReportButton({ target, ownerId, compact = false, color =
 
   return (
     <>
-      <Pressable style={styles.reportButton} onPress={open} accessibilityRole="button" accessibilityLabel="דיווח על תוכן">
+      <Pressable style={styles.reportButton} onPress={open} accessibilityRole="button" accessibilityLabel={`דיווח על ${subjectLabel}`}>
         <Ionicons name="flag-outline" size={compact ? 19 : 21} color={color} />
         {!compact ? <AppText style={[styles.reportLabel, { color }]}>דיווח</AppText> : null}
       </Pressable>
@@ -78,7 +78,7 @@ export default function ReportButton({ target, ownerId, compact = false, color =
         <Pressable style={styles.overlay} onPress={close}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <View style={styles.header}>
-              <AppText style={styles.title}>דיווח על תוכן</AppText>
+              <AppText style={styles.title}>דיווח על {subjectLabel}</AppText>
               <Pressable onPress={close} hitSlop={12} accessibilityLabel="סגירה">
                 <Ionicons name="close" size={24} color={colors.textPrimary} />
               </Pressable>

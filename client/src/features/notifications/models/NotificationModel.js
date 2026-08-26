@@ -321,6 +321,15 @@ export function formatNotificationMessage(notification) {
     if (notification.subtype === 'content_deleted') {
       return 'התוכן שלך הוסר';
     }
+    if (notification.subtype === 'moderation_warning') {
+      return 'נשלחה אליך אזהרה מצוות הקהילה';
+    }
+    if (notification.subtype === 'account_suspended') {
+      return 'החשבון שלך הושעה בעקבות החלטת מודרציה';
+    }
+    if (notification.subtype === 'account_reinstated') {
+      return 'החשבון שלך חזר לפעילות';
+    }
   }
   return notification.title || 'עדכון חדש מ־PlanLi';
 }
@@ -400,6 +409,14 @@ function statusAction(reason) {
       message: 'ייתכן שהתוכן הוסר או הועבר לבדיקה. אפשר לחזור להתראות ולנסות שוב מאוחר יותר.',
     };
   }
+  if (reason === 'account') {
+    return {
+      type: 'status',
+      reason,
+      title: 'עדכון לגבי החשבון',
+      message: 'פרטי ההחלטה מופיעים בהתראה. אם החשבון פעיל אפשר להמשיך להשתמש באפליקציה כרגיל.',
+    };
+  }
   return {
     type: 'status',
     reason: 'unsupported',
@@ -416,6 +433,9 @@ export function buildNotificationRouteAction(notification) {
   if (notification?.type === NotificationType.SYSTEM) {
     if (notification.subtype === 'content_held') return statusAction('held');
     if (notification.subtype === 'content_deleted') return statusAction('deleted');
+    if (['moderation_warning', 'account_suspended', 'account_reinstated'].includes(notification.subtype)) {
+      return statusAction('account');
+    }
   }
   const targetStatus = cleanText(notification?.target?.status, 40).toLowerCase();
   if (UNAVAILABLE_STATUSES.has(targetStatus)) {

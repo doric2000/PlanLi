@@ -4,6 +4,9 @@ import { cloudFunctions } from '../config/firebase';
 const callables = new Map();
 export const ADMIN_CALLABLE_TIMEOUTS = Object.freeze({
   moderateContent: 320000,
+  resolveModerationCase: 320000,
+  bulkUpdateModerationCases: 320000,
+  updateAdminAttachedPlace: 200000,
   setUserSuspension: 320000,
   deleteUserAsAdmin: 560000,
   listDestinationReviews: 140000,
@@ -29,11 +32,26 @@ const call = async (name, payload = {}) => {
 export const getModerationDashboard = () => call('getModerationDashboard');
 export const listModerationCases = (payload = {}) => call('listModerationCases', payload);
 export const getModerationCase = (caseId) => call('getModerationCase', { caseId });
+export const updateModerationCase = (payload) => call('updateModerationCase', payload);
+export const resolveModerationCase = (payload) => call('resolveModerationCase', payload);
+export const bulkUpdateModerationCases = (payload) => call('bulkUpdateModerationCases', payload);
+export const searchAdminResources = (payload = {}) => call('searchAdminResources', payload);
+export const getAdminResource = (target) => call('getAdminResource', { target });
+export const listAdminSavedViews = () => call('listAdminSavedViews');
+export const saveAdminSavedView = (payload) => call('saveAdminSavedView', payload);
+export const deleteAdminSavedView = (id) => call('deleteAdminSavedView', { id });
+export const getModerationPolicy = () => call('getModerationPolicy');
+export const updateAdminAttachedPlace = (payload) => call('updateAdminAttachedPlace', payload);
 export const listHeldContent = () => call('listHeldContent');
 export const moderateContent = (payload) => call('moderateContent', payload);
 export const listAdminUsers = (payload = {}) => call('listAdminUsers', payload);
 export const getAdminUser = (identifier) => call('getAdminUser', { identifier });
-export const setUserSuspension = (identifier, suspended, reason) => call('setUserSuspension', { identifier, suspended, reason });
+export const setUserSuspension = (identifier, suspended, reason, durationHours = undefined) => call('setUserSuspension', {
+  identifier,
+  suspended,
+  reason,
+  ...(suspended && durationHours !== undefined ? { durationHours } : {}),
+});
 export const setUserEmailVerified = (identifier, verified, reason) => call('setUserEmailVerified', { identifier, verified, reason });
 export const setUserAdmin = (identifier, admin, reason) => call('setUserAdmin', { identifier, admin, reason });
 export const deleteUserAsAdmin = (identifier, reason) => call('deleteUserAsAdmin', { identifier, reason });

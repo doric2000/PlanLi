@@ -36,6 +36,17 @@ describe('NotificationModel schema v2', () => {
     });
   });
 
+  it.each([
+    ['moderation_warning', 'נשלחה אליך אזהרה מצוות הקהילה'],
+    ['account_suspended', 'החשבון שלך הושעה בעקבות החלטת מודרציה'],
+    ['account_reinstated', 'החשבון שלך חזר לפעילות'],
+  ])('presents %s as a private account update', (subtype, message) => {
+    expect(getNotificationPresentation({ type: 'system', subtype })).toMatchObject({ message });
+    expect(buildNotificationRouteAction({
+      type: 'system', subtype, navigation: { action: 'open_profile', profileId: 'user-1' },
+    })).toMatchObject({ type: 'status', reason: 'account' });
+  });
+
   it('bounds renderable previews and rejects unsafe media or document ids', () => {
     const notification = normalizeNotification('notification-1', {
       schemaVersion: 2,

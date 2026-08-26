@@ -18,6 +18,11 @@ jest.mock('../src/components/OpenWithLocationSheet', () => {
     ? ReactModule.createElement(Text, { testID: 'open-with-sheet' }, `${place?.name || ''}:${place?.coordinates?.lat || ''}`)
     : null;
 });
+jest.mock('../src/features/moderation/components/ReportButton', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return (props) => ReactModule.createElement(View, { ...props, testID: 'report-attached-place' });
+});
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
   const { Text } = require('react-native');
@@ -79,6 +84,16 @@ describe('RouteItinerary', () => {
     fireEvent.press(screen.getByTestId('route-stop-toggle-0-1'));
     expect(screen.queryByTestId('route-stop-expanded-0-0')).toBeNull();
     expect(screen.getByTestId('route-stop-expanded-0-1')).toBeTruthy();
+  });
+
+  it('reports the precise stop as an attached place on the canonical route', () => {
+    const screen = render(<RouteItinerary day={days[0]} dayIndex={0} routeId="route-1" ownerId="owner-1" />);
+    fireEvent.press(screen.getByTestId('route-stop-toggle-0-0'));
+    expect(screen.getByTestId('report-attached-place').props.target).toEqual({
+      type: 'route',
+      id: 'route-1',
+      subject: { kind: 'attached_place', field: 'place', dayId: 'day-1', stopId: 'stop-1' },
+    });
   });
 
   it('opens a stop-specific gallery at the selected photo', () => {

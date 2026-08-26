@@ -99,6 +99,18 @@ test('moderation queues and reporter cleanup have their required indexes', () =>
     .map(fieldSignature);
   assert.ok(caseIndexes.includes('status:ASCENDING|updatedAt:DESCENDING'));
   assert.ok(caseIndexes.includes('priority:ASCENDING|status:ASCENDING'));
+  assert.ok(caseIndexes.includes('status:ASCENDING|dueAtMs:ASCENDING'));
+  assert.ok(caseIndexes.includes('status:ASCENDING|reportCount:DESCENDING'));
+  assert.ok(caseIndexes.includes('status:ASCENDING|assignmentUid:ASCENDING|updatedAt:DESCENDING'));
+  assert.ok(caseIndexes.includes('status:ASCENDING|priority:ASCENDING|dueAtMs:ASCENDING'));
+  const searchIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'search')
+    .map(fieldSignature);
+  assert.ok(searchIndexes.includes('search.prefixes:CONTAINS|updatedAt:DESCENDING'));
+  const enforcementIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'enforcements')
+    .map(fieldSignature);
+  assert.ok(enforcementIndexes.includes('type:ASCENDING|status:ASCENDING|endsAt:ASCENDING'));
   const reporterOverride = config.fieldOverrides.find((entry) => (
     entry.collectionGroup === 'reports' && entry.fieldPath === 'reporterId'
   ));

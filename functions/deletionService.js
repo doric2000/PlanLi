@@ -11,7 +11,10 @@ const {
 } = require('./socialService');
 const { refreshRecommendationFallbackForDestination } = require('./destinationImageService');
 const { revokeAppleAuthorization } = require('./appleAuthService');
-const { hasActiveAdminAccess } = require('./adminAuthorization');
+const {
+  deactivateAdminRegistryInTransaction,
+  hasActiveAdminAccess,
+} = require('./adminAuthorization');
 const {
   detachGroupedLikeContribution,
   purgeNotificationsForActor,
@@ -315,6 +318,12 @@ async function requestAccountDeletion({
     'Recent sign-in is required before deleting an account.'
   );
   const uid = auth.uid;
+  const activeAdmin = await hasActiveAdminAccess({ admin, auth });
+  assert(
+    !activeAdmin,
+    'failed-precondition',
+    'Another administrator must remove admin access before this account can be deleted.'
+  );
   const authUser = await admin.auth().getUser(uid);
   const appleProvider = (authUser.providerData || []).find((provider) => provider.providerId === 'apple.com');
   if (appleProvider) {
@@ -326,11 +335,23 @@ async function requestAccountDeletion({
   } else {
     assert(!data?.appleAuthorizationCode, 'invalid-argument', 'Apple authorization is not linked to this account.');
   }
-  const result = await deleteAccountInternal({ admin, uid, mediaBucket });
+  const result = await deleteAccountInternal({
+    admin,
+    uid,
+    mediaBucket,
+    rejectActiveAdminTarget: true,
+  });
   return { jobId: result.jobId, status: result.status };
 }
 
-async function deleteAccountInternal({ admin, uid, mediaBucket }) {
+async function deleteAccountInternal({
+  admin,
+  uid,
+  mediaBucket,
+  actorUid = null,
+  requireActiveAdminActor = false,
+  rejectActiveAdminTarget = false,
+}) {
   const db = admin.firestore();
   const jobRef = db.doc(`system/accountDeletion/jobs/${uid}`);
   const userRef = db.doc(`users/${uid}`);
@@ -344,10 +365,15 @@ async function deleteAccountInternal({ admin, uid, mediaBucket }) {
   }, { merge: true });
 
   await db.runTransaction(async (transaction) => {
-    const [userSnapshot, adminSnapshot] = await Promise.all([
-      transaction.get(userRef),
-      transaction.get(adminRegistryRef),
-    ]);
+    const userSnapshot = await transaction.get(userRef);
+    await deactivateAdminRegistryInTransaction({
+      admin,
+      transaction,
+      uid,
+      actorUid,
+      requireActiveActor: requireActiveAdminActor,
+      rejectActiveTarget: rejectActiveAdminTarget,
+    });
     if (userSnapshot.exists) {
       transaction.set(userRef, {
         status: 'deleting',
@@ -355,12 +381,6 @@ async function deleteAccountInternal({ admin, uid, mediaBucket }) {
           ...(userSnapshot.data()?.moderation || {}),
           status: 'deleting',
         },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-    }
-    if (adminSnapshot.exists) {
-      transaction.set(adminRegistryRef, {
-        active: false,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     }
