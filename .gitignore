@@ -18,6 +18,9 @@ functions/.prelaunch-reset/
 .codex_tmp/
 client/.codex_tmp/
 client/.expo-validation/
+client/assets/campaign/
+client/assets/google-play/
+client/assets/fearture-graphic.png
 hosting/admin/
 .firebase/
 firebase-debug.log
