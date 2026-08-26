@@ -1,4 +1,5 @@
 import {
+  createSwipeNavigationCoordinator,
   getAdjacentSwipeIndex,
   getAdjacentSwipeItem,
   getCommittedSwipeDirection,
@@ -52,6 +53,68 @@ describe('horizontal swipe navigation', () => {
       gestureState: { dx: -60, vx: -0.2 },
     })).not.toThrow();
     expect(navigation.navigate).toHaveBeenCalledWith('Community', undefined);
+  });
+
+  it('serializes overlapping swipe navigation until the target is focused', () => {
+    let state = {
+      index: 1,
+      routes: [
+        { key: 'favorites', name: 'Favorites' },
+        { key: 'routes', name: 'Routes' },
+        { key: 'community', name: 'Community' },
+      ],
+    };
+    const navigation = {
+      getState: () => state,
+      navigate: jest.fn(),
+    };
+    const coordinator = createSwipeNavigationCoordinator();
+
+    expect(coordinator.navigate({
+      navigation,
+      gestureState: { dx: -60, vx: -0.2 },
+    })).toEqual(state.routes[2]);
+    expect(coordinator.navigate({
+      navigation,
+      gestureState: { dx: -60, vx: -0.2 },
+    })).toBeNull();
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
+
+    state = { ...state, index: 2 };
+    coordinator.confirmState(state);
+    expect(coordinator.hasPendingNavigation()).toBe(false);
+    expect(coordinator.navigate({
+      navigation,
+      gestureState: { dx: 60, vx: 0.2 },
+    })).toEqual(state.routes[1]);
+    expect(navigation.navigate).toHaveBeenCalledTimes(2);
+
+    coordinator.dispose();
+  });
+
+  it('recovers the swipe coordinator if navigation never focuses its target', () => {
+    jest.useFakeTimers();
+    const navigation = {
+      getState: () => ({
+        index: 0,
+        routes: [
+          { key: 'home', name: 'Home' },
+          { key: 'community', name: 'Community' },
+        ],
+      }),
+      navigate: jest.fn(),
+    };
+    const coordinator = createSwipeNavigationCoordinator({ pendingTimeoutMs: 100 });
+
+    coordinator.navigate({ navigation, gestureState: { dx: -60, vx: -0.2 } });
+    expect(coordinator.hasPendingNavigation()).toBe(true);
+    jest.advanceTimersByTime(100);
+    expect(coordinator.hasPendingNavigation()).toBe(false);
+    coordinator.navigate({ navigation, gestureState: { dx: -60, vx: -0.2 } });
+    expect(navigation.navigate).toHaveBeenCalledTimes(2);
+
+    coordinator.dispose();
+    jest.useRealTimers();
   });
 
   it('follows the reversed Favorites visual order one category at a time', () => {

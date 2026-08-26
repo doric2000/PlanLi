@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import AppText from "../components/AppText";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthUser } from '../hooks/useAuthUser';
@@ -10,8 +10,9 @@ import { colors, notifications, tabNavigatorStyles as styles } from '../styles';
 import { tabConfigs, tabScreens } from './TabConfigs';
 import CachedImage from '../components/CachedImage';
 import SwipeableTabBarButton from './SwipeableTabBarButton';
-import { navigateToAdjacentSwipeItem } from './horizontalSwipe';
+import { createSwipeNavigationCoordinator } from './horizontalSwipe';
 import { getVisibleMainTabNames } from './mainTabOrder';
+import { shouldDetachInactiveMainTabScreens } from './mainTabSceneLifecycle';
 import { MAIN_TAB_TRANSITION_OPTIONS } from './mainTabTransition';
 import { shouldHideMainTabBar } from './tabBarVisibility';
 import { NOYA_MAIN_TAB_TARGETS } from '../features/noya/NoyaTourDefinitions';
@@ -31,19 +32,35 @@ export default function TabNavigator() {
   const { user, authFlowInProgress } = useAuthUser();
   const unreadCount = useUnreadCount();
   const insets = useSafeAreaInsets();
+  const swipeNavigationRef = useRef(null);
+  if (!swipeNavigationRef.current) {
+    swipeNavigationRef.current = createSwipeNavigationCoordinator();
+  }
   const handleTabBarSwipe = useCallback((navigation, gestureState) => {
-    navigateToAdjacentSwipeItem({
+    swipeNavigationRef.current.navigate({
       navigation,
       gestureState,
     });
   }, []);
+  const handleTabNavigationState = useCallback((event) => {
+    swipeNavigationRef.current.confirmState(event?.data?.state);
+  }, []);
   const visibleScreens = getVisibleMainTabNames(Boolean(user) && !authFlowInProgress)
     .map((name) => tabScreens.find((screen) => screen.name === name))
     .filter(Boolean);
+  const visibleScreenNames = visibleScreens.map(({ name }) => name).join('|');
+
+  useEffect(() => {
+    swipeNavigationRef.current.reset();
+  }, [visibleScreenNames]);
+
+  useEffect(() => () => swipeNavigationRef.current.dispose(), []);
 
   return (
     <Tab.Navigator
+      detachInactiveScreens={shouldDetachInactiveMainTabScreens()}
       initialRouteName="Home"
+      screenListeners={{ state: handleTabNavigationState }}
       screenOptions={({ route, navigation }) => {
         const config = tabConfigs[route.name];
         const hideTabBar = shouldHideMainTabBar(route.name);
