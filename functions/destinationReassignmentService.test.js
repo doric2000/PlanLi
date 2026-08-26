@@ -5,6 +5,7 @@ const {
   STAGES,
   impactHash,
   migrateFavoritePage,
+  migratedRecommendationCount,
   recommendationPatch,
   reassignmentJobId,
   residualReferenceStage,
@@ -21,6 +22,14 @@ test('preview hash is deterministic and changes with impact', () => {
   assert.equal(first, impactHash(source, target, { recommendations: 1, routes: 0, trips: 0 }));
   assert.notEqual(first, impactHash(source, target, { recommendations: 2, routes: 0, trips: 0 }));
   assert.equal(reassignmentJobId(source, target), reassignmentJobId(source, target));
+});
+
+test('final recommendation stats use the frozen preview when worker counters race', () => {
+  assert.equal(migratedRecommendationCount({
+    preview: { counts: { recommendations: 3 } },
+    updatedCounts: { recommendations: 1 },
+  }), 3);
+  assert.equal(migratedRecommendationCount({ updatedCounts: { recommendations: 2 } }), 2);
 });
 
 test('recommendation reassignment rebuilds search destination data', () => {

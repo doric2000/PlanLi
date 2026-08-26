@@ -61,6 +61,12 @@ function impactHash(source, target, counts) {
     .digest('base64url').slice(0, 32);
 }
 
+function migratedRecommendationCount(job) {
+  const frozenCount = Number(job?.preview?.counts?.recommendations);
+  if (Number.isFinite(frozenCount) && frozenCount >= 0) return frozenCount;
+  return Math.max(0, Number(job?.updatedCounts?.recommendations || 0));
+}
+
 async function loadDestinationPair(db, source, target) {
   const [sourceCountry, sourceCity, targetCountry, targetCity] = await Promise.all([
     db.doc(`countries/${source.countryId}`).get(),
@@ -516,7 +522,12 @@ async function finalize({ admin, ref, job }) {
     });
     transaction.update(targetRef, {
       reassignment: admin.firestore.FieldValue.delete(),
-      'stats.recommendationCount': Math.max(0, Number(targetSnapshot.data()?.stats?.recommendationCount || 0) + Number(jobSnapshot.data()?.updatedCounts?.recommendations || 0)),
+      // Multiple idempotent workers may migrate different pages concurrently.
+      // The frozen preview is the authoritative source contribution; progress
+      // counters are diagnostic and can legitimately lose a race between pages.
+      'stats.recommendationCount': Math.max(0,
+        Number(targetSnapshot.data()?.stats?.recommendationCount || 0) +
+        migratedRecommendationCount(jobSnapshot.data())),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     transaction.update(ref, {
@@ -565,6 +576,7 @@ module.exports = {
   impactHash,
   jobRef,
   migrateFavoritePage,
+  migratedRecommendationCount,
   previewDestinationReassignment,
   processDestinationReassignmentJob,
   recommendationPatch,

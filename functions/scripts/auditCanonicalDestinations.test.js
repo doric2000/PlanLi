@@ -30,3 +30,17 @@ test('audit identifies the two reported production destination failures', () => 
   assert.equal(munnar.knownSuspect, true);
   assert.equal(ometepe.knownSuspect, true);
 });
+
+test('audit classifies a completed inactive source separately from active candidates', () => {
+  const result = auditDestination({
+    countryId: 'NI', cityId: 'old-rivas', countryCode: 'NI', registryEntries: BUILTIN_POLICIES,
+    destination: {
+      status: 'inactive',
+      mergedInto: { countryId: 'NI', cityId: 'canonical-ometepe' },
+      googleCache: { names: { en: 'Rivas', he: 'ריבס' }, coordinates: { lat: 11.5191, lng: -85.567 } },
+      stats: { recommendationCount: 0 },
+    },
+  });
+  assert.equal(result.status, 'merged_source');
+  assert.deepEqual(result.mergedInto, { countryId: 'NI', cityId: 'canonical-ometepe' });
+});

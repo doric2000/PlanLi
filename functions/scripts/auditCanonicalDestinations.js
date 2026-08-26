@@ -50,6 +50,8 @@ function auditDestination({ countryId, cityId, countryCode, destination, registr
   const englishName = String(destination?.googleCache?.names?.en || destination?.identity?.names?.en || '').toLowerCase();
   const currentRegistryId = destination?.canonicalPolicy?.registryId || null;
   const suggestedRegistryId = match?.entry?.id || null;
+  const destinationStatus = String(destination?.status || 'active');
+  const mergedInto = destination?.mergedInto || null;
   return {
     countryId,
     cityId,
@@ -60,7 +62,11 @@ function auditDestination({ countryId, cityId, countryCode, destination, registr
     currentRegistryId,
     suggestedRegistryId,
     suggestedNameHe: match?.entry?.names?.he || null,
-    status: match?.ambiguity?.length
+    destinationStatus,
+    mergedInto,
+    status: destinationStatus !== 'active'
+      ? mergedInto?.countryId && mergedInto?.cityId ? 'merged_source' : 'inactive_review'
+      : match?.ambiguity?.length
       ? 'ambiguous'
       : currentRegistryId && currentRegistryId === suggestedRegistryId
         ? 'canonical'
@@ -110,7 +116,8 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
   const result = {
     mode: 'dry-run',
     destinationCount: items.length,
-    counts: Object.fromEntries(['canonical', 'reassignment_candidate', 'manual_review', 'ambiguous']
+    activeDestinationCount: items.filter((item) => item.destinationStatus === 'active').length,
+    counts: Object.fromEntries(['canonical', 'reassignment_candidate', 'manual_review', 'ambiguous', 'merged_source', 'inactive_review']
       .map((status) => [status, items.filter((item) => item.status === status).length])),
     items: items.sort((left, right) => Number(right.knownSuspect) - Number(left.knownSuspect) ||
       right.recommendationCount - left.recommendationCount || left.cityId.localeCompare(right.cityId)),
