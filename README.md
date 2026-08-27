@@ -25,14 +25,15 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible Android and iOS production EAS Update is launch-safe
-destination-resolution group `a50b1502-5158-49e5-bb59-02933dac81f1`, Android
-update `01a04394-64d8-76b2-8e63-e7c29c23f6df` and iOS update
-`01a04394-64d8-72c5-b098-e4c0700e6544`, published at
-`2026-08-27T14:16:33.752Z` from clean `main` merge commit `77096274`. EAS
-read-back confirms runtime `1.1.0`, the exact merge commit, both platforms and
-the production branch. Download, application and destination-search behavior
-on physical Android and iOS devices remain unverified.
+The latest compatible Android and iOS production EAS Update is content-
+publication contract group `4c1fcb12-53c4-4696-90ff-3ad047597e40`, Android
+update `01a043e2-3cf0-710b-a265-2c3b9ecfa9ca` and iOS update
+`01a043e2-3cf0-7812-8872-12d045411a09`, published at
+`2026-08-27T15:41:35.344Z` from clean `main` merge commit
+`e7bc51d640adfd2cc45ea01a441bc554c0499591`. EAS read-back confirms runtime
+`1.1.0`, the exact merge commit, both platforms and the production branch.
+Download, application and end-to-end publication behavior on physical Android
+and iOS devices remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
 internal iOS EAS Development Build
@@ -43,11 +44,11 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and runtime `1.1.0`. The matching
-destination-resolution preview group is
-`2be4404d-9bb4-48aa-b296-44df198deb1b`; the immediately preceding compatible
-groups are preview `18ae0c59-1b46-49a7-89cf-941782743183` and production
-`f91d01d2-42aa-436c-8774-98d9f85d09bd`. PR `#231` merged the canonical-
+the `production` EAS Update channel and runtime `1.1.0`. The matching content-
+publication preview group is `50e55983-342e-48d0-9e9f-ceba7c77754d`; the
+immediately preceding compatible groups are preview
+`2be4404d-9bb4-48aa-b296-44df198deb1b` and production
+`a50b1502-5158-49e5-bb59-02933dac81f1`. PR `#231` merged the canonical-
 destination rollout to `main` as `9d70edad`. Nine affected Functions and the
 48-file admin Hosting bundle were then redeployed from that clean merge commit.
 The private registry contains 251 validated entries, 14 reviewed legacy
@@ -1778,3 +1779,66 @@ rejected.
   reopen the production app up to twice to apply it; roll back preview to group
   `18ae0c59-1b46-49a7-89cf-941782743183` or production to group
   `f91d01d2-42aa-436c-8774-98d9f85d09bd` if required.
+
+## Content publication contract release
+
+- Source and Git: implementation commit `5e2967838463` passed PR `#244` and
+  merged to clean `main` as `e7bc51d640adfd2cc45ea01a441bc554c0499591`
+  at `2026-08-27T15:08:41Z`.
+- Root cause and scope: safe recommendations using a labeled taxonomy “Other”
+  choice were persisted as `moderation_hold`, while save responses omitted the
+  stored publication status. The durable queue therefore reported success even
+  though public/profile queries correctly excluded the record. Recommendation
+  and route save/draft receipts now return an explicit `active` or
+  `moderation_hold` outcome, unknown legacy responses never claim public
+  visibility, safe labeled Other recommendations publish immediately, and held
+  route retries replay idempotently. The owner profile now has a read-only
+  **בבדיקה** tab backed by an owner-scoped callable. The acceptance matrix covers
+  exact, destination and pin locations, all 10 categories and 166
+  subcategories, route stop variants, drafts, edits, retries and moderation.
+- Functions: only `saveRecommendation`, `publishRecommendationDraft`,
+  `saveRoute`, `publishRouteDraft`, and `listMyPendingContent` were deployed to
+  `planli-f0b12` in `europe-west1`. Independent inventory confirms all five are
+  `ACTIVE`, v2 and Node.js 22. Revisions are
+  `saverecommendation-00043-mob`,
+  `publishrecommendationdraft-00009-bih`, `saveroute-00043-nul`,
+  `publishroutedraft-00009-zal`, and `listmypendingcontent-00001-vuj`; deployment
+  completed between `2026-08-27T15:13:08Z` and `2026-08-27T15:13:12Z`.
+- Production repair: a guarded dry run found exactly two legacy
+  `taxonomy_other` holds, both valid and none blocked. The fingerprint-locked
+  apply activated both at `2026-08-27T15:16:20Z`, removed their obsolete
+  moderation fields and wrote two audit records. Independent read-back found
+  both recommendations and all 10 media registry entries active, with zero
+  remaining taxonomy-Other holds. Direct Storage object checks were unavailable
+  to the CLI service identity; canonical descriptors and owner-bound active/held
+  registry records were verified before apply, and the media trigger's active
+  read-back was verified afterward.
+- EAS Update: two clean-main production-lineage preflights passed against prior
+  production commit `77096274e5b6f0efd6219d8500c94f4a5864a174`. Preview group
+  `50e55983-342e-48d0-9e9f-ceba7c77754d`, Android update
+  `01a043dd-a5c4-7b59-9ccd-c3e6e8f7b77d` and iOS update
+  `01a043dd-a5c4-7eca-8272-19218a684a56` were published at
+  `2026-08-27T15:36:34.500Z`. Those exact artifacts were republished to
+  production group `4c1fcb12-53c4-4696-90ff-3ad047597e40`, Android update
+  `01a043e2-3cf0-710b-a265-2c3b9ecfa9ca` and iOS update
+  `01a043e2-3cf0-7812-8872-12d045411a09` at
+  `2026-08-27T15:41:35.344Z`. EAS read-back confirmed both branches, platforms,
+  runtime `1.1.0` and exact source commit `e7bc51d`. The preview export bundled
+  2,422 modules for each native platform, uploaded two app bundles, found 52
+  iOS and 51 Android assets, and uploaded no new assets.
+- Validation and observability: focused client publication/profile/draft/route
+  coverage, 108 focused Functions tests, generated coverage for every taxonomy
+  selection, `npm run validate:changed`, `git diff --check`, secret review and
+  all four required PR checks passed. Firebase read-only logging found no
+  `ERROR` entries for the five deployed Functions from
+  `2026-08-27T15:08:00Z` through release verification. Sentry returned no
+  unresolved `prod`/`production` issue and no publication issue in the preceding
+  24 hours.
+- No native EAS build, TestFlight/App Store or Google Play submission, Rules,
+  indexes, Hosting, IAM or dependency change accompanied this release. The only
+  production-document writes were the two explicitly approved audited repairs.
+  OTA download/application and a physical end-to-end recommendation/route
+  matrix remain unverified. Force-close and reopen the production app up to
+  twice to apply it. Roll back preview to group
+  `2be4404d-9bb4-48aa-b296-44df198deb1b` or production to group
+  `a50b1502-5158-49e5-bb59-02933dac81f1` if required.
