@@ -40,6 +40,14 @@ export default function DestinationFallbackPicker({ onSelect }) {
   const [confirmedName, setConfirmedName] = useState('');
   const searchRequestRef = useRef(0);
 
+  const commitSelection = async (value) => {
+    if (!value) throw new Error('Destination resolution is incomplete.');
+    if (typeof onSelect !== 'function') {
+      throw new Error('Destination selection handler is unavailable.');
+    }
+    await onSelect(value);
+  };
+
   const search = async () => {
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < 2) {
@@ -98,9 +106,9 @@ export default function DestinationFallbackPicker({ onSelect }) {
         return;
       }
       const value = destinationValue(result, selection);
-      if (value) onSelect?.(value);
-    } catch {
-      setError('לא הצלחנו לאמת את היעד. בחרו שוב או נסו יעד אחר.');
+      await commitSelection(value);
+    } catch (selectionError) {
+      setError(selectionError?.userMessage || 'לא הצלחנו לאמת את היעד. בחרו שוב או נסו יעד אחר.');
     } finally {
       setBusy('');
     }
@@ -116,9 +124,9 @@ export default function DestinationFallbackPicker({ onSelect }) {
         incidentId: choice.incidentId,
       });
       const value = destinationValue(result, choice.selection);
-      if (value) onSelect?.(value);
-    } catch {
-      setError('לא הצלחנו לאמת את היעד. נסו שוב.');
+      await commitSelection(value);
+    } catch (selectionError) {
+      setError(selectionError?.userMessage || 'לא הצלחנו לאמת את היעד. נסו שוב.');
     } finally {
       setBusy('');
     }
@@ -135,9 +143,9 @@ export default function DestinationFallbackPicker({ onSelect }) {
         confirmedHebrewName: confirmedName.trim(),
       });
       const value = destinationValue(result, nameConfirmation.selection);
-      if (value) onSelect?.(value);
-    } catch {
-      setError('השם חייב להיות שם עברי קצר וברור.');
+      await commitSelection(value);
+    } catch (selectionError) {
+      setError(selectionError?.userMessage || 'השם חייב להיות שם עברי קצר וברור.');
     } finally {
       setBusy('');
     }

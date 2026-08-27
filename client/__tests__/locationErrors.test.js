@@ -73,4 +73,23 @@ describe('location error presentation', () => {
     expect(locationErrorMessage(error)).toContain('טעינת המקום');
     expect(locationErrorMessage(error, 'en')).toContain('too long');
   });
+
+  it('maps every structured terminal recovery to a visible action instead of unknown', () => {
+    const routeLimit = {
+      code: 'functions/resource-exhausted',
+      details: { reason: 'ROUTE_NEW_PLACE_LIMIT', retryable: false },
+    };
+    const support = {
+      code: 'functions/failed-precondition',
+      details: {
+        reason: 'provider_configuration_failed',
+        retryable: false,
+        recoveryAction: 'contact_support',
+        incidentId: 'loc_1234567890ab',
+      },
+    };
+    expect(locationErrorKind(routeLimit)).toBe('requestCeiling');
+    expect(locationErrorKind(support)).toBe('support');
+    expect(locationErrorMessage(support)).toContain('קוד התמיכה');
+  });
 });

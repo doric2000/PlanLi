@@ -30,6 +30,12 @@ describe('useExactPlaceSelection', () => {
       country: 'Thailand',
       countryId: 'TH',
       cityId: 'chiang-mai',
+      destination: {
+        countryId: 'TH',
+        cityId: 'chiang-mai',
+        countryName: 'Thailand',
+        cityName: 'Chiang Mai',
+      },
       place: resolved.place,
     });
   });
@@ -96,6 +102,7 @@ describe('useExactPlaceSelection', () => {
       status: 'destination_choice_required',
       resolutionId: 'dcr_12345678',
       incidentId: 'loc_1234567890ab',
+      place: { placeId: 'hotel', name: 'Hotel', coordinates: { lat: 19.8, lng: 99.8 } },
       alternatives: [{ destinationChoiceId: 'dc_12345678', cityName: 'Chiang Rai' }],
     });
     mockFinalize.mockResolvedValue(resolved);
@@ -103,6 +110,7 @@ describe('useExactPlaceSelection', () => {
 
     await act(async () => result.current.handleSelectGooglePlace('hotel'));
     expect(result.current.destinationChoice?.resolutionId).toBe('dcr_12345678');
+    expect(result.current.pendingLocation?.place?.placeId).toBe('hotel');
     await act(async () => result.current.chooseDestination('dc_12345678'));
 
     expect(mockResolve).toHaveBeenCalledTimes(1);
@@ -112,6 +120,27 @@ describe('useExactPlaceSelection', () => {
       incidentId: 'loc_1234567890ab',
     });
     expect(result.current.pendingLocation?.cityId).toBe('chiang-mai');
+  });
+
+  it('recovers an expired search session from the durable provider Place ID', async () => {
+    mockResolve
+      .mockRejectedValueOnce(Object.assign(new Error('expired'), {
+        code: 'functions/deadline-exceeded', details: { reason: 'selection_expired' },
+      }))
+      .mockResolvedValueOnce(resolved);
+    const selection = {
+      sessionId: 'ps_expired', selectionId: 'sel_expired',
+      providerPlaceId: 'wat-doi-kham', description: 'Wat Phra That Doi Kham',
+    };
+    const { result } = renderHook(() => useExactPlaceSelection());
+
+    await act(async () => result.current.handleSelectGooglePlace(selection));
+
+    expect(mockResolve).toHaveBeenCalledTimes(2);
+    expect(mockResolve.mock.calls[1][0]).toEqual(expect.objectContaining({
+      provider: 'google', providerPlaceId: 'wat-doi-kham', place_id: 'wat-doi-kham',
+    }));
+    expect(result.current.pendingLocation?.place?.placeId).toBe('wat-doi-kham');
   });
 
   it('attaches the exact place to a user-selected fallback destination', async () => {

@@ -2,14 +2,21 @@ const crypto = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 
 const { isVerifiedCaller, normalizePublishRequestId } = require('./recommendationService');
-const { MAX_ROUTE_MEDIA, saveRoute } = require('./routeService');
+const {
+  MAX_ROUTE_MEDIA,
+  loadTrustedRecommendationSources,
+  saveRoute,
+  trustedRecommendationForStop,
+} = require('./routeService');
 const { taxonomy } = require('./travelTaxonomy');
 const { normalizeRouteTime } = require('./routeTime');
+const { renewResolvedPlaceTokenLeases } = require('./placesGatewayService');
 
 const MAX_ROUTE_DAYS = 60;
 const MAX_ROUTE_STOPS = 150;
 const DRAFT_REVISION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PUBLISHED_RECEIPT_TTL_MS = 24 * 60 * 60 * 1000;
+const SERVER_LOCATION_BINDING_VERSION = 1;
 
 function draftError(code, reason, message) {
   return new HttpsError(code, message, { reason });
@@ -269,6 +276,86 @@ function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
   };
 }
 
+function locationBindingMatchesStop(binding, stop) {
+  return Boolean(
+    binding?.schemaVersion === SERVER_LOCATION_BINDING_VERSION &&
+    stop?.locationPrecision === 'exact' &&
+    binding.sourceRecommendationId === stop.source?.recommendationId &&
+    binding.place?.placeId &&
+    binding.place.placeId === stop.place?.placeId &&
+    binding.destination?.countryId === stop.destination?.countryId &&
+    binding.destination?.cityId === stop.destination?.cityId
+  );
+}
+
+function bindingForTrustedRecommendation(stop, trustedRecommendations) {
+  const trusted = trustedRecommendationForStop(stop, trustedRecommendations);
+  if (!trusted || trusted.location?.mode !== 'exact') return null;
+  return {
+    schemaVersion: SERVER_LOCATION_BINDING_VERSION,
+    sourceRecommendationId: stop.source.recommendationId,
+    destination: {
+      countryId: trusted.location.destination.countryId,
+      cityId: trusted.location.destination.cityId,
+    },
+    place: trusted.location.place,
+  };
+}
+
+function stopMapForDraft(draft) {
+  return new Map((draft?.days || []).flatMap((day) => (day.stops || []).map((stop) => [
+    `${day.id}/${stop.id}`,
+    stop,
+  ])));
+}
+
+function attachServerLocationBindings(draft, trustedRecommendations, previousDraft = null) {
+  const previousStops = stopMapForDraft(previousDraft);
+  return {
+    ...draft,
+    days: draft.days.map((day) => ({
+      ...day,
+      stops: day.stops.map((stop) => {
+        const trustedBinding = bindingForTrustedRecommendation(stop, trustedRecommendations);
+        const previousBinding = previousStops.get(`${day.id}/${stop.id}`)?.serverLocationBinding;
+        const binding = trustedBinding || (
+          locationBindingMatchesStop(previousBinding, stop) ? previousBinding : null
+        );
+        return {
+          ...stop,
+          ...(binding ? { serverLocationBinding: binding } : {}),
+        };
+      }),
+    })),
+  };
+}
+
+function stripServerLocationBindings(draft) {
+  return {
+    ...draft,
+    days: (draft?.days || []).map((day) => ({
+      ...day,
+      stops: (day.stops || []).map((stop) => {
+        const { serverLocationBinding, ...publicStop } = stop;
+        return publicStop;
+      }),
+    })),
+  };
+}
+
+function trustedPlacesFromDraft(draft) {
+  const trustedPlaces = new Map();
+  (draft?.days || []).forEach((day) => (day.stops || []).forEach((stop) => {
+    const binding = stop.serverLocationBinding;
+    if (!locationBindingMatchesStop(binding, stop)) return;
+    trustedPlaces.set(binding.place.placeId, {
+      destination: binding.destination,
+      place: binding.place,
+    });
+  }));
+  return trustedPlaces;
+}
+
 function draftPointerRef(db, uid) {
   return db.doc(`system/routeDrafts/owners/${uid}`);
 }
@@ -347,18 +434,25 @@ async function getCurrentRouteDraft({ admin, auth }) {
   const loaded = await readDraftRevision(db, pointer);
   assert(loaded.revision.ownerId === auth.uid && loaded.revision.state === 'draft',
     'permission-denied', 'ROUTE_DRAFT_FORBIDDEN', 'Route draft is unavailable.');
+  const publicDraft = stripServerLocationBindings(loaded.draft);
   return {
     draft: {
       id: pointer.draftId,
       version: pointer.version,
       sourceRouteId: pointer.sourceRouteId || null,
       updatedAt: pointer.updatedAt || loaded.revision.updatedAt || null,
-      ...loaded.draft,
+      ...publicDraft,
     },
   };
 }
 
-async function saveRouteDraft({ admin, auth, data }) {
+async function saveRouteDraft({
+  admin,
+  auth,
+  data,
+  renewTokensImpl = renewResolvedPlaceTokenLeases,
+  providerRateLimitKey,
+}) {
   assert(auth?.uid, 'unauthenticated', 'ROUTE_DRAFT_AUTH_REQUIRED', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'ROUTE_DRAFT_AUTH_REQUIRED', 'Email verification is required.');
   const db = admin.firestore();
@@ -370,8 +464,8 @@ async function saveRouteDraft({ admin, auth, data }) {
   assert(expectedVersion == null || (Number.isSafeInteger(expectedVersion) && expectedVersion >= 0),
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'expectedVersion is invalid.');
   await assertEditableSource(db, sourceRouteId, uid);
-  const draft = sanitizeRouteDraft(data?.draft, { ownerUid: uid });
-  assert(draft.area, 'invalid-argument', 'ROUTE_DRAFT_DESTINATION_REQUIRED', 'Choose a destination first.');
+  const sanitizedDraft = sanitizeRouteDraft(data?.draft, { ownerUid: uid });
+  assert(sanitizedDraft.area, 'invalid-argument', 'ROUTE_DRAFT_DESTINATION_REQUIRED', 'Choose a destination first.');
 
   const pointerRef = draftPointerRef(db, uid);
   const pointerSnapshot = await pointerRef.get();
@@ -399,6 +493,33 @@ async function saveRouteDraft({ admin, auth, data }) {
     assert(expectedVersion == null || current.version === expectedVersion,
       'aborted', 'ROUTE_DRAFT_VERSION_CONFLICT', 'The route draft changed. Reload it and try again.');
   }
+
+  let previousDraft = null;
+  if (current?.revisionPath) {
+    const previous = await readDraftRevision(db, current);
+    assert(previous.revision.ownerId === uid && previous.revision.state === 'draft',
+      'permission-denied', 'ROUTE_DRAFT_FORBIDDEN', 'Route draft is unavailable.');
+    previousDraft = previous.draft;
+  }
+  const trustedRecommendations = await loadTrustedRecommendationSources(db, sanitizedDraft.days);
+  const draft = attachServerLocationBindings(
+    sanitizedDraft,
+    trustedRecommendations,
+    previousDraft
+  );
+
+  await renewTokensImpl({
+    admin,
+    auth,
+    providerRateLimitKey,
+    resolvedPlaceTokens: [
+      draft.area?.resolvedPlaceToken,
+      ...draft.days.flatMap((day) => day.stops.flatMap((stop) => [
+        stop.place?.resolvedPlaceToken,
+        stop.destination?.resolvedPlaceToken,
+      ])),
+    ].filter(Boolean),
+  });
 
   const routeId = current?.routeId || sourceRouteId || db.collection('routes').doc().id;
   const routeRef = db.doc(`routes/${routeId}`);
@@ -498,21 +619,22 @@ async function discardRouteDraft({ admin, auth, data }) {
 }
 
 function publishableRoute(draft) {
+  const publicDraft = stripServerLocationBindings(draft);
   return {
     routeSchemaVersion: 2,
     taxonomyVersion: taxonomy.version,
-    title: draft.title,
-    description: draft.description,
-    categoryIds: draft.categoryIds,
-    subcategoryIds: draft.subcategoryIds,
-    attributes: draft.attributes,
-    difficulty: draft.difficulty,
-    experienceLevel: draft.experienceLevel,
-    transportModes: draft.transportModes,
-    pace: draft.pace,
+    title: publicDraft.title,
+    description: publicDraft.description,
+    categoryIds: publicDraft.categoryIds,
+    subcategoryIds: publicDraft.subcategoryIds,
+    attributes: publicDraft.attributes,
+    difficulty: publicDraft.difficulty,
+    experienceLevel: publicDraft.experienceLevel,
+    transportModes: publicDraft.transportModes,
+    pace: publicDraft.pace,
     priceBasis: 'whole_route',
-    priceNote: draft.priceNote,
-    days: draft.days,
+    priceNote: publicDraft.priceNote,
+    days: publicDraft.days,
   };
 }
 
@@ -552,6 +674,7 @@ async function publishRouteDraft({
   assert(loaded.revision.ownerId === auth.uid && loaded.revision.state === 'draft',
     'permission-denied', 'ROUTE_DRAFT_FORBIDDEN', 'Route draft is unavailable.');
   const route = publishableRoute(loaded.draft);
+  const serverTrustedPlaces = trustedPlacesFromDraft(loaded.draft);
   const result = await saveRoute({
     admin,
     auth,
@@ -567,6 +690,7 @@ async function publishRouteDraft({
     placesProvider,
     restCountriesKey,
     providerRateLimitKey,
+    serverTrustedPlaces,
   });
 
   await db.runTransaction(async (transaction) => {
@@ -600,6 +724,7 @@ async function publishRouteDraft({
 }
 
 module.exports = {
+  attachServerLocationBindings,
   assertEditableSource,
   cleanupPublishedRouteDraftReceipts,
   discardRouteDraft,
@@ -610,4 +735,6 @@ module.exports = {
   publishableRoute,
   sanitizeRouteDraft,
   saveRouteDraft,
+  stripServerLocationBindings,
+  trustedPlacesFromDraft,
 };

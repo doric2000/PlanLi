@@ -37,6 +37,11 @@ function reasonForLocationError(error, fallback = 'location_resolution_failed') 
   if (code === 'deadline-exceeded' || message.includes('too long')) return 'provider_timeout';
   if (code === 'not-found') return 'place_not_found';
   if (message.includes('ambiguous')) return 'ambiguous_destination';
+  if (message.includes('same country')) return 'country_mismatch';
+  if (message.includes('contains the selected place') || message.includes('outside the selected destination')) {
+    return 'destination_outside_bounds';
+  }
+  if (message.includes('being reassigned')) return 'destination_reassignment_in_progress';
   if (message.includes('trustworthy destination') || message.includes('containing destination')) {
     return 'destination_not_resolved';
   }
@@ -48,12 +53,40 @@ function reasonForLocationError(error, fallback = 'location_resolution_failed') 
 
 function retryableLocationError(error) {
   const reason = String(error?.details?.reason || reasonForLocationError(error));
-  return ['temporary_limit_reached', 'provider_timeout', 'provider_unavailable'].includes(reason);
+  return [
+    'temporary_limit_reached',
+    'provider_timeout',
+    'provider_unavailable',
+    'destination_reassignment_in_progress',
+  ].includes(reason);
 }
 
 function preservedErrorReason(error) {
   const reason = String(error?.details?.reason || '').trim();
   return SAFE_REASON_PATTERN.test(reason) ? reason : '';
+}
+
+function locationStage(fallbackReason, error) {
+  const preserved = String(error?.details?.stage || '').trim();
+  if (/^[a-z][a-z0-9_]{2,48}$/.test(preserved)) return preserved;
+  const fallback = String(fallbackReason || 'location_resolution_failed');
+  if (fallback.includes('search')) return 'search';
+  if (fallback.includes('selection')) return 'selection';
+  if (fallback.includes('choice')) return 'destination_choice';
+  if (fallback.includes('route')) return 'route_publish';
+  if (fallback.includes('save') || fallback.includes('publish')) return 'publish';
+  return 'destination_resolution';
+}
+
+function recoveryActionForReason(reason, retryable) {
+  if (reason === 'selection_expired' || reason === 'place_not_found') return 'search_again';
+  if (['destination_not_resolved', 'ambiguous_destination', 'destination_not_found',
+    'destination_outside_bounds', 'country_mismatch', 'invalid_selection'].includes(reason)) {
+    return 'choose_destination';
+  }
+  if (reason === 'destination_name_confirmation_required') return 'confirm_name';
+  if (retryable) return 'retry';
+  return 'contact_support';
 }
 
 function decorateLocationError(error, incidentId, fallbackReason) {
@@ -74,6 +107,8 @@ function decorateLocationError(error, incidentId, fallbackReason) {
     reason,
     incidentId,
     retryable,
+    stage: locationStage(fallbackReason, error),
+    recoveryAction: recoveryActionForReason(reason, retryable),
   });
 }
 
@@ -114,5 +149,6 @@ module.exports = {
   decorateLocationError,
   locationLog,
   reasonForLocationError,
+  recoveryActionForReason,
   retryableLocationError,
 };

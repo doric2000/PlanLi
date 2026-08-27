@@ -47,6 +47,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
   const [nameConfirmation, setNameConfirmation] = useState(null);
   const [confirmedHebrewName, setConfirmedHebrewName] = useState('');
   const providerGenerationRef = useRef(0);
+  const resolutionGenerationRef = useRef(0);
   const {
     options,
     loading,
@@ -76,7 +77,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
   useEffect(() => {
     const needle = compactDestinationText(settledQuery);
     const generation = ++providerGenerationRef.current;
-    if (!allowProviderDestinations || needle.length < 2 || loading || searchLoading || results.length) {
+    if (!allowProviderDestinations || needle.length < 2 || loading || searchLoading) {
       setProviderResults([]);
       setProviderLoading(false);
       setProviderError('');
@@ -96,7 +97,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
       if (generation === providerGenerationRef.current) setProviderLoading(false);
     });
     return () => controller.abort();
-  }, [allowProviderDestinations, loading, providerRetry, results.length, searchLoading, settledQuery]);
+  }, [allowProviderDestinations, loading, providerRetry, searchLoading, settledQuery]);
 
   const select = (option) => {
     onChange?.(option);
@@ -105,18 +106,21 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
     setFocused(false);
     setProviderResults([]);
     setProviderError('');
+    setResolvingProvider(false);
     setDestinationChoice(null);
     setNameConfirmation(null);
     setConfirmedHebrewName('');
   };
 
   const selectProvider = async (selection) => {
+    const generation = ++resolutionGenerationRef.current;
     setResolvingProvider(true);
     setProviderError('');
     try {
       const result = await resolveDestinationForPlacePreview(selection, {
         selectionIntent: 'destination',
       });
+      if (generation !== resolutionGenerationRef.current) return;
       if (result?.status === 'destination_name_confirmation_required') {
         setNameConfirmation({ ...result, selection });
         setConfirmedHebrewName(result.nameConfirmation?.suggestedHebrewName || '');
@@ -129,14 +133,17 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
       }
       select(providerDestinationValue(result, selection));
     } catch {
-      setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+      if (generation === resolutionGenerationRef.current) {
+        setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+      }
     } finally {
-      setResolvingProvider(false);
+      if (generation === resolutionGenerationRef.current) setResolvingProvider(false);
     }
   };
 
   const confirmProviderName = async () => {
     if (!nameConfirmation?.resolvedPlaceToken || !confirmedHebrewName.trim()) return;
+    const generation = ++resolutionGenerationRef.current;
     setResolvingProvider(true);
     setProviderError('');
     try {
@@ -145,16 +152,20 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
         incidentId: nameConfirmation.incidentId,
         confirmedHebrewName: confirmedHebrewName.trim(),
       });
+      if (generation !== resolutionGenerationRef.current) return;
       select(providerDestinationValue(result, nameConfirmation.selection));
     } catch {
-      setProviderError('לא הצלחנו לאשר את שם היעד. בדקו את השם ונסו שוב.');
+      if (generation === resolutionGenerationRef.current) {
+        setProviderError('לא הצלחנו לאשר את שם היעד. בדקו את השם ונסו שוב.');
+      }
     } finally {
-      setResolvingProvider(false);
+      if (generation === resolutionGenerationRef.current) setResolvingProvider(false);
     }
   };
 
   const chooseProviderDestination = async (destinationChoiceId) => {
     if (!destinationChoice?.resolutionId) return;
+    const generation = ++resolutionGenerationRef.current;
     setResolvingProvider(true);
     setProviderError('');
     try {
@@ -163,11 +174,14 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
         destinationChoiceId,
         incidentId: destinationChoice.incidentId,
       });
+      if (generation !== resolutionGenerationRef.current) return;
       select(providerDestinationValue(result, destinationChoice.selection));
     } catch {
-      setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+      if (generation === resolutionGenerationRef.current) {
+        setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+      }
     } finally {
-      setResolvingProvider(false);
+      if (generation === resolutionGenerationRef.current) setResolvingProvider(false);
     }
   };
 
@@ -195,10 +209,19 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
 
   const normalizedQuery = compactDestinationText(query);
   const searchPending = normalizedQuery.length >= 2 && (
-    compactDestinationText(settledQuery) !== normalizedQuery || loading || searchLoading || providerLoading || resolvingProvider
+    compactDestinationText(settledQuery) !== normalizedQuery || loading || searchLoading ||
+    (providerLoading && !results.length) || resolvingProvider
   );
-  const visibleResults = results.length ? results : providerResults;
-  const usingProviderResults = !results.length && providerResults.length > 0;
+  const visibleResults = [
+    ...results.map((option) => ({ source: 'planli', option })),
+    ...providerResults
+      .filter((providerOption) => !results.some((localOption) =>
+        localOption.providerPlaceId &&
+        localOption.providerPlaceId === (providerOption.providerPlaceId || providerOption.place_id)
+      ))
+      .map((option) => ({ source: 'google', option })),
+  ];
+  const providerErrorBlocksResults = Boolean(providerError) && !visibleResults.length;
 
   return (
     <View style={styles.destinationPicker}>
@@ -209,7 +232,11 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
         <AppTextInput
           value={query}
           onChangeText={(text) => {
+            resolutionGenerationRef.current += 1;
+            providerGenerationRef.current += 1;
             setQuery(text);
+            setProviderResults([]);
+            setResolvingProvider(false);
             setDestinationChoice(null);
             setNameConfirmation(null);
             setProviderError('');
@@ -279,7 +306,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
 
       {focused && normalizedQuery.length >= 2 && !searchPending && !destinationChoice && !nameConfirmation ? (
         <View style={styles.destinationResults}>
-          {providerError ? (
+          {providerErrorBlocksResults ? (
             <View>
               <AppText style={styles.destinationEmpty}>{providerError}</AppText>
               <TouchableOpacity
@@ -297,8 +324,8 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
                 <AppText style={styles.textAction}>ניסיון נוסף</AppText>
               </TouchableOpacity>
             </View>
-          ) : visibleResults.length ? visibleResults.map((option, index) => {
-            const isProvider = usingProviderResults;
+          ) : visibleResults.length ? visibleResults.map(({ source, option }, index) => {
+            const isProvider = source === 'google';
             return (
               <TouchableOpacity
                 key={isProvider ? option.selectionId || option.providerPlaceId : option.key}
@@ -325,7 +352,19 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
               {allowProviderDestinations ? 'לא נמצא יעד מתאים' : 'לא נמצא יעד פעיל ב־PlanLi'}
             </AppText>
           )}
-          {usingProviderResults ? <AppText style={styles.destinationEmpty}>תוצאות מ־Google Maps</AppText> : null}
+          {providerError && visibleResults.length ? (
+            <View testID="recommendation-destination-provider-warning">
+              <AppText style={styles.destinationEmpty}>{providerError}</AppText>
+              <TouchableOpacity
+                onPress={() => setProviderRetry((value) => value + 1)}
+                accessibilityRole="button"
+                testID="recommendation-destination-provider-retry"
+              >
+                <AppText style={styles.textAction}>ניסיון נוסף</AppText>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+          {providerResults.length ? <AppText style={styles.destinationEmpty}>כולל תוצאות מ־Google Maps</AppText> : null}
         </View>
       ) : null}
     </View>

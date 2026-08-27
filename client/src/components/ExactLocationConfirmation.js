@@ -21,8 +21,24 @@ export default function ExactLocationConfirmation({
   const copy = locationCopy(locale);
   if (destinationChoice) {
     const hasAlternatives = Boolean(destinationChoice.alternatives?.length);
+    const choicePlace = pendingLocation?.place || destinationChoice.place || null;
     return (
       <View style={styles.choiceCard} testID="exact-location-destination-choices">
+        {choicePlace ? (
+          <View testID="exact-location-choice-preview">
+            <View style={styles.previewCopy}>
+              <AppText style={styles.previewTitle} numberOfLines={2}>
+                {choicePlace.name || choicePlace.address}
+              </AppText>
+              {!!choicePlace.address && (
+                <AppText style={styles.previewAddress} numberOfLines={2}>
+                  {choicePlace.address}
+                </AppText>
+              )}
+            </View>
+            <ExactLocationMapPreview place={choicePlace} title={copy.mapPreview} locale={locale} />
+          </View>
+        ) : null}
         <AppText style={styles.choiceHeading}>
           {hasAlternatives ? copy.destinationChoiceHeading : 'לאיזה יעד לשייך את המקום?'}
         </AppText>

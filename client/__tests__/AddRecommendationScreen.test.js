@@ -46,11 +46,12 @@ const mockResolveDestinationForPlacePreview = jest.fn(() => Promise.resolve({
     // General destination info used for app routing/filtering
     destination: {
       country: { id: 'IL', name: 'Israel' },
-      city: { id: 'TLV', name: 'Tel Aviv' }
+      city: { id: 'TLV', name: 'Tel Aviv', googlePlaceId: 'google-tel-aviv' }
     },
     // Specific Google Place details
     place: { 
-      placeId: 'google-place-id', 
+      placeId: 'google-place-id',
+      resolvedPlaceToken: 'resolved-place-token',
       name: 'Pizza Hut', 
       address: 'Tel Aviv St 1',
       // REQUIRED: Coordinates (saved in Firestore under postData.place)
@@ -817,6 +818,9 @@ describe('AddRecommendationScreen Integration Test', () => {
         draft: expect.objectContaining({
           title: 'Best Pizza Ever',
           selectedPlace: expect.objectContaining({ placeId: 'google-place-id' }),
+          selectedCity: expect.objectContaining({
+            id: 'TLV', googlePlaceId: 'google-tel-aviv',
+          }),
         }),
       }));
     });
@@ -831,6 +835,12 @@ describe('AddRecommendationScreen Integration Test', () => {
           phone: '+972 50 123 4567',
           externalUrl: 'https://example.com/place',
         },
+        selectedPlace: expect.objectContaining({
+          placeId: 'google-place-id', resolvedPlaceToken: 'resolved-place-token',
+        }),
+        selectedCity: expect.objectContaining({
+          id: 'TLV', googlePlaceId: 'google-tel-aviv',
+        }),
       }),
     }));
 

@@ -111,3 +111,30 @@ test('fallback destination search ignores an older response that arrives last', 
   expect(screen.getByText('Rome')).toBeTruthy();
   expect(screen.queryByText('Dolomites')).toBeNull();
 });
+
+test('fallback destination waits for the parent to persist the choice and surfaces rejection', async () => {
+  const selection = {
+    selectionId: 'sel_hod', providerPlaceId: 'google-hod',
+    structured_formatting: { main_text: 'הוד השרון', secondary_text: 'ישראל' },
+  };
+  mockSearchCities.mockResolvedValue([selection]);
+  mockResolve.mockResolvedValue({
+    status: 'resolved', resolvedPlaceToken: 'destination-token',
+    destination: {
+      country: { id: 'IL', name: 'ישראל' },
+      city: { id: 'hod-hasharon', name: 'הוד השרון' },
+    },
+  });
+  const onSelect = jest.fn(async () => {
+    throw Object.assign(new Error('parent rejected'), { userMessage: 'לא נשמר במסך האב' });
+  });
+  const screen = render(<DestinationFallbackPicker onSelect={onSelect} />);
+
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'הוד השרון');
+  fireEvent.press(screen.getByTestId('destination-fallback-search-button'));
+  await screen.findByText('הוד השרון');
+  fireEvent.press(screen.getByTestId('destination-fallback-result-0'));
+
+  await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(1));
+  await screen.findByText('לא נשמר במסך האב');
+});

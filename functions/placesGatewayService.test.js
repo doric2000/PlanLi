@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   createResolvedPlaceToken,
   legacyAutocomplete,
+  renewResolvedPlaceTokenLeases,
   searchPlaces,
   verifyResolvedPlaceToken,
 } = require('./placesGatewayService');
@@ -13,6 +14,40 @@ test('resolved place tokens are signed and tamper-evident', () => {
   assert.equal(verifyResolvedPlaceToken(token, key), true);
   assert.equal(verifyResolvedPlaceToken(`${token}x`, key), false);
   assert.equal(verifyResolvedPlaceToken(token, `${key}-wrong`), false);
+});
+
+test('saving a private draft renews only the owner server binding without provider work', async () => {
+  const key = 'a-test-signing-key-with-enough-entropy';
+  const ownedToken = createResolvedPlaceToken(key);
+  const foreignToken = createResolvedPlaceToken(key);
+  const documents = new Map([
+    [ownedToken, { uid: 'user-1', expiresAt: { toDate: () => new Date(Date.now() + 60_000) } }],
+    [foreignToken, { uid: 'user-2', expiresAt: { toDate: () => new Date(Date.now() + 60_000) } }],
+  ]);
+  const writes = [];
+  const admin = { firestore: () => ({
+    doc: (path) => {
+      const token = path.split('/').at(-1);
+      return {
+        get: async () => ({ exists: documents.has(token), data: () => documents.get(token) }),
+        set: async (value, options) => writes.push({ token, value, options }),
+      };
+    },
+  }) };
+
+  const result = await renewResolvedPlaceTokenLeases({
+    admin,
+    auth: { uid: 'user-1' },
+    resolvedPlaceTokens: [ownedToken, ownedToken, foreignToken, 'invalid-token'],
+    providerRateLimitKey: key,
+  });
+  assert.equal(result.requested, 3);
+  assert.equal(result.renewed, 1);
+  assert.equal(result.skipped, 2);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].token, ownedToken);
+  assert.equal(writes[0].options.merge, true);
+  assert.ok(writes[0].value.expiresAt.getTime() > Date.now() + 20 * 24 * 60 * 60 * 1000);
 });
 
 test('legacy gateway autocomplete returns only bounded, client-safe prediction fields', async () => {

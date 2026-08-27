@@ -264,12 +264,14 @@ export default function StopEditorModal({
       return {
         ...exactValue,
         locationPrecision: 'exact',
-        destination: {
-          countryId: exactValue.countryId,
-          cityId: exactValue.cityId,
-          countryName: exactValue.country,
-          cityName: exactValue.location,
-        },
+        destination: destinationRef(normalizedDestination(
+          exactValue.destination || {
+            countryId: exactValue.countryId,
+            cityId: exactValue.cityId,
+            countryName: exactValue.country,
+            cityName: exactValue.location,
+          }
+        )),
       };
     }
     if (mode === LOCATION_MODES.general) {

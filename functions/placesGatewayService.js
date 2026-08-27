@@ -16,6 +16,8 @@ const {
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const RESOLVED_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const DRAFT_RESOLVED_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_DRAFT_TOKEN_RENEWALS = 200;
 const MAX_QUERY_LENGTH = 180;
 const MAX_PREDICTIONS = 10;
 
@@ -325,12 +327,53 @@ async function storeResolvedPlaceDestination({
   }, { merge: true });
 }
 
+async function renewResolvedPlaceTokenLeases({
+  admin,
+  auth,
+  resolvedPlaceTokens,
+  providerRateLimitKey,
+  ttlMs = DRAFT_RESOLVED_TOKEN_TTL_MS,
+}) {
+  assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
+  const tokens = Array.from(new Set(
+    (Array.isArray(resolvedPlaceTokens) ? resolvedPlaceTokens : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  assert(tokens.length <= MAX_DRAFT_TOKEN_RENEWALS,
+    'invalid-argument', 'The draft contains too many resolved places.');
+  assert(Number.isFinite(ttlMs) && ttlMs >= RESOLVED_TOKEN_TTL_MS,
+    'invalid-argument', 'The resolved place lease is invalid.');
+  const now = Date.now();
+  const expiresAt = new Date(now + ttlMs);
+  let renewed = 0;
+  let skipped = 0;
+  await Promise.all(tokens.map(async (token) => {
+    if (!verifyResolvedPlaceToken(token, providerRateLimitKey)) {
+      skipped += 1;
+      return;
+    }
+    const ref = resolvedTokenRef(admin.firestore(), token);
+    const snapshot = await ref.get();
+    const value = snapshot.exists ? snapshot.data() || {} : null;
+    if (!value || value.uid !== auth.uid || value.expiresAt?.toDate?.().getTime() <= now) {
+      skipped += 1;
+      return;
+    }
+    await ref.set({ expiresAt, leaseRenewedAt: new Date(now) }, { merge: true });
+    renewed += 1;
+  }));
+  return { requested: tokens.length, renewed, skipped, expiresAt };
+}
+
 module.exports = {
+  DRAFT_RESOLVED_TOKEN_TTL_MS,
   RESOLVED_TOKEN_TTL_MS,
   SESSION_TTL_MS,
   createResolvedPlaceToken,
   legacyAutocomplete,
   readResolvedPlaceToken,
+  renewResolvedPlaceTokenLeases,
   resolvePlaceSelection,
   searchPlaces,
   signResolvedTokenId,

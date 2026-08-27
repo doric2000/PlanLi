@@ -351,6 +351,209 @@ test('a general destination proof cannot be reused with different destination ID
   }), /does not match/);
 });
 
+test('more than five selected exact stops publish from server bindings without provider fan-out', async () => {
+  const stops = Array.from({ length: 6 }, (_, index) => ({
+    id: `bound-${index}`,
+    title: `Bound ${index}`,
+    locationPrecision: 'exact',
+    place: {
+      placeId: `place-${index}`,
+      resolvedPlaceToken: `resolved-token-${index}`,
+      coordinates: { lat: 32.14 + index / 1000, lng: 34.88 },
+    },
+    destination: {
+      countryId: 'IL', cityId: 'hod-hasharon', provider: 'google',
+      providerPlaceId: 'google-hod-hasharon',
+    },
+  }));
+  let exactCalls = 0;
+  const result = await resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days: [{ id: 'day_001', stops }],
+    consumeBudget: async () => assert.fail('valid bindings must not consume raw provider budget'),
+    resolveExact: async (input) => {
+      exactCalls += 1;
+      assert.match(input.resolvedPlaceToken, /^resolved-token-/);
+      assert.equal(input.destinationRef.providerPlaceId, 'google-hod-hasharon');
+      return {
+        countryId: 'IL', cityId: 'hod-hasharon', countryData: { name: 'ישראל' },
+        cityData: { names: { he: 'הוד השרון', en: 'Hod Hasharon' } },
+        cityRef: { path: 'countries/IL/destinations/hod-hasharon' },
+        place: { placeId: input.placeId, name: input.placeId, coordinates: { lat: 32.15, lng: 34.88 } },
+      };
+    },
+  });
+  assert.equal(exactCalls, 6);
+  assert.equal(result.days[0].stops.length, 6);
+  assert.equal(result.providerCalls, 0);
+});
+
+test('twelve exact PlanLi recommendations publish without tokens or provider budget', async () => {
+  const stops = Array.from({ length: 12 }, (_, index) => ({
+    id: `planli-${index}`,
+    title: `PlanLi ${index}`,
+    locationPrecision: 'exact',
+    place: {
+      placeId: `planli-place-${index}`,
+      coordinates: { lat: 32.14 + index / 1000, lng: 34.88 },
+    },
+    destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+    source: { type: 'recommendation', recommendationId: `recommendation-${index}` },
+  }));
+  const trustedRecommendations = new Map(stops.map((stop, index) => [
+    `recommendation-${index}`,
+    {
+      categoryId: 'food',
+      subcategoryIds: ['cafe'],
+      location: {
+        mode: 'exact',
+        destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+        place: {
+          placeId: stop.place.placeId,
+          name: stop.title,
+          coordinates: stop.place.coordinates,
+        },
+      },
+    },
+  ]));
+  const result = await resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days: [{ id: 'day_001', stops }],
+    trustedRecommendations,
+    consumeBudget: async () => assert.fail('PlanLi locations must not consume provider budget'),
+    resolveExact: async () => assert.fail('PlanLi locations must not be re-resolved by Google'),
+    resolveExisting: async () => ({
+      countryId: 'IL', cityId: 'hod-hasharon', countryData: { name: 'ישראל' },
+      cityData: { names: { he: 'הוד השרון' } },
+      cityRef: { path: 'countries/IL/destinations/hod-hasharon' },
+    }),
+  });
+
+  assert.equal(result.days[0].stops.length, 12);
+  assert.equal(result.providerCalls, 0);
+  assert.ok(result.days[0].stops.every((stop) => stop.source?.recommendationId));
+});
+
+test('a mismatched PlanLi source does not make a submitted place trusted', async () => {
+  let budgetUnits = 0;
+  let exactCalls = 0;
+  const result = await resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days: [{ id: 'day_001', stops: [{
+      id: 'spoofed', title: 'מקום אחר', locationPrecision: 'exact',
+      place: { placeId: 'submitted-place', coordinates: { lat: 32.15, lng: 34.88 } },
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      source: { type: 'recommendation', recommendationId: 'recommendation-1' },
+    }] }],
+    trustedRecommendations: new Map([['recommendation-1', {
+      categoryId: 'food', subcategoryIds: ['cafe'],
+      location: {
+        mode: 'exact',
+        destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+        place: { placeId: 'trusted-place', coordinates: { lat: 32.15, lng: 34.88 } },
+      },
+    }]]),
+    consumeBudget: async ({ units }) => { budgetUnits += units; },
+    resolveExact: async () => {
+      exactCalls += 1;
+      return {
+        countryId: 'IL', cityId: 'hod-hasharon', countryData: { name: 'ישראל' },
+        cityData: { names: { he: 'הוד השרון' } },
+        cityRef: { path: 'countries/IL/destinations/hod-hasharon' },
+        place: { placeId: 'submitted-place', coordinates: { lat: 32.15, lng: 34.88 } },
+      };
+    },
+  });
+
+  assert.equal(budgetUnits, 1);
+  assert.equal(exactCalls, 1);
+  assert.equal(result.days[0].stops[0].source, undefined);
+});
+
+test('duplicate exact stops accept merge-equivalent destination references and reject unrelated ones', async () => {
+  const stop = (id, cityId) => ({
+    id,
+    title: id,
+    locationPrecision: 'exact',
+    place: {
+      placeId: 'same-place',
+      resolvedPlaceToken: 'resolved-token',
+      coordinates: { lat: 32.15, lng: 34.88 },
+    },
+    destination: { countryId: 'IL', cityId },
+  });
+  const resolveExisting = async (_db, destinationRef) => ({
+    countryId: 'IL',
+    cityId: destinationRef.cityId === 'old-hod' ? 'hod-hasharon' : destinationRef.cityId,
+    countryData: { name: 'ישראל' },
+    cityData: { names: { he: 'הוד השרון' } },
+  });
+  const resolveExact = async () => ({
+    countryId: 'IL', cityId: 'hod-hasharon', countryData: { name: 'ישראל' },
+    cityData: { names: { he: 'הוד השרון' } },
+    cityRef: { path: 'countries/IL/destinations/hod-hasharon' },
+    place: { placeId: 'same-place', name: 'מקום כפול', coordinates: { lat: 32.15, lng: 34.88 } },
+  });
+  const admin = { firestore: () => ({}) };
+  const auth = { uid: 'owner' };
+
+  const merged = await resolveRoutePlaces({
+    admin,
+    auth,
+    days: [{ id: 'day_001', stops: [
+      stop('before-merge', 'old-hod'),
+      stop('after-merge', 'hod-hasharon'),
+    ] }],
+    resolveExisting,
+    resolveExact,
+  });
+  assert.deepEqual(
+    merged.days[0].stops.map((entry) => entry.destination.cityId),
+    ['hod-hasharon', 'hod-hasharon']
+  );
+
+  await assert.rejects(resolveRoutePlaces({
+    admin,
+    auth,
+    days: [{ id: 'day_001', stops: [
+      stop('hod', 'hod-hasharon'),
+      stop('eilat', 'eilat'),
+    ] }],
+    resolveExisting,
+    resolveExact,
+  }), (error) => error?.details?.reason === 'invalid_selection');
+});
+
+test('a removed recommendation source is detached while its verified stop location survives', async () => {
+  const result = await resolveRoutePlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'owner' },
+    days: [{ id: 'day_001', stops: [{
+      id: 'orphaned-source', title: 'מקום שנשמר', locationPrecision: 'exact',
+      place: { placeId: 'saved-place', coordinates: { lat: 32.15, lng: 34.88 } },
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      source: { type: 'recommendation', recommendationId: 'deleted-recommendation' },
+    }] }],
+    trustedRecommendations: new Map(),
+    trustedPlaces: new Map([['saved-place', {
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      place: { placeId: 'saved-place', name: 'מקום שנשמר', coordinates: { lat: 32.15, lng: 34.88 } },
+    }]]),
+    consumeBudget: async () => assert.fail('a server binding does not need raw provider budget'),
+    resolveExact: async () => assert.fail('a server binding does not call Google'),
+    resolveExisting: async () => ({
+      countryId: 'IL', cityId: 'hod-hasharon', countryData: { name: 'ישראל' },
+      cityData: { names: { he: 'הוד השרון' } },
+      cityRef: { path: 'countries/IL/destinations/hod-hasharon' },
+    }),
+  });
+  assert.equal(result.days[0].stops[0].source, undefined);
+  assert.equal(result.days[0].stops[0].place.placeId, 'saved-place');
+});
+
 test('travel estimates are produced only between consecutive precise stops', () => {
   const result = attachRouteLegEstimates([{
     stops: [
@@ -378,6 +581,13 @@ test('PlanLi stop classification is reloaded from an active recommendation', asy
       categoryId: 'food',
       subcategoryIds: ['restaurant'],
       tags: ['cafe'],
+      locationMode: 'exact',
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      place: {
+        placeId: 'recommendation-place',
+        name: 'מקום מאומת',
+        coordinates: { lat: 32.15, lng: 34.88 },
+      },
     },
   };
   const db = {
@@ -394,15 +604,23 @@ test('PlanLi stop classification is reloaded from an active recommendation', asy
   assert.deepEqual(trusted.get('recommendation-1'), {
     categoryId: 'food',
     subcategoryIds: ['restaurant'],
+    location: {
+      mode: 'exact',
+      destination: {
+        countryId: 'IL', cityId: 'hod-hasharon', countryName: '', cityName: '',
+      },
+      place: {
+        placeId: 'recommendation-place', name: 'מקום מאומת', address: '',
+        coordinates: { lat: 32.15, lng: 34.88 },
+      },
+    },
   });
 
   documents['recommendations/recommendation-1'].status = 'moderation_hold';
-  await assert.rejects(
-    loadTrustedRecommendationSources(db, [{
-      stops: [{ source: { recommendationId: 'recommendation-1' } }],
-    }]),
-    /no longer active/
-  );
+  const removed = await loadTrustedRecommendationSources(db, [{
+    stops: [{ source: { recommendationId: 'recommendation-1' } }],
+  }]);
+  assert.equal(removed.size, 0);
 });
 
 test('route edits reject deletion races and changed revisions', () => {

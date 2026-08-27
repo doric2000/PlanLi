@@ -44,7 +44,17 @@ export default function ExactLocationPicker({
 
 	useEffect(() => {
 		hydrateSelection(value);
-	}, [hydrateSelection, value?.cityId, value?.countryId, value?.place?.placeId]);
+	}, [
+		hydrateSelection,
+		value?.city?.googlePlaceId,
+		value?.city?.id,
+		value?.city?.providerPlaceId,
+		value?.cityId,
+		value?.countryId,
+		value?.destination?.providerPlaceId,
+		value?.destinationProviderPlaceId,
+		value?.place?.placeId,
+	]);
 
 	useEffect(() => {
 		onResolvingChange?.(resolvingLocation || !!pendingLocation || !!destinationChoice);
@@ -80,7 +90,7 @@ export default function ExactLocationPicker({
 				resolving={resolvingLocation}
 				resolvingPreview={resolvingPreview}
 				onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
-				onChooseFallbackDestination={(destination) => chooseFallbackDestination(destination).catch(() => {})}
+				onChooseFallbackDestination={chooseFallbackDestination}
 				onConfirm={confirmPendingLocation}
 					onChooseAnother={chooseAnotherLocation}
 				locale={locale}
