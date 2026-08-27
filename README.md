@@ -25,17 +25,14 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible Android production EAS Update is the Home startup-crash
-hotfix group `25506ec2-6a03-46dd-99f4-7b26178e9205`, Android update
-`01a0429b-1a4e-7018-bbd6-a8001df4f267`, published at
-`2026-08-27T09:44:16.206Z` from clean `main` merge commit `c5397636`. EAS
-read-back confirms runtime `1.1.0`, the exact merge commit, the production
-branch, and Android-only scope. The latest compatible iOS production EAS Update
-remains recommendation draft-recovery group
-`65e800f9-a1eb-4a6c-916e-4cf941ec3e10`, iOS update
-`01a04212-50c3-721e-ac6e-60b97ce356f3`, from merge commit `f06f2f6b`.
-Download, application, Android Home launch, and recommendation draft recovery
-on physical devices remain unverified.
+The latest compatible Android and iOS production EAS Update is launch-safe
+destination-resolution group `a50b1502-5158-49e5-bb59-02933dac81f1`, Android
+update `01a04394-64d8-76b2-8e63-e7c29c23f6df` and iOS update
+`01a04394-64d8-72c5-b098-e4c0700e6544`, published at
+`2026-08-27T14:16:33.752Z` from clean `main` merge commit `77096274`. EAS
+read-back confirms runtime `1.1.0`, the exact merge commit, both platforms and
+the production branch. Download, application and destination-search behavior
+on physical Android and iOS devices remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
 internal iOS EAS Development Build
@@ -47,10 +44,10 @@ development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
 the `production` EAS Update channel and runtime `1.1.0`. The matching
-recommendation draft-recovery preview group is
-`50b71fab-4cab-4a78-acf2-ef2ced0a22ff`; the immediately preceding compatible
-groups are preview `65aad93c-c64b-4f13-a154-626f6909d333` and production
-`57eed77a-9f71-4e56-89c7-2c85f3c82077`. PR `#231` merged the canonical-
+destination-resolution preview group is
+`2be4404d-9bb4-48aa-b296-44df198deb1b`; the immediately preceding compatible
+groups are preview `18ae0c59-1b46-49a7-89cf-941782743183` and production
+`f91d01d2-42aa-436c-8774-98d9f85d09bd`. PR `#231` merged the canonical-
 destination rollout to `main` as `9d70edad`. Nine affected Functions and the
 48-file admin Hosting bundle were then redeployed from that clean merge commit.
 The private registry contains 251 validated entries, 14 reviewed legacy
@@ -1728,3 +1725,56 @@ rejected.
   on a physical iPhone remain unverified. Force-close and reopen the production
   app up to twice to apply the OTA; roll back by republishing production group
   `4947c1c8-6bae-4115-bc2f-b6c622d9230d`.
+
+## Launch-safe destination resolution release
+
+- Source and Git: implementation commit `59dc63b19801cc9b596679dbe10f8066b9ac940d`
+  passed PR `#242` and merged to clean `main` as
+  `77096274e5b6f0efd6219d8500c94f4a5864a174` at
+  `2026-08-27T13:46:55Z`.
+- Root cause and scope: Google `locality` values were treated as traveler-facing
+  destinations even when they represented unfamiliar address components such
+  as Rivas or Kannan Devan Hills. Resolution now prefers a private reviewed
+  registry of 251 traveler destinations, supports explicit Hebrew naming and a
+  same-country fallback picker, preserves the exact-place publication token,
+  rejects cross-country attachment before any cache mutation, and ignores stale
+  asynchronous destination-search results. The client asks the user to choose
+  when no reliable destination can be inferred instead of activating a raw
+  provider name.
+- Validation: focused review-fix coverage passed 23 client and 49 recommendation
+  service tests. Changed-scope validation passed 79 client tests and 106
+  Functions tests, validated all 251 registry entries and reported zero
+  Functions dependency vulnerabilities. Every required PR `#242` check passed,
+  including affected client and Functions jobs and final PR validation.
+- Functions: only `resolvePlaceSelection` and
+  `resolveRecommendationDestination` were deployed from the merge source to
+  `planli-f0b12` in `europe-west1`. Independent inventory reports both `ACTIVE`,
+  v2, Node.js 22, and source hash
+  `2172059424f0ac2be3f4668238982121b37aa98a`. The uploaded source generations
+  correspond to `2026-08-27T14:13:31.722Z` and
+  `2026-08-27T14:12:43.311Z`, respectively. The Firebase log read-back failed in
+  the Google Cloud retrieval layer, so post-deploy log contents are unverified.
+- EAS Update: EAS CLI `22.6.0` was reinstalled after the cached `npx` package was
+  incomplete. The new `eas release` topic still exposed no executable
+  subcommands, so it was not added to the durable release instructions and the
+  established exact-artifact workflow remained in use. Two production-lineage
+  preflights passed against prior production commit
+  `cd458a7e33f23970926d1af3db05ef18c1cd57d6`. Preview group
+  `2be4404d-9bb4-48aa-b296-44df198deb1b`, Android update
+  `01a0438a-7b5f-7b6e-bb99-a93a49637c41` and iOS update
+  `01a0438a-7b5f-7038-9bf4-acd190311bf0` were published at
+  `2026-08-27T14:05:44.159Z`. Those exact artifacts were republished to
+  production group `a50b1502-5158-49e5-bb59-02933dac81f1`, Android update
+  `01a04394-64d8-76b2-8e63-e7c29c23f6df` and iOS update
+  `01a04394-64d8-72c5-b098-e4c0700e6544` at
+  `2026-08-27T14:16:33.752Z`. EAS read-back confirmed both platforms, runtime
+  `1.1.0`, production head, and exact merge commit `77096274`.
+- The preview export bundled 2,421 modules for each native platform, uploaded
+  two app bundles, found 52 iOS and 51 Android assets, and uploaded no new
+  assets. No native build, TestFlight/App Store or Google Play submission,
+  Hosting, Rules, indexes, IAM, migration, registry seed, or production-document
+  write accompanied this release. OTA download/application and authenticated
+  destination behavior remain unverified on physical devices. Force-close and
+  reopen the production app up to twice to apply it; roll back preview to group
+  `18ae0c59-1b46-49a7-89cf-941782743183` or production to group
+  `f91d01d2-42aa-436c-8774-98d9f85d09bd` if required.
