@@ -19,6 +19,7 @@
     "delete-all-recommendations": "node scripts/deleteAllRecommendations.js",
     "delete-non-admin-users": "node scripts/deleteNonAdminUsers.js",
     "repair-beta-owner": "node scripts/repairBetaOwnerAccount.js",
+    "repair-taxonomy-other": "node scripts/repairTaxonomyOtherRecommendations.js",
     "set-email-verified": "node scripts/setEmailVerified.js",
     "migrate-media": "node scripts/migrateCanonicalMedia.js",
     "migrate-storage-eu": "node scripts/migrateStorageToEurope.js",

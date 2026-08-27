@@ -1,6 +1,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { evaluateTextSafety } = require('./moderationService');
+const { publicationOutcome } = require('./contentPublication');
 const {
   isVerifiedCaller,
   destinationHebrewWritePatch,
@@ -887,6 +888,7 @@ async function saveRoute({
         routeId: routeRef.id,
         revisionId: existingRoute.activeRevisionId,
         revisionVersion: revisionVersion(existingRoute),
+        ...publicationOutcome(existingRoute.status),
         idempotentReplay: true,
       };
     }
@@ -895,16 +897,18 @@ async function saveRoute({
       const replay = existingSnapshot.data() || {};
       assert(replay.ownerId === uid, 'already-exists',
         'This publication request conflicts with an existing route.');
-      assert((replay.status || 'active') === 'active' && replay.activeRevisionId,
-        'failed-precondition', 'The existing route publication is not active.');
+      assert(['active', 'moderation_hold'].includes(replay.status || 'active') && replay.activeRevisionId,
+        'failed-precondition', 'The existing route publication has no active revision.');
       console.info('route_save_timing', {
         durationMs: Date.now() - saveStartedAt,
         idempotentReplay: true,
+        publicationStatus: publicationOutcome(replay.status).publicationStatus,
       });
       return {
         routeId: routeRef.id,
         revisionId: replay.activeRevisionId,
         revisionVersion: revisionVersion(replay),
+        ...publicationOutcome(replay.status),
         idempotentReplay: true,
       };
     }
@@ -1053,8 +1057,8 @@ async function saveRoute({
         const replay = currentSnapshot.data() || {};
         assert(replay.ownerId === uid, 'already-exists',
           'This publication request conflicts with an existing route.');
-        assert((replay.status || 'active') === 'active' && replay.activeRevisionId,
-          'failed-precondition', 'The existing route publication is not active.');
+        assert(['active', 'moderation_hold'].includes(replay.status || 'active') && replay.activeRevisionId,
+          'failed-precondition', 'The existing route publication has no active revision.');
         transaction.update(revisionRef, {
           state: 'superseded',
           supersededAt: now,
@@ -1235,7 +1239,7 @@ async function saveRoute({
         expireAt: new Date(Date.now() + SUPERSEDED_REVISION_TTL_MS),
       });
     }
-      return { replay: false };
+      return { replay: false, status: routeDocument.status };
     });
   } catch (error) {
     await deletePreparedRevision(db, revisionRef, 'route_failed_revision_cleanup_failed');
@@ -1251,19 +1255,27 @@ async function saveRoute({
     console.info('route_save_timing', {
       durationMs: Date.now() - saveStartedAt,
       idempotentReplay: true,
+      publicationStatus: publicationOutcome(transactionOutcome.data?.status).publicationStatus,
     });
     return {
       routeId: routeRef.id,
       revisionId: transactionOutcome.data?.activeRevisionId,
       revisionVersion: revisionVersion(transactionOutcome.data),
+      ...publicationOutcome(transactionOutcome.data?.status),
       idempotentReplay: true,
     };
   }
   console.info('route_save_timing', {
     durationMs: Date.now() - saveStartedAt,
     idempotentReplay: false,
+    publicationStatus: publicationOutcome(transactionOutcome?.status).publicationStatus,
   });
-  return { routeId: routeRef.id, revisionId, revisionVersion: baseVersion + 1 };
+  return {
+    routeId: routeRef.id,
+    revisionId,
+    revisionVersion: baseVersion + 1,
+    ...publicationOutcome(transactionOutcome?.status),
+  };
 }
 
 async function deletePreparedRevision(db, revisionRef, logEvent) {

@@ -19,6 +19,8 @@ export function ProfileContentHeader({
   contentLoading,
   recommendationsCount = 0,
   routesCount = 0,
+  pendingCount = 0,
+  showPending = false,
   title = 'התוכן שלי',
 }) {
   const renderTab = (tab, label, count, icon) => {
@@ -53,6 +55,7 @@ export function ProfileContentHeader({
       <View style={styles.contentTabs} accessibilityRole="tablist">
         {renderTab('recommendations', 'המלצות', recommendationsCount, 'thumb-up')}
         {renderTab('routes', 'מסלולים', routesCount, 'map')}
+        {showPending ? renderTab('pending', 'בבדיקה', pendingCount, 'schedule') : null}
       </View>
       {contentLoading ? (
         <View style={styles.contentLoading}>
@@ -65,23 +68,30 @@ export function ProfileContentHeader({
 export function ProfileGridTile({ item, contentTab, contentLoading, navigation, styles }) {
   if (contentLoading) return null;
 
-  const isRecommendation = contentTab === 'recommendations';
+  const isPending = contentTab === 'pending';
+  const isRecommendation = contentTab === 'recommendations'
+    || (isPending && item?.contentType === 'recommendation');
   const image = isRecommendation
-    ? getRecommendationImageUrls(item, 'thumb')[0] || null
+    ? item?.thumbnailUrl || getRecommendationImageUrls(item, 'thumb')[0] || null
     : getRouteImageUrls(item, 'thumb')[0] || null;
   const title = isRecommendation
     ? item?.title || item?.name || 'המלצה'
     : item?.Title || item?.title || 'מסלול';
-  const subtitle = isRecommendation
+  const subtitle = isPending
+    ? (item?.contentType === 'route' ? 'מסלול ממתין לבדיקה' : 'המלצה ממתינה לבדיקה')
+    : isRecommendation
     ? item?.destination?.cityName || item?.destination?.countryName || ''
     : Array.isArray(item?.summaryPlaces)
       ? item.summaryPlaces.filter(Boolean).slice(0, 2).join(' · ')
       : '';
-  const visual = isRecommendation
+  const visual = isPending
+    ? { icon: 'schedule', color: '#B7791F' }
+    : isRecommendation
     ? getRecommendationMapVisual(item?.categoryId, item?.category)
     : { icon: 'map', color: colors.primary };
 
   const handlePress = async () => {
+    if (isPending) return;
     if (isRecommendation) {
       navigation.navigate('RecommendationDetail', { item });
       return;
@@ -102,12 +112,22 @@ export function ProfileGridTile({ item, contentTab, contentLoading, navigation, 
       icon={visual.icon}
       fallbackColor={visual.color}
       onPress={handlePress}
+      disabled={isPending}
       style={styles.gridTile}
     />
   );
 }
 
 export function ProfileContentEmpty({ contentTab, styles, ownerLabel = 'הפרופיל' }) {
+  if (contentTab === 'pending') {
+    return (
+      <View style={styles.emptyState}>
+        <MaterialIcons name="verified" size={36} color={colors.textMuted} />
+        <AppText style={styles.emptyTitle}>אין פרסומים שממתינים לבדיקה</AppText>
+        <AppText style={styles.emptyText}>כל התוכן שנשלח כבר טופל או פורסם.</AppText>
+      </View>
+    );
+  }
   const recommendations = contentTab === 'recommendations';
   return (
     <View style={styles.emptyState}>

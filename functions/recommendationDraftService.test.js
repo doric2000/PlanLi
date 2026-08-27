@@ -447,10 +447,14 @@ test('publishing saves the exact version, falls back from an expired token, and 
     saveRecommendationImpl: async ({ data }) => {
       requests.push(data);
       if (requests.length === 1) throw Object.assign(new Error('Token expired; search again.'), { code: 'not-found' });
-      return { recommendationId: 'rec-1' };
+      return {
+        recommendationId: 'rec-1', publicationStatus: 'moderation_hold', publiclyVisible: false,
+      };
     },
   });
   assert.equal(result.recommendationId, 'rec-1');
+  assert.equal(result.publicationStatus, 'moderation_hold');
+  assert.equal(result.publiclyVisible, false);
   assert.equal(requests.length, 2);
   assert.equal(requests[0].resolvedPlaceToken, 'expired-token');
   assert.equal(requests[1].resolvedPlaceToken, undefined);
@@ -466,7 +470,10 @@ test('publishing saves the exact version, falls back from an expired token, and 
     path,
     collection: (name) => ({ doc: (id) => replayRef(`${path}/${name}/${id}`) }),
     get: async () => path === receiptPath
-      ? { exists: true, data: () => ({ ownerId: 'owner', version: 5, result: { recommendationId: 'rec-1' } }) }
+      ? { exists: true, data: () => ({
+          ownerId: 'owner', version: 5,
+          result: { recommendationId: 'rec-1', publicationStatus: 'moderation_hold', publiclyVisible: false },
+        }) }
       : { exists: false, data: () => ({}) },
   });
   const replay = await publishRecommendationDraft({
@@ -475,6 +482,8 @@ test('publishing saves the exact version, falls back from an expired token, and 
     saveRecommendationImpl: async () => assert.fail('idempotent replay must not save again'),
   });
   assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.publicationStatus, 'moderation_hold');
+  assert.equal(replay.publiclyVisible, false);
 });
 
 test('publication refuses to acknowledge success if the claimed pointer no longer matches', async () => {

@@ -7,7 +7,10 @@ jest.mock('firebase/functions', () => ({
     if (name === 'getCurrentRecommendationDraft') return { data: { draft: { id: 'draft-1', version: 2 } } };
     if (name === 'saveRecommendationDraft') return { data: { draftId: 'draft-1', version: 3 } };
     if (name === 'discardRecommendationDraft') return { data: { discarded: true } };
-    return { data: { recommendationId: 'rec-1', published: true } };
+    return { data: {
+      recommendationId: 'rec-1', published: true,
+      publicationStatus: 'active', publiclyVisible: true,
+    } };
   }),
 }));
 jest.mock('../src/config/firebase', () => ({ cloudFunctions: { region: 'europe-west1' } }));
@@ -32,6 +35,7 @@ test('recommendation draft service wraps the four private lifecycle callables', 
   await expect(discardRecommendationDraft('draft-1')).resolves.toEqual({ discarded: true });
   await expect(publishRecommendationDraft('draft-1', 3)).resolves.toEqual({
     recommendationId: 'rec-1', published: true,
+    publicationStatus: 'active', publiclyVisible: true,
   });
 
   expect(mockCallableInvocations).toEqual([

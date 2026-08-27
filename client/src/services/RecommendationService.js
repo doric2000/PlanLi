@@ -21,8 +21,9 @@ const getSaveRecommendationCallable = () => {
 
 export const saveRecommendation = async (payload) => {
   const response = await getSaveRecommendationCallable()(payload);
-  clearPersonalizationDiscoveryCache('recommendations');
-  return response?.data || null;
+  const result = response?.data || null;
+  if (result?.publicationStatus === 'active') clearPersonalizationDiscoveryCache('recommendations');
+  return result;
 };
 
 const getResolveRecommendationDestinationCallable = () => {
@@ -74,6 +75,6 @@ export const discardRecommendationDraft = async (draftId) => {
 export const publishRecommendationDraft = async (draftId, expectedVersion) => {
   publishRecommendationDraftCallable ||= httpsCallable(cloudFunctions, 'publishRecommendationDraft');
   const response = await publishRecommendationDraftCallable({ draftId, expectedVersion });
-  clearPersonalizationDiscoveryCache('recommendations');
+  if (response.data?.publicationStatus === 'active') clearPersonalizationDiscoveryCache('recommendations');
   return response.data;
 };

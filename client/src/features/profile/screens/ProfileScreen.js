@@ -76,6 +76,8 @@ function AuthedProfileScreen({ navigation, route }) {
   const {
     recommendations,
     routes,
+    pendingContent,
+    pendingError,
     loading: contentLoading,
     error: contentError,
     refresh: refreshContent,
@@ -154,6 +156,8 @@ function AuthedProfileScreen({ navigation, route }) {
         statsLoading={statsLoading}
         recommendations={recommendations}
         routes={routes}
+        pendingContent={pendingContent}
+        pendingError={pendingError}
         contentLoading={contentLoading}
         contentError={contentError || profileError}
         isOwner={isMyProfile}

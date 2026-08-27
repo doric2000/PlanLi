@@ -14,6 +14,7 @@ import { db } from '../../../config/firebase';
 import { primeUserDataCache } from '../../../hooks/useUserData';
 import { createRequestCoordinator } from '../../../utils/requestCoordinator';
 import { registerProfileResourceInvalidator } from '../../../utils/profileResourceInvalidation';
+import { listMyPendingContent } from '../../../services/PendingContentService';
 import {
   calculateContributionScore,
   getDominantRecommendationCategory,
@@ -92,12 +93,16 @@ async function loadProfileResource({ uid, user, isOwnProfile }) {
     where('ownerId', '==', uid),
     where('status', '==', 'active')
   )).then((snapshot) => Number(snapshot.data()?.count || 0)).catch(() => null);
+  const pendingPromise = isOwnProfile
+    ? listMyPendingContent({ limit: 30 }).catch((error) => ({ items: [], nextCursor: null, error }))
+    : Promise.resolve({ items: [], nextCursor: null, error: null });
 
-  const [userData, recommendationSnapshot, routeSnapshot, routeCount] = await Promise.all([
+  const [userData, recommendationSnapshot, routeSnapshot, routeCount, pending] = await Promise.all([
     identityPromise,
     recommendationsPromise,
     routesPromise,
     routeCountPromise,
+    pendingPromise,
   ]);
   const recommendations = snapshotItems(recommendationSnapshot);
   const routes = snapshotItems(routeSnapshot);
@@ -107,7 +112,15 @@ async function loadProfileResource({ uid, user, isOwnProfile }) {
     routes: routeCount ?? routes.length,
   };
   primeUserDataCache(uid, userData);
-  return { userData, stats, recommendations, routes };
+  return {
+    userData,
+    stats,
+    recommendations,
+    routes,
+    pendingContent: pending.items,
+    pendingNextCursor: pending.nextCursor,
+    pendingError: pending.error || null,
+  };
 }
 
 function resourceKey(uid, isOwnProfile) {
@@ -121,6 +134,9 @@ export function requestProfileResource({ uid, user, isOwnProfile }) {
       stats: DEFAULT_PROFILE_STATS,
       recommendations: [],
       routes: [],
+      pendingContent: [],
+      pendingNextCursor: null,
+      pendingError: null,
     };
     return { requested: false, source: 'empty', promise: Promise.resolve(value) };
   }

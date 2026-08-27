@@ -251,7 +251,10 @@ test('publishing the same saved version is idempotent after draft cleanup', asyn
             data: () => ({
               ownerId: 'owner',
               version: 4,
-              result: { routeId: 'route-1', revisionId: 'revision-1' },
+              result: {
+                routeId: 'route-1', revisionId: 'revision-1',
+                publicationStatus: 'moderation_hold', publiclyVisible: false,
+              },
             }),
           }
         : { exists: false, data: () => ({}) },
@@ -265,6 +268,8 @@ test('publishing the same saved version is idempotent after draft cleanup', asyn
   assert.deepEqual(result, {
     routeId: 'route-1',
     revisionId: 'revision-1',
+    publicationStatus: 'moderation_hold',
+    publiclyVisible: false,
     published: true,
     idempotentReplay: true,
   });

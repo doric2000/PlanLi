@@ -26,7 +26,7 @@ export const saveRoute = async (route, routeId = null, publishRequestId = null) 
     ...(routeId ? { routeId } : {}),
     ...(publishRequestId ? { publishRequestId } : {}),
   });
-  clearPersonalizationDiscoveryCache('routes');
+  if (response.data?.publicationStatus === 'active') clearPersonalizationDiscoveryCache('routes');
   return response.data;
 };
 
@@ -65,7 +65,7 @@ export const discardRouteDraft = async (draftId) => {
 export const publishRouteDraft = async (draftId, expectedVersion) => {
   publishRouteDraftCallable ||= httpsCallable(cloudFunctions, 'publishRouteDraft');
   const response = await publishRouteDraftCallable({ draftId, expectedVersion });
-  clearPersonalizationDiscoveryCache('routes');
+  if (response.data?.publicationStatus === 'active') clearPersonalizationDiscoveryCache('routes');
   return response.data;
 };
 

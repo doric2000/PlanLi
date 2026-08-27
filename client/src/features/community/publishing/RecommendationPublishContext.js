@@ -116,6 +116,19 @@ export function publishRetryPolicy(error, attempts) {
   };
 }
 
+export function normalizePublicationOutcome(result) {
+  const publicationStatus = result?.publicationStatus === 'active'
+    ? 'active'
+    : result?.publicationStatus === 'moderation_hold'
+      ? 'moderation_hold'
+      : 'unknown';
+  return {
+    ...(result || {}),
+    publicationStatus,
+    publiclyVisible: publicationStatus === 'active' && result?.publiclyVisible !== false,
+  };
+}
+
 function isExpiredPlaceTokenError(error) {
   const code = String(error?.code || '');
   const message = String(error?.message || '').toLowerCase();
@@ -913,6 +926,27 @@ export function ContentPublishProvider({ children }) {
         durationMs: Date.now() - saveRequestStartedAt,
       });
 
+      result = normalizePublicationOutcome(result);
+      const completedContentType = current.contentType || 'recommendation';
+      if (result.publicationStatus === 'unknown') {
+        captureDiagnosticException(new Error('Publication completed without a visibility status.'), {
+          operation: 'content_publish_outcome',
+          code: 'publication_status_missing',
+          reason: 'publication_status_missing',
+          contentMode: current.payload?.locationMode,
+          contentType: completedContentType,
+          publicationStatus: 'unknown',
+        });
+      }
+      addDiagnosticBreadcrumb({
+        category: 'callable',
+        message: 'Content publication completed',
+        data: {
+          operation: 'content_publish_outcome',
+          outcome: result.publicationStatus,
+        },
+      });
+
       const completedAt = Date.now();
       await updateJob(jobId, (job) => ({
         ...job,
@@ -936,7 +970,10 @@ export function ContentPublishProvider({ children }) {
           code: String(error?.code || 'unknown'),
         });
       });
-      if (completedJob.contentType !== 'route' && result?.country?.id && result?.city?.id) {
+      if (result.publicationStatus === 'active'
+        && completedJob.contentType !== 'route'
+        && result?.country?.id
+        && result?.city?.id) {
         const name = result.city.name || result.city.id;
         const countryName = result.country.name || result.country.id;
         await rememberDiscoveryDestinations([{
@@ -996,6 +1033,7 @@ export function ContentPublishProvider({ children }) {
         captureDiagnosticException(diagnosticError, {
           operation: `publish_${current.contentType || 'recommendation'}_${failedStage}`,
           code: String(error?.code || 'unknown'),
+          contentType: current.contentType || 'recommendation',
           ...(error?.details?.reason ? { reason: String(error.details.reason) } : {}),
           ...(current.contentType !== 'route' && current.draft?.locationMode
             ? { contentMode: current.draft.locationMode }

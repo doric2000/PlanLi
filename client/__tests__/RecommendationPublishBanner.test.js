@@ -124,4 +124,31 @@ describe('RecommendationPublishBanner', () => {
     expect(screen.queryByText(/externalUrl/)).toBeNull();
     expect(screen.queryByTestId('publish-retry')).toBeNull();
   });
+
+  it('does not call held content published and explains where it can be found', () => {
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', contentType: 'recommendation', status: 'success', stage: 'success', progress: 1,
+        result: { publicationStatus: 'moderation_hold', publiclyVisible: false },
+      },
+    };
+    const screen = render(<RecommendationPublishBanner />);
+    expect(screen.getByText('ההמלצה נשלחה לבדיקה')).toBeTruthy();
+    expect(screen.getByText(/עדיין לא מוצג לציבור/)).toBeTruthy();
+    expect(screen.queryByText(/פורסמה בהצלחה/)).toBeNull();
+  });
+
+  it('does not guess public visibility when an older server omits the outcome', () => {
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', contentType: 'route', status: 'success', stage: 'success', progress: 1,
+        result: { routeId: 'route-1' },
+      },
+    };
+    const screen = render(<RecommendationPublishBanner />);
+    expect(screen.getByText('המסלול נשמר, סטטוס הפרסום בבדיקה')).toBeTruthy();
+    expect(screen.queryByText(/פורסם בהצלחה/)).toBeNull();
+  });
 });

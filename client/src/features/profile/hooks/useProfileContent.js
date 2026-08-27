@@ -19,6 +19,8 @@ export function useProfileContent({ uid, user, isOwnProfile = false }) {
   const cached = peekProfileResource(uid, isOwnProfile);
   const [recommendations, setRecommendations] = useState(cached?.recommendations || []);
   const [routes, setRoutes] = useState(cached?.routes || []);
+  const [pendingContent, setPendingContent] = useState(cached?.pendingContent || []);
+  const [pendingError, setPendingError] = useState(cached?.pendingError || null);
   const [loading, setLoading] = useState(Boolean(uid) && !cached);
   const [error, setError] = useState(null);
 
@@ -26,6 +28,8 @@ export function useProfileContent({ uid, user, isOwnProfile = false }) {
     const next = peekProfileResource(uid, isOwnProfile);
     setRecommendations(next?.recommendations || []);
     setRoutes(next?.routes || []);
+    setPendingContent(next?.pendingContent || []);
+    setPendingError(next?.pendingError || null);
     setLoading(Boolean(uid) && !next);
     setError(null);
   }, [uid, isOwnProfile]);
@@ -34,6 +38,8 @@ export function useProfileContent({ uid, user, isOwnProfile = false }) {
     if (!uid) {
       setRecommendations([]);
       setRoutes([]);
+      setPendingContent([]);
+      setPendingError(null);
       setLoading(false);
       return { requested: false, source: 'empty', promise: Promise.resolve() };
     }
@@ -43,6 +49,8 @@ export function useProfileContent({ uid, user, isOwnProfile = false }) {
     const promise = attempt.promise.then((resource) => {
         setRecommendations(resource.recommendations);
         setRoutes(resource.routes);
+        setPendingContent(resource.pendingContent || []);
+        setPendingError(resource.pendingError || null);
         setError(null);
         return resource;
       })
@@ -60,7 +68,7 @@ export function useProfileContent({ uid, user, isOwnProfile = false }) {
     });
   }, [refresh]);
 
-  return { recommendations, routes, loading, error, refresh };
+  return { recommendations, routes, pendingContent, pendingError, loading, error, refresh };
 }
 
 export default useProfileContent;
