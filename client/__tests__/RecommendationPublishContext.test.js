@@ -848,4 +848,90 @@ describe('publish status helpers', () => {
     expect(upgraded.reviewRequired).toBeUndefined();
     expect(upgraded.payload.recommendation.taxonomyVersion).toBe(5);
   });
+
+  it('repairs and requeues only a failed invalid-selection job with a bidi-contaminated URL', () => {
+    const repaired = upgradeRestoredPublishJob({
+      version: 3,
+      contentType: 'recommendation',
+      status: 'failed',
+      stage: 'failed',
+      attempts: 1,
+      error: { details: { reason: 'invalid_selection', retryable: false } },
+      payload: { recommendation: { taxonomyVersion: 999, budget: 'balanced' } },
+      draft: { details: { externalUrl: '\u200f https://example.com/place' } },
+    });
+    expect(repaired).toEqual(expect.objectContaining({
+      version: 4,
+      status: 'queued',
+      stage: 'queued',
+      attempts: 0,
+      error: null,
+      reviewRequired: false,
+    }));
+    expect(repaired.draft.details.externalUrl).toBe('https://example.com/place');
+
+    const unrelated = upgradeRestoredPublishJob({
+      version: 3,
+      contentType: 'recommendation',
+      status: 'failed',
+      stage: 'failed',
+      error: { details: { reason: 'invalid_selection', retryable: false } },
+      payload: { recommendation: { taxonomyVersion: 999, budget: 'balanced' } },
+      draft: { details: { externalUrl: 'not a link' } },
+    });
+    expect(unrelated.status).toBe('failed');
+    expect(unrelated.error.details.reason).toBe('invalid_selection');
+  });
+
+  it('automatically publishes a restored bidi-URL failure without re-uploading media', async () => {
+    const canonicalMedia = {
+      assetId: '123e4567-e89b-42d3-a456-426614174000',
+      large: { url: 'https://cdn/large.webp' },
+      feed: { url: 'https://cdn/feed.webp' },
+      thumb: { url: 'https://cdn/thumb.webp' },
+    };
+    mockLoadJobs.mockResolvedValue([{
+      version: 3,
+      id: 'rtl-url-job',
+      publishRequestId: '123e4567-e89b-42d3-a456-426614174099',
+      ownerUid: 'owner-1',
+      contentType: 'recommendation',
+      createdAt: 1,
+      updatedAt: 1,
+      status: 'failed',
+      stage: 'failed',
+      attempts: 1,
+      retryAt: 0,
+      progress: 0.9,
+      payload: {
+        draftId: 'recommendation-draft-1',
+        expectedVersion: 26,
+        recommendationDraftMediaSaved: true,
+        recommendationDraftIdSynced: true,
+      },
+      draft: {
+        details: { externalUrl: '\u200f https://example.com/place' },
+        media: [canonicalMedia],
+        localMediaCount: 0,
+      },
+      media: [{ id: 'media-1', type: 'remote', asset: canonicalMedia, progress: 1 }],
+      timings: { queuedAt: 1 },
+      error: {
+        code: 'functions/invalid-argument',
+        details: { reason: 'invalid_selection', retryable: false, publishStage: 'saving' },
+      },
+    }]);
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api.jobs[0]?.media[0]).toEqual(expect.objectContaining({
+      type: 'remote',
+      asset: canonicalMedia,
+      progress: 1,
+    })));
+    await waitFor(() => expect(mockPublishRecommendationDraft)
+      .toHaveBeenCalledWith('recommendation-draft-1', 26));
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    screen.unmount();
+  });
 });

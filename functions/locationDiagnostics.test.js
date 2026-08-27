@@ -6,6 +6,7 @@ const {
   createIncidentId,
   decorateLocationError,
   locationLog,
+  reasonForLocationError,
 } = require('./locationDiagnostics');
 
 test('location callable errors expose only a stable reason, incident ID and retry flag', () => {
@@ -44,6 +45,18 @@ test('callable domain reasons survive location decoration', () => {
     'publishRecommendationDraft'
   );
   assert.equal(decorated.details.reason, 'RECOMMENDATION_DRAFT_NOT_FOUND');
+  assert.equal(decorated.details.retryable, false);
+  assert.equal(reasonForLocationError(decorated), 'RECOMMENDATION_DRAFT_NOT_FOUND');
+});
+
+test('external URL validation remains distinct in logs and callable details', () => {
+  const source = new HttpsError('invalid-argument', 'externalUrl is invalid.', {
+    reason: 'invalid_external_url',
+    retryable: false,
+  });
+  assert.equal(reasonForLocationError(source), 'invalid_external_url');
+  const decorated = decorateLocationError(source, 'loc_1234567890ab', 'recommendation_save_failed');
+  assert.equal(decorated.details.reason, 'invalid_external_url');
   assert.equal(decorated.details.retryable, false);
 });
 

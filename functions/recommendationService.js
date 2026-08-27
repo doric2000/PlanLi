@@ -140,6 +140,21 @@ function cleanOptionalString(value, { field, max }) {
   return cleanString(value, { field, max });
 }
 
+const BIDI_FORMATTING_CHARACTERS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
+function normalizeExternalUrl(value) {
+  if (value == null || value === '') return '';
+  if (typeof value !== 'string') failInvalidExternalUrl();
+  return value.replace(BIDI_FORMATTING_CHARACTERS, '').trim();
+}
+
+function failInvalidExternalUrl() {
+  throw new HttpsError('invalid-argument', 'externalUrl is invalid.', {
+    reason: 'invalid_external_url',
+    retryable: false,
+  });
+}
+
 function cleanStringArray(value, { field, maxItems, maxLength }) {
   assert(Array.isArray(value), 'invalid-argument', `${field} must be an array.`);
   assert(value.length <= maxItems, 'invalid-argument', `${field} contains too many items.`);
@@ -255,7 +270,7 @@ function sanitizeRecommendationDetails(value, content) {
   const details = {
     contactName: cleanOptionalString(value.contactName, { field: 'contactName', max: 80 }),
     phone: cleanOptionalString(value.phone, { field: 'phone', max: 40 }),
-    externalUrl: cleanOptionalString(value.externalUrl, { field: 'externalUrl', max: 500 }),
+    externalUrl: cleanOptionalString(normalizeExternalUrl(value.externalUrl), { field: 'externalUrl', max: 500 }),
     priceNote: cleanOptionalString(value.priceNote, { field: 'priceNote', max: 120 }),
     accessibilityNote: cleanOptionalString(value.accessibilityNote, { field: 'accessibilityNote', max: 500 }),
     eventSchedule: cleanOptionalString(value.eventSchedule, { field: 'eventSchedule', max: 160 }),
@@ -269,10 +284,11 @@ function sanitizeRecommendationDetails(value, content) {
     try {
       parsed = new URL(details.externalUrl);
     } catch (_) {
-      assert(false, 'invalid-argument', 'externalUrl is invalid.');
+      failInvalidExternalUrl();
     }
-    assert(['http:', 'https:'].includes(parsed.protocol),
-      'invalid-argument', 'externalUrl is invalid.');
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
+      failInvalidExternalUrl();
+    }
   }
   assert(content.categoryId !== 'events' || details.eventSchedule,
     'invalid-argument', 'Event timing is required.');
@@ -2436,6 +2452,7 @@ module.exports = {
   saveRecommendation,
   stableDocumentId,
   normalizePublishRequestId,
+  normalizeExternalUrl,
   validateMediaAssets,
   destinationHebrewWritePatch,
   normalizeDestinationForUse,

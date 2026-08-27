@@ -4,6 +4,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const {
   isVerifiedCaller,
+  normalizeExternalUrl,
   normalizePublishRequestId,
   saveRecommendation,
 } = require('./recommendationService');
@@ -128,7 +129,11 @@ function cleanDetails(value) {
   assert(Object.keys(input).every((key) => Object.hasOwn(DETAIL_LIMITS, key)),
     'invalid-argument', 'RECOMMENDATION_DRAFT_INVALID', 'details are invalid.');
   return Object.fromEntries(Object.entries(DETAIL_LIMITS).map(([key, max]) => [
-    key, cleanString(input[key] || '', `details.${key}`, { max }),
+    key, cleanString(
+      key === 'externalUrl' ? normalizeExternalUrl(input[key]) : input[key] || '',
+      `details.${key}`,
+      { max }
+    ),
   ]).filter(([, entry]) => entry));
 }
 

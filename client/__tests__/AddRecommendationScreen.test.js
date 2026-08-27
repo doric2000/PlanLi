@@ -795,6 +795,13 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(getByTestId('recommendation-optional-phone'));
     expect(getByTestId('recommendation-optional-input-phone').props.maxLength).toBe(40);
     fireEvent.changeText(getByTestId('recommendation-optional-input-phone'), '+972 50 123 4567');
+    fireEvent.press(getByTestId('recommendation-optional-externalUrl'));
+    fireEvent.changeText(
+      getByTestId('recommendation-optional-input-externalUrl'),
+      '\u200f https://example.com/place'
+    );
+    expect(getByTestId('recommendation-optional-input-externalUrl').props.value)
+      .toBe('https://example.com/place');
     fireEvent.press(getByTestId('recommendation-next'));
 
     // ------------------------------------------------
@@ -820,7 +827,10 @@ describe('AddRecommendationScreen Integration Test', () => {
         categoryId: 'food',
         subcategoryIds: ['restaurant'],
         budget: 'balanced',
-        details: { phone: '+972 50 123 4567' },
+        details: {
+          phone: '+972 50 123 4567',
+          externalUrl: 'https://example.com/place',
+        },
       }),
     }));
 

@@ -42,6 +42,7 @@ import {
   spacing,
 } from '../../../styles';
 import { findMediaAssetByUrl, getMediaVariantUrl } from '../../../utils/mediaAssets';
+import { isValidExternalUrl, normalizeExternalUrl } from '../../../utils/externalUrl';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import {
   createTravelMediaDescriptor,
@@ -108,7 +109,12 @@ function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
 
 function cleanDetails(details) {
   return Object.fromEntries(Object.entries(details || {})
-    .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : ''])
+    .map(([key, value]) => [
+      key,
+      key === 'externalUrl'
+        ? normalizeExternalUrl(value)
+        : typeof value === 'string' ? value.trim() : '',
+    ])
     .filter(([, value]) => value));
 }
 
@@ -737,7 +743,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setTitle(editItem.title || '');
     setDescription(editItem.description || '');
     setBudget(editItem.budget || '');
-    setDetails(initialDetails);
+    setDetails(cleanDetails(initialDetails));
     setEventSchedule(initialSchedule);
     setSourceMedia(Array.isArray(editItem.media) ? editItem.media : []);
     setEditableMedia(imageUris.map((uri) => createTravelMediaDescriptor({
@@ -813,7 +819,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setTitle(draft.title || '');
     setDescription(draft.description || '');
     setBudget(draft.budget || '');
-    setDetails(draft.details || {});
+    setDetails(cleanDetails(draft.details));
     setEventSchedule(draft.eventSchedule || '');
     setEditableMedia(mediaItems);
     hydrateSelection({
@@ -1019,6 +1025,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       if (!title.trim()) return 'כדאי להוסיף שם קצר וברור.';
       if (!description.trim()) return 'כדאי לכתוב במשפט או שניים למה ההמלצה שווה.';
       if (!budget) return 'כדאי לבחור את רמת המחיר.';
+      if (!isValidExternalUrl(details.externalUrl)) {
+        return 'כדאי להזין קישור מלא שמתחיל ב־http:// או https://.';
+      }
       if (categoryId === 'events' && !eventSchedule.trim()) {
         return 'באירוע כדאי לציין מתי הוא מתקיים.';
       }
@@ -1462,7 +1471,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             <FocusClearingFormInput
               label={optionalField.label}
               value={details[optionalField.id] || ''}
-              onChangeText={(value) => setDetails((current) => ({ ...current, [optionalField.id]: value }))}
+              onChangeText={(value) => setDetails((current) => ({
+                ...current,
+                [optionalField.id]: optionalField.id === 'externalUrl'
+                  ? normalizeExternalUrl(value)
+                  : value,
+              }))}
               placeholder={optionalField.placeholder}
               keyboardType={optionalField.keyboardType}
               multiline={optionalField.multiline}
