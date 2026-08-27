@@ -335,7 +335,31 @@ test('publish payload distinguishes new and edit exact-location publication', ()
   });
   assert.equal(edit.recommendationId, 'rec-1');
   assert.deepEqual(edit.destinationRef, { countryId: 'HU', cityId: 'budapest' });
-  assert.equal(edit.placeId, undefined);
+  assert.equal(edit.placeId, 'place-1');
+});
+
+test('exact drafts retain the provider destination binding for delayed publication', () => {
+  const exactDraft = sanitizeRecommendationDraft(partialDraft({
+    locationMode: 'exact',
+    selectedCountry: { id: 'IL', name: 'ישראל' },
+    selectedCity: {
+      id: 'hod-hasharon', name: 'הוד השרון', googlePlaceId: 'google-hod-hasharon',
+    },
+    selectedPlace: {
+      placeId: 'google-hod-hasharon', resolvedPlaceToken: 'token-1', name: 'הוד השרון',
+    },
+  }));
+  const payload = publishData({
+    publishRequestId: '123e4567-e89b-42d3-a456-426614174003',
+  }, exactDraft);
+  assert.deepEqual(payload.destinationRef, {
+    countryId: 'IL',
+    cityId: 'hod-hasharon',
+    provider: 'google',
+    providerPlaceId: 'google-hod-hasharon',
+  });
+  assert.equal(payload.placeId, 'google-hod-hasharon');
+  assert.equal(payload.resolvedPlaceToken, 'token-1');
 });
 
 test('publish payload preserves verified provider destinations for destination and pin modes', () => {

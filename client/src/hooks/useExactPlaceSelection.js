@@ -19,9 +19,22 @@ const countryForValue = (value) =>
 
 const cityForValue = (value) =>
   value?.city?.id
-    ? value.city
+    ? {
+        ...value.city,
+        ...((value.city.googlePlaceId || value.city.providerPlaceId ||
+          value?.destination?.providerPlaceId || value?.destinationProviderPlaceId)
+          ? {
+              googlePlaceId: value.city.googlePlaceId || value.city.providerPlaceId ||
+                value?.destination?.providerPlaceId || value?.destinationProviderPlaceId,
+            }
+          : {}),
+      }
     : value?.cityId
-      ? { id: value.cityId, name: value.location || value.cityName || value.cityId }
+      ? {
+          id: value.cityId,
+          name: value.location || value.cityName || value.cityId,
+          googlePlaceId: value.destination?.providerPlaceId || value.destinationProviderPlaceId || null,
+        }
       : null;
 
 const destinationChoiceExpired = (error) => {
@@ -33,14 +46,45 @@ const destinationChoiceExpired = (error) => {
 
 export const buildExactPlaceValue = (country, city, place) => {
   if (!country?.id || !city?.id || !place?.placeId) return null;
+  const providerPlaceId = city.googlePlaceId || city.providerPlaceId || '';
   return {
     location: city.name || city.id,
     country: country.name || country.id,
     countryId: country.id,
     cityId: city.id,
+    destination: {
+      countryId: country.id,
+      cityId: city.id,
+      countryName: country.name || country.id,
+      cityName: city.name || city.id,
+      ...(providerPlaceId ? { provider: 'google', providerPlaceId } : {}),
+    },
     place,
   };
 };
+
+const durableProviderSelection = (selection) => {
+  const providerPlaceId = selection?.providerPlaceId || selection?.place_id || '';
+  if (!providerPlaceId) return selection;
+  return {
+    provider: 'google',
+    providerPlaceId,
+    place_id: providerPlaceId,
+    description: selection?.description || selection?.text || '',
+    types: Array.isArray(selection?.types) ? selection.types : [],
+  };
+};
+
+async function resolveSelectionWithExpiryRecovery(selection) {
+  try {
+    return await resolveDestinationForPlacePreview(selection);
+  } catch (error) {
+    if (!destinationChoiceExpired(error)) throw error;
+    const durableSelection = durableProviderSelection(selection);
+    if (durableSelection === selection) throw error;
+    return resolveDestinationForPlacePreview(durableSelection);
+  }
+}
 
 export default function useExactPlaceSelection({ value = null, onChange, locale = 'he' } = {}) {
   const [locationQuery, setLocationQuery] = useState(() => queryForValue(value));
@@ -105,11 +149,11 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
     setLocationResolveError(null);
     setLocationResolveRetryable(false);
     try {
-      const result = await resolveDestinationForPlacePreview(selection);
+      const result = await resolveSelectionWithExpiryRecovery(selection);
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
       if (result?.status === 'destination_choice_required') {
         setDestinationChoice(result);
-        setPendingLocation(null);
+        setPendingLocation(result.place ? { place: result.place } : null);
         return null;
       }
       const nextValue = buildExactPlaceValue(
@@ -184,7 +228,7 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
         if (!destinationChoiceExpired(error) || !lastSelection) throw error;
         const selectedAlternative = (destinationChoice.alternatives || [])
           .find((alternative) => alternative.destinationChoiceId === destinationChoiceId);
-        const refreshed = await resolveDestinationForPlacePreview(lastSelection);
+        const refreshed = await resolveSelectionWithExpiryRecovery(lastSelection);
         if (refreshed?.status === 'resolved') {
           result = refreshed;
         } else {
@@ -245,7 +289,7 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
         });
       } catch (error) {
         if (!destinationChoiceExpired(error) || !lastSelection) throw error;
-        const refreshed = await resolveDestinationForPlacePreview(lastSelection);
+        const refreshed = await resolveSelectionWithExpiryRecovery(lastSelection);
         if (refreshed?.status === 'resolved') {
           result = refreshed;
         } else if (refreshed?.status === 'destination_choice_required') {

@@ -305,8 +305,16 @@ exports.getCurrentRecommendationDraft = callable(
 );
 
 exports.saveRecommendationDraft = callable(
-  { access: 'active', timeoutSeconds: 60, memory: '512MiB' },
-  (request) => saveRecommendationDraft({ admin, auth: request.auth, data: request.data })
+  {
+    access: 'active', timeoutSeconds: 60, memory: '512MiB',
+    secrets: [publicRateLimitKey],
+  },
+  (request) => saveRecommendationDraft({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    providerRateLimitKey: publicRateLimitKey.value(),
+  })
 );
 
 exports.discardRecommendationDraft = callable(
@@ -468,8 +476,16 @@ exports.getCurrentRouteDraft = callable(
 );
 
 exports.saveRouteDraft = callable(
-  { access: 'active', timeoutSeconds: 60, memory: '512MiB' },
-  (request) => saveRouteDraft({ admin, auth: request.auth, data: request.data })
+  {
+    access: 'active', timeoutSeconds: 60, memory: '512MiB',
+    secrets: [publicRateLimitKey],
+  },
+  (request) => saveRouteDraft({
+    admin,
+    auth: request.auth,
+    data: request.data,
+    providerRateLimitKey: publicRateLimitKey.value(),
+  })
 );
 
 exports.discardRouteDraft = callable(

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  attachServerLocationBindings,
   assertEditableSource,
   cleanupPublishedRouteDraftReceipts,
   discardRouteDraft,
@@ -10,6 +11,8 @@ const {
   publishableRoute,
   sanitizeRouteDraft,
   saveRouteDraft,
+  stripServerLocationBindings,
+  trustedPlacesFromDraft,
 } = require('./routeDraftService');
 
 const auth = {
@@ -182,6 +185,60 @@ test('route drafts preserve the request to reuse a server-verified saved locatio
   }));
   assert.equal(draft.days[0].stops[0].reuseSavedLocation, true);
   assert.equal(publishableRoute(draft).days[0].stops[0].reuseSavedLocation, true);
+});
+
+test('private PlanLi location bindings survive draft versions but never reach client or publish payloads', () => {
+  const sanitized = sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: [{
+      id: 'planli-stop', title: 'קפה', locationPrecision: 'exact',
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      place: { placeId: 'cafe-1', coordinates: { lat: 32.15, lng: 34.88 } },
+      source: { recommendationId: 'recommendation-1' },
+      serverLocationBinding: { schemaVersion: 1, place: { placeId: 'attacker' } },
+    }] }],
+  }));
+  assert.equal(sanitized.days[0].stops[0].serverLocationBinding, undefined);
+
+  const trustedRecommendations = new Map([['recommendation-1', {
+    categoryId: 'food', subcategoryIds: ['cafe'],
+    location: {
+      mode: 'exact',
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      place: {
+        placeId: 'cafe-1', name: 'קפה מאומת',
+        coordinates: { lat: 32.15, lng: 34.88 },
+      },
+    },
+  }]]);
+  const bound = attachServerLocationBindings(sanitized, trustedRecommendations);
+  const binding = bound.days[0].stops[0].serverLocationBinding;
+  assert.equal(binding.sourceRecommendationId, 'recommendation-1');
+  assert.equal(binding.place.name, 'קפה מאומת');
+
+  const carried = attachServerLocationBindings(sanitized, new Map(), bound);
+  assert.deepEqual(carried.days[0].stops[0].serverLocationBinding, binding);
+  assert.equal(stripServerLocationBindings(carried).days[0].stops[0].serverLocationBinding, undefined);
+  assert.equal(publishableRoute(carried).days[0].stops[0].serverLocationBinding, undefined);
+  assert.deepEqual(trustedPlacesFromDraft(carried).get('cafe-1'), {
+    destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+    place: binding.place,
+  });
+
+  const changed = sanitizeRouteDraft(partialDraft({
+    dayCount: 1,
+    days: [{ stops: [{
+      id: 'planli-stop', title: 'מקום אחר', locationPrecision: 'exact',
+      destination: { countryId: 'IL', cityId: 'hod-hasharon' },
+      place: { placeId: 'other-place', coordinates: { lat: 32.16, lng: 34.89 } },
+      source: { recommendationId: 'recommendation-1' },
+    }] }],
+  }));
+  assert.equal(
+    attachServerLocationBindings(changed, new Map(), bound)
+      .days[0].stops[0].serverLocationBinding,
+    undefined
+  );
 });
 
 test('publish payload keeps one route schema and whole-route pricing', () => {

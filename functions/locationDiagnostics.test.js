@@ -9,7 +9,7 @@ const {
   reasonForLocationError,
 } = require('./locationDiagnostics');
 
-test('location callable errors expose only a stable reason, incident ID and retry flag', () => {
+test('location callable errors expose a stable recovery contract', () => {
   const incidentId = createIncidentId('loc_1234567890ab');
   const decorated = decorateLocationError(
     new HttpsError('deadline-exceeded', 'Google Places took too long to respond.'),
@@ -22,6 +22,8 @@ test('location callable errors expose only a stable reason, incident ID and retr
     reason: 'provider_timeout',
     incidentId,
     retryable: true,
+    stage: 'selection',
+    recoveryAction: 'retry',
   });
 });
 
@@ -73,6 +75,7 @@ test('daily quota and provider request ceilings are non-retryable', () => {
   );
   assert.deepEqual(daily.details, {
     reason: 'daily_limit_reached', incidentId: 'loc_1234567890ab', retryable: false,
+    stage: 'selection', recoveryAction: 'contact_support',
   });
   assert.equal(ceiling.details.reason, 'provider_call_limit_reached');
   assert.equal(ceiling.details.retryable, false);

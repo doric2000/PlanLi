@@ -305,6 +305,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const {
     chooseAnotherLocation,
     chooseDestination,
+    chooseFallbackDestination,
     confirmPendingLocation,
     destinationChoice,
     googleSearchFn,
@@ -1221,6 +1222,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               resolving={resolvingLocation}
               resolvingPreview={resolvingPreview}
               onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
+              onChooseFallbackDestination={chooseFallbackDestination}
               onConfirm={confirmExactLocationAndAdvance}
               onChooseAnother={chooseAnotherLocation}
             />

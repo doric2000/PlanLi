@@ -106,6 +106,16 @@ function placeFingerprint(place) {
   return `${placeId}|${name}|${lat}|${lng}`;
 }
 
+function exactDestinationRef(selectedCountry, selectedCity) {
+  if (!selectedCountry?.id || !selectedCity?.id) return null;
+  const providerPlaceId = selectedCity.providerPlaceId || selectedCity.googlePlaceId || '';
+  return {
+    countryId: selectedCountry.id,
+    cityId: selectedCity.id,
+    ...(providerPlaceId ? { provider: 'google', providerPlaceId } : {}),
+  };
+}
+
 function resolveCategoryIdFromEditItem(editItem) {
   if (!editItem) return '';
   const fromId = typeof editItem.categoryId === 'string' ? editItem.categoryId.trim() : '';
@@ -297,6 +307,7 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
   // --- Exact Google place handling ---
   const {
     chooseDestination,
+    chooseFallbackDestination,
     chooseAnotherLocation,
     confirmPendingLocation,
     googleSearchFn,
@@ -765,14 +776,19 @@ const handleSubmit = async () => {
         if (typeof enqueueCreate !== 'function') {
           throw new Error('Recommendation publishing is not available.');
         }
+        const exactDestination = exactDestinationRef(selectedCountry, selectedCity);
         const destinationPayload = selectedPlace?.resolvedPlaceToken
           ? {
               resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
               ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
               ...(selectedPlace.incidentId ? { incidentId: selectedPlace.incidentId } : {}),
+              ...(exactDestination ? { destinationRef: exactDestination } : {}),
             }
           : selectedPlace?.placeId
-          ? { placeId: selectedPlace.placeId }
+          ? {
+              placeId: selectedPlace.placeId,
+              ...(exactDestination ? { destinationRef: exactDestination } : {}),
+            }
           : {
               destinationRef: {
                 countryId: selectedCountry.id,
@@ -785,6 +801,7 @@ const handleSubmit = async () => {
           sourceJobId: publishJobId,
           payload: {
             ...destinationPayload,
+            locationMode: 'exact',
             recommendation: {
               taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
               title,
@@ -852,11 +869,13 @@ const handleSubmit = async () => {
         if (!item.asset && !isRemote(travelMediaUri(item))) return uploadedQueue.shift();
         return item.asset || findMediaAssetByUrl(editItem?.media, travelMediaUri(item));
       }).filter(Boolean);
+      const exactDestination = exactDestinationRef(selectedCountry, selectedCity);
       const destinationPayload = selectedPlace?.resolvedPlaceToken
         ? {
             resolvedPlaceToken: selectedPlace.resolvedPlaceToken,
             ...(selectedPlace.placeId ? { placeId: selectedPlace.placeId } : {}),
             ...(selectedPlace.incidentId ? { incidentId: selectedPlace.incidentId } : {}),
+            ...(exactDestination ? { destinationRef: exactDestination } : {}),
           }
         : isEdit && selectedCountry?.id && selectedCity?.id
         ? {
@@ -868,6 +887,7 @@ const handleSubmit = async () => {
         : selectedPlace?.placeId
         ? {
             placeId: selectedPlace.placeId,
+            ...(exactDestination ? { destinationRef: exactDestination } : {}),
           }
         : {
             destinationRef: {
@@ -878,6 +898,7 @@ const handleSubmit = async () => {
       const callablePayload = {
         recommendationId: editPostId,
         ...destinationPayload,
+        locationMode: 'exact',
         recommendation: {
           taxonomyVersion: TRAVEL_TAXONOMY_VERSION,
           title,
@@ -991,6 +1012,7 @@ const handleSubmit = async () => {
             resolving={resolvingLocation}
             resolvingPreview={resolvingPreview}
             onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
+            onChooseFallbackDestination={chooseFallbackDestination}
             onConfirm={confirmPendingLocation}
             onChooseAnother={chooseAnotherLocation}
           />

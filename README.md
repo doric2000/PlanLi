@@ -577,6 +577,12 @@ feature branch from silently replacing previously deployed JavaScript. Publish
 only JavaScript, styling, and bundled-asset changes that are compatible with the
 installed native runtime:
 
+On the Windows release workstation, use the globally installed `eas` CLI and
+verify it with `eas --version` and `eas whoami`. Do not fall back to the cached
+`npx eas-cli@latest` package when it fails with a missing-module error; the npm
+cache can contain an incomplete EAS installation even while the global CLI is
+healthy.
+
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi
 npm run preflight:eas-production

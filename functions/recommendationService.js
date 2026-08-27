@@ -63,7 +63,6 @@ const { buildMapLocation, normalizeMapCoordinates } = require('./mapLocation');
 const { consumeProviderBudget } = require('./providerRateLimitService');
 const {
   exactPlaceGoogleCacheFor,
-  isAreaDestination,
 } = require('./legacyPlacesAdapter');
 const {
   fetchBilingualPlace,
@@ -78,6 +77,15 @@ const {
   candidateMatchesLocality,
   destinationClaimId,
 } = require('./destinationV3Service');
+
+const DIRECT_DESTINATION_TYPES = new Set([
+  'locality',
+  'postal_town',
+  'island',
+  'administrative_area_level_3',
+  'administrative_area_level_2',
+  'administrative_area_level_1',
+]);
 const {
   readResolvedPlaceToken,
   storeResolvedPlaceDestination,
@@ -920,28 +928,53 @@ function destinationUnavailable(message) {
 }
 
 async function resolveExistingDestination(db, destinationRef) {
-  const { countryId, cityId } = cleanRecommendationDestinationRef(destinationRef);
-  const countryRef = db.doc(`countries/${countryId}`);
-  const cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
-  const [countrySnap, citySnap] = await Promise.all([
-    countryRef.get(),
-    cityRef.get(),
-  ]);
-  if (!countrySnap.exists || !citySnap.exists) destinationUnavailable('Destination does not exist.');
-  if (countrySnap.data()?.status !== 'active' || !destinationAcceptsNewReferences(citySnap.data())) {
-    destinationUnavailable('Destination is not active.');
+  let { countryId, cityId } = cleanRecommendationDestinationRef(destinationRef);
+  const visited = new Set();
+  for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
+    const destinationKey = `${countryId}/${cityId}`;
+    if (visited.has(destinationKey)) destinationUnavailable('Destination merge cycle detected.');
+    visited.add(destinationKey);
+    const countryRef = db.doc(`countries/${countryId}`);
+    const cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
+    const [countrySnap, citySnap] = await Promise.all([
+      countryRef.get(),
+      cityRef.get(),
+    ]);
+    if (!citySnap.exists) destinationUnavailable('Destination does not exist.');
+    const cityData = citySnap.data() || {};
+    if (isDestinationReassigning(cityData)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The destination is being reassigned. Try again shortly.',
+        { reason: 'destination_reassignment_in_progress', retryable: true }
+      );
+    }
+    if (destinationAcceptsNewReferences(cityData)) {
+      if (!countrySnap.exists || countrySnap.data()?.status !== 'active') {
+        destinationUnavailable('Destination is not active.');
+      }
+      return normalizeDestinationForUse({
+        countryRef,
+        cityRef,
+        countryId,
+        cityId,
+        countryData: countrySnap.data(),
+        cityData,
+        createCountry: false,
+        createCity: false,
+        place: null,
+        resolutionSource: visited.size > 1 ? 'merged_destination_redirect' : 'existing_destination',
+      }, countrySnap.data()?.code || countryId);
+    }
+    const mergedCountryId = String(cityData.mergedInto?.countryId || '').trim();
+    const mergedCityId = String(cityData.mergedInto?.cityId || '').trim();
+    if (!mergedCountryId || !mergedCityId) destinationUnavailable('Destination is not active.');
+    ({ countryId, cityId } = cleanRecommendationDestinationRef({
+      countryId: mergedCountryId,
+      cityId: mergedCityId,
+    }));
   }
-  return normalizeDestinationForUse({
-    countryRef,
-    cityRef,
-    countryId,
-    cityId,
-    countryData: countrySnap.data(),
-    cityData: citySnap.data(),
-    createCountry: false,
-    createCity: false,
-    place: null,
-  }, countrySnap.data()?.code || countryId);
+  destinationUnavailable('Destination merge chain is too long.');
 }
 
 async function resolveRecommendationDestinationRef({
@@ -970,13 +1003,80 @@ async function resolveRecommendationDestinationRef({
     placesProvider,
     restCountriesKey,
     providerRateLimitKey,
+    selectionIntent: 'destination',
   });
+  let expectedCountryId = cleaned.countryId;
+  let expectedCityId = cleaned.cityId;
+  if (destination.countryId !== expectedCountryId || destination.cityId !== expectedCityId) {
+    try {
+      const redirected = await resolveExisting(admin.firestore(), cleaned);
+      expectedCountryId = redirected.countryId;
+      expectedCityId = redirected.cityId;
+    } catch (error) {
+      if (error?.details?.retryable === true) throw error;
+      // The provider identity assertion below remains authoritative for a
+      // destination that never existed in the catalog.
+    }
+  }
   assert(
-    destination.countryId === cleaned.countryId && destination.cityId === cleaned.cityId,
+    destination.countryId === expectedCountryId && destination.cityId === expectedCityId,
     'failed-precondition',
     'The provider destination does not match the selected destination. Search again.'
   );
   return destination;
+}
+
+async function resolveUnchangedExactRecommendation({
+  db,
+  locationMode,
+  placeId,
+  destinationRef,
+  previousData,
+  resolveExisting = resolveExistingDestination,
+}) {
+  const previousPlaceId = String(previousData?.place?.placeId || '').trim();
+  const submittedPlaceId = String(placeId || '').trim();
+  const previousDestination = previousData?.destination;
+  if (
+    locationMode !== 'exact' ||
+    !submittedPlaceId ||
+    submittedPlaceId !== previousPlaceId ||
+    !previousDestination?.countryId ||
+    !previousDestination?.cityId ||
+    !destinationRef?.countryId ||
+    !destinationRef?.cityId
+  ) {
+    return null;
+  }
+
+  const resolveCanonical = async (value) => {
+    try {
+      return await resolveExisting(db, {
+        countryId: value.countryId,
+        cityId: value.cityId,
+      });
+    } catch (error) {
+      if (error?.details?.retryable === true) throw error;
+      return null;
+    }
+  };
+  const [submittedDestination, previousCanonicalDestination] = await Promise.all([
+    resolveCanonical(destinationRef),
+    resolveCanonical(previousDestination),
+  ]);
+  if (
+    !submittedDestination ||
+    !previousCanonicalDestination ||
+    submittedDestination.countryId !== previousCanonicalDestination.countryId ||
+    submittedDestination.cityId !== previousCanonicalDestination.cityId
+  ) {
+    return null;
+  }
+  return {
+    ...submittedDestination,
+    place: previousData.place,
+    resolutionSource: 'existing_recommendation_location',
+  };
 }
 
 function destinationContainsCoordinates(destination, coordinates) {
@@ -994,6 +1094,38 @@ function destinationContainsCoordinates(destination, coordinates) {
     ? lng >= west && lng <= east
     : lng >= west || lng <= east;
   return insideLatitude && insideLongitude;
+}
+
+function destinationHasGeometry(destination) {
+  const viewport = destination?.googleCache?.viewport ||
+    destination?.identity?.viewport || destination?.viewport;
+  const coordinates = destination?.googleCache?.coordinates ||
+    destination?.identity?.coordinates || destination?.coordinates;
+  return Boolean(normalizeMapCoordinates(coordinates)) || Boolean(
+    viewport?.southwest && viewport?.northeast
+  );
+}
+
+function assertPlaceMatchesDestinationGeometry(destination, place) {
+  const coordinates = normalizeMapCoordinates(place?.coordinates);
+  assert(coordinates, 'failed-precondition', 'The selected place has no valid coordinates. Search again.');
+  if (!destinationHasGeometry(destination?.cityData)) return;
+  const cityCoordinates = normalizeMapCoordinates(
+    destination?.cityData?.googleCache?.coordinates ||
+    destination?.cityData?.identity?.coordinates ||
+    destination?.cityData?.coordinates
+  );
+  const insideViewport = destinationContainsCoordinates(destination?.cityData, coordinates);
+  const nearDestination = cityCoordinates
+    ? distanceKm(cityCoordinates, coordinates) <= 100
+    : false;
+  if (!insideViewport && !nearDestination) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Choose a destination that contains the selected place.',
+      { reason: 'destination_outside_bounds', retryable: false }
+    );
+  }
 }
 
 function manualPlaceForDestination(value, destination) {
@@ -1210,11 +1342,13 @@ async function resolveGoogleDestination({
   });
   const parsed = parseResolvedBilingualPlace(bilingual);
   const selectedEn = bilingual.en || {};
-  const selectedIsDestination = isAreaDestination(selectedEn) ||
-    (selectedEn.types || []).some((type) => [
-      'locality', 'postal_town', 'administrative_area_level_3',
-      'administrative_area_level_2', 'administrative_area_level_1',
-    ].includes(type));
+  // Only promote the Google entity the user selected directly. A venue's
+  // locality/address components still go through the reviewed registry and
+  // must never create raw destinations such as Rivas or Kannan Devan Hills.
+  // `natural_feature` is intentionally excluded: it can be a single lake,
+  // mountain or attraction rather than a traveler-facing destination.
+  const selectedIsDestination = (selectedEn.types || [])
+    .some((type) => DIRECT_DESTINATION_TYPES.has(type));
   const selectedCoordinates = selectedEn.coordinates || bilingual.he?.coordinates;
   const preliminaryCountry = await resolvePlaceCountry({
     parsedPlace: parsed,
@@ -1230,11 +1364,13 @@ async function resolveGoogleDestination({
       ...(selectedIsDestination ? [selectedEn.displayName] : []),
       selectedEn.localityName,
       ...localityNamesForPlace(selectedEn),
-      ...(selectedEn.addressDescriptorCandidates || []).map((entry) => entry.name),
+      ...(preliminaryCountry.countryCode === 'IN'
+        ? (selectedEn.addressDescriptorCandidates || []).map((entry) => entry.name)
+        : []),
     ],
     coordinates: selectedCoordinates,
   });
-  if (!canonicalMatch && selectionIntent !== 'destination' &&
+  if (!canonicalMatch && !selectedIsDestination && selectionIntent !== 'destination' &&
       placesProvider === 'new' && parsed.placeId) {
     let proAllowed = false;
     try {
@@ -1284,7 +1420,9 @@ async function resolveGoogleDestination({
   }
   let canonicalEntry = canonicalMatch?.entry || null;
   let provisionalDestination = false;
-  if (!canonicalEntry && selectionIntent === 'destination') {
+  const directlySelectedDestination = selectedIsDestination &&
+    (selectionIntent === 'destination' || selectionIntent === 'exact_place');
+  if (!canonicalEntry && directlySelectedDestination) {
     assert(selectedIsDestination, 'invalid-argument',
       'Choose a city, island, province, or tourism region as the destination.');
     const englishName = String(selectedEn.displayName || selectedEn.localityName || '').trim();
@@ -1296,10 +1434,25 @@ async function resolveGoogleDestination({
       assert(hasHebrewName(confirmedName), 'invalid-argument',
         'The confirmed destination name must contain Hebrew.');
     }
-    const suggestedHebrewName = hasHebrewName(googleHebrewName)
+    const hasReliableGoogleHebrewName = hasHebrewName(googleHebrewName);
+    const suggestedHebrewName = hasReliableGoogleHebrewName
       ? googleHebrewName
       : transliterateDestinationName(englishName);
-    if (!confirmedName) {
+    if (!confirmedName && !hasReliableGoogleHebrewName) {
+      // Exact-place selection has no inline naming editor. Keep the exact
+      // place preview and route the user through the shared destination
+      // picker, where naming is supported, instead of accepting a generated
+      // transliteration as public truth.
+      if (selectionIntent !== 'destination') {
+        const selectionError = new HttpsError(
+          'failed-precondition',
+          'This destination needs a verified Hebrew name. Please choose it as a destination.'
+        );
+        selectionError.destinationSelectionRequired = true;
+        selectionError.destinationCountryCode = preliminaryCountry.countryCode;
+        selectionError.providerCallCount = requestContext.count;
+        throw selectionError;
+      }
       return {
         requiresNameConfirmation: true,
         status: 'destination_name_confirmation_required',
@@ -1316,7 +1469,7 @@ async function resolveGoogleDestination({
         providerCallCount: requestContext.count,
       };
     }
-    const reliableHebrewName = confirmedName;
+    const reliableHebrewName = confirmedName || googleHebrewName;
     provisionalDestination = true;
     canonicalEntry = {
       id: provisionalRegistryId(preliminaryCountry.countryCode, parsed.placeId),
@@ -1740,6 +1893,7 @@ async function createDestinationChoiceResolution({
   destinationCountryCode,
   providerCallCount,
   allowDestinationSearch = false,
+  place = null,
 }) {
   const resolutionId = `dcr_${crypto.randomBytes(18).toString('base64url')}`;
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -1784,6 +1938,7 @@ async function createDestinationChoiceResolution({
     allowDestinationSearch: allowDestinationSearch === true,
     providerCallCount,
     destinationCountryCode: expectedCountryCode,
+    ...(place ? { place } : {}),
   };
 }
 
@@ -1854,12 +2009,14 @@ async function finalizeDestinationChoice({
     'failed-precondition', 'The destination country could not be verified. Search again.');
   assert(selectedCountryCode === expectedCountryCode, 'failed-precondition',
     'Choose a destination in the same country as the selected place.');
+  const exactPlace = exactPlaceFromBilingual(
+    exactResolvedPlace,
+    exactResolvedPlace.fetchedAt instanceof Date ? exactResolvedPlace.fetchedAt : new Date()
+  );
+  assertPlaceMatchesDestinationGeometry(destination, exactPlace);
   const combinedDestination = {
     ...destination,
-    place: exactPlaceFromBilingual(
-      exactResolvedPlace,
-      exactResolvedPlace.fetchedAt instanceof Date ? exactResolvedPlace.fetchedAt : new Date()
-    ),
+    place: exactPlace,
   };
   const combinedResolution = serializeDestinationResolution(combinedDestination);
   await storeResolvedPlaceDestination({
@@ -1905,6 +2062,22 @@ async function materializeDestinationResolution(db, stored) {
   const countryData = countrySnapshot.exists ? countrySnapshot.data() : stored.countryData;
   const cityData = citySnapshot.exists ? citySnapshot.data() : stored.cityData;
   assert(countryData && cityData, 'failed-precondition', 'The resolved destination is invalid. Search again.');
+  if (citySnapshot.exists && isDestinationReassigning(cityData)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The destination is being reassigned. Try again shortly.',
+      { reason: 'destination_reassignment_in_progress', retryable: true }
+    );
+  }
+  if (citySnapshot.exists && !destinationAcceptsNewReferences(cityData) &&
+      cityData.mergedInto?.countryId && cityData.mergedInto?.cityId) {
+    const redirected = await resolveExistingDestination(db, cityData.mergedInto);
+    return {
+      ...redirected,
+      place: stored.place || null,
+      resolutionSource: 'merged_destination_redirect',
+    };
+  }
   assert(!countrySnapshot.exists || countryData.status === 'active', 'failed-precondition', 'The matching country is not active.');
   assert(!citySnapshot.exists || destinationAcceptsNewReferences(cityData), 'failed-precondition',
     'The matching destination is not available for new content.');
@@ -2059,6 +2232,144 @@ async function resolveSubmittedPlaceDestination({
   };
 }
 
+async function resolveExactPlaceWithDestination({
+  admin,
+  auth,
+  placeId,
+  resolvedPlaceToken,
+  destinationRef,
+  mapsKey,
+  newPlacesKey,
+  placesProvider = 'legacy',
+  restCountriesKey,
+  providerRateLimitKey,
+  providerBudgetConsumed = false,
+  incidentId,
+}) {
+  const cleanedDestinationRef = cleanRecommendationDestinationRef(destinationRef);
+  const effectiveIncidentId = createIncidentId(incidentId);
+  let resolvedPlace = null;
+  let tokenIsUsable = false;
+  if (resolvedPlaceToken) {
+    try {
+      resolvedPlace = await readResolvedPlaceToken({
+        admin,
+        auth,
+        resolvedPlaceToken,
+        providerRateLimitKey,
+      });
+      tokenIsUsable = true;
+    } catch (error) {
+      if (!placeId || !isExpiredResolvedPlaceError(error)) throw error;
+      locationLog('destination', {
+        incidentId: effectiveIncidentId,
+        outcome: 'fallback',
+        durationMs: 0,
+        reason: 'selection_expired',
+        fallbackPath: 'explicit_destination_binding',
+      });
+    }
+  }
+
+  let destination;
+  if (resolvedPlace?.destinationResolution) {
+    destination = await materializeDestinationResolution(
+      admin.firestore(), resolvedPlace.destinationResolution
+    );
+    let expectedCountryId = cleanedDestinationRef.countryId;
+    let expectedCityId = cleanedDestinationRef.cityId;
+    if (destination.countryId !== expectedCountryId || destination.cityId !== expectedCityId) {
+      const redirected = await resolveExistingDestination(
+        admin.firestore(), cleanedDestinationRef
+      );
+      expectedCountryId = redirected.countryId;
+      expectedCityId = redirected.cityId;
+    }
+    assert(
+      destination.countryId === expectedCountryId &&
+        destination.cityId === expectedCityId,
+      'failed-precondition',
+      'The verified destination does not match the selected destination. Search again.'
+    );
+  } else {
+    destination = await resolveRecommendationDestinationRef({
+      admin,
+      auth,
+      destinationRef: cleanedDestinationRef,
+      mapsKey,
+      newPlacesKey,
+      placesProvider,
+      restCountriesKey,
+      providerRateLimitKey,
+    });
+  }
+
+  const requestContext = providerRequestContext({
+    count: Number(resolvedPlace?.providerCallCount || destination?.providerCallCount || 0),
+    incidentId: effectiveIncidentId,
+  });
+  if (!resolvedPlace) {
+    assert(placeId, 'invalid-argument', 'An exact place is required.');
+    if (!providerBudgetConsumed) {
+      await consumeProviderBudget({
+        admin,
+        auth,
+        action: 'fullResolution',
+        key: providerRateLimitKey,
+      });
+    }
+    resolvedPlace = await fetchBilingualPlace({
+      provider: placesProvider,
+      placeId,
+      mapsKey,
+      newPlacesKey,
+      requestContext,
+    });
+  }
+
+  const parsedPlace = parseResolvedBilingualPlace(resolvedPlace);
+  const resolvedCountry = await resolvePlaceCountry({
+    parsedPlace,
+    parsedCity: parsedPlace,
+    mapsKey,
+    requestContext,
+  });
+  const destinationCountryCode = String(
+    destination.countryData?.code || destination.countryId || ''
+  ).trim().toUpperCase();
+  if (resolvedCountry.countryCode !== destinationCountryCode) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Choose a destination in the same country as the selected place.',
+      { reason: 'country_mismatch', retryable: false }
+    );
+  }
+  const exactPlace = exactPlaceFromBilingual(
+    resolvedPlace,
+    resolvedPlace.fetchedAt instanceof Date ? resolvedPlace.fetchedAt : new Date()
+  );
+  assert(!placeId || exactPlace.placeId === placeId,
+    'failed-precondition', 'The verified place does not match the selected place. Search again.');
+  assertPlaceMatchesDestinationGeometry(destination, exactPlace);
+  const combinedDestination = {
+    ...destination,
+    place: exactPlace,
+    incidentId: effectiveIncidentId,
+    providerCallCount: requestContext.count,
+  };
+  if (tokenIsUsable) {
+    await storeResolvedPlaceDestination({
+      admin,
+      auth,
+      resolvedPlaceToken,
+      destinationResolution: serializeDestinationResolution(combinedDestination),
+      providerRateLimitKey,
+      providerCallCount: requestContext.count,
+    });
+  }
+  return combinedDestination;
+}
+
 async function resolveRecommendationDestinationInternal({
   admin,
   auth,
@@ -2110,6 +2421,12 @@ async function resolveRecommendationDestinationInternal({
       ((error?.destinationSelectionRequired === true && data?.supportsDestinationSearch === true) ||
         (Array.isArray(error?.destinationChoices) && error.destinationChoices.length > 1))
     ) {
+      const selectedPlace = await readResolvedPlaceToken({
+        admin,
+        auth,
+        resolvedPlaceToken: data.resolvedPlaceToken,
+        providerRateLimitKey,
+      });
       return createDestinationChoiceResolution({
         admin,
         auth,
@@ -2119,6 +2436,10 @@ async function resolveRecommendationDestinationInternal({
         destinationCountryCode: error.destinationCountryCode,
         providerCallCount: Number(error.providerCallCount || 0),
         allowDestinationSearch: true,
+        place: exactPlaceFromBilingual(
+          selectedPlace,
+          selectedPlace.fetchedAt instanceof Date ? selectedPlace.fetchedAt : new Date()
+        ),
       });
     }
     throw error;
@@ -2167,6 +2488,8 @@ async function saveRecommendation({
   mediaBucket,
   providerRateLimitKey,
   resolveDestinationRef = resolveRecommendationDestinationRef,
+  resolveExactPlace = resolveExactPlaceWithDestination,
+  resolveExistingForEdit = resolveExistingDestination,
 }) {
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -2302,20 +2625,46 @@ async function saveRecommendation({
     'invalid-argument', 'locationMode is required.');
   let destination;
   if (data?.destinationRef) {
-    destination = await resolveDestinationRef({
-      admin,
-      auth,
-      destinationRef: data.destinationRef,
-      mapsKey,
-      newPlacesKey,
-      placesProvider,
-      restCountriesKey,
-      providerRateLimitKey,
-    });
+    const trustedExactEdit = recommendationId
+      ? await resolveUnchangedExactRecommendation({
+          db,
+          locationMode,
+          placeId: data?.placeId,
+          destinationRef: data.destinationRef,
+          previousData,
+          resolveExisting: resolveExistingForEdit,
+        })
+      : null;
+    const hasSubmittedExactPlace = locationMode === 'exact' &&
+      Boolean(data?.resolvedPlaceToken || data?.placeId);
+    destination = trustedExactEdit || (hasSubmittedExactPlace
+      ? await resolveExactPlace({
+          admin,
+          auth,
+          placeId: data?.placeId,
+          resolvedPlaceToken: data?.resolvedPlaceToken,
+          destinationRef: data.destinationRef,
+          mapsKey,
+          newPlacesKey,
+          placesProvider,
+          restCountriesKey,
+          providerRateLimitKey,
+          incidentId: data?.incidentId,
+        })
+      : await resolveDestinationRef({
+          admin,
+          auth,
+          destinationRef: data.destinationRef,
+          mapsKey,
+          newPlacesKey,
+          placesProvider,
+          restCountriesKey,
+          providerRateLimitKey,
+        }));
     if (usesRecommendationCatalog && locationMode === 'pin') {
       assert(data?.manualLocation, 'invalid-argument', 'A map pin is required for pin mode.');
     }
-    if (usesRecommendationCatalog && locationMode === 'exact') {
+    if (usesRecommendationCatalog && locationMode === 'exact' && !destination.place?.placeId) {
       assert(
         recommendationId &&
           previousData?.place?.placeId &&
@@ -2329,6 +2678,7 @@ async function saveRecommendation({
       assert(locationMode === 'pin', 'invalid-argument', 'manualLocation requires pin mode.');
       destination.place = manualPlaceForDestination(data.manualLocation, destination);
     } else if (
+      !destination.place?.placeId &&
       recommendationId &&
       locationMode !== 'destination' &&
       previousData?.place?.placeId &&
@@ -2640,8 +2990,10 @@ module.exports = {
   resolvePlaceCountry,
   resolveGoogleDestination,
   resolveDestinationFromToken,
+  resolveExactPlaceWithDestination,
   resolveSubmittedPlaceDestination,
   resolveRecommendationDestinationRef,
+  resolveUnchangedExactRecommendation,
   resolveRecommendationDestination,
   resolveExistingDestination,
   sanitizeRecommendationContent,

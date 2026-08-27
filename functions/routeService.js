@@ -6,6 +6,7 @@ const {
   isVerifiedCaller,
   destinationHebrewWritePatch,
   normalizePublishRequestId,
+  resolveExactPlaceWithDestination,
   resolveExistingDestination,
   resolveSubmittedPlaceDestination,
   stableDocumentId,
@@ -581,6 +582,44 @@ async function mapWithConcurrency(values, concurrency, task) {
   return output;
 }
 
+function trustedRecommendationLocation(recommendation) {
+  try {
+    const destination = cleanDestinationRef(recommendation?.destination);
+    if (!destination) return null;
+    const mode = recommendation?.locationMode === 'exact'
+      ? 'exact'
+      : recommendation?.locationMode === 'pin'
+        ? 'pin'
+        : 'general';
+    if (mode !== 'exact') return { mode, destination };
+    const place = sanitizePlace(recommendation?.place, recommendation?.mapLocation, {
+      requirePlaceId: true,
+    });
+    return { mode, destination, place };
+  } catch {
+    return null;
+  }
+}
+
+function trustedRecommendationForStop(stop, trustedRecommendations) {
+  const recommendationId = stop?.source?.recommendationId;
+  const trusted = recommendationId ? trustedRecommendations.get(recommendationId) : null;
+  const location = trusted?.location;
+  if (
+    !location ||
+    location.destination.countryId !== stop?.destination?.countryId ||
+    location.destination.cityId !== stop?.destination?.cityId
+  ) {
+    return null;
+  }
+  if (stop.locationPrecision === 'exact') {
+    if (location.mode !== 'exact' || location.place?.placeId !== stop.place?.placeId) return null;
+  } else if (stop.locationPrecision !== location.mode) {
+    return null;
+  }
+  return trusted;
+}
+
 async function loadTrustedRecommendationSources(db, days) {
   const recommendationIds = Array.from(new Set(days.flatMap((day) => day.stops
     .map((stop) => stop.source?.recommendationId)
@@ -588,10 +627,9 @@ async function loadTrustedRecommendationSources(db, days) {
   if (!recommendationIds.length) return new Map();
   const snapshots = await Promise.all(recommendationIds.map((id) => db.doc(`recommendations/${id}`).get()));
   return new Map(snapshots.map((snapshot, index) => {
-    assert(snapshot.exists, 'failed-precondition', 'A PlanLi recommendation used by this route is no longer available.');
+    if (!snapshot.exists) return null;
     const recommendation = snapshot.data() || {};
-    assert(recommendation.status === 'active', 'failed-precondition',
-      'A PlanLi recommendation used by this route is no longer active.');
+    if (recommendation.status !== 'active') return null;
     const catalogCategoryId = normalizeRecommendationCategory(recommendation.categoryId);
     const catalogSubcategoryIds = normalizeRecommendationSubcategories(
       recommendation.subcategoryIds,
@@ -601,11 +639,13 @@ async function loadTrustedRecommendationSources(db, days) {
       recommendation.categoryId || recommendation.category,
     ])[0] || '';
     const legacySubcategoryIds = normalizeRecommendationTags(recommendation.tags || []);
+    const location = trustedRecommendationLocation(recommendation);
     return [recommendationIds[index], {
       categoryId: catalogCategoryId || legacyCategoryId,
       subcategoryIds: catalogSubcategoryIds.length ? catalogSubcategoryIds : legacySubcategoryIds,
+      ...(location ? { location } : {}),
     }];
-  }));
+  }).filter(Boolean));
 }
 
 async function resolveRoutePlaces({
@@ -621,6 +661,7 @@ async function resolveRoutePlaces({
   trustedRecommendations = new Map(),
   resolveExisting = resolveExistingDestination,
   resolveSubmitted = resolveSubmittedPlaceDestination,
+  resolveExact = resolveExactPlaceWithDestination,
   consumeBudget = consumeProviderBudget,
 }) {
   const placeEntries = new Map();
@@ -629,13 +670,27 @@ async function resolveRoutePlaces({
     const placeId = stop.place?.placeId;
     if (placeId) {
       const current = placeEntries.get(placeId);
-      if (!current || (!current.resolvedPlaceToken && stop.place.resolvedPlaceToken)) {
-        placeEntries.set(placeId, {
-          placeId,
-          resolvedPlaceToken: stop.place.resolvedPlaceToken || null,
-          trusted: trustedPlaces.get(placeId) || null,
-        });
+      const trustedRecommendation = trustedRecommendationForStop(stop, trustedRecommendations);
+      const trustedRecommendationPlace = trustedRecommendation?.location?.mode === 'exact'
+        ? {
+            destination: trustedRecommendation.location.destination,
+            place: trustedRecommendation.location.place,
+          }
+        : null;
+      const destinationRefs = [...(current?.destinationRefs || [])];
+      if (stop.destination && !destinationRefs.some((destinationRef) =>
+        destinationRef.countryId === stop.destination.countryId &&
+        destinationRef.cityId === stop.destination.cityId
+      )) {
+        destinationRefs.push(stop.destination);
       }
+      placeEntries.set(placeId, {
+        placeId,
+        resolvedPlaceToken: current?.resolvedPlaceToken || stop.place.resolvedPlaceToken || null,
+        destinationRef: current?.destinationRef || stop.destination || null,
+        destinationRefs,
+        trusted: current?.trusted || trustedPlaces.get(placeId) || trustedRecommendationPlace || null,
+      });
       return;
     }
     if (stop.destination?.countryId && stop.destination?.cityId) {
@@ -670,27 +725,61 @@ async function resolveRoutePlaces({
     });
   }
   const resolved = await mapWithConcurrency(entries, 5, async (entry) => {
+    let destination;
     if (entry.trusted && !entry.resolvedPlaceToken) {
-      const destination = await resolveExisting(
+      destination = await resolveExisting(
         admin.firestore(),
         entry.trusted.destination
       );
       destination.place = entry.trusted.place;
-      return destination;
+    } else {
+      destination = entry.destinationRef
+        ? await resolveExact({
+            admin,
+            auth,
+            placeId: entry.placeId,
+            resolvedPlaceToken: entry.resolvedPlaceToken,
+            destinationRef: entry.destinationRef,
+            mapsKey,
+            newPlacesKey,
+            placesProvider,
+            restCountriesKey,
+            providerRateLimitKey,
+            providerBudgetConsumed: !entry.resolvedPlaceToken,
+          })
+        : await resolveSubmitted({
+            admin,
+            auth,
+            placeId: entry.placeId,
+            resolvedPlaceToken: entry.resolvedPlaceToken,
+            mapsKey,
+            newPlacesKey,
+            placesProvider,
+            restCountriesKey,
+            providerRateLimitKey,
+            providerBudgetConsumed: !entry.resolvedPlaceToken,
+          });
     }
-    const destination = await resolveSubmitted({
-      admin,
-      auth,
-      placeId: entry.placeId,
-      resolvedPlaceToken: entry.resolvedPlaceToken,
-      mapsKey,
-      newPlacesKey,
-      placesProvider,
-      restCountriesKey,
-      providerRateLimitKey,
-      providerBudgetConsumed: !entry.resolvedPlaceToken,
-    });
     assert(destination.place?.placeId === entry.placeId, 'failed-precondition', 'A route place token does not match its stop. Search again.');
+    for (const destinationRef of entry.destinationRefs || []) {
+      if (destination.countryId === destinationRef.countryId && destination.cityId === destinationRef.cityId) {
+        continue;
+      }
+      let redirected = null;
+      try {
+        redirected = await resolveExisting(admin.firestore(), destinationRef);
+      } catch {
+        // A reference with different IDs must resolve through a documented
+        // merge; raw mismatches remain invalid.
+      }
+      if (redirected?.countryId !== destination.countryId || redirected?.cityId !== destination.cityId) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The same route place cannot be assigned to different destinations.',
+          { reason: 'invalid_selection', retryable: false }
+        );
+      }
+    }
     return destination;
   });
   const resolvedGeneral = await mapWithConcurrency(
@@ -711,9 +800,23 @@ async function resolveRoutePlaces({
         restCountriesKey,
         providerRateLimitKey,
         providerBudgetConsumed: !destinationRef.resolvedPlaceToken,
+        selectionIntent: 'destination',
       });
+      let expectedCountryId = destinationRef.countryId;
+      let expectedCityId = destinationRef.cityId;
+      if (destination.countryId !== expectedCountryId || destination.cityId !== expectedCityId) {
+        try {
+          const redirected = await resolveExisting(admin.firestore(), destinationRef);
+          expectedCountryId = redirected.countryId;
+          expectedCityId = redirected.cityId;
+        } catch (error) {
+          if (error?.details?.retryable === true) throw error;
+          // Keep the mismatch below as the stable validation failure when the
+          // submitted destination never existed or cannot be redirected.
+        }
+      }
       assert(
-        destination.countryId === destinationRef.countryId && destination.cityId === destinationRef.cityId,
+        destination.countryId === expectedCountryId && destination.cityId === expectedCityId,
         'failed-precondition',
         'A route destination token does not match its stop. Search again.'
       );
@@ -725,11 +828,7 @@ async function resolveRoutePlaces({
   const resolvedDays = days.map((day) => ({
     ...day,
     stops: day.stops.map((stop) => {
-      const trustedRecommendation = stop.source?.recommendationId
-        ? trustedRecommendations.get(stop.source.recommendationId)
-        : null;
-      assert(!stop.source?.recommendationId || trustedRecommendation,
-        'failed-precondition', 'A PlanLi recommendation used by this route is no longer available.');
+      const trustedRecommendation = trustedRecommendationForStop(stop, trustedRecommendations);
       const destination = stop.place?.placeId
         ? byPlaceId.get(stop.place.placeId)
         : byDestination.get(`${stop.destination?.countryId}/${stop.destination?.cityId}`);
@@ -744,8 +843,10 @@ async function resolveRoutePlaces({
               coordinates: stop.coordinates || stop.place?.coordinates,
             }
           : null;
+      const stopWithoutSource = { ...stop };
+      delete stopWithoutSource.source;
       return {
-        ...stop,
+        ...(trustedRecommendation ? stop : stopWithoutSource),
         location: precisePlace?.name || stop.location ||
           destinationHebrewName(destination.cityData) || destination.cityId,
         country: destination.countryData.name || destination.countryId,
@@ -854,6 +955,7 @@ async function saveRoute({
   placesProvider = 'legacy',
   restCountriesKey,
   providerRateLimitKey,
+  serverTrustedPlaces = new Map(),
 }) {
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -935,7 +1037,7 @@ async function saveRoute({
     existingMedia: existingRoute?.media,
   });
   const mediaDays = replaceValidatedMedia(route.days, validatedMedia);
-  const trustedPlaces = routeId
+  const persistedTrustedPlaces = routeId
     ? await loadTrustedRoutePlaces({
         db,
         routeRef,
@@ -943,6 +1045,8 @@ async function saveRoute({
         days: mediaDays,
       })
     : new Map();
+  const trustedPlaces = new Map(persistedTrustedPlaces);
+  serverTrustedPlaces.forEach((value, placeId) => trustedPlaces.set(placeId, value));
   const trustedRecommendations = await loadTrustedRecommendationSources(db, mediaDays);
   const locationStartedAt = Date.now();
   const resolved = await resolveRoutePlaces({
@@ -1374,6 +1478,8 @@ module.exports = {
   deletePreparedRevision,
   loadRouteDetails,
   loadTrustedRecommendationSources,
+  trustedRecommendationForStop,
+  trustedRecommendationLocation,
   loadTrustedRoutePlaces,
   mapWithConcurrency,
   resolveRoutePlaces,

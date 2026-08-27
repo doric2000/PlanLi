@@ -146,6 +146,9 @@ function isMissingRecommendationDraftError(error) {
 }
 
 function hasProviderDestinationDraft(draft) {
+  if (draft?.locationMode === 'exact') {
+    return Boolean(draft?.selectedCity?.providerPlaceId || draft?.selectedCity?.googlePlaceId);
+  }
   return ['destination', 'pin'].includes(draft?.locationMode) &&
     Boolean(draft?.generalDestination?.providerPlaceId);
 }

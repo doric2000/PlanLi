@@ -16,11 +16,22 @@ jest.mock('../src/services/PersonalizationService', () => ({
   getPersonalizedRecommendations: (...args) => mockGetPersonalizedRecommendations(...args),
 }));
 jest.mock('../src/components/ExactLocationPicker', () => {
-  const { View } = require('react-native');
-  return ({ value }) => (
-    <View
+  const { Pressable } = require('react-native');
+  return ({ value, onChange }) => (
+    <Pressable
       testID="exact-location-picker"
       accessibilityLabel={`exact-${value?.countryId || 'null'}-${value?.cityId || 'null'}-${value?.place?.placeId || 'null'}`}
+      onPress={() => onChange?.({
+        location: 'הוד השרון', country: 'ישראל', countryId: 'IL', cityId: 'hod-hasharon',
+        destination: {
+          countryId: 'IL', cityId: 'hod-hasharon', countryName: 'ישראל', cityName: 'הוד השרון',
+          provider: 'google', providerPlaceId: 'google-hod-hasharon',
+        },
+        place: {
+          placeId: 'hod-cafe', resolvedPlaceToken: 'resolved-token', name: 'בית קפה',
+          coordinates: { lat: 32.15, lng: 34.88 },
+        },
+      })}
     />
   );
 });
@@ -376,6 +387,24 @@ describe('StopEditorModal', () => {
       destination: expect.objectContaining({ countryId: 'HU', cityId: 'budapest' }),
       place: expect.objectContaining({ placeId: 'saved-place' }),
     }), 1);
+  });
+
+  it('keeps the provider destination identity on a newly selected exact stop', () => {
+    const onSave = jest.fn();
+    const screen = render(
+      <StopEditorModal visible dayIndex={0} stopIndex={0} onSave={onSave} onClose={jest.fn()} allowImages={false} />
+    );
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'בית קפה');
+    fireEvent.press(screen.getByTestId('exact-location-picker'));
+    fireEvent.press(screen.getByText('שמירה'));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      locationPrecision: 'exact',
+      place: expect.objectContaining({ placeId: 'hod-cafe', resolvedPlaceToken: 'resolved-token' }),
+      destination: expect.objectContaining({
+        countryId: 'IL', cityId: 'hod-hasharon',
+        provider: 'google', providerPlaceId: 'google-hod-hasharon',
+      }),
+    }), 0);
   });
 
   it('shows a retry state when PlanLi recommendations fail and loads them on retry', async () => {

@@ -77,7 +77,7 @@ describe('SingleDestinationPicker provider fallback', () => {
     })));
   });
 
-  it('does not call Google when an active PlanLi destination matches', async () => {
+  it('shows PlanLi and Google results together even when a local substring matches', async () => {
     mockOptions = [{
       key: 'city:HU:budapest', kind: 'city', countryId: 'HU', cityId: 'budapest',
       name: 'בודפשט', countryName: 'הונגריה',
@@ -94,6 +94,67 @@ describe('SingleDestinationPicker provider fallback', () => {
     });
 
     expect(screen.getByTestId('recommendation-destination-option-HU-budapest')).toBeTruthy();
-    expect(mockSearchCities).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSearchCities).toHaveBeenCalledWith('בודפשט', expect.any(Object)));
+    expect(screen.getByTestId('recommendation-destination-provider-option-1')).toBeTruthy();
+  });
+
+  it('keeps a PlanLi result selectable when Google search fails', async () => {
+    mockOptions = [{
+      key: 'city:HU:budapest', kind: 'city', countryId: 'HU', cityId: 'budapest',
+      name: 'בודפשט', countryName: 'הונגריה',
+    }];
+    mockSearchCities.mockRejectedValueOnce(new Error('provider unavailable'));
+    const onChange = jest.fn();
+    const screen = render(
+      <SingleDestinationPicker allowProviderDestinations value={null} onChange={onChange} />
+    );
+    const input = screen.getByTestId('recommendation-destination-search');
+    fireEvent(input, 'focus');
+    fireEvent.changeText(input, 'בודפשט');
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByTestId(
+      'recommendation-destination-provider-warning'
+    )).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-destination-option-HU-budapest'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      countryId: 'HU', cityId: 'budapest',
+    }));
+  });
+
+  it('ignores a provider resolution completed after the query changed', async () => {
+    let finishResolution;
+    mockResolveDestination.mockImplementationOnce(() => new Promise((resolve) => {
+      finishResolution = resolve;
+    }));
+    const onChange = jest.fn();
+    const screen = render(
+      <SingleDestinationPicker allowProviderDestinations value={null} onChange={onChange} />
+    );
+    const input = screen.getByTestId('recommendation-destination-search');
+    fireEvent(input, 'focus');
+    fireEvent.changeText(input, 'לובליאנה');
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByTestId('recommendation-destination-provider-option-0')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-destination-provider-option-0'));
+    fireEvent.changeText(input, 'בודפשט');
+    await act(async () => {
+      finishResolution({
+        status: 'resolved', resolvedPlaceToken: 'old-token',
+        destination: {
+          country: { id: 'SI', name: 'סלובניה' },
+          city: { id: 'ljubljana', name: 'לובליאנה' },
+        },
+      });
+      await Promise.resolve();
+    });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('recommendation-destination-search').props.value).toBe('בודפשט');
   });
 });

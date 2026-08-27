@@ -8,10 +8,13 @@ const {
   isVerifiedCaller,
   normalizeDestinationForUse,
   parsePlaceDetails,
+  resolveExistingDestination,
   resolveGoogleDestination,
+  resolveExactPlaceWithDestination,
   resolvePlaceCountry,
-	resolveRecommendationDestinationRef,
+  resolveRecommendationDestinationRef,
 	resolveRecommendationDestination,
+	resolveUnchangedExactRecommendation,
 	sanitizeRecommendationAttributes,
   sanitizeRecommendationCatalogContent,
   sanitizeRecommendationContent,
@@ -371,8 +374,8 @@ test('an ambiguous destination choice finalizes from transient trusted data with
         if (path === `system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`) {
           return { exists: true, data: () => ({
             uid: 'owner', expiresAt: future,
-            he: { placeId: 'hotel', countryCode: 'TH' },
-            en: { placeId: 'hotel', countryCode: 'TH' },
+            he: { placeId: 'hotel', countryCode: 'TH', coordinates: { lat: 19.8, lng: 99.8 } },
+            en: { placeId: 'hotel', countryCode: 'TH', coordinates: { lat: 19.8, lng: 99.8 } },
           }) };
         }
         if (path === 'countries/TH') {
@@ -1284,12 +1287,14 @@ test('the current client receives destination search state instead of an unknown
     assert.equal(result.allowDestinationSearch, true);
     assert.deepEqual(result.alternatives, []);
     assert.match(result.resolutionId, /^dcr_/);
+    assert.equal(result.place.placeId, 'hotel-liro');
+    assert.deepEqual(result.place.coordinates, coordinates);
   } finally {
     clearRegistryCache();
   }
 });
 
-test('an explicitly confirmed worldwide destination becomes a stable provisional destination', async () => {
+test('a reliable Google Hebrew destination becomes provisional without manual confirmation', async () => {
   const admin = createFakeAdmin({
     'countries/IL': {
       name: 'ישראל', names: { he: 'ישראל', en: 'Israel' }, code: 'IL',
@@ -1310,24 +1315,199 @@ test('an explicitly confirmed worldwide destination becomes a stable provisional
       coordinates, types: ['locality', 'political'],
     },
   };
-  const confirmation = await resolveGoogleDestination({
-    admin, selectionIntent: 'destination', placesProvider: 'new', resolvedPlace,
-  });
-  assert.equal(confirmation.status, 'destination_name_confirmation_required');
-  assert.equal(confirmation.nameConfirmation.suggestedHebrewName, 'נס ציונה');
-
   const destination = await resolveGoogleDestination({
-    admin,
-    selectionIntent: 'destination',
-    confirmedHebrewName: 'נס ציונה',
-    placesProvider: 'new',
-    resolvedPlace,
+    admin, selectionIntent: 'destination', placesProvider: 'new', resolvedPlace,
   });
   assert.equal(destination.cityData.canonicalPolicy.approved, false);
   assert.equal(destination.cityData.canonicalPolicy.provisional, true);
   assert.equal(destination.cityData.canonicalPolicy.selectionSource, 'user_confirmed_destination');
   assert.equal(destination.cityData.googleCache.names.he, 'נס ציונה');
   assert.equal(destination.createCity, true);
+});
+
+test('Hod Hasharon selected directly is accepted as a stable provisional locality', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': {
+      name: 'ישראל', names: { he: 'ישראל', en: 'Israel' }, code: 'IL',
+      region: 'Asia', currencyCode: 'ILS', status: 'active',
+    },
+  });
+  const coordinates = { lat: 32.1501, lng: 34.8881 };
+  const destination = await resolveGoogleDestination({
+    admin,
+    selectionIntent: 'exact_place',
+    placesProvider: 'new',
+    resolvedPlace: {
+      fetchedAt: new Date(),
+      he: {
+        placeId: 'google-hod-hasharon', displayName: 'הוד השרון', localityName: 'הוד השרון',
+        countryName: 'ישראל', countryCode: 'IL', localityCandidates: ['הוד השרון'],
+        coordinates, types: ['locality', 'political'],
+      },
+      en: {
+        placeId: 'google-hod-hasharon', displayName: 'Hod Hasharon', localityName: 'Hod Hasharon',
+        countryName: 'Israel', countryCode: 'IL', localityCandidates: ['Hod Hasharon'],
+        coordinates, types: ['locality', 'political'],
+      },
+    },
+  });
+  assert.equal(destination.createCity, true);
+  assert.equal(destination.cityData.googleCache.names.he, 'הוד השרון');
+  assert.equal(destination.cityData.providerRefs.googlePlaceId, 'google-hod-hasharon');
+  assert.equal(destination.place.placeId, 'google-hod-hasharon');
+  assert.equal(
+    [...admin.documents.keys()].some((path) => path.startsWith('system/runtime/providerUsage/')),
+    false,
+    'a directly selected locality must not consume containingPlaces Pro budget'
+  );
+});
+
+test('an exact place keeps its explicit destination binding through token-based publication', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const coordinates = { lat: 32.151, lng: 34.89 };
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/hod-hasharon': {
+      status: 'active',
+      names: { he: 'הוד השרון', en: 'Hod Hasharon' },
+      providerRefs: { googlePlaceId: 'google-hod-hasharon' },
+      googleCache: {
+        coordinates: { lat: 32.1501, lng: 34.8881 },
+        viewport: {
+          southwest: { lat: 32.10, lng: 34.84 },
+          northeast: { lat: 32.20, lng: 34.94 },
+        },
+      },
+    },
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner',
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      incidentId: 'loc_hod_binding',
+      providerCallCount: 2,
+      he: {
+        placeId: 'hod-cafe', displayName: 'בית קפה בהוד השרון', address: 'הוד השרון',
+        countryCode: 'IL', coordinates, types: ['cafe'],
+      },
+      en: {
+        placeId: 'hod-cafe', displayName: 'Hod Hasharon Cafe', address: 'Hod Hasharon',
+        countryCode: 'IL', coordinates, types: ['cafe'],
+      },
+    },
+  });
+
+  const destination = await resolveExactPlaceWithDestination({
+    admin,
+    auth: verifiedAuth,
+    placeId: 'hod-cafe',
+    resolvedPlaceToken,
+    destinationRef: { countryId: 'IL', cityId: 'hod-hasharon' },
+    mapsKey: 'unused',
+    providerRateLimitKey,
+  });
+
+  assert.equal(destination.cityId, 'hod-hasharon');
+  assert.equal(destination.place.placeId, 'hod-cafe');
+  assert.equal(
+    admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
+      .destinationResolution.cityId,
+    'hod-hasharon'
+  );
+});
+
+test('merged destinations redirect existing references while reassignment remains retryable', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/old-city': {
+      status: 'inactive',
+      mergedInto: { countryId: 'IL', cityId: 'canonical-city' },
+    },
+    'countries/IL/destinations/canonical-city': {
+      status: 'active',
+      names: { he: 'יעד קנוני', en: 'Canonical City' },
+    },
+    'countries/IL/destinations/reassigning-city': {
+      status: 'active',
+      names: { he: 'יעד בתהליך מיזוג', en: 'Reassigning City' },
+      reassignment: { state: 'reassigning', jobId: 'job-1' },
+    },
+  });
+
+  const redirected = await resolveExistingDestination(admin.firestore(), {
+    countryId: 'IL', cityId: 'old-city',
+  });
+  assert.equal(redirected.cityId, 'canonical-city');
+  assert.equal(redirected.resolutionSource, 'merged_destination_redirect');
+
+  await assert.rejects(
+    resolveExistingDestination(admin.firestore(), {
+      countryId: 'IL', cityId: 'reassigning-city',
+    }),
+    (error) => error?.details?.reason === 'destination_reassignment_in_progress' &&
+      error?.details?.retryable === true
+  );
+});
+
+test('an exact-place token bound to a merged destination follows the canonical destination', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const coordinates = { lat: 32.151, lng: 34.89 };
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/old-hod': {
+      status: 'inactive',
+      mergedInto: { countryId: 'IL', cityId: 'hod-hasharon' },
+    },
+    'countries/IL/destinations/hod-hasharon': {
+      status: 'active',
+      names: { he: 'הוד השרון', en: 'Hod Hasharon' },
+      googleCache: {
+        coordinates: { lat: 32.1501, lng: 34.8881 },
+        viewport: {
+          southwest: { lat: 32.10, lng: 34.84 },
+          northeast: { lat: 32.20, lng: 34.94 },
+        },
+      },
+    },
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner',
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      incidentId: 'loc_merged_binding',
+      providerCallCount: 0,
+      destinationResolution: {
+        countryId: 'IL',
+        cityId: 'old-hod',
+        createCountry: false,
+        createCity: false,
+      },
+      he: {
+        placeId: 'hod-cafe', displayName: 'בית קפה בהוד השרון', address: 'הוד השרון',
+        countryCode: 'IL', coordinates, types: ['cafe'],
+      },
+      en: {
+        placeId: 'hod-cafe', displayName: 'Hod Hasharon Cafe', address: 'Hod Hasharon',
+        countryCode: 'IL', coordinates, types: ['cafe'],
+      },
+    },
+  });
+
+  const destination = await resolveExactPlaceWithDestination({
+    admin,
+    auth: verifiedAuth,
+    placeId: 'hod-cafe',
+    resolvedPlaceToken,
+    destinationRef: { countryId: 'IL', cityId: 'old-hod' },
+    mapsKey: 'unused',
+    providerRateLimitKey,
+  });
+
+  assert.equal(destination.cityId, 'hod-hasharon');
+  assert.equal(destination.place.placeId, 'hod-cafe');
+  assert.equal(
+    admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
+      .destinationResolution.cityId,
+    'hod-hasharon'
+  );
 });
 
 test('a worldwide destination without reliable Hebrew asks for explicit name confirmation', async () => {
@@ -1394,6 +1574,78 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
   assert.equal(result.publicationStatus, 'active');
   assert.equal(result.publiclyVisible, true);
+});
+
+test('a text-only exact recommendation edit reuses its verified server place without Google', async () => {
+  const recommendationId = 'existing-exact';
+  const previousPlace = {
+    placeId: 'cafe-1', name: 'קפה קיים', address: 'הוד השרון',
+    coordinates: { lat: 32.15, lng: 34.89 },
+  };
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/hod-hasharon': {
+      name: 'הוד השרון', names: { he: 'הוד השרון', en: 'Hod Hasharon' },
+      status: 'active', stats: { recommendationCount: 1 },
+    },
+    [`recommendations/${recommendationId}`]: {
+      ...validContent,
+      ownerId: 'owner', status: 'active', locationMode: 'exact',
+      destination: {
+        countryId: 'IL', cityId: 'hod-hasharon',
+        countryName: 'ישראל', cityName: 'הוד השרון',
+      },
+      place: previousPlace,
+      stats: { likeCount: 0, commentCount: 0 },
+    },
+  });
+  let exactResolutionCalls = 0;
+  await saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    resolveExactPlace: async () => {
+      exactResolutionCalls += 1;
+      throw new Error('Google must not be called for an unchanged location');
+    },
+    data: {
+      recommendationId,
+      destinationRef: { countryId: 'IL', cityId: 'hod-hasharon' },
+      locationMode: 'exact',
+      placeId: 'cafe-1',
+      recommendation: { ...validContent, title: 'כותרת מעודכנת' },
+    },
+  });
+
+  assert.equal(exactResolutionCalls, 0);
+  assert.deepEqual(admin.documents.get(`recommendations/${recommendationId}`).place, previousPlace);
+});
+
+test('an unchanged exact edit treats merged destination references as the same destination', async () => {
+  const place = { placeId: 'cafe-1', coordinates: { lat: 32.15, lng: 34.89 } };
+  const canonical = await resolveUnchangedExactRecommendation({
+    db: {},
+    locationMode: 'exact',
+    placeId: 'cafe-1',
+    destinationRef: { countryId: 'IL', cityId: 'canonical-hod' },
+    previousData: {
+      place,
+      destination: { countryId: 'IL', cityId: 'legacy-hod' },
+    },
+    resolveExisting: async (_db, destinationRef) => ({
+      countryId: 'IL', cityId: 'canonical-hod',
+      countryData: { name: 'ישראל' }, cityData: { name: 'הוד השרון' },
+      countryRef: { path: 'countries/IL' },
+      cityRef: { path: 'countries/IL/destinations/canonical-hod' },
+      resolutionSource: destinationRef.cityId === 'legacy-hod'
+        ? 'merged_destination_redirect'
+        : 'existing_destination',
+    }),
+  });
+
+  assert.equal(canonical.cityId, 'canonical-hod');
+  assert.equal(canonical.place, place);
+  assert.equal(canonical.resolutionSource, 'existing_recommendation_location');
 });
 
 test('a safe labeled Other publishes immediately while genuinely unsafe text is held', async () => {
@@ -1654,6 +1906,21 @@ test('provider destination references use the submitted resolver and reject cano
     },
     resolveSubmitted: async () => ({ countryId: 'IT', cityId: 'dst_rome' }),
   }), /does not match/);
+
+  await assert.rejects(() => resolveRecommendationDestinationRef({
+    admin,
+    auth: verifiedAuth,
+    destinationRef: {
+      countryId: 'IT', cityId: 'dst_locked', providerPlaceId: 'google-locked',
+    },
+    resolveSubmitted: async () => ({ countryId: 'IT', cityId: 'dst_target' }),
+    resolveExisting: async () => {
+      const error = new Error('The destination is being reassigned.');
+      error.details = { reason: 'destination_reassignment_in_progress', retryable: true };
+      throw error;
+    },
+  }), (error) => error?.details?.reason === 'destination_reassignment_in_progress' &&
+    error?.details?.retryable === true);
 });
 
 test('provider destination publication strips the provider place and keeps only a manual pin', async () => {
@@ -2227,7 +2494,7 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
         [second.city.id]: { providerPlaceId: 'springfield-b' },
       }
     );
-    })(), /not mapped to an approved PlanLi destination/);
+    })(), /verified Hebrew name/);
   } finally {
     global.fetch = originalFetch;
   }
@@ -2447,7 +2714,7 @@ test('Google errors and unknown country overrides are rejected', async () => {
           recommendation: validContent,
         },
       }),
-      /not mapped to an approved PlanLi destination/
+      /verified Hebrew name/
     );
   } finally {
     global.fetch = originalFetch;

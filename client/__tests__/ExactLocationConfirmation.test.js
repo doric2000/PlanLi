@@ -68,11 +68,18 @@ test('exact-location confirmation offers destination search instead of an error'
     <ExactLocationConfirmation
       destinationChoice={{
         resolutionId: 'dcr_fallback1', alternatives: [], allowDestinationSearch: true,
+        place: {
+          placeId: 'hotel-liro', name: 'Hotel Liro', address: 'Vlorë, Albania',
+          coordinates: { lat: 40.4146, lng: 19.4812 },
+        },
       }}
       onChooseFallbackDestination={onChooseFallbackDestination}
       onChooseAnother={jest.fn()}
     />
   );
+  expect(screen.getByTestId('exact-location-choice-preview')).toBeTruthy();
+  expect(screen.getByTestId('mock-location-map')).toBeTruthy();
+  expect(screen.getByText('Hotel Liro')).toBeTruthy();
   fireEvent.press(screen.getByTestId('mock-destination-fallback'));
   expect(onChooseFallbackDestination).toHaveBeenCalledWith({ countryId: 'IT', cityId: 'dolomites' });
 });

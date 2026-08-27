@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { GoogleAuth } = require('google-auth-library');
 const { googleAuthOptions, initializeAdmin } = require('./localCredentials');
+const { destinationHebrewName, hasHebrewName } = require('../destinationLocalizationService');
 const {
   BUDGET_IDS,
   CATEGORY_IDS,
@@ -91,6 +92,78 @@ function canonicalSearchIndex(search) {
     'prefixes',
   ].every((field) => Array.isArray(search[field]) &&
     search[field].every((entry) => typeof entry === 'string'));
+}
+
+function activeLocationIntegrity(documents) {
+  const byPath = new Map(documents.map((document) => [document.ref.path, document]));
+  const invalidReferences = [];
+  const invalidNames = [];
+  const orphanSources = [];
+  const activeRoutes = new Map(documents
+    .filter((document) => /^routes\/[^/]+$/.test(document.ref.path) && document.data()?.status === 'active')
+    .map((document) => [document.id, document.data() || {}]));
+
+  const inspectDestination = (documentPath, destination, cityName) => {
+    const countryId = String(destination?.countryId || '');
+    const cityId = String(destination?.cityId || '');
+    if (!countryId || !cityId) {
+      invalidReferences.push({ documentPath, reason: 'destination_missing' });
+      return;
+    }
+    const country = byPath.get(`countries/${countryId}`);
+    const city = byPath.get(`countries/${countryId}/destinations/${cityId}`);
+    if (!country || !city || country.data()?.status !== 'active' || city.data()?.status !== 'active') {
+      invalidReferences.push({ documentPath, reason: 'destination_orphaned', countryId, cityId });
+      return;
+    }
+    const canonicalName = destinationHebrewName(city.data());
+    if (!hasHebrewName(canonicalName) || (cityName && !hasHebrewName(cityName))) {
+      invalidNames.push({ documentPath, countryId, cityId, cityName: cityName || null });
+    }
+  };
+
+  documents.forEach((document) => {
+    const path = document.ref.path;
+    const data = document.data() || {};
+    if (/^recommendations\/[^/]+$/.test(path) && data.status === 'active') {
+      inspectDestination(path, data.destination, data.destination?.cityName);
+      if (data.locationMode === 'exact' && !String(data.place?.placeId || '').trim()) {
+        invalidReferences.push({ documentPath: path, reason: 'exact_place_missing' });
+      }
+      return;
+    }
+    if (/^trips\/[^/]+$/.test(path) && data.status === 'active' && data.destination) {
+      inspectDestination(path, data.destination, data.destination.cityName);
+      return;
+    }
+    const stopMatch = path.match(
+      /^routes\/([^/]+)\/revisions\/([^/]+)\/days\/[^/]+\/stops\/[^/]+$/
+    );
+    if (!stopMatch) return;
+    const route = activeRoutes.get(stopMatch[1]);
+    if (!route || route.activeRevisionId !== stopMatch[2]) return;
+    inspectDestination(path, data.destination, data.destination?.cityName);
+    if (data.locationPrecision === 'exact' && !String(data.place?.placeId || '').trim()) {
+      invalidReferences.push({ documentPath: path, reason: 'exact_place_missing' });
+    }
+    const sourceId = String(data.source?.recommendationId || '');
+    const source = sourceId ? byPath.get(`recommendations/${sourceId}`) : null;
+    const sourceStatus = source ? String(source.data()?.status || 'inactive') : 'missing';
+    if (sourceId && sourceStatus !== 'active') {
+      orphanSources.push({
+        documentPath: path,
+        recommendationId: sourceId,
+        sourceStatus,
+      });
+    }
+  });
+
+  activeRoutes.forEach((route, routeId) => {
+    (route.destinations || []).forEach((destination, index) => inspectDestination(
+      `routes/${routeId}.destinations[${index}]`, destination, destination?.cityName
+    ));
+  });
+  return { invalidReferences, invalidNames, orphanSources };
 }
 
 function taxonomyContentErrors(documentPath, data = {}) {
@@ -285,10 +358,17 @@ async function auditFirestore(db) {
     orphanFavorites: [],
     counterMismatches: [],
     invalidTaxonomyContent: [],
+    invalidLocationReferences: [],
+    invalidLocationNames: [],
+    orphanLocationSources: [],
     profileCountMismatch: null,
     sampleMediaPath: null,
   };
   const byPath = new Map(documents.map((document) => [document.ref.path, document]));
+  const locationIntegrity = activeLocationIntegrity(documents);
+  report.invalidLocationReferences = locationIntegrity.invalidReferences;
+  report.invalidLocationNames = locationIntegrity.invalidNames;
+  report.orphanLocationSources = locationIntegrity.orphanSources;
   const countriesByCode = new Map();
   const citiesByProvider = new Map();
   const content = documents.filter((document) =>
@@ -508,6 +588,9 @@ function failures(report) {
     ...firestore.orphanFavorites,
     ...firestore.counterMismatches,
     ...firestore.invalidTaxonomyContent,
+    ...(firestore.invalidLocationReferences || []),
+    ...(firestore.invalidLocationNames || []),
+    ...(firestore.orphanLocationSources || []),
     ...(firestore.profileCountMismatch ? [firestore.profileCountMismatch] : []),
     ...storage.missingInEurope,
     ...storage.checksumMismatches,
@@ -550,6 +633,7 @@ if (require.main === module) {
 
 module.exports = {
   allowedMergedProviderGroup,
+  activeLocationIntegrity,
   auditFirestore,
   favoriteKeyForPath,
   failures,

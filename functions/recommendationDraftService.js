@@ -10,6 +10,7 @@ const {
 } = require('./recommendationService');
 const { RECOMMENDATION_CATALOG, taxonomy } = require('./travelTaxonomy');
 const { consumeRateLimit } = require('./socialService');
+const { renewResolvedPlaceTokenLeases } = require('./placesGatewayService');
 
 const DRAFT_VERSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PUBLICATION_RECEIPT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -63,9 +64,23 @@ function cleanCountry(value) {
 
 function cleanCity(value) {
   if (!value) return null;
+  const providerPlaceId = cleanString(
+    value.providerPlaceId || value.googlePlaceId || '',
+    'city.providerPlaceId',
+    { max: 300 }
+  );
+  const resolvedPlaceToken = providerPlaceId
+    ? cleanString(value.resolvedPlaceToken || '', 'city.resolvedPlaceToken', { max: 500 })
+    : '';
   return {
     id: cleanId(value.id || value.cityId, 'city.id', false),
     name: cleanString(value.name || value.cityName || '', 'city.name', { max: 200 }),
+    ...(providerPlaceId ? {
+      provider: 'google',
+      providerPlaceId,
+      googlePlaceId: providerPlaceId,
+      ...(resolvedPlaceToken ? { resolvedPlaceToken } : {}),
+    } : {}),
   };
 }
 
@@ -234,6 +249,8 @@ async function saveRecommendationDraft({
   auth,
   data,
   consumeRateLimitImpl = consumeRateLimit,
+  renewTokensImpl = renewResolvedPlaceTokenLeases,
+  providerRateLimitKey,
 }) {
   requireDraftAuth(auth);
   const db = admin.firestore();
@@ -272,6 +289,16 @@ async function saveRecommendationDraft({
       'failed-precondition', 'RECOMMENDATION_DRAFT_PUBLISHING', 'The recommendation draft is being published.');
   }
   await consumeRateLimitImpl({ admin, uid: auth.uid, action: 'recommendationDraftSave' });
+  await renewTokensImpl({
+    admin,
+    auth,
+    providerRateLimitKey,
+    resolvedPlaceTokens: [
+      draft.selectedPlace?.resolvedPlaceToken,
+      draft.generalDestination?.resolvedPlaceToken,
+      draft.selectedCity?.resolvedPlaceToken,
+    ].filter(Boolean),
+  });
   const draftId = current?.draftId || crypto.randomUUID();
   const nextVersion = (current?.version || 0) + 1;
   const versionRef = ownerRef.collection('draftVersions').doc();
@@ -335,11 +362,13 @@ function destinationRefForDraft(draft, { includeProvider = false } = {}) {
     countryId: draft.selectedCountry?.id,
     cityId: draft.selectedCity?.id,
   };
-  const generalDestination = draft.generalDestination;
-  if (!includeProvider || !generalDestination?.providerPlaceId) return destinationRef;
+  const providerDestination = draft.locationMode === 'exact'
+    ? draft.selectedCity
+    : draft.generalDestination;
+  if (!includeProvider || !providerDestination?.providerPlaceId) return destinationRef;
   assert(
-    generalDestination.countryId === destinationRef.countryId &&
-      generalDestination.cityId === destinationRef.cityId,
+    (!providerDestination.countryId || providerDestination.countryId === destinationRef.countryId) &&
+      (providerDestination.id || providerDestination.cityId) === destinationRef.cityId,
     'invalid-argument',
     'RECOMMENDATION_DRAFT_INVALID',
     'The provider destination does not match the selected destination.'
@@ -347,9 +376,9 @@ function destinationRefForDraft(draft, { includeProvider = false } = {}) {
   return {
     ...destinationRef,
     provider: 'google',
-    providerPlaceId: generalDestination.providerPlaceId,
-    ...(generalDestination.resolvedPlaceToken
-      ? { resolvedPlaceToken: generalDestination.resolvedPlaceToken }
+    providerPlaceId: providerDestination.providerPlaceId,
+    ...(providerDestination.resolvedPlaceToken
+      ? { resolvedPlaceToken: providerDestination.resolvedPlaceToken }
       : {}),
   };
 }
@@ -375,12 +404,9 @@ function publishData(pointer, draft) {
     },
   };
   if (draft.locationMode === 'exact') {
-    if (pointer.sourceRecommendationId && !draft.selectedPlace?.resolvedPlaceToken) {
-      data.destinationRef = destinationRefForDraft(draft);
-    } else {
-      if (draft.selectedPlace?.resolvedPlaceToken) data.resolvedPlaceToken = draft.selectedPlace.resolvedPlaceToken;
-      if (draft.selectedPlace?.placeId) data.placeId = draft.selectedPlace.placeId;
-    }
+    data.destinationRef = destinationRefForDraft(draft, { includeProvider: true });
+    if (draft.selectedPlace?.resolvedPlaceToken) data.resolvedPlaceToken = draft.selectedPlace.resolvedPlaceToken;
+    if (draft.selectedPlace?.placeId) data.placeId = draft.selectedPlace.placeId;
   } else {
     data.destinationRef = destinationRefForDraft(draft, { includeProvider: true });
     if (draft.locationMode === 'pin') data.manualLocation = { coordinates: draft.manualCoordinate };
