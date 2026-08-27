@@ -20,6 +20,8 @@ function normalizedCode(error) {
 }
 
 function reasonForLocationError(error, fallback = 'location_resolution_failed') {
+  const preserved = preservedErrorReason(error);
+  if (preserved) return preserved;
   const code = normalizedCode(error);
   const message = String(error?.message || '').toLowerCase();
   if (['not-found', 'deadline-exceeded'].includes(code) && message.includes('expired')) {

@@ -11,6 +11,9 @@ import { useContentPublish } from './RecommendationPublishContext';
 
 export function publishErrorMessage(job) {
   const error = job?.error;
+  if (error?.details?.reason === 'invalid_external_url') {
+    return 'הקישור שצורף אינו תקין. פתחו עריכה, תקנו או הסירו אותו ופרסמו מחדש.';
+  }
   if (error?.details?.reason === 'RECOMMENDATION_DRAFT_NOT_FOUND') {
     return 'לא הצלחנו לשחזר את טיוטת הפרסום. פתחו עריכה ונסו לפרסם מחדש.';
   }

@@ -26,6 +26,7 @@ import {
 } from '../../../services/ErrorReporting';
 import { applyRoutePublishMedia } from '../../roadtrip/utils/routeMedia';
 import { rememberDiscoveryDestinations } from '../../../utils/recentDiscoveryDestinations';
+import { isValidExternalUrl, normalizeExternalUrl } from '../../../utils/externalUrl';
 import {
   deletePreparedTravelMedia,
   prepareTravelMediaSource,
@@ -164,10 +165,38 @@ export function upgradeRestoredPublishJob(job) {
   const contentType = job?.contentType === 'route' ? 'route' : 'recommendation';
   const payloadContent = contentType === 'route' ? job?.payload?.route : job?.payload?.recommendation;
   const sourceVersion = Number(payloadContent?.taxonomyVersion || 0);
+  const rawExternalUrl = contentType === 'recommendation'
+    ? job?.draft?.details?.externalUrl
+    : '';
+  const normalizedExternalUrl = normalizeExternalUrl(rawExternalUrl);
+  const repairedExternalUrl = typeof rawExternalUrl === 'string' &&
+    rawExternalUrl !== normalizedExternalUrl &&
+    isValidExternalUrl(normalizedExternalUrl);
+  const normalizedDraft = repairedExternalUrl
+    ? {
+        ...job.draft,
+        details: {
+          ...job.draft?.details,
+          ...(normalizedExternalUrl ? { externalUrl: normalizedExternalUrl } : { externalUrl: '' }),
+        },
+      }
+    : job?.draft;
+  const shouldRecoverExternalUrl = repairedExternalUrl &&
+    job?.status === 'failed' &&
+    String(job?.error?.details?.reason || '').toLowerCase() === 'invalid_selection';
   const base = {
     ...job,
-    version: Number(job?.version || 1) < 3 ? 3 : job.version,
+    version: Number(job?.version || 1) < 4 ? 4 : job.version,
     contentType,
+    draft: normalizedDraft,
+    ...(shouldRecoverExternalUrl ? {
+      status: 'queued',
+      stage: 'queued',
+      attempts: 0,
+      retryAt: 0,
+      error: null,
+      reviewRequired: false,
+    } : {}),
     ...(['preparing', 'uploading', 'saving'].includes(job?.status)
       ? { status: 'queued', stage: 'queued', retryAt: 0 }
       : {}),
@@ -400,7 +429,7 @@ export function ContentPublishProvider({ children }) {
 
     const now = Date.now();
     const nextJob = {
-      version: 3,
+      version: 4,
       id: jobId,
       publishRequestId,
       contentType,

@@ -102,4 +102,26 @@ describe('RecommendationPublishBanner', () => {
     )).toBeTruthy();
     expect(screen.getByTestId('publish-retry')).toBeTruthy();
   });
+
+  it('explains a genuinely invalid external link without exposing server text', () => {
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', status: 'failed', stage: 'failed', progress: 0.9,
+        error: {
+          code: 'functions/invalid-argument',
+          message: 'externalUrl is invalid.',
+          details: { reason: 'invalid_external_url', retryable: false, publishStage: 'saving' },
+        },
+      },
+    };
+
+    const screen = render(<RecommendationPublishBanner />);
+
+    expect(screen.getByText(
+      'הקישור שצורף אינו תקין. פתחו עריכה, תקנו או הסירו אותו ופרסמו מחדש.'
+    )).toBeTruthy();
+    expect(screen.queryByText(/externalUrl/)).toBeNull();
+    expect(screen.queryByTestId('publish-retry')).toBeNull();
+  });
 });

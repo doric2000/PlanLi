@@ -16,6 +16,7 @@ const {
   sanitizeRecommendationCatalogContent,
   sanitizeRecommendationContent,
   sanitizeRecommendationDetails,
+  normalizeExternalUrl,
   saveRecommendation,
   stableDocumentId,
   validateMediaAssets,
@@ -86,6 +87,38 @@ test('catalog recommendations need only a concise classification and keep useful
     phone: '+972 50 123 4567',
     externalUrl: 'https://planli.example/place',
   });
+});
+
+test('external recommendation links discard bidi formatting but reject genuinely invalid URLs', () => {
+  const content = sanitizeRecommendationCatalogContent({
+    recommendationCatalogVersion: 1,
+    title: 'מקום ששווה להכיר',
+    description: 'אוכל מצוין ושירות נעים.',
+    categoryId: 'food',
+    subcategoryIds: ['restaurant'],
+    budget: 'balanced',
+  });
+  assert.equal(
+    normalizeExternalUrl('\u200f https://planli.example/place\u2069'),
+    'https://planli.example/place'
+  );
+  assert.deepEqual(sanitizeRecommendationDetails({
+    externalUrl: '\u200f https://planli.example/place',
+  }, content), {
+    externalUrl: 'https://planli.example/place',
+  });
+  assert.throws(
+    () => sanitizeRecommendationDetails({ externalUrl: 'not a link' }, content),
+    (error) => error?.details?.reason === 'invalid_external_url' && error?.details?.retryable === false
+  );
+  assert.throws(
+    () => sanitizeRecommendationDetails({ externalUrl: 'ftp://planli.example/place' }, content),
+    (error) => error?.details?.reason === 'invalid_external_url'
+  );
+  assert.throws(
+    () => sanitizeRecommendationDetails({ externalUrl: 123 }, content),
+    (error) => error?.details?.reason === 'invalid_external_url'
+  );
 });
 
 test('catalog validation keeps Other moderated and requires timing only for events', () => {

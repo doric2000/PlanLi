@@ -57,7 +57,10 @@ function firestoreAdmin(db) {
 test('recommendation drafts sanitize bounded partial composer state without local paths', () => {
   const draft = sanitizeRecommendationDraft(partialDraft({
     step: 3,
-    details: { phone: '  +972 50 123 4567  ' },
+    details: {
+      phone: '  +972 50 123 4567  ',
+      externalUrl: '\u200f https://planli.example/place\u2069',
+    },
     generalDestination: {
       countryId: 'GR',
       cityId: 'dst_mykonos',
@@ -74,6 +77,7 @@ test('recommendation drafts sanitize bounded partial composer state without loca
   }));
   assert.equal(draft.composerKind, 'catalog-v1');
   assert.equal(draft.details.phone, '+972 50 123 4567');
+  assert.equal(draft.details.externalUrl, 'https://planli.example/place');
   assert.deepEqual(draft.generalDestination, {
     countryId: 'GR',
     cityId: 'dst_mykonos',
