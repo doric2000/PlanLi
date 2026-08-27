@@ -80,6 +80,7 @@ function projectionTitle(target, data, parentData) {
 function buildAdminSearchProjection({ target, data, parentData = null }) {
   if (!target || !data || typeof data !== 'object') return null;
   const title = projectionTitle(target, data, parentData);
+  const targetCountryName = cleanText(data.countryName, 140);
   const ownerId = target.type === 'profile'
     ? target.id
     : cleanText(data.authorId || data.ownerId || parentData?.ownerId, 180);
@@ -90,7 +91,7 @@ function buildAdminSearchProjection({ target, data, parentData = null }) {
           countryId: target.countryId,
           cityId: target.cityId,
           cityName: title,
-          countryName: data.countryName,
+          ...(targetCountryName ? { countryName: targetCountryName } : {}),
         }
       : null);
   const previewData = target.subject?.kind === 'attached_place'
