@@ -25,12 +25,12 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible Android and iOS production EAS Update is location-
-stability group `3016e5a7-5f03-4abd-8277-db1e43f48f4d`, Android update
-`01a04475-a5ba-7b18-bc16-191f2e63a5bf` and iOS update
-`01a04475-a5ba-7ff3-ae65-1fc08c9b7e40`, published at
-`2026-08-27T18:22:35.962Z` from clean `main` merge commit
-`b1314ba4bf10dee1e9fbb82548cfceab2aaf355d`. EAS read-back confirms runtime
+The latest compatible Android and iOS production EAS Update is regional-
+discovery group `13f33be0-9aba-4c24-8ad2-4ba93a431bd5`, Android update
+`01a04563-9588-79ef-a6df-025b012318c3` and iOS update
+`01a04563-9588-7296-b65e-99f238cbae6f`, published at
+`2026-08-27T22:42:29.384Z` from clean `main` merge commit
+`4319c86a3f9dff786c5bf9489c14c194084695bc`. EAS read-back confirms runtime
 `1.1.0`, the exact merge commit, both platforms and the production branch.
 Download, application and end-to-end publication behavior on physical Android
 and iOS devices remain unverified.
@@ -1907,3 +1907,58 @@ rejected.
   unverified. Force-close and reopen the production app up to twice to apply the
   OTA. Roll back by republishing production group
   `4c1fcb12-53c4-4696-90ff-3ad047597e40` if required.
+
+## Regional discovery release
+
+- Source and Git: implementation commit
+  `3d897dea01f9af32565e3da69f4c573406a7aa35` passed PR `#249` and merged to
+  clean `main` as `4319c86a3f9dff786c5bf9489c14c194084695bc`.
+- Scope: the client now requires a persisted selection from eight travel regions,
+  exposes an accessible pixel-matched Hebrew atlas selector, and filters home,
+  search, community, routes, maps and destination discovery to the active region.
+  The server owns the region contract, persists authenticated selections and
+  rejects unsupported region identifiers. The final review also fixed map
+  refresh on region changes, cleared stale home rails after failed refreshes and
+  prevented unclassified local search history or favorites from crossing the
+  selected-region boundary.
+- Firestore and data: 48 required composite indexes were deployed to the
+  production `eur3` database and independently reached `READY`. The guarded
+  classification backfill first reported 121 eligible documents without writes,
+  then updated 121 documents after authorization: 15 countries, 48 destinations,
+  32 catalog records, 24 recommendations and two routes. A final dry run found
+  all 121 current and zero remaining changes.
+- Functions: exactly 15 Node.js 22 v2 Functions were deployed to
+  `europe-west1`: `saveRecommendation`, `publishRecommendationDraft`,
+  `saveRoute`, `publishRouteDraft`, `getPersonalizedRecommendations`,
+  `getMapRecommendations`, `getPersonalizedRoutes`, `searchDestinations`,
+  `setDiscoveryRegion`, `onDestinationCatalogSync`,
+  `onCountryDestinationCatalogSync`, `previewDestinationReassignment`,
+  `startDestinationReassignment`, `getDestinationReassignmentJob` and
+  `onDestinationReassignmentJobWritten`. Independent inventory confirmed all 15
+  `ACTIVE`; the post-deploy log query returned zero recent error lines.
+- EAS Update: the production project environment now contains
+  `EXPO_PUBLIC_REGION_DISCOVERY_ENABLED=true`. Preview group
+  `bb382a52-a7fb-4c30-b81c-14cb53a83e47`, Android update
+  `01a04561-f717-7897-b748-c8fdeb546f09` and iOS update
+  `01a04561-f717-7999-9948-52b982b02f7c` were built from the clean merge source.
+  Those exact artifacts were republished to production group
+  `13f33be0-9aba-4c24-8ad2-4ba93a431bd5`, Android update
+  `01a04563-9588-79ef-a6df-025b012318c3` and iOS update
+  `01a04563-9588-7296-b65e-99f238cbae6f` at
+  `2026-08-27T22:42:29.384Z`. EAS read-back confirmed branch `production`, both
+  platforms, runtime `1.1.0` and exact source commit `4319c86a`.
+- Validation: the full client suite passed 907 tests in 168 suites; the full
+  Functions suite passed 688 tests with 22 intentional skips and zero failures;
+  Firestore Rules emulator coverage passed 22/22. Changed-scope validation,
+  admin Web export/verification, iOS release configuration/export, Functions
+  production audit, final diff checks and every required PR check passed. Browser
+  smoke tests at 390x843 and 1440x1000 verified all eight buttons, selection,
+  replacement, reload persistence, centered desktop layout and zero console
+  errors.
+- No replacement native EAS build or App Store/Google Play submission was needed
+  because this release changes JavaScript, assets and compatible backend contracts
+  only; the installed beta binaries already target runtime `1.1.0`. OTA download,
+  application and regional end-to-end behavior on physical iOS and Android devices
+  remain unverified. Force-close and reopen the production app up to twice to
+  apply the OTA. Roll back by republishing production group
+  `3016e5a7-5f03-4abd-8277-db1e43f48f4d` if required.
