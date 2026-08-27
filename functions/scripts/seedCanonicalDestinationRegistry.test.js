@@ -21,6 +21,9 @@ test('registry seed is dry-run by default and apply requires enrichment', async 
 test('built-in grouping policy is merged into researched candidates', () => {
   const munnar = mergePolicy(CANDIDATES.find((entry) => entry.id === 'in-munnar'));
   assert.ok(munnar.aliases.includes('Kannan Devan Hills'));
+  assert.equal(munnar.radiusKm, 32);
+  assert.deepEqual(munnar.center, { lat: 10.0889, lng: 77.0595 });
+  assert.equal(munnar.geometryPolicy.source, 'planli_reviewed');
   const audit = auditEntries(CANDIDATES.map(mergePolicy), { requireProviderIdentity: false });
   assert.equal(audit.valid, true);
 });

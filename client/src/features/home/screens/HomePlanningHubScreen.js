@@ -15,6 +15,7 @@ import CachedImage from '../../../components/CachedImage';
 import CityCard from '../../../components/CityCard';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import DestinationFilterModal from '../../../components/DestinationFilterModal';
+import DestinationNameConfirmationModal from '../../../components/DestinationNameConfirmationModal';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import PageHeader from '../../../components/PageHeader';
 import SearchFilterRow from '../../../components/SearchFilterRow';
@@ -27,7 +28,10 @@ import {
   destinationCatalogItemToCity,
   searchDestinations,
 } from '../../../services/DestinationService';
-import { resolveDestinationForPlacePreview } from '../../../services/LocationService';
+import {
+  confirmProvisionalDestinationName,
+  resolveDestinationForPlacePreview,
+} from '../../../services/LocationService';
 import {
   requestPersonalizedRecommendations,
   requestPersonalizedRoutes,
@@ -145,6 +149,10 @@ export default function HomePlanningHubScreen({ navigation }) {
   const [searchError, setSearchError] = useState(null);
   const [destinationFilterVisible, setDestinationFilterVisible] = useState(false);
   const [savedOnly, setSavedOnly] = useState(false);
+  const [destinationNameConfirmation, setDestinationNameConfirmation] = useState(null);
+  const [destinationNameInput, setDestinationNameInput] = useState('');
+  const [destinationNameBusy, setDestinationNameBusy] = useState(false);
+  const [destinationNameError, setDestinationNameError] = useState('');
 
   const [recentDestinations, setRecentDestinations] = useState([]);
   const [recentLoading, setRecentLoading] = useState(true);
@@ -474,33 +482,77 @@ export default function HomePlanningHubScreen({ navigation }) {
     goToDestination(city);
   }, [goToDestination, rememberHomeDestination]);
 
+  const openResolvedGoogleDestination = (result) => {
+    if (result?.persisted) {
+      rememberHomeDestination({
+        ...result.destination.city,
+        countryId: result.destination.country.id,
+        countryName: result.destination.country.name,
+      });
+      setSearchQuery('');
+      navigation.navigate('LandingPage', {
+        cityId: result.destination.city.id,
+        countryId: result.destination.country.id,
+      });
+      return;
+    }
+    navigation.navigate('AddRecommendation', {
+      prefillLocation: {
+        destination: {
+          country: result.destination.country,
+          city: result.destination.city,
+        },
+        place: result.place,
+      },
+    });
+  };
+
+  const closeDestinationNameConfirmation = () => {
+    if (destinationNameBusy) return;
+    setDestinationNameConfirmation(null);
+    setDestinationNameInput('');
+    setDestinationNameError('');
+  };
+
+  const confirmHomeDestinationName = async () => {
+    const confirmedHebrewName = destinationNameInput.trim();
+    if (!destinationNameConfirmation?.resolvedPlaceToken || !confirmedHebrewName) return;
+    setDestinationNameBusy(true);
+    setDestinationNameError('');
+    try {
+      const confirmed = await confirmProvisionalDestinationName({
+        resolvedPlaceToken: destinationNameConfirmation.resolvedPlaceToken,
+        incidentId: destinationNameConfirmation.incidentId,
+        confirmedHebrewName,
+      });
+      setDestinationNameConfirmation(null);
+      setDestinationNameInput('');
+      openResolvedGoogleDestination(confirmed);
+    } catch {
+      setDestinationNameError('השם חייב להיות שם עברי קצר וברור.');
+    } finally {
+      setDestinationNameBusy(false);
+    }
+  };
+
   const handleGoogleSelect = async (selection) => {
     try {
       if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'Main' })) return;
-      const result = await resolveDestinationForPlacePreview(selection);
-      if (result?.persisted) {
-        rememberHomeDestination({
-          ...result.destination.city,
-          countryId: result.destination.country.id,
-          countryName: result.destination.country.name,
-        });
-        setSearchQuery('');
-        navigation.navigate('LandingPage', {
-          cityId: result.destination.city.id,
-          countryId: result.destination.country.id,
-        });
+      const result = await resolveDestinationForPlacePreview(selection, {
+        selectionIntent: 'destination',
+      });
+      if (result?.status === 'destination_name_confirmation_required') {
+        const suggestedName = result.nameConfirmation?.suggestedHebrewName || '';
+        setDestinationNameConfirmation(result);
+        setDestinationNameInput(suggestedName);
+        setDestinationNameError('');
         return;
       }
-
-      navigation.navigate('AddRecommendation', {
-        prefillLocation: {
-          destination: {
-            country: result.destination.country,
-            city: result.destination.city,
-          },
-          place: result.place,
-        },
-      });
+      if (result?.status === 'destination_choice_required') {
+        Alert.alert('נדרשת בחירת יעד', 'חפשו ובחרו עיר או אזור מתאימים מתוך רשימת היעדים.');
+        return;
+      }
+      openResolvedGoogleDestination(result);
     } catch (error) {
       console.error(error);
       Alert.alert('שגיאה', 'לא ניתן לטעון את היעד.');
@@ -769,6 +821,16 @@ export default function HomePlanningHubScreen({ navigation }) {
         savedOnly={savedOnly}
         onSavedOnlyChange={setSavedOnly}
         favoritesAvailable={Boolean(user) && !isGuest}
+      />
+      <DestinationNameConfirmationModal
+        visible={Boolean(destinationNameConfirmation)}
+        englishName={destinationNameConfirmation?.nameConfirmation?.englishName || ''}
+        value={destinationNameInput}
+        busy={destinationNameBusy}
+        error={destinationNameError}
+        onChangeText={(value) => { setDestinationNameInput(value); setDestinationNameError(''); }}
+        onCancel={closeDestinationNameConfirmation}
+        onConfirm={confirmHomeDestinationName}
       />
     </SafeAreaView>
   );

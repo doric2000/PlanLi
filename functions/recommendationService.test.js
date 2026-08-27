@@ -24,6 +24,7 @@ const {
 const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
 const { canonicalDestinationId, clearRegistryCache } = require('./canonicalDestinationRegistry');
 const { createResolvedPlaceToken } = require('./placesGatewayService');
+const { hasHebrewName } = require('./destinationLocalizationService');
 
 test('verified caller accepts verified password users, social users and admins', () => {
   assert.equal(
@@ -363,14 +364,15 @@ test('an ambiguous destination choice finalizes from transient trusted data with
         if (path === 'system/runtime/destinationResolutionChoices/dcr_12345678') {
           return { exists: true, data: () => ({
             uid: 'owner', resolvedPlaceToken, incidentId: 'loc_1234567890ab',
-            providerCallCount: 2, expiresAt: future,
+            providerCallCount: 2, destinationCountryCode: 'TH', expiresAt: future,
             choices: [{ choiceId: 'dc_12345678', destinationResolution: storedResolution }],
           }) };
         }
         if (path === `system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`) {
           return { exists: true, data: () => ({
             uid: 'owner', expiresAt: future,
-            he: { placeId: 'hotel' }, en: { placeId: 'hotel' },
+            he: { placeId: 'hotel', countryCode: 'TH' },
+            en: { placeId: 'hotel', countryCode: 'TH' },
           }) };
         }
         if (path === 'countries/TH') {
@@ -400,6 +402,67 @@ test('an ambiguous destination choice finalizes from transient trusted data with
   assert.equal(result.resolvedPlaceToken, resolvedPlaceToken);
   assert.equal(tokenUpdate.destinationResolution.cityId, 'chiang-rai');
   assert.equal(choiceDeleted, true);
+});
+
+test('fallback destination finalization rejects a destination from another country before writing', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  let tokenUpdated = false;
+  let choiceDeleted = false;
+  const future = { toDate: () => new Date(Date.now() + 60_000) };
+  const db = {
+    doc: (path) => ({
+      get: async () => {
+        if (path === 'system/runtime/destinationResolutionChoices/dcr_country1') {
+          return { exists: true, data: () => ({
+            uid: 'owner',
+            resolvedPlaceToken,
+            incidentId: 'loc_country_mismatch',
+            destinationCountryCode: 'AL',
+            providerCallCount: 0,
+            choices: [],
+            expiresAt: future,
+          }) };
+        }
+        if (path === `system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`) {
+          return { exists: true, data: () => ({
+            uid: 'owner',
+            expiresAt: future,
+            he: { placeId: 'albania-hotel', countryCode: 'AL' },
+            en: { placeId: 'albania-hotel', countryCode: 'AL' },
+          }) };
+        }
+        if (path === 'countries/JP') {
+          return { exists: true, data: () => ({ code: 'JP', name: 'יפן', status: 'active' }) };
+        }
+        if (path === 'countries/JP/destinations/tokyo') {
+          return { exists: true, data: () => ({
+            status: 'active',
+            googleCache: { names: { he: 'טוקיו', en: 'Tokyo' } },
+          }) };
+        }
+        return { exists: false, data: () => null };
+      },
+      set: async () => { tokenUpdated = true; },
+      delete: async () => { choiceDeleted = true; },
+    }),
+  };
+
+  await assert.rejects(finalizeDestinationChoice({
+    admin: { firestore: () => db },
+    auth: {
+      uid: 'owner',
+      token: { email_verified: true, firebase: { sign_in_provider: 'password' } },
+    },
+    data: {
+      resolutionId: 'dcr_country1',
+      destinationRef: { countryId: 'JP', cityId: 'tokyo' },
+    },
+    providerRateLimitKey,
+  }), /same country/);
+
+  assert.equal(tokenUpdated, false);
+  assert.equal(choiceDeleted, false);
 });
 
 test('recommendation content ignores client-controlled ownership and location fields', () => {
@@ -758,6 +821,18 @@ function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
     id: documentPath.split('/').at(-1),
     get: async function get() {
       return snapshot(this);
+    },
+    create: async function create(data) {
+      if (documents.has(this.path)) throw new Error('already exists');
+      documents.set(this.path, data);
+    },
+    set: async function set(data, options = {}) {
+      documents.set(this.path, options.merge
+        ? { ...(documents.get(this.path) || {}), ...data }
+        : data);
+    },
+    delete: async function deleteDocument() {
+      documents.delete(this.path);
     },
   });
   const readField = (data, field) => field.split('.').reduce((value, key) => value?.[key], data);
@@ -1162,6 +1237,121 @@ test('Google destination resolution rejects an unapproved locality instead of cr
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('the current client receives destination search state instead of an unknown-destination error', async () => {
+  clearRegistryCache();
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const coordinates = { lat: 40.4146218, lng: 19.4811959 };
+  const expiresAt = { toDate: () => new Date(Date.now() + 60_000) };
+  const admin = createFakeAdmin({
+    'countries/AL': {
+      name: 'אלבניה', names: { he: 'אלבניה', en: 'Albania' }, code: 'AL',
+      region: 'Europe', currencyCode: 'ALL', status: 'active',
+    },
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner', expiresAt, incidentId: 'loc_vlorefallback', providerCallCount: 1,
+      he: {
+        placeId: 'hotel-liro', displayName: 'Hotel Liro', countryName: 'Albania',
+        countryCode: 'AL', localityName: 'Vlora', localityCandidates: ['Vlora'],
+        coordinates, types: ['hotel', 'lodging'],
+      },
+      en: {
+        placeId: 'hotel-liro', displayName: 'Hotel Liro', countryName: 'Albania',
+        countryCode: 'AL', localityName: 'Vlora', localityCandidates: ['Vlora'],
+        coordinates, types: ['hotel', 'lodging'],
+      },
+    },
+  });
+
+  try {
+    const result = await resolveRecommendationDestination({
+      admin,
+      auth: verifiedAuth,
+      providerRateLimitKey,
+      placesProvider: 'legacy',
+      data: {
+        resolvedPlaceToken,
+        supportsDestinationChoice: true,
+        supportsDestinationSearch: true,
+      },
+    });
+    assert.equal(result.status, 'destination_choice_required');
+    assert.equal(result.allowDestinationSearch, true);
+    assert.deepEqual(result.alternatives, []);
+    assert.match(result.resolutionId, /^dcr_/);
+  } finally {
+    clearRegistryCache();
+  }
+});
+
+test('an explicitly confirmed worldwide destination becomes a stable provisional destination', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': {
+      name: 'ישראל', names: { he: 'ישראל', en: 'Israel' }, code: 'IL',
+      region: 'Asia', currencyCode: 'ILS', status: 'active',
+    },
+  });
+  const coordinates = { lat: 31.932111, lng: 34.801327 };
+  const resolvedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'ness-ziona-place', displayName: 'נס ציונה', localityName: 'נס ציונה',
+      countryName: 'ישראל', countryCode: 'IL', localityCandidates: ['נס ציונה'],
+      coordinates, types: ['locality', 'political'],
+    },
+    en: {
+      placeId: 'ness-ziona-place', displayName: 'Ness Ziona', localityName: 'Ness Ziona',
+      countryName: 'Israel', countryCode: 'IL', localityCandidates: ['Ness Ziona'],
+      coordinates, types: ['locality', 'political'],
+    },
+  };
+  const confirmation = await resolveGoogleDestination({
+    admin, selectionIntent: 'destination', placesProvider: 'new', resolvedPlace,
+  });
+  assert.equal(confirmation.status, 'destination_name_confirmation_required');
+  assert.equal(confirmation.nameConfirmation.suggestedHebrewName, 'נס ציונה');
+
+  const destination = await resolveGoogleDestination({
+    admin,
+    selectionIntent: 'destination',
+    confirmedHebrewName: 'נס ציונה',
+    placesProvider: 'new',
+    resolvedPlace,
+  });
+  assert.equal(destination.cityData.canonicalPolicy.approved, false);
+  assert.equal(destination.cityData.canonicalPolicy.provisional, true);
+  assert.equal(destination.cityData.canonicalPolicy.selectionSource, 'user_confirmed_destination');
+  assert.equal(destination.cityData.googleCache.names.he, 'נס ציונה');
+  assert.equal(destination.createCity, true);
+});
+
+test('a worldwide destination without reliable Hebrew asks for explicit name confirmation', async () => {
+  const admin = createFakeAdmin();
+  const coordinates = { lat: 60.3913, lng: 5.3221 };
+  const destination = await resolveGoogleDestination({
+    admin,
+    selectionIntent: 'destination',
+    placesProvider: 'new',
+    resolvedPlace: {
+      fetchedAt: new Date(),
+      he: {
+        placeId: 'bergen-place', displayName: 'Bergen', localityName: 'Bergen',
+        countryName: 'Norway', countryCode: 'NO', localityCandidates: ['Bergen'],
+        coordinates, types: ['locality', 'political'],
+      },
+      en: {
+        placeId: 'bergen-place', displayName: 'Bergen', localityName: 'Bergen',
+        countryName: 'Norway', countryCode: 'NO', localityCandidates: ['Bergen'],
+        coordinates, types: ['locality', 'political'],
+      },
+    },
+  });
+  assert.equal(destination.status, 'destination_name_confirmation_required');
+  assert.equal(destination.requiresNameConfirmation, true);
+  assert.equal(destination.nameConfirmation.englishName, 'Bergen');
+  assert.ok(hasHebrewName(destination.nameConfirmation.suggestedHebrewName));
 });
 
 test('saveRecommendation creates against an existing destination and owns server fields', async () => {

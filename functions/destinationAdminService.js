@@ -27,6 +27,7 @@ const {
   DESTINATION_KINDS,
   GROUPING_POLICIES,
   REGISTRY_PATH,
+  REGISTRY_VERSION,
   clearRegistryCache,
   registryCollectionIssues,
   validateRegistryEntry,
@@ -508,7 +509,7 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     parentId,
     groupingPolicy,
     aliases,
-    registryVersion: 1,
+    registryVersion: REGISTRY_VERSION,
     approvedBy: auth.uid,
   };
   const db = admin.firestore();
@@ -542,9 +543,15 @@ async function updateDestinationPolicy({ admin, auth, data }) {
       center: destinationCoordinates(currentCity),
       viewport: currentCity.googleCache?.viewport || currentCity.identity?.viewport || null,
       googleTypes: currentCity.googleCache?.types || currentCity.identity?.types || [],
+      geometryPolicy: {
+        autoMatchEligible: false,
+        aliasAutoMatchEligible: true,
+        source: 'admin_approved_aliases',
+        version: 2,
+      },
       approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
       status: 'active',
-      registryVersion: 1,
+      registryVersion: REGISTRY_VERSION,
     };
     const entryValidation = validateRegistryEntry(registryEntry);
     if (!entryValidation.valid) {

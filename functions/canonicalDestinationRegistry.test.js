@@ -6,6 +6,7 @@ const {
   BUILTIN_POLICIES,
   canonicalDestinationId,
   matchCanonicalEntry,
+  providerGeometryPolicy,
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
@@ -126,4 +127,52 @@ test('registry collection validation rejects invalid graphs, duplicates and unre
   assert.ok(codes.has('parent_cycle'));
   assert.ok(codes.has('missing_parent'));
   assert.ok(codes.has('unresolved_overlap'));
+});
+
+test('Lake Carezza resolves to the reviewed Dolomites region', () => {
+  const match = matchCanonicalEntry(BUILTIN_POLICIES, {
+    countryCode: 'IT', aliases: ['Welschnofen'],
+    coordinates: { lat: 46.4092273, lng: 11.5750645 },
+  });
+  assert.equal(match.entry.id, 'it-dolomites');
+  assert.equal(match.entry.names.he, 'הדולומיטים');
+});
+
+test('unreviewed provider geometry never auto-matches a point', () => {
+  const match = matchCanonicalEntry([{
+    id: 'zz-provider-region', countryCode: 'ZZ', names: { he: 'אזור', en: 'Region' },
+    aliases: ['Region'], kind: 'tourism_region', groupingPolicy: 'self', status: 'active',
+    center: { lat: 1, lng: 1 }, radiusKm: 100,
+    geometryPolicy: { autoMatchEligible: false, source: 'google_unreviewed', version: 2 },
+  }], {
+    countryCode: 'ZZ', aliases: ['Unrelated locality'], coordinates: { lat: 1, lng: 1 },
+  });
+  assert.equal(match, null);
+});
+
+test('provider viewports are eligible only when their scale fits the destination kind', () => {
+  const cityViewport = {
+    southwest: { lat: 31.7, lng: 34.7 },
+    northeast: { lat: 32.3, lng: 35.1 },
+  };
+  const tinyRegionViewport = {
+    southwest: { lat: 46.539, lng: 11.839 },
+    northeast: { lat: 46.541, lng: 11.841 },
+  };
+  assert.equal(providerGeometryPolicy('city_hub', cityViewport).autoMatchEligible, true);
+  assert.equal(providerGeometryPolicy('tourism_region', tinyRegionViewport).autoMatchEligible, false);
+});
+
+test('a provider alias cannot assign a place outside its sane viewport', () => {
+  const match = matchCanonicalEntry([{
+    id: 'vn-da-nang', countryCode: 'VN', names: { he: 'דה נאנג', en: 'Da Nang' },
+    aliases: ['Da Nang'], kind: 'city_hub', groupingPolicy: 'self', status: 'active',
+    viewport: {
+      southwest: { lat: 15.9, lng: 108.0 },
+      northeast: { lat: 16.2, lng: 108.35 },
+    },
+  }], {
+    countryCode: 'VN', aliases: ['Da Nang'], coordinates: { lat: 15.89, lng: 108.36 },
+  });
+  assert.equal(match, null);
 });

@@ -113,4 +113,28 @@ describe('useExactPlaceSelection', () => {
     });
     expect(result.current.pendingLocation?.cityId).toBe('chiang-mai');
   });
+
+  it('attaches the exact place to a user-selected fallback destination', async () => {
+    mockResolve.mockResolvedValue({
+      status: 'destination_choice_required',
+      resolutionId: 'dcr_fallback1',
+      incidentId: 'loc_fallback123',
+      alternatives: [],
+      allowDestinationSearch: true,
+    });
+    mockFinalize.mockResolvedValue(resolved);
+    const { result } = renderHook(() => useExactPlaceSelection());
+
+    await act(async () => result.current.handleSelectGooglePlace('lake-carezza'));
+    await act(async () => result.current.chooseFallbackDestination({
+      countryId: 'IT', cityId: 'dolomites', resolvedPlaceToken: 'destination-token',
+    }));
+
+    expect(mockFinalize).toHaveBeenCalledWith({
+      resolutionId: 'dcr_fallback1',
+      incidentId: 'loc_fallback123',
+      destinationResolvedPlaceToken: 'destination-token',
+    });
+    expect(result.current.pendingLocation?.cityId).toBe('chiang-mai');
+  });
 });

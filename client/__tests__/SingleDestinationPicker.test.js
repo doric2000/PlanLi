@@ -6,6 +6,7 @@ import SingleDestinationPicker from '../src/features/community/components/Single
 const mockSearchCities = jest.fn();
 const mockResolveDestination = jest.fn();
 const mockFinalizeDestination = jest.fn();
+const mockConfirmDestinationName = jest.fn();
 let mockOptions = [];
 
 jest.mock('@expo/vector-icons', () => {
@@ -25,6 +26,7 @@ jest.mock('../src/services/LocationService', () => ({
   searchCities: (...args) => mockSearchCities(...args),
   resolveDestinationForPlacePreview: (...args) => mockResolveDestination(...args),
   finalizeDestinationChoice: (...args) => mockFinalizeDestination(...args),
+  confirmProvisionalDestinationName: (...args) => mockConfirmDestinationName(...args),
 }));
 
 describe('SingleDestinationPicker provider fallback', () => {

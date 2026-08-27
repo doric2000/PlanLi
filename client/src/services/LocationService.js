@@ -79,23 +79,35 @@ export const searchPlaces = async (searchText, { signal } = {}) => {
 
 // Destination ownership and geopolitical resolution are server-only. Preview and
 // save use the same resolver, so a client cannot present one destination and save another.
-export const resolveDestinationForPlacePreview = async (selectionOrPlaceId) => {
+export const resolveDestinationForPlacePreview = async (selectionOrPlaceId, {
+  selectionIntent = 'exact_place',
+  confirmedHebrewName = null,
+} = {}) => {
   const selection = selectionOrPlaceId && typeof selectionOrPlaceId === 'object'
     ? selectionOrPlaceId
     : null;
   const placeId = selection?.providerPlaceId || selection?.place_id || selectionOrPlaceId;
   if (!selection?.sessionId || !selection?.selectionId) {
-    return resolveRecommendationDestination(placeId);
+    return resolveRecommendationDestination(typeof selectionOrPlaceId === 'object'
+      ? {
+          ...(selectionOrPlaceId || {}),
+          selectionIntent,
+          ...(confirmedHebrewName ? { confirmedHebrewName } : {}),
+        }
+      : { placeId, selectionIntent, ...(confirmedHebrewName ? { confirmedHebrewName } : {}) });
   }
   const response = await getResolvePlaceSelectionCallable()({
     sessionId: selection.sessionId,
     selectionId: selection.selectionId,
     incidentId: selection.incidentId,
     supportsDestinationChoice: true,
+    supportsDestinationSearch: true,
+    selectionIntent,
+    ...(confirmedHebrewName ? { confirmedHebrewName } : {}),
   });
   const resolved = response?.data || {};
   const resolvedPlaceToken = response?.data?.resolvedPlaceToken;
-  if (resolved.status === 'destination_choice_required') {
+  if (resolved.status !== 'resolved') {
     return { ...resolved, resolvedPlaceToken };
   }
   const result = resolved.destination
@@ -103,14 +115,16 @@ export const resolveDestinationForPlacePreview = async (selectionOrPlaceId) => {
     : await resolveRecommendationDestination({
         resolvedPlaceToken,
         incidentId: resolved.incidentId || selection.incidentId,
+        selectionIntent,
+        ...(confirmedHebrewName ? { confirmedHebrewName } : {}),
       });
   return {
     ...result,
     resolvedPlaceToken,
     incidentId: result?.incidentId || resolved.incidentId || selection.incidentId,
-    place: result?.place
+    place: (result?.place || resolved?.place)
       ? {
-          ...result.place,
+          ...(result?.place || resolved?.place),
           resolvedPlaceToken,
           incidentId: result?.incidentId || resolved.incidentId || selection.incidentId,
         }
@@ -121,11 +135,15 @@ export const resolveDestinationForPlacePreview = async (selectionOrPlaceId) => {
 export const finalizeDestinationChoice = async ({
   resolutionId,
   destinationChoiceId,
+  destinationRef,
+  destinationResolvedPlaceToken,
   incidentId,
 }) => {
   const response = await getResolvePlaceSelectionCallable()({
     resolutionId,
-    destinationChoiceId,
+    ...(destinationChoiceId ? { destinationChoiceId } : {}),
+    ...(destinationRef ? { destinationRef } : {}),
+    ...(destinationResolvedPlaceToken ? { destinationResolvedPlaceToken } : {}),
     incidentId,
     supportsDestinationChoice: true,
   });
@@ -139,5 +157,34 @@ export const finalizeDestinationChoice = async ({
           incidentId: result.incidentId || incidentId,
         }
       : result.place,
+  };
+};
+
+export const confirmProvisionalDestinationName = async ({
+  resolvedPlaceToken,
+  incidentId,
+  confirmedHebrewName,
+}) => {
+  const result = await resolveRecommendationDestination({
+    resolvedPlaceToken,
+    incidentId,
+    selectionIntent: 'destination',
+    confirmedHebrewName,
+    supportsDestinationChoice: true,
+    supportsDestinationSearch: true,
+  });
+  const confirmedResolvedPlaceToken = result?.resolvedPlaceToken || resolvedPlaceToken;
+  const confirmedIncidentId = result?.incidentId || incidentId;
+  return {
+    ...result,
+    resolvedPlaceToken: confirmedResolvedPlaceToken,
+    incidentId: confirmedIncidentId,
+    place: result?.place
+      ? {
+          ...result.place,
+          resolvedPlaceToken: confirmedResolvedPlaceToken,
+          incidentId: confirmedIncidentId,
+        }
+      : result?.place,
   };
 };

@@ -17,6 +17,7 @@ const mockSearchDestinations = jest.fn();
 const mockLoadRecentDestinations = jest.fn();
 const mockRememberRecentDestinations = jest.fn();
 const mockResolveDestinationForPlacePreview = jest.fn();
+const mockConfirmProvisionalDestinationName = jest.fn();
 const mockEnsureCapability = jest.fn();
 const mockRequestPersonalizedRoutes = jest.fn();
 const mockRequestPersonalizedRecommendations = jest.fn();
@@ -172,6 +173,7 @@ jest.mock('../src/components/CityCard', () => {
 
 jest.mock('../src/services/LocationService', () => ({
   resolveDestinationForPlacePreview: (...args) => mockResolveDestinationForPlacePreview(...args),
+  confirmProvisionalDestinationName: (...args) => mockConfirmProvisionalDestinationName(...args),
 }));
 
 jest.mock('../src/services/ProfileService', () => ({
@@ -540,7 +542,7 @@ describe('HomeScreenSearchTest', () => {
         selectionId: 'selection-1',
         sessionId: 'session-1',
         providerPlaceId: 'google-place-1',
-      });
+      }, { selectionIntent: 'destination' });
       expect(navigationMock.navigate).toHaveBeenCalledWith('AddRecommendation', {
         prefillLocation: {
           destination: {
@@ -548,6 +550,66 @@ describe('HomeScreenSearchTest', () => {
             city: expect.objectContaining({ id: 'chiang-rai' }),
           },
           place: exactPlace,
+        },
+      });
+    });
+  });
+
+  it('lets the user correct a provisional Hebrew destination name before continuing', async () => {
+    mockEnsureCapability.mockResolvedValue(true);
+    mockResolveDestinationForPlacePreview.mockResolvedValue({
+      status: 'destination_name_confirmation_required',
+      resolvedPlaceToken: 'resolved-token-dolomites',
+      incidentId: 'loc_dolomites',
+      nameConfirmation: {
+        englishName: 'Dolomites',
+        suggestedHebrewName: 'דולומיטס',
+      },
+    });
+    mockConfirmProvisionalDestinationName.mockResolvedValue({
+      persisted: false,
+      destination: {
+        country: { id: 'IT', name: 'איטליה' },
+        city: { id: 'dolomites', name: 'הדולומיטים' },
+      },
+      place: {
+        placeId: 'google-place-1',
+        resolvedPlaceToken: 'resolved-token-dolomites',
+      },
+    });
+    const navigationMock = { navigate: jest.fn() };
+    const screen = render(
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={navigationMock} />
+      </SafeAreaProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('mock-google-result'));
+    const nameInput = await screen.findByTestId('home-destination-hebrew-name');
+    fireEvent.changeText(nameInput, 'הדולומיטים');
+    fireEvent.press(screen.getByTestId('home-destination-confirm-name'));
+
+    await waitFor(() => {
+      expect(mockConfirmProvisionalDestinationName).toHaveBeenCalledWith({
+        resolvedPlaceToken: 'resolved-token-dolomites',
+        incidentId: 'loc_dolomites',
+        confirmedHebrewName: 'הדולומיטים',
+      });
+      expect(navigationMock.navigate).toHaveBeenCalledWith('AddRecommendation', {
+        prefillLocation: {
+          destination: {
+            country: { id: 'IT', name: 'איטליה' },
+            city: { id: 'dolomites', name: 'הדולומיטים' },
+          },
+          place: expect.objectContaining({
+            placeId: 'google-place-1',
+            resolvedPlaceToken: 'resolved-token-dolomites',
+          }),
         },
       });
     });

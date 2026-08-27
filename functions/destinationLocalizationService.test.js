@@ -46,6 +46,11 @@ test('Latin-only destinations receive a deterministic local transliteration', ()
   }), { name, source: 'transliteration_fallback' });
 });
 
+test('fallback transliteration uses Hebrew final letters at word boundaries', () => {
+  assert.match(transliterateDestinationName('Bergen'), /ן$/);
+  assert.equal(transliterateDestinationName('Naam'), 'נאם');
+});
+
 test('an admin Hebrew name remains authoritative during refresh', () => {
   assert.deepEqual(resolveHebrewDestinationName({
     countryCode: 'DE',
