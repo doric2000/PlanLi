@@ -4,6 +4,7 @@ import { useMapRecommendations } from '../src/hooks/useMapRecommendations';
 import { getMapRecommendations } from '../src/services/MapRecommendationsService';
 
 let mockUser = { uid: 'traveler-1' };
+let mockRegionId = null;
 
 jest.mock('../src/services/MapRecommendationsService', () => ({
   getMapRecommendations: jest.fn(),
@@ -13,11 +14,17 @@ jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ user: mockUser }),
 }));
 
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({ selectedRegionId: mockRegionId }),
+}));
+
 const viewport = { north: 33, south: 32, west: 34, east: 35, zoom: 12 };
 
 describe('useMapRecommendations', () => {
   beforeEach(() => {
     mockUser = { uid: 'traveler-1' };
+    mockRegionId = null;
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
     getMapRecommendations.mockReset();
   });
 
@@ -151,5 +158,29 @@ describe('useMapRecommendations', () => {
     expect(result.current.items).toEqual([]);
     await waitFor(() => expect(result.current.items).toEqual([{ id: 'user-2-map' }]));
     expect(getMapRecommendations).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears retained markers and refetches the last viewport when the region changes', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'europe';
+    getMapRecommendations
+      .mockResolvedValueOnce({ items: [{ id: 'europe-map' }] })
+      .mockResolvedValueOnce({ items: [{ id: 'africa-map' }] });
+    const { result, rerender } = renderHook(() => (
+      useMapRecommendations({ enabled: true, request: {} })
+    ));
+
+    await act(async () => result.current.searchViewport(viewport));
+    expect(result.current.items).toEqual([{ id: 'europe-map' }]);
+
+    mockRegionId = 'africa';
+    rerender({});
+
+    expect(result.current.items).toEqual([]);
+    await waitFor(() => expect(result.current.items).toEqual([{ id: 'africa-map' }]));
+    expect(getMapRecommendations).toHaveBeenLastCalledWith(
+      { regionId: 'africa', viewport },
+      { forceRefresh: false },
+    );
   });
 });

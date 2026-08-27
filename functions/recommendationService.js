@@ -4,6 +4,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { evaluateTextSafety } = require('./moderationService');
 const { publicationOutcome } = require('./contentPublication');
 const { resolveCountryMetadata } = require('./countryMetadata');
+const { discoveryRegionForCountry } = require('./discoveryRegions');
 const {
   getHebrewCountryName,
   normalizeCoordinates,
@@ -2718,6 +2719,7 @@ async function saveRecommendation({
       countryName: destination.countryData.name || destination.countryId,
       cityName: destinationHebrewName(destination.cityData) || destination.cityId,
     },
+    discoveryRegionId: discoveryRegionForCountry(destination.countryId),
     media,
     details,
     locationMode: locationMode || (destination.place?.placeId ? 'exact' : 'destination'),
@@ -2817,6 +2819,7 @@ async function saveRecommendation({
       );
       transaction.create(destination.countryRef, {
         ...destination.countryData,
+        discoveryRegionId: discoveryRegionForCountry(destination.countryId),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -2835,6 +2838,7 @@ async function saveRecommendation({
       );
       transaction.create(destination.cityRef, {
         ...destination.cityData,
+        discoveryRegionId: discoveryRegionForCountry(destination.countryId),
         stats: {
           ...(destination.cityData.stats || {}),
           recommendationCount: destinationChanged && contributesToDestinationStats ? 1 : 0,
@@ -2968,6 +2972,8 @@ async function saveRecommendation({
       id: responseDestination.cityId,
       name: responseDestination.cityName || responseDestination.cityId,
     },
+    discoveryRegionId: transactionOutcome?.data?.discoveryRegionId
+      || discoveryRegionForCountry(responseDestination.countryId),
     ...publicationOutcome(transactionOutcome?.data?.status || transactionOutcome?.status),
     ...(!transactionOutcome?.replay && destination.resolutionSource
       ? { resolutionSource: destination.resolutionSource }

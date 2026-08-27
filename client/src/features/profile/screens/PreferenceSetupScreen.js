@@ -24,6 +24,8 @@ import {
   saveGuestNoyaProfile,
 } from '../services/NoyaOnboardingStorage';
 import { normalizeNoyaSmartProfile } from '../utils/preferenceSetup';
+import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 
 const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 const EMPTY_PROFILE = {
@@ -121,6 +123,7 @@ function PreviewCard({ item, onPress }) {
 }
 
 export default function PreferenceSetupScreen({ navigation, route }) {
+  const { selectedRegionId } = useOptionalRegionSelection();
   const source = route?.params?.source || '';
   const uid = auth.currentUser?.uid;
   const { synchronizeUserDocument } = useAuth();
@@ -186,7 +189,11 @@ export default function PreferenceSetupScreen({ navigation, route }) {
   const loadPreview = useCallback(async () => {
     setPreviewLoading(true);
     try {
-      const response = await getPersonalizedRecommendations({ sort: 'forYou', limit: 3 });
+      const response = await getPersonalizedRecommendations({
+        sort: 'forYou',
+        limit: 3,
+        ...(isRegionDiscoveryEnabled() && selectedRegionId ? { regionId: selectedRegionId } : {}),
+      });
       setPreviewItems(Array.isArray(response?.items) ? response.items.slice(0, 3) : []);
     } catch { setPreviewItems([]); }
     finally { setPreviewLoading(false); }

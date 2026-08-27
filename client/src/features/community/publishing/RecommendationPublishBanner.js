@@ -8,6 +8,8 @@ import { colors, contentPublishBannerStyles as styles } from '../../../styles';
 import { locationErrorKind, locationErrorMessage } from '../../../utils/locationErrors';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import { useContentPublish } from './RecommendationPublishContext';
+import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
+import { getRegionById, isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 
 export function publishErrorMessage(job) {
   const error = job?.error;
@@ -43,9 +45,10 @@ function statusCopy(job, queuedCount) {
   if (job.stage === 'queued') return queuedCount > 1 ? `${queuedCount} פרסומים ממתינים` : `${noun} ממתין לפרסום…`;
   return queuedCount > 1 ? `מפרסם כעת, ${queuedCount - 1} נוספים ממתינים…` : `מעלה ומכין את ${noun}…`;
 }
-export default function RecommendationPublishBanner({ onReview }) {
+export default function RecommendationPublishBanner({ onReview, onView, onChooseRegion }) {
   const insets = useSafeAreaInsets();
   const { activeJob, bannerJobCount, beginReview, retry, discard } = useContentPublish();
+  const { selectedRegionId, selectRegion } = useOptionalRegionSelection();
   if (!activeJob) return null;
 
   const failed = activeJob.status === 'failed';
@@ -55,6 +58,25 @@ export default function RecommendationPublishBanner({ onReview }) {
     activeJob.result?.publicationStatus
   );
   const progress = Math.round(Math.max(0, Math.min(1, activeJob.progress || 0)) * 100);
+  const publishedRegionIds = activeJob.contentType === 'route'
+    ? activeJob.result?.discoveryRegionIds || []
+    : [activeJob.result?.discoveryRegionId].filter(Boolean);
+  const publishedOutsideRegion = isRegionDiscoveryEnabled() && success
+    && activeJob.result?.publicationStatus === 'active'
+    && publishedRegionIds.length > 0
+    && !publishedRegionIds.includes(selectedRegionId);
+  const publishedRegionLabels = publishedRegionIds.map((id) => getRegionById(id)?.label).filter(Boolean);
+  const switchPublishedRegion = async () => {
+    if (publishedRegionIds.length !== 1) {
+      onChooseRegion?.();
+      return;
+    }
+    try {
+      await selectRegion(publishedRegionIds[0]);
+    } catch {
+      Alert.alert('לא הצלחנו להחליף אזור', 'הבחירה לא נשמרה. אפשר לנסות שוב בעוד רגע.');
+    }
+  };
   const confirmDiscard = () => Alert.alert(
     'מחיקת הפרסום?',
     `${activeJob.contentType === 'route' ? 'המסלול' : 'ההמלצה'} והתמונות ששמרנו לפרסום יימחקו מהמכשיר.`,
@@ -94,6 +116,8 @@ export default function RecommendationPublishBanner({ onReview }) {
             <AppText style={styles.pendingText}>הפרסום עדיין לא מוצג לציבור ויופיע באזור „בבדיקה” בפרופיל.</AppText>
           ) : unknownOutcome ? (
             <AppText style={styles.pendingText}>לא קיבלנו אישור שהפרסום ציבורי. אפשר לרענן את הפרופיל ולבדוק שוב.</AppText>
+          ) : publishedOutsideRegion ? (
+            <AppText style={styles.pendingText}>התוכן פורסם ב{publishedRegionLabels.join(' וב')} ולא יוצג באזור הנוכחי.</AppText>
           ) : null}
           {failed ? (
             <AppText style={styles.errorText} numberOfLines={2}>
@@ -131,6 +155,19 @@ export default function RecommendationPublishBanner({ onReview }) {
           </TouchableOpacity>
           <TouchableOpacity style={styles.action} onPress={confirmDiscard} testID="publish-discard">
             <AppText style={[styles.actionText, styles.discardText]}>מחיקה</AppText>
+          </TouchableOpacity>
+        </View>
+      ) : publishedOutsideRegion ? (
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.primaryAction} onPress={() => onView?.(activeJob)} testID="publish-view-content">
+            <AppText style={styles.primaryActionText}>צפייה בתוכן</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.action}
+            onPress={switchPublishedRegion}
+            testID="publish-switch-region"
+          >
+            <AppText style={styles.actionText}>{publishedRegionIds.length === 1 ? 'החלפת אזור' : 'בחירת אזור'}</AppText>
           </TouchableOpacity>
         </View>
       ) : null}

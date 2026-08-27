@@ -6,6 +6,7 @@ const { buildSearchIndex, destinationKey } = require('./discoverySearch');
 const { destinationHebrewName } = require('./destinationLocalizationService');
 const { destinationAcceptsNewReferences } = require('./destinationReferencePolicy');
 const { buildFavoritePreview, favoriteKeyForPath } = require('./socialService');
+const { discoveryRegionForCountry, routeRegionFields } = require('./discoveryRegions');
 
 const PAGE_SIZE = 25;
 const MAX_DESTINATION_AFFINITY = 20;
@@ -124,6 +125,7 @@ function recommendationPatch(data, target) {
   const destination = { ...(data.destination || {}), ...target };
   return {
     destination,
+    discoveryRegionId: discoveryRegionForCountry(target.countryId),
     search: buildSearchIndex({
       title: data.title, description: data.description, destination, place: data.place,
       categoryIds: [data.categoryId].filter(Boolean), subcategoryIds: data.tags,
@@ -149,6 +151,7 @@ function routePatch(data, source, target) {
   return {
     destinations,
     destinationKeys,
+    ...routeRegionFields(destinations.map((entry) => entry?.countryId).filter(Boolean)),
     search: buildSearchIndex({
       title: data.title,
       description: `${data.description || ''} ${(data.summaryPlaces || []).join(' ')}`,

@@ -25,6 +25,7 @@ function destinationSearchCacheKey(payload) {
     sort: payload?.sort || 'popular',
     limit: payload?.limit || 20,
     countryId: String(payload?.countryId || '').trim(),
+    regionId: String(payload?.regionId || '').trim(),
   });
 }
 
@@ -70,6 +71,7 @@ export function destinationCatalogItemToCity(item, placeholderColor) {
     id: data.cityId || '',
     cityId: data.cityId || '',
     countryId: data.countryId || '',
+    discoveryRegionId: data.discoveryRegionId || null,
     name: names.he || names.en || data.cityId || '',
     names,
     identity: { names },

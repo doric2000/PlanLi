@@ -1,16 +1,20 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import RecommendationPublishBanner from '../src/features/community/publishing/RecommendationPublishBanner';
 
 const mockRetry = jest.fn();
 const mockDiscard = jest.fn();
 const mockBeginReview = jest.fn();
+const mockSelectRegion = jest.fn();
 let mockPublishState;
 
 jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
   useContentPublish: () => mockPublishState,
+}));
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({ selectedRegionId: 'europe', selectRegion: mockSelectRegion }),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 10, left: 0 }),
@@ -22,6 +26,7 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 describe('RecommendationPublishBanner', () => {
+  const originalRegionFlag = process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
   beforeEach(() => {
     jest.clearAllMocks();
     mockPublishState = {
@@ -32,6 +37,49 @@ describe('RecommendationPublishBanner', () => {
       retry: mockRetry,
       discard: mockDiscard,
     };
+  });
+
+  afterEach(() => {
+    if (originalRegionFlag === undefined) delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
+    else process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = originalRegionFlag;
+  });
+
+  it('offers view and explicit switch when published outside the selected region', () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    const onView = jest.fn();
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', contentType: 'recommendation', status: 'success', progress: 1,
+        result: { recommendationId: 'rec-1', publicationStatus: 'active', discoveryRegionId: 'israel' },
+      },
+    };
+    const screen = render(<RecommendationPublishBanner onView={onView} />);
+    fireEvent.press(screen.getByTestId('publish-view-content'));
+    fireEvent.press(screen.getByTestId('publish-switch-region'));
+    expect(onView).toHaveBeenCalledWith(mockPublishState.activeJob);
+    expect(mockSelectRegion).toHaveBeenCalledWith('israel');
+  });
+
+  it('reports a failed region switch instead of leaking a rejected promise', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockSelectRegion.mockRejectedValueOnce(new Error('storage unavailable'));
+    mockPublishState = {
+      ...mockPublishState,
+      activeJob: {
+        id: 'job-1', contentType: 'recommendation', status: 'success', progress: 1,
+        result: { recommendationId: 'rec-1', publicationStatus: 'active', discoveryRegionId: 'israel' },
+      },
+    };
+    const screen = render(<RecommendationPublishBanner />);
+    fireEvent.press(screen.getByTestId('publish-switch-region'));
+
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(
+      'לא הצלחנו להחליף אזור',
+      'הבחירה לא נשמרה. אפשר לנסות שוב בעוד רגע.',
+    ));
+    alert.mockRestore();
   });
 
   it('shows app-wide upload progress', () => {

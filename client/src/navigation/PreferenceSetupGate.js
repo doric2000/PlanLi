@@ -6,9 +6,13 @@ import RightDrawerNavigator from './RightDrawerNavigator';
 import { useAuth } from '../features/auth/AuthContext';
 import { AUTH_STATES } from '../constants/authPolicy';
 import { colors, common } from '../styles';
+import RegionSelectorScreen from '../features/region/screens/RegionSelectorScreen';
+import { useOptionalRegionSelection } from '../features/region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../features/region/regionDefinitions';
 
 export default function PreferenceSetupGate({ navigation, route }) {
   const { status, loading, authFlowInProgress } = useAuth();
+  const { selectedRegionId, loading: regionLoading } = useOptionalRegionSelection();
   const allowUnverified = route?.params?.allowUnverified === true;
   const allowIncomplete = route?.params?.allowIncomplete === true;
 
@@ -37,6 +41,13 @@ export default function PreferenceSetupGate({ navigation, route }) {
         </View>
       </SafeAreaView>
     );
+  }
+
+  if (isRegionDiscoveryEnabled() && (regionLoading || !selectedRegionId)) {
+    if (regionLoading) {
+      return <SafeAreaView style={common.container}><View style={common.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View></SafeAreaView>;
+    }
+    return <RegionSelectorScreen navigation={navigation} route={{ params: { required: true } }} />;
   }
 
   return <RightDrawerNavigator />;

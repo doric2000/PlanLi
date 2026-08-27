@@ -43,6 +43,7 @@ const {
   setPersonalizationFeedback,
 } = require('./personalizationService');
 const { getMapRecommendations } = require('./mapRecommendationsService');
+const { setDiscoveryRegion } = require('./discoveryRegionPreferenceService');
 const { consumePublicReadBudget } = require('./publicRateLimitService');
 const {
   PROVIDER_CALLABLE_LIMITS,
@@ -638,6 +639,10 @@ exports.searchDestinations = callable(
     await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
     return searchDestinations({ admin, data: request.data });
   }
+);
+
+exports.setDiscoveryRegion = callable({ access: 'signedIn' }, (request) =>
+  setDiscoveryRegion({ admin, auth: request.auth, data: request.data })
 );
 
 exports.recordDiscoverySignal = callable({ access: 'active' }, (request) =>

@@ -74,6 +74,10 @@ import {
   HomeContinuationCard,
   HomeQuickActions,
 } from '../components/HomeDashboard';
+import HomeRegionPreviewChip from '../../region/components/HomeRegionPreviewChip';
+import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled, isRegionSelectorPreviewEnabled } from '../../region/regionDefinitions';
+import { shouldAutoOpenRegionSelector } from '../../region/utils/regionSelectorHomeGate';
 
 const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 const DESTINATION_PLACEHOLDER_COLORS = ['#78909C', '#607D8B', '#526878'];
@@ -89,6 +93,7 @@ function recentDestinationToCity(destination) {
     name: destination.name || destination.label || destination.cityId,
     description: destination.countryName || '',
     countryName: destination.countryName || '',
+    discoveryRegionId: destination.discoveryRegionId || null,
     label: destination.label,
   };
 }
@@ -103,8 +108,32 @@ function cityToRecentDestination(city) {
     cityId,
     name,
     countryName,
+    discoveryRegionId: city?.discoveryRegionId || null,
     label: [name, countryName].filter(Boolean).join(' · '),
   };
+}
+
+export function buildHomeSearchPool({
+  regionDiscoveryEnabled,
+  selectedRegionId,
+  searchResultsLoaded,
+  searchDestinationsList,
+  recentDestinations,
+  favoriteDestinations,
+}) {
+  const localDestinations = mergeDestinations(recentDestinations, favoriteDestinations);
+  if (!regionDiscoveryEnabled) {
+    return mergeDestinations(
+      searchResultsLoaded ? searchDestinationsList : recentDestinations,
+      favoriteDestinations,
+    );
+  }
+  const regionSafeLocalDestinations = localDestinations.filter(
+    (destination) => destination.discoveryRegionId === selectedRegionId,
+  );
+  return searchResultsLoaded
+    ? mergeDestinations(searchDestinationsList, regionSafeLocalDestinations)
+    : regionSafeLocalDestinations;
 }
 
 function catalogItemsToCities(items) {
@@ -126,6 +155,16 @@ function openPreferenceSetupFrom(navigation, source = 'home') {
   rootNavigation?.navigate?.('PreferenceSetup', { source });
 }
 
+function openRegionSelectorFrom(navigation, source = 'home') {
+  let rootNavigation = navigation;
+  let parent = rootNavigation?.getParent?.();
+  while (parent) {
+    rootNavigation = parent;
+    parent = rootNavigation?.getParent?.();
+  }
+  rootNavigation?.navigate?.('RegionSelector', { source });
+}
+
 function requestMetadata(attempt) {
   return {
     requested: attempt?.requested === true || attempt?.source === 'in-flight',
@@ -142,6 +181,11 @@ export default function HomePlanningHubScreen({ navigation }) {
   const { ensureCapability, handleCallableAuthError, userDocument } = useAuth();
   const { completed: preferencesCompleted, loading: preferencesLoading } = useSmartProfile();
   const favoriteCities = useFavoriteCityIds({ enabled: Boolean(user) && !isGuest });
+  const {
+    selectedRegionId,
+    hasSeenPrompt: hasSeenRegionPrompt,
+    loading: regionSelectionLoading,
+  } = useOptionalRegionSelection();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDestinationsList, setSearchDestinationsList] = useState([]);
@@ -175,6 +219,7 @@ export default function HomePlanningHubScreen({ navigation }) {
   const [guestProfileLoaded, setGuestProfileLoaded] = useState(false);
 
   const existingNoyaOpenedRef = useRef(false);
+  const regionAutoPromptOpenedRef = useRef(false);
   const mainScrollRef = useRef(null);
   const searchInputRef = useRef(null);
   const searchRequestRef = useRef(0);
@@ -188,6 +233,18 @@ export default function HomePlanningHubScreen({ navigation }) {
   const hasPersonalization = isGuest ? guestNoyaCompleted : preferencesCompleted;
   const personalizationReady = !authLoading && (isGuest ? guestProfileLoaded : !preferencesLoading);
   const discoverySort = hasPersonalization ? 'forYou' : 'newest';
+
+  useEffect(() => {
+    if (!isRegionDiscoveryEnabled()) return;
+    routesRequestRef.current += 1;
+    recommendationsRequestRef.current += 1;
+    setRoutes([]);
+    setRecommendations([]);
+    setRoutesError(null);
+    setRecommendationsError(null);
+    setRoutesLoading(true);
+    setRecommendationsLoading(true);
+  }, [selectedRegionId]);
 
   useEffect(() => {
     if (!isFocused) return undefined;
@@ -225,6 +282,45 @@ export default function HomePlanningHubScreen({ navigation }) {
     }
     return () => { active = false; };
   }, [isFocused, isGuest, navigation, user?.uid, userDocument?.onboarding?.noya?.version]);
+
+  useEffect(() => {
+    const dashboardSettled = !recentLoading
+      && !draftLoading
+      && !routesLoading
+      && !recommendationsLoading;
+    const shouldOpen = shouldAutoOpenRegionSelector({
+      previewEnabled: isRegionSelectorPreviewEnabled(),
+      selectionLoading: regionSelectionLoading,
+      hasSeenPrompt: hasSeenRegionPrompt,
+      isFocused,
+      personalizationReady,
+      dashboardSettled,
+      refreshing,
+      confirming,
+      noyaOpenedThisVisit: existingNoyaOpenedRef.current,
+      alreadyOpened: regionAutoPromptOpenedRef.current,
+    });
+    if (!shouldOpen) return undefined;
+
+    const timer = setTimeout(() => {
+      if (existingNoyaOpenedRef.current) return;
+      regionAutoPromptOpenedRef.current = true;
+      openRegionSelectorFrom(navigation, 'home-auto-preview');
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [
+    confirming,
+    draftLoading,
+    hasSeenRegionPrompt,
+    isFocused,
+    navigation,
+    personalizationReady,
+    recentLoading,
+    recommendationsLoading,
+    refreshing,
+    regionSelectionLoading,
+    routesLoading,
+  ]);
 
   const loadRecentDestinations = useCallback(async () => {
     const requestId = recentRequestRef.current + 1;
@@ -278,7 +374,7 @@ export default function HomePlanningHubScreen({ navigation }) {
     setRoutesError(null);
     let attempt = null;
     try {
-      attempt = requestPersonalizedRoutes({ sort: discoverySort, limit: 4 });
+      attempt = requestPersonalizedRoutes({ sort: discoverySort, limit: 4, ...(isRegionDiscoveryEnabled() && selectedRegionId ? { regionId: selectedRegionId } : {}) });
       const response = await attempt.promise;
       if (routesRequestRef.current !== requestId) return { ...requestMetadata(attempt), source: 'stale' };
       setRoutes(Array.isArray(response?.items) ? response.items : []);
@@ -293,7 +389,7 @@ export default function HomePlanningHubScreen({ navigation }) {
     } finally {
       if (routesRequestRef.current === requestId) setRoutesLoading(false);
     }
-  }, [discoverySort, principal]);
+  }, [discoverySort, principal, selectedRegionId]);
 
   const loadRecommendations = useCallback(async () => {
     const requestId = recommendationsRequestRef.current + 1;
@@ -302,7 +398,7 @@ export default function HomePlanningHubScreen({ navigation }) {
     setRecommendationsError(null);
     let attempt = null;
     try {
-      attempt = requestPersonalizedRecommendations({ sort: discoverySort, limit: 4 });
+      attempt = requestPersonalizedRecommendations({ sort: discoverySort, limit: 4, ...(isRegionDiscoveryEnabled() && selectedRegionId ? { regionId: selectedRegionId } : {}) });
       const response = await attempt.promise;
       if (recommendationsRequestRef.current !== requestId) {
         return { ...requestMetadata(attempt), source: 'stale' };
@@ -319,7 +415,7 @@ export default function HomePlanningHubScreen({ navigation }) {
     } finally {
       if (recommendationsRequestRef.current === requestId) setRecommendationsLoading(false);
     }
-  }, [discoverySort, principal]);
+  }, [discoverySort, principal, selectedRegionId]);
 
   const loadDashboard = useCallback(() => Promise.all([
     loadRecentDestinations(),
@@ -345,7 +441,7 @@ export default function HomePlanningHubScreen({ navigation }) {
     setSearchResultsLoaded(false);
     setSearchError(null);
     try {
-      const catalog = await searchDestinations({ query: queryText, sort: 'name', limit: 30 });
+      const catalog = await searchDestinations({ query: queryText, sort: 'name', limit: 30, ...(isRegionDiscoveryEnabled() && selectedRegionId ? { regionId: selectedRegionId } : {}) });
       if (searchRequestRef.current !== requestId) return { requested: true, source: 'stale' };
       setSearchDestinationsList(catalogItemsToCities(catalog?.items));
       setSearchResultsLoaded(true);
@@ -359,7 +455,7 @@ export default function HomePlanningHubScreen({ navigation }) {
       }
       return { requested: true, source: 'network-error' };
     }
-  }, []);
+  }, [selectedRegionId]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -425,13 +521,14 @@ export default function HomePlanningHubScreen({ navigation }) {
     () => new Set(favoriteCities.favorites.map((city) => `${city.countryId}:${city.id}`)),
     [favoriteCities.favorites],
   );
-  const searchPool = useMemo(
-    () => mergeDestinations(
-      searchResultsLoaded ? searchDestinationsList : recentDestinations,
-      favoriteCities.favorites,
-    ),
-    [favoriteCities.favorites, recentDestinations, searchDestinationsList, searchResultsLoaded],
-  );
+  const searchPool = useMemo(() => buildHomeSearchPool({
+    regionDiscoveryEnabled: isRegionDiscoveryEnabled(),
+    selectedRegionId,
+    searchResultsLoaded,
+    searchDestinationsList,
+    recentDestinations,
+    favoriteDestinations: favoriteCities.favorites,
+  }), [favoriteCities.favorites, recentDestinations, searchDestinationsList, searchResultsLoaded, selectedRegionId]);
   const filteredDestinations = useMemo(() => filterAndSortDestinations(searchPool, {
     query: searchQuery,
     sortBy: 'name',
@@ -658,11 +755,13 @@ export default function HomePlanningHubScreen({ navigation }) {
         filterTestID="home-filter-button"
       >
         <GooglePlacesInput
-          mode="google"
+          mode={isRegionDiscoveryEnabled() ? "local" : "google"}
           value={searchQuery}
           onChangeValue={setSearchQuery}
           localResults={localAutocompleteResults}
-          idleLocalResults={recentDestinations}
+          idleLocalResults={isRegionDiscoveryEnabled()
+            ? recentDestinations.filter((item) => item.discoveryRegionId === selectedRegionId)
+            : recentDestinations}
           idleLocalTitle="חיפושים אחרונים"
           localResultsLoading={localResultsLoading}
           returnSelection
@@ -689,6 +788,12 @@ export default function HomePlanningHubScreen({ navigation }) {
 
   const renderDashboard = () => (
     <View style={styles.dashboard} testID="home-dashboard">
+      {isRegionSelectorPreviewEnabled() || isRegionDiscoveryEnabled() ? (
+        <HomeRegionPreviewChip
+          regionId={selectedRegionId}
+          onPress={() => openRegionSelectorFrom(navigation, 'home-change')}
+        />
+      ) : null}
       <HomeContinuationCard
         loading={draftLoading || recentLoading}
         error={draftError}

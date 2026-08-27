@@ -4,6 +4,7 @@ const { distanceBetween, geohashQueryBounds } = require('geofire-common');
 const { matchesDestinations, parseSearchQuery, searchRelevance } = require('./discoverySearch');
 const { cleanDestinations, cleanFilters, matchesFilters } = require('./personalizationService');
 const { normalizeMapCoordinates } = require('./mapLocation');
+const { cleanDiscoveryRegionId } = require('./discoveryRegions');
 
 const MIN_MAP_ZOOM = 4;
 const MAX_MAP_RESULTS = 200;
@@ -113,11 +114,12 @@ function mapRecommendationPreview(item) {
   };
 }
 
-function filterMapCandidates(candidates, { viewport, parsedQuery, destinations, filters }) {
+function filterMapCandidates(candidates, { viewport, parsedQuery, destinations, filters, discoveryRegionId }) {
   const byId = new Map();
   candidates.forEach((item) => {
     if (!item?.id || byId.has(item.id)) return;
     if (item.status !== 'active') return;
+    if (discoveryRegionId && item.discoveryRegionId !== discoveryRegionId) return;
     if (!viewportContains(viewport, item.mapLocation || item?.place?.coordinates)) return;
     if (!matchesDestinations(item, destinations)) return;
     if (!matchesFilters(item, filters)) return;
@@ -128,16 +130,18 @@ function filterMapCandidates(candidates, { viewport, parsedQuery, destinations, 
   return Array.from(byId.values());
 }
 
-async function queryMapCandidates(db, viewport) {
+async function queryMapCandidates(db, viewport, discoveryRegionId = null) {
   const bounds = getViewportGeohashBounds(viewport);
-  const snapshots = await Promise.all(bounds.map(([start, end]) => db
-    .collection('recommendations')
-    .where('status', '==', 'active')
+  const snapshots = await Promise.all(bounds.map(([start, end]) => {
+    let query = db.collection('recommendations').where('status', '==', 'active');
+    if (discoveryRegionId) query = query.where('discoveryRegionId', '==', discoveryRegionId);
+    return query
     .orderBy('mapLocation.geohash')
     .startAt(start)
     .endAt(end)
     .limit(MAX_QUERY_RESULTS_PER_BOUND)
-    .get()));
+      .get();
+  }));
   return snapshots.flatMap((snapshot) => snapshot.docs.map((document) => ({
     id: document.id,
     ...document.data(),
@@ -154,16 +158,19 @@ async function getMapRecommendations({ admin, data }) {
   }
   const filters = cleanFilters(data?.filters || {});
   const { destinations } = cleanDestinations(data || {});
+  const discoveryRegionId = cleanDiscoveryRegionId(data?.regionId);
+  assert(discoveryRegionId !== undefined, 'invalid-argument', 'regionId is invalid.');
   if (viewport.zoom < MIN_MAP_ZOOM) {
     return { items: [], count: 0, truncated: false, zoomInRequired: true };
   }
 
-  const candidates = await queryMapCandidates(admin.firestore(), viewport);
+  const candidates = await queryMapCandidates(admin.firestore(), viewport, discoveryRegionId);
   const matching = filterMapCandidates(candidates, {
     viewport,
     parsedQuery,
     destinations,
     filters,
+    discoveryRegionId,
   });
   const truncated = matching.length > MAX_MAP_RESULTS;
   const items = matching.slice(0, MAX_MAP_RESULTS);
