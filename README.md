@@ -25,14 +25,14 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible production EAS Update is canonical-destination integrity
-group `57eed77a-9f71-4e56-89c7-2c85f3c82077`, published for Android
-(`01a041e7-be3b-7ced-83d6-8243c9c5c93b`) and iOS
-(`01a041e7-be3b-76f4-bc0f-f7e7540f8821`) at
-`2026-08-27T06:28:21.691Z` from clean `main` merge commit `9d70edad`. EAS
+The latest compatible production EAS Update is recommendation draft-recovery
+group `65e800f9-a1eb-4a6c-916e-4cf941ec3e10`, published for Android
+(`01a04212-50c3-7b27-abbe-5ab757b1d1db`) and iOS
+(`01a04212-50c3-721e-ac6e-60b97ce356f3`) at
+`2026-08-27T07:14:51.715Z` from clean `main` merge commit `f06f2f6b`. EAS
 read-back confirms that both production manifests use runtime `1.1.0`, the
 exact merge commit, the production environment, and a clean working tree.
-Download, application, and canonical destination selection on the physical
+Download, application, and recommendation draft recovery on the physical
 Android tablet and TestFlight iPhone remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
@@ -44,11 +44,11 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and runtime `1.1.0`. The matching canonical-
-destination preview group is `65aad93c-c64b-4f13-a154-626f6909d333`; the
-immediately preceding compatible groups are preview
-`1a3c69c6-fc05-4666-b3df-da528b00facf` and production
-`2b8fe998-103e-4d9f-8080-ad01301b6cb8`. PR `#231` merged the canonical-
+the `production` EAS Update channel and runtime `1.1.0`. The matching
+recommendation draft-recovery preview group is
+`50b71fab-4cab-4a78-acf2-ef2ced0a22ff`; the immediately preceding compatible
+groups are preview `65aad93c-c64b-4f13-a154-626f6909d333` and production
+`57eed77a-9f71-4e56-89c7-2c85f3c82077`. PR `#231` merged the canonical-
 destination rollout to `main` as `9d70edad`. Nine affected Functions and the
 48-file admin Hosting bundle were then redeployed from that clean merge commit.
 The private registry contains 251 validated entries, 14 reviewed legacy
@@ -1521,3 +1521,43 @@ rejected.
   Android devices. Force-close and reopen the app up to twice to apply it. Roll
   back preview to `1a3c69c6-fc05-4666-b3df-da528b00facf` or production to
   `2b8fe998-103e-4d9f-8080-ad01301b6cb8` if required.
+
+## Recommendation draft recovery release
+
+- Source and Git: PR `#233` merged to clean `main` as
+  `f06f2f6b6aacb99cc9d76e99cb9ffb1d34f8c4ba` at
+  `2026-08-27T07:01:32Z`.
+- Root cause and scope: production logs showed repeated HTTP 409 responses from
+  `saveRecommendationDraft`, which maps uniquely to
+  `RECOMMENDATION_DRAFT_VERSION_CONFLICT`; the final save therefore failed
+  before the publication queue was reached. The client now refreshes and retries
+  a matching stale draft once without overwriting a different draft. Discard is
+  single-flight, shows immediate progress, treats an already-missing draft as
+  success, and leaves after server deletion even if local media cleanup fails.
+  Terminal save/discard failures use privacy-safe Sentry operation, code, reason,
+  and content-mode tags only.
+- Preview EAS Update: group `50b71fab-4cab-4a78-acf2-ef2ced0a22ff`, Android
+  update `01a04210-e502-77d6-9679-5098ff897ec1`, and iOS update
+  `01a04210-e502-70f2-9bb1-5f825c56fe48`, published at
+  `2026-08-27T07:13:18.594Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10`, Android update
+  `01a04212-50c3-7b27-abbe-5ab757b1d1db`, and iOS update
+  `01a04212-50c3-721e-ac6e-60b97ce356f3`, published at
+  `2026-08-27T07:14:51.715Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `f06f2f6b`; production
+  reused the preview artifacts.
+- Validation: all 32 focused recommendation-composer tests passed,
+  `npm run validate:changed` passed, and every PR `#233` check passed. Both
+  clean-main production-lineage preflights passed against the previously live
+  commit `9d70edad`. The preview export found 52 iOS and 51 Android assets,
+  uploaded two app bundles, and uploaded no new assets.
+- Observability: read-only Sentry queries returned no issues in the preceding
+  24 hours for the `prod` or `production` environments or without an environment
+  filter. No physical-device reproduction has been completed after rollout.
+- No Firebase deployment, Rules, indexes, Hosting, migration, IAM, native EAS
+  build, TestFlight/App Store submission, or Google Play release accompanied
+  this JavaScript-only update. Force-close and reopen the production app up to
+  twice to apply it. Roll back preview to
+  `65aad93c-c64b-4f13-a154-626f6909d333` or production to
+  `57eed77a-9f71-4e56-89c7-2c85f3c82077` if required.
