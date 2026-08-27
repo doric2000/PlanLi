@@ -364,37 +364,35 @@ Current release record:
 - Source release: the build contains the native RTL correction from PR `#217`
   merge commit `0511cf110642fb1811cb717b5a80fd9d11e19510`; its exact source is
   `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5`.
-- Preview EAS Update: Home planning hub group
-  `48a9c9ef-4c32-4030-adb0-0ad7bcecb111`, runtime `1.1.0`, iOS update
-  `01a03b4e-b151-7955-887a-b24f9ded8f1d`, and Android update
-  `01a03b4e-b151-7faa-bde7-d23de24d37a1`, published from PR `#215` merge
-  commit `e1ba08d9255c90c1c22ed93b5d9da90c5d392d74` at
-  `2026-08-25T23:43:28.081Z` with the `production` EAS environment. EAS
-  read-back confirmed both manifests, the `preview` branch, runtime, and exact
-  commit. There is no signed iOS preview-profile build, so download and
-  physical-device behavior remain unverified.
-- Production EAS Update: exact republish of that preview bundle as group
-  `43a873d8-282c-4e6a-986d-fcd014047c2c`, runtime `1.1.0`, iOS update
-  `01a03b51-cc08-727f-88f1-93b17c27e092`, and Android update
-  `01a03b51-cc08-7328-8f2d-71f26f5953b2`, published at
-  `2026-08-25T23:46:51.528Z`. EAS read-back confirmed both manifests and the
-  production branch point to this group and exact commit, with a clean Git
-  working tree. Roll back by republishing the preceding production group
-  `1184a492-317b-4a5a-be48-12374b98bc8a`. Download and application on the
+- Preview EAS Update: rebuilt admin-console group
+  `18ae0c59-1b46-49a7-89cf-941782743183`, runtime `1.1.0`, iOS update
+  `01a04321-6135-7f22-a823-6a41f8016ee3`, and Android update
+  `01a04321-6135-796f-adb0-b2f29c372bcd`, published at
+  `2026-08-27T12:10:56.181Z` from clean `main` commit
+  `cd458a7e33f23970926d1af3db05ef18c1cd57d6` with the production EAS
+  environment. EAS read-back confirmed both manifests, the `preview` branch,
+  runtime, and exact commit.
+- Production EAS Update: exact republish of those preview artifacts as group
+  `f91d01d2-42aa-436c-8774-98d9f85d09bd`, runtime `1.1.0`, iOS update
+  `01a04323-fa7c-77db-96bb-f59d49c3474e`, and Android update
+  `01a04323-fa7c-7dc9-b4ec-b5eaa4c31130`, published at
+  `2026-08-27T12:13:46.492Z`. EAS read-back confirmed the production branch,
+  both platforms, and exact commit `cd458a7e33f23970926d1af3db05ef18c1cd57d6`.
+  Roll back by republishing production group
+  `4947c1c8-6bae-4115-bc2f-b6c622d9230d`. Download and application on the
   physical TestFlight iPhone and Android tablet remain unverified.
-- Firebase release: 99 active Node.js 22 v2 Functions in `europe-west1`.
-  Twelve affected Functions deployed from clean `main` commit `4766903` at
-  approximately `2026-08-25T20:49Z`: `prepareMedia`,
-  `publishRecommendationDraft`, `saveRouteDraft`, `publishRouteDraft`,
-  `updateProfile`, `getPersonalizedRecommendations`, `getPersonalizedRoutes`,
-  `recordDiscoverySignal`, `setPersonalizationFeedback`,
-  `mergeGuestPersonalization`, `setPersonalizationBehavior`, and
-  `resetPersonalizationActivity`. The last three were created; the other nine
-  were updated. CLI inventory independently confirmed all twelve as active v2
-  Node.js 22 Functions in `europe-west1`, and the post-deploy logs contained
-  rollout health starts with no Function error entries. Firestore Rules,
-  Storage Rules, indexes, Hosting, production documents, migrations, IAM, and
-  the other 87 Functions were unchanged.
+- Firebase admin-console release: 34 targeted v2 Functions were deployed from
+  clean `main` and independently inventoried as 34/34 `ACTIVE` on Node.js 22 in
+  `europe-west1`. Firestore has 62/62 expected composite indexes after adding
+  the eight moderation queue, enforcement, and search indexes. The authorized
+  resumable backfill completed and its final dry run found zero remaining case,
+  held-content, or search-projection changes. Firestore and Storage Rules, IAM,
+  unrelated Functions, and native builds were unchanged.
+- Firebase Hosting now serves the rebuilt admin console at
+  `https://planli-f0b12.web.app/admin/`. The production HTML and expected bundle
+  returned HTTP 200; browser checks at 1280x900 and 390x844 found no console
+  errors or horizontal overflow. Authenticated admin behavior remains pending
+  because the available browser session was signed out.
 - RoadTrip validation: 16 focused client suites passed 108 tests and seven
   focused Node.js 22 route/location Function suites passed 50 tests.
   Changed-scope validation and PR `#181` plan, affected-client,
@@ -425,16 +423,12 @@ Current release record:
   review found no actionable findings. The locked client dependency audit still
   reports eight high-severity findings; dependencies were not upgraded during
   this release. Physical-device behavior remains unverified.
-- OTA device state: Expo serves Home planning hub preview group
-  `48a9c9ef-4c32-4030-adb0-0ad7bcecb111` only to matching preview requests;
-  no preview iOS client exists, so it has not been applied. Production now
-  serves group `43a873d8-282c-4e6a-986d-fcd014047c2c` for Android and iOS.
-  Download, application, Home continuation/search/actions/discovery behavior,
-  multi-photo gestures, recommendation creation, RoadTrip editing, Noya
-  guidance, and For You v2 behavior remain unverified on the physical
-  TestFlight iPhone and Android tablet. The immediate rollback groups are
-  preview `cde53874-e3f5-4a1b-b8ef-f7a52fa5a025` and production
-  `1184a492-317b-4a5a-be48-12374b98bc8a`.
+- OTA device state: Expo serves rebuilt admin-console preview group
+  `18ae0c59-1b46-49a7-89cf-941782743183` to matching preview requests and
+  production group `f91d01d2-42aa-436c-8774-98d9f85d09bd` to compatible
+  Android and iOS runtime `1.1.0` clients. Download, application, and signed-in
+  admin-console behavior remain unverified on physical devices. The immediate
+  production rollback group is `4947c1c8-6bae-4115-bc2f-b6c622d9230d`.
 - Production catalog migration: the separately authorized apply run at
   `2026-08-24T19:49Z` scanned 14 recommendations and migrated exactly one
   document (`recommendations/rec_CBCFGWNEcxN3Ov6ijXeI`) to category `nature`
@@ -1661,3 +1655,76 @@ rejected.
   `50b71fab-4cab-4a78-acf2-ef2ced0a22ff`, production Android to
   `25506ec2-6a03-46dd-99f4-7b26178e9205`, or production iOS to
   `65e800f9-a1eb-4a6c-916e-4cf941ec3e10` if required.
+
+## Admin console rebuild and compatibility release
+
+- Source and Git: compatibility PR `#239` merged as
+  `7d71e3b8c41d` and search-projection repair PR `#240` merged as final release
+  commit `cd458a7e33f23970926d1af3db05ef18c1cd57d6` on clean `main`.
+- Root cause and scope: the rebuilt admin client could reach an older or
+  partially deployed callable/index surface and then expose raw Firebase
+  failures for every action. The console now bootstraps against an explicit
+  `consoleContractVersion`, blocks operational controls until the backend
+  contract is compatible, keeps saved views optional, and maps callable/index
+  failures to safe Hebrew recovery states. The moderation search backfill is
+  idempotent and no longer rewrites equivalent projections. A production dry
+  run also exposed an optional destination `countryName` being serialized as
+  `undefined`; PR `#240` omits the absent field and covers it with a regression
+  test.
+- Firestore indexes: the exact indexes target was deployed to the Standard
+  `(default)` database in `eur3`. Independent comparison reported 62 local and
+  62 live composite indexes with none missing; eight moderation-case,
+  enforcement, and search indexes were added. Firestore Rules were not
+  deployed or weakened.
+- Functions: the 34 admin, moderation, enforcement, notification, profile-sync,
+  deletion, and search-projection targets were deployed with the documented
+  extended source-discovery timeout and explicit retry-policy confirmation.
+  Independent inventory found all 34 `ACTIVE`, v2, Node.js 22, and
+  `europe-west1`; the seven repaired search triggers share deployed source hash
+  `a03346c8f761f7519163bc2f22737a06695cd0c1`. Two attempts to read recent
+  Function logs through Firebase CLI failed in the Google Cloud log-retrieval
+  layer, so post-release log contents are explicitly unverified rather than
+  reported as clean.
+- Moderation backfill: the initial dry run found nine case revisions, two held
+  content links, and 127 search projections. The approved apply wrote the nine
+  case and two held-content repairs. The first search apply stopped before its
+  batch commit when Firestore rejected the undefined destination field; after
+  PR `#240` and redeployment of the seven search triggers, the dry run found 74
+  and five changes across two resumable batches and the apply completed. The
+  final read-only audit inspected 11 cases, two held records, and 318 search
+  resources across two pages with zero remaining changes or writes.
+- Hosting: `export:admin-web` and `verify:admin-web` passed, resolving all 35
+  local references, before exact Hosting deployment. The live admin route at
+  `https://planli-f0b12.web.app/admin/` returned HTTP 200 with the expected
+  bundle. Browser checks at desktop 1280x900 and iPhone 390x844 loaded the
+  Hebrew sign-in state with no console errors or horizontal overflow. The
+  available browser profile had no signed-in admin session, so authenticated
+  policy bootstrap and real admin actions remain unverified in production.
+- EAS Update: two clean-main production-lineage preflights passed against the
+  preceding live source `ffde0470634d13f9e5c93656770cc16e85818171`. Preview
+  group `18ae0c59-1b46-49a7-89cf-941782743183` contains iOS update
+  `01a04321-6135-7f22-a823-6a41f8016ee3` and Android update
+  `01a04321-6135-796f-adb0-b2f29c372bcd`, published at
+  `2026-08-27T12:10:56.181Z`. Those exact artifacts were republished to
+  production group `f91d01d2-42aa-436c-8774-98d9f85d09bd`, iOS update
+  `01a04323-fa7c-77db-96bb-f59d49c3474e`, and Android update
+  `01a04323-fa7c-7dc9-b4ec-b5eaa4c31130` at
+  `2026-08-27T12:13:46.492Z`. EAS read-back confirmed both production
+  manifests, runtime `1.1.0`, branch `production`, and exact commit
+  `cd458a7e33f23970926d1af3db05ef18c1cd57d6`. The preview export bundled 2,419
+  modules for each native platform, found 52 iOS and 51 Android assets, uploaded
+  two app bundles, and uploaded no new assets.
+- Validation: focused Functions coverage passed 40/40 tests and transitive
+  moderation, notification, deletion, and public-profile coverage passed 75/75.
+  Client contract/error coverage passed 13/13, changed-scope validation passed,
+  and the single final review found and drove the error-priority regression fix
+  before merge. Regression coverage includes reporter document-ID anonymity,
+  filtered moderation datasets larger than one page, failure after suspension
+  reinstatement finalization, and route-revision projection cleanup.
+- No native EAS build, TestFlight/App Store or Google Play submission, Rules,
+  Storage, IAM, dependency upgrade, or destructive production deletion was
+  performed. The only production-document writes were the explicitly approved
+  moderation backfill. OTA download/application and authenticated admin actions
+  on a physical iPhone remain unverified. Force-close and reopen the production
+  app up to twice to apply the OTA; roll back by republishing production group
+  `4947c1c8-6bae-4115-bc2f-b6c622d9230d`.
