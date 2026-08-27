@@ -45,6 +45,8 @@ import { NoyaTourProvider } from "./src/features/noya/NoyaTourContext";
 import NoyaTourOverlayHost from "./src/features/noya/NoyaTourOverlay";
 import GuestPersonalizationBridge from "./src/features/profile/components/GuestPersonalizationBridge";
 import { PersonalizationFeedbackProvider } from "./src/features/profile/context/PersonalizationFeedbackContext";
+import RegionSelectorScreen from "./src/features/region/screens/RegionSelectorScreen";
+import { RegionSelectionProvider } from "./src/features/region/context/RegionSelectionContext";
 
 
 const Stack = createStackNavigator();
@@ -105,6 +107,7 @@ export default function App() {
 		<AppFontProvider>
 			<SafeAreaProvider initialMetrics={initialWindowMetrics}>
 				<AuthProvider navigationRef={navigationRef}>
+				<RegionSelectionProvider>
 				 <PersonalizationFeedbackProvider>
 				 <BlockedUsersProvider>
 				 <NotificationCenterProvider>
@@ -128,6 +131,7 @@ export default function App() {
 					<Stack.Screen name='Privacy' component={LegalDocumentScreen} />
 					<Stack.Screen name='CommunityGuidelines' component={LegalDocumentScreen} />
 					<Stack.Screen name='Main' component={PreferenceSetupGate} />
+					<Stack.Screen name='RegionSelector' component={RegionSelectorScreen} />
 					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupScreen} />
 					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
 					<Stack.Screen name="NotificationSettings" component={NotificationSettingsAuthed} />
@@ -176,6 +180,12 @@ export default function App() {
 				/>
 				<AuthGateModal />
 				<ContentPublishBanner
+					onView={(job) => {
+						if (!navigationRef.isReady()) return;
+						if (job.contentType === 'route') navigationRef.navigate('RouteDetail', { routeId: job.result?.routeId });
+						else navigationRef.navigate('RecommendationDetail', { postId: job.result?.recommendationId });
+					}}
+					onChooseRegion={() => navigationRef.isReady() && navigationRef.navigate('RegionSelector', { source: 'publish-change' })}
 					onReview={(publishJobId, contentType) => {
 						if (navigationRef.isReady()) {
 							navigationRef.navigate(
@@ -192,6 +202,7 @@ export default function App() {
 				 </NotificationCenterProvider>
 				 </BlockedUsersProvider>
 				 </PersonalizationFeedbackProvider>
+				</RegionSelectionProvider>
 				</AuthProvider>
 			</SafeAreaProvider>
 		</AppFontProvider>

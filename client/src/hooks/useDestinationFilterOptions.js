@@ -4,6 +4,8 @@ import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { searchDestinations } from '../services/DestinationService';
 import { compactDestinationText } from '../utils/destinationSearch';
+import { useOptionalRegionSelection } from '../features/region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../features/region/regionDefinitions';
 
 let cachedOptions = null;
 let pendingOptions = null;
@@ -31,12 +33,14 @@ function catalogItemToOption(data, countryNameFallbacks = {}) {
   };
 }
 
-async function loadDestinationOptions() {
-  if (cachedOptions) return cachedOptions;
-  if (pendingOptions) return pendingOptions;
-  pendingOptions = Promise.all([
-    getDocs(query(collection(db, 'countries'), where('status', '==', 'active'), limit(100))),
-    searchDestinations({ sort: 'popular', limit: 30 }),
+async function loadDestinationOptions(regionId = null) {
+  if (cachedOptions?.regionId === regionId) return cachedOptions.items;
+  if (pendingOptions?.regionId === regionId) return pendingOptions.promise;
+  let countriesQuery = query(collection(db, 'countries'), where('status', '==', 'active'), limit(100));
+  if (regionId) countriesQuery = query(collection(db, 'countries'), where('status', '==', 'active'), where('discoveryRegionId', '==', regionId), limit(100));
+  const promise = Promise.all([
+    getDocs(countriesQuery),
+    searchDestinations({ sort: 'popular', limit: 30, ...(regionId ? { regionId } : {}) }),
   ]).then(([countriesSnapshot, catalog]) => {
     const countryNames = Object.fromEntries(countriesSnapshot.docs.map((document) => [
       document.id,
@@ -65,59 +69,76 @@ async function loadDestinationOptions() {
         popularity: Number(popularityByCountry[document.id] || 0),
       };
     });
-    cachedOptions = [...countries, ...cities].sort((a, b) => a.label.localeCompare(b.label, 'he'));
-    return cachedOptions;
+    const items = [...countries, ...cities].sort((a, b) => a.label.localeCompare(b.label, 'he'));
+    cachedOptions = { regionId, items };
+    return items;
   }).finally(() => { pendingOptions = null; });
-  return pendingOptions;
+  pendingOptions = { regionId, promise };
+  return promise;
 }
 
 export function useDestinationFilterOptions(enabled = true, searchQuery = '') {
-  const [options, setOptions] = useState(cachedOptions || []);
+  const { selectedRegionId } = useOptionalRegionSelection();
+  const activeRegionId = isRegionDiscoveryEnabled() ? selectedRegionId : null;
+  const [optionsState, setOptionsState] = useState(() => ({
+    regionId: activeRegionId,
+    items: cachedOptions?.regionId === activeRegionId ? cachedOptions.items : [],
+  }));
   const [loading, setLoading] = useState(false);
-  const [remoteOptions, setRemoteOptions] = useState([]);
+  const [remoteOptionsState, setRemoteOptionsState] = useState({ regionId: activeRegionId, items: [] });
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchRetryKey, setSearchRetryKey] = useState(0);
   useEffect(() => {
-    if (!enabled || cachedOptions) {
-      if (cachedOptions && options !== cachedOptions) setOptions(cachedOptions);
+    if (!enabled) return undefined;
+    if (cachedOptions?.regionId === activeRegionId) {
+      setOptionsState({ regionId: activeRegionId, items: cachedOptions.items });
       return undefined;
     }
     let active = true;
+    setOptionsState({ regionId: activeRegionId, items: [] });
     setLoading(true);
-    loadDestinationOptions().then((next) => active && setOptions(next))
+    loadDestinationOptions(activeRegionId).then((next) => {
+      if (active) setOptionsState({ regionId: activeRegionId, items: next });
+    })
       .catch((error) => console.error('Failed to load destination filter options', error))
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [enabled]);
+  }, [activeRegionId, enabled]);
   useEffect(() => {
     const queryKey = compactDestinationText(searchQuery);
     if (!enabled || queryKey.length < 2) {
-      setRemoteOptions([]);
+      setRemoteOptionsState({ regionId: activeRegionId, items: [] });
       setSearchLoading(false);
       setSearchError('');
       return undefined;
     }
     let active = true;
+    setRemoteOptionsState({ regionId: activeRegionId, items: [] });
     setSearchLoading(true);
     setSearchError('');
-    searchDestinations({ query: searchQuery, sort: 'popular', limit: 30 })
+    searchDestinations({ query: searchQuery, sort: 'popular', limit: 30, ...(activeRegionId ? { regionId: activeRegionId } : {}) })
       .then((catalog) => {
         if (!active) return;
-        setRemoteOptions((catalog?.items || [])
-          .map((data) => catalogItemToOption(data))
-          .filter((item) => item.countryId && item.cityId));
+        setRemoteOptionsState({
+          regionId: activeRegionId,
+          items: (catalog?.items || [])
+            .map((data) => catalogItemToOption(data))
+            .filter((item) => item.countryId && item.cityId),
+        });
       })
       .catch((error) => {
         if (active) {
-          setRemoteOptions([]);
+          setRemoteOptionsState({ regionId: activeRegionId, items: [] });
           setSearchError('לא הצלחנו לחפש יעדים כרגע.');
           console.error('Failed to search destination filter options', error);
         }
       })
       .finally(() => active && setSearchLoading(false));
     return () => { active = false; };
-  }, [enabled, searchQuery, searchRetryKey]);
+  }, [activeRegionId, enabled, searchQuery, searchRetryKey]);
+  const options = optionsState.regionId === activeRegionId ? optionsState.items : [];
+  const remoteOptions = remoteOptionsState.regionId === activeRegionId ? remoteOptionsState.items : [];
   const mergedOptions = [...new Map([...options, ...remoteOptions]
     .map((option) => [option.key, option])).values()];
   const popularOptions = [...options].filter((option) => option.kind === 'city')

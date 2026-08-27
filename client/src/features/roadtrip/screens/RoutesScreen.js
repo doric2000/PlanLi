@@ -59,6 +59,9 @@ import {
   useNoyaTourTargetRegistration,
 } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
+import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
+import HomeRegionPreviewChip from '../../region/components/HomeRegionPreviewChip';
 
 const text = {
   title: 'מסלולים',
@@ -71,6 +74,8 @@ const text = {
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
+  const { selectedRegionId } = useOptionalRegionSelection();
+  const activeRegionId = isRegionDiscoveryEnabled() ? selectedRegionId : null;
   useNoyaMainTabRegistration(navigation);
   const routesSearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesSearch);
   const routesFilterTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesFilter);
@@ -112,7 +117,7 @@ export default function RoutesScreen({ navigation }) {
     setConfirming(false);
     setRequesting(true);
     setSettledRequestIdentity('');
-  }, [principal]);
+  }, [activeRegionId, principal]);
 
   useEffect(() => {
     if (profileLoading || personalizationInitialized.current) return;
@@ -126,7 +131,7 @@ export default function RoutesScreen({ navigation }) {
   }, [filters]);
 
   const requestKey = JSON.stringify(debouncedRequest);
-  const requestIdentity = JSON.stringify([principal, sortBy, requestKey]);
+  const requestIdentity = JSON.stringify([principal, activeRegionId, sortBy, requestKey]);
   const personalizationSortReady = !profileLoading
     && (!personalizationAvailable || sortBy === 'personalized');
   const requestSettled = !requesting && settledRequestIdentity === requestIdentity;
@@ -142,7 +147,7 @@ export default function RoutesScreen({ navigation }) {
     if (showLoader) setLoading(true);
     setError(null);
     try {
-      const attempt = requestRoutes({ ...debouncedRequest, sort: serverSort(sortBy), limit: 30 });
+      const attempt = requestRoutes({ ...debouncedRequest, ...(activeRegionId ? { regionId: activeRegionId } : {}), sort: serverSort(sortBy), limit: 30 });
       if (refreshFeedback) {
         const networkPending = attempt.requested || attempt.source === 'in-flight';
         setRefreshing(networkPending);
@@ -170,7 +175,7 @@ export default function RoutesScreen({ navigation }) {
       setRefreshing(false);
       setConfirming(false);
     }
-  }, [requestIdentity, requestKey, sortBy, principal]);
+  }, [activeRegionId, requestIdentity, requestKey, sortBy, principal]);
 
   useFocusEffect(useCallback(() => {
     fetchRoutes({ showLoader: routes.length === 0 });
@@ -323,6 +328,7 @@ export default function RoutesScreen({ navigation }) {
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
+      {isRegionDiscoveryEnabled() ? <HomeRegionPreviewChip regionId={selectedRegionId} onPress={() => navigation.navigate('RegionSelector', { source: 'routes-change' })} /> : null}
       <FlatList style={styles.scroll} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.feedContent,

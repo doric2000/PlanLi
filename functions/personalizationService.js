@@ -1,4 +1,5 @@
 const { HttpsError } = require('firebase-functions/v2/https');
+const { cleanDiscoveryRegionId } = require('./discoveryRegions');
 const { attachRouteDestinationPreviews } = require('./routeDestinationPreviewService');
 const {
   BUDGET_IDS,
@@ -659,8 +660,11 @@ function cleanDestinations(data) {
   return { destinations, context: null };
 }
 
-function candidateBase(collection, { context, route }) {
+function candidateBase(collection, { context, route, discoveryRegionId }) {
   let query = collection.where('status', '==', 'active');
+  if (discoveryRegionId) query = route
+    ? query.where(`discoveryRegionMembership.${discoveryRegionId}`, '==', true)
+    : query.where('discoveryRegionId', '==', discoveryRegionId);
   if (context) {
     if (route) query = query.where('destinationKeys', 'array-contains', destinationKey(context.countryId, context.cityId));
     else {
@@ -672,10 +676,10 @@ function candidateBase(collection, { context, route }) {
 }
 
 async function candidateSnapshots(db, {
-  collectionName, context, destinations, interests, filters, parsedQuery, route,
+  collectionName, context, destinations, interests, filters, parsedQuery, route, discoveryRegionId,
 }) {
   const collection = db.collection(collectionName);
-  const base = () => candidateBase(collection, { context, route });
+  const base = () => candidateBase(collection, { context, route, discoveryRegionId });
   const queries = [
     base().orderBy('stats.likeCount', 'desc').limit(80).get(),
     base().orderBy('createdAt', 'desc').limit(80).get(),
@@ -684,7 +688,7 @@ async function candidateSnapshots(db, {
   // use destinationKeys as an array, so text/facet candidates are collected
   // globally and the hard destination context is applied in memory below.
   const facetBase = () => route && context
-    ? collection.where('status', '==', 'active')
+    ? candidateBase(collection, { context: null, route, discoveryRegionId })
     : base();
   if (parsedQuery.terms.length) {
     const prefixes = Array.from(new Set(parsedQuery.alternatives.flat())).slice(0, 30);
@@ -697,11 +701,11 @@ async function candidateSnapshots(db, {
   if (!context) {
     for (const destination of destinations) {
       if (route) {
-        queries.push(collection.where('status', '==', 'active')
+        queries.push(candidateBase(collection, { context: null, route, discoveryRegionId })
           .where('destinationKeys', 'array-contains', destinationKey(destination.countryId, destination.cityId))
           .limit(100).get());
       } else {
-        let query = collection.where('status', '==', 'active')
+        let query = candidateBase(collection, { context: null, route, discoveryRegionId })
           .where('destination.countryId', '==', destination.countryId);
         if (destination.cityId) query = query.where('destination.cityId', '==', destination.cityId);
         queries.push(query.limit(100).get());
@@ -728,6 +732,13 @@ function sortGeneric(candidates, sort, parsedQuery) {
 function publicDiscoveryItem(item) {
   const { _textScore, search, ...publicItem } = item;
   return publicItem;
+}
+
+function matchesDiscoveryRegion(item, discoveryRegionId, { route = false } = {}) {
+  if (!discoveryRegionId) return true;
+  return route
+    ? item?.discoveryRegionMembership?.[discoveryRegionId] === true
+    : item?.discoveryRegionId === discoveryRegionId;
 }
 
 function cleanGuestBehaviorContext(value) {
@@ -863,6 +874,8 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
     throw new HttpsError('invalid-argument', 'query is invalid.');
   }
   const filters = cleanFilters(data?.filters || {}, { route });
+  const discoveryRegionId = cleanDiscoveryRegionId(data?.regionId);
+  assert(discoveryRegionId !== undefined, 'invalid-argument', 'regionId is invalid.');
   const { destinations, context } = cleanDestinations(data || {});
   const db = admin.firestore();
   const [userSnapshot, blockedSnapshot] = auth?.uid
@@ -901,6 +914,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
       filters,
       parsedQuery,
       route,
+      discoveryRegionId,
     });
   } catch {
     fallbackReason = 'candidate-query-failed';
@@ -916,6 +930,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
     const path = `${collectionName}/${item.id}`;
     if (suppressedPaths.has(path)) return false;
     if (blockedUserIds.has(item.ownerId)) return false;
+    if (!matchesDiscoveryRegion(item, discoveryRegionId, { route })) return false;
     if (!matchesDestinations(item, destinations)) return false;
     if (!matchesFilters(item, filters, { route })) return false;
     const relevance = searchRelevance(item, parsedQuery);
@@ -950,6 +965,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
     candidates: candidates.length,
     returned: output.length,
     fallbackReason,
+    discoveryRegionId,
     latencyMs: Date.now() - startedAt,
   });
   return { mode, items: output };
@@ -1283,6 +1299,7 @@ module.exports = {
   isGuestEventAfterActivityReset,
   mergeGuestPersonalization,
   matchesFilters,
+  matchesDiscoveryRegion,
   normalizePersonalization,
   personalizationCandidateInterestIds,
   rankPersonalizedResults,

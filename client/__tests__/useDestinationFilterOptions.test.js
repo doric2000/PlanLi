@@ -4,6 +4,8 @@ import { getDocs } from 'firebase/firestore';
 import { useDestinationFilterOptions } from '../src/hooks/useDestinationFilterOptions';
 import { searchDestinations } from '../src/services/DestinationService';
 
+let mockRegionId = null;
+
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn(() => ({ type: 'collection' })),
   getDocs: jest.fn(),
@@ -15,10 +17,19 @@ jest.mock('../src/config/firebase', () => ({ db: {} }));
 jest.mock('../src/services/DestinationService', () => ({
   searchDestinations: jest.fn(),
 }));
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({ selectedRegionId: mockRegionId }),
+}));
 
 describe('useDestinationFilterOptions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRegionId = null;
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
+  });
+
+  afterAll(() => {
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
   });
 
   it('merges a debounced remote match outside the popular catalog with bilingual names', async () => {
@@ -120,5 +131,29 @@ describe('useDestinationFilterOptions', () => {
     await waitFor(() => expect(result.current.options).toEqual(expect.arrayContaining([
       expect.objectContaining({ cityId: 'budapest' }),
     ])));
+  });
+
+  it('hides cached options from the previous region even when the next load fails', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'europe';
+    getDocs.mockResolvedValue({
+      docs: [{ id: 'FR', data: () => ({ status: 'active', names: { he: 'צרפת' } }) }],
+    });
+    searchDestinations.mockResolvedValue({ items: [] });
+    const { result, rerender } = renderHook(() => useDestinationFilterOptions(true, ''));
+    await waitFor(() => expect(result.current.options).toEqual(expect.arrayContaining([
+      expect.objectContaining({ countryId: 'FR' }),
+    ])));
+
+    mockRegionId = 'israel';
+    getDocs.mockRejectedValue(new Error('load failed'));
+    searchDestinations.mockRejectedValue(new Error('load failed'));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    rerender({});
+
+    expect(result.current.options).toEqual([]);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.options).toEqual([]);
+    consoleError.mockRestore();
   });
 });

@@ -9,12 +9,16 @@ import { useAuthUser } from './useAuthUser';
 import { isDiscoveryRateLimitError } from '../utils/discoveryErrors';
 import { waitForRefreshConfirmation } from '../utils/refreshFeedback';
 import { invalidateProfileResources } from '../utils/profileResourceInvalidation';
+import { useOptionalRegionSelection } from '../features/region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../features/region/regionDefinitions';
 
 const serverSort = (sortBy) => sortBy === 'personalized'
   ? 'forYou'
   : sortBy === 'newest' ? 'newest' : 'popular';
 
 export const useRecommendations = (sortBy = 'popularity') => {
+  const { selectedRegionId } = useOptionalRegionSelection();
+  const activeRegionId = isRegionDiscoveryEnabled() ? selectedRegionId : null;
   const { isBlocked } = useBlockedUsers();
   const { user } = useAuthUser();
   const principal = user?.uid || 'guest';
@@ -38,7 +42,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
     setConfirming(false);
     setRequesting(true);
     setSettledRequestIdentity('');
-  }, [principal]);
+  }, [activeRegionId, principal]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedRequest(discoveryRequest), 350);
@@ -47,7 +51,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
 
   const requestKey = JSON.stringify(debouncedRequest);
   const discoveryRequestKey = JSON.stringify(discoveryRequest);
-  const requestIdentity = JSON.stringify([principal, sortBy, requestKey]);
+  const requestIdentity = JSON.stringify([principal, activeRegionId, sortBy, requestKey]);
   const fetchRecommendations = useCallback(async ({ showLoader = true, refreshFeedback = false } = {}) => {
     const serial = requestSerial.current + 1;
     requestSerial.current = serial;
@@ -58,6 +62,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
     try {
       const attempt = requestPersonalizedRecommendations({
         ...debouncedRequest,
+        ...(activeRegionId ? { regionId: activeRegionId } : {}),
         sort: serverSort(sortBy),
         limit: 30,
       });
@@ -88,7 +93,7 @@ export const useRecommendations = (sortBy = 'popularity') => {
       setRefreshing(false);
       setConfirming(false);
     }
-  }, [requestIdentity, requestKey, sortBy, isBlocked, principal]);
+  }, [activeRegionId, requestIdentity, requestKey, sortBy, isBlocked, principal]);
 
   useFocusEffect(useCallback(() => {
     fetchRecommendations({ showLoader: data.length === 0 });

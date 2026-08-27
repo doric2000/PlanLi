@@ -9,6 +9,7 @@ import {
 
 let focusEffect;
 let mockUser = { uid: 'traveler-1' };
+let mockRegionId = null;
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback) => {
@@ -28,13 +29,22 @@ jest.mock('../src/features/moderation/BlockedUsersContext', () => ({
 jest.mock('../src/hooks/useAuthUser', () => ({
   useAuthUser: () => ({ user: mockUser }),
 }));
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({ selectedRegionId: mockRegionId }),
+}));
 
 describe('useRecommendations request behavior', () => {
   beforeEach(() => {
     focusEffect = null;
     mockUser = { uid: 'traveler-1' };
+    mockRegionId = null;
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
     requestPersonalizedRecommendations.mockReset();
     clearPersonalizationDiscoveryCache.mockReset();
+  });
+
+  afterAll(() => {
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
   });
 
   it('uses the same coordinated request path on focus and explicit refresh', async () => {
@@ -201,6 +211,37 @@ describe('useRecommendations request behavior', () => {
       await focusEffect();
     });
     expect(result.current.data).toEqual([]);
+    consoleError.mockRestore();
+  });
+
+  it('clears retained recommendations before a changed-region request settles or fails', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'europe';
+    requestPersonalizedRecommendations
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.resolve({ items: [{ id: 'europe-rec', ownerId: 'visible-user' }] }),
+      }))
+      .mockImplementationOnce(() => ({
+        requested: true,
+        source: 'network',
+        promise: Promise.reject(new Error('load failed')),
+      }));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { result, rerender } = renderHook(() => useRecommendations());
+    await act(async () => { await focusEffect(); });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+
+    mockRegionId = 'israel';
+    rerender({});
+    expect(result.current.data).toEqual([]);
+    await act(async () => { await focusEffect(); });
+
+    expect(result.current.data).toEqual([]);
+    expect(requestPersonalizedRecommendations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ regionId: 'israel' }),
+    );
     consoleError.mockRestore();
   });
 });

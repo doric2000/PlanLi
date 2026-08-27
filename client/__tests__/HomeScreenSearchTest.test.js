@@ -8,6 +8,7 @@ import { act, render, fireEvent, waitFor, within } from '@testing-library/react-
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
+import { buildHomeSearchPool } from '../src/features/home/screens/HomePlanningHubScreen';
 import {
   HomeContentRail,
   HomeContinuationCard,
@@ -36,6 +37,7 @@ const mockSmartProfileState = {
   completed: false,
   loading: false,
 };
+let mockSelectedRegionId = null;
 const deferred = () => {
   let resolve;
   let reject;
@@ -196,6 +198,14 @@ jest.mock('../src/features/auth/AuthContext', () => ({
   }),
 }));
 
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({
+    selectedRegionId: mockSelectedRegionId,
+    hasSeenPrompt: true,
+    loading: false,
+  }),
+}));
+
 jest.mock('../src/features/profile/services/NoyaOnboardingStorage', () => ({
   dismissGuestNoya: jest.fn(async () => undefined),
   loadGuestNoyaProfile: jest.fn(async () => null),
@@ -213,6 +223,8 @@ describe('HomeScreenSearchTest', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSelectedRegionId = null;
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
     Object.assign(mockAuthUserState, {
       user: null,
       loading: false,
@@ -248,6 +260,69 @@ describe('HomeScreenSearchTest', () => {
         }),
       ],
     });
+  });
+
+  it('keeps region-scoped search free of unclassified local destinations', () => {
+    const serverEurope = { id: 'paris', countryId: 'FR', discoveryRegionId: 'europe' };
+    const localEurope = { id: 'rome', countryId: 'IT', discoveryRegionId: 'europe' };
+    const localAfrica = { id: 'nairobi', countryId: 'KE', discoveryRegionId: 'africa' };
+    const unclassifiedFavorite = { id: 'toronto', countryId: 'CA' };
+
+    expect(buildHomeSearchPool({
+      regionDiscoveryEnabled: true,
+      selectedRegionId: 'europe',
+      searchResultsLoaded: true,
+      searchDestinationsList: [serverEurope],
+      recentDestinations: [localAfrica, localEurope],
+      favoriteDestinations: [unclassifiedFavorite],
+    })).toEqual([serverEurope, localEurope]);
+  });
+
+  it('removes prior-region Home rails before a failed region refresh can settle', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockSelectedRegionId = 'europe';
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ mode: 'generic', items: [{ id: 'europe-route', title: 'אירופה' }] }),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.resolve({ mode: 'generic', items: [{ id: 'europe-rec', title: 'אירופה' }] }),
+    }));
+    const renderHome = () => (
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 44, left: 0, right: 0, bottom: 34 },
+        }}
+      >
+        <HomeScreen navigation={{ navigate: jest.fn() }} />
+      </SafeAreaProvider>
+    );
+    const screen = render(renderHome());
+    await waitFor(() => expect(screen.getByTestId('home-route-card-europe-route')).toBeTruthy());
+    expect(screen.getByTestId('home-recommendation-card-europe-rec')).toBeTruthy();
+
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockRequestPersonalizedRoutes.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.reject(new Error('offline')),
+    }));
+    mockRequestPersonalizedRecommendations.mockImplementation(() => ({
+      requested: true,
+      source: 'network',
+      promise: Promise.reject(new Error('offline')),
+    }));
+    mockSelectedRegionId = 'africa';
+    screen.rerender(renderHome());
+
+    await waitFor(() => expect(screen.queryByTestId('home-route-card-europe-route')).toBeNull());
+    expect(screen.queryByTestId('home-recommendation-card-europe-rec')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('home-route-error')).toBeTruthy());
+    consoleSpy.mockRestore();
   });
 
   it('uses Android-safe live-region semantics for cached Home refresh notices', () => {

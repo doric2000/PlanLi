@@ -1,6 +1,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { hasUsableDestinationCache } = require('./destinationCacheService');
 const { destinationEnglishName, destinationHebrewName } = require('./destinationLocalizationService');
+const { cleanDiscoveryRegionId, discoveryRegionForCountry } = require('./discoveryRegions');
 
 const COMBINING_MARKS = /[\u0300-\u036f\u0591-\u05C7]/g;
 const NON_ALPHANUMERIC = /[^a-z0-9\u05D0-\u05EA]+/gi;
@@ -89,6 +90,7 @@ function catalogData({ countryId, cityId, city, country, timestamp }) {
   ].filter((type) => typeof type === 'string'))).slice(0, 12);
   return {
     countryId,
+    discoveryRegionId: country?.discoveryRegionId || discoveryRegionForCountry(countryId),
     cityId,
     status: city?.status === 'active' && country?.status === 'active' ? 'active' : 'inactive',
     destinationType: city?.destinationType || null,
@@ -196,10 +198,16 @@ async function searchDestinations({ admin, data }) {
   const sort = data?.sort || 'popular';
   if (!['popular', 'name'].includes(sort)) throw new HttpsError('invalid-argument', 'sort is invalid.');
   const countryId = typeof data?.countryId === 'string' && data.countryId.trim() ? data.countryId.trim() : null;
+  const discoveryRegionId = cleanDiscoveryRegionId(data?.regionId);
+  if (discoveryRegionId === undefined) throw new HttpsError('invalid-argument', 'regionId is invalid.');
+  if (countryId && discoveryRegionId && discoveryRegionForCountry(countryId) !== discoveryRegionId) {
+    throw new HttpsError('invalid-argument', 'countryId is outside regionId.');
+  }
   const queryText = compactDestinationSearchText(data?.query);
   const prefix = queryText.slice(0, MAX_PREFIX_LENGTH);
   let query = admin.firestore().collection('destinationCatalog').where('status', '==', 'active');
   if (countryId) query = query.where('countryId', '==', countryId);
+  else if (discoveryRegionId) query = query.where('discoveryRegionId', '==', discoveryRegionId);
   if (prefix?.length >= 2) query = query.where('search.prefixes', 'array-contains', prefix);
   const effectiveSort = prefix?.length >= 2 ? 'popular' : sort;
   query = effectiveSort === 'popular'

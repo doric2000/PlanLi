@@ -35,6 +35,8 @@ import {
 import { colors, settingsHubStyles as styles } from '../../../styles';
 import { useNoyaTour } from '../../noya/NoyaTourContext';
 import { useAuth } from '../../auth/AuthContext';
+import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
+import { getRegionById, isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 
 function SettingsRow({
   accessibilityRole = 'button',
@@ -88,6 +90,8 @@ function SettingsRow({
 }
 
 export default function SettingsScreen({ navigation }) {
+  const { selectedRegionId } = useOptionalRegionSelection();
+  const selectedRegion = getRegionById(selectedRegionId);
   const [deleting, setDeleting] = useState(false);
   const [resettingPersonalization, setResettingPersonalization] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -313,6 +317,18 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         <AppText style={styles.sectionTitle}>התאמה אישית</AppText>
+        {isRegionDiscoveryEnabled() && selectedRegion ? (
+          <View style={styles.group} testID="settings-region-section">
+            <SettingsRow
+              detail={`האזור הנוכחי: ${selectedRegion.label}`}
+              icon="earth-outline"
+              label="החלפת אזור גילוי"
+              onPress={() => navigation.navigate('RegionSelector', { source: 'settings-change' })}
+              testID="settings-change-region-button"
+              last
+            />
+          </View>
+        ) : null}
         <View style={styles.group} testID="settings-noya-section">
           <SettingsRow
             detail="תחומי עניין, רמת מחיר, הרכב נסיעה וצרכים"

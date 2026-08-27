@@ -2,6 +2,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { evaluateTextSafety } = require('./moderationService');
 const { publicationOutcome } = require('./contentPublication');
+const { discoveryRegionForCountry, routeRegionFields } = require('./discoveryRegions');
 const {
   isVerifiedCaller,
   destinationHebrewWritePatch,
@@ -1077,6 +1078,9 @@ async function saveRoute({
     destinationKey(destination.countryId),
     destinationKey(destination.countryId, destination.cityId),
   ])));
+  const routeDiscoveryRegions = routeRegionFields(
+    resolved.destinations.map((destination) => destination.countryId)
+  );
   const now = admin.firestore.FieldValue.serverTimestamp();
   const revisionId = routeRevisionId(routeRef);
   const revisionRef = routeRef.collection('revisions').doc(revisionId);
@@ -1085,7 +1089,10 @@ async function saveRoute({
   for (const destination of resolved.catalogDestinations) {
     destinationDocuments.set(destination.countryRef.path, {
       ref: destination.countryRef,
-      data: destination.countryData,
+      data: {
+        ...destination.countryData,
+        discoveryRegionId: discoveryRegionForCountry(destination.countryId),
+      },
       create: destination.createCountry,
       kind: 'country',
     });
@@ -1093,6 +1100,7 @@ async function saveRoute({
       ref: destination.cityRef,
       data: {
         ...destination.cityData,
+        discoveryRegionId: discoveryRegionForCountry(destination.countryId),
         stats: { ...(destination.cityData.stats || {}), recommendationCount: 0 },
       },
       create: destination.createCity,
@@ -1319,6 +1327,7 @@ async function saveRoute({
       pace: route.pace,
       destinations: canonicalDestinations,
       destinationKeys,
+      ...routeDiscoveryRegions,
       summaryPlaces,
       search: canonicalSearch,
       media: validatedMedia,
@@ -1343,7 +1352,7 @@ async function saveRoute({
         expireAt: new Date(Date.now() + SUPERSEDED_REVISION_TTL_MS),
       });
     }
-      return { replay: false, status: routeDocument.status };
+      return { replay: false, status: routeDocument.status, ...routeDiscoveryRegions };
     });
   } catch (error) {
     await deletePreparedRevision(db, revisionRef, 'route_failed_revision_cleanup_failed');
@@ -1366,6 +1375,7 @@ async function saveRoute({
       revisionId: transactionOutcome.data?.activeRevisionId,
       revisionVersion: revisionVersion(transactionOutcome.data),
       ...publicationOutcome(transactionOutcome.data?.status),
+      discoveryRegionIds: transactionOutcome.data?.discoveryRegionIds || [],
       idempotentReplay: true,
     };
   }
@@ -1379,6 +1389,7 @@ async function saveRoute({
     revisionId,
     revisionVersion: baseVersion + 1,
     ...publicationOutcome(transactionOutcome?.status),
+    discoveryRegionIds: transactionOutcome?.discoveryRegionIds || routeDiscoveryRegions.discoveryRegionIds,
   };
 }
 

@@ -58,6 +58,9 @@ import {
   useNoyaTourTargetRegistration,
 } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
+import HomeRegionPreviewChip from '../../region/components/HomeRegionPreviewChip';
+import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 
 function normalizeMapFocus(input) {
   const recommendationId = String(input?.recommendationId || '').trim();
@@ -90,6 +93,7 @@ function mergeFocusedRecommendation(recommendations, focusedRecommendation, mapF
 }
 
 export default function CommunityScreen({ navigation, route }) {
+  const { selectedRegionId } = useOptionalRegionSelection();
   useNoyaMainTabRegistration(navigation);
   const { activeDefinition, pendingMainDefinition } = useNoyaTour();
   const communitySearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communitySearch);
@@ -109,6 +113,12 @@ export default function CommunityScreen({ navigation, route }) {
   const [mapFocus, setMapFocus] = useState(null);
   const personalizationInitialized = useRef(false);
   const handledMapFocusRequest = useRef(null);
+
+  useEffect(() => {
+    if (!isRegionDiscoveryEnabled()) return;
+    setMapOpen(false);
+    setMapFocus(null);
+  }, [selectedRegionId]);
 
   // --- Hooks ---
   const {
@@ -353,6 +363,7 @@ export default function CommunityScreen({ navigation, route }) {
     <SafeAreaView style={styles.screen} edges={["left", "right"]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
+      {isRegionDiscoveryEnabled() ? <HomeRegionPreviewChip regionId={selectedRegionId} onPress={() => navigation.navigate('RegionSelector', { source: 'community-change' })} /> : null}
       {mapOpen && (
         <>
           {renderActiveFilters()}

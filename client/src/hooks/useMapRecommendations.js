@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getMapRecommendations } from '../services/MapRecommendationsService';
 import { useAuthUser } from './useAuthUser';
+import { useOptionalRegionSelection } from '../features/region/context/RegionSelectionState';
+import { isRegionDiscoveryEnabled } from '../features/region/regionDefinitions';
 
 export function useMapRecommendations({ enabled, request = {} }) {
+  const { selectedRegionId } = useOptionalRegionSelection();
+  const activeRegionId = isRegionDiscoveryEnabled() ? selectedRegionId : null;
   const { user } = useAuthUser();
   const principal = user?.uid || 'guest';
   const [items, setItems] = useState([]);
@@ -16,7 +20,7 @@ export function useMapRecommendations({ enabled, request = {} }) {
   const requestKey = useMemo(() => JSON.stringify(request || {}), [request]);
   const requestRef = useRef(request);
   requestRef.current = request;
-  const activeRequestKey = `${principal}:${requestKey}`;
+  const activeRequestKey = `${principal}:${activeRegionId || 'all'}:${requestKey}`;
 
   useEffect(() => {
     serialRef.current += 1;
@@ -26,7 +30,7 @@ export function useMapRecommendations({ enabled, request = {} }) {
     setError(null);
     setTruncated(false);
     setZoomInRequired(false);
-  }, [principal]);
+  }, [activeRegionId, principal]);
 
   const fetchViewport = useCallback(async (viewport, {
     forceRefresh = false,
@@ -42,6 +46,7 @@ export function useMapRecommendations({ enabled, request = {} }) {
     try {
       const response = await getMapRecommendations({
         ...requestRef.current,
+        ...(activeRegionId ? { regionId: activeRegionId } : {}),
         viewport,
       }, { forceRefresh });
       if (serialRef.current !== serial) return null;
@@ -59,7 +64,7 @@ export function useMapRecommendations({ enabled, request = {} }) {
     } finally {
       if (serialRef.current === serial) setLoading(false);
     }
-  }, [activeRequestKey, enabled, requestKey]);
+  }, [activeRegionId, activeRequestKey, enabled, requestKey]);
 
   useEffect(() => {
     if (!enabled) {
