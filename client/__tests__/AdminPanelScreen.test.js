@@ -96,6 +96,7 @@ describe('Admin console end-to-end surface', () => {
     AdminService.getModerationDashboard.mockResolvedValue(dashboard);
     AdminService.listModerationCases.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.getModerationPolicy.mockResolvedValue({
+      consoleContractVersion: 1,
       reasons: [
         { id: 'no_violation', label: 'לא נמצאה הפרה', userMessage: 'לא נמצאה הפרה' },
         { id: 'spam_scam_commercial', label: 'ספאם', userMessage: 'הפרת ספאם' },
@@ -111,8 +112,9 @@ describe('Admin console end-to-end surface', () => {
 
   it('opens each workload metric as its matching filtered queue', async () => {
     const screen = render(<AdminPanelScreen navigation={navigation} />);
-    expect(await screen.findByTestId('admin-metric-openCases')).toBeTruthy();
-    expect(await screen.findByTestId('admin-metric-urgentCases')).toBeTruthy();
+    await screen.findByTestId('admin-overview-content', {}, { timeout: 10000 });
+    expect(screen.getByTestId('admin-metric-openCases')).toBeTruthy();
+    expect(screen.getByTestId('admin-metric-urgentCases')).toBeTruthy();
     fireEvent.press(screen.getByTestId('admin-metric-urgentCases'));
     await waitFor(() => expect(AdminService.listModerationCases).toHaveBeenCalledWith(expect.objectContaining({ view: 'urgent' })));
     expect(screen.getByTestId('admin-queue-view-urgent').props.accessibilityState.selected).toBe(true);
@@ -266,19 +268,33 @@ describe('Admin console end-to-end surface', () => {
     expect(AdminService.searchAdminResources).toHaveBeenLastCalledWith({ query: 'חיפה', cursor: 'cursor-1' });
   });
 
-  it('shows a retryable local error when moderation policy loading fails', async () => {
+  it('blocks operational controls until the backend contract retry succeeds', async () => {
     const item = queueCase('policy');
     AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
     AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
     AdminService.getModerationPolicy.mockRejectedValueOnce(new Error('unavailable'));
     const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
-    fireEvent.press(await screen.findByTestId('admin-case-policy'));
-    expect(await screen.findByTestId('admin-case-policy-error')).toBeTruthy();
+    expect(await screen.findByTestId('admin-console-bootstrap-error')).toBeTruthy();
+    expect(screen.queryByTestId('admin-queue-content')).toBeNull();
+    expect(AdminService.listModerationCases).not.toHaveBeenCalled();
     AdminService.getModerationPolicy.mockResolvedValue({
+      consoleContractVersion: 1,
       reasons: [{ id: 'no_violation', label: 'לא נמצאה הפרה', userMessage: 'לא נמצאה הפרה' }],
     });
-    fireEvent.press(screen.getByTestId('admin-case-policy-retry'));
+    fireEvent.press(screen.getByTestId('admin-console-bootstrap-retry'));
+    fireEvent.press(await screen.findByTestId('admin-case-policy'));
     expect(await screen.findByTestId('admin-case-decision-policy')).toBeTruthy();
+  });
+
+  it('keeps the console locked when the server returns an older contract', async () => {
+    AdminService.getModerationPolicy.mockResolvedValueOnce({
+      consoleContractVersion: 0,
+      reasons: [{ id: 'no_violation', label: 'לא נמצאה הפרה' }],
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    expect(await screen.findByText(/אינה תואמת לשירותים הפעילים/u)).toBeTruthy();
+    expect(screen.queryByTestId('admin-overview-content')).toBeNull();
+    expect(AdminService.getModerationDashboard).not.toHaveBeenCalled();
   });
 
   it('moves from a search result without reports to a documented decision', async () => {

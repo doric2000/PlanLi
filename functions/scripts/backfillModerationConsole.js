@@ -72,6 +72,23 @@ function missingCasePatch(value) {
   return patch;
 }
 
+function comparableValue(value) {
+  if (value === undefined) return undefined;
+  if (value === null || typeof value !== 'object') return value;
+  if (typeof value.toMillis === 'function') return { __timestampMs: value.toMillis() };
+  if (value instanceof Date) return { __dateMs: value.getTime() };
+  if (Array.isArray(value)) return value.map(comparableValue);
+  return Object.fromEntries(Object.keys(value).sort().flatMap((key) => {
+    const normalized = comparableValue(value[key]);
+    return normalized === undefined ? [] : [[key, normalized]];
+  }));
+}
+
+function equivalentProjection(existing, projection) {
+  const { updatedAt: _existingUpdatedAt, ...existingValue } = existing || {};
+  return JSON.stringify(comparableValue(existingValue)) === JSON.stringify(comparableValue(projection));
+}
+
 async function heldCaseChange(db, entry, unit) {
   const target = { type: unit.type, id: entry.id, path: entry.ref.path };
   const caseId = caseIdForTarget(target);
@@ -107,18 +124,19 @@ async function heldCaseChange(db, entry, unit) {
 async function searchProjectionChange(db, entry) {
   const target = targetForPath(entry.ref.path);
   if (!target) return null;
+  const ref = db.doc(`system/moderation/search/${projectionId(entry.ref.path)}`);
   const parentData = target.type === 'comment' || target.subject?.kind === 'attached_place'
     ? (await db.doc(entry.ref.path.split('/').slice(0, 2).join('/')).get()).data() || null
     : null;
   if (target.subject?.kind === 'attached_place' && parentData?.activeRevisionId !== target.revisionId) {
-    return {
-      ref: db.doc(`system/moderation/search/${projectionId(entry.ref.path)}`),
-      delete: true,
-    };
+    const snapshot = await ref.get();
+    return snapshot.exists ? { ref, delete: true } : null;
   }
   const projection = buildAdminSearchProjection({ target, data: entry.data() || {}, parentData });
+  const snapshot = await ref.get();
+  if (snapshot.exists && equivalentProjection(snapshot.data() || {}, projection)) return null;
   return {
-    ref: db.doc(`system/moderation/search/${projectionId(entry.ref.path)}`),
+    ref,
     merge: false,
     patch: { ...projection, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
   };
@@ -187,4 +205,11 @@ if (require.main === module) main().catch((error) => {
   process.exitCode = 1;
 });
 
-module.exports = { parseArgs, runBackfill, searchProjectionChange, splitCursor, unitsForPhase };
+module.exports = {
+  equivalentProjection,
+  parseArgs,
+  runBackfill,
+  searchProjectionChange,
+  splitCursor,
+  unitsForPhase,
+};

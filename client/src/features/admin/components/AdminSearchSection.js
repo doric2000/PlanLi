@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -6,7 +6,6 @@ import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
 import {
   getAdminResource,
-  getModerationPolicy,
   resolveModerationCase,
   searchAdminResources,
 } from '../../../services/AdminService';
@@ -18,7 +17,7 @@ import AdminAsyncState from './AdminAsyncState';
 import ModerationTargetPreview from './ModerationTargetPreview';
 import { DecisionPanel } from './ModerationQueueSection';
 
-export default function AdminSearchSection({ onOpenCase }) {
+export default function AdminSearchSection({ policy, onOpenCase }) {
   const [query, setQuery] = useState('');
   const [state, setState] = useState({
     loading: false,
@@ -31,14 +30,7 @@ export default function AdminSearchSection({ onOpenCase }) {
   });
   const [selected, setSelected] = useState(null);
   const [detailState, setDetailState] = useState({ loading: false, error: '' });
-  const [policy, setPolicy] = useState({ reasons: [] });
   const [decisionState, setDecisionState] = useState({ busy: false, error: '', success: '' });
-
-  useEffect(() => {
-    getModerationPolicy()
-      .then((value) => setPolicy(value || { reasons: [] }))
-      .catch((error) => setDecisionState((current) => ({ ...current, error: safeAdminError(error) })));
-  }, []);
 
   const search = async ({ append = false } = {}) => {
     const normalized = append ? state.searchQuery : query.replace(/\s+/gu, ' ').trim();
