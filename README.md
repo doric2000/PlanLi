@@ -1603,3 +1603,61 @@ rejected.
   Roll back Android preview to group
   `50b71fab-4cab-4a78-acf2-ef2ced0a22ff` or Android production to group
   `65e800f9-a1eb-4a6c-916e-4cf941ec3e10` if required.
+
+## Recommendation RTL-link publication recovery release
+
+- Source and Git: PR `#237` merged to clean `main` as
+  `ffde0470634d13f9e5c93656770cc16e85818171` at
+  `2026-08-27T10:14:34Z`.
+- Root cause and scope: production incident `loc_DiQNgtDzVtrp` reached
+  `publishRecommendationDraft` with a visually valid HTTPS link prefixed by an
+  invisible RTL formatting character. Draft and media saves had succeeded, but
+  final URL parsing rejected the link as `invalid_selection`. Client and server
+  boundaries now strip Unicode bidi formatting controls and trim external URLs,
+  while still rejecting non-HTTP(S), hostless, and non-string values. Existing
+  durable recommendation jobs that failed specifically for this legacy shape
+  are upgraded and requeued once without re-uploading remote media; unrelated
+  invalid selections remain failed. Genuine link errors now return
+  `invalid_external_url` with link-specific Hebrew copy.
+- Firebase deployment: only `saveRecommendation`, `saveRecommendationDraft`,
+  and `publishRecommendationDraft` were deployed from the clean merge commit to
+  `planli-f0b12` in `europe-west1`. Independent inventory confirms all 104
+  Functions active on Node.js 22. The resulting Cloud Run revisions are
+  `saverecommendation-00042-dis` (updated `2026-08-27T10:19:46Z`),
+  `saverecommendationdraft-00004-pax` (`2026-08-27T10:19:58Z`), and
+  `publishrecommendationdraft-00008-tuw` (`2026-08-27T10:19:52Z`). The first
+  CLI attempt stopped during local source discovery before any remote update;
+  the single retry with the documented discovery timeout completed successfully.
+- Preview EAS Update: group `98b2e69d-fabb-466a-88a8-abbc98510616`, Android
+  update `01a042cb-79bc-7440-928c-b13c1bc6be47`, and iOS update
+  `01a042cb-79bc-77b8-b482-2830fa2101be`, published at
+  `2026-08-27T10:37:06.364Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact preview-artifact republish group
+  `4947c1c8-6bae-4115-bc2f-b6c622d9230d`, Android update
+  `01a042ce-61b1-763e-aaf8-37e5379f0b43`, and iOS update
+  `01a042ce-61b1-7335-b9c8-c07e666cabbc`, published at
+  `2026-08-27T10:40:16.817Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `ffde0470634d13f9e5c93656770cc16e85818171`.
+  The preview export bundled 2,419 modules for each native platform, found 52
+  iOS and 51 Android assets, uploaded two app bundles and no new assets; the
+  production release reused those exact artifacts.
+- Validation: 64 focused client tests and 68 focused Functions tests passed,
+  `npm run validate:changed` and `git diff --check` passed, every PR `#237`
+  check passed, and final review found no blocking issue. Both clean-main EAS
+  production-lineage preflights passed against the previously live production
+  source `c539763`.
+- Observability: a post-deploy read-only Cloud Logging response covering the
+  three deployed services from `2026-08-27T10:19:30Z` returned 15 entries with
+  zero `ERROR`/5xx entries and zero publication-failure signals. Subsequent
+  repeated queries reached the project read-request quota; the successful
+  response, deployed revision inventory, and EAS manifests were verified
+  independently.
+- No native EAS build, TestFlight/App Store or Google Play submission, Rules,
+  indexes, Hosting, migration, IAM, or production-document mutation accompanied
+  this release. OTA download/application and retry success remain unverified on
+  physical iOS and Android devices. Force-close and reopen the production app up
+  to twice to apply it. Roll back preview Android to
+  `15e726fc-c307-4939-96fb-519e6c5c4050`, preview iOS to
+  `50b71fab-4cab-4a78-acf2-ef2ced0a22ff`, production Android to
+  `25506ec2-6a03-46dd-99f4-7b26178e9205`, or production iOS to
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10` if required.
