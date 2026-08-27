@@ -1,8 +1,6 @@
 const { execFileSync, spawnSync } = require('node:child_process');
 const path = require('node:path');
 
-const EAS_CLI_VERSION = '18.0.1';
-
 function fail(message) {
   const error = new Error(message);
   error.code = 'EAS_PRODUCTION_PREFLIGHT_FAILED';
@@ -54,9 +52,12 @@ function easExecOptions(platform = process.platform) {
   };
 }
 
+function easExecutable(platform = process.platform) {
+  return platform === 'win32' ? 'eas.cmd' : 'eas';
+}
+
 function runEas(clientRoot, args) {
-  const executable = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  return execFileSync(executable, ['-y', `eas-cli@${EAS_CLI_VERSION}`, ...args], {
+  return execFileSync(easExecutable(), args, {
     cwd: clientRoot,
     ...easExecOptions(),
   });
@@ -116,6 +117,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  easExecutable,
   easExecOptions,
   parseArgs,
   validateDeployedCommit,
