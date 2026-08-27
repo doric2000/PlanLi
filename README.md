@@ -25,15 +25,15 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible production EAS Update is recommendation destination-
-publishing group `2b8fe998-103e-4d9f-8080-ad01301b6cb8`, published for Android
-(`01a03fb3-eeb4-7379-9d28-4b48cf0aff7b`) and iOS
-(`01a03fb3-eeb4-7718-ac45-7271f9864282`) at
-`2026-08-26T20:12:31.796Z` from clean `main` commit `cbb6aa61`. EAS
+The latest compatible production EAS Update is canonical-destination integrity
+group `57eed77a-9f71-4e56-89c7-2c85f3c82077`, published for Android
+(`01a041e7-be3b-7ced-83d6-8243c9c5c93b`) and iOS
+(`01a041e7-be3b-76f4-bc0f-f7e7540f8821`) at
+`2026-08-27T06:28:21.691Z` from clean `main` merge commit `9d70edad`. EAS
 read-back confirms that both production manifests use runtime `1.1.0`, the
 exact merge commit, the production environment, and a clean working tree.
-Download, application, and recommendation publication on the physical Android
-tablet and TestFlight iPhone remain unverified.
+Download, application, and canonical destination selection on the physical
+Android tablet and TestFlight iPhone remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
 internal iOS EAS Development Build
@@ -44,22 +44,20 @@ merge commit `8afdfb3`. Its EAS build ID is
 development profile has no update channel. Download, installation, and physical
 iPhone behavior remain unverified; no EAS Update, App Store submission, or
 backend deployment was performed for this build. The production profile uses
-the `production` EAS Update channel and runtime `1.1.0`. The matching
-recommendation destination-publishing preview group is
-`1a3c69c6-fc05-4666-b3df-da528b00facf`; the immediately preceding compatible
-groups are preview `31df8f49-77fb-4151-85fb-245e594a81d7` and production
-`1a691933-e4b6-4003-9d3d-111315a88549`. The RTL native builds and store actions
-did not deploy Firebase or write production data. A later canonical-destination
-backend rollout deployed 17 affected Functions and the admin Hosting bundle
-from branch `feat/canonical-travel-destinations`; the final source commits are
-`21ad5cf`, `907ba32`, and `baf1a08`. The private registry contains 251 validated
-entries, 14 reviewed legacy destinations were reassigned, and the Functions
-inventory now reports 104 active Node.js 22 v2 Functions in `europe-west1`.
-The final production audit at `2026-08-26T22:37:37.021Z` passed with zero
-failures, and a post-deploy Firebase MCP query returned no `ERROR` entries for
-the affected targets. Firestore Rules, indexes, Storage Rules, IAM, EAS Update,
-native builds, store submissions, and the rollback Storage bucket were
-unchanged.
+the `production` EAS Update channel and runtime `1.1.0`. The matching canonical-
+destination preview group is `65aad93c-c64b-4f13-a154-626f6909d333`; the
+immediately preceding compatible groups are preview
+`1a3c69c6-fc05-4666-b3df-da528b00facf` and production
+`2b8fe998-103e-4d9f-8080-ad01301b6cb8`. PR `#231` merged the canonical-
+destination rollout to `main` as `9d70edad`. Nine affected Functions and the
+48-file admin Hosting bundle were then redeployed from that clean merge commit.
+The private registry contains 251 validated entries, 14 reviewed legacy
+destinations are reassigned, and 14 historical user personalization profiles
+were repaired with an audited production migration. The final production audit
+at `2026-08-27T06:31:11.158Z` checked 839 Firestore documents and 104 active
+Node.js 22 v2 Functions in `europe-west1` and returned zero failures. Firestore
+Rules, indexes, Storage Rules, IAM, native builds, store submissions, and the
+rollback Storage bucket were unchanged.
 
 ## Run the client
 
@@ -1473,3 +1471,53 @@ rejected.
   TestFlight/App Store or Google Play action accompanied this rollout. A new
   destination selection was covered by resolver tests but was not submitted
   through a physical signed-in mobile client after deployment.
+
+## Canonical destination integrity follow-up release
+
+- Source and Git: PR `#231` merged to `main` as
+  `9d70edadfd32f18a60a0784c74266313ebcd6a2b` at
+  `2026-08-27T05:57:07Z`. Final hardening commit `8fbd279` prevents reuse of an
+  inactive merged destination that shares a Google Place ID, enforces parent
+  grouping, validates registry graphs and provider identities, locks favorite
+  mutations during reassignment, and propagates merged destination affinity.
+- Firebase: `saveRecommendation`, `publishRecommendationDraft`,
+  `resolveRecommendationDestination`, `resolvePlaceSelection`, `saveRoute`,
+  `publishRouteDraft`, `setFavorite`, `updateDestinationPolicy`, and
+  `onDestinationReassignmentJobWritten` were successfully redeployed from the
+  clean merge commit. Firebase inventory confirms Node.js 22 v2 in
+  `europe-west1`; a post-deploy MCP query returned no `ERROR` entries for those
+  targets. Exact Cloud Run revision names and the CLI completion timestamp were
+  not returned.
+- Production data repair: the explicit apply run resolved 14 completed merge
+  mappings, scanned 23 users, and repaired 14 personalization profiles. It
+  required project confirmation and an active admin and wrote a moderation
+  audit record. The immediate follow-up dry-run reported `updatedUsers: 0`.
+- Hosting: the current 48-file admin bundle was released to
+  `https://planli-f0b12.web.app/admin/`. Browser verification loaded the Hebrew
+  authentication screen with title `AdminPanel` and no console warnings or
+  errors. Firebase CLI did not return a Hosting release ID or exact timestamp.
+- Preview EAS Update: group `65aad93c-c64b-4f13-a154-626f6909d333`, Android
+  update `01a041e5-a290-7bc3-92e4-7befabc8c036`, and iOS update
+  `01a041e5-a290-7969-ac3a-fc848b263c40`, published at
+  `2026-08-27T06:26:03.536Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact republish group
+  `57eed77a-9f71-4e56-89c7-2c85f3c82077`, Android update
+  `01a041e7-be3b-7ced-83d6-8243c9c5c93b`, and iOS update
+  `01a041e7-be3b-76f4-bc0f-f7e7540f8821`, published at
+  `2026-08-27T06:28:21.691Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed both manifests use exact commit `9d70edad`; production
+  reused the preview bundles. The export found 52 iOS and 51 Android assets,
+  uploaded two app bundles, and uploaded no new assets.
+- Validation: final focused tests passed 89/89; `npm run validate:changed` and
+  GitHub PR validation passed; the 14-file Codex Security review completed with
+  no reportable findings. The final `audit-live` at
+  `2026-08-27T06:31:11.158Z` checked 839 Firestore documents, 104 Functions,
+  both Storage buckets and public media and returned `ok: true` with zero
+  failures.
+- No Firestore Rules, indexes, Storage Rules, IAM, native EAS build,
+  TestFlight/App Store submission, or Google Play release was changed. The OTA
+  is available to installed production-channel binaries, but download,
+  application and destination behavior remain unverified on physical iOS and
+  Android devices. Force-close and reopen the app up to twice to apply it. Roll
+  back preview to `1a3c69c6-fc05-4666-b3df-da528b00facf` or production to
+  `2b8fe998-103e-4d9f-8080-ad01301b6cb8` if required.
