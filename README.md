@@ -25,15 +25,17 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible production EAS Update is recommendation draft-recovery
-group `65e800f9-a1eb-4a6c-916e-4cf941ec3e10`, published for Android
-(`01a04212-50c3-7b27-abbe-5ab757b1d1db`) and iOS
-(`01a04212-50c3-721e-ac6e-60b97ce356f3`) at
-`2026-08-27T07:14:51.715Z` from clean `main` merge commit `f06f2f6b`. EAS
-read-back confirms that both production manifests use runtime `1.1.0`, the
-exact merge commit, the production environment, and a clean working tree.
-Download, application, and recommendation draft recovery on the physical
-Android tablet and TestFlight iPhone remain unverified.
+The latest compatible Android production EAS Update is the Home startup-crash
+hotfix group `25506ec2-6a03-46dd-99f4-7b26178e9205`, Android update
+`01a0429b-1a4e-7018-bbd6-a8001df4f267`, published at
+`2026-08-27T09:44:16.206Z` from clean `main` merge commit `c5397636`. EAS
+read-back confirms runtime `1.1.0`, the exact merge commit, the production
+branch, and Android-only scope. The latest compatible iOS production EAS Update
+remains recommendation draft-recovery group
+`65e800f9-a1eb-4a6c-916e-4cf941ec3e10`, iOS update
+`01a04212-50c3-721e-ac6e-60b97ce356f3`, from merge commit `f06f2f6b`.
+Download, application, Android Home launch, and recommendation draft recovery
+on physical devices remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
 internal iOS EAS Development Build
@@ -1561,3 +1563,43 @@ rejected.
   twice to apply it. Roll back preview to
   `65aad93c-c64b-4f13-a154-626f6909d333` or production to
   `57eed77a-9f71-4e56-89c7-2c85f3c82077` if required.
+
+## Android Home startup-crash hotfix
+
+- Source and Git: PR `#235` merged to clean `main` as
+  `c53976369bf26bf7608a635c962b88e84b8eab4a` at
+  `2026-08-27T09:28:04Z`.
+- Root cause and scope: Sentry issue `PLANLI-MOBILE-M` showed React Native
+  throwing `IllegalArgumentException: Invalid accessibility role value: status`
+  while an authenticated user opened Home on Android 16. React Native `0.81.5`
+  accepts `status` in the JavaScript type but excludes it from the legacy
+  Android `AccessibilityRole` enum. Both cached Home refresh notices now use the
+  cross-platform `role="status"` prop and retain polite Android live-region
+  announcements without sending the crashing legacy prop.
+- Preview EAS Update: Android-only group
+  `15e726fc-c307-4939-96fb-519e6c5c4050`, update
+  `01a04298-0ef7-75ef-8187-72bf5df94c6e`, published at
+  `2026-08-27T09:40:56.695Z` on branch `preview`, runtime `1.1.0`.
+- Production EAS Update: exact Android artifact republish group
+  `25506ec2-6a03-46dd-99f4-7b26178e9205`, update
+  `01a0429b-1a4e-7018-bbd6-a8001df4f267`, published at
+  `2026-08-27T09:44:16.206Z` on branch `production`, runtime `1.1.0`. EAS
+  read-back confirmed the exact source commit and Android-only platform; iOS
+  remains on recommendation draft-recovery group
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10`.
+- Validation: the focused Home suite passed 17/17 tests, changed-scope
+  validation passed, the Android Hermes export bundled 2,418 modules and 48
+  assets, and all applicable PR `#235` checks passed. Both clean-main
+  production-lineage preflights passed. The EAS preview export uploaded one app
+  bundle, found 51 Android assets, and uploaded no new assets.
+- Observability: Sentry still marks `PLANLI-MOBILE-M` unresolved with four fatal
+  events from one user. Its last event remains `2026-08-26T20:57:31Z`, before
+  this rollout; the post-release read-only query returned no later event.
+- No native EAS build, iOS update, TestFlight/App Store or Google Play
+  submission, Firebase deployment, Rules, indexes, Hosting, migration, IAM, or
+  production-data write accompanied this JavaScript-only hotfix. Download,
+  application, and launch verification on a physical Android device remain
+  pending. Force-close and reopen the production app up to twice to apply it.
+  Roll back Android preview to group
+  `50b71fab-4cab-4a78-acf2-ef2ced0a22ff` or Android production to group
+  `65e800f9-a1eb-4a6c-916e-4cf941ec3e10` if required.
