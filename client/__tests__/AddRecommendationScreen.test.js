@@ -96,6 +96,11 @@ jest.mock('../src/services/RecommendationService', () => ({
   discardRecommendationDraft: (...args) => mockDiscardRecommendationDraft(...args),
 }));
 
+const mockCaptureDiagnosticException = jest.fn();
+jest.mock('../src/services/ErrorReporting', () => ({
+  captureDiagnosticException: (...args) => mockCaptureDiagnosticException(...args),
+}));
+
 const mockRememberRecentDestination = jest.fn(() => Promise.resolve([]));
 jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
   rememberDiscoveryDestinations: (...args) => mockRememberRecentDestination(...args),
@@ -540,6 +545,120 @@ describe('AddRecommendationScreen Integration Test', () => {
     });
     await waitFor(() => expect(navigationMock.goBack).toHaveBeenCalledTimes(1));
     jest.useRealTimers();
+  });
+
+  it('refreshes a stale draft version and completes the publication handoff', async () => {
+    const draft = {
+      id: 'recommendation-draft-1',
+      version: 7,
+      sourceRecommendationId: null,
+      step: 4,
+      locationMode: 'exact',
+      selectedCountry: { id: 'NI', name: 'ניקרגואה' },
+      selectedCity: { id: 'rivas', name: 'ריוואס' },
+      selectedPlace: { placeId: 'ojo-de-agua', name: 'Ojo de Agua' },
+      locationQuery: 'Ojo de Agua',
+      categoryId: 'food',
+      subcategoryIds: ['restaurant'],
+      title: 'Ojo de Agua',
+      description: 'מעיינות נעימים באומטפה.',
+      budget: 'economy',
+      details: {},
+      media: [canonicalMedia()],
+      localMediaCount: 0,
+    };
+    mockGetCurrentRecommendationDraft
+      .mockResolvedValueOnce(draft)
+      .mockResolvedValueOnce({ ...draft, version: 8 });
+    mockSaveRecommendationDraft
+      .mockRejectedValueOnce(Object.assign(new Error('stale'), {
+        code: 'functions/aborted',
+        details: { reason: 'RECOMMENDATION_DRAFT_VERSION_CONFLICT' },
+      }))
+      .mockResolvedValueOnce({ draftId: draft.id, version: 9 });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByText('פרסום ההמלצה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { draftId: draft.id, expectedVersion: 9 },
+    })));
+    expect(mockSaveRecommendationDraft).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      draftId: draft.id,
+      expectedVersion: 7,
+    }));
+    expect(mockSaveRecommendationDraft).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      draftId: draft.id,
+      expectedVersion: 8,
+    }));
+    expect(mockCaptureDiagnosticException).not.toHaveBeenCalled();
+    expect(navigationMock.goBack).toHaveBeenCalled();
+  });
+
+  it('does not overwrite another draft while recovering a publication conflict', async () => {
+    const draft = {
+      id: 'recommendation-draft-1',
+      version: 7,
+      sourceRecommendationId: null,
+      step: 4,
+      locationMode: 'destination',
+      generalDestination: {
+        key: 'city:IL:TLV', kind: 'city', countryId: 'IL', cityId: 'TLV',
+        countryName: 'ישראל', name: 'תל אביב',
+      },
+      selectedCountry: { id: 'IL', name: 'ישראל' },
+      selectedCity: { id: 'TLV', name: 'תל אביב' },
+      categoryId: 'food',
+      subcategoryIds: ['restaurant'],
+      title: 'מסעדה מקומית',
+      description: 'מקום נעים לארוחה בעיר.',
+      budget: 'economy',
+      details: {},
+      media: [canonicalMedia()],
+      localMediaCount: 0,
+    };
+    const conflict = Object.assign(new Error('stale'), {
+      code: 'functions/aborted',
+      details: { reason: 'RECOMMENDATION_DRAFT_VERSION_CONFLICT' },
+    });
+    mockGetCurrentRecommendationDraft
+      .mockResolvedValueOnce(draft)
+      .mockResolvedValueOnce({ ...draft, id: 'another-draft', version: 8 });
+    mockSaveRecommendationDraft.mockRejectedValueOnce(conflict);
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByText('פרסום ההמלצה')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-next'));
+
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+      'לא הצלחנו לשמור את ההמלצה',
+      'אפשר לנסות שוב בעוד רגע.'
+    ));
+    expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueCreate).not.toHaveBeenCalled();
+    expect(mockCaptureDiagnosticException).toHaveBeenCalledWith(conflict, {
+      operation: 'save_recommendation_for_publish',
+      code: 'functions/aborted',
+      reason: 'RECOMMENDATION_DRAFT_VERSION_CONFLICT',
+      contentMode: 'destination',
+    });
   });
 
   it('keeps a bottom optional field reachable and dismissible while preserving its text', async () => {
@@ -1155,6 +1274,67 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockClearRecommendationDraftMedia).toHaveBeenCalledWith({ deleteFiles: true });
     expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' });
     expect(Alert.alert.mock.calls.some(([title]) => title === 'לא הצלחנו לוותר על השינויים')).toBe(false);
+  });
+
+  it('shows discard progress, ignores a duplicate press, and leaves after local cleanup fails', async () => {
+    let beforeRemoveHandler;
+    let finishDiscard;
+    const draft = {
+      ...makeEditItem({ id: undefined, recommendationCatalogVersion: undefined }),
+      id: 'recommendation-draft-1',
+      version: 7,
+      sourceRecommendationId: null,
+      step: 4,
+      locationMode: 'destination',
+      selectedCountry: { id: 'IL', name: 'ישראל' },
+      selectedCity: { id: 'TLV', name: 'תל אביב' },
+      subcategoryIds: ['restaurant'],
+      media: [canonicalMedia()],
+      localMediaCount: 0,
+    };
+    mockGetCurrentRecommendationDraft.mockResolvedValueOnce(draft);
+    mockDiscardRecommendationDraft.mockImplementationOnce(() => new Promise((resolve) => {
+      finishDiscard = resolve;
+    }));
+    mockClearRecommendationDraftMedia.mockRejectedValueOnce(Object.assign(new Error('cleanup failed'), {
+      code: 'storage/unavailable',
+    }));
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn((event, handler) => {
+        if (event === 'beforeRemove') beforeRemoveHandler = handler;
+        return jest.fn();
+      }),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await waitFor(() => expect(screen.getByTestId('recommendation-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('recommendation-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('recommendation-budget-1')).toBeTruthy());
+    await act(async () => {
+      beforeRemoveHandler({ preventDefault: jest.fn(), data: { action: { type: 'POP' } } });
+    });
+    const discardAction = Alert.alert.mock.calls.at(-1)[2]
+      .find((action) => action.text === 'ויתור על השינויים ויציאה');
+    act(() => {
+      discardAction.onPress();
+      discardAction.onPress();
+    });
+
+    expect(screen.getByText('מוותרים על השינויים…')).toBeTruthy();
+    await waitFor(() => expect(mockDiscardRecommendationDraft).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      finishDiscard({ discarded: true });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(navigationMock.dispatch).toHaveBeenCalledWith({ type: 'POP' }));
+    expect(mockCaptureDiagnosticException).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      operation: 'cleanup_recommendation_draft_media',
+      contentMode: 'destination',
+    }));
   });
 
   it('edit mode: beforeRemove shows unsaved alert when dirty; כן dispatches action', async () => {

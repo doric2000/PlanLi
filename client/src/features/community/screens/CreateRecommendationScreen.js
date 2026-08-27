@@ -55,6 +55,7 @@ import {
   getCurrentRecommendationDraft,
   saveRecommendationDraft,
 } from '../../../services/RecommendationService';
+import { captureDiagnosticException } from '../../../services/ErrorReporting';
 import ManualMapPinPicker from '../components/ManualMapPinPicker';
 import SingleDestinationPicker from '../components/SingleDestinationPicker';
 import { NoyaTourTarget, useNoyaTour } from '../../noya/NoyaTourContext';
@@ -264,6 +265,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const leavePromptOpenRef = useRef(false);
   const pauseAutosaveRef = useRef(false);
   const publishHandoffRef = useRef(false);
+  const discardInFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const isEdit = Boolean(sourceRecommendationId);
   const editPostId = sourceRecommendationId || null;
@@ -458,12 +460,36 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         : { comparable, saveRequestId: randomUUID() };
       pendingSaveRequestRef.current = pendingRequest;
       try {
-        const saved = await saveRecommendationDraft({
+        const savePayload = {
           ...(draftIdRef.current ? { draftId: draftIdRef.current, expectedVersion: versionRef.current } : {}),
           sourceRecommendationId: sourceRecommendationIdRef.current || null,
           saveRequestId: pendingRequest.saveRequestId,
           draft: snapshot,
-        });
+        };
+        let saved;
+        try {
+          saved = await saveRecommendationDraft(savePayload);
+        } catch (error) {
+          if (error?.details?.reason !== 'RECOMMENDATION_DRAFT_VERSION_CONFLICT' || !draftIdRef.current) {
+            throw error;
+          }
+          let current;
+          try {
+            current = await getCurrentRecommendationDraft();
+          } catch {
+            throw error;
+          }
+          const currentVersion = Number(current?.version);
+          const sameDraft = current?.id === draftIdRef.current &&
+            (current?.sourceRecommendationId || '') === (sourceRecommendationIdRef.current || '');
+          if (!sameDraft || !Number.isSafeInteger(currentVersion) || currentVersion < 1) throw error;
+          versionRef.current = currentVersion;
+          saved = await saveRecommendationDraft({
+            ...savePayload,
+            draftId: draftIdRef.current,
+            expectedVersion: currentVersion,
+          });
+        }
         draftIdRef.current = saved.draftId;
         versionRef.current = saved.version;
         lastSavedComparableRef.current = comparable;
@@ -528,10 +554,23 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, []);
 
   const discardCurrentDraftAndLeave = useCallback(async (action = null) => {
+    if (discardInFlightRef.current) return;
+    discardInFlightRef.current = true;
     leavePromptOpenRef.current = false;
     pauseAutosaveRef.current = true;
+    setSubmitting(true);
+    setSaveStatus('discarding');
     const completeDiscard = async () => {
-      await clearDraftMedia({ deleteFiles: true });
+      try {
+        await clearDraftMedia({ deleteFiles: true });
+      } catch (error) {
+        captureDiagnosticException(error, {
+          operation: 'cleanup_recommendation_draft_media',
+          code: error?.code || 'unknown',
+          reason: error?.details?.reason || 'local_cleanup_failed',
+          contentMode: latestDraftRef.current?.locationMode,
+        });
+      }
       draftIdRef.current = '';
       versionRef.current = 0;
       setDraftId('');
@@ -543,14 +582,19 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       await completeDiscard();
     } catch (error) {
       if (error?.details?.reason === 'RECOMMENDATION_DRAFT_NOT_FOUND') {
-        try {
-          await completeDiscard();
-          return;
-        } catch {
-          // Use the standard retry choices when local cleanup also fails.
-        }
+        await completeDiscard();
+        return;
       }
+      captureDiagnosticException(error, {
+        operation: 'discard_recommendation_draft',
+        code: error?.code || 'unknown',
+        reason: error?.details?.reason || 'unknown',
+        contentMode: latestDraftRef.current?.locationMode,
+      });
+      discardInFlightRef.current = false;
       pauseAutosaveRef.current = false;
+      setSubmitting(false);
+      setSaveStatus('saved');
       Alert.alert('לא הצלחנו לוותר על השינויים', 'ההמלצה לא נסגרה כדי שהשינויים לא יישארו בטעות. אפשר לנסות שוב.', [
         { text: 'המשך עריכה', style: 'cancel', onPress: resumeEditing },
         { text: 'ניסיון נוסף', onPress: () => discardCurrentDraftAndLeave(action) },
@@ -592,6 +636,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const requestLeave = useCallback((action = null) => {
     Keyboard.dismiss();
+    if (discardInFlightRef.current) return;
     if (publishHandoffRef.current) {
       if (leavePromptOpenRef.current) return;
       leavePromptOpenRef.current = true;
@@ -1055,6 +1100,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         pauseAutosaveRef.current = false;
       }
       console.error('Error queueing recommendation:', error);
+      captureDiagnosticException(error, {
+        operation: 'save_recommendation_for_publish',
+        code: error?.code || 'unknown',
+        reason: error?.details?.reason || 'unknown',
+        contentMode: locationMode,
+      });
       Alert.alert(
         'לא הצלחנו לשמור את ההמלצה',
         travelMediaErrorMessage(error) || 'אפשר לנסות שוב בעוד רגע.'
@@ -1482,8 +1533,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           <View style={[styles.progressFill, { width: `${(step / STEP_COUNT) * 100}%` }]} />
         </View>
         <View style={styles.saveStatusRow} accessibilityLiveRegion="polite">
-          {saveStatus === 'saving' ? <ActivityIndicator size="small" color={colors.white} /> : null}
-          <AppText style={styles.saveStatusText}>{saveStatus === 'saving' ? 'שומר…' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : draftId ? 'נשמר' : ''}</AppText>
+          {['saving', 'discarding'].includes(saveStatus) ? <ActivityIndicator size="small" color={colors.white} /> : null}
+          <AppText style={styles.saveStatusText}>{saveStatus === 'discarding' ? 'מוותרים על השינויים…' : saveStatus === 'saving' ? 'שומר…' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : draftId ? 'נשמר' : ''}</AppText>
           {saveStatus === 'error' ? (
             <TouchableOpacity onPress={() => persistSnapshot(draftPayload, draftComparable).catch(() => {})} testID="recommendation-save-retry">
               <AppText style={styles.saveRetryText}>ניסיון נוסף</AppText>
