@@ -33,6 +33,9 @@ jest.mock('../src/config/firebase', () => ({
   db: { id: 'mock-db' },
   auth: { currentUser: { uid: 'profile-1' } },
 }));
+jest.mock('../src/services/PendingContentService', () => ({
+  listMyPendingContent: jest.fn(async () => ({ items: [], nextCursor: null })),
+}));
 
 import { clearUserDataCache } from '../src/hooks/useUserData';
 import { useProfileContent } from '../src/features/profile/hooks/useProfileContent';

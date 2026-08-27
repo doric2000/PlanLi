@@ -7,7 +7,10 @@ import ProfileHeader from '../src/features/profile/components/ProfileHeader';
 import ProfilePreferencesSignature from '../src/features/profile/components/ProfilePreferencesSignature';
 import ProfileStatsCard from '../src/features/profile/components/ProfileStatsCard';
 import { createProfileStyles } from '../src/features/profile/components/profileStyles';
+import { ProfileContentHeader } from '../src/features/profile/components/ProfileContentGrid';
 import { getPreferencePresentation } from '../src/constants/travelPresentation';
+
+jest.mock('../src/services/RouteService', () => ({ loadRouteDetails: jest.fn() }));
 
 jest.mock('@expo/vector-icons', () => ({
   MaterialIcons: ({ name }) => {
@@ -47,6 +50,30 @@ describe('profile presentation', () => {
     expect(screen.getByText('לייקים')).toBeTruthy();
     expect(screen.getByText('0')).toBeTruthy();
     expect(screen.queryByText(/rating|דירוג|כוכב/i)).toBeNull();
+  });
+
+  it('shows pending-review content only on the owner profile', () => {
+    const owner = render(
+      <ProfileContentHeader
+        styles={styles}
+        contentTab="pending"
+        onChangeTab={jest.fn()}
+        pendingCount={2}
+        showPending
+      />
+    );
+    expect(owner.getByText('בבדיקה 2')).toBeTruthy();
+
+    const visitor = render(
+      <ProfileContentHeader
+        styles={styles}
+        contentTab="recommendations"
+        onChangeTab={jest.fn()}
+        pendingCount={2}
+        showPending={false}
+      />
+    );
+    expect(visitor.queryByText('בבדיקה 2')).toBeNull();
   });
 
   it('uses the same travel-taste presentation for owner and public profiles', () => {

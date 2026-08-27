@@ -494,8 +494,37 @@ test('publishRequestId route replays return the same active route without creati
   assert.equal(firstReplay.routeId, routeId);
   assert.equal(secondReplay.routeId, routeId);
   assert.equal(firstReplay.revisionId, 'revision-1');
+  assert.equal(firstReplay.publicationStatus, 'active');
+  assert.equal(firstReplay.publiclyVisible, true);
   assert.equal(secondReplay.idempotentReplay, true);
   assert.equal(reads, 2);
+});
+
+test('publishRequestId replays a held route as a successful pending-review outcome', async () => {
+  const requestId = '123e4567-e89b-42d3-a456-426614174001';
+  const routeId = stableDocumentId('route', `owner:${requestId}`);
+  const routeDocument = {
+    ownerId: 'owner', status: 'moderation_hold', activeRevisionId: 'revision-held', revisionVersion: 2,
+  };
+  const admin = {
+    firestore: () => ({
+      doc: (path) => ({
+        path,
+        id: path.split('/').at(-1),
+        get: async () => ({ exists: path === `routes/${routeId}`, data: () => routeDocument }),
+      }),
+    }),
+  };
+  const result = await saveRoute({
+    admin,
+    auth: { uid: 'owner', token: { email_verified: true, firebase: { sign_in_provider: 'password' } } },
+    mapsKey: 'maps-key',
+    data: { publishRequestId: requestId, route: {} },
+  });
+  assert.equal(result.routeId, routeId);
+  assert.equal(result.publicationStatus, 'moderation_hold');
+  assert.equal(result.publiclyVisible, false);
+  assert.equal(result.idempotentReplay, true);
 });
 
 test('route publishRequestId rejects malformed IDs and edit combinations', async () => {

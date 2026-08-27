@@ -6,6 +6,7 @@ import {
   recommendationPublishProgress,
   isTransientPublishError,
   normalizedPublishError,
+  normalizePublicationOutcome,
   publishRetryPolicy,
   upgradeRestoredPublishJob,
   useRecommendationPublish,
@@ -96,11 +97,60 @@ describe('RecommendationPublishProvider', () => {
       ? { uri: `${uri}.prepared.jpg`, temporary: true }
       : { uri, temporary: false });
     mockDeletePreparedTravelMedia.mockResolvedValue(undefined);
-    mockSaveRoute.mockResolvedValue({ routeId: 'route-1' });
+    mockSaveRecommendation.mockResolvedValue({
+      recommendationId: 'rec-1', publicationStatus: 'active', publiclyVisible: true,
+    });
+    mockSaveRoute.mockResolvedValue({
+      routeId: 'route-1', publicationStatus: 'active', publiclyVisible: true,
+    });
     mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 4 });
-    mockPublishRouteDraft.mockResolvedValue({ routeId: 'route-1', published: true });
+    mockPublishRouteDraft.mockResolvedValue({
+      routeId: 'route-1', published: true, publicationStatus: 'active', publiclyVisible: true,
+    });
     mockSaveRecommendationDraft.mockResolvedValue({ draftId: 'recommendation-draft-1', version: 8 });
-    mockPublishRecommendationDraft.mockResolvedValue({ recommendationId: 'rec-draft-1', published: true });
+    mockPublishRecommendationDraft.mockResolvedValue({
+      recommendationId: 'rec-draft-1', published: true,
+      publicationStatus: 'active', publiclyVisible: true,
+    });
+  });
+
+  it('normalizes active, pending-review, and missing publication outcomes without guessing visibility', () => {
+    expect(normalizePublicationOutcome({ publicationStatus: 'active', publiclyVisible: true }))
+      .toMatchObject({ publicationStatus: 'active', publiclyVisible: true });
+    expect(normalizePublicationOutcome({ publicationStatus: 'moderation_hold', publiclyVisible: false }))
+      .toMatchObject({ publicationStatus: 'moderation_hold', publiclyVisible: false });
+    expect(normalizePublicationOutcome({ recommendationId: 'rec-unknown' }))
+      .toMatchObject({ publicationStatus: 'unknown', publiclyVisible: false });
+  });
+
+  it('keeps a held save as a successful durable job with an explicit pending-review result', async () => {
+    mockSaveRecommendation.mockResolvedValue({
+      recommendationId: 'rec-held',
+      publicationStatus: 'moderation_hold',
+      publiclyVisible: false,
+    });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: { recommendation: { title: 'Held', media: [] } },
+        media: [],
+        draft: {},
+      });
+    });
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    expect(api.activeJob.result).toMatchObject({
+      recommendationId: 'rec-held',
+      publicationStatus: 'moderation_hold',
+      publiclyVisible: false,
+    });
+    expect(mockCaptureDiagnosticException).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ code: 'publication_status_missing' })
+    );
+    screen.unmount();
   });
 
   it('durably enqueues before the unresolved network save and completes in the background', async () => {
@@ -739,6 +789,7 @@ describe('RecommendationPublishProvider', () => {
         operation: 'publish_recommendation_saving',
         code: 'functions/invalid-argument',
         contentMode: 'exact',
+        contentType: 'recommendation',
       }
     );
     const jobId = api.activeJob.id;

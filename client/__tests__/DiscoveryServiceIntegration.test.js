@@ -32,18 +32,32 @@ describe('discovery cache mutation integration', () => {
   });
 
   it('invalidates recommendation discovery after a successful save', async () => {
-    mockSaveRecommendation.mockResolvedValue({ data: { id: 'rec-1' } });
+    mockSaveRecommendation.mockResolvedValue({
+      data: { id: 'rec-1', publicationStatus: 'active', publiclyVisible: true },
+    });
 
     await expect(saveRecommendation({ recommendation: { title: 'Trip' } }))
-      .resolves.toEqual({ id: 'rec-1' });
+      .resolves.toEqual({ id: 'rec-1', publicationStatus: 'active', publiclyVisible: true });
     expect(mockClearDiscoveryCache).toHaveBeenCalledWith('recommendations');
   });
 
   it('invalidates route discovery after a successful save', async () => {
-    mockSaveRoute.mockResolvedValue({ data: { id: 'route-1' } });
+    mockSaveRoute.mockResolvedValue({
+      data: { id: 'route-1', publicationStatus: 'active', publiclyVisible: true },
+    });
 
-    await expect(saveRoute({ title: 'Trip' })).resolves.toEqual({ id: 'route-1' });
+    await expect(saveRoute({ title: 'Trip' })).resolves.toEqual({
+      id: 'route-1', publicationStatus: 'active', publiclyVisible: true,
+    });
     expect(mockClearDiscoveryCache).toHaveBeenCalledWith('routes');
+  });
+
+  it('does not invalidate public discovery for content held for review', async () => {
+    mockSaveRecommendation.mockResolvedValue({
+      data: { id: 'rec-held', publicationStatus: 'moderation_hold', publiclyVisible: false },
+    });
+    await saveRecommendation({ recommendation: { title: 'Held' } });
+    expect(mockClearDiscoveryCache).not.toHaveBeenCalled();
   });
 
   it('does not invalidate a feed when its mutation fails', async () => {

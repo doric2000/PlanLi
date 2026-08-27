@@ -25,6 +25,14 @@ export function publishErrorMessage(job) {
 
 function statusCopy(job, queuedCount) {
   const noun = job.contentType === 'route' ? 'המסלול' : 'ההמלצה';
+  if (job.status === 'success' && job.result?.publicationStatus === 'moderation_hold') {
+    return job.contentType === 'route' ? 'המסלול נשלח לבדיקה' : 'ההמלצה נשלחה לבדיקה';
+  }
+  if (job.status === 'success' && job.result?.publicationStatus !== 'active') {
+    return job.contentType === 'route'
+      ? 'המסלול נשמר, סטטוס הפרסום בבדיקה'
+      : 'ההמלצה נשמרה, סטטוס הפרסום בבדיקה';
+  }
   if (job.status === 'success') return job.contentType === 'route'
     ? 'המסלול פורסם בהצלחה'
     : 'ההמלצה פורסמה בהצלחה';
@@ -42,6 +50,10 @@ export default function RecommendationPublishBanner({ onReview }) {
 
   const failed = activeJob.status === 'failed';
   const success = activeJob.status === 'success';
+  const pendingReview = success && activeJob.result?.publicationStatus === 'moderation_hold';
+  const unknownOutcome = success && !['active', 'moderation_hold'].includes(
+    activeJob.result?.publicationStatus
+  );
   const progress = Math.round(Math.max(0, Math.min(1, activeJob.progress || 0)) * 100);
   const confirmDiscard = () => Alert.alert(
     'מחיקת הפרסום?',
@@ -58,19 +70,31 @@ export default function RecommendationPublishBanner({ onReview }) {
         styles.banner,
         { bottom: Math.max(insets.bottom, 10) + 82 },
         failed && styles.bannerFailed,
-        success && styles.bannerSuccess,
+        success && !pendingReview && !unknownOutcome && styles.bannerSuccess,
+        success && (pendingReview || unknownOutcome) && styles.bannerPending,
       ]}
       accessibilityLiveRegion="polite"
       testID="content-publish-banner"
     >
       <View style={styles.contentRow}>
         <Ionicons
-          name={failed ? 'alert-circle' : success ? 'checkmark-circle' : 'cloud-upload-outline'}
+          name={failed
+            ? 'alert-circle'
+            : pendingReview || unknownOutcome
+              ? 'time-outline'
+              : success
+                ? 'checkmark-circle'
+                : 'cloud-upload-outline'}
           size={22}
-          color={failed ? colors.error : success ? '#177245' : colors.primary}
+          color={failed ? colors.error : pendingReview || unknownOutcome ? '#9A6700' : success ? '#177245' : colors.primary}
         />
         <View style={styles.copy}>
           <AppText style={styles.title}>{statusCopy(activeJob, bannerJobCount)}</AppText>
+          {pendingReview ? (
+            <AppText style={styles.pendingText}>הפרסום עדיין לא מוצג לציבור ויופיע באזור „בבדיקה” בפרופיל.</AppText>
+          ) : unknownOutcome ? (
+            <AppText style={styles.pendingText}>לא קיבלנו אישור שהפרסום ציבורי. אפשר לרענן את הפרופיל ולבדוק שוב.</AppText>
+          ) : null}
           {failed ? (
             <AppText style={styles.errorText} numberOfLines={2}>
               {publishErrorMessage(activeJob)}

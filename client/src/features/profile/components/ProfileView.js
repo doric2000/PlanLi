@@ -31,6 +31,8 @@ export default function ProfileView({
   statsLoading,
   recommendations = [],
   routes = [],
+  pendingContent = [],
+  pendingError = null,
   contentLoading,
   contentError,
   isOwner,
@@ -52,7 +54,12 @@ export default function ProfileView({
   const [contentTab, setContentTab] = useState('recommendations');
   const [bioModalVisible, setBioModalVisible] = useState(false);
   const profileListRef = useRef(null);
-  const activeData = contentTab === 'recommendations' ? recommendations : routes;
+  const activeData = contentTab === 'recommendations'
+    ? recommendations
+    : contentTab === 'routes'
+      ? routes
+      : pendingContent;
+  const activeContentError = contentTab === 'pending' ? pendingError : contentError;
   const heroMedia = useMemo(
     () => selectProfileHeroMedia(recommendations, routes),
     [recommendations, routes]
@@ -146,6 +153,8 @@ export default function ProfileView({
               contentLoading={contentLoading}
               recommendationsCount={stats?.recommendations ?? 0}
               routesCount={stats?.routes ?? 0}
+              pendingCount={pendingContent.length}
+              showPending={isOwner}
               title={title}
             />
           </View>
@@ -166,7 +175,7 @@ export default function ProfileView({
             style={styles.refreshBody}
             testID={confirming ? 'profile-refresh-confirmation' : refreshing ? 'profile-refresh-state' : 'profile-content-loading-state'}
           />
-        ) : contentError ? (
+        ) : activeContentError ? (
           <View style={styles.refreshBody} testID="profile-content-error-state">
             <EmptyState
               icon="cloud-off"

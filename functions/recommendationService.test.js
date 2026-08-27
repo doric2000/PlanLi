@@ -122,7 +122,7 @@ test('external recommendation links discard bidi formatting but reject genuinely
   );
 });
 
-test('catalog validation keeps Other moderated and requires timing only for events', () => {
+test('catalog validation accepts a labeled Other and requires timing only for events', () => {
   assert.throws(() => sanitizeRecommendationCatalogContent({
     recommendationCatalogVersion: 1,
     title: 'המלצה',
@@ -810,6 +810,7 @@ test('authorized edits can retain media already attached to the document', async
 
 function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
   const documents = new Map(Object.entries(seed));
+  const deleteField = Symbol('delete-field');
   let autoId = 0;
   const snapshot = (ref) => ({
     id: ref.id,
@@ -840,7 +841,8 @@ function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
     const next = { ...current };
     Object.entries(patch).forEach(([field, value]) => {
       if (!field.includes('.')) {
-        next[field] = value;
+        if (value === deleteField) delete next[field];
+        else next[field] = value;
         return;
       }
       const segments = field.split('.');
@@ -904,6 +906,7 @@ function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
     firestore: Object.assign(() => db, {
       FieldValue: {
         serverTimestamp: () => 'SERVER_TIMESTAMP',
+        delete: () => deleteField,
       },
     }),
     storage: () => ({
@@ -1389,6 +1392,107 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(Object.hasOwn(saved.search, 'tokens'), false);
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
+  assert.equal(result.publicationStatus, 'active');
+  assert.equal(result.publiclyVisible, true);
+});
+
+test('a safe labeled Other publishes immediately while genuinely unsafe text is held', async () => {
+  const seed = {
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/TLV': {
+      name: 'תל אביב', names: { he: 'תל אביב', en: 'Tel Aviv' },
+      status: 'active', stats: { recommendationCount: 0 },
+    },
+  };
+  const safeAdmin = createFakeAdmin(seed);
+  const safe = await saveRecommendation({
+    admin: safeAdmin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      locationMode: 'destination',
+      recommendation: {
+        taxonomyVersion: 5,
+        recommendationCatalogVersion: 1,
+        title: 'מערת קרח מיוחדת',
+        description: 'חוויה מיוחדת באזור שמתאימה למשפחות.',
+        categoryId: 'nature',
+        subcategoryIds: ['nature_other'],
+        customSubcategoryLabel: 'קרחון נגיש',
+        budget: 'balanced',
+        media: [],
+      },
+    },
+  });
+  assert.equal(safe.publicationStatus, 'active');
+  assert.equal(safeAdmin.documents.get(`recommendations/${safe.recommendationId}`).status, 'active');
+
+  const unsafeAdmin = createFakeAdmin(seed);
+  const unsafe = await saveRecommendation({
+    admin: unsafeAdmin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      locationMode: 'destination',
+      recommendation: {
+        ...validContent,
+        title: 'child porn',
+      },
+    },
+  });
+  assert.equal(unsafe.publicationStatus, 'moderation_hold');
+  assert.equal(unsafe.publiclyVisible, false);
+  assert.equal(unsafeAdmin.documents.get(`recommendations/${unsafe.recommendationId}`).status, 'moderation_hold');
+});
+
+test('editing a legacy taxonomy_other hold releases it after the safe label is revalidated', async () => {
+  const recommendationId = 'held-other';
+  const otherContent = {
+    taxonomyVersion: 5,
+    recommendationCatalogVersion: 1,
+    title: 'מערת קרח מיוחדת',
+    description: 'חוויה מיוחדת באזור שמתאימה למשפחות.',
+    categoryId: 'nature',
+    subcategoryIds: ['nature_other'],
+    customSubcategoryLabel: 'קרחון נגיש',
+    budget: 'balanced',
+    media: [],
+  };
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/TLV': {
+      name: 'תל אביב', names: { he: 'תל אביב', en: 'Tel Aviv' },
+      status: 'active', stats: { recommendationCount: 1 },
+    },
+    [`recommendations/${recommendationId}`]: {
+      ...otherContent,
+      ownerId: 'owner',
+      status: 'moderation_hold',
+      moderation: { holdReason: 'taxonomy_other' },
+      destination: {
+        countryId: 'IL', cityId: 'TLV', countryName: 'ישראל', cityName: 'תל אביב',
+      },
+      stats: { likeCount: 0, commentCount: 0 },
+    },
+  });
+  const result = await saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      recommendationId,
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      locationMode: 'destination',
+      recommendation: otherContent,
+    },
+  });
+  const saved = admin.documents.get(`recommendations/${recommendationId}`);
+  assert.equal(result.publicationStatus, 'active');
+  assert.equal(saved.status, 'active');
+  assert.equal(Object.hasOwn(saved, 'moderation'), false);
+  assert.equal(saved.destination.cityId, 'TLV');
 });
 
 test('canonical destination wins when an inactive merged source shares its provider identity', async () => {

@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { evaluateTextSafety } = require('./moderationService');
+const { publicationOutcome } = require('./contentPublication');
 const { resolveCountryMetadata } = require('./countryMetadata');
 const {
   getHebrewCountryName,
@@ -2209,6 +2210,8 @@ async function saveRecommendation({
         durationMs: Date.now() - saveStartedAt,
         imageCount: Array.isArray(replay.media) ? replay.media.length : 0,
         replay: true,
+        contentMode: replay.locationMode || 'destination',
+        publicationStatus: publicationOutcome(replay.status).publicationStatus,
       });
       return {
         recommendationId: recommendationRef.id,
@@ -2220,6 +2223,7 @@ async function saveRecommendation({
           id: replay.destination?.cityId,
           name: replay.destination?.cityName || replay.destination?.cityId,
         },
+        ...publicationOutcome(replay.status),
         idempotentReplay: true,
       };
     }
@@ -2379,9 +2383,7 @@ async function saveRecommendation({
     subcategoryIds: content.subcategoryIds || content.tags,
     interestIds: Array.from(new Set([...(facets.interests || []), ...(content.catalogInterestIds || [])])),
   });
-  const moderationHoldReason = !textSafety.safe
-    ? textSafety.reason
-    : content.customSubcategoryLabel ? 'taxonomy_other' : '';
+  const moderationHoldReason = !textSafety.safe ? textSafety.reason : '';
 
   const transactionOutcome = await db.runTransaction(async (transaction) => {
     const current = await transaction.get(recommendationRef);
@@ -2557,13 +2559,24 @@ async function saveRecommendation({
       });
     }
 
+    const existingStatus = currentData?.status || 'active';
+    const releasesLegacyTaxonomyHold = existingStatus === 'moderation_hold'
+      && currentData?.moderation?.holdReason === 'taxonomy_other'
+      && !moderationHoldReason;
+    const nextStatus = moderationHoldReason && existingStatus === 'active'
+      ? 'moderation_hold'
+      : releasesLegacyTaxonomyHold
+        ? 'active'
+        : existingStatus;
     if (recommendationId) {
       transaction.update(recommendationRef, {
         ...transactionPayload,
-        status: currentData.status === 'active' && moderationHoldReason
-          ? 'moderation_hold'
-          : (currentData.status || (moderationHoldReason ? 'moderation_hold' : 'active')),
-        ...(moderationHoldReason ? { moderation: { holdReason: moderationHoldReason } } : {}),
+        status: nextStatus,
+        ...(moderationHoldReason
+          ? { moderation: { holdReason: moderationHoldReason } }
+          : releasesLegacyTaxonomyHold
+            ? { moderation: admin.firestore.FieldValue.delete() }
+            : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
@@ -2577,13 +2590,17 @@ async function saveRecommendation({
         stats: { likeCount: 0, commentCount: 0 },
       });
     }
-    return { replay: false, destination: transactionPayload.destination };
+    return { replay: false, destination: transactionPayload.destination, status: nextStatus };
   });
 
   console.info('recommendation_save_timing', {
     durationMs: Date.now() - saveStartedAt,
     imageCount: media.length,
     replay: transactionOutcome?.replay === true,
+    contentMode: payload.locationMode,
+    publicationStatus: publicationOutcome(
+      transactionOutcome?.data?.status || transactionOutcome?.status
+    ).publicationStatus,
   });
   const responseDestination = transactionOutcome?.data?.destination || transactionOutcome?.destination || {
     countryId: destination.countryId,
@@ -2601,6 +2618,7 @@ async function saveRecommendation({
       id: responseDestination.cityId,
       name: responseDestination.cityName || responseDestination.cityId,
     },
+    ...publicationOutcome(transactionOutcome?.data?.status || transactionOutcome?.status),
     ...(!transactionOutcome?.replay && destination.resolutionSource
       ? { resolutionSource: destination.resolutionSource }
       : {}),

@@ -30,6 +30,7 @@ const {
   saveRecommendationDraft,
 } = require('./recommendationDraftService');
 const { saveTrip } = require('./tripService');
+const { listMyPendingContent } = require('./myPendingContentService');
 const { completeAccountSetup, registerUser, updateProfile } = require('./profileService');
 const { authorizeRequest } = require('./authPolicy');
 const {
@@ -495,6 +496,11 @@ exports.publishRouteDraft = callable(
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   }))
+);
+
+exports.listMyPendingContent = callable(
+  { access: 'active', timeoutSeconds: 30 },
+  (request) => listMyPendingContent({ admin, auth: request.auth, data: request.data })
 );
 
 exports.loadRouteDetails = callable(

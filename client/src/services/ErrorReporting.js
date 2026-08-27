@@ -33,10 +33,12 @@ const ALLOWED_TAGS = new Set([
   'auth_state',
   'build',
   'content_mode',
+  'content_type',
   'error_code',
   'error_reason',
   'feature',
   'operation',
+  'publication_status',
   'screen',
 ]);
 const ALLOWED_CONTEXT_FIELDS = Object.freeze({
@@ -218,7 +220,9 @@ export function isExpectedDiagnosticCancellation(error) {
   return code === 'err_request_canceled' || code === 'auth/provider-cancelled';
 }
 
-export function captureDiagnosticException(error, { operation, code, reason, contentMode } = {}) {
+export function captureDiagnosticException(error, {
+  operation, code, reason, contentMode, contentType, publicationStatus,
+} = {}) {
   if (isExpectedDiagnosticCancellation(error)) return;
   if (error && typeof error === 'object') {
     if (capturedErrors.has(error)) return;
@@ -229,6 +233,10 @@ export function captureDiagnosticException(error, { operation, code, reason, con
     if (code) scope.setTag('error_code', sanitizeDiagnosticText(String(code)).slice(0, 64));
     if (reason) scope.setTag('error_reason', sanitizeDiagnosticText(String(reason)).slice(0, 80));
     if (['exact', 'destination', 'pin'].includes(contentMode)) scope.setTag('content_mode', contentMode);
+    if (['recommendation', 'route'].includes(contentType)) scope.setTag('content_type', contentType);
+    if (['active', 'moderation_hold', 'unknown'].includes(publicationStatus)) {
+      scope.setTag('publication_status', publicationStatus);
+    }
     Sentry.captureException(error);
   });
 }

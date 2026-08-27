@@ -13,18 +13,19 @@ export function getContentGridColumns(width) {
   return 3;
 }
 
-export default function ContentTile({ image, title, subtitle, icon = 'photo-library', fallbackColor = colors.brand, onPress, style }) {
+export default function ContentTile({ image, title, subtitle, icon = 'photo-library', fallbackColor = colors.brand, onPress, style, disabled = false }) {
   const [revealed, setRevealed] = useState(false);
   const showOverlay = Platform.OS === 'web' && revealed;
   return (
     <Pressable
       style={[styles.tile, style]}
       onPress={onPress}
+      disabled={disabled || typeof onPress !== 'function'}
       onHoverIn={() => setRevealed(true)}
       onHoverOut={() => setRevealed(false)}
       onFocus={() => setRevealed(true)}
       onBlur={() => setRevealed(false)}
-      accessibilityRole="button"
+      accessibilityRole={disabled || typeof onPress !== 'function' ? 'image' : 'button'}
       accessibilityLabel={`${title || 'תוכן'}${subtitle ? `, ${subtitle}` : ''}`}
     >
       {image ? (
