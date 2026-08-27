@@ -41,6 +41,20 @@ test('admin search projection indexes Hebrew and English without private email f
   assert.equal(projectionId(target.path), projectionId(target.path));
 });
 
+test('destination projections omit an absent optional country name', () => {
+  const target = targetForPath('countries/IL/destinations/haifa');
+  const projection = buildAdminSearchProjection({
+    target,
+    data: { identity: { names: { he: 'חיפה' } }, status: 'active' },
+  });
+  assert.deepEqual(projection.destination, {
+    countryId: 'IL',
+    cityId: 'haifa',
+    cityName: 'חיפה',
+  });
+  assert.equal('countryName' in projection.destination, false);
+});
+
 test('route publication cleanup removes projections from inactive revisions', async () => {
   const deleted = [];
   const entries = [
