@@ -25,12 +25,12 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible Android and iOS production EAS Update is content-
-publication contract group `4c1fcb12-53c4-4696-90ff-3ad047597e40`, Android
-update `01a043e2-3cf0-710b-a265-2c3b9ecfa9ca` and iOS update
-`01a043e2-3cf0-7812-8872-12d045411a09`, published at
-`2026-08-27T15:41:35.344Z` from clean `main` merge commit
-`e7bc51d640adfd2cc45ea01a441bc554c0499591`. EAS read-back confirms runtime
+The latest compatible Android and iOS production EAS Update is location-
+stability group `3016e5a7-5f03-4abd-8277-db1e43f48f4d`, Android update
+`01a04475-a5ba-7b18-bc16-191f2e63a5bf` and iOS update
+`01a04475-a5ba-7ff3-ae65-1fc08c9b7e40`, published at
+`2026-08-27T18:22:35.962Z` from clean `main` merge commit
+`b1314ba4bf10dee1e9fbb82548cfceab2aaf355d`. EAS read-back confirms runtime
 `1.1.0`, the exact merge commit, both platforms and the production branch.
 Download, application and end-to-end publication behavior on physical Android
 and iOS devices remain unverified.
@@ -1848,3 +1848,62 @@ rejected.
   twice to apply it. Roll back preview to group
   `2be4404d-9bb4-48aa-b296-44df198deb1b` or production to group
   `a50b1502-5158-49e5-bb59-02933dac81f1` if required.
+
+## Location selection and RoadTrip stability release
+
+- Source and Git: implementation commit `ab94604` passed PR `#246` and merged
+  to clean `main` as `f5bfbff22f71f6a95d1b1e8bc56c968635fa52fd`. EAS
+  preflight repair commit `24fd4d3` passed PR `#247` and produced final release
+  source `b1314ba4bf10dee1e9fbb82548cfceab2aaf355d` at
+  `2026-08-27T18:00:47Z`.
+- Root cause and scope: directly selected Google cities outside the reviewed
+  catalog were rejected, successful destination confirmation was lost by two
+  recommendation screens, and exact places could disappear while reassignment
+  was required. Draft expiry and RoadTrip publication could also discard a
+  verified place-to-destination binding or consume Google verification quota
+  again. The release establishes one location-selection contract for
+  recommendations and RoadTrips, permits verified directly selected cities such
+  as Hod Hasharon as provisional destinations, keeps exact-place map state,
+  preserves server-owned draft bindings, trusts matching active PlanLi sources,
+  keeps PlanLi results usable during Google failures, and classifies recovery
+  actions instead of exposing a dead end.
+- Validation: changed-scope validation passed seven affected client groups and
+  eight affected Functions groups; focused Functions location coverage passed
+  106 tests. The final review reported no blocking, P1 or P2 finding, every check
+  on PRs `#246` and `#247` passed, and the repaired EAS preflight unit suite
+  passed 5/5. Physical end-to-end behavior remains unverified and is delegated
+  to the beta device matrix after rollout.
+- Functions: `searchPlaces`, `resolvePlaceSelection`,
+  `resolveRecommendationDestination`, `saveRecommendation`,
+  `saveRecommendationDraft`, `publishRecommendationDraft`,
+  `getCurrentRouteDraft`, `saveRoute`, `saveRouteDraft`, and
+  `publishRouteDraft` were deployed with exact targets to `planli-f0b12` in
+  `europe-west1`. The first attempt stopped before live changes because source
+  discovery exceeded ten seconds; the documented
+  `FUNCTIONS_DISCOVERY_TIMEOUT=60000` retry succeeded. Independent inventory
+  confirmed all ten `ACTIVE`, v2 and Node.js 22. No Rules, indexes, Storage,
+  Hosting, IAM or production-document writes accompanied the deployment.
+- Production audit: the post-release read-only audit at
+  `2026-08-27T18:25:41.293Z` inspected 848 Firestore documents and all 123
+  Functions. It found zero unexpected roots or Functions, invalid location
+  references or names, orphan location sources, invalid destination IDs,
+  missing European media objects or checksum mismatches; `failureCount` was
+  zero.
+- EAS Update: global EAS CLI `22.6.0` was used because the cached `npx eas-cli`
+  installation remained incomplete. The release preflight now deliberately uses
+  the installed EAS executable, and its durable setup and identity checks are
+  documented above. Preview group `e0db577e-4aa0-4e29-bc00-0ee0442e6671`, iOS
+  update `01a04472-8495-7bbe-a365-2f617a77b6b7` and Android update
+  `01a04472-8495-73ea-88dd-4057e2f458aa` were published at
+  `2026-08-27T18:19:10.869Z`. Those exact artifacts were republished to
+  production group `3016e5a7-5f03-4abd-8277-db1e43f48f4d`, iOS update
+  `01a04475-a5ba-7ff3-ae65-1fc08c9b7e40` and Android update
+  `01a04475-a5ba-7b18-bc16-191f2e63a5bf` at
+  `2026-08-27T18:22:35.962Z`. EAS read-back confirmed production head, both
+  platforms, runtime `1.1.0`, a clean tree and exact source commit `b1314ba`.
+- No native EAS build or store submission was needed because the installed iOS
+  and Android beta binaries already use compatible runtime `1.1.0`. OTA
+  download/application and the physical recommendation/RoadTrip matrix remain
+  unverified. Force-close and reopen the production app up to twice to apply the
+  OTA. Roll back by republishing production group
+  `4c1fcb12-53c4-4696-90ff-3ad047597e40` if required.
