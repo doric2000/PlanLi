@@ -1,5 +1,7 @@
 export function safeAdminError(error, { operationMayContinue = false } = {}) {
   const reason = error?.details?.reason || error?.customData?.details?.reason;
+  const code = String(error?.code || error?.name || '').toLowerCase();
+  if (reason === 'admin_required') return 'הרשאת המנהל לא אושרה בשרת. יש לוודא שהחשבון רשום כמנהל פעיל ולהתחבר מחדש.';
   if (reason === 'recent_sign_in_required') return 'מטעמי אבטחה יש להתנתק ולהתחבר מחדש לפני פעולה רגישה.';
   if (reason === 'last_admin') return 'אי אפשר להסיר את מנהל המערכת האחרון.';
   if (reason === 'self_admin_action') return 'אי אפשר לבצע פעולה זו על החשבון שלך.';
@@ -17,7 +19,12 @@ export function safeAdminError(error, { operationMayContinue = false } = {}) {
   if (reason === 'admin_account_protected') return 'אי אפשר להפעיל אכיפה על מנהל פעיל. יש להסיר קודם את הרשאת המנהל באזור המתקדם.';
   if (reason === 'target_owner_missing') return 'לתיק הזה אין חשבון משתמש שאפשר להפעיל עליו אכיפה.';
   if (reason === 'place_destination_mismatch') return 'המקום המאומת אינו שייך לעיר של התוכן. יש לבחור מועמד אחר.';
-  const code = String(error?.code || error?.name || '').toLowerCase();
+  if (code.includes('permission-denied')) {
+    return 'הרשאת המנהל לא אושרה בשרת. יש לוודא שהחשבון רשום כמנהל פעיל ולהתחבר מחדש.';
+  }
+  if (code.includes('not-found') || code.includes('unimplemented')) {
+    return 'שירותי קונסולת הניהול טרם עודכנו לגרסה הנדרשת. יש להשלים את פריסת השרת ולנסות שוב.';
+  }
   if (operationMayContinue && (code.includes('deadline-exceeded') || code.includes('timeout') || code.includes('unavailable'))) {
     return 'הפעולה אורכת זמן רב. ייתכן שהיא עדיין מתבצעת בשרת; אין להפעיל אותה שוב לפני רענון ובדיקת המצב.';
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,14 +8,25 @@ import AppText from '../../../components/AppText';
 import { auth } from '../../../config/firebase';
 import { useAdminClaim } from '../../../hooks/useAdminClaim';
 import { useBackButton } from '../../../hooks/useBackButton';
+import { getModerationPolicy } from '../../../services/AdminService';
 import { adminStyles as styles, colors } from '../../../styles';
+import { safeAdminError } from '../adminErrors';
 import { ADMIN_SECTIONS } from '../adminLabels';
 import AdminAuditSection from '../components/AdminAuditSection';
 import AdminDestinationsSection from '../components/AdminDestinationsSection';
 import AdminOverviewSection from '../components/AdminOverviewSection';
 import AdminSearchSection from '../components/AdminSearchSection';
 import AdminUsersSection from '../components/AdminUsersSection';
+import AdminAsyncState from '../components/AdminAsyncState';
 import ModerationQueueSection from '../components/ModerationQueueSection';
+
+const ADMIN_CONSOLE_CONTRACT_VERSION = 1;
+
+function isCompatiblePolicy(policy) {
+  return policy?.consoleContractVersion === ADMIN_CONSOLE_CONTRACT_VERSION
+    && Array.isArray(policy.reasons)
+    && policy.reasons.length > 0;
+}
 
 function requestedSection(params = {}) {
   if (params.caseId || ['reports', 'content', 'queue'].includes(params.tab)) return 'queue';
@@ -36,9 +47,32 @@ export default function AdminConsoleScreen({ navigation, route }) {
     countryId: typeof routeParams.countryId === 'string' ? routeParams.countryId : '',
     cityId: typeof routeParams.cityId === 'string' ? routeParams.cityId : '',
   });
+  const [compatibility, setCompatibility] = useState({ loading: true, error: '', policy: null });
+
+  const loadCompatibility = useCallback(async () => {
+    setCompatibility((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      const policy = await getModerationPolicy();
+      if (!isCompatiblePolicy(policy)) {
+        setCompatibility({
+          loading: false,
+          error: 'גרסת קונסולת הניהול אינה תואמת לשירותים הפעילים. יש להשלים את פריסת השרת ולנסות שוב.',
+          policy: null,
+        });
+        return;
+      }
+      setCompatibility({ loading: false, error: '', policy });
+    } catch (error) {
+      setCompatibility({ loading: false, error: safeAdminError(error), policy: null });
+    }
+  }, []);
 
   useBackButton(navigation, { title: '', color: colors.primary });
   useEffect(() => navigation.setOptions({ headerTitle: 'קונסולת הניהול' }), [navigation]);
+  useEffect(() => {
+    if (adminLoading || !isAdmin) return;
+    loadCompatibility();
+  }, [adminLoading, isAdmin, loadCompatibility]);
   useEffect(() => {
     const nextSection = requestedSection(routeParams);
     setSection(nextSection);
@@ -66,13 +100,31 @@ export default function AdminConsoleScreen({ navigation, route }) {
 
   if (adminLoading) return <SafeAreaView style={styles.screen}><ActivityIndicator style={styles.loading} color={colors.primary} /></SafeAreaView>;
   if (!isAdmin) return <SafeAreaView style={styles.screen}><View style={styles.empty}><Ionicons name="lock-closed" size={42} color={colors.textSecondary} /><AppText style={styles.emptyText}>אין הרשאת מנהל פעילה לחשבון זה.</AppText></View></SafeAreaView>;
+  if (compatibility.loading || !compatibility.policy) {
+    return (
+      <SafeAreaView style={styles.screen} testID="admin-panel-screen">
+        <View style={styles.mainBody}>
+          <View style={styles.sectionHeading}>
+            <AppText style={styles.sectionTitle}>בדיקת שירותי הניהול</AppText>
+            <AppText style={styles.sectionDescription}>הפעולות יופעלו רק לאחר אימות גרסת השרת והרשאת המנהל.</AppText>
+          </View>
+          <AdminAsyncState
+            loading={compatibility.loading}
+            error={compatibility.error}
+            onRetry={loadCompatibility}
+            testID="admin-console-bootstrap"
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const body = section === 'overview'
     ? <AdminOverviewSection onNavigate={navigate} />
     : section === 'queue'
-      ? <ModerationQueueSection initialView={queueView} focusCaseId={focusCaseId} onFocusHandled={() => { setFocusCaseId(''); navigation.setParams?.({ caseId: undefined }); }} />
+      ? <ModerationQueueSection policy={compatibility.policy} initialView={queueView} focusCaseId={focusCaseId} onFocusHandled={() => { setFocusCaseId(''); navigation.setParams?.({ caseId: undefined }); }} />
       : section === 'search'
-        ? <AdminSearchSection onOpenCase={(caseId) => { setFocusCaseId(caseId); setSection('queue'); }} />
+        ? <AdminSearchSection policy={compatibility.policy} onOpenCase={(caseId) => { setFocusCaseId(caseId); setSection('queue'); }} />
         : section === 'destinations'
           ? <AdminDestinationsSection focusCountryId={focusDestination.countryId} focusCityId={focusDestination.cityId} onFocusHandled={() => { setFocusDestination({ countryId: '', cityId: '' }); navigation.setParams?.({ countryId: undefined, cityId: undefined }); }} />
           : section === 'users'

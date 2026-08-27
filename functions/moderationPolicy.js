@@ -29,9 +29,11 @@ const CONTENT_ACTIONS = Object.freeze(['none', 'dismiss', 'hold', 'restore', 'de
 const ACCOUNT_ACTIONS = Object.freeze(['none', 'warn', 'suspend', 'reinstate']);
 const SUSPENSION_HOURS = Object.freeze([24, 24 * 7, 24 * 30]);
 const BULK_OPERATIONS = Object.freeze(['claim', 'unclaim', 'set_priority', 'dismiss']);
+const CONSOLE_CONTRACT_VERSION = 1;
 
 function publicModerationPolicy() {
   return {
+    consoleContractVersion: CONSOLE_CONTRACT_VERSION,
     reportCategories: [...REPORT_CATEGORIES],
     reasons: POLICY_REASONS.map((reason) => ({ ...reason })),
     contentActions: [...CONTENT_ACTIONS],
@@ -48,6 +50,7 @@ function policyReason(reasonId) {
 module.exports = {
   ACCOUNT_ACTIONS,
   BULK_OPERATIONS,
+  CONSOLE_CONTRACT_VERSION,
   CONTENT_ACTIONS,
   POLICY_REASONS,
   REPORT_CATEGORIES,

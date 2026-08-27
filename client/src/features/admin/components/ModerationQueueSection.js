@@ -8,7 +8,6 @@ import {
   bulkUpdateModerationCases,
   deleteAdminSavedView,
   getModerationCase,
-  getModerationPolicy,
   listAdminSavedViews,
   listModerationCases,
   resolveModerationCase,
@@ -247,7 +246,7 @@ function CaseDetails({ details, loading, error, policy, supportState, actionStat
   );
 }
 
-export default function ModerationQueueSection({ initialView = 'needs_action', focusCaseId = '', onFocusHandled }) {
+export default function ModerationQueueSection({ policy, initialView = 'needs_action', focusCaseId = '', onFocusHandled }) {
   const { width } = useWindowDimensions();
   const split = width >= 900;
   const [view, setView] = useState(initialView);
@@ -262,7 +261,6 @@ export default function ModerationQueueSection({ initialView = 'needs_action', f
   const [selectedIds, setSelectedIds] = useState([]);
   const [details, setDetails] = useState(null);
   const [detailState, setDetailState] = useState({ loading: false, error: '' });
-  const [policy, setPolicy] = useState(null);
   const [supportState, setSupportState] = useState({ loading: true, policyError: '', viewsError: '' });
   const [actionState, setActionState] = useState({ busy: '', error: '', decisionError: '', success: '', note: '' });
   const requestId = useRef(0);
@@ -310,17 +308,14 @@ export default function ModerationQueueSection({ initialView = 'needs_action', f
 
   const loadSupportData = useCallback(async () => {
     setSupportState((current) => ({ ...current, loading: true, policyError: '', viewsError: '' }));
-    const [policyResult, viewsResult] = await Promise.allSettled([
-      getModerationPolicy(),
-      listAdminSavedViews(),
-    ]);
-    let policyError = '';
+    const viewsResult = await Promise.resolve()
+      .then(() => listAdminSavedViews())
+      .then((value) => ({ status: 'fulfilled', value }))
+      .catch((reason) => ({ status: 'rejected', reason }));
     let viewsError = '';
-    if (policyResult.status === 'fulfilled') setPolicy(policyResult.value);
-    else policyError = `מדיניות המודרציה לא נטענה: ${safeAdminError(policyResult.reason)}`;
     if (viewsResult.status === 'fulfilled') setSavedViews(viewsResult.value?.items || []);
     else viewsError = `התצוגות השמורות לא נטענו: ${safeAdminError(viewsResult.reason)}`;
-    setSupportState({ loading: false, policyError, viewsError });
+    setSupportState({ loading: false, policyError: '', viewsError });
   }, []);
 
   useEffect(() => { load(); }, [payload]); // eslint-disable-line react-hooks/exhaustive-deps
