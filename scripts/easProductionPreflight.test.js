@@ -2,13 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  easExecutable,
   easExecOptions,
   parseArgs,
   validateDeployedCommit,
   validateRepositoryState,
 } = require('./easProductionPreflight');
 
-test('uses the Windows command shell for the npx.cmd launcher', () => {
+test('uses the installed EAS launcher for each platform', () => {
+  assert.equal(easExecutable('win32'), 'eas.cmd');
+  assert.equal(easExecutable('linux'), 'eas');
   assert.equal(easExecOptions('win32').shell, true);
   assert.equal(easExecOptions('linux').shell, false);
 });
