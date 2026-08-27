@@ -28,6 +28,8 @@ const {
   GROUPING_POLICIES,
   REGISTRY_PATH,
   clearRegistryCache,
+  registryCollectionIssues,
+  validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
 const {
   getDestinationRenameJobRef,
@@ -498,12 +500,6 @@ async function updateDestinationPolicy({ admin, auth, data }) {
   const parentId = data?.parentId ? cleanId(data.parentId, 'parentId') : null;
   const aliases = cleanPolicyAliases(data?.aliases || []);
   const bundle = await destinationBundle(admin, countryId, cityId);
-  if (parentId) {
-    const parent = await admin.firestore().doc(`${REGISTRY_PATH}/${parentId}`).get();
-    if (!parent.exists || parent.data()?.countryCode !== String(bundle.country?.code || countryId).toUpperCase()) {
-      fail('invalid-argument', 'Parent destination is invalid.', 'invalid_parent');
-    }
-  }
   const registryId = bundle.city?.canonicalPolicy?.registryId || `${String(bundle.country?.code || countryId).toLowerCase()}-${cityId.toLowerCase()}`;
   const policy = {
     approved: true,
@@ -515,32 +511,65 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     registryVersion: 1,
     approvedBy: auth.uid,
   };
-  await bundle.cityRef.update({
-    canonicalPolicy: policy,
-    destinationType: kind === 'city_hub' ? 'city' : kind === 'island' ? 'island' : 'region',
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  const db = admin.firestore();
+  const countryRef = db.doc(`countries/${countryId}`);
+  const registryRef = db.doc(`${REGISTRY_PATH}/${registryId}`);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  let syncedCity = null;
+  await db.runTransaction(async (transaction) => {
+    const [citySnapshot, countrySnapshot, registrySnapshot] = await Promise.all([
+      transaction.get(bundle.cityRef),
+      transaction.get(countryRef),
+      transaction.get(db.collection(REGISTRY_PATH)),
+    ]);
+    if (!citySnapshot.exists || !countrySnapshot.exists || countrySnapshot.data()?.status !== 'active') {
+      fail('failed-precondition', 'Destination identity changed before policy update.', 'destination_changed');
+    }
+    const currentCity = citySnapshot.data() || {};
+    const currentCountry = countrySnapshot.data() || {};
+    const registryEntry = {
+      id: registryId,
+      countryCode: String(currentCountry.code || countryId).toUpperCase(),
+      names: {
+        he: destinationHebrewName(currentCity) || cityId,
+        en: currentCity.googleCache?.names?.en || currentCity.identity?.names?.en || cityId,
+      },
+      aliases,
+      kind,
+      parentId,
+      groupingPolicy,
+      providerRefs: currentCity.providerRefs || {},
+      center: destinationCoordinates(currentCity),
+      viewport: currentCity.googleCache?.viewport || currentCity.identity?.viewport || null,
+      googleTypes: currentCity.googleCache?.types || currentCity.identity?.types || [],
+      approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
+      status: 'active',
+      registryVersion: 1,
+    };
+    const entryValidation = validateRegistryEntry(registryEntry);
+    if (!entryValidation.valid) {
+      fail('failed-precondition', 'Destination policy does not satisfy registry requirements.', entryValidation.errors[0]);
+    }
+    const entries = registrySnapshot.docs
+      .filter((document) => document.id !== registryId)
+      .map((document) => ({ id: document.id, ...document.data() }));
+    const collectionIssues = registryCollectionIssues([...entries, registryEntry]);
+    if (collectionIssues.length) {
+      fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
+    }
+    const destinationType = kind === 'city_hub' ? 'city' : kind === 'island' ? 'island' : 'region';
+    syncedCity = { ...currentCity, canonicalPolicy: policy, destinationType };
+    transaction.update(bundle.cityRef, {
+      canonicalPolicy: policy,
+      destinationType,
+      updatedAt: timestamp,
+    });
+    const registryData = { ...registryEntry };
+    delete registryData.id;
+    transaction.set(registryRef, { ...registryData, updatedAt: timestamp }, { merge: true });
   });
-  await admin.firestore().doc(`${REGISTRY_PATH}/${registryId}`).set({
-    countryCode: String(bundle.country?.code || countryId).toUpperCase(),
-    names: {
-      he: destinationHebrewName(bundle.city) || cityId,
-      en: bundle.city?.googleCache?.names?.en || bundle.city?.identity?.names?.en || cityId,
-    },
-    aliases,
-    kind,
-    parentId,
-    groupingPolicy,
-    providerRefs: bundle.city?.providerRefs || {},
-    center: destinationCoordinates(bundle.city),
-    viewport: bundle.city?.googleCache?.viewport || bundle.city?.identity?.viewport || null,
-    googleTypes: bundle.city?.googleCache?.types || bundle.city?.identity?.types || [],
-    approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
-    status: 'active',
-    registryVersion: 1,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
   clearRegistryCache();
-  await syncDestinationCatalog({ admin, countryId, cityId, city: { ...bundle.city, canonicalPolicy: policy } });
+  await syncDestinationCatalog({ admin, countryId, cityId, city: syncedCity });
   await audit({ admin, auth, action: 'destination_policy_updated', target: { countryId, cityId }, reason, metadata: policy });
   return { success: true, policy };
 }

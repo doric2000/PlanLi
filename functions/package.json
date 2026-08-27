@@ -39,6 +39,7 @@
     "repair-destination-hebrew-names": "node scripts/repairDestinationHebrewNames.js",
     "repair-canonical-destination": "node scripts/repairCanonicalDestination.js",
     "reassign-canonical-destination": "node scripts/reassignCanonicalDestination.js",
+    "repair-merged-destination-personalization": "node scripts/repairMergedDestinationPersonalization.js",
     "seed-canonical-destinations": "node scripts/seedCanonicalDestinationRegistry.js",
     "repair-destination-image-queries": "node scripts/repairDestinationImageQueries.js",
     "repair-missing-destination-images": "node scripts/repairMissingDestinationImages.js",

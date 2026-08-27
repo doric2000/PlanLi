@@ -7,6 +7,7 @@ const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
+  registryCollectionIssues,
   validateRegistryEntry,
 } = require('../canonicalDestinationRegistry');
 
@@ -157,14 +158,16 @@ function auditEntries(entries, { requireProviderIdentity }) {
   const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
   const duplicatePlaceIds = placeIds.filter((id, index) => placeIds.indexOf(id) !== index);
   const invalid = validations.filter((validation) => !validation.valid);
+  const collectionIssues = registryCollectionIssues(entries);
   return {
     valid: entries.length >= 240 && entries.length <= 260 && !invalid.length &&
-      !duplicateIds.length && !duplicatePlaceIds.length,
+      !duplicateIds.length && !duplicatePlaceIds.length && !collectionIssues.length,
     count: entries.length,
     regionalCounts: REGIONAL_COUNTS,
     invalid: invalid.map((item) => ({ id: item.id, errors: item.errors })),
     duplicateIds: Array.from(new Set(duplicateIds)),
     duplicateGooglePlaceIds: Array.from(new Set(duplicatePlaceIds)),
+    collectionIssues,
   };
 }
 

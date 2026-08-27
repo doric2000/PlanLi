@@ -103,6 +103,106 @@ function entryContainsPoint(entry, coordinates) {
     distanceKm(entry.center, coordinates) <= Number(entry.radiusKm);
 }
 
+function groupedEntryFor(entry, entries) {
+  if (!entry) return null;
+  const byId = new Map(entries.map((candidate) => [candidate.id, candidate]));
+  let current = entry;
+  const visited = new Set();
+  while (current?.parentId && !visited.has(current.id)) {
+    visited.add(current.id);
+    const parent = byId.get(current.parentId);
+    if (!parent) break;
+    const childApproved = parent.groupingPolicy === 'approved_children' &&
+      current.groupingPolicy !== 'parent';
+    if (childApproved) break;
+    current = parent;
+  }
+  return current;
+}
+
+function uniqueGroupedEntries(entries, candidates) {
+  const grouped = new Map();
+  entries.forEach((entry) => {
+    const effective = groupedEntryFor(entry, candidates);
+    if (effective) grouped.set(effective.id, effective);
+  });
+  return Array.from(grouped.values());
+}
+
+function registryCollectionIssues(entries) {
+  const normalized = entries.map(normalizeEntry);
+  const byId = new Map();
+  const issues = [];
+  const providerOwners = new Map();
+  normalized.forEach((entry) => {
+    if (byId.has(entry.id)) issues.push({ code: 'duplicate_id', id: entry.id });
+    byId.set(entry.id, entry);
+    const providerIds = [
+      entry.providerRefs?.googlePlaceId,
+      ...(Array.isArray(entry.providerRefs?.googlePlaceIds) ? entry.providerRefs.googlePlaceIds : []),
+    ].filter(Boolean);
+    providerIds.forEach((providerId) => {
+      const owner = providerOwners.get(providerId);
+      if (owner && owner !== entry.id) {
+        issues.push({ code: 'duplicate_google_place_id', id: entry.id, relatedId: owner });
+      } else {
+        providerOwners.set(providerId, entry.id);
+      }
+    });
+  });
+
+  normalized.forEach((entry) => {
+    if (entry.groupingPolicy === 'parent' && !entry.parentId) {
+      issues.push({ code: 'parent_policy_without_parent', id: entry.id });
+    }
+    if (!entry.parentId) return;
+    const parent = byId.get(entry.parentId);
+    if (entry.parentId === entry.id) {
+      issues.push({ code: 'self_parent', id: entry.id });
+    } else if (!parent) {
+      issues.push({ code: 'missing_parent', id: entry.id, relatedId: entry.parentId });
+    } else if (parent.countryCode !== entry.countryCode) {
+      issues.push({ code: 'cross_country_parent', id: entry.id, relatedId: entry.parentId });
+    } else if (entry.groupingPolicy !== 'parent' && parent.groupingPolicy !== 'approved_children') {
+      issues.push({ code: 'unapproved_child', id: entry.id, relatedId: entry.parentId });
+    }
+  });
+
+  normalized.forEach((entry) => {
+    const visited = new Set();
+    let current = entry;
+    while (current?.parentId) {
+      if (visited.has(current.id)) {
+        issues.push({ code: 'parent_cycle', id: entry.id });
+        break;
+      }
+      visited.add(current.id);
+      current = byId.get(current.parentId);
+      if (!current) break;
+    }
+  });
+
+  for (let leftIndex = 0; leftIndex < normalized.length; leftIndex += 1) {
+    const left = normalized[leftIndex];
+    if (!left.center) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < normalized.length; rightIndex += 1) {
+      const right = normalized[rightIndex];
+      if (left.countryCode !== right.countryCode || !right.center) continue;
+      const related = left.parentId === right.id || right.parentId === left.id;
+      if (related) continue;
+      const centerDistance = distanceKm(left.center, right.center);
+      if (centerDistance < 3 && entryContainsPoint(left, right.center) &&
+          entryContainsPoint(right, left.center)) {
+        issues.push({ code: 'unresolved_overlap', id: left.id, relatedId: right.id });
+      }
+    }
+  }
+  return issues.filter((issue, index, values) => values.findIndex((candidate) =>
+    candidate.code === issue.code && candidate.id === issue.id &&
+    candidate.relatedId === issue.relatedId
+  ) === index);
+}
+
 function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = [], coordinates }) {
   const code = String(countryCode || '').toUpperCase();
   const candidates = entries.map(normalizeEntry)
@@ -110,11 +210,13 @@ function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = 
   if (providerPlaceId) {
     const exact = candidates.find((entry) => entry.providerRefs?.googlePlaceId === providerPlaceId ||
       (entry.providerRefs?.googlePlaceIds || []).includes(providerPlaceId));
-    if (exact) return { entry: exact, source: 'canonical_google_place_id' };
+    if (exact) return { entry: groupedEntryFor(exact, candidates), source: 'canonical_google_place_id' };
   }
   const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
-  const aliasMatches = candidates.filter((entry) => entry.aliasesNormalized.some((alias) => aliasKeys.has(alias)));
-  const containing = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
+  const rawAliasMatches = candidates.filter((entry) => entry.aliasesNormalized.some((alias) => aliasKeys.has(alias)));
+  const rawContaining = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
+  const aliasMatches = uniqueGroupedEntries(rawAliasMatches, candidates);
+  const containing = uniqueGroupedEntries(rawContaining, candidates);
   if (aliasMatches.length === 1) {
     return {
       entry: aliasMatches[0],
@@ -128,10 +230,12 @@ function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = 
     }
     if (!containedAliasMatches.length) return { ambiguity: aliasMatches.slice(0, 3) };
   }
-  const eligible = containing.filter((entry) => aliasMatches.includes(entry));
+  const aliasMatchIds = new Set(aliasMatches.map((entry) => entry.id));
+  const eligible = containing.filter((entry) => aliasMatchIds.has(entry.id));
   const pool = eligible.length ? eligible : containing;
   if (!pool.length) return null;
-  const children = pool.filter((entry) => entry.parentId);
+  const children = pool.filter((entry) => entry.parentId &&
+    candidates.find((candidate) => candidate.id === entry.parentId)?.groupingPolicy === 'approved_children');
   const preferred = children.length ? children : pool;
   const sorted = preferred.sort((left, right) => {
     const leftDistance = left.center ? distanceKm(left.center, coordinates) : 0;
@@ -145,7 +249,7 @@ function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = 
       return { ambiguity: sorted.slice(0, 3) };
     }
   }
-  return { entry: sorted[0], source: aliasMatches.includes(sorted[0]) ? 'canonical_alias_and_geometry' : 'canonical_geometry' };
+  return { entry: sorted[0], source: aliasMatchIds.has(sorted[0].id) ? 'canonical_alias_and_geometry' : 'canonical_geometry' };
 }
 
 async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
@@ -182,6 +286,7 @@ module.exports = {
   entryContainsPoint,
   matchCanonicalEntry,
   normalizeEntry,
+  registryCollectionIssues,
   registryEntriesForCountry,
   validateRegistryEntry,
 };

@@ -1445,18 +1445,35 @@ async function resolveGoogleDestination({
       [builtDestination.id]: { providerPlaceId: canonicalPlaceId },
     },
   };
-  let existingCity = canonicalPlaceId ? await destinations
-    .where('providerRefs.googlePlaceId', '==', canonicalPlaceId)
-    .limit(1)
-    .get() : { empty: true, docs: [] };
-  if (!existingCity.empty) {
-    cityId = existingCity.docs[0].id;
-    cityData = existingCity.docs[0].data();
+  const canonicalCityRef = db.doc(`countries/${countryId}/destinations/${builtDestination.id}`);
+  const canonicalCitySnapshot = await canonicalCityRef.get();
+  if (canonicalCitySnapshot.exists) {
+    cityId = canonicalCitySnapshot.id;
+    cityData = canonicalCitySnapshot.data();
     assert(
-      destinationAcceptsNewReferences(cityData),
+      destinationAcceptsNewReferences(cityData) &&
+        cityData?.canonicalPolicy?.approved === true &&
+        cityData?.canonicalPolicy?.registryId === canonicalEntry.id,
       'failed-precondition',
-      'The matching destination is not active.'
+      'The canonical destination identity is not active.'
     );
+  }
+
+  if (!cityId && canonicalPlaceId) {
+    const providerMatches = await destinations
+      .where('providerRefs.googlePlaceId', '==', canonicalPlaceId)
+      .limit(10)
+      .get();
+    const approvedMatch = providerMatches.docs.find((document) => {
+      const data = document.data() || {};
+      return destinationAcceptsNewReferences(data) &&
+        data.canonicalPolicy?.approved === true &&
+        data.canonicalPolicy?.registryId === canonicalEntry.id;
+    });
+    if (approvedMatch) {
+      cityId = approvedMatch.id;
+      cityData = approvedMatch.data();
+    }
   }
 
   if (!cityId && claimRef) {
@@ -1477,13 +1494,13 @@ async function resolveGoogleDestination({
         const claimedCitySnapshot = await db
           .doc(`countries/${countryId}/destinations/${claimedDestinationId}`)
           .get();
-        assert(
-          claimedCitySnapshot.exists && destinationAcceptsNewReferences(claimedCitySnapshot.data()),
-          'failed-precondition',
-          'The matching destination is not active.'
-        );
-        cityId = claimedDestinationId;
-        cityData = claimedCitySnapshot.data();
+        const claimedCity = claimedCitySnapshot.exists ? claimedCitySnapshot.data() || {} : null;
+        if (claimedCity && destinationAcceptsNewReferences(claimedCity) &&
+            claimedCity.canonicalPolicy?.approved === true &&
+            claimedCity.canonicalPolicy?.registryId === canonicalEntry.id) {
+          cityId = claimedDestinationId;
+          cityData = claimedCity;
+        }
       }
     }
   }

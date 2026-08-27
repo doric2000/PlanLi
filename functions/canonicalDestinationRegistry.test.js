@@ -6,6 +6,7 @@ const {
   BUILTIN_POLICIES,
   canonicalDestinationId,
   matchCanonicalEntry,
+  registryCollectionIssues,
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
 
@@ -87,4 +88,42 @@ test('a unique approved province alias wins before approximate fallback geometry
   });
   assert.equal(match.entry.id, 'th-chiang-mai');
   assert.equal(match.source, 'canonical_alias');
+});
+
+test('parent grouping resolves an approved child alias to its parent', () => {
+  const entries = [
+    {
+      id: 'zz-island', countryCode: 'ZZ', names: { he: 'אי', en: 'Island' },
+      aliases: ['Island'], kind: 'island', groupingPolicy: 'self',
+      center: { lat: 1, lng: 1 }, radiusKm: 50, status: 'active',
+    },
+    {
+      id: 'zz-village', countryCode: 'ZZ', names: { he: 'כפר', en: 'Village' },
+      aliases: ['Village'], kind: 'city_hub', parentId: 'zz-island', groupingPolicy: 'parent',
+      center: { lat: 1, lng: 1 }, radiusKm: 5, status: 'active',
+    },
+  ];
+  const match = matchCanonicalEntry(entries, {
+    countryCode: 'ZZ', aliases: ['Village'], coordinates: { lat: 1, lng: 1 },
+  });
+  assert.equal(match.entry.id, 'zz-island');
+});
+
+test('registry collection validation rejects invalid graphs, duplicates and unresolved overlaps', () => {
+  const base = {
+    countryCode: 'ZZ', names: { he: 'יעד', en: 'Destination' }, aliases: ['Destination'],
+    kind: 'city_hub', groupingPolicy: 'self', center: { lat: 1, lng: 1 }, radiusKm: 10,
+    providerRefs: { googlePlaceId: 'shared-place' }, status: 'active',
+  };
+  const issues = registryCollectionIssues([
+    { ...base, id: 'zz-first', parentId: 'zz-first' },
+    { ...base, id: 'zz-second', center: { lat: 1.001, lng: 1.001 } },
+    { ...base, id: 'zz-third', providerRefs: { googlePlaceId: 'third-place' }, parentId: 'missing' },
+  ]);
+  const codes = new Set(issues.map((issue) => issue.code));
+  assert.ok(codes.has('duplicate_google_place_id'));
+  assert.ok(codes.has('self_parent'));
+  assert.ok(codes.has('parent_cycle'));
+  assert.ok(codes.has('missing_parent'));
+  assert.ok(codes.has('unresolved_overlap'));
 });

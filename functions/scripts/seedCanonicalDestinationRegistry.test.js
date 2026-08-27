@@ -25,6 +25,24 @@ test('built-in grouping policy is merged into researched candidates', () => {
   assert.equal(audit.valid, true);
 });
 
+test('registry seed audit blocks dangling parents and duplicate provider identities', () => {
+  const entries = CANDIDATES.map(mergePolicy).map((entry, index) => ({
+    ...entry,
+    providerRefs: { googlePlaceId: `place-${index}` },
+    center: { lat: 20 + index, lng: 20 + index },
+    radiusKm: 1,
+  }));
+  entries[1] = {
+    ...entries[1],
+    parentId: 'missing-parent',
+    providerRefs: { googlePlaceId: entries[0].providerRefs.googlePlaceId },
+  };
+  const audit = auditEntries(entries, { requireProviderIdentity: true });
+  assert.equal(audit.valid, false);
+  assert.ok(audit.collectionIssues.some((issue) => issue.code === 'missing_parent'));
+  assert.ok(audit.collectionIssues.some((issue) => issue.code === 'duplicate_google_place_id'));
+});
+
 test('reviewed enrichment overrides select an exact island identity from ambiguous results', async () => {
   const candidate = CANDIDATES.find((entry) => entry.id === 'es-ibiza');
   const country = { longText: 'Spain', shortText: 'ES', types: ['country'] };

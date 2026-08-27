@@ -7,6 +7,7 @@ const {
   migrateFavoritePage,
   migratedRecommendationCount,
   recommendationPatch,
+  reassignDestinationPersonalization,
   reassignmentJobId,
   residualReferenceStage,
   routePatch,
@@ -86,6 +87,14 @@ test('favorite migration moves the hashed destination favorite and refreshes its
     ['countries/NI/destinations/ometepe', {
       status: 'active', name: 'אומטפה', countryName: 'ניקרגואה', createdAt: 'CITY_CREATED',
     }],
+    ['users/u1', {
+      personalization: {
+        destinations: [
+          { countryId: 'NI', cityId: 'rivas', score: 6, negativeScore: 1 },
+          { countryId: 'NI', cityId: 'ometepe', score: 3, negativeScore: 2 },
+        ],
+      },
+    }],
   ]);
   const ref = (path) => ({ path, id: path.split('/').at(-1) });
   const snapshot = (reference) => ({
@@ -111,6 +120,7 @@ test('favorite migration moves the hashed destination favorite and refreshes its
     db,
     job: { source, target },
     pageSize: 25,
+    nowMs: 1234,
   });
 
   assert.equal(result.updated, 1);
@@ -118,6 +128,40 @@ test('favorite migration moves the hashed destination favorite and refreshes its
   const migrated = [...documents.entries()].find(([path]) => path.startsWith('users/u1/favorites/'))?.[1];
   assert.equal(migrated.target.path, 'countries/NI/destinations/ometepe');
   assert.equal(migrated.preview.title, 'אומטפה');
+  assert.deepEqual(documents.get('users/u1').personalization.destinations, [{
+    countryId: 'NI', cityId: 'ometepe', score: 6, negativeScore: 2, updatedAtMs: 1234,
+  }]);
+});
+
+test('destination personalization reassignment is bounded and leaves unrelated profiles unchanged', () => {
+  assert.equal(reassignDestinationPersonalization({ destinations: [] }, source, target, 1), null);
+  const result = reassignDestinationPersonalization({
+    behaviorEnabled: true,
+    destinations: [
+      { countryId: 'NI', cityId: 'rivas', score: 18, negativeScore: 3 },
+      { countryId: 'NI', cityId: 'ometepe', score: 7, negativeScore: 9 },
+      { countryId: 'GR', cityId: 'corfu', score: 4, negativeScore: 0 },
+    ],
+  }, source, target, 55);
+  assert.equal(result.behaviorEnabled, true);
+  assert.deepEqual(result.destinations, [
+    { countryId: 'NI', cityId: 'ometepe', score: 18, negativeScore: 9, updatedAtMs: 55 },
+    { countryId: 'GR', cityId: 'corfu', score: 4, negativeScore: 0 },
+  ]);
+});
+
+test('destination personalization reassignment retains strong negative affinity at the limit', () => {
+  const destinations = [
+    { countryId: 'NI', cityId: 'rivas', score: 1, negativeScore: 0 },
+    { countryId: 'GR', cityId: 'avoid-me', score: 0, negativeScore: 20 },
+    ...Array.from({ length: 19 }, (_, index) => ({
+      countryId: 'ZZ', cityId: `destination-${index}`, score: 2, negativeScore: 0,
+    })),
+  ];
+  const result = reassignDestinationPersonalization({ destinations }, source, target, 77);
+  assert.equal(result.destinations.length, 20);
+  assert.ok(result.destinations.some((entry) => entry.cityId === 'avoid-me'));
+  assert.ok(!result.destinations.some((entry) => entry.cityId === 'ometepe'));
 });
 
 function inMemoryReassignmentAdmin(seed) {

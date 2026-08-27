@@ -21,7 +21,7 @@ const {
   validateMediaAssets,
 } = require('./recommendationService');
 const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
-const { canonicalDestinationId } = require('./canonicalDestinationRegistry');
+const { canonicalDestinationId, clearRegistryCache } = require('./canonicalDestinationRegistry');
 const { createResolvedPlaceToken } = require('./placesGatewayService');
 
 test('verified caller accepts verified password users, social users and admins', () => {
@@ -1166,6 +1166,64 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(Object.hasOwn(saved.search, 'tokens'), false);
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
+});
+
+test('canonical destination wins when an inactive merged source shares its provider identity', async () => {
+  clearRegistryCache();
+  const registryId = 'zz-canonical-hub';
+  const canonicalId = canonicalDestinationId('ZZ', registryId);
+  const providerPlaceId = 'shared-canonical-place';
+  const canonicalPolicy = {
+    approved: true, registryId, kind: 'city_hub', groupingPolicy: 'self', registryVersion: 1,
+  };
+  const admin = createFakeAdmin({
+    'countries/ZZ': {
+      name: 'זדלנד', names: { he: 'זדלנד', en: 'Zedland' }, code: 'ZZ',
+      region: 'Test', currencyCode: 'ZZZ', status: 'active',
+    },
+    'countries/ZZ/destinations/dst_00000000000000000000': {
+      status: 'inactive', providerRefs: { googlePlaceId: providerPlaceId },
+      mergedInto: { countryId: 'ZZ', cityId: canonicalId },
+    },
+    [`countries/ZZ/destinations/${canonicalId}`]: {
+      status: 'active', destinationType: 'city', providerRefs: { googlePlaceId: providerPlaceId },
+      canonicalPolicy,
+      googleCache: {
+        names: { he: 'יעד קנוני', en: 'Canonical Hub' },
+        coordinates: { lat: 1, lng: 1 },
+      },
+    },
+    [`system/destinationRegistry/entries/${registryId}`]: {
+      countryCode: 'ZZ', names: { he: 'יעד קנוני', en: 'Canonical Hub' },
+      aliases: ['Canonical Hub'], kind: 'city_hub', groupingPolicy: 'self',
+      providerRefs: { googlePlaceId: providerPlaceId }, center: { lat: 1, lng: 1 },
+      radiusKm: 10, status: 'active', registryVersion: 1,
+    },
+  });
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'selected-poi', displayName: 'Attraction', countryName: 'Zedland',
+      countryCode: 'ZZ', localityName: 'Canonical Hub', localityCandidates: ['Canonical Hub'],
+      coordinates: { lat: 1, lng: 1 }, types: ['tourist_attraction'],
+    },
+    en: {
+      placeId: 'selected-poi', displayName: 'Attraction', countryName: 'Zedland',
+      countryCode: 'ZZ', localityName: 'Canonical Hub', localityCandidates: ['Canonical Hub'],
+      coordinates: { lat: 1, lng: 1 }, types: ['tourist_attraction'],
+    },
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin, placeId: selectedPlace.en.placeId, resolvedPlace: selectedPlace,
+      mapsKey: 'unused', newPlacesKey: 'unused', placesProvider: 'new',
+    });
+    assert.equal(destination.cityId, canonicalId);
+    assert.equal(destination.cityData.status, 'active');
+  } finally {
+    clearRegistryCache();
+  }
 });
 
 test('saveRecommendation rejects a destination locked after resolution but before its write transaction', async () => {

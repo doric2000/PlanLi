@@ -8,6 +8,8 @@ const { destinationAcceptsNewReferences } = require('./destinationReferencePolic
 const { buildFavoritePreview, favoriteKeyForPath } = require('./socialService');
 
 const PAGE_SIZE = 25;
+const MAX_DESTINATION_AFFINITY = 20;
+const MAX_PERSONALIZED_DESTINATIONS = 20;
 const STAGES = Object.freeze(['recommendations', 'routes', 'trips', 'favorites', 'finalize', 'complete']);
 
 function fail(code, message, reason = 'invalid_input') {
@@ -206,7 +208,45 @@ function favoriteTarget(target) {
   };
 }
 
-async function migrateFavoritePage({ db, job, pageSize }) {
+function reassignDestinationPersonalization(personalization, source, target, nowMs = Date.now()) {
+  const destinations = Array.isArray(personalization?.destinations)
+    ? personalization.destinations
+    : [];
+  const sourceEntry = destinations.find((entry) =>
+    entry?.countryId === source.countryId && entry?.cityId === source.cityId
+  );
+  if (!sourceEntry) return null;
+  const targetEntry = destinations.find((entry) =>
+    entry?.countryId === target.countryId && entry?.cityId === target.cityId
+  );
+  const merged = {
+    countryId: target.countryId,
+    cityId: target.cityId,
+    score: Math.min(MAX_DESTINATION_AFFINITY, Math.max(
+      Number(sourceEntry.score || 0), Number(targetEntry?.score || 0)
+    )),
+    negativeScore: Math.min(MAX_DESTINATION_AFFINITY, Math.max(
+      Number(sourceEntry.negativeScore || 0), Number(targetEntry?.negativeScore || 0)
+    )),
+    updatedAtMs: nowMs,
+  };
+  const retained = destinations.filter((entry) => !(
+    (entry?.countryId === source.countryId && entry?.cityId === source.cityId) ||
+    (entry?.countryId === target.countryId && entry?.cityId === target.cityId)
+  ));
+  return {
+    ...(personalization || {}),
+    destinations: [merged, ...retained]
+      .sort((left, right) =>
+        (Number(right.score || 0) + Number(right.negativeScore || 0)) -
+        (Number(left.score || 0) + Number(left.negativeScore || 0))
+      )
+      .slice(0, MAX_PERSONALIZED_DESTINATIONS),
+    updatedAtMs: nowMs,
+  };
+}
+
+async function migrateFavoritePage({ db, job, pageSize, timestamp = new Date(), nowMs = Date.now() }) {
   const sourcePath = destinationPath(job.source);
   const target = favoriteTarget(job.target);
   const snapshot = await db.collectionGroup('favorites')
@@ -225,15 +265,17 @@ async function migrateFavoritePage({ db, job, pageSize }) {
     const pairs = snapshot.docs.map((document) => {
       const userId = document.ref.path.split('/')[1];
       const nextRef = db.doc(`users/${userId}/favorites/${favoriteKeyForPath(target.path)}`);
-      return { sourceRef: document.ref, targetRef: nextRef };
+      return { sourceRef: document.ref, targetRef: nextRef, userRef: db.doc(`users/${userId}`) };
     });
-    const currentSnapshots = await Promise.all(pairs.flatMap(({ sourceRef, targetRef }) => [
+    const currentSnapshots = await Promise.all(pairs.flatMap(({ sourceRef, targetRef, userRef }) => [
       transaction.get(sourceRef),
       transaction.get(targetRef),
+      transaction.get(userRef),
     ]));
-    pairs.forEach(({ sourceRef, targetRef }, index) => {
-      const currentSource = currentSnapshots[index * 2];
-      const currentTarget = currentSnapshots[index * 2 + 1];
+    pairs.forEach(({ sourceRef, targetRef, userRef }, index) => {
+      const currentSource = currentSnapshots[index * 3];
+      const currentTarget = currentSnapshots[index * 3 + 1];
+      const currentUser = currentSnapshots[index * 3 + 2];
       if (!currentSource.exists) return;
       const sourceData = currentSource.data() || {};
       transaction.set(targetRef, {
@@ -245,6 +287,14 @@ async function migrateFavoritePage({ db, job, pageSize }) {
           targetCitySnapshot.data()?.createdAt || null,
         sourceUpdatedAt: targetCitySnapshot.data()?.updatedAt || targetCitySnapshot.data()?.createdAt || null,
       });
+      if (currentUser.exists) {
+        const personalization = reassignDestinationPersonalization(
+          currentUser.data()?.personalization, job.source, job.target, nowMs
+        );
+        if (personalization) {
+          transaction.set(userRef, { personalization, updatedAt: timestamp }, { merge: true });
+        }
+      }
       transaction.delete(sourceRef);
       migrated += 1;
     });
@@ -290,7 +340,7 @@ async function processPage({ db, job, timestamp, pageSize }) {
     await commitUpdates(db, updates);
     return { ...page, updated: updates.length };
   }
-  return migrateFavoritePage({ db, job, pageSize });
+  return migrateFavoritePage({ db, job, pageSize, timestamp });
 }
 
 async function startDestinationReassignment({ admin, source, target, expectedImpactHash, reason, requestedBy }) {
@@ -580,6 +630,7 @@ module.exports = {
   previewDestinationReassignment,
   processDestinationReassignmentJob,
   recommendationPatch,
+  reassignDestinationPersonalization,
   reassignmentJobId,
   residualReferenceStage,
   routePatch,

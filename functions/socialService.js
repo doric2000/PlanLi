@@ -225,6 +225,11 @@ function assertActiveTarget(snapshot, target) {
   return data;
 }
 
+function assertDestinationFavoriteMutationAllowed(target, targetData) {
+  assert(target?.type !== 'city' || !isDestinationReassigning(targetData),
+    'failed-precondition', 'The selected destination is being reassigned. Try again shortly.');
+}
+
 async function setFavorite({ admin, auth, data }) {
   assertVerified(auth);
   const target = normalizeTarget(data?.target);
@@ -239,6 +244,7 @@ async function setFavorite({ admin, auth, data }) {
 
   await db.runTransaction(async (transaction) => {
     const targetSnapshot = await transaction.get(targetRef);
+    assertDestinationFavoriteMutationAllowed(target, targetSnapshot.data());
     const targetData = saved ? assertActiveTarget(targetSnapshot, target) : targetSnapshot.data();
     const publicProfile = saved
       ? await loadAuthorProfile(transaction, db, targetData.ownerId)
@@ -987,6 +993,7 @@ module.exports = {
   RATE_LIMITS,
   TARGETS,
   buildFavoritePreview,
+  assertDestinationFavoriteMutationAllowed,
   canonicalCommentThread,
   cleanupOrphanFavorites,
   cleanId,
