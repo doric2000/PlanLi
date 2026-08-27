@@ -8,6 +8,10 @@ import { act, render, fireEvent, waitFor, within } from '@testing-library/react-
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import HomeScreen from '../src/features/home/screens/HomeScreen';
+import {
+  HomeContentRail,
+  HomeContinuationCard,
+} from '../src/features/home/components/HomeDashboard';
 
 const mockSearchDestinations = jest.fn();
 const mockLoadRecentDestinations = jest.fn();
@@ -242,6 +246,41 @@ describe('HomeScreenSearchTest', () => {
         }),
       ],
     });
+  });
+
+  it('uses Android-safe live-region semantics for cached Home refresh notices', () => {
+    const continuation = render(
+      <HomeContinuationCard
+        loading
+        error={null}
+        draft={{ id: 'draft-1', title: 'טיוטת מסלול', days: [] }}
+        recentDestination={null}
+        onPress={jest.fn()}
+        onRetry={jest.fn()}
+      />
+    );
+    const continuationNotice = continuation.getByTestId('home-continuation-refreshing');
+    expect(continuationNotice.props.role).toBe('status');
+    expect(continuationNotice.props.accessibilityLiveRegion).toBe('polite');
+    expect(continuationNotice.props.accessibilityRole).toBeUndefined();
+    continuation.unmount();
+
+    const rail = render(
+      <HomeContentRail
+        kind="route"
+        items={[{ id: 'route-1', title: 'מסלול' }]}
+        loading
+        error={null}
+        mode="generic"
+        onRetry={jest.fn()}
+        onSeeAll={jest.fn()}
+        onItemPress={jest.fn()}
+      />
+    );
+    const railNotice = rail.getByTestId('home-route-refreshing');
+    expect(railNotice.props.role).toBe('status');
+    expect(railNotice.props.accessibilityLiveRegion).toBe('polite');
+    expect(railNotice.props.accessibilityRole).toBeUndefined();
   });
 
   it('opens as a useful planning hub without requesting popularity-ranked destinations', async () => {
