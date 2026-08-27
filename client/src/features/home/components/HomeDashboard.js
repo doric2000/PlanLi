@@ -133,7 +133,8 @@ export function HomeContinuationCard({
       {loading ? (
         <View
           style={styles.continuationRefreshNotice}
-          accessibilityRole="status"
+          role="status"
+          accessibilityLiveRegion="polite"
           accessibilityLabel="מרעננים את פרטי התכנון"
           testID="home-continuation-refreshing"
         >
@@ -333,7 +334,8 @@ function RailRefreshNotice({ kind, loading, error, onRetry }) {
     return (
       <View
         style={styles.railRefreshNotice}
-        accessibilityRole="status"
+        role="status"
+        accessibilityLiveRegion="polite"
         accessibilityLabel="מרעננים את התוכן"
         testID={`home-${kind}-refreshing`}
       >
