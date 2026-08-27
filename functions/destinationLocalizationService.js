@@ -1,6 +1,6 @@
 const HEBREW_LETTER = /[\u05D0-\u05EA]/;
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
-const DESTINATION_NAMING_POLICY_VERSION = 1;
+const DESTINATION_NAMING_POLICY_VERSION = 2;
 
 const HEBREW_DESTINATION_OVERRIDES = Object.freeze({
   'AL:vlore': 'ולורה',
@@ -75,6 +75,11 @@ function transliterateDestinationName(value) {
     .map((part) => /^[\s\-/]+$/.test(part) ? part : transliterateToken(part))
     .join('')
     .replace(/\s+/g, ' ')
+    .replace(/כ(?=$|[\s\-/])/g, 'ך')
+    .replace(/מ(?=$|[\s\-/])/g, 'ם')
+    .replace(/נ(?=$|[\s\-/])/g, 'ן')
+    .replace(/פ(?=$|[\s\-/])/g, 'ף')
+    .replace(/צ(?=$|[\s\-/])/g, 'ץ')
     .trim();
 }
 

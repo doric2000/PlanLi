@@ -4,7 +4,7 @@ const { compactDestinationSearchText } = require('./destinationCatalogService');
 const { distanceKm } = require('./destinationIdentityService');
 
 const REGISTRY_PATH = 'system/destinationRegistry/entries';
-const REGISTRY_VERSION = 1;
+const REGISTRY_VERSION = 2;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const DESTINATION_KINDS = Object.freeze(['city_hub', 'island', 'tourism_region', 'province']);
 const GROUPING_POLICIES = Object.freeze(['self', 'parent', 'approved_children']);
@@ -21,6 +21,7 @@ const BUILTIN_POLICIES = Object.freeze([
   { id: 'in-parvati-valley', countryCode: 'IN', names: { he: 'עמק פרוואטי', en: 'Parvati Valley' }, aliases: ['Parvati Valley', 'Kasol', 'Tosh', 'Manikaran'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 32.01, lng: 77.31 }, radiusKm: 42 },
   { id: 'ni-ometepe', countryCode: 'NI', names: { he: 'אומטפה', en: 'Ometepe' }, aliases: ['Ometepe', 'Isla de Ometepe', 'Moyogalpa', 'Altagracia', 'Tilgue'], kind: 'island', groupingPolicy: 'self', center: { lat: 11.514, lng: -85.583 }, radiusKm: 35 },
   { id: 'gr-corfu', countryCode: 'GR', names: { he: 'קורפו', en: 'Corfu' }, aliases: ['Corfu', 'Kerkyra', 'Perama'], kind: 'island', groupingPolicy: 'self', center: { lat: 39.6243, lng: 19.9217 }, radiusKm: 42 },
+  { id: 'it-dolomites', countryCode: 'IT', names: { he: 'הדולומיטים', en: 'Dolomites' }, aliases: ['Dolomites'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 46.54, lng: 11.84 }, radiusKm: 65 },
   { id: 'th-chiang-mai', countryCode: 'TH', names: { he: 'צ׳יאנג מאי', en: 'Chiang Mai' }, aliases: ['Chiang Mai', 'Chiang Mai Province'], kind: 'province', groupingPolicy: 'self', center: { lat: 18.7883, lng: 98.9853 }, radiusKm: 115 },
   { id: 'th-chiang-rai', countryCode: 'TH', names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' }, aliases: ['Chiang Rai', 'Chiang Rai Province'], kind: 'province', groupingPolicy: 'self', center: { lat: 19.9105, lng: 99.8406 }, radiusKm: 105 },
   { id: 'cy-cyprus', countryCode: 'CY', names: { he: 'קפריסין', en: 'Cyprus' }, aliases: ['Cyprus'], kind: 'island', groupingPolicy: 'approved_children', center: { lat: 35.1264, lng: 33.4299 }, radiusKm: 125 },
@@ -47,14 +48,53 @@ function canonicalDestinationId(countryId, registryId) {
   return `dst_${digest.slice(0, 20)}`;
 }
 
+function viewportDiagonalKm(viewport) {
+  const southwest = viewport?.southwest;
+  const northeast = viewport?.northeast;
+  const coordinates = [southwest?.lat, southwest?.lng, northeast?.lat, northeast?.lng]
+    .map(Number);
+  if (!coordinates.every(Number.isFinite)) return null;
+  return distanceKm(
+    { lat: coordinates[0], lng: coordinates[1] },
+    { lat: coordinates[2], lng: coordinates[3] }
+  );
+}
+
+function providerGeometryPolicy(kind, viewport) {
+  const saneDiagonalRanges = {
+    city_hub: [1, 200],
+    island: [2, 2000],
+    tourism_region: [10, 2000],
+    province: [20, 2000],
+  };
+  const diagonalKm = viewportDiagonalKm(viewport);
+  const range = saneDiagonalRanges[kind];
+  const autoMatchEligible = Boolean(range && diagonalKm !== null &&
+    diagonalKm >= range[0] && diagonalKm <= range[1]);
+  return {
+    autoMatchEligible,
+    aliasAutoMatchEligible: autoMatchEligible,
+    source: autoMatchEligible ? 'google_viewport_sane' : 'google_geometry_untrusted',
+    version: 2,
+  };
+}
+
 function normalizeEntry(entry) {
   const countryCode = String(entry?.countryCode || '').trim().toUpperCase();
+  const reviewedLegacyGeometry = Number.isFinite(Number(entry?.radiusKm)) &&
+    Number(entry.radiusKm) > 0;
   return {
     ...entry,
     countryCode,
     aliasesNormalized: normalizedAliases(entry),
     status: entry?.status || 'active',
     registryVersion: Number(entry?.registryVersion || REGISTRY_VERSION),
+    geometryPolicy: entry?.geometryPolicy || (reviewedLegacyGeometry ? {
+      autoMatchEligible: true,
+      aliasAutoMatchEligible: true,
+      source: 'planli_reviewed_legacy',
+      version: 2,
+    } : providerGeometryPolicy(entry?.kind, entry?.viewport)),
   };
 }
 
@@ -98,6 +138,7 @@ function pointInsideViewport(point, viewport) {
 }
 
 function entryContainsPoint(entry, coordinates) {
+  if (entry?.geometryPolicy?.autoMatchEligible === false) return false;
   if (entry.viewport && pointInsideViewport(coordinates, entry.viewport)) return true;
   return entry.center && Number.isFinite(Number(entry.radiusKm)) &&
     distanceKm(entry.center, coordinates) <= Number(entry.radiusKm);
@@ -213,8 +254,16 @@ function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = 
     if (exact) return { entry: groupedEntryFor(exact, candidates), source: 'canonical_google_place_id' };
   }
   const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
-  const rawAliasMatches = candidates.filter((entry) => entry.aliasesNormalized.some((alias) => aliasKeys.has(alias)));
   const rawContaining = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
+  const rawContainingIds = new Set(rawContaining.map((entry) => entry.id));
+  const rawAliasMatches = candidates.filter((entry) => {
+    if (entry.geometryPolicy?.aliasAutoMatchEligible === false ||
+        !entry.aliasesNormalized.some((alias) => aliasKeys.has(alias))) return false;
+    const source = String(entry.geometryPolicy?.source || '');
+    const aliasIsReviewed = source.startsWith('planli_reviewed') ||
+      source === 'admin_approved_aliases';
+    return aliasIsReviewed || rawContainingIds.has(entry.id);
+  });
   const aliasMatches = uniqueGroupedEntries(rawAliasMatches, candidates);
   const containing = uniqueGroupedEntries(rawContaining, candidates);
   if (aliasMatches.length === 1) {
@@ -265,7 +314,26 @@ async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
   }
   const merged = new Map(BUILTIN_POLICIES.filter((entry) => entry.countryCode === code)
     .map((entry) => [entry.id, normalizeEntry(entry)]));
-  persisted.forEach((entry) => merged.set(entry.id, entry));
+  persisted.forEach((entry) => {
+    const reviewed = merged.get(entry.id);
+    merged.set(entry.id, reviewed ? normalizeEntry({
+      ...entry,
+      names: reviewed.names,
+      aliases: Array.from(new Set([...(entry.aliases || []), ...(reviewed.aliases || [])])),
+      kind: reviewed.kind,
+      parentId: reviewed.parentId || null,
+      groupingPolicy: reviewed.groupingPolicy,
+      center: reviewed.center,
+      ...(reviewed.viewport ? { viewport: reviewed.viewport } : {}),
+      ...(reviewed.radiusKm ? { radiusKm: reviewed.radiusKm } : {}),
+      geometryPolicy: {
+        autoMatchEligible: true,
+        aliasAutoMatchEligible: true,
+        source: 'planli_reviewed',
+        version: 2,
+      },
+    }) : entry);
+  });
   const entries = Array.from(merged.values());
   cache.set(code, { expiresAt: now + CACHE_TTL_MS, entries });
   return entries;
@@ -286,7 +354,9 @@ module.exports = {
   entryContainsPoint,
   matchCanonicalEntry,
   normalizeEntry,
+  providerGeometryPolicy,
   registryCollectionIssues,
   registryEntriesForCountry,
   validateRegistryEntry,
+  viewportDiagonalKm,
 };

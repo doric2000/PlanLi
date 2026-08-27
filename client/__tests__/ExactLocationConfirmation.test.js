@@ -6,6 +6,17 @@ jest.mock('../src/components/ExactLocationMapPreview', () => function MapPreview
   const { View } = require('react-native');
   return <View testID="mock-location-map" />;
 });
+jest.mock('../src/components/DestinationFallbackPicker', () => function DestinationFallbackPicker({ onSelect }) {
+  const { TouchableOpacity, Text } = require('react-native');
+  return (
+    <TouchableOpacity
+      testID="mock-destination-fallback"
+      onPress={() => onSelect({ countryId: 'IT', cityId: 'dolomites' })}
+    >
+      <Text>Fallback picker</Text>
+    </TouchableOpacity>
+  );
+});
 
 test('exact-location confirmation exposes prepared English copy when requested', () => {
   const onConfirm = jest.fn();
@@ -49,4 +60,19 @@ test('exact-location confirmation renders copy and controls before place resolut
   expect(screen.getByTestId('exact-location-confirm').props.accessibilityState.disabled).toBe(true);
   expect(screen.getByTestId('exact-location-map-skeleton')).toBeTruthy();
   expect(screen.queryByTestId('mock-location-map')).toBeNull();
+});
+
+test('exact-location confirmation offers destination search instead of an error', () => {
+  const onChooseFallbackDestination = jest.fn();
+  const screen = render(
+    <ExactLocationConfirmation
+      destinationChoice={{
+        resolutionId: 'dcr_fallback1', alternatives: [], allowDestinationSearch: true,
+      }}
+      onChooseFallbackDestination={onChooseFallbackDestination}
+      onChooseAnother={jest.fn()}
+    />
+  );
+  fireEvent.press(screen.getByTestId('mock-destination-fallback'));
+  expect(onChooseFallbackDestination).toHaveBeenCalledWith({ countryId: 'IT', cityId: 'dolomites' });
 });

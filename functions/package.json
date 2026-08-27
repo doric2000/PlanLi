@@ -41,6 +41,7 @@
     "reassign-canonical-destination": "node scripts/reassignCanonicalDestination.js",
     "repair-merged-destination-personalization": "node scripts/repairMergedDestinationPersonalization.js",
     "seed-canonical-destinations": "node scripts/seedCanonicalDestinationRegistry.js",
+    "migrate-destination-readiness": "node scripts/migrateDestinationResolutionReadiness.js",
     "repair-destination-image-queries": "node scripts/repairDestinationImageQueries.js",
     "repair-missing-destination-images": "node scripts/repairMissingDestinationImages.js",
     "repair-destination-identities": "node scripts/repairDestinationIdentities.js",

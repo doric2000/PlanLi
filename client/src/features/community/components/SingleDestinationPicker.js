@@ -6,6 +6,7 @@ import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
 import { useDestinationFilterOptions } from '../../../hooks/useDestinationFilterOptions';
 import {
+  confirmProvisionalDestinationName,
   finalizeDestinationChoice,
   resolveDestinationForPlacePreview,
   searchCities,
@@ -43,6 +44,8 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
   const [providerRetry, setProviderRetry] = useState(0);
   const [resolvingProvider, setResolvingProvider] = useState(false);
   const [destinationChoice, setDestinationChoice] = useState(null);
+  const [nameConfirmation, setNameConfirmation] = useState(null);
+  const [confirmedHebrewName, setConfirmedHebrewName] = useState('');
   const providerGenerationRef = useRef(0);
   const {
     options,
@@ -103,13 +106,23 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
     setProviderResults([]);
     setProviderError('');
     setDestinationChoice(null);
+    setNameConfirmation(null);
+    setConfirmedHebrewName('');
   };
 
   const selectProvider = async (selection) => {
     setResolvingProvider(true);
     setProviderError('');
     try {
-      const result = await resolveDestinationForPlacePreview(selection);
+      const result = await resolveDestinationForPlacePreview(selection, {
+        selectionIntent: 'destination',
+      });
+      if (result?.status === 'destination_name_confirmation_required') {
+        setNameConfirmation({ ...result, selection });
+        setConfirmedHebrewName(result.nameConfirmation?.suggestedHebrewName || '');
+        setDestinationChoice(null);
+        return;
+      }
       if (result?.status === 'destination_choice_required') {
         setDestinationChoice({ ...result, selection });
         return;
@@ -117,6 +130,24 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
       select(providerDestinationValue(result, selection));
     } catch {
       setProviderError('לא הצלחנו לאמת את היעד. אפשר לבחור אותו שוב.');
+    } finally {
+      setResolvingProvider(false);
+    }
+  };
+
+  const confirmProviderName = async () => {
+    if (!nameConfirmation?.resolvedPlaceToken || !confirmedHebrewName.trim()) return;
+    setResolvingProvider(true);
+    setProviderError('');
+    try {
+      const result = await confirmProvisionalDestinationName({
+        resolvedPlaceToken: nameConfirmation.resolvedPlaceToken,
+        incidentId: nameConfirmation.incidentId,
+        confirmedHebrewName: confirmedHebrewName.trim(),
+      });
+      select(providerDestinationValue(result, nameConfirmation.selection));
+    } catch {
+      setProviderError('לא הצלחנו לאשר את שם היעד. בדקו את השם ונסו שוב.');
     } finally {
       setResolvingProvider(false);
     }
@@ -180,6 +211,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
           onChangeText={(text) => {
             setQuery(text);
             setDestinationChoice(null);
+            setNameConfirmation(null);
             setProviderError('');
           }}
           onFocus={() => setFocused(true)}
@@ -198,7 +230,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
         <AppText style={styles.fieldHint}>כדאי להקליד לפחות שני תווים</AppText>
       ) : null}
 
-      {focused && destinationChoice?.alternatives?.length ? (
+      {destinationChoice?.alternatives?.length ? (
         <View style={styles.destinationResults} testID="recommendation-destination-provider-choices">
           <AppText style={styles.destinationEmpty}>לאיזה יעד התכוונת?</AppText>
           {destinationChoice.alternatives.map((alternative) => (
@@ -219,7 +251,33 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
         </View>
       ) : null}
 
-      {focused && normalizedQuery.length >= 2 && !searchPending && !destinationChoice ? (
+      {nameConfirmation ? (
+        <View style={styles.destinationResults} testID="recommendation-destination-name-confirmation">
+          <AppText style={styles.destinationEmpty}>
+            אשרו שם עברי עבור {nameConfirmation.nameConfirmation?.englishName || 'היעד'}
+          </AppText>
+          <AppTextInput
+            value={confirmedHebrewName}
+            onChangeText={setConfirmedHebrewName}
+            style={styles.searchInput}
+            textAlign="right"
+            autoCorrect={false}
+            testID="recommendation-destination-hebrew-name"
+          />
+          <TouchableOpacity
+            style={styles.destinationResult}
+            onPress={confirmProviderName}
+            disabled={resolvingProvider || !confirmedHebrewName.trim()}
+            accessibilityRole="button"
+            testID="recommendation-destination-confirm-name"
+          >
+            <Ionicons name="checkmark-circle-outline" size={19} color={colors.primary} />
+            <AppText style={styles.textAction}>אישור היעד</AppText>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {focused && normalizedQuery.length >= 2 && !searchPending && !destinationChoice && !nameConfirmation ? (
         <View style={styles.destinationResults}>
           {providerError ? (
             <View>

@@ -24,6 +24,13 @@ const cityForValue = (value) =>
       ? { id: value.cityId, name: value.location || value.cityName || value.cityId }
       : null;
 
+const destinationChoiceExpired = (error) => {
+  const code = String(error?.code || '');
+  const reason = String(error?.details?.reason || '');
+  return code.includes('not-found') || code.includes('deadline-exceeded') ||
+    /expired/i.test(reason) || /expired/i.test(String(error?.message || ''));
+};
+
 export const buildExactPlaceValue = (country, city, place) => {
   if (!country?.id || !city?.id || !place?.placeId) return null;
   return {
@@ -166,11 +173,34 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
     setLocationResolveError(null);
     setLocationResolveRetryable(false);
     try {
-      const result = await finalizeDestinationChoice({
-        resolutionId: destinationChoice.resolutionId,
-        destinationChoiceId,
-        incidentId: destinationChoice.incidentId,
-      });
+      let result;
+      try {
+        result = await finalizeDestinationChoice({
+          resolutionId: destinationChoice.resolutionId,
+          destinationChoiceId,
+          incidentId: destinationChoice.incidentId,
+        });
+      } catch (error) {
+        if (!destinationChoiceExpired(error) || !lastSelection) throw error;
+        const selectedAlternative = (destinationChoice.alternatives || [])
+          .find((alternative) => alternative.destinationChoiceId === destinationChoiceId);
+        const refreshed = await resolveDestinationForPlacePreview(lastSelection);
+        if (refreshed?.status === 'resolved') {
+          result = refreshed;
+        } else {
+          const replacement = (refreshed?.alternatives || []).find((alternative) =>
+            alternative.countryId === selectedAlternative?.countryId &&
+            alternative.cityId === selectedAlternative?.cityId
+          );
+          if (!replacement) throw error;
+          setDestinationChoice(refreshed);
+          result = await finalizeDestinationChoice({
+            resolutionId: refreshed.resolutionId,
+            destinationChoiceId: replacement.destinationChoiceId,
+            incidentId: refreshed.incidentId,
+          });
+        }
+      }
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
       const nextValue = buildExactPlaceValue(
         result.destination.country,
@@ -194,7 +224,65 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
         setResolvingLocation(false);
       }
     }
-  }, [destinationChoice, locale, locationQuery]);
+  }, [destinationChoice, lastSelection, locale, locationQuery]);
+
+  const chooseFallbackDestination = useCallback(async (destination) => {
+    if (!destinationChoice?.resolutionId || !destination?.countryId || !destination?.cityId) return null;
+    const generation = ++resolutionGenerationRef.current;
+    setResolvingLocation(true);
+    setLocationResolveError(null);
+    setLocationResolveRetryable(false);
+    try {
+      const destinationSelection = destination.resolvedPlaceToken
+        ? { destinationResolvedPlaceToken: destination.resolvedPlaceToken }
+        : { destinationRef: { countryId: destination.countryId, cityId: destination.cityId } };
+      let result;
+      try {
+        result = await finalizeDestinationChoice({
+          resolutionId: destinationChoice.resolutionId,
+          incidentId: destinationChoice.incidentId,
+          ...destinationSelection,
+        });
+      } catch (error) {
+        if (!destinationChoiceExpired(error) || !lastSelection) throw error;
+        const refreshed = await resolveDestinationForPlacePreview(lastSelection);
+        if (refreshed?.status === 'resolved') {
+          result = refreshed;
+        } else if (refreshed?.status === 'destination_choice_required') {
+          setDestinationChoice(refreshed);
+          result = await finalizeDestinationChoice({
+            resolutionId: refreshed.resolutionId,
+            incidentId: refreshed.incidentId,
+            ...destinationSelection,
+          });
+        } else {
+          throw error;
+        }
+      }
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      const nextValue = buildExactPlaceValue(
+        result.destination.country,
+        result.destination.city,
+        result.place
+      );
+      setPendingLocation(nextValue);
+      setDestinationChoice(null);
+      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      return nextValue;
+    } catch (error) {
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      const message = locationErrorMessage(error, locale);
+      setLocationResolveError(message);
+      setLocationResolveRetryable(locationErrorRetryable(error));
+      throw Object.assign(error instanceof Error ? error : new Error(message), {
+        userMessage: message,
+      });
+    } finally {
+      if (mountedRef.current && generation === resolutionGenerationRef.current) {
+        setResolvingLocation(false);
+      }
+    }
+  }, [destinationChoice, lastSelection, locale, locationQuery]);
 
   const retryLocationResolution = useCallback(() => {
     if (!lastSelection) return Promise.resolve(null);
@@ -209,6 +297,7 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
   return {
     clearSelectionForTyping,
     chooseDestination,
+    chooseFallbackDestination,
     chooseAnotherLocation,
     confirmPendingLocation,
     googleSearchFn,

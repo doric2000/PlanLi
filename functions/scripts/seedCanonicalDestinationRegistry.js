@@ -7,6 +7,7 @@ const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
+  providerGeometryPolicy,
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('../canonicalDestinationRegistry');
@@ -93,6 +94,15 @@ function mergePolicy(candidate) {
     kind: builtIn.kind,
     parentId: builtIn.parentId || null,
     groupingPolicy: builtIn.groupingPolicy,
+    ...(builtIn.center ? { center: builtIn.center } : {}),
+    ...(builtIn.viewport ? { viewport: builtIn.viewport } : {}),
+    ...(builtIn.radiusKm ? { radiusKm: builtIn.radiusKm } : {}),
+    geometryPolicy: {
+      autoMatchEligible: true,
+      aliasAutoMatchEligible: true,
+      source: 'planli_reviewed',
+      version: 2,
+    },
   } : candidate;
 }
 
@@ -139,9 +149,15 @@ async function enrichCandidate(candidate, { apiKey, fetchImpl = global.fetch }) 
     },
     providerDisplayName: place.displayName?.text || null,
     providerAddress: place.formattedAddress || null,
-    center: normalizedCoordinates(override.center || place.location),
-    viewport: normalizedViewport(place.viewport),
-    ...(override.radiusKm ? { radiusKm: override.radiusKm } : {}),
+    center: normalizedCoordinates(override.center || candidate.center || place.location),
+    viewport: candidate.viewport || normalizedViewport(place.viewport),
+    ...(override.radiusKm || candidate.radiusKm
+      ? { radiusKm: Number(override.radiusKm || candidate.radiusKm) }
+      : {}),
+    geometryPolicy: candidate.geometryPolicy || providerGeometryPolicy(
+      candidate.kind,
+      candidate.viewport || normalizedViewport(place.viewport)
+    ),
     googleTypes: place.types || [],
     registryVersion: REGISTRY_VERSION,
     status: 'active',

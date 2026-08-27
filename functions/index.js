@@ -381,7 +381,10 @@ exports.resolvePlaceSelection = callable(
     ...PROVIDER_CALLABLE_LIMITS,
   },
   async (request) => {
-    if (request.data?.resolutionId && request.data?.destinationChoiceId) {
+    if (request.data?.resolutionId && (
+      request.data?.destinationChoiceId || request.data?.destinationRef ||
+      request.data?.destinationResolvedPlaceToken
+    )) {
       return locationSave('destination_choice', request, () => finalizeDestinationChoice({
         admin,
         auth: request.auth,
@@ -405,6 +408,11 @@ exports.resolvePlaceSelection = callable(
         resolvedPlaceToken: selection.resolvedPlaceToken,
         incidentId: selection.incidentId,
         supportsDestinationChoice: request.data?.supportsDestinationChoice === true,
+        supportsDestinationSearch: request.data?.supportsDestinationSearch === true,
+        selectionIntent: request.data?.selectionIntent === 'destination'
+          ? 'destination'
+          : 'exact_place',
+        confirmedHebrewName: request.data?.confirmedHebrewName || null,
       },
       mapsKey: googleMapsKey.value(),
       newPlacesKey: googlePlacesNewKey.value(),
@@ -412,7 +420,7 @@ exports.resolvePlaceSelection = callable(
       restCountriesKey: restCountriesKey.value(),
       providerRateLimitKey: publicRateLimitKey.value(),
     });
-    if (destination.status === 'destination_choice_required') {
+    if (destination.status !== 'resolved') {
       return {
         ...selection,
         ...destination,

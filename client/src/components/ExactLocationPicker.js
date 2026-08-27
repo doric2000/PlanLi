@@ -23,6 +23,7 @@ export default function ExactLocationPicker({
 	const {
 		clearSelectionForTyping,
 		chooseDestination,
+		chooseFallbackDestination,
 		chooseAnotherLocation,
 		confirmPendingLocation,
 		googleSearchFn,
@@ -79,6 +80,7 @@ export default function ExactLocationPicker({
 				resolving={resolvingLocation}
 				resolvingPreview={resolvingPreview}
 				onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
+				onChooseFallbackDestination={(destination) => chooseFallbackDestination(destination).catch(() => {})}
 				onConfirm={confirmPendingLocation}
 					onChooseAnother={chooseAnotherLocation}
 				locale={locale}

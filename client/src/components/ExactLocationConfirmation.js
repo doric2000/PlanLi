@@ -2,6 +2,7 @@ import React from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 
 import AppText from './AppText';
+import DestinationFallbackPicker from './DestinationFallbackPicker';
 import ExactLocationMapPreview from './ExactLocationMapPreview';
 import { exactLocationPickerStyles as styles } from '../styles';
 import { locationCopy } from '../utils/locationCopy';
@@ -10,6 +11,7 @@ export default function ExactLocationConfirmation({
   pendingLocation,
   destinationChoice,
   onChooseDestination,
+  onChooseFallbackDestination,
   onConfirm,
   onChooseAnother,
   resolving = false,
@@ -17,14 +19,19 @@ export default function ExactLocationConfirmation({
   locale = 'he',
 }) {
   const copy = locationCopy(locale);
-  if (destinationChoice?.alternatives?.length) {
+  if (destinationChoice) {
+    const hasAlternatives = Boolean(destinationChoice.alternatives?.length);
     return (
       <View style={styles.choiceCard} testID="exact-location-destination-choices">
-        <AppText style={styles.choiceHeading}>{copy.destinationChoiceHeading}</AppText>
-        <AppText style={styles.choiceHelper}>
-          {copy.destinationChoiceHelper}
+        <AppText style={styles.choiceHeading}>
+          {hasAlternatives ? copy.destinationChoiceHeading : 'לאיזה יעד לשייך את המקום?'}
         </AppText>
-        {destinationChoice.alternatives.map((alternative) => (
+        <AppText style={styles.choiceHelper}>
+          {hasAlternatives
+            ? copy.destinationChoiceHelper
+            : 'המקום המדויק נשמר. בחרו רק את העיר או האזור שבהם מטיילים.'}
+        </AppText>
+        {(destinationChoice.alternatives || []).map((alternative) => (
           <TouchableOpacity
             key={alternative.destinationChoiceId}
             style={styles.choiceButton}
@@ -38,6 +45,12 @@ export default function ExactLocationConfirmation({
             </AppText>
           </TouchableOpacity>
         ))}
+        {destinationChoice.allowDestinationSearch ? (
+          <View testID="exact-location-destination-search">
+            <AppText style={styles.choiceHelper}>לא מצאתם? חפשו עיר או אזור מתאימים.</AppText>
+            <DestinationFallbackPicker onSelect={onChooseFallbackDestination} />
+          </View>
+        ) : null}
         <TouchableOpacity
           style={styles.chooseAnotherButton}
           onPress={onChooseAnother}
