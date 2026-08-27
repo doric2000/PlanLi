@@ -253,6 +253,21 @@ async function collectAllDocuments(db) {
   return { roots: roots.map((entry) => entry.id).sort(), documents: result };
 }
 
+function allowedMergedProviderGroup(documents) {
+  if (!Array.isArray(documents) || documents.length < 2) return false;
+  const active = documents.filter((document) => document.data()?.status === 'active');
+  if (active.length !== 1) return false;
+  const activePath = active[0].ref.path;
+  return documents.every((document) => {
+    if (document.ref.path === activePath) return true;
+    const data = document.data() || {};
+    const mergedPath = data.mergedInto?.countryId && data.mergedInto?.cityId
+      ? `countries/${data.mergedInto.countryId}/destinations/${data.mergedInto.cityId}`
+      : '';
+    return data.status === 'inactive' && mergedPath === activePath;
+  });
+}
+
 async function auditFirestore(db) {
   const { roots, documents } = await collectAllDocuments(db);
   const report = {
@@ -299,8 +314,7 @@ async function auditFirestore(db) {
       if (!/^dst_[A-Za-z0-9_-]{20}$/.test(document.id)) report.invalidCityIds.push(document.ref.path);
       const providerId = String(data.providerRefs?.googlePlaceId || '').trim();
       if (providerId) {
-        if (citiesByProvider.has(providerId)) report.duplicateCityProviders.push(providerId);
-        citiesByProvider.set(providerId, document.ref.path);
+        citiesByProvider.set(providerId, [...(citiesByProvider.get(providerId) || []), document]);
       }
     }
     if (/^users\/[^/]+\/favorites\/[^/]+$/.test(document.ref.path)) {
@@ -310,6 +324,12 @@ async function auditFirestore(db) {
       } else if (!byPath.has(targetPath)) {
         report.orphanFavorites.push({ favorite: document.ref.path, target: targetPath });
       }
+    }
+  }
+
+  for (const [providerId, providerDocuments] of citiesByProvider) {
+    if (providerDocuments.length > 1 && !allowedMergedProviderGroup(providerDocuments)) {
+      report.duplicateCityProviders.push(providerId);
     }
   }
 
@@ -529,6 +549,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  allowedMergedProviderGroup,
   auditFirestore,
   favoriteKeyForPath,
   failures,

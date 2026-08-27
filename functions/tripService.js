@@ -3,6 +3,10 @@ const { hasActiveAdminAccess } = require('./adminAuthorization');
 const { isVerifiedCaller, validateMediaAssets } = require('./recommendationService');
 const { evaluateTextSafety } = require('./moderationService');
 const { destinationHebrewName } = require('./destinationLocalizationService');
+const {
+  destinationAcceptsNewReferences,
+  isDestinationReassigning,
+} = require('./destinationReferencePolicy');
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
@@ -32,7 +36,7 @@ async function resolveDestination(db, destination) {
   ]);
   assert(
     country.exists && country.data()?.status === 'active' &&
-      city.exists && city.data()?.status === 'active',
+      city.exists && destinationAcceptsNewReferences(city.data()),
     'not-found',
     'Destination does not exist.'
   );
@@ -87,13 +91,24 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
     } else {
       assert(!current.exists, 'already-exists', 'Trip already exists.');
     }
+    const previousDestination = current.data()?.destination;
+    const previousDestinationChanged = previousDestination?.countryId && previousDestination?.cityId &&
+      (!destination || previousDestination.countryId !== destination.countryId ||
+        previousDestination.cityId !== destination.cityId);
+    const previousCity = previousDestinationChanged
+      ? await transaction.get(db.doc(
+        `countries/${previousDestination.countryId}/destinations/${previousDestination.cityId}`
+      ))
+      : null;
+    assert(!previousCity?.exists || !isDestinationReassigning(previousCity.data()),
+      'failed-precondition', 'The trip destination is being reassigned. Try again shortly.');
     const canonicalDestination = destination ? {
       countryId: destination.countryId,
       cityId: destination.cityId,
       countryName: destination.countryName,
       cityName: destinationHebrewName(city.data()) || destination.cityId,
     } : null;
-    assert(!destination || (city.exists && city.data()?.status === 'active' && canonicalDestination.cityName),
+    assert(!destination || (city.exists && destinationAcceptsNewReferences(city.data()) && canonicalDestination.cityName),
       'failed-precondition', 'Destination is no longer available.');
     transaction.set(tripRef, {
       ownerId: current.exists ? current.data().ownerId : auth.uid,

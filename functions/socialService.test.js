@@ -2,10 +2,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  assertDestinationFavoriteMutationAllowed,
   buildFavoritePreview,
   canonicalCommentThread,
   handleCommentThreadDeletionJobWrite,
 } = require('./socialService');
+
+test('favorite mutations are blocked while a destination is being reassigned', () => {
+  assert.throws(() => assertDestinationFavoriteMutationAllowed(
+    { type: 'city', id: 'source', countryId: 'NI' },
+    { status: 'active', reassignment: { state: 'reassigning', jobId: 'job-1' } }
+  ), /being reassigned/);
+  assert.doesNotThrow(() => assertDestinationFavoriteMutationAllowed(
+    { type: 'city', id: 'target', countryId: 'NI' },
+    { status: 'active', reassignment: { state: 'receiving', jobId: 'job-1' } }
+  ));
+});
 
 test('comment threads normalize roots and one-level replies', () => {
   assert.deepEqual(canonicalCommentThread({}, 'root-1'), {

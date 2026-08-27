@@ -21,6 +21,7 @@ const {
   validateMediaAssets,
 } = require('./recommendationService');
 const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
+const { canonicalDestinationId, clearRegistryCache } = require('./canonicalDestinationRegistry');
 const { createResolvedPlaceToken } = require('./placesGatewayService');
 
 test('verified caller accepts verified password users, social users and admins', () => {
@@ -711,7 +712,7 @@ test('authorized edits can retain media already attached to the document', async
   );
 });
 
-function createFakeAdmin(seed = {}) {
+function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
   const documents = new Map(Object.entries(seed));
   let autoId = 0;
   const snapshot = (ref) => ({
@@ -772,8 +773,9 @@ function createFakeAdmin(seed = {}) {
         return makeQuery(collectionPath, field, operation, expected);
       },
     }),
-    runTransaction: async (callback) =>
-      callback({
+    runTransaction: async (callback) => {
+      if (beforeTransaction) await beforeTransaction({ documents });
+      return callback({
         get: async (ref) => snapshot(ref),
         create: (ref, data) => {
           if (documents.has(ref.path)) throw new Error('already exists');
@@ -786,7 +788,8 @@ function createFakeAdmin(seed = {}) {
         set: (ref, data) => {
           documents.set(ref.path, { ...(documents.get(ref.path) || {}), ...data });
         },
-      }),
+      });
+    },
   };
   return {
     documents,
@@ -836,7 +839,7 @@ test('saveRecommendation requires taxonomy v5 for budget-bearing writes', async 
   }), /Update PlanLi/);
 });
 
-test('Google destination resolution falls back from a district to its containing city', async () => {
+test('Google destination resolution groups Chiang Mai places to the approved province', async () => {
   const admin = createFakeAdmin({
     'countries/TH': {
       name: 'Thailand',
@@ -919,8 +922,10 @@ test('Google destination resolution falls back from a district to its containing
     });
 
     assert.equal(destination.countryId, 'TH');
-    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-mai-city');
-    assert.deepEqual(searches, ['Chiang Mai Thailand']);
+    assert.equal(destination.cityId, canonicalDestinationId('TH', 'th-chiang-mai'));
+    assert.equal(destination.cityData.canonicalPolicy.kind, 'province');
+    assert.equal(destination.cityData.googleCache.names.he, 'צ׳יאנג מאי');
+    assert.deepEqual(searches, []);
   } finally {
     global.fetch = originalFetch;
   }
@@ -1029,15 +1034,15 @@ test('Google destination resolution maps the reported Chiang Rai hotel to its Th
     });
 
     assert.equal(destination.countryId, 'TH');
-    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'chiang-rai-province');
+    assert.equal(destination.cityId, canonicalDestinationId('TH', 'th-chiang-rai'));
     assert.equal(destination.cityData.destinationType, 'region');
-    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'geocode']);
+    assert.deepEqual(calls, []);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('Google destination resolution treats Vlora and Vlorë as the same Albanian destination', async () => {
+test('Google destination resolution rejects an unapproved locality instead of creating it', async () => {
   const admin = createFakeAdmin({
     'countries/AL': {
       name: 'Albania',
@@ -1112,21 +1117,15 @@ test('Google destination resolution treats Vlora and Vlorë as the same Albanian
   };
 
   try {
-    const destination = await resolveGoogleDestination({
+    await assert.rejects(resolveGoogleDestination({
       admin,
       placeId: selectedPlace.en.placeId,
       resolvedPlace: selectedPlace,
       mapsKey: 'maps-key',
       newPlacesKey: 'new-key',
       placesProvider: 'new',
-    });
-
-    assert.equal(destination.countryId, 'AL');
-    assert.equal(destination.cityData.googleCache.names.en, 'Vlorë');
-    assert.equal(destination.cityData.googleCache.names.he, 'ולורה');
-    assert.equal(destination.cityData.googleCache.nameSources.he, 'override');
-    assert.equal(destination.cityData.providerRefs.googlePlaceId, 'vlore-municipality');
-    assert.deepEqual(calls.sort(), ['details:en', 'details:he', 'details:null', 'details:null', 'geocode']);
+    }), /not mapped to an approved PlanLi destination/);
+    assert.deepEqual(calls, ['details:en']);
   } finally {
     global.fetch = originalFetch;
   }
@@ -1167,6 +1166,127 @@ test('saveRecommendation creates against an existing destination and owns server
   assert.equal(Object.hasOwn(saved.search, 'tokens'), false);
   assert.ok(Array.isArray(saved.search.prefixes));
   assert.equal(saved.createdAt, 'SERVER_TIMESTAMP');
+});
+
+test('canonical destination wins when an inactive merged source shares its provider identity', async () => {
+  clearRegistryCache();
+  const registryId = 'zz-canonical-hub';
+  const canonicalId = canonicalDestinationId('ZZ', registryId);
+  const providerPlaceId = 'shared-canonical-place';
+  const canonicalPolicy = {
+    approved: true, registryId, kind: 'city_hub', groupingPolicy: 'self', registryVersion: 1,
+  };
+  const admin = createFakeAdmin({
+    'countries/ZZ': {
+      name: 'זדלנד', names: { he: 'זדלנד', en: 'Zedland' }, code: 'ZZ',
+      region: 'Test', currencyCode: 'ZZZ', status: 'active',
+    },
+    'countries/ZZ/destinations/dst_00000000000000000000': {
+      status: 'inactive', providerRefs: { googlePlaceId: providerPlaceId },
+      mergedInto: { countryId: 'ZZ', cityId: canonicalId },
+    },
+    [`countries/ZZ/destinations/${canonicalId}`]: {
+      status: 'active', destinationType: 'city', providerRefs: { googlePlaceId: providerPlaceId },
+      canonicalPolicy,
+      googleCache: {
+        names: { he: 'יעד קנוני', en: 'Canonical Hub' },
+        coordinates: { lat: 1, lng: 1 },
+      },
+    },
+    [`system/destinationRegistry/entries/${registryId}`]: {
+      countryCode: 'ZZ', names: { he: 'יעד קנוני', en: 'Canonical Hub' },
+      aliases: ['Canonical Hub'], kind: 'city_hub', groupingPolicy: 'self',
+      providerRefs: { googlePlaceId: providerPlaceId }, center: { lat: 1, lng: 1 },
+      radiusKm: 10, status: 'active', registryVersion: 1,
+    },
+  });
+  const selectedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'selected-poi', displayName: 'Attraction', countryName: 'Zedland',
+      countryCode: 'ZZ', localityName: 'Canonical Hub', localityCandidates: ['Canonical Hub'],
+      coordinates: { lat: 1, lng: 1 }, types: ['tourist_attraction'],
+    },
+    en: {
+      placeId: 'selected-poi', displayName: 'Attraction', countryName: 'Zedland',
+      countryCode: 'ZZ', localityName: 'Canonical Hub', localityCandidates: ['Canonical Hub'],
+      coordinates: { lat: 1, lng: 1 }, types: ['tourist_attraction'],
+    },
+  };
+
+  try {
+    const destination = await resolveGoogleDestination({
+      admin, placeId: selectedPlace.en.placeId, resolvedPlace: selectedPlace,
+      mapsKey: 'unused', newPlacesKey: 'unused', placesProvider: 'new',
+    });
+    assert.equal(destination.cityId, canonicalId);
+    assert.equal(destination.cityData.status, 'active');
+  } finally {
+    clearRegistryCache();
+  }
+});
+
+test('saveRecommendation rejects a destination locked after resolution but before its write transaction', async () => {
+  const destinationPath = 'countries/IL/destinations/TLV';
+  let locked = false;
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'Israel', code: 'IL', status: 'active' },
+    [destinationPath]: {
+      name: 'Tel Aviv', status: 'active', stats: { recommendationCount: 0 },
+    },
+  }, {
+    beforeTransaction: ({ documents }) => {
+      if (locked) return;
+      locked = true;
+      documents.set(destinationPath, {
+        ...documents.get(destinationPath),
+        reassignment: { state: 'reassigning', jobId: 'job-1' },
+      });
+    },
+  });
+
+  await assert.rejects(saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      destinationRef: { countryId: 'IL', cityId: 'TLV' },
+      recommendation: validContent,
+    },
+  }), /no longer active/);
+  assert.equal([...admin.documents.keys()].some((path) => path.startsWith('recommendations/')), false);
+});
+
+test('recommendation edits cannot race a reassignment by removing its locked source destination', async () => {
+  const admin = createFakeAdmin({
+    'countries/IL': { name: 'ישראל', code: 'IL', status: 'active' },
+    'countries/IL/destinations/source': {
+      name: 'יעד מקור', names: { he: 'יעד מקור', en: 'Source' },
+      status: 'active', stats: { recommendationCount: 1 },
+      reassignment: { state: 'reassigning', jobId: 'job-1' },
+    },
+    'countries/IL/destinations/target': {
+      name: 'יעד חדש', names: { he: 'יעד חדש', en: 'Target' },
+      status: 'active', stats: { recommendationCount: 0 },
+    },
+    'recommendations/recommendation-1': {
+      ...validContent,
+      ownerId: 'owner', status: 'active', stats: { likeCount: 0, commentCount: 0 },
+      destination: { countryId: 'IL', cityId: 'source', countryName: 'ישראל', cityName: 'יעד מקור' },
+    },
+  });
+
+  await assert.rejects(saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    mapsKey: 'unused',
+    data: {
+      recommendationId: 'recommendation-1',
+      destinationRef: { countryId: 'IL', cityId: 'target' },
+      recommendation: validContent,
+    },
+  }), /being reassigned/);
+  assert.equal(admin.documents.get('recommendations/recommendation-1').destination.cityId, 'source');
 });
 
 test('provider destination references use the submitted resolver and reject canonical mismatches', async () => {
@@ -1622,7 +1742,7 @@ test('saveRecommendation rejects unverified and foreign edits', async () => {
   );
 });
 
-test('Google place is reloaded by the server and creates legacy-compatible destination docs', async () => {
+test('Google place cannot create an unapproved destination document', async () => {
   const admin = createFakeAdmin();
   const originalFetch = global.fetch;
   global.fetch = async (urlValue) => {
@@ -1672,6 +1792,7 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
   };
 
   try {
+    await assert.rejects((async () => {
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
@@ -1722,12 +1843,13 @@ test('Google place is reloaded by the server and creates legacy-compatible desti
       { lat: 32.08, lng: 34.78 }
     );
     assert.ok(mapLocation.geohash);
+    })(), /not mapped to an approved PlanLi destination/);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('same-name destinations keep distinct Place-ID identities in one transactional claim', async () => {
+test('same-name raw localities cannot bypass the approved registry', async () => {
   const admin = createFakeAdmin({
     'countries/US': {
       name: 'ארצות הברית', names: { he: 'ארצות הברית', en: 'United States' },
@@ -1759,6 +1881,7 @@ test('same-name destinations keep distinct Place-ID identities in one transactio
   };
 
   try {
+    await assert.rejects((async () => {
     const first = await saveRecommendation({
       admin, auth: verifiedAuth, mapsKey: 'maps-key',
       data: { placeId: 'springfield-a', recommendation: { ...validContent, title: 'First Springfield' } },
@@ -1777,12 +1900,13 @@ test('same-name destinations keep distinct Place-ID identities in one transactio
         [second.city.id]: { providerPlaceId: 'springfield-b' },
       }
     );
+    })(), /not mapped to an approved PlanLi destination/);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('Google place reuses a legacy country document by ISO code', async () => {
+test('legacy country reuse does not authorize an unknown destination', async () => {
   const admin = createFakeAdmin({
     'countries/ישראל': {
       name: 'ישראל',
@@ -1825,6 +1949,7 @@ test('Google place reuses a legacy country document by ISO code', async () => {
   };
 
   try {
+    await assert.rejects((async () => {
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
@@ -1844,12 +1969,13 @@ test('Google place reuses a legacy country document by ISO code', async () => {
       admin.documents.get(`countries/ישראל/destinations/${cityId}`).providerRefs.googlePlaceId,
       'jerusalem-place-id'
     );
+    })(), /not mapped to an approved PlanLi destination/);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('Ariel preview and save use the same Israel destination without a country component', async () => {
+test('country policy alone does not promote an unknown locality to a destination', async () => {
   const admin = createFakeAdmin({
     'countries/ישראל': {
       name: 'ישראל',
@@ -1903,6 +2029,7 @@ test('Ariel preview and save use the same Israel destination without a country c
   };
 
   try {
+    await assert.rejects((async () => {
     const preview = await resolveRecommendationDestination({
       admin,
       auth: verifiedAuth,
@@ -1934,6 +2061,7 @@ test('Ariel preview and save use the same Israel destination without a country c
     assert.equal(saved.country.id, preview.destination.country.id);
     assert.equal(saved.city.id, preview.destination.city.id);
     assert.equal(saved.resolutionSource, preview.resolutionSource);
+    })(), /not mapped to an approved PlanLi destination/);
   } finally {
     global.fetch = originalFetch;
   }
@@ -1992,7 +2120,7 @@ test('Google errors and unknown country overrides are rejected', async () => {
           recommendation: validContent,
         },
       }),
-      /override does not exist/
+      /not mapped to an approved PlanLi destination/
     );
   } finally {
     global.fetch = originalFetch;

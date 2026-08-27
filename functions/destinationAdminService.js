@@ -24,9 +24,22 @@ const { buildDownloadUrl, getMediaBucket } = require('./mediaProcessor');
 const { destinationKey } = require('./discoverySearch');
 const { destinationHebrewName, hasHebrewName } = require('./destinationLocalizationService');
 const {
+  DESTINATION_KINDS,
+  GROUPING_POLICIES,
+  REGISTRY_PATH,
+  clearRegistryCache,
+  registryCollectionIssues,
+  validateRegistryEntry,
+} = require('./canonicalDestinationRegistry');
+const {
   getDestinationRenameJobRef,
   startDestinationRename,
 } = require('./destinationRenameService');
+const {
+  jobRef: destinationReassignmentJobRef,
+  previewDestinationReassignment: previewReassignment,
+  startDestinationReassignment: queueDestinationReassignment,
+} = require('./destinationReassignmentService');
 const {
   buildNotificationTarget,
   destinationNotificationId,
@@ -193,6 +206,9 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
   if (!hasHebrewName(names.he)) add('missing_hebrew_name', 'error', 'חסר שם בעברית');
   if (destination?.googleCache?.nameSources?.he === 'transliteration_fallback') {
     add('fallback_hebrew_name', 'warning', 'שם היעד תועתק אוטומטית וממתין לבדיקה');
+  }
+  if (destination?.canonicalPolicy?.approved !== true) {
+    add('unapproved_canonical_destination', 'error', 'היעד אינו מאושר במאגר היעדים הקנוני');
   }
   if (!names.en) add('missing_english_name', 'error', 'חסר שם באנגלית');
   if (!placeId) add('missing_google_place', 'error', 'חסר מזהה מקום מאומת של גוגל');
@@ -461,6 +477,135 @@ async function getDestinationRenameJob({ admin, auth, data }) {
   const jobId = cleanId(data?.jobId, 'jobId');
   const snapshot = await getDestinationRenameJobRef(admin.firestore(), jobId).get();
   if (!snapshot.exists) fail('not-found', 'Destination rename job was not found.', 'rename_job_missing');
+  return serialize({ jobId: snapshot.id, ...snapshot.data() });
+}
+
+function cleanPolicyAliases(value) {
+  if (!Array.isArray(value) || value.length > 30) fail('invalid-argument', 'Aliases are invalid.', 'invalid_aliases');
+  const aliases = Array.from(new Set(value.map((item) => String(item || '').normalize('NFC').trim().replace(/\s+/g, ' '))
+    .filter(Boolean)));
+  if (aliases.some((alias) => alias.length < 2 || alias.length > 80)) fail('invalid-argument', 'Aliases are invalid.', 'invalid_aliases');
+  return aliases;
+}
+
+async function updateDestinationPolicy({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'updateDestinationPolicy');
+  const countryId = cleanId(data?.countryId, 'countryId');
+  const cityId = cleanId(data?.cityId, 'cityId');
+  const reason = cleanReason(data?.reason);
+  const kind = String(data?.kind || '').trim();
+  const groupingPolicy = String(data?.groupingPolicy || '').trim();
+  if (!DESTINATION_KINDS.includes(kind)) fail('invalid-argument', 'Destination kind is invalid.', 'invalid_kind');
+  if (!GROUPING_POLICIES.includes(groupingPolicy)) fail('invalid-argument', 'Grouping policy is invalid.', 'invalid_grouping_policy');
+  const parentId = data?.parentId ? cleanId(data.parentId, 'parentId') : null;
+  const aliases = cleanPolicyAliases(data?.aliases || []);
+  const bundle = await destinationBundle(admin, countryId, cityId);
+  const registryId = bundle.city?.canonicalPolicy?.registryId || `${String(bundle.country?.code || countryId).toLowerCase()}-${cityId.toLowerCase()}`;
+  const policy = {
+    approved: true,
+    registryId,
+    kind,
+    parentId,
+    groupingPolicy,
+    aliases,
+    registryVersion: 1,
+    approvedBy: auth.uid,
+  };
+  const db = admin.firestore();
+  const countryRef = db.doc(`countries/${countryId}`);
+  const registryRef = db.doc(`${REGISTRY_PATH}/${registryId}`);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  let syncedCity = null;
+  await db.runTransaction(async (transaction) => {
+    const [citySnapshot, countrySnapshot, registrySnapshot] = await Promise.all([
+      transaction.get(bundle.cityRef),
+      transaction.get(countryRef),
+      transaction.get(db.collection(REGISTRY_PATH)),
+    ]);
+    if (!citySnapshot.exists || !countrySnapshot.exists || countrySnapshot.data()?.status !== 'active') {
+      fail('failed-precondition', 'Destination identity changed before policy update.', 'destination_changed');
+    }
+    const currentCity = citySnapshot.data() || {};
+    const currentCountry = countrySnapshot.data() || {};
+    const registryEntry = {
+      id: registryId,
+      countryCode: String(currentCountry.code || countryId).toUpperCase(),
+      names: {
+        he: destinationHebrewName(currentCity) || cityId,
+        en: currentCity.googleCache?.names?.en || currentCity.identity?.names?.en || cityId,
+      },
+      aliases,
+      kind,
+      parentId,
+      groupingPolicy,
+      providerRefs: currentCity.providerRefs || {},
+      center: destinationCoordinates(currentCity),
+      viewport: currentCity.googleCache?.viewport || currentCity.identity?.viewport || null,
+      googleTypes: currentCity.googleCache?.types || currentCity.identity?.types || [],
+      approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
+      status: 'active',
+      registryVersion: 1,
+    };
+    const entryValidation = validateRegistryEntry(registryEntry);
+    if (!entryValidation.valid) {
+      fail('failed-precondition', 'Destination policy does not satisfy registry requirements.', entryValidation.errors[0]);
+    }
+    const entries = registrySnapshot.docs
+      .filter((document) => document.id !== registryId)
+      .map((document) => ({ id: document.id, ...document.data() }));
+    const collectionIssues = registryCollectionIssues([...entries, registryEntry]);
+    if (collectionIssues.length) {
+      fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
+    }
+    const destinationType = kind === 'city_hub' ? 'city' : kind === 'island' ? 'island' : 'region';
+    syncedCity = { ...currentCity, canonicalPolicy: policy, destinationType };
+    transaction.update(bundle.cityRef, {
+      canonicalPolicy: policy,
+      destinationType,
+      updatedAt: timestamp,
+    });
+    const registryData = { ...registryEntry };
+    delete registryData.id;
+    transaction.set(registryRef, { ...registryData, updatedAt: timestamp }, { merge: true });
+  });
+  clearRegistryCache();
+  await syncDestinationCatalog({ admin, countryId, cityId, city: syncedCity });
+  await audit({ admin, auth, action: 'destination_policy_updated', target: { countryId, cityId }, reason, metadata: policy });
+  return { success: true, policy };
+}
+
+async function previewDestinationReassignment({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'previewDestinationReassignment');
+  return previewReassignment({
+    db: admin.firestore(),
+    source: { countryId: cleanId(data?.source?.countryId, 'source.countryId'), cityId: cleanId(data?.source?.cityId, 'source.cityId') },
+    target: { countryId: cleanId(data?.target?.countryId, 'target.countryId'), cityId: cleanId(data?.target?.cityId, 'target.cityId') },
+  });
+}
+
+async function startDestinationReassignment({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'startDestinationReassignment');
+  const reason = cleanReason(data?.reason);
+  const result = await queueDestinationReassignment({
+    admin,
+    source: data?.source,
+    target: data?.target,
+    expectedImpactHash: String(data?.expectedImpactHash || ''),
+    reason,
+    requestedBy: auth.uid,
+  });
+  await audit({
+    admin, auth, action: 'destination_reassignment_started', target: { source: data?.source, target: data?.target }, reason,
+    metadata: { jobId: result.jobId, counts: result.preview.counts },
+  });
+  return result;
+}
+
+async function getDestinationReassignmentJob({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'getDestinationReassignmentJob');
+  const id = cleanId(data?.jobId, 'jobId');
+  const snapshot = await destinationReassignmentJobRef(admin.firestore(), id).get();
+  if (!snapshot.exists) fail('not-found', 'Destination reassignment job was not found.', 'reassignment_job_missing');
   return serialize({ jobId: snapshot.id, ...snapshot.data() });
 }
 
@@ -778,6 +923,7 @@ module.exports = {
   getAirportCandidates,
   getDestinationImageCandidates,
   getDestinationRenameJob,
+  getDestinationReassignmentJob,
   getDestinationReview,
   holdDestinationContentDocuments,
   listDestinationReviews,
@@ -790,5 +936,8 @@ module.exports = {
   syncDestinationAirport,
   setDestinationAirport,
   setDestinationHebrewName,
+  startDestinationReassignment,
+  previewDestinationReassignment,
+  updateDestinationPolicy,
   setDestinationUploadedImage,
 };

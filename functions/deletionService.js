@@ -11,6 +11,7 @@ const {
 } = require('./socialService');
 const { refreshRecommendationFallbackForDestination } = require('./destinationImageService');
 const { revokeAppleAuthorization } = require('./appleAuthService');
+const { isDestinationReassigning } = require('./destinationReferencePolicy');
 const {
   deactivateAdminRegistryInTransaction,
   hasActiveAdminAccess,
@@ -118,6 +119,8 @@ async function markDeleting({ admin, target, actorUid, isAdmin }) {
       if (target.type === 'recommendation' && countryId && cityId) {
         cityRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
         citySnapshot = await transaction.get(cityRef);
+        assert(!citySnapshot.exists || !isDestinationReassigning(citySnapshot.data()),
+          'failed-precondition', 'The recommendation destination is being reassigned. Try again shortly.');
       }
       transaction.update(ref, {
         status: 'deleting',

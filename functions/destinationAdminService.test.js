@@ -15,6 +15,7 @@ const { nearestScheduledAirports } = require('./airportFacts');
 function validDestination() {
   return {
     status: 'active',
+    canonicalPolicy: { approved: true, registryId: 'il-tel-aviv', kind: 'city_hub', groupingPolicy: 'self' },
     providerRefs: { googlePlaceId: 'place-1' },
     googleCache: {
       names: { he: 'תל אביב', en: 'Tel Aviv' },
@@ -42,7 +43,7 @@ test('destination quality reports identity, image, airport and job problems', ()
     imageSync: { state: 'failed' }, identitySync: { state: 'needs_review' },
   }, {});
   const codes = new Set(issues.map((issue) => issue.code));
-  for (const code of ['missing_english_name', 'missing_google_place', 'country_conflict', 'missing_coordinates', 'missing_image', 'image_job_failed', 'identity_job_failed', 'new_destination']) {
+  for (const code of ['missing_english_name', 'missing_google_place', 'country_conflict', 'missing_coordinates', 'missing_image', 'image_job_failed', 'identity_job_failed', 'unapproved_canonical_destination', 'new_destination']) {
     assert.ok(codes.has(code), `missing issue ${code}`);
   }
 });

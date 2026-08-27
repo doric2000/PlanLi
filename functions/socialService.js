@@ -24,6 +24,7 @@ const {
   stageNotificationDelete,
 } = require('./notificationService');
 const { destinationHebrewName } = require('./destinationLocalizationService');
+const { isDestinationReassigning } = require('./destinationReferencePolicy');
 
 const TARGETS = Object.freeze({
   recommendation: { collection: 'recommendations' },
@@ -215,11 +216,18 @@ async function loadAuthorProfile(transaction, db, ownerId) {
   return snapshot.exists ? snapshot.data() : null;
 }
 
-function assertActiveTarget(snapshot) {
+function assertActiveTarget(snapshot, target) {
   assert(snapshot.exists, 'not-found', 'The selected item no longer exists.');
   const data = snapshot.data();
   assert(data?.status === 'active', 'failed-precondition', 'The selected item is not available.');
+  assert(target?.type !== 'city' || !isDestinationReassigning(data), 'failed-precondition',
+    'The selected destination is being reassigned. Try again shortly.');
   return data;
+}
+
+function assertDestinationFavoriteMutationAllowed(target, targetData) {
+  assert(target?.type !== 'city' || !isDestinationReassigning(targetData),
+    'failed-precondition', 'The selected destination is being reassigned. Try again shortly.');
 }
 
 async function setFavorite({ admin, auth, data }) {
@@ -236,7 +244,8 @@ async function setFavorite({ admin, auth, data }) {
 
   await db.runTransaction(async (transaction) => {
     const targetSnapshot = await transaction.get(targetRef);
-    const targetData = saved ? assertActiveTarget(targetSnapshot) : targetSnapshot.data();
+    assertDestinationFavoriteMutationAllowed(target, targetSnapshot.data());
+    const targetData = saved ? assertActiveTarget(targetSnapshot, target) : targetSnapshot.data();
     const publicProfile = saved
       ? await loadAuthorProfile(transaction, db, targetData.ownerId)
       : null;
@@ -984,6 +993,7 @@ module.exports = {
   RATE_LIMITS,
   TARGETS,
   buildFavoritePreview,
+  assertDestinationFavoriteMutationAllowed,
   canonicalCommentThread,
   cleanupOrphanFavorites,
   cleanId,

@@ -1,7 +1,27 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { failures, inspectValue, isAllowedRoot } = require('./auditLiveState');
+const { allowedMergedProviderGroup, failures, inspectValue, isAllowedRoot } = require('./auditLiveState');
+
+function destinationDocument(path, data) {
+  return { ref: { path }, data: () => data };
+}
+
+test('provider duplicates are allowed only for inactive sources merged into one active target', () => {
+  const active = destinationDocument('countries/IN/destinations/munnar', { status: 'active' });
+  const merged = destinationDocument('countries/IN/destinations/legacy', {
+    status: 'inactive', mergedInto: { countryId: 'IN', cityId: 'munnar' },
+  });
+  assert.equal(allowedMergedProviderGroup([merged, active]), true);
+  assert.equal(allowedMergedProviderGroup([active, destinationDocument(
+    'countries/IN/destinations/other', { status: 'active' }
+  )]), false);
+  assert.equal(allowedMergedProviderGroup([active, destinationDocument(
+    'countries/IN/destinations/legacy', {
+      status: 'inactive', mergedInto: { countryId: 'IN', cityId: 'another-target' },
+    }
+  )]), false);
+});
 
 test('live audit recognizes the server-owned global notification device registry', () => {
   assert.equal(isAllowedRoot('notificationDevices'), true);

@@ -49,14 +49,17 @@ recommendation destination-publishing preview group is
 `1a3c69c6-fc05-4666-b3df-da528b00facf`; the immediately preceding compatible
 groups are preview `31df8f49-77fb-4151-85fb-245e594a81d7` and production
 `1a691933-e4b6-4003-9d3d-111315a88549`. The RTL native builds and store actions
-did not deploy Firebase or write production data. The recommendation release
-deployed `saveRecommendation`, `saveRecommendationDraft`, and
-`publishRecommendationDraft` from `cbb6aa61` at
-`2026-08-26T19:50:18Z`. The Functions inventory reports 99 active Node.js 22 v2
-Functions in `europe-west1`; a post-deploy Firebase MCP query returned no
-`ERROR` entries for the three targets through `2026-08-26T20:18:00Z`.
-Firestore Rules, indexes, Hosting, production documents, migrations, and the
-rollback Storage bucket were unchanged.
+did not deploy Firebase or write production data. A later canonical-destination
+backend rollout deployed 17 affected Functions and the admin Hosting bundle
+from branch `feat/canonical-travel-destinations`; the final source commits are
+`21ad5cf`, `907ba32`, and `baf1a08`. The private registry contains 251 validated
+entries, 14 reviewed legacy destinations were reassigned, and the Functions
+inventory now reports 104 active Node.js 22 v2 Functions in `europe-west1`.
+The final production audit at `2026-08-26T22:37:37.021Z` passed with zero
+failures, and a post-deploy Firebase MCP query returned no `ERROR` entries for
+the affected targets. Firestore Rules, indexes, Storage Rules, IAM, EAS Update,
+native builds, store submissions, and the rollback Storage bucket were
+unchanged.
 
 ## Run the client
 
@@ -1401,3 +1404,72 @@ rejected.
   download and apply the update. Roll back preview to
   `31df8f49-77fb-4151-85fb-245e594a81d7` or production to
   `1a691933-e4b6-4003-9d3d-111315a88549` if required.
+
+## Canonical travel destination rollout
+
+- Source: feature commit `21ad5cf9fc18d231a55142efb8317e4b38a208dd`,
+  deterministic reassignment-counter fix `907ba32`, and live-audit compatibility
+  fix `baf1a08`, all on pushed branch `feat/canonical-travel-destinations`. No
+  merge to `main` was performed.
+- Scope: a private 251-entry traveler-facing registry; canonical place-ID,
+  alias, containment, parent/child and grouping resolution; India
+  `addressDescriptor` support; Pro `containingPlaces` only as a last-resort
+  match to an already approved destination; admin policy editing and resumable
+  reassignment; writer locks; and dry-run-first seed/audit/repair tooling.
+- Functions deployment: 17 affected Node.js 22 v2 Functions were created or
+  updated in `europe-west1`: `saveRecommendation`,
+  `publishRecommendationDraft`, `resolveRecommendationDestination`,
+  `resolvePlaceSelection`, `saveRoute`, `publishRouteDraft`, `saveTrip`,
+  `setFavorite`, `deleteContent`, `listDestinationReviews`,
+  `getDestinationReview`, `approveDestination`, `updateDestinationPolicy`,
+  `previewDestinationReassignment`, `startDestinationReassignment`,
+  `getDestinationReassignmentJob`, and
+  `onDestinationReassignmentJobWritten`. The worker was redeployed from
+  `907ba32` after runtime validation of deterministic counter finalization. The
+  exact CLI completion timestamps and Cloud Run revision names were not
+  returned; deployment completed before the independent audit at
+  `2026-08-26T22:37:37.021Z`. Firebase inventory confirms all five new targets
+  and 104 total active Functions.
+- Registry seed: `system/destinationRegistry` version 1 was written at
+  `2026-08-26T22:15:38.225Z` with 251 validated, unique entries: 101 Europe,
+  80 Asia, 30 Central America, and 40 South America. Enrichment returned zero
+  unresolved entries and the independent Firestore read-back returned exactly
+  251 child documents. The Google key was read from Secret Manager into process
+  memory only and was not logged or written to disk.
+- Production correction: 14 preview-bound reassignment jobs completed. They
+  moved 14 recommendations, one route and its active/prepared stops, and two
+  favorites; all source destinations are inactive with exact `mergedInto`
+  pointers and all targets/catalog projections are active. The reported cases
+  now resolve as Rivas/Ojo de Agua → Ometepe, Kannan Devan Hills/Rajamalai →
+  Munnar, and Perama → Corfu. Chiang Mai and Chiang Rai are canonical province
+  destinations. Bansko, Sapa, Mykonos, Da Nang, Budapest, Tyrol, Cusco, Venice,
+  and Bangkok were also canonicalized from unapproved legacy identities.
+- Runtime repair: one observed two-worker race moved the Munnar recommendation
+  correctly but left its diagnostic progress count at zero. The finalizer now
+  uses the immutable preview count; the Munnar statistic was transactionally
+  reconciled from 0 to 1 and recorded in the moderation audit. A read-back of
+  all 14 targets found zero recommendation-counter mismatches.
+- Remaining audit state: 29 active destinations comprise 14 canonical entries
+  and 15 manual-review entries, with zero active reassignment candidates and
+  zero ambiguities. Fourteen inactive merged sources and two unrelated inactive
+  review records remain preserved. `Nam Hoa Lu`, `Humantay Lake`, and `Rinas`
+  remain manual-review cases because no approved match was reliable enough to
+  mutate automatically.
+- Admin Hosting: the 48-file bundle was released to
+  `https://planli-f0b12.web.app/admin/`. HTML and JavaScript returned HTTP 200,
+  the live bundle contains the canonical-policy and reassignment controls, and
+  the configured CSP remained present. The Firebase CLI did not return a
+  Hosting release ID or exact release timestamp.
+- Validation: `npm run validate:changed` passed twice, including client checks,
+  admin Web export/verification, 16 related Functions groups, and the Functions
+  production audit. Focused post-race tests passed 14/14. The final
+  `audit-live` checked 835 Firestore documents, 104 Functions, both Storage
+  buckets, and public media, and returned `ok: true` with zero failures. Direct
+  propagation checks found no residual source references or stale Chiang Rai
+  stops, and verified the Budapest and Chiang Mai favorite moves. The final
+  Cloud Logging query returned no `ERROR` entries for affected Functions. The
+  32-file Codex Security diff review found no reportable vulnerabilities.
+- No Firestore Rules, indexes, Storage Rules, IAM, EAS Update, native build,
+  TestFlight/App Store or Google Play action accompanied this rollout. A new
+  destination selection was covered by resolver tests but was not submitted
+  through a physical signed-in mobile client after deployment.

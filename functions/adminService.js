@@ -82,6 +82,14 @@ const SENSITIVE_ADMIN_ACTIONS = Object.freeze({
     recentSignIn: true,
     reason: 'renaming a destination updates public catalog and linked public content.',
   },
+  updateDestinationPolicy: {
+    recentSignIn: true,
+    reason: 'changing canonical destination policy affects future destination resolution.',
+  },
+  startDestinationReassignment: {
+    recentSignIn: true,
+    reason: 'reassigning a destination updates linked public content and retires the source destination.',
+  },
   updateAdminAttachedPlace: {
     recentSignIn: true,
     reason: 'correcting an attached place changes published location data.',

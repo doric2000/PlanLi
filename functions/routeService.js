@@ -15,6 +15,10 @@ const {
   hasHebrewName,
   normalizeDestinationHebrewData,
 } = require('./destinationLocalizationService');
+const {
+  destinationAcceptsNewReferences,
+  isDestinationReassigning,
+} = require('./destinationReferencePolicy');
 const { normalizeRouteTime } = require('./routeTime');
 const {
   buildTravelContentFacets,
@@ -1037,7 +1041,9 @@ async function saveRoute({
   });
   await batch.commit();
 
-  const transactionOutcome = await db.runTransaction(async (transaction) => {
+  let transactionOutcome;
+  try {
+    transactionOutcome = await db.runTransaction(async (transaction) => {
     const currentSnapshot = await transaction.get(routeRef);
     const currentRoute = routeId
       ? assertEditableRoute(currentSnapshot, uid, isAdmin)
@@ -1067,10 +1073,22 @@ async function saveRoute({
       : null;
     const destinationEntries = Array.from(destinationDocuments.values());
     const claimEntries = Array.from(destinationClaims.values());
-    const [destinationSnapshots, claimSnapshots] = await Promise.all([
+    const previousDestinationRefs = (currentRoute?.destinations || [])
+      .filter((entry) => entry?.countryId && entry?.cityId)
+      .map((entry) => db.doc(`countries/${entry.countryId}/destinations/${entry.cityId}`))
+      .filter((ref) => !destinationDocuments.has(ref.path));
+    const [destinationSnapshots, claimSnapshots, previousDestinationSnapshots] = await Promise.all([
       Promise.all(destinationEntries.map((entry) => transaction.get(entry.ref))),
       Promise.all(claimEntries.map((entry) => transaction.get(entry.ref))),
+      Promise.all(previousDestinationRefs.map((ref) => transaction.get(ref))),
     ]);
+    assert(
+      previousDestinationSnapshots.every((snapshot) =>
+        !snapshot.exists || !isDestinationReassigning(snapshot.data())
+      ),
+      'failed-precondition',
+      'A route destination is being reassigned. Try again shortly.'
+    );
     const canonicalDestinationNames = new Map();
 
     destinationEntries.forEach((entry, index) => {
@@ -1092,7 +1110,8 @@ async function saveRoute({
         return;
       }
       assert(
-        snapshot.data()?.status === 'active',
+        snapshot.data()?.status === 'active' &&
+          (entry.kind !== 'destination' || destinationAcceptsNewReferences(snapshot.data())),
         'failed-precondition',
         `The selected ${entry.kind} is no longer active.`
       );
@@ -1216,21 +1235,19 @@ async function saveRoute({
         expireAt: new Date(Date.now() + SUPERSEDED_REVISION_TTL_MS),
       });
     }
-    return { replay: false };
-  });
+      return { replay: false };
+    });
+  } catch (error) {
+    await deletePreparedRevision(db, revisionRef, 'route_failed_revision_cleanup_failed');
+    throw error;
+  }
   console.info('route_place_resolution_timing', {
     durationMs: Date.now() - locationStartedAt,
     stopCount: mediaDays.reduce((sum, day) => sum + day.stops.length, 0),
     providerCalls: resolved.providerCalls,
   });
   if (transactionOutcome?.replay) {
-    if (typeof db.recursiveDelete === 'function') {
-      await db.recursiveDelete(revisionRef).catch((error) => {
-        console.warn('route_replay_revision_cleanup_failed', {
-          code: String(error?.code || 'unknown'),
-        });
-      });
-    }
+    await deletePreparedRevision(db, revisionRef, 'route_replay_revision_cleanup_failed');
     console.info('route_save_timing', {
       durationMs: Date.now() - saveStartedAt,
       idempotentReplay: true,
@@ -1247,6 +1264,19 @@ async function saveRoute({
     idempotentReplay: false,
   });
   return { routeId: routeRef.id, revisionId, revisionVersion: baseVersion + 1 };
+}
+
+async function deletePreparedRevision(db, revisionRef, logEvent) {
+  if (typeof db.recursiveDelete !== 'function') return false;
+  try {
+    const snapshot = await revisionRef.get();
+    if (!snapshot.exists || snapshot.data()?.state === 'active') return false;
+    await db.recursiveDelete(revisionRef);
+    return true;
+  } catch (error) {
+    console.warn(logEvent, { code: String(error?.code || 'unknown') });
+    return false;
+  }
 }
 
 async function loadRouteDetails({ admin, data }) {
@@ -1329,6 +1359,7 @@ module.exports = {
   attachRouteLegEstimates,
   cleanupRouteRevisions,
   collectMedia,
+  deletePreparedRevision,
   loadRouteDetails,
   loadTrustedRecommendationSources,
   loadTrustedRoutePlaces,
