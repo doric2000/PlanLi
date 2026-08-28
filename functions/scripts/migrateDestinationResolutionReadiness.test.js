@@ -5,6 +5,7 @@ const {
   legacyPolicy,
   parseArguments,
   registryGeometryPatch,
+  registryPatchChanged,
 } = require('./migrateDestinationResolutionReadiness');
 
 test('destination readiness migration is dry-run by default', () => {
@@ -54,4 +55,31 @@ test('reviewed geometry and sane provider viewports remain eligible for automati
     radiusKm: 10,
     providerIdentity: { allowExactProviderMatch: false },
   }).providerIdentity.allowExactProviderMatch, false);
+});
+
+test('registry migration ignores Firestore map key ordering after a successful apply', () => {
+  const current = {
+    registryVersion: 3,
+    geometryPolicy: { source: 'provider_geometry_available', version: 3, autoMatchEligible: true },
+    matchProfile: {
+      trust: 'trusted',
+      areas: [{ radiusKm: 20, center: { lng: 2, lat: 1 }, type: 'circle' }],
+      version: 3,
+    },
+    providerIdentity: { source: 'geographic_provider_identity', compatible: true },
+  };
+  const sameValuesDifferentOrder = {
+    geometryPolicy: { autoMatchEligible: true, version: 3, source: 'provider_geometry_available' },
+    matchProfile: {
+      version: 3,
+      areas: [{ type: 'circle', center: { lat: 1, lng: 2 }, radiusKm: 20 }],
+      trust: 'trusted',
+    },
+    providerIdentity: { compatible: true, source: 'geographic_provider_identity' },
+  };
+  assert.equal(registryPatchChanged(current, sameValuesDifferentOrder), false);
+  assert.equal(registryPatchChanged(current, {
+    ...sameValuesDifferentOrder,
+    matchProfile: { ...sameValuesDifferentOrder.matchProfile, trust: 'blocked' },
+  }), true);
 });
