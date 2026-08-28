@@ -1,5 +1,7 @@
 import {
+  canDisplayDestinationImageWithoutCredit,
   getDestinationAttribution,
+  getDestinationCreditPolicy,
   getDestinationImageUrl,
   LEGACY_GENERIC_DESTINATION_IMAGE,
 } from '../src/utils/destinationImages';
@@ -21,8 +23,27 @@ test('the old generic and Google Place URLs are treated as missing', () => {
   expect(getDestinationImageUrl({ imageUrl: 'https://maps.googleapis.com/maps/api/place/photo?key=secret' })).toBeNull();
 });
 
-test('attribution is exposed only for Unsplash images', () => {
-  const attribution = { photographerName: 'Traveler' };
+test('complete Unsplash attribution is exposed and required inline', () => {
+  const attribution = {
+    photographerName: 'Traveler',
+    photographerProfileUrl: 'https://unsplash.com/@traveler?utm_source=planli&utm_medium=referral',
+    providerName: 'Unsplash',
+  };
+  const destination = { destinationImage: { source: { type: 'unsplash' }, attribution } };
+  expect(getDestinationCreditPolicy(destination).mode).toBe('inline');
+  expect(canDisplayDestinationImageWithoutCredit(destination)).toBe(false);
   expect(getDestinationAttribution({ destinationImage: { source: { type: 'unsplash' }, attribution } })).toBe(attribution);
   expect(getDestinationAttribution({ destinationImage: { source: { type: 'recommendation' } } })).toBeNull();
+});
+
+test('provider images with incomplete required credit are not displayed', () => {
+  const destination = {
+    destinationImage: {
+      source: { type: 'unsplash' },
+      urls: { feed: 'https://images.unsplash.com/incomplete.jpg' },
+      attribution: { photographerName: 'Traveler' },
+    },
+  };
+  expect(getDestinationCreditPolicy(destination).mode).toBe('blocked');
+  expect(getDestinationImageUrl(destination)).toBeNull();
 });

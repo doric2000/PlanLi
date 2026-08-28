@@ -1,6 +1,52 @@
 export const LEGACY_GENERIC_DESTINATION_IMAGE =
   'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800';
 
+const ATTRIBUTION_FREE_WIKIMEDIA_LICENSES = ['public domain', 'cc0'];
+
+function normalizedLicenseName(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isAttributionFreeWikimediaLicense(value) {
+  const license = normalizedLicenseName(value);
+  return ATTRIBUTION_FREE_WIKIMEDIA_LICENSES.some((allowed) =>
+    license === allowed || license.startsWith(`${allowed} `)
+  );
+}
+
+export function getDestinationCreditPolicy(destination) {
+  const image = destination?.destinationImage;
+  const sourceType = image?.source?.type;
+  const attribution = image?.attribution || null;
+
+  if (sourceType === 'unsplash') {
+    const complete = Boolean(
+      attribution?.photographerName &&
+      attribution?.photographerProfileUrl &&
+      attribution?.providerName
+    );
+    return { mode: complete ? 'inline' : 'blocked', attribution, sourceType };
+  }
+
+  if (sourceType === 'wikimedia') {
+    if (isAttributionFreeWikimediaLicense(attribution?.licenseName)) {
+      return { mode: 'none', attribution, sourceType };
+    }
+    const complete = Boolean(
+      attribution?.photographerName &&
+      attribution?.photoUrl &&
+      attribution?.licenseName
+    );
+    return { mode: complete ? 'details' : 'blocked', attribution, sourceType };
+  }
+
+  return { mode: 'none', attribution: null, sourceType: sourceType || null };
+}
+
+export function canDisplayDestinationImageWithoutCredit(destination) {
+  return getDestinationCreditPolicy(destination).mode === 'none';
+}
+
 function isUsableLegacyUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return false;
   if (value === LEGACY_GENERIC_DESTINATION_IMAGE) return false;
@@ -10,7 +56,8 @@ function isUsableLegacyUrl(value) {
 
 export function getDestinationImageUrl(destination, variant = 'feed') {
   const urls = destination?.destinationImage?.urls;
-  const preferred = urls?.[variant] || urls?.feed || urls?.large || urls?.thumb;
+  const blocked = getDestinationCreditPolicy(destination).mode === 'blocked';
+  const preferred = blocked ? null : (urls?.[variant] || urls?.feed || urls?.large || urls?.thumb);
   if (preferred) return preferred;
   const legacy = variant === 'thumb'
     ? [destination?.thumbnailUrl, destination?.externalImageUrl, destination?.imageUrl, destination?.heroImageUrl]
@@ -23,6 +70,6 @@ export function getDestinationPlaceholderColor(destination) {
 }
 
 export function getDestinationAttribution(destination) {
-  const image = destination?.destinationImage;
-  return ['unsplash', 'wikimedia'].includes(image?.source?.type) ? image.attribution || null : null;
+  const policy = getDestinationCreditPolicy(destination);
+  return ['inline', 'details'].includes(policy.mode) ? policy.attribution : null;
 }

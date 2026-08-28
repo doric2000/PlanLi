@@ -1,4 +1,7 @@
-import { getDestinationImageUrl } from '../../../utils/destinationImages';
+import {
+  canDisplayDestinationImageWithoutCredit,
+  getDestinationImageUrl,
+} from '../../../utils/destinationImages';
 import { getMediaVariantUrl } from '../../../utils/mediaAssets';
 import { flattenRouteStops } from './routeStops';
 
@@ -32,10 +35,14 @@ export function getRouteDestinationPreviews(route, maximum = 4) {
       : name.toLocaleLowerCase();
     if (!name || !key || seen.has(key)) continue;
     seen.add(key);
+    const stopImage = stopImageForDestination(stops, value);
+    const destinationImage = canDisplayDestinationImageWithoutCredit(value)
+      ? value.imageUrl || getDestinationImageUrl(value, 'thumb')
+      : null;
     previews.push({
       ...value,
       name,
-      imageUrl: value.imageUrl || getDestinationImageUrl(value, 'thumb') || stopImageForDestination(stops, value),
+      imageUrl: stopImage || destinationImage,
     });
     if (previews.length >= maximum) break;
   }
