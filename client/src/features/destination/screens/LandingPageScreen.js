@@ -351,7 +351,7 @@ export default function LandingPageScreen({ navigation, route }) {
               </View>
             )}
             <View style={styles.heroShade} pointerEvents="none" />
-            <PhotoAttribution destination={destination} />
+            <PhotoAttribution destination={destination} placement="hero" />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="חזרה"
