@@ -7,7 +7,11 @@ const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
+  REVIEWED_PROVIDER_IDENTITY_IDS,
+  buildMatchProfile,
   providerGeometryPolicy,
+  providerIdentityNameMatches,
+  providerIdentityPolicy,
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('../canonicalDestinationRegistry');
@@ -24,8 +28,15 @@ const SEARCH_FIELDS = [
 // component (cross-border natural regions). These reviewed overrides select a
 // specific provider identity; they never accept an arbitrary first result.
 const ENRICHMENT_OVERRIDES = Object.freeze({
+  'at-vienna': { includedType: 'locality' },
+  'ba-sarajevo': { includedType: 'locality' },
+  'it-milan': { includedType: 'locality' },
+  'jp-tokyo': { includedType: 'locality' },
+  'vn-da-nang': { includedType: 'locality' },
+  'vn-ho-chi-minh-city': { includedType: 'locality' },
   'es-ibiza': { expectedPlaceId: 'ChIJQzkJhWNHmRIR1iaEzSVHBgk' },
-  'it-amalfi-coast': { expectedPlaceId: 'ChIJoXFMw62VOxMR3ExPyRTP6Ew' },
+  'it-amalfi-coast': { expectedPlaceId: 'ChIJoXFMw62VOxMR3ExPyRTP6Ew', allowPoiIdentity: true },
+  'no-norwegian-fjords': { allowPoiIdentity: true },
   'gr-lefkada': { expectedPlaceId: 'ChIJR8EI2hS0XRMRxkD45hmYnpQ' },
   'ch-zurich': { query: 'Zürich, Switzerland', expectedPlaceId: 'ChIJGaK-SZcLkEcRA9wf5_GNbuY' },
   'si-lake-bled': { expectedPlaceId: 'ChIJIeTZuTmRekcRrAcB3TGDzYM' },
@@ -101,8 +112,21 @@ function mergePolicy(candidate) {
       autoMatchEligible: true,
       aliasAutoMatchEligible: true,
       source: 'planli_reviewed',
-      version: 2,
+      version: REGISTRY_VERSION,
     },
+    ...(builtIn.providerIdentity ? { providerIdentity: builtIn.providerIdentity } : {}),
+    matchProfile: buildMatchProfile({
+      ...candidate,
+      ...builtIn,
+      matchProfile: {
+        version: REGISTRY_VERSION,
+        source: 'planli_reviewed',
+        identityReviewed: true,
+        areas: builtIn.radiusKm
+          ? [{ type: 'circle', center: builtIn.center, radiusKm: builtIn.radiusKm }]
+          : [],
+      },
+    }),
   } : candidate;
 }
 
@@ -115,17 +139,34 @@ async function enrichCandidate(candidate, { apiKey, fetchImpl = global.fetch }) 
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': SEARCH_FIELDS,
     },
-    body: JSON.stringify({ textQuery: override.query || candidate.providerQuery, languageCode: 'en' }),
+    body: JSON.stringify({
+      textQuery: override.query || candidate.providerQuery,
+      languageCode: 'en',
+      ...(override.includedType ? {
+        includedType: override.includedType,
+        strictTypeFiltering: true,
+      } : {}),
+    }),
   });
   if (!response.ok) throw new Error(`Google search failed (${response.status}) for ${candidate.id}.`);
   const body = await response.json();
   const providerResults = body.places || [];
-  const matches = providerResults.filter((place) => countryCodeFor(place) === candidate.countryCode);
+  const matches = providerResults.filter((place) => countryCodeFor(place) === candidate.countryCode &&
+    providerIdentityPolicy(candidate.kind, place.types, {
+      reviewedOverride: override.allowPoiIdentity === true ||
+        REVIEWED_PROVIDER_IDENTITY_IDS.has(candidate.id),
+      administrativeNameMatch: providerIdentityNameMatches(candidate, place.displayName?.text),
+    }).compatible);
   const selected = override.expectedPlaceId
     ? providerResults.find((place) => place.id === override.expectedPlaceId)
     : matches.length === 1 ? matches[0] : null;
   const selectedCountry = selected ? countryCodeFor(selected) : '';
-  const selectedAllowed = selected && (
+  const selectedIdentity = selected ? providerIdentityPolicy(candidate.kind, selected.types, {
+    reviewedOverride: override.allowPoiIdentity === true ||
+      REVIEWED_PROVIDER_IDENTITY_IDS.has(candidate.id),
+    administrativeNameMatch: providerIdentityNameMatches(candidate, selected.displayName?.text),
+  }) : null;
+  const selectedAllowed = selected && selectedIdentity?.compatible && (
     selectedCountry === candidate.countryCode || (override.allowCountryless && !selectedCountry)
   );
   if (!selectedAllowed) {
@@ -141,7 +182,7 @@ async function enrichCandidate(candidate, { apiKey, fetchImpl = global.fetch }) 
     };
   }
   const place = selected;
-  return {
+  const enriched = {
     ...candidate,
     providerRefs: {
       googlePlaceId: place.id,
@@ -156,12 +197,23 @@ async function enrichCandidate(candidate, { apiKey, fetchImpl = global.fetch }) 
       : {}),
     geometryPolicy: candidate.geometryPolicy || providerGeometryPolicy(
       candidate.kind,
-      candidate.viewport || normalizedViewport(place.viewport)
+      candidate.viewport || normalizedViewport(place.viewport),
+      {
+        center: normalizedCoordinates(override.center || candidate.center || place.location),
+        radiusKm: Number(override.radiusKm || candidate.radiusKm) || null,
+      }
     ),
+    providerIdentity: {
+      compatible: true,
+      source: selectedIdentity.source,
+      reviewedOverride: override.allowPoiIdentity === true ||
+        REVIEWED_PROVIDER_IDENTITY_IDS.has(candidate.id),
+    },
     googleTypes: place.types || [],
     registryVersion: REGISTRY_VERSION,
     status: 'active',
   };
+  return { ...enriched, matchProfile: buildMatchProfile(enriched) };
 }
 
 function auditEntries(entries, { requireProviderIdentity }) {

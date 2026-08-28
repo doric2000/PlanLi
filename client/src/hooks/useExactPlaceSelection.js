@@ -86,7 +86,27 @@ async function resolveSelectionWithExpiryRecovery(selection) {
   }
 }
 
-export default function useExactPlaceSelection({ value = null, onChange, locale = 'he' } = {}) {
+const coordinatesForDestination = (destination) => {
+  const rawLat = destination?.coordinates?.lat ?? destination?.coordinates?.latitude;
+  const rawLng = destination?.coordinates?.lng ?? destination?.coordinates?.longitude;
+  const lat = rawLat == null || rawLat === '' ? NaN : Number(rawLat);
+  const lng = rawLng == null || rawLng === '' ? NaN : Number(rawLng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  const southwest = destination?.viewport?.southwest;
+  const northeast = destination?.viewport?.northeast;
+  const rawValues = [southwest?.lat, southwest?.lng, northeast?.lat, northeast?.lng];
+  if (rawValues.some((value) => value == null || value === '')) return null;
+  const values = rawValues.map(Number);
+  if (!values.every(Number.isFinite)) return null;
+  return { lat: (values[0] + values[2]) / 2, lng: (values[1] + values[3]) / 2 };
+};
+
+export default function useExactPlaceSelection({
+  value = null,
+  onChange,
+  locale = 'he',
+  preferredDestination = null,
+} = {}) {
   const [locationQuery, setLocationQuery] = useState(() => queryForValue(value));
   const [selectedCountry, setSelectedCountry] = useState(() => countryForValue(value));
   const [selectedCity, setSelectedCity] = useState(() => cityForValue(value));
@@ -152,6 +172,35 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
       const result = await resolveSelectionWithExpiryRecovery(selection);
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
       if (result?.status === 'destination_choice_required') {
+        if (preferredDestination?.countryId && preferredDestination?.cityId) {
+          try {
+            const preferredSelection = preferredDestination.resolvedPlaceToken
+              ? { destinationResolvedPlaceToken: preferredDestination.resolvedPlaceToken }
+              : { destinationRef: {
+                  countryId: preferredDestination.countryId,
+                  cityId: preferredDestination.cityId,
+                } };
+            const preferredResult = await finalizeDestinationChoice({
+              resolutionId: result.resolutionId,
+              incidentId: result.incidentId,
+              ...preferredSelection,
+            });
+            if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+            const preferredValue = buildExactPlaceValue(
+              preferredResult.destination.country,
+              preferredResult.destination.city,
+              preferredResult.place
+            );
+            setPendingLocation(preferredValue);
+            setDestinationChoice(null);
+            setLocationQuery(preferredResult.place?.name || preferredResult.place?.address || locationQuery);
+            return preferredValue;
+          } catch {
+            // The preferred route destination is only a quiet shortcut. Country
+            // and geometry validation remain authoritative; on mismatch the
+            // existing destination picker is shown unchanged.
+          }
+        }
         setDestinationChoice(result);
         setPendingLocation(result.place ? { place: result.place } : null);
         return null;
@@ -180,7 +229,7 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
         setResolvingLocation(false);
       }
     }
-  }, [locale, locationQuery]);
+  }, [locale, locationQuery, preferredDestination]);
 
   const confirmPendingLocation = useCallback(() => {
     if (!pendingLocation) return null;
@@ -334,8 +383,12 @@ export default function useExactPlaceSelection({ value = null, onChange, locale 
   }, [handleSelectGooglePlace, lastSelection]);
 
   const googleSearchFn = useCallback(
-    (text, options) => searchPlaces(text, { ...options, types: 'all' }),
-    []
+    (text, options) => searchPlaces(text, {
+      ...options,
+      types: 'all',
+      locationBias: coordinatesForDestination(preferredDestination),
+    }),
+    [preferredDestination]
   );
 
   return {

@@ -74,3 +74,24 @@ test('reviewed enrichment overrides select an exact island identity from ambiguo
   });
   assert.equal(result.enrichmentIssue, undefined);
 });
+
+test('city enrichment refuses a business Place ID even when it is the only result', async () => {
+  const candidate = CANDIDATES.find((entry) => entry.id === 'at-vienna');
+  let requestBody;
+  const result = await enrichCandidate(candidate, {
+    apiKey: 'test-key',
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return { ok: true, json: async () => ({ places: [{
+        id: 'vienna-event-venue', displayName: { text: 'Vienna' },
+        addressComponents: [{ longText: 'Austria', shortText: 'AT', types: ['country'] }],
+        location: { latitude: 48.2, longitude: 16.37 },
+        types: ['event_venue', 'point_of_interest', 'establishment'],
+      }] }) };
+    },
+  });
+  assert.equal(requestBody.includedType, 'locality');
+  assert.equal(requestBody.strictTypeFiltering, true);
+  assert.equal(result.providerRefs, undefined);
+  assert.equal(result.enrichmentIssue, 'missing_google_match');
+});

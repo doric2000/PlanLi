@@ -26,6 +26,7 @@ const {
 } = require('./recommendationService');
 const { destinationClaimId, stableDestinationId } = require('./destinationV3Service');
 const { canonicalDestinationId, clearRegistryCache } = require('./canonicalDestinationRegistry');
+const { provisionalRegistryId } = require('./destinationResolutionPolicy');
 const { createResolvedPlaceToken } = require('./placesGatewayService');
 const { hasHebrewName } = require('./destinationLocalizationService');
 
@@ -1156,7 +1157,50 @@ test('Google destination resolution maps the reported Chiang Rai hotel to its Th
   }
 });
 
-test('Google destination resolution rejects an unapproved locality instead of creating it', async () => {
+test('Hampi venues resolve to the shared tourism region without locality provider fallback', async () => {
+  clearRegistryCache();
+  const admin = createFakeAdmin({
+    'countries/IN': {
+      name: 'הודו', names: { he: 'הודו', en: 'India' }, code: 'IN',
+      region: 'Asia', currencyCode: 'INR', status: 'active',
+    },
+  });
+  const venues = [
+    ['virupaksha-temple', 'Virupaksha Temple', 'Hampi', { lat: 15.335133, lng: 76.458653 }],
+    ['hampi-kishkindhe-ferry', 'Hampi-Kishkindhe Ferry', 'Gangavathi', { lat: 15.338045, lng: 76.458463 }],
+    ['ferry-point-hampi', 'Ferry Point Hampi', 'Hampi', { lat: 15.337016, lng: 76.458036 }],
+  ];
+  try {
+    for (const [placeId, displayName, localityName, coordinates] of venues) {
+      const resolvedPlace = {
+        fetchedAt: new Date(),
+        he: {
+          placeId, displayName, localityName, localityCandidates: [localityName],
+          countryName: 'הודו', countryCode: 'IN', coordinates,
+          types: ['tourist_attraction', 'point_of_interest'],
+        },
+        en: {
+          placeId, displayName, localityName, localityCandidates: [localityName],
+          countryName: 'India', countryCode: 'IN', coordinates,
+          types: ['tourist_attraction', 'point_of_interest'],
+        },
+      };
+      const destination = await resolveGoogleDestination({
+        admin, resolvedPlace, placesProvider: 'new',
+      });
+      assert.equal(destination.cityId, canonicalDestinationId('IN', 'in-hampi'));
+      assert.equal(destination.cityData.googleCache.names.he, 'האמפי');
+      assert.equal(destination.place.placeId, placeId);
+      assert.ok(['canonical_geometry', 'canonical_alias_and_geometry']
+        .includes(destination.resolutionSource));
+      assert.equal(destination.providerCallCount, 0);
+    }
+  } finally {
+    clearRegistryCache();
+  }
+});
+
+test('a containing locality without a reliable Hebrew name still requires user confirmation', async () => {
   const admin = createFakeAdmin({
     'countries/AL': {
       name: 'Albania',
@@ -1239,7 +1283,8 @@ test('Google destination resolution rejects an unapproved locality instead of cr
       newPlacesKey: 'new-key',
       placesProvider: 'new',
     }), /not mapped to an approved PlanLi destination/);
-    assert.deepEqual(calls, ['details:en']);
+    assert.ok(calls.includes('geocode'));
+    assert.ok(calls.some((call) => call.startsWith('details:')));
   } finally {
     global.fetch = originalFetch;
   }
@@ -1290,6 +1335,65 @@ test('the current client receives destination search state instead of an unknown
     assert.equal(result.place.placeId, 'hotel-liro');
     assert.deepEqual(result.place.coordinates, coordinates);
   } finally {
+    clearRegistryCache();
+  }
+});
+
+test('an ambiguous verified locality opens destination search instead of a dead-end error', async () => {
+  clearRegistryCache();
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const coordinates = { lat: 40.4146, lng: 19.4812 };
+  const admin = createFakeAdmin({
+    'countries/AL': {
+      name: 'אלבניה', names: { he: 'אלבניה', en: 'Albania' }, code: 'AL',
+      region: 'Europe', currencyCode: 'ALL', status: 'active',
+    },
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner', expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      he: {
+        placeId: 'ambiguous-hotel', displayName: 'Hotel', localityName: 'Vlora',
+        localityCandidates: ['Vlora'], countryCode: 'AL', coordinates, types: ['lodging'],
+      },
+      en: {
+        placeId: 'ambiguous-hotel', displayName: 'Hotel', localityName: 'Vlora',
+        localityCandidates: ['Vlora'], countryCode: 'AL', coordinates, types: ['lodging'],
+      },
+    },
+  });
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      status: 'OK',
+      results: [
+        {
+          place_id: 'vlore-a', types: ['locality', 'political'],
+          address_components: [{ short_name: 'AL', types: ['country'] }],
+          geometry: { location: { lat: 40.42, lng: 19.48 } },
+        },
+        {
+          place_id: 'vlore-b', types: ['locality', 'political'],
+          address_components: [{ short_name: 'AL', types: ['country'] }],
+          geometry: { location: { lat: 40.43, lng: 19.49 } },
+        },
+      ],
+    }),
+  });
+  try {
+    const result = await resolveRecommendationDestination({
+      admin, auth: verifiedAuth, mapsKey: 'maps-key', providerRateLimitKey,
+      placesProvider: 'legacy',
+      data: {
+        resolvedPlaceToken, supportsDestinationChoice: true, supportsDestinationSearch: true,
+      },
+    });
+    assert.equal(result.status, 'destination_choice_required');
+    assert.equal(result.allowDestinationSearch, true);
+    assert.equal(result.place.placeId, 'ambiguous-hotel');
+  } finally {
+    global.fetch = originalFetch;
     clearRegistryCache();
   }
 });
@@ -2500,7 +2604,7 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
   }
 });
 
-test('legacy country reuse does not authorize an unknown destination', async () => {
+test('a verified containing locality reuses the existing country and creates a provisional destination', async () => {
   const admin = createFakeAdmin({
     'countries/ישראל': {
       name: 'ישראל',
@@ -2543,7 +2647,6 @@ test('legacy country reuse does not authorize an unknown destination', async () 
   };
 
   try {
-    await assert.rejects((async () => {
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
@@ -2556,20 +2659,22 @@ test('legacy country reuse does not authorize an unknown destination', async () 
     });
 
     assert.equal(result.country.id, 'ישראל');
-    const cityId = stableDestinationId('ישראל', 'jerusalem-place-id');
+    const cityId = canonicalDestinationId(
+      'ישראל',
+      provisionalRegistryId('IL', 'jerusalem-place-id')
+    );
     assert.equal(result.city.id, cityId);
     assert.equal(admin.documents.has('countries/IL'), false);
     assert.deepEqual(
       admin.documents.get(`countries/ישראל/destinations/${cityId}`).providerRefs.googlePlaceId,
       'jerusalem-place-id'
     );
-    })(), /not mapped to an approved PlanLi destination/);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('country policy alone does not promote an unknown locality to a destination', async () => {
+test('country policy and a verified locality create one stable provisional destination', async () => {
   const admin = createFakeAdmin({
     'countries/ישראל': {
       name: 'ישראל',
@@ -2623,7 +2728,6 @@ test('country policy alone does not promote an unknown locality to a destination
   };
 
   try {
-    await assert.rejects((async () => {
     const preview = await resolveRecommendationDestination({
       admin,
       auth: verifiedAuth,
@@ -2633,10 +2737,14 @@ test('country policy alone does not promote an unknown locality to a destination
     });
     assert.equal(preview.destination.country.id, 'ישראל');
     assert.equal(preview.destination.country.code, 'IL');
-    assert.equal(preview.resolutionSource, 'independent-policy-registry');
+    assert.equal(preview.resolutionSource, 'verified_containing_locality');
+    const arielCityId = canonicalDestinationId(
+      'ישראל',
+      provisionalRegistryId('IL', 'ariel-city-place-id')
+    );
     assert.equal(
       admin.documents.has(
-        `countries/ישראל/destinations/${stableDestinationId('ישראל', 'ariel-city-place-id')}`
+        `countries/ישראל/destinations/${arielCityId}`
       ),
       false
     );
@@ -2655,7 +2763,6 @@ test('country policy alone does not promote an unknown locality to a destination
     assert.equal(saved.country.id, preview.destination.country.id);
     assert.equal(saved.city.id, preview.destination.city.id);
     assert.equal(saved.resolutionSource, preview.resolutionSource);
-    })(), /not mapped to an approved PlanLi destination/);
   } finally {
     global.fetch = originalFetch;
   }

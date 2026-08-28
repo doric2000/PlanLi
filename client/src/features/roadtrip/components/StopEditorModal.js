@@ -143,6 +143,10 @@ export default function StopEditorModal({
   const [stopBaseline, setStopBaseline] = useState(null);
   const [unsavedModalVisible, setUnsavedModalVisible] = useState(false);
   const pendingDiscardRef = useRef(null);
+  const preferredRouteDestination = useMemo(
+    () => normalizedDestination(routeDestination),
+    [routeDestination]
+  );
   useEffect(() => {
     if (!visible || !guideEnabled) return;
     requestCreatorStep('route', 1, {
@@ -496,6 +500,7 @@ export default function StopEditorModal({
               errorTestID="route-stop-location-error"
               retryTestID="route-stop-location-retry"
               changeResultTestID="route-stop-location-change-result"
+              preferredDestination={preferredRouteDestination}
             /> : null}
             {mode === LOCATION_MODES.general || (mode === LOCATION_MODES.pin && destination) ? <View style={composer.locationPanel}>
               <AppText style={composer.fieldLabel}>בחירת עיר או אזור</AppText>
@@ -515,6 +520,7 @@ export default function StopEditorModal({
               errorTestID="route-stop-pin-location-error"
               retryTestID="route-stop-pin-location-retry"
               changeResultTestID="route-stop-pin-location-change-result"
+              preferredDestination={preferredRouteDestination}
             /> : null}
             {mode === LOCATION_MODES.pin && destination ? <View style={styles.manualMapSpacing}><ManualMapPinPicker destination={destination} value={pin} onChange={setPin} /></View> : null}
             {mode === LOCATION_MODES.planli ? <View style={composer.destinationResults}>

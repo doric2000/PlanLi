@@ -7,6 +7,7 @@ import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal
 const mockGetPersonalizedRecommendations = jest.fn();
 const mockPickImagesForReview = jest.fn();
 const mockResolveLocation = jest.fn();
+const mockSearchPlaces = jest.fn(async () => []);
 
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
@@ -17,15 +18,21 @@ jest.mock('../src/services/PersonalizationService', () => ({
   getPersonalizedRecommendations: (...args) => mockGetPersonalizedRecommendations(...args),
 }));
 jest.mock('../src/services/LocationService', () => ({
-  searchPlaces: jest.fn(async () => []),
+  searchPlaces: (...args) => mockSearchPlaces(...args),
   resolveDestinationForPlacePreview: (...args) => mockResolveLocation(...args),
   finalizeDestinationChoice: jest.fn(),
 }));
 jest.mock('../src/components/GooglePlacesInput', () => {
   const { Pressable, Text, TextInput, View } = require('react-native');
-  return ({ value, onChangeValue, onSelect, inputTestID }) => (
+  return ({ value, onChangeValue, onSelect, inputTestID, googleSearchFn }) => (
     <View>
       <TextInput testID={inputTestID} value={value} onChangeText={onChangeValue} />
+      <Pressable
+        testID="route-stop-run-google-search"
+        onPress={() => googleSearchFn?.('Virupaksha Temple')}
+      >
+        <Text>חיפוש מקום</Text>
+      </Pressable>
       <Pressable
         testID="route-stop-google-result"
         onPress={() => onSelect?.({
@@ -108,6 +115,31 @@ describe('StopEditorModal', () => {
     mockPickImagesForReview.mockImplementation(({ onComplete }) => onComplete([
       'file:///one.jpg', 'file:///two.jpg', 'file:///three.jpg',
     ]));
+    mockSearchPlaces.mockClear();
+  });
+
+  it('passes the route destination center into every exact-place search', async () => {
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        onSave={jest.fn()}
+        onClose={jest.fn()}
+        allowImages={false}
+        routeDestination={{
+          countryId: 'IN', cityId: 'hampi', countryName: 'הודו', cityName: 'האמפי',
+          coordinates: { lat: 15.335, lng: 76.46 },
+        }}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId('route-stop-run-google-search'));
+
+    await waitFor(() => expect(mockSearchPlaces).toHaveBeenCalledWith(
+      'Virupaksha Temple',
+      expect.objectContaining({ locationBias: { lat: 15.335, lng: 76.46 } })
+    ));
   });
 
   it('saves a useful general-area stop without requiring a map point', () => {

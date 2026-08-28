@@ -81,6 +81,22 @@ test('Places API New autocomplete uses a session token and a minimal field mask'
   }]);
 });
 
+test('Places API New autocomplete applies a circular location bias', async () => {
+  let body;
+  await newAutocomplete({
+    query: 'Virupaksha Temple', newPlacesKey: 'new-key',
+    coordinates: { lat: 15.335, lng: 76.46 }, randomSelectionId: () => 'sel-1',
+    fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => ({ suggestions: [] }) };
+    },
+  });
+  assert.deepEqual(body.locationBias, {
+    circle: { center: { latitude: 15.335, longitude: 76.46 }, radius: 50000 },
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(body, 'locationRestriction'), false);
+});
+
 test('Places API New fetches matching Hebrew and English details exactly once', async () => {
   const calls = [];
   const bilingual = await fetchNewBilingualPlace({

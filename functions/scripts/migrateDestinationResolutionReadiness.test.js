@@ -27,6 +27,10 @@ test('legacy active destination policy is provisional and exact-selection only',
 test('reviewed geometry and sane provider viewports remain eligible for automatic matching', () => {
   assert.equal(registryGeometryPatch('it-dolomites').geometryPolicy.autoMatchEligible, true);
   assert.equal(registryGeometryPatch('it-dolomites').radiusKm, 65);
+  assert.equal(registryGeometryPatch('in-hampi').matchProfile.trust, 'trusted');
+  assert.equal(registryGeometryPatch('in-hampi').radiusKm, 20);
+  assert.equal(registryGeometryPatch('at-vienna').matchProfile.trust, 'trusted');
+  assert.equal(registryGeometryPatch('at-vienna').providerIdentity.allowExactProviderMatch, false);
   assert.equal(registryGeometryPatch('it-lake-como').geometryPolicy.autoMatchEligible, false);
   assert.equal(registryGeometryPatch('it-lake-como').geometryPolicy.aliasAutoMatchEligible, false);
   assert.equal(registryGeometryPatch('it-lake-como', {
@@ -36,4 +40,18 @@ test('reviewed geometry and sane provider viewports remain eligible for automati
       northeast: { lat: 46.3, lng: 9.5 },
     },
   }).geometryPolicy.autoMatchEligible, true);
+  assert.equal(registryGeometryPatch('it-lake-como', {
+    kind: 'tourism_region',
+    center: { lat: 46, lng: 9.2 },
+    viewport: {
+      southwest: { lat: 45.999, lng: 9.199 },
+      northeast: { lat: 46.001, lng: 9.201 },
+    },
+  }).matchProfile.trust, 'trusted');
+  assert.equal(registryGeometryPatch('zz-admin-quarantine', {
+    kind: 'city_hub',
+    center: { lat: 1, lng: 1 },
+    radiusKm: 10,
+    providerIdentity: { allowExactProviderMatch: false },
+  }).providerIdentity.allowExactProviderMatch, false);
 });

@@ -47,4 +47,20 @@ describe('LocationService search guards', () => {
       }),
     }));
   });
+
+  it('sends a route location bias through the shared Places callable', async () => {
+    const callable = jest.fn(async () => ({ data: {
+      predictions: [], sessionId: 'ps_hampi', expiresAt: 'later', incidentId: 'loc_hampi',
+    } }));
+    httpsCallable.mockReturnValue(callable);
+
+    await searchPlaces('Virupaksha Temple', {
+      locationBias: { lat: 15.335, lng: 76.46 },
+    });
+
+    expect(callable).toHaveBeenCalledWith({
+      query: 'Virupaksha Temple', mode: 'places',
+      locationBias: { lat: 15.335, lng: 76.46 },
+    });
+  });
 });

@@ -7,7 +7,12 @@ const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
+  REVIEWED_PROVIDER_IDENTITY_IDS,
+  buildMatchProfile,
+  prepareEntries,
   providerGeometryPolicy,
+  providerIdentityNameMatches,
+  providerIdentityPolicy,
 } = require('../canonicalDestinationRegistry');
 
 const DEFAULT_PROJECT_ID = 'planli-f0b12';
@@ -49,6 +54,29 @@ function legacyPolicy({ countryCode, countryId, cityId, destination }) {
 
 function registryGeometryPatch(id, entry = {}) {
   const reviewed = BUILTIN_POLICIES.find((entry) => entry.id === id);
+  const materialized = reviewed ? {
+    ...entry,
+    ...reviewed,
+    aliases: Array.from(new Set([...(entry.aliases || []), ...(reviewed.aliases || [])])),
+  } : entry;
+  const identity = providerIdentityPolicy(materialized.kind, materialized.googleTypes, {
+    reviewedOverride: reviewed != null || materialized.providerIdentity?.reviewedOverride === true ||
+      REVIEWED_PROVIDER_IDENTITY_IDS.has(id),
+    administrativeNameMatch: providerIdentityNameMatches(materialized),
+  });
+  const matchProfile = buildMatchProfile({
+    ...materialized,
+    ...(reviewed ? {
+      matchProfile: {
+        version: REGISTRY_VERSION,
+        source: 'planli_reviewed',
+        identityReviewed: true,
+        areas: reviewed.radiusKm
+          ? [{ type: 'circle', center: reviewed.center, radiusKm: reviewed.radiusKm }]
+          : [],
+      },
+    } : {}),
+  });
   return reviewed ? {
     center: reviewed.center,
     ...(reviewed.viewport ? { viewport: reviewed.viewport } : {}),
@@ -57,11 +85,29 @@ function registryGeometryPatch(id, entry = {}) {
       autoMatchEligible: true,
       aliasAutoMatchEligible: true,
       source: 'planli_reviewed',
-      version: 2,
+      version: REGISTRY_VERSION,
+    },
+    matchProfile,
+    providerIdentity: {
+      ...(entry.providerIdentity || {}),
+      compatible: true,
+      source: identity.source,
+      reviewedOverride: true,
+      ...(reviewed.providerIdentity?.allowExactProviderMatch === false
+        ? { allowExactProviderMatch: false }
+        : {}),
     },
     registryVersion: REGISTRY_VERSION,
   } : {
-    geometryPolicy: providerGeometryPolicy(entry.kind, entry.viewport),
+    geometryPolicy: providerGeometryPolicy(entry.kind, entry.viewport, entry),
+    matchProfile,
+    providerIdentity: {
+      ...(entry.providerIdentity || {}),
+      compatible: identity.compatible,
+      source: identity.source,
+      reviewedOverride: entry.providerIdentity?.reviewedOverride === true ||
+        REVIEWED_PROVIDER_IDENTITY_IDS.has(id),
+    },
     registryVersion: REGISTRY_VERSION,
   };
 }
@@ -88,10 +134,20 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
     document.id, String(document.data()?.code || document.id).toUpperCase(),
   ]));
   const operations = [];
-  const registryItems = registrySnapshot.docs.map((document) => {
+  const compiledProfiles = new Map(prepareEntries(registrySnapshot.docs.map((document) => {
     const current = document.data() || {};
     const patch = registryGeometryPatch(document.id, current);
+    return { id: document.id, ...current, ...patch };
+  })).map((entry) => [entry.id, entry.matchProfile]));
+  const registryItems = registrySnapshot.docs.map((document) => {
+    const current = document.data() || {};
+    const patch = {
+      ...registryGeometryPatch(document.id, current),
+      matchProfile: compiledProfiles.get(document.id),
+    };
     const changed = JSON.stringify(current.geometryPolicy || null) !== JSON.stringify(patch.geometryPolicy) ||
+      JSON.stringify(current.matchProfile || null) !== JSON.stringify(patch.matchProfile) ||
+      JSON.stringify(current.providerIdentity || null) !== JSON.stringify(patch.providerIdentity) ||
       Number(current.registryVersion || 0) !== REGISTRY_VERSION;
     if (changed) operations.push({ ref: document.ref, data: {
       ...patch,
@@ -100,7 +156,12 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
     return {
       id: document.id,
       changed,
-      trusted: patch.geometryPolicy.autoMatchEligible,
+      trusted: patch.matchProfile.trust === 'trusted',
+      identityCompatible: patch.providerIdentity.compatible,
+      kind: current.kind || null,
+      googleTypes: current.googleTypes || [],
+      providerDisplayName: current.providerDisplayName || null,
+      exactProviderMatchAllowed: patch.providerIdentity.allowExactProviderMatch !== false,
       beforeAutomatic: current.geometryPolicy?.autoMatchEligible === true,
       beforeManualOrPro: current.geometryPolicy?.autoMatchEligible === false,
     };
@@ -137,6 +198,19 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
     registryMetadataPatch: registryMetadataChanged ? 1 : 0,
     automaticGeometry: registryItems.filter((item) => item.trusted).length,
     manualOrProGeometry: registryItems.filter((item) => !item.trusted).length,
+    incompatibleProviderIdentities: registryItems.filter((item) => !item.identityCompatible).length,
+    quarantinedProviderIdentities: registryItems.filter((item) => !item.exactProviderMatchAllowed).length,
+    blockedMatchProfileEntries: registryItems.filter((item) => !item.trusted)
+      .map((item) => item.id),
+    incompatibleProviderIdentityEntries: registryItems.filter((item) => !item.identityCompatible)
+      .map((item) => ({
+        id: item.id,
+        kind: item.kind,
+        providerDisplayName: item.providerDisplayName,
+        googleTypes: item.googleTypes,
+      })),
+    quarantinedProviderIdentityEntries: registryItems.filter((item) => !item.exactProviderMatchAllowed)
+      .map((item) => item.id),
     legacyDestinationPatches: legacyItems.filter((item) => item.eligible).length,
     totalWrites: operations.length,
     before: {
@@ -151,6 +225,7 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
       automaticGeometry: registryItems.filter((item) => item.trusted).length,
       manualOrProGeometry: registryItems.filter((item) => !item.trusted).length,
       unclassifiedGeometry: 0,
+      incompatibleProviderIdentities: registryItems.filter((item) => !item.identityCompatible).length,
       activeLegacyWithoutPolicy: 0,
     },
   };

@@ -29,6 +29,7 @@ export default function ExactLocationPicker({
 	errorTestID = 'exact-location-error',
 	retryTestID = 'exact-location-retry',
 	changeResultTestID = 'exact-location-change-result',
+	preferredDestination = null,
 }) {
 	const copy = locationCopy(locale);
 	const composerVariant = variant === 'composer';
@@ -54,7 +55,7 @@ export default function ExactLocationPicker({
 		selectedCity,
 		selectedCountry,
 		selectedPlace,
-	} = useExactPlaceSelection({ value, onChange, locale });
+	} = useExactPlaceSelection({ value, onChange, locale, preferredDestination });
 
 	useEffect(() => {
 		hydrateSelection(value);
