@@ -7,12 +7,10 @@ import RegionSelectorScreen, {
 import { REGIONS } from '../src/features/region/regionDefinitions';
 
 const mockSelectRegion = jest.fn();
-const mockDismissPrompt = jest.fn();
 
 jest.mock('../src/features/region/context/RegionSelectionState', () => ({
   useRegionSelection: () => ({
     selectRegion: (...args) => mockSelectRegion(...args),
-    dismissPrompt: (...args) => mockDismissPrompt(...args),
   }),
 }));
 
@@ -32,13 +30,14 @@ describe('RegionSelectorScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSelectRegion.mockResolvedValue({});
-    mockDismissPrompt.mockResolvedValue({});
   });
 
-  it('renders all eight accessible region buttons and the accessible skip action', () => {
+  it('renders all eight accessible region buttons without the old skip action', () => {
     const screen = render(<RegionSelectorScreen navigation={createNavigation()} />);
 
-    expect(screen.getByLabelText('לא עכשיו')).toBeTruthy();
+    expect(screen.queryByText('לא עכשיו')).toBeNull();
+    expect(screen.queryByTestId('region-selector-skip')).toBeNull();
+    expect(screen.queryByTestId('region-selector-cancel')).toBeNull();
     expect(REGIONS).toHaveLength(8);
     REGIONS.forEach((region) => {
       const button = screen.getByTestId(`region-option-${region.id}`);
@@ -65,13 +64,16 @@ describe('RegionSelectorScreen', () => {
     });
   });
 
-  it('draws the pressed state from the transparent region image without a rectangular fill', () => {
+  it('draws the pressed state from a transparent contour without a rectangular fill', () => {
     const screen = render(<RegionSelectorScreen navigation={createNavigation()} />);
     const button = screen.getByTestId('region-option-africa');
 
     expect(screen.queryByTestId('region-option-africa-pressed-visual')).toBeNull();
     fireEvent(button, 'pressIn');
     expect(screen.getByTestId('region-option-africa-pressed-visual')).toBeTruthy();
+    const outline = screen.getByTestId('region-option-africa-selection-outline');
+    expect(outline.props.source).toBe(REGIONS.find((region) => region.id === 'africa').selectionOutline);
+    expect(outline.props.style).not.toEqual(expect.objectContaining({ tintColor: expect.anything() }));
     expect(button.props.style).not.toEqual(expect.objectContaining({ backgroundColor: expect.anything() }));
 
     fireEvent(button, 'pressOut');
@@ -91,20 +93,28 @@ describe('RegionSelectorScreen', () => {
     },
   );
 
-  it('dismisses with לא עכשיו and returns to the previous screen', async () => {
+  it('offers an accessible cancel action only when changing an existing selection', () => {
     const navigation = createNavigation();
-    const screen = render(<RegionSelectorScreen navigation={navigation} />);
+    const screen = render(
+      <RegionSelectorScreen
+        navigation={navigation}
+        route={{ params: { source: 'home-change' } }}
+      />,
+    );
 
-    fireEvent.press(screen.getByTestId('region-selector-skip'));
+    expect(screen.queryByText('לא עכשיו')).toBeNull();
+    expect(screen.getByText('ביטול')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('ביטול וחזרה'));
 
-    await waitFor(() => expect(mockDismissPrompt).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(navigation.goBack).toHaveBeenCalledTimes(1));
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+    expect(mockSelectRegion).not.toHaveBeenCalled();
   });
 
-  it('hides skip and stays mounted after selection in required mode', async () => {
+  it('hides cancel and stays mounted after selection in required mode', async () => {
     const navigation = createNavigation();
     const screen = render(<RegionSelectorScreen navigation={navigation} route={{ params: { required: true } }} />);
-    expect(screen.queryByTestId('region-selector-skip')).toBeNull();
+    expect(screen.queryByText('לא עכשיו')).toBeNull();
+    expect(screen.queryByTestId('region-selector-cancel')).toBeNull();
     fireEvent.press(screen.getByTestId('region-option-israel'));
     await waitFor(() => expect(mockSelectRegion).toHaveBeenCalledWith('israel'));
     expect(navigation.goBack).not.toHaveBeenCalled();
