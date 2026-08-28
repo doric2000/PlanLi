@@ -61,7 +61,7 @@ import {
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
 import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
-import HomeRegionPreviewChip from '../../region/components/HomeRegionPreviewChip';
+import RegionHeaderAction from '../../region/components/RegionHeaderAction';
 
 const text = {
   title: 'מסלולים',
@@ -271,6 +271,15 @@ export default function RoutesScreen({ navigation }) {
       overlapNext
       style={tabHeroStyles.fixedHeader}
       testID="routes-tab-header"
+      renderTitleAccessory={() => (
+        isRegionDiscoveryEnabled() ? (
+          <RegionHeaderAction
+            regionId={selectedRegionId}
+            onPress={() => navigation.navigate('RegionSelector', { source: 'routes-change' })}
+            testID="routes-region-change"
+          />
+        ) : null
+      )}
       renderEnd={() => (
         <TouchableOpacity
           accessibilityLabel="מיון מסלולים"
@@ -328,7 +337,6 @@ export default function RoutesScreen({ navigation }) {
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
-      {isRegionDiscoveryEnabled() ? <HomeRegionPreviewChip regionId={selectedRegionId} onPress={() => navigation.navigate('RegionSelector', { source: 'routes-change' })} /> : null}
       <FlatList style={styles.scroll} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.feedContent,

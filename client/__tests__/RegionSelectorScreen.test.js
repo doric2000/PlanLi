@@ -1,7 +1,9 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
-import RegionSelectorScreen from '../src/features/region/screens/RegionSelectorScreen';
+import RegionSelectorScreen, {
+  calculateRegionSelectorCanvasSize,
+} from '../src/features/region/screens/RegionSelectorScreen';
 import { REGIONS } from '../src/features/region/regionDefinitions';
 
 const mockSelectRegion = jest.fn();
@@ -12,6 +14,10 @@ jest.mock('../src/features/region/context/RegionSelectionState', () => ({
     selectRegion: (...args) => mockSelectRegion(...args),
     dismissPrompt: (...args) => mockDismissPrompt(...args),
   }),
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 47, right: 0, bottom: 34, left: 0 }),
 }));
 
 function createNavigation({ canGoBack = true } = {}) {
@@ -40,6 +46,36 @@ describe('RegionSelectorScreen', () => {
       expect(screen.getByLabelText(region.label)).toBe(button);
       expect(button.props.accessibilityRole).toBe('button');
     });
+  });
+
+  it('fills the native viewport and preserves the reference ratio on Web', () => {
+    expect(calculateRegionSelectorCanvasSize({
+      viewportWidth: 390,
+      viewportHeight: 844,
+      platform: 'ios',
+    })).toEqual({ width: 390, height: 844 });
+
+    expect(calculateRegionSelectorCanvasSize({
+      viewportWidth: 1440,
+      viewportHeight: 1000,
+      platform: 'web',
+    })).toEqual({
+      width: 430,
+      height: Math.round(430 * 1844 / 853),
+    });
+  });
+
+  it('draws the pressed state from the transparent region image without a rectangular fill', () => {
+    const screen = render(<RegionSelectorScreen navigation={createNavigation()} />);
+    const button = screen.getByTestId('region-option-africa');
+
+    expect(screen.queryByTestId('region-option-africa-pressed-visual')).toBeNull();
+    fireEvent(button, 'pressIn');
+    expect(screen.getByTestId('region-option-africa-pressed-visual')).toBeTruthy();
+    expect(button.props.style).not.toEqual(expect.objectContaining({ backgroundColor: expect.anything() }));
+
+    fireEvent(button, 'pressOut');
+    expect(screen.queryByTestId('region-option-africa-pressed-visual')).toBeNull();
   });
 
   it.each(REGIONS.map((region) => [region.id, region.label]))(

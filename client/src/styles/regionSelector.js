@@ -27,15 +27,23 @@ export const regionSelectorStyles = StyleSheet.create({
   },
   regionButton: {
     position: 'absolute',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
-  regionButtonPressed: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
+  regionButtonActive: {
+    zIndex: 20,
   },
-  regionImage: {
+  regionPressedVisual: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  regionPressedImage: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
-    opacity: 0,
+  },
+  regionOutlineImage: {
+    tintColor: '#FFFFFF',
+    opacity: 0.96,
+    transform: [{ scale: 1.025 }],
   },
   skipButton: {
     position: 'absolute',
@@ -114,5 +122,24 @@ export const regionSelectorStyles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     writingDirection: 'rtl',
+  },
+  headerRegionAction: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRegionActionPressed: {
+    opacity: 0.72,
+  },
+  headerRegionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

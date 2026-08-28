@@ -12,6 +12,7 @@ export default function PageHeader({
   variant = 'main',
   renderStart,
   renderEnd,
+  renderTitleAccessory,
   children,
   style,
   contentStyle,
@@ -24,7 +25,7 @@ export default function PageHeader({
   const insets = useSafeAreaInsets();
   const hero = variant === 'hero';
   const detail = variant === 'detail';
-  const hasTop = Boolean(title || subtitle || renderStart || renderEnd);
+  const hasTop = Boolean(title || subtitle || renderStart || renderEnd || renderTitleAccessory);
 
   return (
     <View
@@ -58,7 +59,12 @@ export default function PageHeader({
         {hasTop ? <View style={[styles.topRow, detail && styles.topRowDetail]}>
           <View style={styles.side}>{renderStart?.() || null}</View>
           <View style={styles.titleWrap}>
-            <AppText style={[styles.title, hero && styles.titleHero]} numberOfLines={1}>{title}</AppText>
+            <View style={styles.titleLine}>
+              <AppText style={[styles.title, hero && styles.titleHero]} numberOfLines={1}>{title}</AppText>
+              {renderTitleAccessory ? (
+                <View style={styles.titleAccessory}>{renderTitleAccessory()}</View>
+              ) : null}
+            </View>
             {subtitle ? (
               <AppText style={[styles.subtitle, hero && styles.subtitleHero]} numberOfLines={2}>{subtitle}</AppText>
             ) : null}

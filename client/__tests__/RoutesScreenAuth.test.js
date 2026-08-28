@@ -11,6 +11,7 @@ let mockFocusEffect = null;
 let mockTabRefresh = null;
 let mockRoutesSceneReady = null;
 let mockSmartProfile = null;
+let mockSelectedRegionId = null;
 
 const deferred = () => {
   let resolve;
@@ -67,6 +68,9 @@ jest.mock('../src/hooks/useSmartProfile', () => ({
 jest.mock('../src/features/publishing/ContentPublishContext', () => ({
   useContentPublish: () => ({ completedVersionByType: {} }),
 }));
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({ selectedRegionId: mockSelectedRegionId }),
+}));
 
 jest.mock('../src/services/RouteService', () => ({
   clearRouteDiscoveryCache: jest.fn(),
@@ -82,11 +86,12 @@ jest.mock('../src/services/SocialService', () => ({
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { Text, View } = require('react-native');
-  return ({ children, title, renderStart, renderEnd, ...props }) => ReactModule.createElement(
+  return ({ children, title, renderStart, renderEnd, renderTitleAccessory, ...props }) => ReactModule.createElement(
     View,
     props,
     renderStart?.(),
     title ? ReactModule.createElement(Text, null, title) : null,
+    renderTitleAccessory?.(),
     renderEnd?.(),
     children
   );
@@ -122,6 +127,8 @@ describe('RoutesScreen authentication state', () => {
     mockTabRefresh = null;
     mockRoutesSceneReady = null;
     mockSmartProfile = { smartProfile: null, completed: false, loading: false };
+    mockSelectedRegionId = null;
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
     requestRoutes.mockReset();
     requestRoutes.mockImplementation(() => ({
       requested: true,
@@ -129,6 +136,19 @@ describe('RoutesScreen authentication state', () => {
       promise: Promise.resolve({ items: [] }),
     }));
     loadRouteDetails.mockReset();
+  });
+
+  it('uses a compact title icon for region changes without inserting the Home chip', () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockSelectedRegionId = 'europe';
+    const navigation = { navigate: jest.fn() };
+    const screen = render(<RoutesScreen navigation={navigation} />);
+
+    expect(screen.queryByTestId('home-region-preview-chip')).toBeNull();
+    const action = screen.getByTestId('routes-region-change');
+    expect(action.props.accessibilityLabel).toContain('אירופה');
+    fireEvent.press(action);
+    expect(navigation.navigate).toHaveBeenCalledWith('RegionSelector', { source: 'routes-change' });
   });
 
   it.each([

@@ -69,6 +69,22 @@ describe('overlapping hero headers', () => {
     expect(style.borderBottomLeftRadius).toBe(radii.xl);
     expect(style.borderBottomRightRadius).toBe(radii.xl);
   });
+
+  it('renders a title accessory inside the existing header height', () => {
+    const { getByTestId } = render(
+      <PageHeader
+        testID="header-with-region"
+        variant="hero"
+        title="קהילה"
+        renderTitleAccessory={() => <View testID="region-title-accessory" />}
+      />
+    );
+
+    expect(getByTestId('region-title-accessory')).toBeTruthy();
+    expect(StyleSheet.flatten(getByTestId('header-with-region').props.style).height).toBe(
+      TAB_HERO_BASE_HEIGHT
+    );
+  });
 });
 
 describe('RTL recommendation actions', () => {

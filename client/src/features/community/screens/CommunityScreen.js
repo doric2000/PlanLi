@@ -58,7 +58,7 @@ import {
   useNoyaTourTargetRegistration,
 } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
-import HomeRegionPreviewChip from '../../region/components/HomeRegionPreviewChip';
+import RegionHeaderAction from '../../region/components/RegionHeaderAction';
 import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
 import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 
@@ -271,6 +271,15 @@ export default function CommunityScreen({ navigation, route }) {
       overlapNext
       style={tabHeroStyles.fixedHeader}
       testID="community-tab-header"
+      renderTitleAccessory={() => (
+        isRegionDiscoveryEnabled() ? (
+          <RegionHeaderAction
+            regionId={selectedRegionId}
+            onPress={() => navigation.navigate('RegionSelector', { source: 'community-change' })}
+            testID="community-region-change"
+          />
+        ) : null
+      )}
       renderStart={() => (
         <TouchableOpacity
           collapsable={false}
@@ -363,7 +372,6 @@ export default function CommunityScreen({ navigation, route }) {
     <SafeAreaView style={styles.screen} edges={["left", "right"]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
-      {isRegionDiscoveryEnabled() ? <HomeRegionPreviewChip regionId={selectedRegionId} onPress={() => navigation.navigate('RegionSelector', { source: 'community-change' })} /> : null}
       {mapOpen && (
         <>
           {renderActiveFilters()}

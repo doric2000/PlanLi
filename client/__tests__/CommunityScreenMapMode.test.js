@@ -25,6 +25,7 @@ let mockCommunityMapProps;
 let mockCommunitySceneReady;
 let mockNoyaContextValue;
 let mockSmartProfile;
+let mockSelectedRegionId;
 
 jest.mock('../src/features/noya/NoyaTourContext', () => ({
   useNoyaMainTabRegistration: jest.fn(),
@@ -80,15 +81,19 @@ jest.mock('../src/hooks/useSmartProfile', () => ({
 jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
   useRecommendationPublish: () => ({ completedVersion: 0 }),
 }));
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({
+  useOptionalRegionSelection: () => ({ selectedRegionId: mockSelectedRegionId }),
+}));
 
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { Text, View } = require('react-native');
-  return ({ children, title, renderStart, renderEnd, ...props }) => ReactModule.createElement(
+  return ({ children, title, renderStart, renderEnd, renderTitleAccessory, ...props }) => ReactModule.createElement(
     View,
     props,
     renderStart?.(),
     title ? ReactModule.createElement(Text, null, title) : null,
+    renderTitleAccessory?.(),
     renderEnd?.(),
     children
   );
@@ -147,11 +152,26 @@ describe('CommunityScreen map mode', () => {
     mockCommunitySceneReady = null;
     mockNoyaContextValue = { activeDefinition: null, pendingMainDefinition: null };
     mockSmartProfile = { smartProfile: {}, completed: false, loading: false };
+    mockSelectedRegionId = null;
+    delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
     mockRecommendationState = {
       data: [], error: null, loading: false, refreshing: false,
       confirming: false, requestSettled: true,
       refresh: jest.fn(), removeRecommendation: jest.fn(), setDiscoveryRequest: jest.fn(),
     };
+  });
+
+  it('uses a compact title icon for region changes without inserting the Home chip', () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockSelectedRegionId = 'israel';
+    const navigation = { navigate: jest.fn() };
+    const screen = render(<CommunityScreen navigation={navigation} />);
+
+    expect(screen.queryByTestId('home-region-preview-chip')).toBeNull();
+    const action = screen.getByTestId('community-region-change');
+    expect(action.props.accessibilityLabel).toContain('ישראל');
+    fireEvent.press(action);
+    expect(navigation.navigate).toHaveBeenCalledWith('RegionSelector', { source: 'community-change' });
   });
 
   it('hides feed sorting and labels the map as all recommendations in the area', () => {
