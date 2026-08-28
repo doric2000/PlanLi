@@ -1994,3 +1994,34 @@ rejected.
   already use runtime `1.1.0`; force-close and reopen the production app up to
   twice to apply the OTA. Roll back by republishing production group
   `13f33be0-9aba-4c24-8ad2-4ba93a431bd5` if required.
+
+## Region selector contour correction release
+
+- Source and Git: implementation commit `414dadf` passed PR `#253` and merged
+  to clean `main` as `f5ba91fe5848fac31bff7eda36e9c19b0b2f9233`.
+- Scope: the selector uses a clean reference background without the baked-in
+  skip label, exposes cancellation only when changing an existing selection,
+  and renders independent alpha-aware white contour assets for all eight
+  regions. The Israel pin, Madagascar, Sri Lanka and the Australia/New Zealand
+  islands are included in their corresponding contour feedback.
+- Validation: 15 focused selector tests passed, changed-scope validation passed,
+  admin Web export/verification and iOS release configuration/export passed,
+  `git diff --check` passed and every required check on PR `#253` passed. Browser
+  validation at 390x843 exercised the selector flow. Automated image checks
+  confirmed transparent crop bounds and placed at least 95% of contour pixels
+  within 9px of a detected source edge. Physical-device safe-area and contour
+  rendering remain unverified.
+- EAS Update: preview group `dae40722-4fce-41cd-93a5-2f305d356ac4`, Android
+  update `01a04776-7fc1-7eb6-a4dc-794a458d6f02` and iOS update
+  `01a04776-7fc1-7064-918a-a12cc9f148bb` were published at
+  `2026-08-28T08:22:23.425Z`. Those exact artifacts were republished to
+  production group `a83997fb-1e7a-49be-8f4a-224892133b7d`, Android update
+  `01a04777-c1ca-7df1-9dab-d4ec52088da9` and iOS update
+  `01a04777-c1ca-79c1-8723-e755e1b386f9` at
+  `2026-08-28T08:23:45.866Z`. EAS read-back confirmed branch `production`, both
+  platforms, runtime `1.1.0` and exact source commit `f5ba91fe`.
+- No Functions, Firestore indexes or Rules, native EAS build, App Store
+  submission or Google Play submission changed in this release. The existing
+  beta binaries already use runtime `1.1.0`; force-close and reopen the
+  production app up to twice to apply the OTA. Roll back by republishing
+  production group `b363be1d-63b2-4ea9-86e2-67bf3923b01c` if required.
