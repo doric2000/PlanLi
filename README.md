@@ -51,11 +51,13 @@ immediately preceding compatible groups are preview
 `a50b1502-5158-49e5-bb59-02933dac81f1`. PR `#231` merged the canonical-
 destination rollout to `main` as `9d70edad`. Nine affected Functions and the
 48-file admin Hosting bundle were then redeployed from that clean merge commit.
-The private registry contains 251 validated entries, 14 reviewed legacy
-destinations are reassigned, and 14 historical user personalization profiles
-were repaired with an audited production migration. The final production audit
-at `2026-08-27T06:31:11.158Z` checked 839 Firestore documents and 104 active
-Node.js 22 v2 Functions in `europe-west1` and returned zero failures. Firestore
+The private registry now contains 252 validated entries. Fourteen reviewed
+legacy destinations are reassigned, 14 historical user personalization profiles
+were repaired with an audited production migration, and the location-resolution
+v3 release below added canonical Vlorë as the Hebrew city `ולורה`. The latest
+production audit at `2026-08-28T13:45:08.873Z` checked 869 Firestore documents
+and 124 active Node.js 22 v2 Functions in `europe-west1` and returned zero
+failures. Firestore
 Rules, indexes, Storage Rules, IAM, native builds, store submissions, and the
 rollback Storage bucket were unchanged.
 
@@ -2066,3 +2068,67 @@ rejected.
   beta binaries already use runtime `1.1.0`; force-close and reopen the
   production app up to twice to apply the OTA. Roll back by republishing
   production group `b363be1d-63b2-4ea9-86e2-67bf3923b01c` if required.
+
+## Destination resolution v3 backend release
+
+- Source and Git: implementation commit
+  `c91a2d0e60bd5016a0d117a18993f873fa6c0b15` passed PR
+  [#258](https://github.com/doric2000/PlanLi/pull/258) and merged to `main` as
+  `eaf9937f0214fbe894123096b8341006970173fc`. The idempotence, Hoi An and
+  Vlorë correction commit `df54d06` passed PR
+  [#259](https://github.com/doric2000/PlanLi/pull/259) and merged to clean
+  `main` as `404fa28782a6a01ea9cbf3780457f5df0888d459` at
+  `2026-08-28T13:37:30Z`.
+- Scope: recommendations and RoadTrips now use the same canonical destination
+  resolver, retain verified place-to-destination bindings through drafts and
+  publication, bias RoadTrip place search toward its selected destination, and
+  keep local PlanLi results usable when Google fails. Directly selected cities
+  can remain provisional instead of being rejected solely because they are not
+  yet in the reviewed registry. The researched registry contains 252 entries;
+  Vlorë is an approved `city_hub` named `ולורה`, distinct from the Albanian
+  Riviera, and its narrower city geometry wins for places inside the city.
+- Functions: exactly 11 Node.js 22 v2 Functions were deployed from clean merge
+  `404fa287` to `europe-west1`: `searchPlaces`, `resolvePlaceSelection`,
+  `resolveRecommendationDestination`, `saveRecommendation`,
+  `saveRecommendationDraft`, `publishRecommendationDraft`,
+  `getCurrentRouteDraft`, `saveRoute`, `saveRouteDraft`, `publishRouteDraft`
+  and `updateDestinationPolicy`. Independent Cloud Run read-back confirmed the
+  ready revisions `searchplaces-00026-gov`,
+  `resolveplaceselection-00030-sew`,
+  `resolverecommendationdestination-00042-hij`,
+  `saverecommendation-00047-fim`, `saverecommendationdraft-00007-gej`,
+  `publishrecommendationdraft-00013-vat`,
+  `getcurrentroutedraft-00005-loj`, `saveroute-00047-zuj`,
+  `saveroutedraft-00009-sar`, `publishroutedraft-00013-ger` and
+  `updatedestinationpolicy-00004-zop`. Their ready-transition window was
+  `2026-08-28T13:41:38.691887Z` through `2026-08-28T13:41:53.910531Z`.
+- Registry and data: the guarded registry readiness migration initially wrote
+  267 documents and its Vlorë-aware geometry follow-up wrote one document; the
+  final dry run reported 252 automatic profiles, zero blocked or incompatible
+  profiles, zero legacy patches and `totalWrites: 0`. `Nam Hoa Lu` was merged
+  into canonical Ninh Binh by completed job
+  `dra_nO05TymjP4IagjnZH55slCYxwTah`. Two exact Hoi An recommendations were
+  moved out of Da Nang under audit `location_repair_hoi_an_20260828_v1`.
+  The mistaken Vlorë-to-riviera job
+  `dra_YdpWKOLkobQkM_TiZgIxvLsvH3oj` was rolled back: Hotel Liro, one route and
+  four active stops now reference canonical Vlorë destination
+  `AL/dst_g99_bYzJWzH2iMhbwibL`; the stale provider claim was removed under
+  audits `location_repair_vlore_city_20260828_v1` and
+  `location_repair_vlore_claim_20260828_v1`. The unused materialized Albanian
+  Riviera catalog document was removed; its reviewed registry entry remains
+  available for legitimate future use.
+- Validation and observability: 36 focused registry/migration/repair tests,
+  direct recommendation and RoadTrip coverage, `npm run validate:changed`, the
+  review-agent pass and every required check on PRs #258 and #259 passed. The
+  final canonical audit found 252 trusted profiles, zero registry issues,
+  reassignment candidates or ambiguities. The live audit at
+  `2026-08-28T13:45:08.873Z` inspected 869 Firestore documents and all 124
+  Functions and found zero invalid location references, names, orphan sources,
+  counter mismatches or failures. Post-deploy Cloud Run logging returned zero
+  `ERROR` entries.
+- No EAS Update was published for iOS or Android by explicit release scope, so
+  the client-side search-bias and picker changes in PR #258 are merged but are
+  not yet delivered to installed beta apps. The compatible runtime remains
+  `1.1.0` and the latest production OTA group remains unchanged. No native EAS
+  build, TestFlight/App Store or Google Play submission, Hosting, Firestore
+  Rules/index, Storage, IAM or dependency change accompanied this release.
