@@ -34,6 +34,7 @@ const ENRICHMENT_OVERRIDES = Object.freeze({
   'jp-tokyo': { includedType: 'locality' },
   'vn-da-nang': { includedType: 'locality' },
   'vn-ho-chi-minh-city': { includedType: 'locality' },
+  'al-vlore': { includedType: 'locality', expectedPlaceId: 'ChIJlRjM6PEzRRMRhg4-8ZoJMQ0' },
   'es-ibiza': { expectedPlaceId: 'ChIJQzkJhWNHmRIR1iaEzSVHBgk' },
   'it-amalfi-coast': { expectedPlaceId: 'ChIJoXFMw62VOxMR3ExPyRTP6Ew', allowPoiIdentity: true },
   'no-norwegian-fjords': { allowPoiIdentity: true },

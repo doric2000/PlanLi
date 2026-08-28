@@ -14,9 +14,9 @@ const {
 } = require('./canonicalDestinationRegistry');
 
 test('researched catalog stays within the approved size and regional allocation', () => {
-  assert.equal(CANDIDATES.length, 251);
+  assert.equal(CANDIDATES.length, 252);
   assert.deepEqual(REGIONAL_COUNTS, {
-    europe: 101, asia: 80, central_america: 30, south_america: 40,
+    europe: 102, asia: 80, central_america: 30, south_america: 40,
   });
   assert.equal(new Set(CANDIDATES.map((entry) => entry.id)).size, CANDIDATES.length);
   CANDIDATES.forEach((entry) => {
@@ -58,6 +58,18 @@ test('Ojo de Agua resolves to Ometepe and not Rivas', () => {
   });
   assert.equal(match.entry.id, 'ni-ometepe');
   assert.equal(match.entry.names.he, 'אומטפה');
+});
+
+test('Vlore city wins inside its urban catchment while the Albanian Riviera remains separate', () => {
+  const city = matchCanonicalEntry(BUILTIN_POLICIES, {
+    countryCode: 'AL', providerPlaceId: 'ChIJlRjM6PEzRRMRhg4-8ZoJMQ0',
+    aliases: ['Vlorë'], coordinates: { lat: 40.4146218, lng: 19.4811959 },
+  });
+  assert.equal(city.entry.id, 'al-vlore');
+  assert.equal(city.entry.names.he, 'ולורה');
+  assert.equal(matchCanonicalEntry(BUILTIN_POLICIES, {
+    countryCode: 'AL', aliases: ['Vlore'], coordinates: { lat: 40.0724, lng: 19.7638 },
+  }), null);
 });
 
 test('approved child wins over island parent while Corfu groups Perama to the island', () => {

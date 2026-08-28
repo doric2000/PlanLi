@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const { isDeepStrictEqual } = require('node:util');
 
 const { initializeAdmin } = require('./localCredentials');
 const {
@@ -120,6 +121,13 @@ async function commitBatches(db, operations) {
   }
 }
 
+function registryPatchChanged(current = {}, patch = {}) {
+  return !isDeepStrictEqual(current.geometryPolicy || null, patch.geometryPolicy || null) ||
+    !isDeepStrictEqual(current.matchProfile || null, patch.matchProfile || null) ||
+    !isDeepStrictEqual(current.providerIdentity || null, patch.providerIdentity || null) ||
+    Number(current.registryVersion || 0) !== REGISTRY_VERSION;
+}
+
 async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = admin } = {}) {
   if (projectId !== DEFAULT_PROJECT_ID) throw new Error(`Expected project ${DEFAULT_PROJECT_ID}.`);
   initializeAdmin(adminImpl);
@@ -145,10 +153,7 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
       ...registryGeometryPatch(document.id, current),
       matchProfile: compiledProfiles.get(document.id),
     };
-    const changed = JSON.stringify(current.geometryPolicy || null) !== JSON.stringify(patch.geometryPolicy) ||
-      JSON.stringify(current.matchProfile || null) !== JSON.stringify(patch.matchProfile) ||
-      JSON.stringify(current.providerIdentity || null) !== JSON.stringify(patch.providerIdentity) ||
-      Number(current.registryVersion || 0) !== REGISTRY_VERSION;
+    const changed = registryPatchChanged(current, patch);
     if (changed) operations.push({ ref: document.ref, data: {
       ...patch,
       updatedAt: adminImpl.firestore.FieldValue.serverTimestamp(),
@@ -245,5 +250,6 @@ module.exports = {
   legacyRegistryId,
   parseArguments,
   registryGeometryPatch,
+  registryPatchChanged,
   run,
 };
