@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Dimensions } from 'react-native';
+import { Alert, Dimensions } from 'react-native';
 
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
@@ -12,6 +12,7 @@ jest.mock('../src/services/AdminService', () => ({
   deleteAdminSavedView: jest.fn(),
   deleteUserAsAdmin: jest.fn(),
   getAdminResource: jest.fn(),
+  getAdminUser: jest.fn(),
   getAirportCandidates: jest.fn(),
   getDestinationImageCandidates: jest.fn(),
   getDestinationRenameJob: jest.fn(),
@@ -170,6 +171,172 @@ describe('Admin console end-to-end surface', () => {
     })));
   });
 
+  it('shows success when a lost callable response reloads the same completed operation', async () => {
+    const item = queueCase('response-lost');
+    const initialDetails = detailsFor(item);
+    let completedOperationId = '';
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase
+      .mockResolvedValueOnce(initialDetails)
+      .mockImplementation(async () => ({
+        ...initialDetails,
+        revision: 4,
+        status: 'resolved_dismissed',
+        resolution: { operationId: completedOperationId, contentAction: 'dismiss', accountAction: 'none' },
+      }));
+    AdminService.resolveModerationCase.mockImplementationOnce(async (decision) => {
+      completedOperationId = decision.operationId;
+      throw Object.assign(new Error('response lost'), { code: 'functions/unavailable' });
+    });
+
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-response-lost'));
+    fireEvent.press(await screen.findByTestId('admin-decision-reason-no_violation'));
+    fireEvent.press(screen.getByTestId('admin-decision-submit'));
+
+    expect(await screen.findByText('ההחלטה נשמרה והאכיפה הושלמה.')).toBeTruthy();
+    expect(screen.queryByText(/ייתכן שהיא עדיין מתבצעת/u)).toBeNull();
+  });
+
+  it('restores held content when the admin closes it as no violation', async () => {
+    const item = queueCase('held', {
+      status: 'auto_held',
+      targetPreview: { available: true, title: 'פוסט מוחזק', status: 'moderation_hold', author: { displayName: 'מטיילת' } },
+    });
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue({
+      ...detailsFor(item),
+      decisionOptions: {
+        contentStatus: 'moderation_hold',
+        accountStatus: 'active',
+        contentActions: ['none', 'restore', 'delete'],
+        accountActions: ['none', 'warn', 'suspend'],
+        defaultContentAction: 'restore',
+        defaultAccountAction: 'none',
+      },
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-held'));
+    expect((await screen.findByTestId('admin-decision-content-restore')).props.accessibilityState.selected).toBe(true);
+    fireEvent.press(screen.getByTestId('admin-decision-reason-no_violation'));
+    fireEvent.press(screen.getByTestId('admin-decision-submit'));
+    await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+      caseId: 'held',
+      expectedRevision: 2,
+      contentAction: 'restore',
+      accountAction: { type: 'none' },
+      reasonCode: 'no_violation',
+      operationId: expect.any(String),
+    })));
+  });
+
+  it('reuses the recorded operation when retrying a failed decision', async () => {
+    const item = queueCase('retry', { revision: 4 });
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue({
+      ...detailsFor(item),
+      decisionRetry: {
+        operationId: 'retry-operation-123',
+        requestedContentAction: 'dismiss',
+        contentAction: 'dismiss',
+        accountAction: 'none',
+        durationHours: null,
+        reasonCode: 'no_violation',
+        userDetail: '',
+        internalNote: '',
+      },
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-retry'));
+    fireEvent.press(await screen.findByTestId('admin-decision-reason-no_violation'));
+    fireEvent.press(await screen.findByTestId('admin-decision-submit'));
+    await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+      caseId: 'retry',
+      expectedRevision: 4,
+      contentAction: 'dismiss',
+      reasonCode: 'no_violation',
+      operationId: 'retry-operation-123',
+    })));
+  });
+
+  it('requires explicit account reinstatement before restoring suspended content', async () => {
+    const item = queueCase('suspended', {
+      targetPreview: { available: true, title: 'מסלול מושעה', status: 'suspended', author: { displayName: 'מטיילת' } },
+    });
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue({
+      ...detailsFor(item),
+      subjectUser: { uid: 'owner-1', displayName: 'מטיילת', status: 'suspended' },
+      decisionOptions: {
+        contentStatus: 'suspended',
+        accountStatus: 'suspended',
+        contentActions: ['none', 'restore', 'delete'],
+        accountActions: ['none', 'reinstate'],
+        defaultContentAction: 'restore',
+        defaultAccountAction: 'none',
+      },
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-suspended'));
+    expect((await screen.findByTestId('admin-decision-content-restore')).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByTestId('admin-decision-account-none').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText('שחזור תוכן של משתמש מושעה דורש בחירה מפורשת ב״החזרה לפעילות״.')).toBeTruthy();
+    expect(screen.getByTestId('admin-decision-submit').props.accessibilityState.disabled).toBe(true);
+
+    fireEvent.press(screen.getByTestId('admin-decision-reason-no_violation'));
+    expect(screen.getByTestId('admin-decision-account-reinstate').props.accessibilityState.selected).toBe(true);
+    fireEvent.press(screen.getByTestId('admin-decision-submit'));
+    await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+      caseId: 'suspended',
+      contentAction: 'restore',
+      accountAction: { type: 'reinstate' },
+      reasonCode: 'no_violation',
+    })));
+  });
+
+  it('clears a guided reinstatement when delete is selected and confirms both actions', async () => {
+    const item = queueCase('suspended-delete', {
+      targetPreview: { available: true, title: 'מסלול מושעה', status: 'suspended', author: { displayName: 'מטיילת' } },
+    });
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue({
+      ...detailsFor(item),
+      subjectUser: { uid: 'owner-1', displayName: 'מטיילת', status: 'suspended' },
+      decisionOptions: {
+        contentStatus: 'suspended',
+        accountStatus: 'suspended',
+        contentActions: ['none', 'restore', 'delete'],
+        accountActions: ['none', 'reinstate'],
+        defaultContentAction: 'restore',
+        defaultAccountAction: 'none',
+      },
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => buttons[1].onPress());
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    try {
+      fireEvent.press(await screen.findByTestId('admin-case-suspended-delete'));
+      fireEvent.press(await screen.findByTestId('admin-decision-reason-no_violation'));
+      expect(screen.getByTestId('admin-decision-account-reinstate').props.accessibilityState.selected).toBe(true);
+      fireEvent.press(screen.getByTestId('admin-decision-content-delete'));
+      expect(screen.getByTestId('admin-decision-account-none').props.accessibilityState.selected).toBe(true);
+      fireEvent.press(screen.getByTestId('admin-decision-reason-spam_scam_commercial'));
+      fireEvent.press(screen.getByTestId('admin-decision-submit'));
+      expect(alert).toHaveBeenCalledWith(
+        'אישור פעולה רגישה',
+        expect.stringContaining('פעולת תוכן: מחיקה\nפעולת חשבון: ללא פעולה'),
+        expect.any(Array)
+      );
+      await waitFor(() => expect(AdminService.resolveModerationCase).toHaveBeenCalledWith(expect.objectContaining({
+        caseId: 'suspended-delete',
+        contentAction: 'delete',
+        accountAction: { type: 'none' },
+        reasonCode: 'spam_scam_commercial',
+      })));
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
   it('can close a destination case as no violation without inventing a content action', async () => {
     const item = queueCase('destination', {
       target: { type: 'destination', id: 'haifa', countryId: 'il', path: 'countries/il/destinations/haifa' },
@@ -228,6 +395,71 @@ describe('Admin console end-to-end surface', () => {
     fireEvent.press(screen.getByTestId('admin-users-advanced-toggle'));
     expect(screen.getByTestId('admin-user-admin-user-1')).toBeTruthy();
     expect(screen.getByTestId('admin-user-delete-user-1')).toBeTruthy();
+  });
+
+  it('opens user and destination tabs through full press targets', async () => {
+    AdminService.listAdminUsers.mockResolvedValue({ items: [], nextCursor: null });
+    AdminService.listDestinationReviews.mockResolvedValue({
+      items: [{ id: 'destination-il-haifa', countryId: 'IL', cityId: 'haifa', names: { he: 'חיפה' }, countryNames: { he: 'ישראל' }, status: 'open' }],
+      nextCursor: null,
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content');
+    fireEvent.press(screen.getByTestId('admin-tab-users'));
+    expect(await screen.findByTestId('admin-users-content')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('admin-tab-destinations'));
+    fireEvent.press(await screen.findByTestId('admin-destination-destination-il-haifa'));
+    expect(screen.getByText('IL/haifa')).toBeTruthy();
+  });
+
+  it('opens the exact case user even when the user is outside the current page', async () => {
+    const item = queueCase('linked-user');
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
+    AdminService.getAdminUser.mockResolvedValue({ uid: 'owner-1', displayName: 'מטיילת', email: 'owner@example.com', disabled: false, emailVerified: true, admin: false });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-linked-user'));
+    fireEvent.press(await screen.findByTestId('admin-case-open-user'));
+    await waitFor(() => expect(AdminService.getAdminUser).toHaveBeenCalledWith('owner-1'));
+    expect(await screen.findByTestId('admin-user-detail-owner-1')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('admin-user-back-to-case'));
+    expect(await screen.findByTestId('admin-case-decision-linked-user')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('admin-tab-users'));
+    expect(await screen.findByTestId('admin-users-content')).toBeTruthy();
+    screen.rerender(<AdminPanelScreen navigation={navigation} route={{ params: {} }} />);
+    expect(await screen.findByTestId('admin-users-content')).toBeTruthy();
+    expect(screen.queryByTestId('admin-user-back-to-case')).toBeNull();
+    expect(AdminService.getAdminUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the exact destination from case context and returns to the case', async () => {
+    const item = queueCase('linked-destination', {
+      targetPreview: {
+        available: true,
+        title: 'פוסט בחיפה',
+        status: 'active',
+        author: { displayName: 'מטיילת' },
+        destination: { countryId: 'IL', cityId: 'haifa', cityName: 'חיפה', countryName: 'ישראל' },
+      },
+    });
+    AdminService.listModerationCases.mockResolvedValue({ items: [item], nextCursor: null });
+    AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
+    AdminService.listDestinationReviews.mockResolvedValue({ items: [], nextCursor: null });
+    AdminService.getDestinationReview.mockResolvedValue({
+      countryId: 'IL',
+      cityId: 'haifa',
+      country: { names: { he: 'ישראל' } },
+      city: { status: 'active', identity: { names: { he: 'חיפה' } }, stats: { recommendationCount: 4 } },
+      review: { status: 'open' },
+      issues: [],
+    });
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-linked-destination'));
+    fireEvent.press(await screen.findByTestId('admin-case-open-destination'));
+    await waitFor(() => expect(AdminService.getDestinationReview).toHaveBeenCalledWith('IL', 'haifa'));
+    expect(await screen.findByText('IL/haifa')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('admin-destination-back-to-case'));
+    expect(await screen.findByTestId('admin-case-decision-linked-destination')).toBeTruthy();
   });
 
   it('searches private admin projections and opens an existing case without exposing raw status codes', async () => {

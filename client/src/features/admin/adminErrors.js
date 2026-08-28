@@ -15,6 +15,12 @@ export function safeAdminError(error, { operationMayContinue = false } = {}) {
   if (reason === 'content_not_held') return 'התוכן כבר מפורסם ולכן אין צורך להחזיר אותו לפרסום.';
   if (reason === 'content_not_active') return 'מצב התוכן השתנה והוא כבר אינו מפורסם. יש לרענן ולבחור פעולה מתאימה.';
   if (reason === 'content_missing') return 'התוכן כבר אינו זמין. יש לרענן את רשימת הדיווחים.';
+  if (reason === 'owner_suspended') return 'אי אפשר לפרסם מחדש תוכן של חשבון מושעה. יש לבחור גם החזרה לפעילות ולבדוק שוב את ההחלטה.';
+  if (reason === 'thread_not_active') return 'אי אפשר לשחזר תגובה כל עוד השרשור הראשי אינו פעיל.';
+  if (reason === 'account_enforcement_conflict' || reason === 'operation_in_progress') return 'מצב האכיפה של החשבון השתנה או שפעולה אחרת עדיין מתבצעת. המצב העדכני נטען ויש לבדוק אותו מחדש.';
+  if (reason === 'decision_retry_conflict') return 'פרטי הניסיון החוזר השתנו. המצב העדכני נטען ויש לבחור את ההחלטה מחדש.';
+  if (reason === 'not_suspended' || reason === 'invalid_account_state') return 'החשבון כבר אינו מושעה. המצב העדכני נטען ואין צורך להחזיר אותו שוב לפעילות.';
+  if (reason === 'already_suspended') return 'החשבון כבר מושעה. יש לרענן את המשתמש לפני ביצוע פעולה נוספת.';
   if (reason === 'case_revision_conflict') return 'מנהל אחר עדכן את התיק. המצב העדכני נטען ויש לבדוק אותו מחדש לפני החלטה.';
   if (reason === 'admin_account_protected') return 'אי אפשר להפעיל אכיפה על מנהל פעיל. יש להסיר קודם את הרשאת המנהל באזור המתקדם.';
   if (reason === 'target_owner_missing') return 'לתיק הזה אין חשבון משתמש שאפשר להפעיל עליו אכיפה.';

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { randomUUID } from 'expo-crypto';
 
 import AppText from '../../../components/AppText';
 import AppTextInput from '../../../components/AppTextInput';
@@ -18,6 +19,7 @@ import { adminStyles as styles } from '../../../styles';
 import { safeAdminError } from '../adminErrors';
 import {
   CATEGORY_LABELS,
+  CASE_EVENT_LABELS,
   formatRelativeAge,
   formatSla,
   QUEUE_VIEWS,
@@ -31,6 +33,7 @@ import ModerationTargetPreview from './ModerationTargetPreview';
 
 const TARGET_FILTERS = Object.freeze(['recommendation', 'route', 'trip', 'comment', 'profile', 'destination']);
 const CONTENT_ACTIONS = Object.freeze([
+  { id: 'none', label: 'ללא שינוי בתוכן' },
   { id: 'dismiss', label: 'אין הפרה' },
   { id: 'hold', label: 'הסתרה זמנית' },
   { id: 'restore', label: 'שחזור' },
@@ -48,6 +51,10 @@ const ACCOUNT_ACTIONS = Object.freeze([
 
 function reasonOf(error) {
   return error?.details?.reason || error?.customData?.details?.reason || '';
+}
+
+function newDecisionOperationId() {
+  return randomUUID?.() || `decision-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function ToggleChip({ label, active, onPress, testID, danger = false }) {
@@ -108,19 +115,36 @@ function CaseRow({ item, active, selected, onOpen, onToggleSelected }) {
 export function DecisionPanel({ details, policy, busy, error, success, onResolve }) {
   const targetType = details?.target?.type;
   const targetSupportsContent = ['recommendation', 'route', 'trip', 'comment'].includes(targetType);
-  const [contentAction, setContentAction] = useState('dismiss');
-  const [accountChoice, setAccountChoice] = useState('none');
+  const defaultContentAction = details?.decisionOptions?.defaultContentAction
+    || (['moderation_hold', 'suspended'].includes(details?.targetPreview?.status) ? 'restore' : 'dismiss');
+  const defaultAccountChoice = details?.decisionOptions?.defaultAccountAction || 'none';
+  const [contentAction, setContentAction] = useState(defaultContentAction);
+  const [accountChoice, setAccountChoice] = useState(defaultAccountChoice);
+  const [accountChoiceAutomatic, setAccountChoiceAutomatic] = useState(false);
   const [reasonCode, setReasonCode] = useState('');
   const [userDetail, setUserDetail] = useState('');
   const [internalNote, setInternalNote] = useState('');
+  const [operationId, setOperationId] = useState(newDecisionOperationId);
 
   useEffect(() => {
-    setContentAction('dismiss');
-    setAccountChoice('none');
-    setReasonCode('');
-    setUserDetail('');
-    setInternalNote('');
-  }, [details?.id, targetSupportsContent]);
+    const retry = details?.decisionRetry;
+    const retryAccountChoice = retry?.accountAction === 'suspend'
+      ? `suspend:${retry.durationHours == null ? 'permanent' : retry.durationHours}`
+      : retry?.accountAction || defaultAccountChoice;
+    setContentAction(retry?.requestedContentAction || defaultContentAction);
+    setAccountChoice(retryAccountChoice);
+    setAccountChoiceAutomatic(retry?.reasonCode === 'no_violation' && retryAccountChoice === 'reinstate');
+    setReasonCode(retry?.reasonCode || '');
+    setUserDetail(retry?.userDetail || '');
+    setInternalNote(retry?.internalNote || '');
+    setOperationId(retry?.operationId || newDecisionOperationId());
+  }, [defaultAccountChoice, defaultContentAction, details?.id, details?.revision, targetSupportsContent]);
+
+  const beginEditedDecision = (changed) => {
+    if (changed && operationId === details?.decisionRetry?.operationId) {
+      setOperationId(newDecisionOperationId());
+    }
+  };
 
   const submit = () => {
     const [accountType, durationValue] = accountChoice.split(':');
@@ -137,57 +161,107 @@ export function DecisionPanel({ details, policy, busy, error, success, onResolve
       reasonCode,
       userDetail,
       internalNote,
+      operationId,
     };
     const destructive = contentAction === 'delete' || ['suspend'].includes(accountType);
     const targetName = details.targetPreview?.title || details.subjectUser?.displayName || 'היעד';
+    const contentLabel = CONTENT_ACTIONS.find((item) => item.id === contentAction)?.label || contentAction;
+    const accountLabel = ACCOUNT_ACTIONS.find((item) => item.id === accountChoice)?.label || accountChoice;
+    const confirmationText = `היעד: ״${targetName}״\nפעולת תוכן: ${contentLabel}\nפעולת חשבון: ${accountLabel}\nהפעולה לא תופעל שוב אוטומטית.`;
     if (!destructive) return onResolve(payload);
     const confirm = () => onResolve(payload);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (window.confirm(`אישור פעולה רגישה על ״${targetName}״\nהפעולה לא תופעל שוב אוטומטית.`)) confirm();
+      if (window.confirm(confirmationText)) confirm();
       return;
     }
-    Alert.alert('אישור פעולה רגישה', `היעד: ${targetName}\nיש לבדוק את ההחלטה לפני האישור.`, [
+    Alert.alert('אישור פעולה רגישה', confirmationText, [
       { text: 'ביטול', style: 'cancel' },
       { text: 'אישור פרטני', style: 'destructive', onPress: confirm },
     ]);
   };
 
   const reasons = policy?.reasons || [];
-  const invalid = !reasonCode || (contentAction === 'none' && accountChoice === 'none');
+  const allowedContentActions = details?.decisionOptions?.contentActions
+    || (targetSupportsContent ? CONTENT_ACTIONS.map((action) => action.id) : ['dismiss']);
+  const allowedAccountActions = details?.decisionOptions?.accountActions || ['none', 'warn', 'suspend', 'reinstate'];
+  const visibleContentActions = CONTENT_ACTIONS.filter((action) => allowedContentActions.includes(action.id));
+  const visibleAccountActions = ACCOUNT_ACTIONS.filter((action) => allowedAccountActions.includes(action.id.split(':')[0]));
+  const suspendedRestoreNeedsAccount = details?.decisionOptions?.contentStatus === 'suspended'
+    && contentAction === 'restore'
+    && accountChoice !== 'reinstate';
+  const invalid = !reasonCode
+    || (contentAction === 'none' && accountChoice === 'none')
+    || suspendedRestoreNeedsAccount;
   return (
     <View style={styles.decisionPanel} testID={`admin-case-decision-${details.id || 'new'}`}>
       <AppText style={styles.subsectionTitle}>החלטה מתועדת</AppText>
       {targetSupportsContent ? <>
         <AppText style={styles.fieldLabel}>פעולת תוכן</AppText>
-        <View style={styles.chipRow}>{CONTENT_ACTIONS.map((action) => <ToggleChip key={action.id} label={action.label} danger={action.danger} active={contentAction === action.id} onPress={() => setContentAction(action.id)} testID={`admin-decision-content-${action.id}`} />)}</View>
+        <View style={styles.chipRow}>{visibleContentActions.map((action) => <ToggleChip key={action.id} label={action.label} danger={action.danger} active={contentAction === action.id} onPress={() => {
+          beginEditedDecision(action.id !== contentAction);
+          setContentAction(action.id);
+          if (reasonCode === 'no_violation' && !['dismiss', 'restore'].includes(action.id)) {
+            setReasonCode('');
+          }
+          if (action.id !== 'restore' && accountChoiceAutomatic) {
+            setAccountChoice('none');
+            setAccountChoiceAutomatic(false);
+          }
+        }} testID={`admin-decision-content-${action.id}`} />)}</View>
       </> : <AppText style={styles.helpText}>לתיק הזה אין פעולת תוכן. אפשר לסגור ללא הפרה או לבחור פעולת חשבון.</AppText>}
       {details.subjectUser ? <>
         <AppText style={styles.fieldLabel}>פעולת חשבון</AppText>
-        <View style={styles.chipRow}>{ACCOUNT_ACTIONS.map((action) => <ToggleChip key={action.id} label={action.label} danger={action.danger} active={accountChoice === action.id} onPress={() => setAccountChoice(action.id)} testID={`admin-decision-account-${action.id.replace(':', '-')}`} />)}</View>
+        <View style={styles.chipRow}>{visibleAccountActions.map((action) => <ToggleChip key={action.id} label={action.label} danger={action.danger} active={accountChoice === action.id} onPress={() => {
+          beginEditedDecision(action.id !== accountChoice);
+          setAccountChoice(action.id);
+          setAccountChoiceAutomatic(false);
+        }} testID={`admin-decision-account-${action.id.replace(':', '-')}`} />)}</View>
       </> : null}
       <AppText style={styles.fieldLabel}>סיבת מדיניות — חובה</AppText>
       <View style={styles.chipRow}>{reasons.map((reason) => <ToggleChip key={reason.id} label={reason.label} active={reasonCode === reason.id} onPress={() => {
+        const noViolationContent = defaultContentAction === 'restore' ? 'restore' : 'dismiss';
+        const noViolationAccount = details?.subjectUser?.status === 'suspended'
+          && allowedAccountActions.includes('reinstate') ? 'reinstate' : 'none';
+        beginEditedDecision(reason.id !== reasonCode || (reason.id === 'no_violation'
+          && (contentAction !== noViolationContent || accountChoice !== noViolationAccount)));
         setReasonCode(reason.id);
         if (reason.id === 'no_violation') {
-          setContentAction('dismiss');
+          setContentAction(noViolationContent);
+          setAccountChoice(noViolationAccount);
+          setAccountChoiceAutomatic(noViolationAccount === 'reinstate');
+        } else if (accountChoiceAutomatic) {
           setAccountChoice('none');
+          setAccountChoiceAutomatic(false);
         }
       }} testID={`admin-decision-reason-${reason.id}`} />)}</View>
-      <AppTextInput style={styles.textArea} value={userDetail} onChangeText={setUserDetail} placeholder="פירוט אופציונלי שיוצג למשתמש" multiline maxLength={240} accessibilityLabel="פירוט למשתמש" />
-      <AppTextInput style={styles.textArea} value={internalNote} onChangeText={setInternalNote} placeholder="הערה פנימית לצוות בלבד" multiline maxLength={1000} accessibilityLabel="הערה פנימית" />
+      <AppTextInput style={styles.textArea} value={userDetail} onChangeText={(value) => {
+        beginEditedDecision(value !== userDetail);
+        setUserDetail(value);
+      }} placeholder="פירוט אופציונלי שיוצג למשתמש" multiline maxLength={240} accessibilityLabel="פירוט למשתמש" />
+      <AppTextInput style={styles.textArea} value={internalNote} onChangeText={(value) => {
+        beginEditedDecision(value !== internalNote);
+        setInternalNote(value);
+      }} placeholder="הערה פנימית לצוות בלבד" multiline maxLength={1000} accessibilityLabel="הערה פנימית" />
       {error ? <AppText style={styles.inlineError}>{error}</AppText> : null}
       {success ? <AppText style={styles.inlineSuccess}>{success}</AppText> : null}
+      {suspendedRestoreNeedsAccount ? <AppText style={styles.inlineError}>שחזור תוכן של משתמש מושעה דורש בחירה מפורשת ב״החזרה לפעילות״.</AppText> : null}
       {(contentAction === 'delete' || accountChoice.startsWith('suspend')) ? <View style={styles.dangerZone}><Ionicons name="warning-outline" size={20} color="#B42318" /><AppText style={styles.dangerZoneText}>פעולה רגישה. היעד יוצג שוב באישור פרטני לפני הביצוע.</AppText></View> : null}
       <AdminAction label="שמירת ההחלטה" primary danger={contentAction === 'delete' || accountChoice === 'suspend:permanent'} busy={busy} disabled={invalid} onPress={submit} testID="admin-decision-submit" />
     </View>
   );
 }
 
-function CaseDetails({ details, loading, error, policy, supportState, actionState, onBack, onUpdate, onResolve, onReload, onReloadSupport }) {
+function CaseDetails({ details, loading, error, policy, supportState, actionState, onBack, onUpdate, onResolve, onReload, onReloadSupport, onOpenUser, onOpenDestination }) {
   if (loading || error || !details) {
     return <View style={styles.caseDetailPane}><AdminAsyncState loading={loading} error={error} empty={!loading && !error && !details} onRetry={onReload} testID="admin-case-details" emptyText="בחרו תיק כדי לראות את ההקשר ולקבל החלטה." /></View>;
   }
   const target = details.targetPreview || {};
+  const subjectUid = details.subjectUser?.uid;
+  const destination = target.destination || (details.target?.type === 'destination' ? {
+    countryId: details.target.countryId,
+    cityId: details.target.cityId || details.target.id,
+    cityName: target.title,
+  } : null);
   return (
     <ScrollView style={styles.caseDetailPane} contentContainerStyle={styles.caseDetailContent} keyboardShouldPersistTaps="handled">
       {onBack ? <AdminAction compact label="חזרה לתור" onPress={onBack} testID="admin-case-back" /> : null}
@@ -212,17 +286,19 @@ function CaseDetails({ details, loading, error, policy, supportState, actionStat
           {(details.reports || []).map((report, index) => <View key={report.id || index} style={styles.timelineItem}><AppText style={styles.contextStrong}>{CATEGORY_LABELS[report.category] || 'אחר'}</AppText>{report.details ? <AppText style={styles.body}>{report.details}</AppText> : null}</View>)}
           {!details.reports?.length ? <AppText style={styles.helpText}>התיק נפתח אוטומטית או מתוכן מוחזק, ללא זהות מדווחים.</AppText> : null}
         </View>
-        {details.subjectUser ? <View style={styles.contextCard}>
+        {details.subjectUser ? <Pressable accessibilityRole={subjectUid ? 'button' : undefined} accessibilityLabel={subjectUid ? `פתיחת המשתמש ${details.subjectUser.displayName || ''}` : undefined} disabled={!subjectUid} style={({ pressed }) => [styles.contextCard, subjectUid && styles.contextLinkCard, pressed && styles.cardPressed]} onPress={() => subjectUid && onOpenUser?.(subjectUid, details.id)} testID="admin-case-open-user">
           <AppText style={styles.subsectionTitle}>המשתמש</AppText>
           <AppText style={styles.contextStrong}>{details.subjectUser.displayName || 'ללא שם'}</AppText>
           <AppText style={styles.body}>{STATUS_LABELS[details.subjectUser.status] || 'פעיל'}</AppText>
           <AppText style={styles.body}>תוכן אחר: {details.recentContent?.length || 0} · אכיפות קודמות: {details.enforcements?.length || 0}</AppText>
-        </View> : null}
-        {target.place || target.destination ? <View style={styles.contextCard}>
+          <AppText style={styles.contextLinkText}>{subjectUid ? 'פתיחת המשתמש ←' : 'אין לתיק מזהה משתמש יציב'}</AppText>
+        </Pressable> : null}
+        {target.place || destination ? <Pressable accessibilityRole={destination?.countryId && destination?.cityId ? 'button' : undefined} accessibilityLabel={destination?.countryId && destination?.cityId ? `פתיחת המקום ${destination.cityName || ''}` : undefined} disabled={!destination?.countryId || !destination?.cityId} style={({ pressed }) => [styles.contextCard, destination?.countryId && destination?.cityId && styles.contextLinkCard, pressed && styles.cardPressed]} onPress={() => onOpenDestination?.(destination, details.id)} testID="admin-case-open-destination">
           <AppText style={styles.subsectionTitle}>פרטי מקום</AppText>
-          <AppText style={styles.contextStrong}>{target.place?.name || target.destination?.cityName || 'מקום מחובר'}</AppText>
-          <AppText style={styles.body}>{target.place?.address || target.destination?.countryName || 'ללא כתובת מלאה'}</AppText>
-        </View> : null}
+          <AppText style={styles.contextStrong}>{target.place?.name || destination?.cityName || 'מקום מחובר'}</AppText>
+          <AppText style={styles.body}>{target.place?.address || destination?.countryName || 'ללא כתובת מלאה'}</AppText>
+          <AppText style={styles.contextLinkText}>{destination?.countryId && destination?.cityId ? 'פתיחת המקום ←' : 'אין לתוכן מצביע יעד יציב'}</AppText>
+        </Pressable> : null}
       </View>
       {details.target?.subject?.kind === 'attached_place' ? <AdminAttachedPlaceReview details={details} onUpdated={onReload} /> : null}
 
@@ -234,7 +310,7 @@ function CaseDetails({ details, loading, error, policy, supportState, actionStat
 
       <View style={styles.contextCard}>
         <AppText style={styles.subsectionTitle}>ציר זמן</AppText>
-        {(details.events || []).map((event) => <View key={event.id} style={styles.timelineItem}><AppText style={styles.contextStrong}>{event.actor?.displayName || 'מערכת'}</AppText><AppText style={styles.body}>{event.type === 'add_note' ? event.note : event.type}</AppText></View>)}
+        {(details.events || []).map((event) => <View key={event.id} style={styles.timelineItem}><AppText style={styles.contextStrong}>{event.actor?.displayName || 'מערכת'}</AppText><AppText style={styles.body}>{event.type === 'add_note' ? event.note : CASE_EVENT_LABELS[event.type] || 'פעולת מערכת תועדה'}</AppText></View>)}
         {!details.events?.length ? <AppText style={styles.helpText}>אין עדיין אירועים מתועדים.</AppText> : null}
       </View>
       {supportState?.loading && !policy
@@ -246,7 +322,7 @@ function CaseDetails({ details, loading, error, policy, supportState, actionStat
   );
 }
 
-export default function ModerationQueueSection({ policy, initialView = 'needs_action', focusCaseId = '', onFocusHandled }) {
+export default function ModerationQueueSection({ policy, initialView = 'needs_action', focusCaseId = '', onFocusHandled, onOpenUser, onOpenDestination }) {
   const { width } = useWindowDimensions();
   const split = width >= 900;
   const [view, setView] = useState(initialView);
@@ -300,9 +376,11 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
       const value = await getModerationCase(caseId);
       setDetails(value);
       setDetailState({ loading: false, error: '' });
+      return value;
     } catch (error) {
       setDetails(null);
       setDetailState({ loading: false, error: safeAdminError(error) });
+      return null;
     }
   }, []);
 
@@ -354,7 +432,24 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
       await openCase(details.id);
       setActionState((current) => ({ ...current, busy: '', success: 'ההחלטה נשמרה והאכיפה הושלמה.' }));
     } catch (error) {
-      if (reasonOf(error) === 'case_revision_conflict') await openCase(details.id);
+      const refreshed = await openCase(details.id);
+      const completedAfterResponseLoss = refreshed?.resolution?.operationId === decision.operationId
+        && String(refreshed.status || '').startsWith('resolved_');
+      if (completedAfterResponseLoss) {
+        setList((current) => ({
+          ...current,
+          items: view === 'history'
+            ? current.items
+            : current.items.filter((item) => item.id !== details.id),
+        }));
+        setActionState((current) => ({
+          ...current,
+          busy: '',
+          decisionError: '',
+          success: 'ההחלטה נשמרה והאכיפה הושלמה.',
+        }));
+        return;
+      }
       setActionState((current) => ({ ...current, busy: '', decisionError: safeAdminError(error, { operationMayContinue: true }) }));
     }
   };
@@ -444,7 +539,7 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
         <AdminAsyncState loading={list.loading} error={list.error} empty={!list.loading && !list.error && !list.items.length} onRetry={() => load()} testID="admin-queue" emptyText="התור הזה נקי כרגע." />
         {!list.loading && !list.error ? <ScrollView style={styles.queueRows} contentContainerStyle={styles.queueRowsContent}>{list.items.map((item) => <CaseRow key={item.id} item={item} active={details?.id === item.id} selected={selectedIds.includes(item.id)} onOpen={() => openCase(item.id)} onToggleSelected={() => toggleSelected(item.id)} />)}{list.nextCursor ? <AdminAction label="טעינת תיקים נוספים" busy={list.loadingMore} onPress={() => load({ append: true })} testID="admin-queue-load-more" /> : null}</ScrollView> : null}
       </View> : null}
-      {(split || showingMobileDetail) ? <CaseDetails details={details} loading={detailState.loading} error={detailState.error} policy={policy} supportState={supportState} actionState={{ ...actionState, setNote: (note) => setActionState((current) => ({ ...current, note })) }} onBack={!split ? () => { setDetails(null); setDetailState({ loading: false, error: '' }); } : null} onUpdate={updateCase} onResolve={resolveCase} onReload={() => details?.id && openCase(details.id)} onReloadSupport={loadSupportData} /> : null}
+      {(split || showingMobileDetail) ? <CaseDetails details={details} loading={detailState.loading} error={detailState.error} policy={policy} supportState={supportState} actionState={{ ...actionState, setNote: (note) => setActionState((current) => ({ ...current, note })) }} onBack={!split ? () => { setDetails(null); setDetailState({ loading: false, error: '' }); } : null} onUpdate={updateCase} onResolve={resolveCase} onReload={() => details?.id && openCase(details.id)} onReloadSupport={loadSupportData} onOpenUser={onOpenUser} onOpenDestination={onOpenDestination} /> : null}
     </View>
   );
 }

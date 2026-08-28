@@ -47,6 +47,8 @@ export default function AdminConsoleScreen({ navigation, route }) {
     countryId: typeof routeParams.countryId === 'string' ? routeParams.countryId : '',
     cityId: typeof routeParams.cityId === 'string' ? routeParams.cityId : '',
   });
+  const [focusUserUid, setFocusUserUid] = useState('');
+  const [returnCaseId, setReturnCaseId] = useState('');
   const [compatibility, setCompatibility] = useState({ loading: true, error: '', policy: null });
 
   const loadCompatibility = useCallback(async () => {
@@ -74,6 +76,7 @@ export default function AdminConsoleScreen({ navigation, route }) {
     loadCompatibility();
   }, [adminLoading, isAdmin, loadCompatibility]);
   useEffect(() => {
+    if (!routeParams.tab && !routeParams.caseId && !(routeParams.countryId && routeParams.cityId)) return;
     const nextSection = requestedSection(routeParams);
     setSection(nextSection);
     if (routeParams.tab === 'content') setQueueView('held');
@@ -92,11 +95,26 @@ export default function AdminConsoleScreen({ navigation, route }) {
     };
   }, [isAdmin]);
 
+  const clearLinkedContext = () => {
+    setFocusUserUid('');
+    setFocusDestination({ countryId: '', cityId: '' });
+    setReturnCaseId('');
+    navigation.setParams?.({ tab: undefined, caseId: undefined, countryId: undefined, cityId: undefined });
+  };
   const navigate = (nextSection, params = {}) => {
+    clearLinkedContext();
     setSection(nextSection);
     if (nextSection === 'queue' && params.view) setQueueView(params.view);
   };
   const active = useMemo(() => ADMIN_SECTIONS.find((item) => item.id === section) || ADMIN_SECTIONS[0], [section]);
+  const returnToCase = () => {
+    const caseId = returnCaseId;
+    setReturnCaseId('');
+    setFocusUserUid('');
+    setFocusDestination({ countryId: '', cityId: '' });
+    setFocusCaseId(caseId);
+    setSection('queue');
+  };
 
   if (adminLoading) return <SafeAreaView style={styles.screen}><ActivityIndicator style={styles.loading} color={colors.primary} /></SafeAreaView>;
   if (!isAdmin) return <SafeAreaView style={styles.screen}><View style={styles.empty}><Ionicons name="lock-closed" size={42} color={colors.textSecondary} /><AppText style={styles.emptyText}>אין הרשאת מנהל פעילה לחשבון זה.</AppText></View></SafeAreaView>;
@@ -122,13 +140,13 @@ export default function AdminConsoleScreen({ navigation, route }) {
   const body = section === 'overview'
     ? <AdminOverviewSection onNavigate={navigate} />
     : section === 'queue'
-      ? <ModerationQueueSection policy={compatibility.policy} initialView={queueView} focusCaseId={focusCaseId} onFocusHandled={() => { setFocusCaseId(''); navigation.setParams?.({ caseId: undefined }); }} />
+      ? <ModerationQueueSection policy={compatibility.policy} initialView={queueView} focusCaseId={focusCaseId} onFocusHandled={() => { setFocusCaseId(''); navigation.setParams?.({ caseId: undefined }); }} onOpenUser={(uid, caseId) => { setFocusDestination({ countryId: '', cityId: '' }); setFocusUserUid(uid); setReturnCaseId(caseId || ''); setSection('users'); }} onOpenDestination={(destination, caseId) => { setFocusUserUid(''); setFocusDestination({ countryId: destination.countryId, cityId: destination.cityId }); setReturnCaseId(caseId || ''); setSection('destinations'); }} />
       : section === 'search'
-        ? <AdminSearchSection policy={compatibility.policy} onOpenCase={(caseId) => { setFocusCaseId(caseId); setSection('queue'); }} />
+        ? <AdminSearchSection policy={compatibility.policy} onOpenCase={(caseId) => { clearLinkedContext(); setFocusCaseId(caseId); setSection('queue'); }} />
         : section === 'destinations'
-          ? <AdminDestinationsSection focusCountryId={focusDestination.countryId} focusCityId={focusDestination.cityId} onFocusHandled={() => { setFocusDestination({ countryId: '', cityId: '' }); navigation.setParams?.({ countryId: undefined, cityId: undefined }); }} />
+          ? <AdminDestinationsSection focusCountryId={focusDestination.countryId} focusCityId={focusDestination.cityId} onFocusHandled={() => { setFocusDestination({ countryId: '', cityId: '' }); navigation.setParams?.({ countryId: undefined, cityId: undefined }); }} onBackToCase={returnCaseId ? returnToCase : null} />
           : section === 'users'
-            ? <AdminUsersSection />
+            ? <AdminUsersSection focusUid={focusUserUid} onBackToCase={returnCaseId ? returnToCase : null} />
             : <AdminAuditSection />;
 
   return (
@@ -136,12 +154,12 @@ export default function AdminConsoleScreen({ navigation, route }) {
       <View style={[styles.console, !wide && styles.consoleMobile]}>
         {wide ? <View style={styles.sidebar}>
           <View style={styles.brandBlock}><View style={styles.brandMark}><Ionicons name="shield-checkmark" size={22} color="#FFFFFF" /></View><View><AppText style={styles.brandTitle}>PlanLi Admin</AppText><AppText style={styles.brandSubtitle}>קונסולת תפעול</AppText></View></View>
-          <View style={styles.sidebarNav} accessibilityRole="tablist">{ADMIN_SECTIONS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: section === item.id }} testID={`admin-tab-${item.id}`} style={[styles.sidebarItem, section === item.id && styles.sidebarItemActive]} onPress={() => setSection(item.id)}><Ionicons name={item.icon} size={20} color={section === item.id ? '#3448C5' : '#667085'} /><AppText style={[styles.sidebarItemText, section === item.id && styles.sidebarItemTextActive]}>{item.label}</AppText></Pressable>)}</View>
+          <View style={styles.sidebarNav} accessibilityRole="tablist">{ADMIN_SECTIONS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: section === item.id }} testID={`admin-tab-${item.id}`} style={[styles.sidebarItem, section === item.id && styles.sidebarItemActive]} onPress={() => navigate(item.id)}><Ionicons name={item.icon} size={20} color={section === item.id ? '#3448C5' : '#667085'} /><AppText style={[styles.sidebarItemText, section === item.id && styles.sidebarItemTextActive]}>{item.label}</AppText></Pressable>)}</View>
           <View style={styles.sidebarFooter}><Ionicons name="lock-closed-outline" size={16} color="#667085" /><AppText style={styles.sidebarFooterText}>גישה מאובטחת · יציאה אוטומטית לאחר 30 דקות</AppText></View>
         </View> : null}
         <View style={styles.main}>
           <View style={styles.topbar}><View><AppText style={styles.title}>{active.label}</AppText><AppText style={styles.subtitle}>ניהול הקהילה, התוכן והמקומות בעברית ובמקום אחד</AppText></View><View style={styles.secureBadge}><Ionicons name="shield-checkmark-outline" size={17} color="#027A48" /><AppText style={styles.secureBadgeText}>גישה מאובטחת</AppText></View></View>
-          {!wide ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mobileNavScroll} contentContainerStyle={styles.mobileNav} accessibilityRole="tablist">{ADMIN_SECTIONS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: section === item.id }} testID={`admin-tab-${item.id}`} style={[styles.mobileNavItem, section === item.id && styles.mobileNavItemActive]} onPress={() => setSection(item.id)}><Ionicons name={item.icon} size={18} color={section === item.id ? '#FFFFFF' : '#475467'} /><AppText style={[styles.mobileNavText, section === item.id && styles.mobileNavTextActive]}>{item.label}</AppText></Pressable>)}</ScrollView> : null}
+          {!wide ? <View style={styles.mobileNavScroll} accessibilityRole="tablist"><View style={styles.mobileNav}>{ADMIN_SECTIONS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: section === item.id }} accessibilityLabel={`פתיחת ${item.label}`} testID={`admin-tab-${item.id}`} style={({ pressed }) => [styles.mobileNavItem, section === item.id && styles.mobileNavItemActive, pressed && styles.cardPressed]} onPress={() => navigate(item.id)}><Ionicons name={item.icon} size={18} color={section === item.id ? '#FFFFFF' : '#475467'} /><AppText numberOfLines={1} style={[styles.mobileNavText, section === item.id && styles.mobileNavTextActive]}>{item.label}</AppText></Pressable>)}</View></View> : null}
           {section === 'queue' ? <View style={styles.mainBodyQueue}>{body}</View> : <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainBody} keyboardShouldPersistTaps="handled">{body}</ScrollView>}
         </View>
       </View>

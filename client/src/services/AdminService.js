@@ -49,11 +49,12 @@ export const listHeldContent = () => call('listHeldContent');
 export const moderateContent = (payload) => call('moderateContent', payload);
 export const listAdminUsers = (payload = {}) => call('listAdminUsers', payload);
 export const getAdminUser = (identifier) => call('getAdminUser', { identifier });
-export const setUserSuspension = (identifier, suspended, reason, durationHours = undefined) => call('setUserSuspension', {
+export const setUserSuspension = (identifier, suspended, reason, durationHours = undefined, operationId = '') => call('setUserSuspension', {
   identifier,
   suspended,
   reason,
   ...(suspended && durationHours !== undefined ? { durationHours } : {}),
+  ...(suspended && operationId ? { operationId } : {}),
 });
 export const setUserEmailVerified = (identifier, verified, reason) => call('setUserEmailVerified', { identifier, verified, reason });
 export const setUserAdmin = (identifier, admin, reason) => call('setUserAdmin', { identifier, admin, reason });
