@@ -59,6 +59,47 @@ Node.js 22 v2 Functions in `europe-west1` and returned zero failures. Firestore
 Rules, indexes, Storage Rules, IAM, native builds, store submissions, and the
 rollback Storage bucket were unchanged.
 
+### Admin moderation reliability rollout
+
+PR [#255](https://github.com/doric2000/PlanLi/pull/255) merged the recoverable
+moderation-decision rollout to `main` as merge commit
+`4640888d1dadb5d88d0a83e3b758f5c7f5dced0c` at
+`2026-08-28T10:42:13Z`. The production rollout from that clean commit has the
+following verified state:
+
+- Firestore composite index `CICAgLiK4oIJ` for enforcement
+  `type + status + updatedAt` is `READY`. Firestore Rules were compiled during
+  validation but were not deployed.
+- Thirty-one targeted v2 Functions, including the moderation callables, report
+  handler, search-projection triggers, and the suspension scheduler, are 31/31
+  `ACTIVE` on Node.js 22 in `europe-west1`. Their live update window was
+  `2026-08-28T10:52:39.691931735Z` through
+  `2026-08-28T10:55:33.103381994Z`; 21 use the core Functions service account
+  and 10 use the media Functions service account. The current regional
+  inventory contains 124 Functions. The scheduler is enabled every 15 minutes
+  in the `Asia/Jerusalem` timezone.
+- The approved production enforcement repair used fingerprint
+  `77926dfd66f3ab868fa1d0b690f651c26d5b1f1edab6ad11cdd02ade3e1f1714`.
+  Its pre-apply dry run, apply, and post-apply dry run each scanned zero
+  `applying` records, applied zero writes, found zero safe repairs remaining,
+  and found zero accounts suspended beyond their end time. No ambiguous record
+  or personal data was returned.
+- Firebase Hosting release `sites/planli-f0b12/releases/1787914814724000`
+  serves version `sites/planli-f0b12/versions/e137f68c68fb6793`, released at
+  `2026-08-28T11:00:14.724Z`. `/admin/` and bundle
+  `index-7e30e6b3469b93c7b54eed2fabd8a054.js` returned HTTP 200. Browser checks at
+  1280x900 and 390x844 found no console errors or horizontal overflow. The
+  available browser was signed out, so authenticated production moderation was
+  not exercised and no real moderation decision was submitted.
+- Focused Functions tests passed 57/57 and focused client tests passed 22/22;
+  changed-scope validation, Admin Web export/verification, iOS release-config
+  verification, iOS and Android Expo exports, the final review, and the security
+  diff scan passed. Post-deploy error-log queries returned no entries.
+- Firestore and Storage Rules, IAM, production user data, and unrelated
+  Functions were unchanged. No EAS Update, EAS build, TestFlight submission,
+  App Store release, or Google Play release was performed; iOS and Android were
+  verified and merged at source/export level only.
+
 ## Run the client
 
 PlanLi development and Firebase tooling use Node.js 22. From the repository
