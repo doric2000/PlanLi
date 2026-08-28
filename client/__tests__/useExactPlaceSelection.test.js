@@ -4,10 +4,11 @@ import useExactPlaceSelection, { buildExactPlaceValue } from '../src/hooks/useEx
 
 const mockResolve = jest.fn();
 const mockFinalize = jest.fn();
+const mockSearch = jest.fn(async () => []);
 jest.mock('../src/services/LocationService', () => ({
   finalizeDestinationChoice: (...args) => mockFinalize(...args),
   resolveDestinationForPlacePreview: (...args) => mockResolve(...args),
-  searchPlaces: jest.fn(async () => []),
+  searchPlaces: (...args) => mockSearch(...args),
 }));
 
 const resolved = {
@@ -22,6 +23,7 @@ describe('useExactPlaceSelection', () => {
   beforeEach(() => {
     mockResolve.mockReset();
     mockFinalize.mockReset();
+    mockSearch.mockClear();
   });
 
   it('owns the canonical exact-place value shared by both forms', () => {
@@ -165,5 +167,75 @@ describe('useExactPlaceSelection', () => {
       destinationResolvedPlaceToken: 'destination-token',
     });
     expect(result.current.pendingLocation?.cityId).toBe('chiang-mai');
+  });
+
+  it('quietly finalizes the preferred route destination when geometry accepts it', async () => {
+    mockResolve.mockResolvedValue({
+      status: 'destination_choice_required',
+      resolutionId: 'dcr_hampi123',
+      incidentId: 'loc_hampi12345',
+      place: { placeId: 'virupaksha', name: 'Virupaksha Temple' },
+      alternatives: [],
+    });
+    mockFinalize.mockResolvedValue({
+      destination: {
+        country: { id: 'IN', name: 'הודו' },
+        city: { id: 'hampi', name: 'האמפי' },
+      },
+      place: { placeId: 'virupaksha', name: 'Virupaksha Temple' },
+    });
+    const preferredDestination = {
+      countryId: 'IN', cityId: 'hampi', coordinates: { lat: 15.335, lng: 76.46 },
+    };
+    const { result } = renderHook(() => useExactPlaceSelection({ preferredDestination }));
+
+    await act(async () => result.current.handleSelectGooglePlace('virupaksha'));
+
+    expect(mockFinalize).toHaveBeenCalledWith({
+      resolutionId: 'dcr_hampi123',
+      incidentId: 'loc_hampi12345',
+      destinationRef: { countryId: 'IN', cityId: 'hampi' },
+    });
+    expect(result.current.destinationChoice).toBeNull();
+    expect(result.current.pendingLocation?.cityId).toBe('hampi');
+  });
+
+  it('keeps the existing picker when the preferred route destination is rejected', async () => {
+    const choice = {
+      status: 'destination_choice_required', resolutionId: 'dcr_farplace',
+      incidentId: 'loc_farplace123', place: { placeId: 'udupi' }, alternatives: [],
+    };
+    mockResolve.mockResolvedValue(choice);
+    mockFinalize.mockRejectedValue(new Error('destination_outside_bounds'));
+    const { result } = renderHook(() => useExactPlaceSelection({
+      preferredDestination: { countryId: 'IN', cityId: 'hampi' },
+    }));
+
+    await act(async () => result.current.handleSelectGooglePlace('udupi'));
+
+    expect(result.current.destinationChoice?.resolutionId).toBe('dcr_farplace');
+    expect(result.current.locationResolveError).toBeNull();
+  });
+
+  it('biases every exact-place search to the preferred destination center', async () => {
+    const { result } = renderHook(() => useExactPlaceSelection({
+      preferredDestination: { coordinates: { lat: 15.335, lng: 76.46 } },
+    }));
+    await act(async () => result.current.googleSearchFn('Virupaksha', { signal: null }));
+    expect(mockSearch).toHaveBeenCalledWith('Virupaksha', {
+      signal: null,
+      types: 'all',
+      locationBias: { lat: 15.335, lng: 76.46 },
+    });
+  });
+
+  it('does not turn missing preferred coordinates into a zero-zero bias', async () => {
+    const { result } = renderHook(() => useExactPlaceSelection({
+      preferredDestination: { coordinates: { lat: null, lng: null } },
+    }));
+    await act(async () => result.current.googleSearchFn('Somewhere', {}));
+    expect(mockSearch).toHaveBeenCalledWith('Somewhere', {
+      types: 'all', locationBias: null,
+    });
   });
 });

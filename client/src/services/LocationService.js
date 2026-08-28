@@ -44,10 +44,14 @@ function mapPrediction(prediction, sessionId, expiresAt, incidentId) {
   };
 }
 
-async function gatewaySearch(searchText, mode) {
+async function gatewaySearch(searchText, mode, { locationBias } = {}) {
   const query = searchText?.trim() || '';
   if (compactDestinationText(query).length < 2) return [];
-  const response = await getSearchPlacesCallable()({ query, mode });
+  const response = await getSearchPlacesCallable()({
+    query,
+    mode,
+    ...(locationBias ? { locationBias } : {}),
+  });
   const result = response?.data || {};
   const predictions = (result.predictions || []).map((prediction) =>
     mapPrediction(prediction, result.sessionId, result.expiresAt, result.incidentId)
@@ -66,10 +70,10 @@ export const searchCities = async (searchText, { signal } = {}) => {
   }
 };
 
-export const searchPlaces = async (searchText, { signal } = {}) => {
+export const searchPlaces = async (searchText, { signal, locationBias } = {}) => {
   if (signal?.aborted) return [];
   try {
-    const results = await gatewaySearch(searchText, 'places');
+    const results = await gatewaySearch(searchText, 'places', { locationBias });
     return signal?.aborted ? [] : results;
   } catch (error) {
     if (signal?.aborted || error?.name === 'AbortError') return [];

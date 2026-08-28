@@ -7,6 +7,8 @@ const {
   canonicalDestinationId,
   matchCanonicalEntry,
   providerGeometryPolicy,
+  providerIdentityNameMatches,
+  providerIdentityPolicy,
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
@@ -81,14 +83,14 @@ test('Chiang Mai and Chiang Rai preserve province destinations', () => {
   assert.notEqual(canonicalDestinationId('TH', mai.entry.id), canonicalDestinationId('TH', rai.entry.id));
 });
 
-test('a unique approved province alias wins before approximate fallback geometry', () => {
+test('a far province alias cannot override the containing province geometry', () => {
   const match = matchCanonicalEntry(BUILTIN_POLICIES, {
     countryCode: 'TH',
     aliases: ['Chiang Mai Province'],
     coordinates: { lat: 20.05, lng: 98.95 },
   });
-  assert.equal(match.entry.id, 'th-chiang-mai');
-  assert.equal(match.source, 'canonical_alias');
+  assert.equal(match.entry.id, 'th-chiang-rai');
+  assert.equal(match.source, 'canonical_geometry');
 });
 
 test('parent grouping resolves an approved child alias to its parent', () => {
@@ -138,19 +140,41 @@ test('Lake Carezza resolves to the reviewed Dolomites region', () => {
   assert.equal(match.entry.names.he, 'הדולומיטים');
 });
 
-test('unreviewed provider geometry never auto-matches a point', () => {
+test('a POI provider identity never auto-matches a city destination', () => {
   const match = matchCanonicalEntry([{
-    id: 'zz-provider-region', countryCode: 'ZZ', names: { he: 'אזור', en: 'Region' },
-    aliases: ['Region'], kind: 'tourism_region', groupingPolicy: 'self', status: 'active',
+    id: 'zz-provider-city', countryCode: 'ZZ', names: { he: 'עיר', en: 'City' },
+    aliases: ['City'], kind: 'city_hub', groupingPolicy: 'self', status: 'active',
     center: { lat: 1, lng: 1 }, radiusKm: 100,
-    geometryPolicy: { autoMatchEligible: false, source: 'google_unreviewed', version: 2 },
+    googleTypes: ['bar', 'point_of_interest', 'establishment'],
   }], {
     countryCode: 'ZZ', aliases: ['Unrelated locality'], coordinates: { lat: 1, lng: 1 },
   });
   assert.equal(match, null);
+  assert.equal(providerIdentityPolicy('city_hub', ['bar', 'point_of_interest']).compatible, false);
+  assert.equal(providerIdentityPolicy(
+    'city_hub', ['administrative_area_level_1', 'political']
+  ).compatible, false);
+  assert.equal(providerIdentityPolicy(
+    'city_hub', ['administrative_area_level_1', 'political'], { administrativeNameMatch: true }
+  ).compatible, true);
+  assert.equal(providerIdentityPolicy(
+    'city_hub', ['administrative_area_level_1', 'political'], { reviewedOverride: true }
+  ).compatible, true);
+  assert.equal(providerIdentityNameMatches({
+    names: { en: 'Kuala Lumpur' }, aliases: ['Kuala Lumpur'],
+    providerDisplayName: 'Federal Territory of Kuala Lumpur',
+  }), true);
+  assert.equal(providerIdentityNameMatches({
+    names: { en: 'Pai' }, aliases: ['Pai'], providerDisplayName: 'Pai District',
+  }), true);
+  assert.equal(providerIdentityNameMatches({
+    names: { en: 'Vienna' }, aliases: ['Vienna'], providerDisplayName: 'Austria',
+  }), false);
+  assert.equal(providerIdentityPolicy('island', ['country', 'political']).compatible, true);
+  assert.equal(providerIdentityPolicy('tourism_region', ['country', 'political']).compatible, false);
 });
 
-test('provider viewports are eligible only when their scale fits the destination kind', () => {
+test('provider viewports remain eligible at small scales and receive a derived catchment', () => {
   const cityViewport = {
     southwest: { lat: 31.7, lng: 34.7 },
     northeast: { lat: 32.3, lng: 35.1 },
@@ -160,7 +184,7 @@ test('provider viewports are eligible only when their scale fits the destination
     northeast: { lat: 46.541, lng: 11.841 },
   };
   assert.equal(providerGeometryPolicy('city_hub', cityViewport).autoMatchEligible, true);
-  assert.equal(providerGeometryPolicy('tourism_region', tinyRegionViewport).autoMatchEligible, false);
+  assert.equal(providerGeometryPolicy('tourism_region', tinyRegionViewport).autoMatchEligible, true);
 });
 
 test('a provider alias cannot assign a place outside its sane viewport', () => {
@@ -175,4 +199,51 @@ test('a provider alias cannot assign a place outside its sane viewport', () => {
     countryCode: 'VN', aliases: ['Da Nang'], coordinates: { lat: 15.89, lng: 108.36 },
   });
   assert.equal(match, null);
+});
+
+test('Hampi venues resolve to the tourism region while a distant namesake does not', () => {
+  for (const coordinates of [
+    { lat: 15.335133, lng: 76.458653 },
+    { lat: 15.338045, lng: 76.458463 },
+    { lat: 15.337016, lng: 76.458036 },
+  ]) {
+    const match = matchCanonicalEntry(BUILTIN_POLICIES, {
+      countryCode: 'IN', aliases: ['Hampi'], coordinates,
+    });
+    assert.equal(match.entry.id, 'in-hampi');
+  }
+  assert.equal(matchCanonicalEntry(BUILTIN_POLICIES, {
+    countryCode: 'IN', aliases: ['Hampi'], coordinates: { lat: 13.344878, lng: 74.79117 },
+  }), null);
+});
+
+test('quarantined provider identities cannot assign their destination by Place ID', () => {
+  const reviewed = {
+    ...BUILTIN_POLICIES.find((entry) => entry.id === 'at-vienna'),
+    providerRefs: { googlePlaceId: 'rathausplatz-event-venue' },
+    googleTypes: ['event_venue', 'point_of_interest', 'establishment'],
+  };
+  assert.equal(matchCanonicalEntry([reviewed], {
+    countryCode: 'AT', providerPlaceId: 'rathausplatz-event-venue',
+    coordinates: { lat: 47.5, lng: 15.5 }, aliases: ['Rathausplatz'],
+  }), null);
+  const match = matchCanonicalEntry([reviewed], {
+    countryCode: 'AT', providerPlaceId: 'actual-vienna-locality',
+    coordinates: { lat: 48.2082, lng: 16.3738 }, aliases: ['Vienna'],
+  });
+  assert.equal(match.entry.id, 'at-vienna');
+  assert.equal(match.source, 'canonical_alias_and_geometry');
+});
+
+test('equally strong overlapping destination profiles require an explicit choice', () => {
+  const base = {
+    countryCode: 'ZZ', names: { he: 'יעד', en: 'Destination' },
+    kind: 'city_hub', groupingPolicy: 'self', status: 'active',
+    center: { lat: 1, lng: 1 }, radiusKm: 20,
+  };
+  const match = matchCanonicalEntry([
+    { ...base, id: 'zz-first', aliases: ['First'] },
+    { ...base, id: 'zz-second', aliases: ['Second'] },
+  ], { countryCode: 'ZZ', coordinates: { lat: 1, lng: 1 } });
+  assert.deepEqual(match.ambiguity.map((entry) => entry.id), ['zz-first', 'zz-second']);
 });

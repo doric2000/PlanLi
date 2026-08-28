@@ -4,10 +4,31 @@ const { compactDestinationSearchText } = require('./destinationCatalogService');
 const { distanceKm } = require('./destinationIdentityService');
 
 const REGISTRY_PATH = 'system/destinationRegistry/entries';
-const REGISTRY_VERSION = 2;
+const REGISTRY_VERSION = 3;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const DESTINATION_KINDS = Object.freeze(['city_hub', 'island', 'tourism_region', 'province']);
 const GROUPING_POLICIES = Object.freeze(['self', 'parent', 'approved_children']);
+const MATCH_PROFILE_VERSION = 3;
+const DEFAULT_MATCH_RADIUS_KM = Object.freeze({
+  city_hub: 35,
+  island: 60,
+  tourism_region: 60,
+  province: 80,
+});
+const SMALL_SETTLEMENT_TYPES = new Set(['neighborhood', 'sublocality', 'sublocality_level_1']);
+const GEOGRAPHIC_TYPES = new Set([
+  'locality', 'postal_town', 'neighborhood', 'sublocality', 'sublocality_level_1',
+  'administrative_area_level_1', 'administrative_area_level_2',
+  'administrative_area_level_3', 'administrative_area_level_4',
+  'colloquial_area', 'natural_feature', 'island',
+  'archipelago', 'national_park', 'park',
+]);
+const REVIEWED_PROVIDER_IDENTITY_IDS = new Set([
+  'it-amalfi-coast',
+  'gr-meteora',
+  'is-south-iceland',
+  'no-norwegian-fjords',
+]);
 
 // These policies are deliberately small and ship with the resolver so the known
 // failures are fixed before the private registry seed is applied. The seed tool
@@ -19,6 +40,11 @@ const BUILTIN_POLICIES = Object.freeze([
   { id: 'in-manali', countryCode: 'IN', names: { he: 'מנאלי', en: 'Manali' }, aliases: ['Manali', 'Old Manali'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 32.2432, lng: 77.1892 }, radiusKm: 22 },
   { id: 'in-rishikesh', countryCode: 'IN', names: { he: 'רישיקש', en: 'Rishikesh' }, aliases: ['Rishikesh'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 30.0869, lng: 78.2676 }, radiusKm: 20 },
   { id: 'in-parvati-valley', countryCode: 'IN', names: { he: 'עמק פרוואטי', en: 'Parvati Valley' }, aliases: ['Parvati Valley', 'Kasol', 'Tosh', 'Manikaran'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 32.01, lng: 77.31 }, radiusKm: 42 },
+  { id: 'in-hampi', countryCode: 'IN', names: { he: 'האמפי', en: 'Hampi' }, aliases: ['Hampi', 'Hampi Group of Monuments'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 15.3350132, lng: 76.460024 }, radiusKm: 20 },
+  { id: 'at-vienna', countryCode: 'AT', names: { he: 'וינה', en: 'Vienna' }, aliases: ['Vienna', 'Wien'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 48.2082, lng: 16.3738 }, radiusKm: 35, providerIdentity: { reviewedOverride: true, allowExactProviderMatch: false } },
+  { id: 'ba-sarajevo', countryCode: 'BA', names: { he: 'סרייבו', en: 'Sarajevo' }, aliases: ['Sarajevo'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 43.8563, lng: 18.4131 }, radiusKm: 30, providerIdentity: { reviewedOverride: true, allowExactProviderMatch: false } },
+  { id: 'it-milan', countryCode: 'IT', names: { he: 'מילאנו', en: 'Milan' }, aliases: ['Milan', 'Milano'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 45.4642, lng: 9.19 }, radiusKm: 35, providerIdentity: { reviewedOverride: true, allowExactProviderMatch: false } },
+  { id: 'ie-west-of-ireland', countryCode: 'IE', names: { he: 'מערב אירלנד', en: 'West of Ireland' }, aliases: ['West of Ireland', 'Wild Atlantic Way'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 53.2, lng: -9.0 }, radiusKm: 220, providerIdentity: { reviewedOverride: true, allowExactProviderMatch: false } },
   { id: 'ni-ometepe', countryCode: 'NI', names: { he: 'אומטפה', en: 'Ometepe' }, aliases: ['Ometepe', 'Isla de Ometepe', 'Moyogalpa', 'Altagracia', 'Tilgue'], kind: 'island', groupingPolicy: 'self', center: { lat: 11.514, lng: -85.583 }, radiusKm: 35 },
   { id: 'gr-corfu', countryCode: 'GR', names: { he: 'קורפו', en: 'Corfu' }, aliases: ['Corfu', 'Kerkyra', 'Perama'], kind: 'island', groupingPolicy: 'self', center: { lat: 39.6243, lng: 19.9217 }, radiusKm: 42 },
   { id: 'it-dolomites', countryCode: 'IT', names: { he: 'הדולומיטים', en: 'Dolomites' }, aliases: ['Dolomites'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 46.54, lng: 11.84 }, radiusKm: 65 },
@@ -60,22 +86,145 @@ function viewportDiagonalKm(viewport) {
   );
 }
 
-function providerGeometryPolicy(kind, viewport) {
-  const saneDiagonalRanges = {
-    city_hub: [1, 200],
-    island: [2, 2000],
-    tourism_region: [10, 2000],
-    province: [20, 2000],
+function stripAdministrativeIdentityLabel(value) {
+  return compactDestinationSearchText(value)
+    .replace(/^(federalterritoryof|specialadministrativeregionof|autonomousregionof|stateof|provinceof|regionof)/, '')
+    .replace(/(federalterritory|specialadministrativeregion|autonomousregion|municipality|prefecture|province|district|region)$/, '');
+}
+
+function providerIdentityNameMatches(entry, providerDisplayName = entry?.providerDisplayName) {
+  const providerName = compactDestinationSearchText(providerDisplayName);
+  if (!providerName) return false;
+  const providerAdministrativeName = stripAdministrativeIdentityLabel(providerDisplayName);
+  return normalizedAliases(entry).some((alias) => alias === providerName ||
+    stripAdministrativeIdentityLabel(alias) === providerAdministrativeName);
+}
+
+function providerIdentityPolicy(kind, googleTypes = [], {
+  reviewedOverride = false,
+  administrativeNameMatch = false,
+} = {}) {
+  const types = new Set(Array.isArray(googleTypes) ? googleTypes : []);
+  if (!types.size) return { compatible: true, source: 'provider_types_missing' };
+  if (reviewedOverride) return { compatible: true, source: 'reviewed_provider_identity' };
+  const hasGeographicType = [...types].some((type) => GEOGRAPHIC_TYPES.has(type));
+  let compatible = false;
+  if (kind === 'city_hub') {
+    compatible = ['locality', 'postal_town', 'neighborhood', 'sublocality',
+      'sublocality_level_1', 'administrative_area_level_3']
+      .some((type) => types.has(type));
+    if (!compatible && administrativeNameMatch && types.has('political') &&
+        !types.has('point_of_interest') && !types.has('establishment')) {
+      compatible = ['country', 'administrative_area_level_1', 'administrative_area_level_2']
+        .some((type) => types.has(type));
+    }
+  } else if (kind === 'province') {
+    compatible = ['administrative_area_level_1', 'administrative_area_level_2']
+      .some((type) => types.has(type));
+  } else if (kind === 'island') {
+    compatible = types.has('island') || types.has('archipelago') || types.has('country') ||
+      types.has('natural_feature') || hasGeographicType;
+  } else if (kind === 'tourism_region') {
+    compatible = hasGeographicType || reviewedOverride;
+  }
+  return {
+    compatible,
+    source: compatible
+      ? reviewedOverride && !hasGeographicType
+        ? 'reviewed_provider_identity'
+        : administrativeNameMatch && kind === 'city_hub' &&
+          ['country', 'administrative_area_level_1', 'administrative_area_level_2']
+            .some((type) => types.has(type))
+          ? 'matching_administrative_provider_identity'
+          : 'geographic_provider_identity'
+      : 'incompatible_provider_identity',
   };
+}
+
+function providerGeometryPolicy(kind, viewport, options = {}) {
   const diagonalKm = viewportDiagonalKm(viewport);
-  const range = saneDiagonalRanges[kind];
-  const autoMatchEligible = Boolean(range && diagonalKm !== null &&
-    diagonalKm >= range[0] && diagonalKm <= range[1]);
+  const hasCenter = Number.isFinite(Number(options?.center?.lat)) &&
+    Number.isFinite(Number(options?.center?.lng));
+  const hasRadius = Number.isFinite(Number(options?.radiusKm)) && Number(options.radiusKm) > 0;
+  const autoMatchEligible = Boolean(DESTINATION_KINDS.includes(kind) &&
+    (diagonalKm !== null || (hasCenter && hasRadius)));
   return {
     autoMatchEligible,
     aliasAutoMatchEligible: autoMatchEligible,
-    source: autoMatchEligible ? 'google_viewport_sane' : 'google_geometry_untrusted',
-    version: 2,
+    source: autoMatchEligible ? 'provider_geometry_available' : 'provider_geometry_missing',
+    version: MATCH_PROFILE_VERSION,
+  };
+}
+
+function normalizeArea(area) {
+  if (area?.type === 'circle') {
+    const lat = Number(area.center?.lat);
+    const lng = Number(area.center?.lng);
+    const radiusKm = Number(area.radiusKm);
+    if ([lat, lng, radiusKm].every(Number.isFinite) && radiusKm > 0) {
+      return { type: 'circle', center: { lat, lng }, radiusKm };
+    }
+  }
+  if (area?.type === 'viewport') {
+    const southwest = area.viewport?.southwest;
+    const northeast = area.viewport?.northeast;
+    if ([southwest?.lat, southwest?.lng, northeast?.lat, northeast?.lng]
+      .map(Number).every(Number.isFinite)) {
+      return { type: 'viewport', viewport: area.viewport };
+    }
+  }
+  return null;
+}
+
+function derivedRadiusKm(entry) {
+  const types = new Set(Array.isArray(entry?.googleTypes) ? entry.googleTypes : []);
+  if (entry?.kind === 'city_hub' && [...types].some((type) => SMALL_SETTLEMENT_TYPES.has(type))) {
+    return 15;
+  }
+  return DEFAULT_MATCH_RADIUS_KM[entry?.kind] || 35;
+}
+
+function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
+  const reviewedOverride = entry?.providerIdentity?.reviewedOverride === true ||
+    entry?.matchProfile?.identityReviewed === true ||
+    REVIEWED_PROVIDER_IDENTITY_IDS.has(entry?.id);
+  const identity = providerIdentityPolicy(entry?.kind, entry?.googleTypes, {
+    reviewedOverride,
+    administrativeNameMatch: providerIdentityNameMatches(entry),
+  });
+  const explicitAreas = (Array.isArray(entry?.matchProfile?.areas) ? entry.matchProfile.areas : [])
+    .map(normalizeArea).filter(Boolean);
+  const legacyReviewed = Number.isFinite(Number(entry?.radiusKm)) && Number(entry.radiusKm) > 0;
+  const center = Number.isFinite(Number(entry?.center?.lat)) && Number.isFinite(Number(entry?.center?.lng))
+    ? { lat: Number(entry.center.lat), lng: Number(entry.center.lng) }
+    : null;
+  const areas = explicitAreas.slice();
+  if (!areas.length && entry?.viewport) {
+    const diagonal = viewportDiagonalKm(entry.viewport);
+    const maximumViewportKm = entry?.kind === 'city_hub' ? 120 : 2500;
+    if (diagonal !== null && diagonal <= maximumViewportKm) {
+      areas.push({ type: 'viewport', viewport: entry.viewport });
+    }
+  }
+  if (!areas.some((area) => area.type === 'circle') && center) {
+    const requestedRadius = legacyReviewed ? Number(entry.radiusKm) : derivedRadiusKm(entry);
+    const cappedRadius = legacyReviewed ? requestedRadius : Math.min(requestedRadius, radiusCapKm);
+    if (Number.isFinite(cappedRadius) && cappedRadius > 0) {
+      areas.push({ type: 'circle', center, radiusKm: Math.max(3, cappedRadius) });
+    }
+  }
+  const explicitlyBlockedV3 = Number(entry?.geometryPolicy?.version || 0) >= MATCH_PROFILE_VERSION &&
+    entry?.geometryPolicy?.autoMatchEligible === false;
+  const trusted = identity.compatible && areas.length > 0 && !explicitlyBlockedV3;
+  return {
+    version: MATCH_PROFILE_VERSION,
+    trust: trusted ? 'trusted' : 'blocked',
+    source: entry?.matchProfile?.source || (legacyReviewed ? 'planli_reviewed_circle' : 'provider_derived'),
+    identitySource: identity.source,
+    identityReviewed: reviewedOverride,
+    areas,
+    aliasMaxDistanceKm: Number(entry?.matchProfile?.aliasMaxDistanceKm ||
+      Math.max(15, ...areas.filter((area) => area.type === 'circle').map((area) => area.radiusKm), 0)),
   };
 }
 
@@ -83,7 +232,7 @@ function normalizeEntry(entry) {
   const countryCode = String(entry?.countryCode || '').trim().toUpperCase();
   const reviewedLegacyGeometry = Number.isFinite(Number(entry?.radiusKm)) &&
     Number(entry.radiusKm) > 0;
-  return {
+  const normalized = {
     ...entry,
     countryCode,
     aliasesNormalized: normalizedAliases(entry),
@@ -93,9 +242,10 @@ function normalizeEntry(entry) {
       autoMatchEligible: true,
       aliasAutoMatchEligible: true,
       source: 'planli_reviewed_legacy',
-      version: 2,
-    } : providerGeometryPolicy(entry?.kind, entry?.viewport)),
+      version: MATCH_PROFILE_VERSION,
+    } : providerGeometryPolicy(entry?.kind, entry?.viewport, entry)),
   };
+  return { ...normalized, matchProfile: buildMatchProfile(normalized) };
 }
 
 function validateRegistryEntry(entry, { requireProviderIdentity = true } = {}) {
@@ -109,6 +259,9 @@ function validateRegistryEntry(entry, { requireProviderIdentity = true } = {}) {
   if (!GROUPING_POLICIES.includes(normalized.groupingPolicy)) errors.push('invalid_grouping_policy');
   if (!normalized.aliasesNormalized.length) errors.push('missing_aliases');
   if (requireProviderIdentity && !normalized.providerRefs?.googlePlaceId) errors.push('missing_google_place_id');
+  if (requireProviderIdentity && normalized.matchProfile.identitySource === 'incompatible_provider_identity') {
+    errors.push('incompatible_google_place_type');
+  }
   const viewportCoordinates = [
     normalized.viewport?.southwest?.lat,
     normalized.viewport?.southwest?.lng,
@@ -138,10 +291,40 @@ function pointInsideViewport(point, viewport) {
 }
 
 function entryContainsPoint(entry, coordinates) {
-  if (entry?.geometryPolicy?.autoMatchEligible === false) return false;
-  if (entry.viewport && pointInsideViewport(coordinates, entry.viewport)) return true;
-  return entry.center && Number.isFinite(Number(entry.radiusKm)) &&
-    distanceKm(entry.center, coordinates) <= Number(entry.radiusKm);
+  const normalized = entry?.matchProfile ? entry : normalizeEntry(entry);
+  if (normalized.matchProfile?.trust !== 'trusted') return false;
+  return normalized.matchProfile.areas.some((area) => area.type === 'viewport'
+    ? pointInsideViewport(coordinates, area.viewport)
+    : distanceKm(area.center, coordinates) <= Number(area.radiusKm));
+}
+
+function prepareEntries(entries) {
+  const normalized = entries.map(normalizeEntry);
+  return normalized.map((entry) => {
+    const explicitOrReviewed = Array.isArray(entry?.matchProfile?.areas) &&
+      (entry.matchProfile.source === 'planli_reviewed_circle' ||
+        entry.matchProfile.source === 'planli_reviewed');
+    if (explicitOrReviewed || !entry.center) return entry;
+    const nearest = normalized.filter((candidate) => candidate.id !== entry.id &&
+      candidate.countryCode === entry.countryCode && candidate.center &&
+      candidate.parentId !== entry.id && entry.parentId !== candidate.id)
+      .map((candidate) => distanceKm(entry.center, candidate.center))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((left, right) => left - right)[0];
+    const radiusCapKm = Number.isFinite(nearest) ? nearest * 0.45 : Infinity;
+    return {
+      ...entry,
+      matchProfile: buildMatchProfile({ ...entry, matchProfile: null }, { radiusCapKm }),
+    };
+  });
+}
+
+function entryMatchRadiusKm(entry) {
+  const areas = entry?.matchProfile?.areas || [];
+  const radii = areas.map((area) => area.type === 'circle'
+    ? Number(area.radiusKm)
+    : viewportDiagonalKm(area.viewport) / 2).filter(Number.isFinite);
+  return Math.max(3, ...radii, 3);
 }
 
 function groupedEntryFor(entry, entries) {
@@ -246,30 +429,29 @@ function registryCollectionIssues(entries) {
 
 function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = [], coordinates }) {
   const code = String(countryCode || '').toUpperCase();
-  const candidates = entries.map(normalizeEntry)
-    .filter((entry) => entry.status === 'active' && entry.countryCode === code);
+  const candidates = prepareEntries(entries)
+    .filter((entry) => entry.status === 'active' && entry.countryCode === code &&
+      entry.matchProfile?.trust === 'trusted');
   if (providerPlaceId) {
-    const exact = candidates.find((entry) => entry.providerRefs?.googlePlaceId === providerPlaceId ||
-      (entry.providerRefs?.googlePlaceIds || []).includes(providerPlaceId));
+    const exact = candidates.find((entry) => entry.providerIdentity?.allowExactProviderMatch !== false &&
+      (entry.providerRefs?.googlePlaceId === providerPlaceId ||
+        (entry.providerRefs?.googlePlaceIds || []).includes(providerPlaceId)));
     if (exact) return { entry: groupedEntryFor(exact, candidates), source: 'canonical_google_place_id' };
   }
   const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
   const rawContaining = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
   const rawContainingIds = new Set(rawContaining.map((entry) => entry.id));
   const rawAliasMatches = candidates.filter((entry) => {
-    if (entry.geometryPolicy?.aliasAutoMatchEligible === false ||
-        !entry.aliasesNormalized.some((alias) => aliasKeys.has(alias))) return false;
-    const source = String(entry.geometryPolicy?.source || '');
-    const aliasIsReviewed = source.startsWith('planli_reviewed') ||
-      source === 'admin_approved_aliases';
-    return aliasIsReviewed || rawContainingIds.has(entry.id);
+    if (!entry.aliasesNormalized.some((alias) => aliasKeys.has(alias))) return false;
+    if (!coordinates || !entry.center || !rawContainingIds.has(entry.id)) return false;
+    return distanceKm(entry.center, coordinates) <= Number(entry.matchProfile.aliasMaxDistanceKm || Infinity);
   });
   const aliasMatches = uniqueGroupedEntries(rawAliasMatches, candidates);
   const containing = uniqueGroupedEntries(rawContaining, candidates);
   if (aliasMatches.length === 1) {
     return {
       entry: aliasMatches[0],
-      source: containing.includes(aliasMatches[0]) ? 'canonical_alias_and_geometry' : 'canonical_alias',
+      source: 'canonical_alias_and_geometry',
     };
   }
   if (aliasMatches.length > 1) {
@@ -287,14 +469,17 @@ function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = 
     candidates.find((candidate) => candidate.id === entry.parentId)?.groupingPolicy === 'approved_children');
   const preferred = children.length ? children : pool;
   const sorted = preferred.sort((left, right) => {
-    const leftDistance = left.center ? distanceKm(left.center, coordinates) : 0;
-    const rightDistance = right.center ? distanceKm(right.center, coordinates) : 0;
+    const leftDistance = left.center ? distanceKm(left.center, coordinates) / entryMatchRadiusKm(left) : 0;
+    const rightDistance = right.center ? distanceKm(right.center, coordinates) / entryMatchRadiusKm(right) : 0;
     return leftDistance - rightDistance || left.id.localeCompare(right.id);
   });
   if (sorted.length > 1) {
-    const firstDistance = sorted[0].center ? distanceKm(sorted[0].center, coordinates) : 0;
-    const secondDistance = sorted[1].center ? distanceKm(sorted[1].center, coordinates) : 0;
-    if (Math.abs(firstDistance - secondDistance) < 3 && sorted[0].parentId === sorted[1].parentId) {
+    const firstDistance = sorted[0].center
+      ? distanceKm(sorted[0].center, coordinates) / entryMatchRadiusKm(sorted[0]) : 0;
+    const secondDistance = sorted[1].center
+      ? distanceKm(sorted[1].center, coordinates) / entryMatchRadiusKm(sorted[1]) : 0;
+    if ((firstDistance === 0 && secondDistance === 0) ||
+        firstDistance > secondDistance * 0.75) {
       return { ambiguity: sorted.slice(0, 3) };
     }
   }
@@ -326,11 +511,23 @@ async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
       center: reviewed.center,
       ...(reviewed.viewport ? { viewport: reviewed.viewport } : {}),
       ...(reviewed.radiusKm ? { radiusKm: reviewed.radiusKm } : {}),
+      providerIdentity: {
+        ...(entry.providerIdentity || {}),
+        ...(reviewed.providerIdentity || {}),
+      },
       geometryPolicy: {
         autoMatchEligible: true,
         aliasAutoMatchEligible: true,
         source: 'planli_reviewed',
-        version: 2,
+        version: MATCH_PROFILE_VERSION,
+      },
+      matchProfile: {
+        version: MATCH_PROFILE_VERSION,
+        trust: 'trusted',
+        source: 'planli_reviewed',
+        identityReviewed: true,
+        areas: reviewed.radiusKm ? [{ type: 'circle', center: reviewed.center, radiusKm: reviewed.radiusKm }] : [],
+        aliasMaxDistanceKm: reviewed.radiusKm || 35,
       },
     }) : entry);
   });
@@ -349,11 +546,17 @@ module.exports = {
   GROUPING_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
+  MATCH_PROFILE_VERSION,
+  REVIEWED_PROVIDER_IDENTITY_IDS,
+  buildMatchProfile,
   canonicalDestinationId,
   clearRegistryCache,
   entryContainsPoint,
   matchCanonicalEntry,
   normalizeEntry,
+  providerIdentityNameMatches,
+  providerIdentityPolicy,
+  prepareEntries,
   providerGeometryPolicy,
   registryCollectionIssues,
   registryEntriesForCountry,

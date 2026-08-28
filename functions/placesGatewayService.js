@@ -70,12 +70,25 @@ function normalizePrediction(prediction) {
   };
 }
 
-async function legacyAutocomplete({ query, mapsKey, fetchImpl = global.fetch, mode }) {
+function normalizeLocationBias(value) {
+  if (value == null) return null;
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 ||
+      lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
+
+async function legacyAutocomplete({ query, mapsKey, fetchImpl = global.fetch, mode, coordinates }) {
   const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
   url.searchParams.set('input', query);
   url.searchParams.set('language', 'he');
   url.searchParams.set('key', mapsKey);
   if (mode === 'destinations') url.searchParams.set('types', '(cities)');
+  if (coordinates) {
+    url.searchParams.set('location', `${coordinates.lat},${coordinates.lng}`);
+    url.searchParams.set('radius', '50000');
+  }
   let response;
   try {
     response = await fetchImpl(url);
@@ -112,8 +125,10 @@ async function searchPlacesInternal({
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   const query = String(data?.query || '').trim();
   const mode = data?.mode === 'destinations' ? 'destinations' : data?.mode === 'places' ? 'places' : null;
+  const coordinates = normalizeLocationBias(data?.locationBias);
   assert(query.length >= 2 && query.length <= MAX_QUERY_LENGTH, 'invalid-argument', 'Query must contain 2–180 characters.');
   assert(mode, 'invalid-argument', 'mode must be places or destinations.');
+  assert(data?.locationBias == null || coordinates, 'invalid-argument', 'locationBias coordinates are invalid.');
   await consumeBudget({ admin, auth, action: 'autocomplete', key: providerRateLimitKey });
   const providerSessionToken = randomId('gst');
   const predictions = (await autocompletePlaces({
@@ -126,6 +141,7 @@ async function searchPlacesInternal({
     sessionToken: providerSessionToken,
     randomSelectionId: () => randomId('sel'),
     legacyAutocomplete,
+    coordinates,
     requestContext,
   })).slice(0, MAX_PREDICTIONS);
   if (requestContext.count === 0) requestContext.count = 1;
@@ -372,6 +388,7 @@ module.exports = {
   SESSION_TTL_MS,
   createResolvedPlaceToken,
   legacyAutocomplete,
+  normalizeLocationBias,
   readResolvedPlaceToken,
   renewResolvedPlaceTokenLeases,
   resolvePlaceSelection,

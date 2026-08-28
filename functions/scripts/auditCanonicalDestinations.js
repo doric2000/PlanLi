@@ -5,8 +5,10 @@ const { initializeAdmin } = require('./localCredentials');
 const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
+  REGISTRY_VERSION,
   matchCanonicalEntry,
   normalizeEntry,
+  registryCollectionIssues,
 } = require('../canonicalDestinationRegistry');
 
 const DEFAULT_PROJECT_ID = 'planli-f0b12';
@@ -89,10 +91,34 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
   const countryCodes = new Map(countries.docs.map((document) => [
     document.id, String(document.data()?.code || document.id).toUpperCase(),
   ]));
-  const registryEntries = [
-    ...BUILTIN_POLICIES.map(normalizeEntry),
-    ...registry.docs.map((document) => normalizeEntry({ id: document.id, ...document.data() })),
-  ];
+  const registryById = new Map(registry.docs.map((document) => [
+    document.id,
+    normalizeEntry({ id: document.id, ...document.data() }),
+  ]));
+  BUILTIN_POLICIES.forEach((reviewed) => {
+    const current = registryById.get(reviewed.id) || {};
+    registryById.set(reviewed.id, normalizeEntry({
+      ...current,
+      ...reviewed,
+      aliases: Array.from(new Set([...(current.aliases || []), ...(reviewed.aliases || [])])),
+      providerIdentity: {
+        ...(current.providerIdentity || {}),
+        ...(reviewed.providerIdentity || {}),
+        reviewedOverride: true,
+      },
+      matchProfile: {
+        version: REGISTRY_VERSION,
+        source: 'planli_reviewed',
+        identityReviewed: true,
+        areas: reviewed.radiusKm
+          ? [{ type: 'circle', center: reviewed.center, radiusKm: reviewed.radiusKm }]
+          : [],
+        aliasMaxDistanceKm: reviewed.radiusKm || 35,
+      },
+    }));
+  });
+  const registryEntries = Array.from(registryById.values());
+  const registryIssues = registryCollectionIssues(registryEntries);
   const contentCoordinates = new Map();
   recommendations.docs.forEach((document) => {
     const data = document.data() || {};
@@ -115,6 +141,20 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
   });
   const result = {
     mode: 'dry-run',
+    registry: {
+      count: registryEntries.length,
+      trustedMatchProfiles: registryEntries.filter((entry) => entry.matchProfile?.trust === 'trusted').length,
+      blockedMatchProfiles: registryEntries.filter((entry) => entry.matchProfile?.trust !== 'trusted').length,
+      blockedMatchProfileEntries: registryEntries.filter((entry) => entry.matchProfile?.trust !== 'trusted')
+        .map((entry) => entry.id),
+      incompatibleProviderIdentities: registryEntries.filter((entry) =>
+        entry.matchProfile?.identitySource === 'incompatible_provider_identity'
+      ).map((entry) => entry.id),
+      quarantinedProviderIdentities: registryEntries.filter((entry) =>
+        entry.providerIdentity?.allowExactProviderMatch === false
+      ).map((entry) => entry.id),
+      issues: registryIssues,
+    },
     destinationCount: items.length,
     activeDestinationCount: items.filter((item) => item.destinationStatus === 'active').length,
     counts: Object.fromEntries(['canonical', 'reassignment_candidate', 'manual_review', 'ambiguous', 'merged_source', 'inactive_review']

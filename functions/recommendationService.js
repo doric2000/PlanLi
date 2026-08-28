@@ -1559,11 +1559,131 @@ async function resolveGoogleDestination({
       };
       return normalizeDestinationForUse(destination, preliminaryCountry.countryCode);
     }
-    const selectionError = new HttpsError('failed-precondition',
-      'This place is not mapped to an approved PlanLi destination. Please choose a destination.');
-    selectionError.destinationSelectionRequired = true;
-    selectionError.destinationCountryCode = preliminaryCountry.countryCode;
-    throw selectionError;
+    const localityProviderConfigured = placesProvider === 'new'
+      ? Boolean(newPlacesKey || mapsKey)
+      : Boolean(mapsKey);
+    let localityPlaceId = null;
+    try {
+      localityPlaceId = localityCandidates.length && localityProviderConfigured
+        ? await fetchLocalityPlaceId({
+            provider: placesProvider,
+            localityName: selectedEn.localityName,
+            localityCandidates,
+            countryName: selectedEn.countryName,
+            countryCode: selectedEn.countryCode || bilingual.he?.countryCode ||
+              preliminaryCountry.countryCode,
+            coordinates: selectedCoordinates,
+            mapsKey,
+            newPlacesKey,
+            requestContext,
+          })
+        : null;
+    } catch (error) {
+      if (/ambiguous|more specific/i.test(String(error?.message || ''))) {
+        error.destinationSelectionRequired = true;
+        error.destinationCountryCode = preliminaryCountry.countryCode;
+        error.providerCallCount = requestContext.count;
+      }
+      throw error;
+    }
+    if (localityPlaceId) {
+      const localityBilingual = await fetchBilingualPlace({
+        provider: placesProvider,
+        placeId: localityPlaceId,
+        mapsKey,
+        newPlacesKey,
+        requestContext,
+      });
+      const localityEn = localityBilingual.en || {};
+      const localityHe = localityBilingual.he || {};
+      const localityNameEn = String(localityEn.localityName || localityEn.displayName || '').trim();
+      const localityAliasesNormalized = localityAliases(
+        localityNameEn,
+        preliminaryCountry.countryCode
+      );
+      const localityCandidate = {
+        placeId: localityPlaceId,
+        countryCode: localityEn.countryCode,
+        nameEn: localityNameEn,
+        coordinates: localityEn.coordinates || localityHe.coordinates,
+      };
+      const validatedLocality = localityCandidates.some((localityName) =>
+        localityAliases(localityName, preliminaryCountry.countryCode)
+          .some((alias) => localityAliasesNormalized.includes(alias)) ||
+        candidateMatchesLocality(localityCandidate, {
+          countryCode: preliminaryCountry.countryCode,
+          localityName,
+          coordinates: selectedCoordinates,
+        })
+      );
+      if (!validatedLocality) {
+        const localityError = new HttpsError('failed-precondition',
+          'The containing destination could not be validated. Please select a more specific place.');
+        localityError.destinationSelectionRequired = true;
+        localityError.destinationCountryCode = preliminaryCountry.countryCode;
+        localityError.providerCallCount = requestContext.count;
+        throw localityError;
+      }
+
+      canonicalMatch = matchCanonicalEntry(registryEntries, {
+        countryCode: preliminaryCountry.countryCode,
+        providerPlaceId: localityPlaceId,
+        aliases: [
+          localityEn.displayName,
+          localityEn.localityName,
+          ...localityNamesForPlace(localityEn),
+        ],
+        coordinates: selectedCoordinates,
+      });
+      if (canonicalMatch?.ambiguity?.length) {
+        const ambiguityError = new HttpsError(
+          'failed-precondition',
+          'The place belongs to more than one approved destination. Please choose a destination.'
+        );
+        ambiguityError.destinationSelectionRequired = true;
+        ambiguityError.destinationCountryCode = preliminaryCountry.countryCode;
+        ambiguityError.providerCallCount = requestContext.count;
+        throw ambiguityError;
+      }
+      canonicalEntry = canonicalMatch?.entry || null;
+      if (!canonicalEntry) {
+        const englishName = localityNameEn;
+        const googleHebrewName = String(
+          localityHe.localityName || localityHe.displayName || ''
+        ).trim();
+        if (hasHebrewName(googleHebrewName)) {
+          provisionalDestination = true;
+          canonicalEntry = {
+            id: provisionalRegistryId(preliminaryCountry.countryCode, localityPlaceId),
+            countryCode: preliminaryCountry.countryCode,
+            names: { he: googleHebrewName, en: englishName || googleHebrewName },
+            aliases: [englishName, googleHebrewName].filter(Boolean),
+            kind: provisionalDestinationKind(localityEn.types),
+            groupingPolicy: 'self',
+            center: localityEn.coordinates || localityHe.coordinates,
+            viewport: localityEn.viewport || localityHe.viewport || null,
+            providerRefs: { googlePlaceId: localityPlaceId },
+            googleTypes: localityEn.types || [],
+            registryVersion: 0,
+            geometryPolicy: {
+              autoMatchEligible: false,
+              aliasAutoMatchEligible: false,
+              source: 'verified_containing_locality',
+              version: 3,
+            },
+          };
+          canonicalMatch = { entry: canonicalEntry, source: 'verified_containing_locality' };
+        }
+      }
+    }
+    if (!canonicalEntry) {
+      const selectionError = new HttpsError('failed-precondition',
+        'This place is not mapped to an approved PlanLi destination. Please choose a destination.');
+      selectionError.destinationSelectionRequired = true;
+      selectionError.destinationCountryCode = preliminaryCountry.countryCode;
+      selectionError.providerCallCount = requestContext.count;
+      throw selectionError;
+    }
   }
   const resolvedCountry = preliminaryCountry;
 
@@ -1693,7 +1813,9 @@ async function resolveGoogleDestination({
         ...(provisionalDestination ? {
           provisional: true,
           reviewState: 'pending',
-          selectionSource: 'user_confirmed_destination',
+          selectionSource: canonicalMatch?.source === 'verified_containing_locality'
+            ? 'verified_containing_locality'
+            : 'user_confirmed_destination',
         } : {}),
       },
       stats: { recommendationCount: 0 },

@@ -67,6 +67,20 @@ test('legacy gateway autocomplete returns only bounded, client-safe prediction f
   assert.match(results[0].selectionId, /^sel_/);
 });
 
+test('legacy autocomplete applies a bounded location bias without restricting results', async () => {
+  await legacyAutocomplete({
+    query: 'Virupaksha Temple', mapsKey: 'key', mode: 'places',
+    coordinates: { lat: 15.335, lng: 76.46 },
+    fetchImpl: async (url) => {
+      const request = new URL(url);
+      assert.equal(request.searchParams.get('location'), '15.335,76.46');
+      assert.equal(request.searchParams.get('radius'), '50000');
+      assert.equal(request.searchParams.has('strictbounds'), false);
+      return { ok: true, json: async () => ({ status: 'ZERO_RESULTS' }) };
+    },
+  });
+});
+
 test('search callable returns the Place ID required by the selection contract', async () => {
   const writes = [];
   const admin = {
@@ -96,4 +110,18 @@ test('search callable returns the Place ID required by the selection contract', 
   });
   assert.equal(result.predictions[0].placeId, 'place-paris');
   assert.equal(writes[0].predictions[0].placeId, 'place-paris');
+});
+
+test('search callable rejects invalid location bias before calling Google', async () => {
+  let providerCalled = false;
+  await assert.rejects(searchPlaces({
+    admin: { firestore: () => ({}) },
+    auth: { uid: 'user-1' },
+    data: { query: 'Hampi', mode: 'places', locationBias: { lat: 95, lng: 76 } },
+    mapsKey: 'key',
+    providerRateLimitKey: 'rate-key',
+    consumeBudget: async () => {},
+    fetchImpl: async () => { providerCalled = true; },
+  }), (error) => String(error.code).includes('invalid-argument'));
+  assert.equal(providerCalled, false);
 });
