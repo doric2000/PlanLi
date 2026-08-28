@@ -25,15 +25,15 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
-The latest compatible Android and iOS production EAS Update is regional-
-discovery group `13f33be0-9aba-4c24-8ad2-4ba93a431bd5`, Android update
-`01a04563-9588-79ef-a6df-025b012318c3` and iOS update
-`01a04563-9588-7296-b65e-99f238cbae6f`, published at
-`2026-08-27T22:42:29.384Z` from clean `main` merge commit
-`4319c86a3f9dff786c5bf9489c14c194084695bc`. EAS read-back confirms runtime
+The latest compatible Android and iOS production EAS Update is region-selector
+polish group `b363be1d-63b2-4ea9-86e2-67bf3923b01c`, Android update
+`01a04728-4cd2-7278-bf57-8d555e2e1c2d` and iOS update
+`01a04728-4cd2-7c6d-a464-3f0af1fe74b6`, published at
+`2026-08-28T06:56:58.578Z` from clean `main` merge commit
+`0c10dc73b4b7ad78b025acf321615f95d47b8277`. EAS read-back confirms runtime
 `1.1.0`, the exact merge commit, both platforms and the production branch.
-Download, application and end-to-end publication behavior on physical Android
-and iOS devices remain unverified.
+Download, application and end-to-end visual behavior on physical Android and
+iOS devices remain unverified.
 TestFlight build `1.1.0 (13)` remains installed and in use on the owner's physical
 iPhone. Builds 14 and 15 have not been confirmed as installed or exercised. An
 internal iOS EAS Development Build
@@ -1962,3 +1962,35 @@ rejected.
   remain unverified. Force-close and reopen the production app up to twice to
   apply the OTA. Roll back by republishing production group
   `3016e5a7-5f03-4abd-8277-db1e43f48f4d` if required.
+
+## Region selector polish release
+
+- Source and Git: implementation commit
+  `49318a4` passed PR `#251` and merged to clean `main` as
+  `0c10dc73b4b7ad78b025acf321615f95d47b8277`.
+- Scope: the native selector now extends edge-to-edge beneath transparent system
+  bars while keeping the skip action reachable below the top safe inset. Press
+  feedback follows each region image's alpha shape with a white outline instead
+  of showing a rectangular highlight. Community and Routes now expose the active
+  region through a compact accessible globe action beside the existing page title,
+  without adding header height; Home retains its full region preview control.
+- Validation: five focused client suites passed 51/51 tests, changed-scope
+  validation passed, `git diff --check` passed and every required check on PR
+  `#251` passed. Browser checks at 390x843 exercised the selector and both compact
+  header actions, confirmed the expected layout and navigation, and found no
+  console errors. Physical-device safe-area and press-effect behavior remain
+  unverified.
+- EAS Update: preview group `41776324-c1db-4c5d-832e-cb1ccc3d3b7d`, Android
+  update `01a04724-d7b4-741a-92d2-f23975db81f8` and iOS update
+  `01a04724-d7b4-7cb7-960a-4dcc4f7abbc9` were published at
+  `2026-08-28T06:53:11.988Z`. Those exact artifacts were republished to production
+  group `b363be1d-63b2-4ea9-86e2-67bf3923b01c`, Android update
+  `01a04728-4cd2-7278-bf57-8d555e2e1c2d` and iOS update
+  `01a04728-4cd2-7c6d-a464-3f0af1fe74b6` at
+  `2026-08-28T06:56:58.578Z`. EAS read-back confirmed branch `production`, both
+  platforms, runtime `1.1.0` and exact source commit `0c10dc73`.
+- No Functions, Firestore indexes or Rules, native EAS build, App Store submission
+  or Google Play submission changed in this release. The existing beta binaries
+  already use runtime `1.1.0`; force-close and reopen the production app up to
+  twice to apply the OTA. Roll back by republishing production group
+  `13f33be0-9aba-4c24-8ad2-4ba93a431bd5` if required.
