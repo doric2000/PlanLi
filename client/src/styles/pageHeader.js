@@ -65,6 +65,20 @@ export const pageHeaderStyles = StyleSheet.create({
   },
   sideEnd: { alignItems: 'flex-start' },
   titleWrap: { flex: 1, alignItems: 'center', minWidth: 0 },
+  titleLine: {
+    minHeight: TAB_HERO_ACTION_HEIGHT,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  titleAccessory: {
+    width: TAB_HERO_ACTION_HEIGHT,
+    height: TAB_HERO_ACTION_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
     color: colors.textPrimary,
     fontSize: 24,

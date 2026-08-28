@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { regionSelectorStyles as styles } from '../../../styles/regionSelector';
 import { useRegionSelection } from '../context/RegionSelectionState';
@@ -20,6 +20,20 @@ import {
 } from '../regionDefinitions';
 
 const WEB_MAX_CANVAS_WIDTH = 430;
+
+export function calculateRegionSelectorCanvasSize({ viewportWidth, viewportHeight, platform }) {
+  const width = Math.min(
+    viewportWidth,
+    platform === 'web' ? WEB_MAX_CANVAS_WIDTH : viewportWidth,
+  );
+
+  return {
+    width,
+    height: platform === 'web'
+      ? Math.round(width * REGION_SELECTOR_SOURCE_SIZE.height / REGION_SELECTOR_SOURCE_SIZE.width)
+      : Math.max(1, Math.round(viewportHeight)),
+  };
+}
 
 function closeSelector(navigation) {
   if (navigation?.canGoBack?.() && typeof navigation?.goBack === 'function') {
@@ -45,14 +59,22 @@ export { closeSelector };
 
 export default function RegionSelectorScreen({ navigation, route }) {
   const { width: viewportWidth, height: viewportHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { selectRegion, dismissPrompt } = useRegionSelection();
   const [busy, setBusy] = useState(false);
+  const [pressedRegionId, setPressedRegionId] = useState(null);
+  const [savingRegionId, setSavingRegionId] = useState(null);
   const required = route?.params?.required === true;
-  const canvasWidth = Math.min(viewportWidth, Platform.OS === 'web' ? WEB_MAX_CANVAS_WIDTH : viewportWidth);
-  const canvasHeight = Math.round(
-    canvasWidth * REGION_SELECTOR_SOURCE_SIZE.height / REGION_SELECTOR_SOURCE_SIZE.width,
-  );
+  const { width: canvasWidth, height: canvasHeight } = calculateRegionSelectorCanvasSize({
+    viewportWidth,
+    viewportHeight,
+    platform: Platform.OS,
+  });
   const centerVertically = Platform.OS === 'web' && viewportHeight > canvasHeight;
+  const activeRegionId = savingRegionId || pressedRegionId;
+  const nativeSkipPosition = Platform.OS === 'web'
+    ? null
+    : { top: Math.max(canvasHeight * 0.024, insets.top + 2) };
   const scrollContentStyle = useMemo(() => [
     styles.scrollContent,
     centerVertically && { justifyContent: 'center' },
@@ -61,6 +83,7 @@ export default function RegionSelectorScreen({ navigation, route }) {
   const handleRegionPress = async (regionId) => {
     if (busy) return;
     setBusy(true);
+    setSavingRegionId(regionId);
     try {
       await selectRegion(regionId);
       if (!required) closeSelector(navigation);
@@ -68,6 +91,8 @@ export default function RegionSelectorScreen({ navigation, route }) {
       // Keep the selector open so the traveler can retry without losing the choice.
     } finally {
       setBusy(false);
+      setSavingRegionId(null);
+      setPressedRegionId(null);
     }
   };
 
@@ -85,12 +110,11 @@ export default function RegionSelectorScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView
+    <View
       style={styles.safeArea}
-      edges={Platform.OS === 'web' ? [] : ['top', 'bottom', 'left', 'right']}
       testID="region-selector-screen"
     >
-      <StatusBar barStyle="light-content" backgroundColor="#081E39" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <LinearGradient
         colors={['#081E39', '#123E65', '#F8EBD7']}
         locations={[0, 0.42, 1]}
@@ -99,6 +123,8 @@ export default function RegionSelectorScreen({ navigation, route }) {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={scrollContentStyle}
+          contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
@@ -115,7 +141,7 @@ export default function RegionSelectorScreen({ navigation, route }) {
               importantForAccessibility="no-hide-descendants"
             />
             {!required ? <Pressable
-              style={({ pressed }) => [styles.skipButton, pressed && styles.regionButtonPressed]}
+              style={[styles.skipButton, nativeSkipPosition]}
               onPress={handleDismiss}
               disabled={busy}
               accessibilityRole="button"
@@ -129,11 +155,13 @@ export default function RegionSelectorScreen({ navigation, route }) {
             {REGIONS.map((region) => (
               <Pressable
                 key={region.id}
-                style={({ pressed }) => [
+                style={[
                   styles.regionButton,
                   scaledCropStyle(region.crop, canvasWidth, canvasHeight, region.zIndex),
-                  pressed && styles.regionButtonPressed,
+                  activeRegionId === region.id && styles.regionButtonActive,
                 ]}
+                onPressIn={() => setPressedRegionId(region.id)}
+                onPressOut={() => setPressedRegionId(null)}
                 onPress={() => handleRegionPress(region.id)}
                 disabled={busy}
                 accessibilityRole="button"
@@ -141,19 +169,32 @@ export default function RegionSelectorScreen({ navigation, route }) {
                 accessibilityHint={`בחירת אזור ${region.label}`}
                 testID={`region-option-${region.id}`}
               >
-                <Image
-                  source={region.image}
-                  style={styles.regionImage}
-                  resizeMode="stretch"
-                  accessible={false}
-                  accessibilityElementsHidden
-                  importantForAccessibility="no-hide-descendants"
-                />
+                {activeRegionId === region.id ? (
+                  <View
+                    pointerEvents="none"
+                    style={styles.regionPressedVisual}
+                    testID={`region-option-${region.id}-pressed-visual`}
+                    accessible={false}
+                  >
+                    <Image
+                      source={region.image}
+                      style={[styles.regionPressedImage, styles.regionOutlineImage]}
+                      resizeMode="stretch"
+                      accessible={false}
+                    />
+                    <Image
+                      source={region.image}
+                      style={styles.regionPressedImage}
+                      resizeMode="stretch"
+                      accessible={false}
+                    />
+                  </View>
+                ) : null}
               </Pressable>
             ))}
           </View>
         </ScrollView>
       </LinearGradient>
-    </SafeAreaView>
+    </View>
   );
 }
