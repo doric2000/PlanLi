@@ -6,6 +6,7 @@ import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal
 
 const mockGetPersonalizedRecommendations = jest.fn();
 const mockPickImagesForReview = jest.fn();
+const mockResolveLocation = jest.fn();
 
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
@@ -15,25 +16,35 @@ jest.mock('@expo/vector-icons', () => {
 jest.mock('../src/services/PersonalizationService', () => ({
   getPersonalizedRecommendations: (...args) => mockGetPersonalizedRecommendations(...args),
 }));
-jest.mock('../src/components/ExactLocationPicker', () => {
-  const { Pressable } = require('react-native');
-  return ({ value, onChange }) => (
-    <Pressable
-      testID="exact-location-picker"
-      accessibilityLabel={`exact-${value?.countryId || 'null'}-${value?.cityId || 'null'}-${value?.place?.placeId || 'null'}`}
-      onPress={() => onChange?.({
-        location: 'הוד השרון', country: 'ישראל', countryId: 'IL', cityId: 'hod-hasharon',
-        destination: {
-          countryId: 'IL', cityId: 'hod-hasharon', countryName: 'ישראל', cityName: 'הוד השרון',
-          provider: 'google', providerPlaceId: 'google-hod-hasharon',
-        },
-        place: {
-          placeId: 'hod-cafe', resolvedPlaceToken: 'resolved-token', name: 'בית קפה',
-          coordinates: { lat: 32.15, lng: 34.88 },
-        },
-      })}
-    />
+jest.mock('../src/services/LocationService', () => ({
+  searchPlaces: jest.fn(async () => []),
+  resolveDestinationForPlacePreview: (...args) => mockResolveLocation(...args),
+  finalizeDestinationChoice: jest.fn(),
+}));
+jest.mock('../src/components/GooglePlacesInput', () => {
+  const { Pressable, Text, TextInput, View } = require('react-native');
+  return ({ value, onChangeValue, onSelect, inputTestID }) => (
+    <View>
+      <TextInput testID={inputTestID} value={value} onChangeText={onChangeValue} />
+      <Pressable
+        testID="route-stop-google-result"
+        onPress={() => onSelect?.({
+          sessionId: 'session-1', selectionId: 'selection-1',
+          providerPlaceId: 'hod-cafe', description: 'בית קפה, הוד השרון',
+        })}
+      >
+        <Text>בחירת מקום חדש</Text>
+      </Pressable>
+    </View>
   );
+});
+jest.mock('../src/components/ExactLocationConfirmation', () => {
+  const { Pressable, Text } = require('react-native');
+  return ({ pendingLocation, onConfirm }) => pendingLocation ? (
+    <Pressable testID="route-stop-confirm-location" onPress={onConfirm}>
+      <Text>אישור המיקום</Text>
+    </Pressable>
+  ) : null;
 });
 jest.mock('../src/features/community/components/SingleDestinationPicker', () => {
   const { Pressable, Text } = require('react-native');
@@ -42,6 +53,7 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
       testID="route-stop-select-destination"
       onPress={() => onChange({
         countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', name: 'בודפשט',
+        coordinates: { lat: 47.4979, lng: 19.0402 },
         provider: 'google', providerPlaceId: 'google-city-1', resolvedPlaceToken: 'resolved-token-1',
       })}
     >
@@ -50,8 +62,13 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
   );
 });
 jest.mock('../src/features/community/components/ManualMapPinPicker', () => {
-  const { View } = require('react-native');
-  return () => <View testID="manual-pin-picker" />;
+  const { Pressable } = require('react-native');
+  return ({ onChange }) => (
+    <Pressable
+      testID="manual-pin-picker"
+      onPress={() => onChange?.({ latitude: 47.5, longitude: 19.05 })}
+    />
+  );
 });
 jest.mock('../src/components/TravelMediaComposer', () => {
   const React = require('react');
@@ -73,6 +90,21 @@ describe('StopEditorModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetPersonalizedRecommendations.mockResolvedValue({ items: [] });
+    mockResolveLocation.mockResolvedValue({
+      status: 'resolved',
+      resolvedPlaceToken: 'resolved-token',
+      destination: {
+        country: { id: 'IL', name: 'ישראל' },
+        city: {
+          id: 'hod-hasharon', name: 'הוד השרון',
+          googlePlaceId: 'google-hod-hasharon',
+        },
+      },
+      place: {
+        placeId: 'hod-cafe', resolvedPlaceToken: 'resolved-token', name: 'בית קפה',
+        coordinates: { lat: 32.15, lng: 34.88 },
+      },
+    });
     mockPickImagesForReview.mockImplementation(({ onComplete }) => onComplete([
       'file:///one.jpg', 'file:///two.jpg', 'file:///three.jpg',
     ]));
@@ -347,7 +379,7 @@ describe('StopEditorModal', () => {
     expect(saved).not.toHaveProperty('subcategoryIds');
   });
 
-  it('hydrates and saves an unchanged exact stop from its nested saved destination', () => {
+  it('hydrates and saves an unchanged exact stop from its nested saved destination', async () => {
     const onSave = jest.fn();
     const screen = render(
       <StopEditorModal
@@ -376,7 +408,8 @@ describe('StopEditorModal', () => {
       />
     );
 
-    expect(screen.getByLabelText('exact-HU-budapest-saved-place')).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId('route-stop-exact-selected')).toBeTruthy());
+    expect(screen.getByText('בית קפה')).toBeTruthy();
     fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'בית קפה מעודכן');
     fireEvent.press(screen.getByText('שמירה'));
 
@@ -389,13 +422,15 @@ describe('StopEditorModal', () => {
     }), 1);
   });
 
-  it('keeps the provider destination identity on a newly selected exact stop', () => {
+  it('keeps the provider destination identity on a newly selected exact stop', async () => {
     const onSave = jest.fn();
     const screen = render(
       <StopEditorModal visible dayIndex={0} stopIndex={0} onSave={onSave} onClose={jest.fn()} allowImages={false} />
     );
     fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'בית קפה');
-    fireEvent.press(screen.getByTestId('exact-location-picker'));
+    fireEvent.press(screen.getByTestId('route-stop-google-result'));
+    await waitFor(() => expect(screen.getByTestId('route-stop-confirm-location')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-confirm-location'));
     fireEvent.press(screen.getByText('שמירה'));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       locationPrecision: 'exact',
@@ -404,6 +439,106 @@ describe('StopEditorModal', () => {
         countryId: 'IL', cityId: 'hod-hasharon',
         provider: 'google', providerPlaceId: 'google-hod-hasharon',
       }),
+    }), 0);
+  });
+
+  it('offers an explicit change action for an existing exact stop', async () => {
+    const onSave = jest.fn();
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        initialData={{
+          id: 'existing-stop', title: 'המקום הישן', locationPrecision: 'exact',
+          location: 'בודפשט', country: 'הונגריה', reuseSavedLocation: true,
+          destination: { countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', cityName: 'בודפשט' },
+          place: { placeId: 'old-place', name: 'המקום הישן', coordinates: { lat: 47.5, lng: 19.1 } },
+        }}
+        onSave={onSave}
+        onClose={jest.fn()}
+        allowImages={false}
+      />
+    );
+
+    fireEvent.press(await screen.findByTestId('route-stop-exact-change'));
+    expect(screen.getByTestId('route-stop-location-input')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('route-stop-google-result'));
+    await waitFor(() => expect(screen.getByTestId('route-stop-confirm-location')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-confirm-location'));
+    fireEvent.press(screen.getByText('שמירה'));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      place: expect.objectContaining({ placeId: 'hod-cafe' }),
+    }), 0);
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty('reuseSavedLocation');
+  });
+
+  it('replaces an existing exact location and removes stale recommendation identity', async () => {
+    const onSave = jest.fn();
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        initialData={{
+          id: 'existing-stop', title: 'המקום הישן', locationPrecision: 'exact',
+          location: 'בודפשט', country: 'הונגריה', reuseSavedLocation: true,
+          destination: { countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', cityName: 'בודפשט' },
+          place: { placeId: 'old-place', name: 'המקום הישן', coordinates: { lat: 47.5, lng: 19.1 } },
+          source: { type: 'recommendation', recommendationId: 'old-recommendation' },
+        }}
+        onSave={onSave}
+        onClose={jest.fn()}
+        allowImages={false}
+      />
+    );
+
+    fireEvent.press(await screen.findByTestId('route-stop-mode-exact'));
+    fireEvent.press(await screen.findByTestId('route-stop-google-result'));
+    await waitFor(() => expect(screen.getByTestId('route-stop-confirm-location')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-confirm-location'));
+    fireEvent.press(screen.getByText('שמירה'));
+
+    const saved = onSave.mock.calls[0][0];
+    expect(saved.place).toEqual(expect.objectContaining({ placeId: 'hod-cafe' }));
+    expect(saved.destination).toEqual(expect.objectContaining({
+      countryId: 'IL', cityId: 'hod-hasharon', providerPlaceId: 'google-hod-hasharon',
+    }));
+    expect(saved).not.toHaveProperty('source');
+    expect(saved).not.toHaveProperty('reuseSavedLocation');
+  });
+
+  it('requires a fresh place search before pinning when the saved area has no map context', async () => {
+    const onSave = jest.fn();
+    const screen = render(
+      <StopEditorModal
+        visible
+        dayIndex={0}
+        stopIndex={0}
+        initialData={{
+          id: 'general-stop', title: 'עצירה כללית', locationPrecision: 'general',
+          destination: { countryId: 'HU', cityId: 'budapest', countryName: 'הונגריה', cityName: 'בודפשט' },
+        }}
+        onSave={onSave}
+        onClose={jest.fn()}
+        allowImages={false}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId('route-stop-mode-pin'));
+    expect(screen.getByTestId('route-stop-location-message')).toBeTruthy();
+    expect(screen.queryByTestId('manual-pin-picker')).toBeNull();
+    fireEvent.press(screen.getByTestId('route-stop-google-result'));
+    await waitFor(() => expect(screen.getByTestId('route-stop-confirm-location')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-confirm-location'));
+    fireEvent.press(screen.getByTestId('manual-pin-picker'));
+    fireEvent.press(screen.getByText('שמירה'));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      locationPrecision: 'pin',
+      coordinates: { lat: 47.5, lng: 19.05 },
+      destination: expect.objectContaining({ countryId: 'IL', cityId: 'hod-hasharon' }),
     }), 0);
   });
 

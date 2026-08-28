@@ -17,7 +17,11 @@ import {
   removedTravelMediaItems,
   travelMediaUri,
 } from '../../../utils/travelMedia';
-import { recommendationComposerStyles as composer, stopEditorModalStyles as styles } from '../../../styles';
+import {
+  colors,
+  recommendationComposerStyles as composer,
+  stopEditorModalStyles as styles,
+} from '../../../styles';
 import ManualMapPinPicker from '../../community/components/ManualMapPinPicker';
 import SingleDestinationPicker from '../../community/components/SingleDestinationPicker';
 import { getStopCoordinates, getStopMediaAssets } from '../utils/routeStops';
@@ -129,6 +133,7 @@ export default function StopEditorModal({
   const [startTime, setStartTime] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [locationBusy, setLocationBusy] = useState(false);
+  const [locationMessage, setLocationMessage] = useState('');
   const [recommendations, setRecommendations] = useState([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [recommendationsError, setRecommendationsError] = useState('');
@@ -174,6 +179,7 @@ export default function StopEditorModal({
     setExactValue(nextExactValue);
     setDestination(nextDestination);
     setPin(nextPin);
+    setLocationMessage('');
     setStartTime(initialData?.startTime || '');
     setDurationMinutes(initialData?.durationMinutes ? String(initialData.durationMinutes) : '');
     setSelectedRecommendation(initialData?.source?.recommendationId ? initialData : null);
@@ -228,6 +234,62 @@ export default function StopEditorModal({
     const coordinates = getStopCoordinates(item);
     setPin(coordinates ? { latitude: coordinates.lat, longitude: coordinates.lng } : null);
   };
+
+  const switchLocationMode = (nextMode) => {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    setLocationMessage('');
+    if (nextMode === LOCATION_MODES.planli) {
+      setExactValue(null);
+      setDestination(null);
+      setPin(null);
+      setSelectedRecommendation(null);
+      return;
+    }
+    setSelectedRecommendation(null);
+    if (nextMode === LOCATION_MODES.exact) {
+      setDestination(null);
+      setPin(null);
+      setExactValue(null);
+      return;
+    }
+    setExactValue(null);
+    if (nextMode === LOCATION_MODES.general) {
+      setPin(null);
+      return;
+    }
+    if (destination?.countryId && destination?.cityId &&
+      !destination.coordinates && !destination.viewport) {
+      setDestination(null);
+      setPin(null);
+      setLocationMessage('כדי לסמן נקודה במפה, כדאי לבחור שוב את העיר או האזור.');
+    }
+  };
+
+  const chooseGeneralDestination = (value) => {
+    setDestination(value);
+    setPin(null);
+    setLocationMessage('');
+  };
+
+  const acceptPinSearchLocation = useCallback((confirmed) => {
+    if (!confirmed) return;
+    const nextDestination = normalizedDestination(confirmed.destination || {
+      countryId: confirmed.countryId,
+      cityId: confirmed.cityId,
+      countryName: confirmed.country,
+      cityName: confirmed.location,
+    });
+    const coordinates = getStopCoordinates(confirmed);
+    if (!nextDestination || !coordinates) return;
+    setDestination({
+      ...nextDestination,
+      coordinates: nextDestination.coordinates || coordinates,
+    });
+    setPin({ latitude: coordinates.lat, longitude: coordinates.lng });
+    setExactValue(null);
+    setLocationMessage('');
+  }, []);
 
   const addPhotos = () => {
     setMediaComposerVisible(true);
@@ -384,11 +446,10 @@ export default function StopEditorModal({
     setUnsavedModalVisible(false); pendingDiscardRef.current = null; onClose?.();
   };
 
-  const modes = [
-    { id: LOCATION_MODES.planli, label: 'מ־PlanLi', icon: 'heart-outline' },
+  const locationModes = [
     { id: LOCATION_MODES.exact, label: 'מקום מדויק', icon: 'location-outline' },
-    { id: LOCATION_MODES.pin, label: 'נקודה במפה', icon: 'pin-outline' },
     { id: LOCATION_MODES.general, label: 'עיר או אזור', icon: 'map-outline' },
+    { id: LOCATION_MODES.pin, label: 'נקודה במפה', icon: 'pin-outline' },
   ];
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={tryClose}>
@@ -402,14 +463,60 @@ export default function StopEditorModal({
         <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <NoyaTourTarget scope="route-stop-editor" targetId={NOYA_CREATOR_TARGETS.routeStop}>
             <FocusClearingFormInput label="שם העצירה" placeholder="למשל: השוק המרכזי" value={title} onChangeText={setTitle} rtl testID="route-stop-title-input" />
+            <TouchableOpacity
+              style={[styles.planliSourceButton, mode === LOCATION_MODES.planli && styles.planliSourceButtonSelected]}
+              onPress={() => switchLocationMode(LOCATION_MODES.planli)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: mode === LOCATION_MODES.planli }}
+              testID="route-stop-mode-planli"
+            >
+              <Ionicons name="heart-outline" size={20} color={colors.primary} />
+              <View style={styles.planliSourceCopy}>
+                <AppText style={styles.planliSourceTitle}>בחירה מהמלצות PlanLi</AppText>
+                <AppText style={styles.planliSourceHint}>הוספת מקום שכבר הומלץ בקהילה</AppText>
+              </View>
+            </TouchableOpacity>
+            <AppText style={styles.locationModeLabel}>או בחירת מיקום</AppText>
             <View style={composer.modeActions}>
-              {modes.map((entry) => <TouchableOpacity key={entry.id} style={[composer.modeButton, mode === entry.id && composer.modeButtonSelected]} onPress={() => setMode(entry.id)} accessibilityRole="radio" accessibilityState={{ checked: mode === entry.id }} testID={`route-stop-mode-${entry.id}`}><Ionicons name={entry.icon} size={18} /><AppText style={composer.modeButtonText}>{entry.label}</AppText></TouchableOpacity>)}
+              {locationModes.map((entry) => <TouchableOpacity key={entry.id} style={[composer.modeButton, mode === entry.id && composer.modeButtonSelected]} onPress={() => switchLocationMode(entry.id)} accessibilityRole="radio" accessibilityState={{ checked: mode === entry.id }} testID={`route-stop-mode-${entry.id}`}><Ionicons name={entry.icon} size={18} color={colors.primary} /><AppText style={composer.modeButtonText}>{entry.label}</AppText></TouchableOpacity>)}
             </View>
           </NoyaTourTarget>
           <View style={styles.locationWrap}>
-            {mode === LOCATION_MODES.exact ? <ExactLocationPicker value={exactValue} onChange={setExactValue} onResolvingChange={setLocationBusy} inputTestID="route-stop-location-input" /> : null}
-            {mode === LOCATION_MODES.general || mode === LOCATION_MODES.pin ? <SingleDestinationPicker allowProviderDestinations value={destination} onChange={(value) => { setDestination(value); setPin(null); }} /> : null}
-            {mode === LOCATION_MODES.pin && destination ? <ManualMapPinPicker destination={destination} value={pin} onChange={setPin} /> : null}
+            {mode === LOCATION_MODES.exact ? <ExactLocationPicker
+              value={exactValue}
+              onChange={setExactValue}
+              onResolvingChange={setLocationBusy}
+              variant="composer"
+              label="חיפוש מקום"
+              placeholder="למשל: Café Central, וינה"
+              inputTestID="route-stop-location-input"
+              showSelectedCard
+              selectedTestID="route-stop-exact-selected"
+              changeTestID="route-stop-exact-change"
+              errorTestID="route-stop-location-error"
+              retryTestID="route-stop-location-retry"
+              changeResultTestID="route-stop-location-change-result"
+            /> : null}
+            {mode === LOCATION_MODES.general || (mode === LOCATION_MODES.pin && destination) ? <View style={composer.locationPanel}>
+              <AppText style={composer.fieldLabel}>בחירת עיר או אזור</AppText>
+              <SingleDestinationPicker allowProviderDestinations value={destination} onChange={chooseGeneralDestination} />
+              {mode === LOCATION_MODES.general ? <AppText style={composer.fieldHint}>העצירה תישמר בתוך היעד בלי נקודה מדויקת במפה.</AppText> : null}
+            </View> : null}
+            {locationMessage ? <AppText style={composer.fieldError} testID="route-stop-location-message">{locationMessage}</AppText> : null}
+            {mode === LOCATION_MODES.pin && !destination ? <ExactLocationPicker
+              value={null}
+              onChange={acceptPinSearchLocation}
+              onResolvingChange={setLocationBusy}
+              variant="composer"
+              label="חיפוש מקום לסימון במפה"
+              helper="חפשו מקום מוכר באזור; לאחר הבחירה אפשר להזיז את הסיכה למיקום הרצוי."
+              placeholder="למשל: Hampi, הודו"
+              inputTestID="route-stop-pin-location-input"
+              errorTestID="route-stop-pin-location-error"
+              retryTestID="route-stop-pin-location-retry"
+              changeResultTestID="route-stop-pin-location-change-result"
+            /> : null}
+            {mode === LOCATION_MODES.pin && destination ? <View style={styles.manualMapSpacing}><ManualMapPinPicker destination={destination} value={pin} onChange={setPin} /></View> : null}
             {mode === LOCATION_MODES.planli ? <View style={composer.destinationResults}>
               {recommendationsLoading ? <ActivityIndicator /> : null}
               {recommendationsError ? <View>

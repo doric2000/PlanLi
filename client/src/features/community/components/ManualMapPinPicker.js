@@ -13,11 +13,11 @@ function normalizeCoordinate(value) {
 }
 
 export default function ManualMapPinPicker({ destination, value, onChange }) {
-  const center = useMemo(
-    () => normalizeCoordinate(destination?.coordinates) || { latitude: 32.0853, longitude: 34.7818 },
-    [destination?.coordinates]
-  );
   const marker = normalizeCoordinate(value);
+  const center = useMemo(
+    () => normalizeCoordinate(destination?.coordinates) || marker || { latitude: 32.0853, longitude: 34.7818 },
+    [destination?.coordinates, marker?.latitude, marker?.longitude]
+  );
 
   return (
     <View>
