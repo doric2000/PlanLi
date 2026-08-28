@@ -1,26 +1,35 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
+  applyingSuspensionDisposition,
+  applySuspensionEnforcement,
   assertAdmin,
   assertRecentAuth,
+  directSuspensionEnforcementId,
   finalizeReinstatement,
   getAdminResource,
   getModerationDashboard,
   listAdminUsers,
   listModerationAudit,
   listModerationCases,
+  moderationCaseAuditId,
+  moderationDecisionOptions,
   moderateContent,
   bulkUpdateModerationCases,
   updateModerationCase,
   sensitiveAdminActions,
   publicModerationCase,
   publicModerationReport,
+  recoverablePreviousCaseStatus,
+  recoverApplyingSuspension,
   processExpiredModerationSuspensions,
+  normalizeNoViolationContentAction,
   reinstateUserAccount,
   resolveModerationCase,
   searchAdminResources,
   setUserAdmin,
   setUserEmailVerified,
+  suspensionReplayDisposition,
   updateAdminAttachedPlace,
 } = require('./adminService');
 const { ownerNotificationOutboxId } = require('./notificationService');
@@ -222,6 +231,12 @@ test('a report that changes a leased case prevents resolution finalization', asy
       }
       return handler({
         get: async (ref) => {
+          if (ref.path === 'recommendations/rec-1') {
+            return { exists: true, data: () => ({ status: 'active', ownerId: 'owner-1' }) };
+          }
+          if (ref.path.startsWith('system/moderation/audit/')) {
+            return { exists: false, data: () => null };
+          }
           assert.equal(ref.path, 'system/moderation/cases/case-1');
           return { exists: true, data: () => caseValue };
         },
@@ -253,6 +268,398 @@ test('a report that changes a leased case prevents resolution finalization', asy
   assert.equal(caseValue.revision, 5);
   assert.equal(caseValue.reportCount, 2);
   assert.equal(caseValue.decisionLease, undefined);
+});
+
+test('a completed case decision and its audit replay once after a lost response', async () => {
+  const deleted = Symbol('deleted');
+  const target = {
+    type: 'destination',
+    id: 'haifa',
+    countryId: 'IL',
+    cityId: 'haifa',
+    path: 'countries/IL/destinations/haifa',
+  };
+  let caseValue = { target, targetPreview: { available: true, title: 'חיפה' }, revision: 0, status: 'open' };
+  const auditValues = new Map();
+  let auditWrites = 0;
+  let eventCounter = 0;
+  const merge = (current, patch) => Object.fromEntries(Object.entries({ ...current, ...patch })
+    .filter(([, value]) => value !== deleted));
+  const db = {
+    doc(path) {
+      return {
+        path,
+        get: async () => {
+          if (path === 'system/moderation/admins/admin-1') {
+            return { exists: true, data: () => ({ active: true }) };
+          }
+          if (path === 'system/moderation/cases/case-1') {
+            return { exists: true, data: () => caseValue };
+          }
+          return { exists: false, data: () => null };
+        },
+      };
+    },
+    collection(path) {
+      return { doc: () => ({ path: `${path}/event-${eventCounter += 1}` }) };
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => {
+        if (ref.path === 'system/moderation/cases/case-1') {
+          return { exists: true, data: () => caseValue };
+        }
+        if (ref.path.startsWith('system/moderation/audit/')) {
+          return {
+            exists: auditValues.has(ref.path),
+            data: () => auditValues.get(ref.path),
+          };
+        }
+        throw new Error(`Unexpected transaction read: ${ref.path}`);
+      },
+      set: (ref, value) => {
+        if (ref.path === 'system/moderation/cases/case-1') caseValue = merge(caseValue, value);
+        else if (ref.path.startsWith('system/moderation/audit/')) {
+          auditValues.set(ref.path, value);
+          auditWrites += 1;
+        }
+      },
+    }),
+  };
+  const firestore = Object.assign(() => db, {
+    FieldValue: { delete: () => deleted, serverTimestamp: () => 'server-time' },
+  });
+  const request = {
+    admin: { firestore },
+    auth: {
+      uid: 'admin-1',
+      token: { admin: true, auth_time: Math.floor(Date.now() / 1000), name: 'מנהלת' },
+    },
+    data: {
+      caseId: 'case-1',
+      expectedRevision: 0,
+      contentAction: 'dismiss',
+      accountAction: { type: 'none' },
+      reasonCode: 'no_violation',
+      operationId: 'operation-replay-1',
+    },
+  };
+
+  const first = await resolveModerationCase(request);
+  const replay = await resolveModerationCase(request);
+  assert.equal(first.status, 'resolved_dismissed');
+  assert.equal(replay.status, 'resolved_dismissed');
+  assert.equal(caseValue.revision, 2);
+  assert.equal(auditWrites, 1);
+  assert.equal(auditValues.size, 1);
+});
+
+test('held no-violation decisions restore content for current and legacy clients', () => {
+  assert.equal(normalizeNoViolationContentAction({
+    requestedContentAction: 'dismiss',
+    contentStatus: 'moderation_hold',
+  }), 'restore');
+  assert.equal(normalizeNoViolationContentAction({
+    requestedContentAction: 'dismiss',
+    contentStatus: 'active',
+  }), 'dismiss');
+  const held = moderationDecisionOptions({
+    target: { type: 'recommendation', id: 'rec-1' },
+    targetPreview: { available: true, status: 'moderation_hold' },
+    subjectUser: { uid: 'owner-1', status: 'active' },
+  });
+  assert.deepEqual(held.contentActions, ['none', 'restore', 'delete']);
+  assert.equal(held.defaultContentAction, 'restore');
+  assert.deepEqual(held.accountActions, ['none', 'warn', 'suspend']);
+});
+
+test('suspended content exposes an explicit reinstate and restore path', () => {
+  const suspended = moderationDecisionOptions({
+    target: { type: 'route', id: 'route-1' },
+    targetPreview: { available: true, status: 'suspended' },
+    subjectUser: { uid: 'owner-1', status: 'suspended' },
+  });
+  assert.deepEqual(suspended.contentActions, ['none', 'restore', 'delete']);
+  assert.equal(suspended.defaultContentAction, 'restore');
+  assert.deepEqual(suspended.accountActions, ['none', 'reinstate']);
+  assert.equal(suspended.defaultAccountAction, 'none');
+});
+
+test('suspension replays only active or applying records and rejects every terminal state', () => {
+  assert.equal(suspensionReplayDisposition('active'), 'replay');
+  assert.equal(suspensionReplayDisposition('applying'), 'resume');
+  for (const status of ['complete', 'revoked', 'superseded', 'failed', 'unknown']) {
+    assert.equal(suspensionReplayDisposition(status), 'conflict');
+  }
+});
+
+test('applying suspension recovery stops on mismatched history and classifies safe convergence paths', () => {
+  const base = {
+    enforcementId: 'enforcement-1',
+    enforcement: {
+      type: 'suspension', status: 'applying', userUid: 'user-1', stage: 'auth_disabled',
+      authDisableStartedAt: 10, endsAt: 500,
+    },
+    userExists: true,
+    authUser: { uid: 'user-1', disabled: true, customClaims: {} },
+    intended: true,
+    now: 100,
+  };
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    userData: { moderation: { status: 'active' } },
+  }).action, 'resume');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    now: 600,
+    userData: { moderation: { status: 'active' } },
+  }).action, 'expire_before_activation');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    enforcement: { ...base.enforcement, stage: 'effects_applied' },
+    now: 600,
+    userData: { moderation: { status: 'active' } },
+  }).action, 'ambiguous');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    userData: { moderation: { status: 'suspended', enforcementId: 'newer' } },
+  }).action, 'supersede');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    userData: { moderation: { status: 'suspended', enforcementId: 'enforcement-1' } },
+  }).action, 'resume');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    intended: false,
+    userData: { moderation: { status: 'active' } },
+  }).action, 'cancel_before_activation');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    authUser: { ...base.authUser, customClaims: { admin: true } },
+    userData: { moderation: { status: 'active' } },
+  }).action, 'cancel_before_activation');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    intended: false,
+    enforcement: { ...base.enforcement, stage: 'profile_suspended' },
+    userData: { moderation: { status: 'suspended', enforcementId: 'enforcement-1' } },
+  }).action, 'ambiguous');
+  assert.equal(applyingSuspensionDisposition({
+    ...base,
+    intended: false,
+    enforcement: { ...base.enforcement, authDisableStartedAt: null },
+    userData: { moderation: { status: 'active' } },
+  }).reason, 'auth_disable_origin_ambiguous');
+});
+
+test('canceling a pre-profile applying suspension re-enables an account disabled by that attempt', async () => {
+  const writes = [];
+  const authUpdates = [];
+  const firestore = () => ({
+    doc: (path) => ({
+      get: async () => {
+        if (path === 'users/user-1') return { exists: true, data: () => ({ moderation: { status: 'active' } }) };
+        return { exists: false, data: () => null };
+      },
+    }),
+  });
+  firestore.FieldValue = { serverTimestamp: () => 'server-time' };
+  const result = await recoverApplyingSuspension({
+    admin: {
+      firestore,
+      auth: () => ({
+        getUser: async () => ({ uid: 'user-1', disabled: true, customClaims: {} }),
+        updateUser: async (uid, value) => authUpdates.push({ uid, value }),
+        revokeRefreshTokens: async () => {},
+      }),
+    },
+    enforcementEntry: {
+      id: 'enforcement-1',
+      data: () => ({
+        type: 'suspension',
+        status: 'applying',
+        userUid: 'user-1',
+        sourceCaseId: 'case-replaced',
+        stage: 'auth_disabled',
+        authDisableStartedAt: 10,
+      }),
+      ref: { set: async (value) => writes.push(value) },
+    },
+    mediaBucket: 'bucket',
+  });
+  assert.equal(result.superseded, true);
+  assert.deepEqual(authUpdates, [{ uid: 'user-1', value: { disabled: false } }]);
+  assert.equal(writes[0].stage, 'cancel_before_activation');
+  assert.equal(writes[0].recoveryReason, 'decision_replaced');
+});
+
+test('applying suspension recovery never resumes over a newer enforcement', async () => {
+  const writes = [];
+  const enforcementEntry = {
+    id: 'old-enforcement',
+    data: () => ({
+      type: 'suspension', status: 'applying', userUid: 'user-1', stage: 'auth_disabled', permanent: true,
+    }),
+    ref: { set: async (value) => writes.push(value) },
+  };
+  const firestore = () => ({
+    doc: (path) => ({
+      get: async () => {
+        assert.equal(path, 'users/user-1');
+        return {
+          exists: true,
+          data: () => ({ moderation: { status: 'suspended', enforcementId: 'newer-enforcement' } }),
+        };
+      },
+    }),
+  });
+  firestore.FieldValue = { serverTimestamp: () => 'server-time' };
+  const result = await recoverApplyingSuspension({
+    admin: {
+      firestore,
+      auth: () => ({ getUser: async () => ({ uid: 'user-1', disabled: true, customClaims: {} }) }),
+    },
+    enforcementEntry,
+    mediaBucket: 'bucket',
+    applySuspensionEnforcementImpl: async () => assert.fail('a superseded enforcement must not resume'),
+  });
+  assert.equal(result.superseded, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].status, 'superseded');
+  assert.equal(writes[0].recoveryReason, 'newer_enforcement');
+});
+
+test('ambiguous applying suspension history stops without any write', async () => {
+  let writes = 0;
+  const firestore = () => ({
+    doc: () => ({
+      get: async () => ({ exists: true, data: () => ({ moderation: { status: 'active' } }) }),
+    }),
+  });
+  firestore.FieldValue = { serverTimestamp: () => 'server-time' };
+  const result = await recoverApplyingSuspension({
+    admin: {
+      firestore,
+      auth: () => ({ getUser: async () => ({ uid: 'user-1', disabled: true, customClaims: {} }) }),
+    },
+    enforcementEntry: {
+      id: 'uncertain',
+      data: () => ({
+        type: 'suspension',
+        status: 'applying',
+        userUid: 'user-1',
+        stage: 'effects_applied',
+        endsAt: 50,
+      }),
+      ref: { set: async () => { writes += 1; } },
+    },
+    mediaBucket: 'bucket',
+    now: 100,
+  });
+  assert.equal(result.ambiguous, true);
+  assert.equal(writes, 0);
+});
+
+test('a suspension retry converges after failure at every durable stage', async () => {
+  const failurePoints = [
+    'auth_disabling',
+    'auth_update',
+    'auth_disabled',
+    'profile_update',
+    'profile_suspended',
+    'media',
+    'hide',
+    'effects_applied',
+    'notification',
+    'audit',
+    'complete',
+  ];
+  for (const failurePoint of failurePoints) {
+    let injected = false;
+    const state = {};
+    const failOnce = (point) => {
+      if (!injected && failurePoint === point) {
+        injected = true;
+        throw new Error(`injected:${point}`);
+      }
+    };
+    const enforcementRef = {
+      set: async (value) => {
+        failOnce(value.stage);
+        Object.assign(state, value);
+      },
+    };
+    const firestore = () => ({
+      doc: (path) => path === 'users/user-1'
+        ? {
+            update: async () => failOnce('profile_update'),
+            get: async () => ({ exists: true, data: () => ({ displayName: 'משתמש' }) }),
+          }
+        : { delete: async () => {} },
+    });
+    firestore.FieldValue = {
+      serverTimestamp: () => 'server-time',
+      delete: () => 'delete',
+    };
+    const admin = {
+      firestore,
+      auth: () => ({
+        updateUser: async () => failOnce('auth_update'),
+        revokeRefreshTokens: async () => {},
+      }),
+    };
+    const invoke = () => applySuspensionEnforcement({
+      admin,
+      auth: { uid: 'admin-1', token: { name: 'מנהלת' } },
+      user: { uid: 'user-1' },
+      mediaBucket: 'bucket',
+      enforcementId: 'enforcement-1',
+      enforcementRef,
+      endsAt: 1000,
+      durationHours: 24,
+      reason: 'סיבה',
+      userMessage: 'הודעה',
+      setMediaAvailabilityImpl: async () => failOnce('media'),
+      hideUserContentImpl: async () => {
+        failOnce('hide');
+        return 3;
+      },
+      sendModerationNotificationImpl: async () => failOnce('notification'),
+      auditEnforcementOnceImpl: async () => failOnce('audit'),
+    });
+    await assert.rejects(invoke(), new RegExp(`injected:${failurePoint}`));
+    const result = await invoke();
+    assert.equal(result.suspended, true);
+    assert.equal(result.hidden, 3);
+    assert.equal(state.status, 'active');
+    assert.equal(state.stage, 'complete');
+  }
+});
+
+test('moderation case audits use a stable operation-scoped identifier', () => {
+  const first = moderationCaseAuditId('case-1', 'operation-1');
+  assert.equal(first, moderationCaseAuditId('case-1', 'operation-1'));
+  assert.notEqual(first, moderationCaseAuditId('case-1', 'operation-2'));
+  assert.match(first, /^case_[A-Za-z0-9_-]{40}$/);
+});
+
+test('direct suspension operations derive a stable per-user enforcement identifier', () => {
+  const first = directSuspensionEnforcementId('user-1', 'operation-1');
+  assert.equal(first, directSuspensionEnforcementId('user-1', 'operation-1'));
+  assert.notEqual(first, directSuspensionEnforcementId('user-1', 'operation-2'));
+  assert.notEqual(first, directSuspensionEnforcementId('user-2', 'operation-1'));
+  assert.match(first, /^[A-Za-z0-9_-]{40}$/);
+});
+
+test('a stale resolving lease recovers the queue status used before the operation', () => {
+  assert.equal(recoverablePreviousCaseStatus({
+    status: 'resolving',
+    decisionLease: { previousStatus: 'auto_held' },
+  }), 'auto_held');
+  assert.equal(recoverablePreviousCaseStatus({
+    status: 'resolving',
+    targetPreview: { status: 'moderation_hold' },
+  }), 'auto_held');
+  assert.equal(recoverablePreviousCaseStatus({ status: 'resolving' }), 'open');
 });
 
 test('attached route place correction binds to the transactionally current revision', async () => {
@@ -371,14 +778,23 @@ test('expired suspensions reinstate only the current enforcement and mark stale 
     { id: 'current', data: () => ({ userUid: 'user-current' }), ref: { set: async (value) => writes.push(['current', value]) } },
     { id: 'stale', data: () => ({ userUid: 'user-stale' }), ref: { set: async (value) => writes.push(['stale', value]) } },
   ];
-  const query = {
-    where: () => query,
-    orderBy: () => query,
-    limit: () => query,
-    get: async () => ({ size: docs.length, docs }),
+  const enforcementQuery = () => {
+    let status = '';
+    const query = {
+      where: (field, _operator, value) => {
+        if (field === 'status') status = value;
+        return query;
+      },
+      orderBy: () => query,
+      limit: () => query,
+      get: async () => status === 'applying'
+        ? ({ size: 0, docs: [] })
+        : ({ size: docs.length, docs }),
+    };
+    return query;
   };
   const db = {
-    collection: () => query,
+    collection: () => enforcementQuery(),
     doc(path) {
       if (path === 'users/user-current') return { get: async () => ({ exists: true, data: () => ({ moderation: { status: 'suspended', enforcementId: 'current' } }) }) };
       if (path === 'users/user-stale') return { get: async () => ({ exists: true, data: () => ({ moderation: { status: 'active', enforcementId: 'newer' } }) }) };
@@ -389,7 +805,6 @@ test('expired suspensions reinstate only the current enforcement and mark stale 
   firestore.Timestamp = { fromMillis: (value) => value };
   firestore.FieldValue = { serverTimestamp: () => 'server-time' };
   const reinstated = [];
-  const audited = [];
   const result = await processExpiredModerationSuspensions({
     admin: { firestore },
     mediaBucket: 'bucket',
@@ -398,12 +813,65 @@ test('expired suspensions reinstate only the current enforcement and mark stale 
       reinstated.push([uid, expectedEnforcementId, requireExpired, now]);
       return { reinstated: true };
     },
-    auditImpl: async (value) => audited.push(value),
   });
-  assert.deepEqual(result, { scanned: 2, reinstated: 1, superseded: 1 });
+  assert.deepEqual(result, {
+    scanned: 2,
+    reinstated: 1,
+    superseded: 1,
+    applyingScanned: 0,
+    applyingRecovered: 0,
+    applyingSuperseded: 0,
+    applyingAmbiguous: 0,
+    applyingFailed: 0,
+  });
   assert.deepEqual(reinstated, [['user-current', 'current', true, 123]]);
   assert.equal(writes.find(([id]) => id === 'stale')[1].status, 'superseded');
-  assert.equal(audited.length, 1);
+});
+
+test('scheduled moderation recovery processes stale applying records independently', async () => {
+  const applyingDocs = [
+    { id: 'resume', data: () => ({ userUid: 'user-resume' }) },
+    { id: 'expired', data: () => ({ userUid: 'user-expired' }) },
+    { id: 'ambiguous', data: () => ({ userUid: 'user-ambiguous' }) },
+  ];
+  const queryFor = () => {
+    let status = '';
+    const query = {
+      where: (field, _operator, value) => {
+        if (field === 'status') status = value;
+        return query;
+      },
+      orderBy: () => query,
+      limit: () => query,
+      get: async () => status === 'applying'
+        ? ({ size: applyingDocs.length, docs: applyingDocs })
+        : ({ size: 0, docs: [] }),
+    };
+    return query;
+  };
+  const firestore = () => ({ collection: () => queryFor() });
+  firestore.Timestamp = { fromMillis: (value) => value };
+  firestore.FieldValue = { serverTimestamp: () => 'server-time' };
+  const result = await processExpiredModerationSuspensions({
+    admin: { firestore },
+    mediaBucket: 'bucket',
+    now: 1000,
+    recoverApplyingImpl: async ({ enforcementEntry }) => {
+      if (enforcementEntry.id === 'resume') return { recovered: true, resumed: true };
+      if (enforcementEntry.id === 'expired') return { recovered: true, reinstated: true };
+      return { recovered: false, ambiguous: true };
+    },
+  });
+  assert.deepEqual(result, {
+    scanned: 0,
+    reinstated: 0,
+    superseded: 0,
+    applyingScanned: 3,
+    applyingRecovered: 2,
+    applyingSuperseded: 0,
+    applyingAmbiguous: 1,
+    applyingFailed: 0,
+  });
 });
 
 test('reinstatement rechecks the exact enforcement before enabling Firebase Auth', async () => {
@@ -507,7 +975,7 @@ test('reinstatement remains successful when transition cleanup fails after final
   assert.deepEqual(authStates, [false]);
 });
 
-test('reinstatement finalizes account, enforcement, profile state, and notification atomically', async () => {
+test('reinstatement finalizes account, enforcement, profile, notification, and audit atomically', async () => {
   const writes = [];
   const deletes = [];
   const userRef = { path: 'users/user-1' };
@@ -555,6 +1023,10 @@ test('reinstatement finalizes account, enforcement, profile state, and notificat
   assert(writes.some(([kind, path, value]) => kind === 'update' && path === userRef.path && value['moderation.status'] === 'active'));
   assert(writes.some(([kind, path, value]) => kind === 'update' && path === enforcementRef.path && value.status === 'complete'));
   assert(writes.some(([kind, path, value]) => kind === 'set' && path.includes('/notifications/') && value.subtype === 'account_reinstated'));
+  assert(writes.some(([kind, path, value]) => kind === 'set'
+    && path.startsWith('system/moderation/audit/reinstatement_')
+    && value.action === 'user_suspension_expired'
+    && value.metadata.enforcementId === 'enforcement-1'));
   assert(deletes.includes('publicProfiles/user-1'));
 });
 

@@ -41,6 +41,7 @@ const MAX_BULK_CASES = 25;
 const MAX_CASE_EVENTS = 100;
 const RECENT_AUTH_SECONDS = 10 * 60;
 const MODERATION_TRANSITION_TTL_MS = 10 * 60 * 1000;
+const TERMINAL_ENFORCEMENT_STATUSES = new Set(['complete', 'revoked', 'superseded', 'failed']);
 // Only actions that can change account authority, account trust level, or
 // suspend/remove content are marked sensitive. CRUD-like content-enrichment and
 // destination maintenance actions stay non-sensitive to avoid unnecessary
@@ -143,6 +144,114 @@ function publicModerationReport(entry) {
   };
 }
 
+function publicModerationEvent(entry = {}) {
+  const value = entry?.data?.() || entry;
+  return {
+    id: entry.id || value.id || '',
+    type: cleanOptionalText(value.type, 80) || 'system_event',
+    actor: value.actor && typeof value.actor === 'object'
+      ? {
+          uid: cleanOptionalText(value.actor.uid, 180),
+          displayName: cleanOptionalText(value.actor.displayName, 80),
+        }
+      : null,
+    revision: Math.max(0, Number(value.revision || 0)),
+    ...(value.type === 'add_note' ? { note: cleanOptionalText(value.note, 1000) } : {}),
+    createdAt: value.createdAt || null,
+  };
+}
+
+function publicModerationEnforcement(entry = {}) {
+  const value = entry?.data?.() || entry;
+  return {
+    id: entry.id || value.id || '',
+    type: cleanOptionalText(value.type, 40),
+    status: cleanOptionalText(value.status, 40),
+    reasonCode: cleanOptionalText(value.reasonCode, 80),
+    createdAt: value.createdAt || null,
+    endsAt: value.endsAt || null,
+    endedAt: value.endedAt || null,
+  };
+}
+
+function moderationDecisionOptions({ target, targetPreview, subjectUser } = {}) {
+  const supportsContent = ['recommendation', 'route', 'trip', 'comment'].includes(target?.type);
+  const contentStatus = targetPreview?.available === false
+    ? 'missing'
+    : String(targetPreview?.status || '').trim();
+  let contentActions = ['dismiss'];
+  let defaultContentAction = 'dismiss';
+  if (supportsContent) {
+    if (contentStatus === 'moderation_hold') {
+      contentActions = ['none', 'restore', 'delete'];
+      defaultContentAction = 'restore';
+    } else if (contentStatus === 'suspended') {
+      contentActions = ['none', 'restore', 'delete'];
+      defaultContentAction = 'restore';
+    } else if (contentStatus === 'active') {
+      contentActions = ['none', 'dismiss', 'hold', 'delete'];
+    } else {
+      contentActions = ['none', 'delete'];
+      defaultContentAction = 'none';
+    }
+  }
+  const accountStatus = String(subjectUser?.status || 'active').trim();
+  const accountActions = subjectUser
+    ? accountStatus === 'suspended'
+      ? ['none', 'reinstate']
+      : ['none', 'warn', 'suspend']
+    : ['none'];
+  return {
+    contentStatus: contentStatus || 'unknown',
+    accountStatus,
+    contentActions,
+    accountActions,
+    defaultContentAction,
+    defaultAccountAction: 'none',
+  };
+}
+
+function suspensionReplayDisposition(status) {
+  if (status === 'active') return 'replay';
+  if (status === 'applying') return 'resume';
+  if (TERMINAL_ENFORCEMENT_STATUSES.has(status)) return 'conflict';
+  return 'conflict';
+}
+
+function moderationCaseAuditId(caseId, operationId) {
+  return `case_${crypto.createHash('sha256')
+    .update(`${caseId}:${operationId}`)
+    .digest('base64url')
+    .slice(0, 40)}`;
+}
+
+function directSuspensionEnforcementId(uid, operationId) {
+  return crypto.createHash('sha256')
+    .update(`direct:${uid}:${operationId}:suspend`)
+    .digest('base64url')
+    .slice(0, 40);
+}
+
+function reinstatementAuditId(uid, transition) {
+  return `reinstatement_${crypto.createHash('sha256')
+    .update(`${uid}:${transition.enforcementId || transition.id}`)
+    .digest('base64url')
+    .slice(0, 40)}`;
+}
+
+function normalizeNoViolationContentAction({ requestedContentAction, contentStatus }) {
+  return requestedContentAction === 'dismiss'
+    && ['moderation_hold', 'suspended'].includes(contentStatus)
+    ? 'restore'
+    : requestedContentAction;
+}
+
+function recoverablePreviousCaseStatus(previous = {}) {
+  if (previous.status !== 'resolving') return previous.status || 'open';
+  return previous.decisionLease?.previousStatus
+    || (previous.targetPreview?.status === 'moderation_hold' ? 'auto_held' : 'open');
+}
+
 function publicModerationCase(item = {}) {
   return {
     id: item.id || '',
@@ -229,6 +338,25 @@ async function audit({ admin, auth, action, target = null, reason, metadata = {}
     metadata,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  return id;
+}
+
+async function auditEnforcementOnce({ admin, auth, enforcementId, action, target, reason, metadata = {} }) {
+  const id = `enforcement_${cleanOptionalOpaqueId(enforcementId, 'enforcementId')}`;
+  const ref = admin.firestore().doc(`system/moderation/audit/${id}`);
+  try {
+    await ref.create({
+      actorUid: auth.uid,
+      actorName: typeof auth.token?.name === 'string' ? auth.token.name.trim().slice(0, 80) : '',
+      action,
+      target,
+      reason,
+      metadata,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    if (!['already-exists', '6', 6].includes(error?.code)) throw error;
+  }
   return id;
 }
 
@@ -385,20 +513,37 @@ async function getModerationCase({ admin, auth, data }) {
     updatedAt: entry.data()?.updatedAt || null,
   }))).slice(0, 12);
   const ownerData = ownerSnapshot?.exists ? ownerSnapshot.data() || {} : null;
+  const subjectUser = ownerData ? {
+    uid: ownerId,
+    displayName: cleanOptionalText(ownerData.displayName, 80),
+    status: cleanOptionalText(ownerData.moderation?.status, 40) || 'active',
+    suspensionEndsAt: ownerData.moderation?.suspensionEndsAt || null,
+    createdAt: ownerData.createdAt || null,
+  } : null;
   return serialize({
     ...publicModerationCase(item),
+    decisionRetry: item.decisionRetry && typeof item.decisionRetry === 'object'
+      ? item.decisionRetry
+      : null,
     reports: reports.docs.map(publicModerationReport),
-    events: events.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
-    enforcements: enforcements.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
-    subjectUser: ownerData ? {
-      uid: ownerId,
-      displayName: cleanOptionalText(ownerData.displayName, 80),
-      status: cleanOptionalText(ownerData.moderation?.status, 40) || 'active',
-      suspensionEndsAt: ownerData.moderation?.suspensionEndsAt || null,
-      createdAt: ownerData.createdAt || null,
-    } : null,
+    events: events.docs.map(publicModerationEvent),
+    enforcements: enforcements.docs.map(publicModerationEnforcement),
+    subjectUser,
+    decisionOptions: moderationDecisionOptions({
+      target: item.target,
+      targetPreview: item.targetPreview,
+      subjectUser,
+    }),
     recentContent,
   });
+}
+
+function cleanOptionalOpaqueId(value, field, maximum = 120) {
+  const result = cleanOptionalText(value, maximum);
+  if (result && !/^[A-Za-z0-9_-]{8,120}$/u.test(result)) {
+    fail('invalid-argument', `${field} is invalid.`, 'invalid_input');
+  }
+  return result;
 }
 
 async function updateModerationCase({ admin, auth, data }) {
@@ -1031,9 +1176,12 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
     fail('failed-precondition', 'Only published content can remain published.', 'content_not_active');
   }
   if (action === 'restore') {
+    const allowSuspendedRestore = data?.allowSuspendedRestore === true;
     const restoredRetry = targetData.status === 'active'
       && targetData.moderation?.lastAction === 'restore';
-    if (targetData.status !== 'moderation_hold' && !restoredRetry) {
+    if (targetData.status !== 'moderation_hold'
+      && !(allowSuspendedRestore && targetData.status === 'suspended')
+      && !restoredRetry) {
       fail('failed-precondition', 'Only held content can be restored.', 'content_not_held');
     }
     const snapshot = targetSnapshot;
@@ -1087,7 +1235,8 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       }
       if (action === 'restore'
         && !alreadyApplied
-        && currentData.status !== 'moderation_hold') {
+        && currentData.status !== 'moderation_hold'
+        && !(data?.allowSuspendedRestore === true && currentData.status === 'suspended')) {
         fail('failed-precondition', 'Only held content can be restored.', 'content_not_held');
       }
       if (action === 'hold'
@@ -1229,34 +1378,52 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
   const caseId = suppliedCaseId || (requestedTarget ? caseIdForTarget(requestedTarget) : '');
   if (!caseId) fail('invalid-argument', 'A moderation case or target is required.', 'invalid_input');
   const revision = expectedRevision(data?.expectedRevision);
-  const contentAction = cleanEnum(data?.contentAction || 'none', CONTENT_ACTIONS, 'contentAction');
+  const requestedContentAction = cleanEnum(data?.contentAction || 'none', CONTENT_ACTIONS, 'contentAction');
+  let contentAction = requestedContentAction;
   const account = data?.accountAction && typeof data.accountAction === 'object'
     ? data.accountAction
     : { type: data?.accountAction || 'none' };
   const accountAction = cleanEnum(account.type || 'none', ACCOUNT_ACTIONS, 'accountAction');
-  if (contentAction === 'none' && accountAction === 'none') {
+  if (requestedContentAction === 'none' && accountAction === 'none') {
     fail('invalid-argument', 'A moderation decision must include an action.', 'invalid_input');
   }
   const reasonCode = cleanOptionalText(data?.reasonCode, 80);
   const reasonDefinition = policyReason(reasonCode);
   if (!reasonDefinition) fail('invalid-argument', 'Moderation reason is invalid.', 'invalid_input');
-  if (reasonCode === 'no_violation' && (contentAction !== 'dismiss' || accountAction !== 'none')) {
+  if (reasonCode === 'no_violation'
+    && (!['dismiss', 'restore'].includes(requestedContentAction)
+      || !['none', 'reinstate'].includes(accountAction))) {
     fail('invalid-argument', 'No-violation reason cannot enforce content or account actions.', 'invalid_input');
   }
   const userDetail = cleanOptionalText(data?.userDetail, 240);
   const internalNote = cleanOptionalText(data?.internalNote, 1000);
   const userMessage = [reasonDefinition.userMessage, userDetail].filter(Boolean).join(' ').slice(0, 240);
   const caseRef = db.doc(`system/moderation/cases/${caseId}`);
+  const operationId = cleanOptionalOpaqueId(data?.operationId, 'operationId')
+    || crypto.randomBytes(16).toString('base64url');
+  const requestedDurationHours = accountAction === 'suspend' && account.durationHours != null
+    ? Number(account.durationHours)
+    : null;
+  if (accountAction === 'suspend'
+    && requestedDurationHours != null
+    && !SUSPENSION_HOURS.includes(requestedDurationHours)) {
+    fail('invalid-argument', 'Unsupported suspension duration.', 'invalid_duration');
+  }
   const leaseId = crypto.randomBytes(16).toString('base64url');
   const leaseRevision = revision + 1;
   const actor = actorProjection(auth);
   let target;
   let ownerId = '';
   let previousStatus = 'open';
+  let replayResult = null;
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(caseRef);
     const previous = snapshot.exists ? snapshot.data() || {} : {};
     const currentRevision = Math.max(0, Number(previous.revision || 0));
+    if (previous.resolution?.operationId === operationId && String(previous.status || '').startsWith('resolved_')) {
+      replayResult = publicModerationCase({ id: caseId, ...previous });
+      return;
+    }
     if (currentRevision !== revision) {
       fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
     }
@@ -1269,7 +1436,36 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
     if (requestedTarget && requestedTarget.path !== target.path) {
       fail('invalid-argument', 'Moderation target does not match the case.', 'invalid_target');
     }
-    previousStatus = previous.status || 'open';
+    if (['recommendation', 'route', 'trip', 'comment'].includes(target.type)) {
+      const liveTarget = await transaction.get(db.doc(target.path));
+      if (!liveTarget.exists) fail('not-found', 'Moderated content is unavailable.', 'content_missing');
+      const liveStatus = liveTarget.data()?.status;
+      if (reasonCode === 'no_violation') {
+        contentAction = normalizeNoViolationContentAction({
+          requestedContentAction,
+          contentStatus: liveStatus,
+        });
+      }
+      if (contentAction === 'restore' && liveStatus === 'suspended' && accountAction !== 'reinstate') {
+        fail('failed-precondition', 'Suspended-user content requires account reinstatement.', 'owner_suspended');
+      }
+    }
+    const retryDecision = previous.decisionRetry && typeof previous.decisionRetry === 'object'
+      ? previous.decisionRetry
+      : null;
+    if (retryDecision?.operationId === operationId) {
+      const retryMatches = retryDecision.requestedContentAction === requestedContentAction
+        && retryDecision.contentAction === contentAction
+        && retryDecision.accountAction === accountAction
+        && (retryDecision.durationHours ?? null) === requestedDurationHours
+        && retryDecision.reasonCode === reasonCode
+        && (retryDecision.userDetail || '') === userDetail
+        && (retryDecision.internalNote || '') === internalNote;
+      if (!retryMatches) {
+        fail('aborted', 'The moderation retry no longer matches the recorded decision.', 'decision_retry_conflict');
+      }
+    }
+    previousStatus = recoverablePreviousCaseStatus(previous);
     ownerId = previous.targetOwnerId || (target.type === 'profile' ? target.id : '');
     let targetPreview = previous.targetPreview || null;
     if (!snapshot.exists) {
@@ -1303,7 +1499,23 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       },
       assignmentUid: previous.assignmentUid || actor.uid,
       revision: leaseRevision,
-      decisionLease: { id: leaseId, actorUid: actor.uid, startedAtMs: Date.now() },
+      decisionLease: {
+        id: leaseId,
+        operationId,
+        actorUid: actor.uid,
+        previousStatus,
+        startedAtMs: Date.now(),
+      },
+      decisionRetry: {
+        operationId,
+        requestedContentAction,
+        contentAction,
+        accountAction,
+        durationHours: requestedDurationHours,
+        reasonCode,
+        userDetail,
+        internalNote,
+      },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -1312,14 +1524,41 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       actor,
       revision: leaseRevision,
       contentAction,
+      requestedContentAction,
       accountAction,
+      operationId,
       reasonCode,
       ...(internalNote ? { note: internalNote } : {}),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
 
+  if (replayResult) return serialize(replayResult);
+
   try {
+    let enforcement = null;
+    const enforcementId = crypto.createHash('sha256')
+      .update(`${caseId}:${operationId}:${accountAction}`)
+      .digest('base64url')
+      .slice(0, 40);
+    if (accountAction === 'reinstate') {
+      if (!ownerId) fail('failed-precondition', 'The case has no user to enforce.', 'target_owner_missing');
+      enforcement = await setUserSuspension({
+        admin,
+        auth,
+        data: {
+          identifier: ownerId,
+          suspended: false,
+          reason: reasonDefinition.label,
+          reasonCode,
+          userMessage,
+          internalNote,
+          sourceCaseId: caseId,
+          operationId,
+        },
+        mediaBucket,
+      });
+    }
     if (['hold', 'restore', 'delete'].includes(contentAction)) {
       if (!['recommendation', 'route', 'trip', 'comment'].includes(target.type)) {
         fail('invalid-argument', 'This target does not support content enforcement.', 'invalid_target');
@@ -1327,7 +1566,12 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       await moderateContent({
         admin,
         auth,
-        data: { target, action: contentAction, reason: reasonDefinition.label },
+        data: {
+          target,
+          action: contentAction,
+          reason: reasonDefinition.label,
+          allowSuspendedRestore: contentAction === 'restore' && accountAction === 'reinstate',
+        },
         mediaBucket,
       });
     } else if (contentAction === 'dismiss' && ['recommendation', 'route', 'trip', 'comment'].includes(target.type)) {
@@ -1338,8 +1582,7 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       }
     }
 
-    let enforcement = null;
-    if (accountAction !== 'none') {
+    if (!['none', 'reinstate'].includes(accountAction)) {
       if (!ownerId) fail('failed-precondition', 'The case has no user to enforce.', 'target_owner_missing');
       if (accountAction === 'warn') {
         enforcement = await warnUser({
@@ -1350,23 +1593,23 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
           reasonCode,
           userMessage,
           internalNote,
+          enforcementId,
         });
       } else {
-        const durationHours = accountAction === 'suspend' && account.durationHours != null
-          ? Number(account.durationHours)
-          : null;
         enforcement = await setUserSuspension({
           admin,
           auth,
           data: {
             identifier: ownerId,
             suspended: accountAction === 'suspend',
-            durationHours,
+            durationHours: requestedDurationHours,
             reason: reasonDefinition.label,
             reasonCode,
             userMessage,
             internalNote,
             sourceCaseId: caseId,
+            enforcementId,
+            operationId,
           },
           mediaBucket,
         });
@@ -1388,11 +1631,18 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       reasonCode,
       userMessage,
       internalNote,
+      operationId,
       ...(enforcement?.enforcementId ? { enforcementId: enforcement.enforcementId } : {}),
     };
     const finalRevision = revision + 2;
+    const resolutionAuditRef = db.doc(
+      `system/moderation/audit/${moderationCaseAuditId(caseId, operationId)}`
+    );
     await db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(caseRef);
+      const [snapshot, auditSnapshot] = await Promise.all([
+        transaction.get(caseRef),
+        transaction.get(resolutionAuditRef),
+      ]);
       const current = snapshot.exists ? snapshot.data() || {} : {};
       if (
         !snapshot.exists
@@ -1410,6 +1660,8 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
         resolvedBy: auth.uid,
         decisionLease: admin.firestore.FieldValue.delete(),
+        decisionRetry: admin.firestore.FieldValue.delete(),
+        resolutionError: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -1420,14 +1672,17 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
         resolution,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-    });
-    await audit({
-      admin,
-      auth,
-      action: 'moderation_case_resolved',
-      target: { caseId, ...target },
-      reason: reasonDefinition.label,
-      metadata: { contentAction, accountAction },
+      if (!auditSnapshot.exists) {
+        transaction.set(resolutionAuditRef, {
+          actorUid: auth.uid,
+          actorName: typeof auth.token?.name === 'string' ? auth.token.name.trim().slice(0, 80) : '',
+          action: 'moderation_case_resolved',
+          target: { caseId, ...target },
+          reason: reasonDefinition.label,
+          metadata: { contentAction, accountAction, operationId },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     });
     return serialize({ caseId, revision: finalRevision, status: resolvedStatus, resolution });
   } catch (error) {
@@ -1567,8 +1822,7 @@ async function listAdminUsers({ admin, auth, data }) {
 async function getAdminUser({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'getAdminUser');
   const user = await resolveUser(admin, data);
-  const profile = await admin.firestore().doc(`users/${user.uid}`).get();
-  return serialize({ ...publicAdminUser(user), profile: profile.exists ? profile.data() : null });
+  return serialize(publicAdminUser(user));
 }
 
 async function hideUserContent({ admin, uid, mediaBucket }) {
@@ -1647,16 +1901,24 @@ async function hideUserContent({ admin, uid, mediaBucket }) {
   return hidden;
 }
 
-async function sendModerationNotification({ admin, uid, subtype, message }) {
+async function sendModerationNotification({ admin, uid, subtype, message, enforcementRef = null }) {
   const db = admin.firestore();
   const targetPath = `publicProfiles/${uid}`;
   const ref = db.doc(`users/${uid}/notifications/${systemNotificationId(subtype, targetPath)}`);
   return db.runTransaction(async (transaction) => {
-    const [userSnapshot, existingSnapshot] = await Promise.all([
+    const [userSnapshot, existingSnapshot, enforcementSnapshot] = await Promise.all([
       transaction.get(db.doc(`users/${uid}`)),
       transaction.get(ref),
+      enforcementRef ? transaction.get(enforcementRef) : Promise.resolve(null),
     ]);
-    if (!notificationRecipientEligible(userSnapshot)) return false;
+    if (enforcementSnapshot?.data()?.notifiedAt) return true;
+    if (!notificationRecipientEligible(userSnapshot)) {
+      if (enforcementRef) transaction.set(enforcementRef, {
+        notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        notificationSkipped: true,
+      }, { merge: true });
+      return false;
+    }
     stageNotificationActivity({
       transaction,
       admin,
@@ -1675,37 +1937,63 @@ async function sendModerationNotification({ admin, uid, subtype, message }) {
         message,
       },
     });
+    if (enforcementRef) transaction.set(enforcementRef, {
+      notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
     return true;
   });
 }
 
-async function warnUser({ admin, auth, uid, sourceCaseId, reasonCode, userMessage, internalNote }) {
+async function warnUser({ admin, auth, uid, sourceCaseId, reasonCode, userMessage, internalNote, enforcementId = '' }) {
   const user = await admin.auth().getUser(uid).catch(() => null);
   if (!user) fail('not-found', 'User was not found.', 'user_missing');
   if (user.customClaims?.admin === true) {
     fail('failed-precondition', 'Remove admin access before moderation enforcement.', 'admin_account_protected');
   }
-  const id = `${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-  await admin.firestore().doc(`system/moderation/enforcements/${id}`).create({
-    type: 'warning',
-    status: 'complete',
-    userUid: uid,
-    sourceCaseId,
-    reasonCode,
-    userMessage,
-    internalNote,
-    actorUid: auth.uid,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  const id = enforcementId || `${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+  const enforcementRef = admin.firestore().doc(`system/moderation/enforcements/${id}`);
+  const existing = await enforcementRef.get();
+  if (existing.exists) {
+    const value = existing.data() || {};
+    if (value.type !== 'warning' || value.userUid !== uid || value.sourceCaseId !== sourceCaseId) {
+      fail('aborted', 'The account enforcement changed.', 'account_enforcement_conflict');
+    }
+    if (value.status === 'complete') {
+      return { id, enforcementId: id, type: 'warning', status: 'complete', replayed: true };
+    }
+  } else {
+    await enforcementRef.create({
+      type: 'warning',
+      status: 'applying',
+      userUid: uid,
+      sourceCaseId,
+      reasonCode,
+      userMessage,
+      internalNote,
+      actorUid: auth.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+  await sendModerationNotification({
+    admin,
+    uid,
+    subtype: 'moderation_warning',
+    message: userMessage,
+    enforcementRef,
   });
-  await sendModerationNotification({ admin, uid, subtype: 'moderation_warning', message: userMessage });
-  await audit({
+  await auditEnforcementOnce({
     admin,
     auth,
+    enforcementId: id,
     action: 'user_warned',
     target: { uid, caseId: sourceCaseId },
     reason: reasonCode,
     metadata: { enforcementId: id },
   });
+  await enforcementRef.set({
+    status: 'complete',
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
   return { id, enforcementId: id, type: 'warning', status: 'complete' };
 }
 
@@ -1721,6 +2009,7 @@ async function acquireModerationTransition({
   operation,
   expectedEnforcementId = null,
   requireSuspended = false,
+  requireNotSuspended = false,
   requireExpired = false,
   allowMissingUser = false,
   now = Date.now(),
@@ -1747,6 +2036,9 @@ async function acquireModerationTransition({
     }
     if (requireSuspended && moderation.status !== 'suspended') {
       return { acquired: false, reason: 'not_suspended' };
+    }
+    if (requireNotSuspended && moderation.status === 'suspended') {
+      return { acquired: false, reason: 'already_suspended' };
     }
     if (expectedEnforcementId && moderation.enforcementId !== expectedEnforcementId) {
       return { acquired: false, reason: 'enforcement_superseded' };
@@ -1838,11 +2130,13 @@ async function finalizeReinstatement({ admin, transition, actorUid, reason }) {
   const notificationRef = db.doc(
     `users/${transition.uid}/notifications/${systemNotificationId('account_reinstated', publicRef.path)}`
   );
+  const auditRef = db.doc(`system/moderation/audit/${reinstatementAuditId(transition.uid, transition)}`);
   return db.runTransaction(async (transaction) => {
-    const [userSnapshot, enforcementSnapshot, notificationSnapshot] = await Promise.all([
+    const [userSnapshot, enforcementSnapshot, notificationSnapshot, auditSnapshot] = await Promise.all([
       transaction.get(transition.userRef),
       transition.enforcementRef ? transaction.get(transition.enforcementRef) : null,
       transaction.get(notificationRef),
+      transaction.get(auditRef),
     ]);
     const current = userSnapshot.exists ? userSnapshot.data() || {} : {};
     if (
@@ -1917,6 +2211,17 @@ async function finalizeReinstatement({ admin, transition, actorUid, reason }) {
         message: notificationMessage,
       },
     });
+    if (!auditSnapshot.exists) {
+      transaction.set(auditRef, {
+        actorUid,
+        actorName: actorUid === 'system' ? 'מערכת' : '',
+        action: actorUid === 'system' ? 'user_suspension_expired' : 'user_unsuspended',
+        target: { uid: transition.uid },
+        reason,
+        metadata: transition.enforcementId ? { enforcementId: transition.enforcementId } : {},
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
     return true;
   });
 }
@@ -1994,12 +2299,329 @@ async function reinstateUserAccount({
   }
 }
 
+function applyingSuspensionDisposition({
+  enforcementId,
+  enforcement = {},
+  userExists,
+  userData = {},
+  authUser,
+  intended = true,
+  now = Date.now(),
+}) {
+  if (enforcement.type !== 'suspension' || enforcement.status !== 'applying') {
+    return { action: 'ignore', reason: 'not_applying' };
+  }
+  const uid = cleanOptionalText(enforcement.userUid, 180);
+  if (!uid || !userExists || !authUser) return { action: 'ambiguous', reason: 'user_missing' };
+  const moderation = userData.moderation || {};
+  const currentSame = moderation.enforcementId === enforcementId;
+  const hasDifferentEnforcement = Boolean(moderation.enforcementId && !currentSame);
+  const stage = String(enforcement.stage || '');
+  const beforeProfileMutation = ['created', 'auth_disabling', 'auth_disabled'].includes(stage);
+  const canCancelBeforeProfile = beforeProfileMutation
+    && (authUser.disabled !== true || Boolean(enforcement.authDisableStartedAt));
+  if (hasDifferentEnforcement) return { action: 'supersede', reason: 'newer_enforcement' };
+  if (userData.status === 'deleting' || moderation.status === 'deleting') {
+    return { action: 'supersede', reason: 'user_deleting' };
+  }
+  if (intended === false) {
+    return !currentSame && moderation.status !== 'suspended' && canCancelBeforeProfile
+      ? { action: 'cancel_before_activation', reason: 'decision_replaced' }
+      : { action: 'ambiguous', reason: authUser.disabled === true && !enforcement.authDisableStartedAt
+          ? 'auth_disable_origin_ambiguous'
+          : 'decision_replaced_state_mismatch' };
+  }
+  if (intended !== true) return { action: 'ambiguous', reason: 'decision_history_ambiguous' };
+  if (authUser.customClaims?.admin === true) {
+    return !currentSame && moderation.status !== 'suspended' && canCancelBeforeProfile
+      ? { action: 'cancel_before_activation', reason: 'admin_account_protected' }
+      : { action: 'ambiguous', reason: authUser.disabled === true && !enforcement.authDisableStartedAt
+          ? 'auth_disable_origin_ambiguous'
+          : 'admin_account_state_mismatch' };
+  }
+
+  const expired = enforcement.permanent !== true
+    && timestampMillis(enforcement.endsAt)
+    && timestampMillis(enforcement.endsAt) <= now;
+  if (expired) {
+    if (currentSame && moderation.status === 'suspended') {
+      return { action: 'expire', reason: 'suspension_expired' };
+    }
+    if (!currentSame && moderation.status !== 'suspended' && canCancelBeforeProfile) {
+      return { action: 'expire_before_activation', reason: 'expired_before_activation' };
+    }
+    return { action: 'ambiguous', reason: 'expired_state_mismatch' };
+  }
+
+  if (currentSame && moderation.status === 'suspended') return { action: 'resume', reason: 'partial_suspension' };
+  if (!currentSame
+    && moderation.status !== 'suspended'
+    && ['created', 'auth_disabling', 'auth_disabled'].includes(stage)) {
+    return { action: 'resume', reason: 'partial_suspension' };
+  }
+  return { action: 'ambiguous', reason: 'active_state_mismatch' };
+}
+
+async function setSuspensionStage({ admin, enforcementRef, stage, patch = {} }) {
+  await enforcementRef.set({
+    stage,
+    ...patch,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function applySuspensionEnforcement({
+  admin,
+  auth,
+  user,
+  mediaBucket,
+  enforcementId,
+  enforcementRef,
+  endsAt,
+  durationHours,
+  reason,
+  userMessage,
+  setMediaAvailabilityImpl = setMediaAvailability,
+  hideUserContentImpl = hideUserContent,
+  sendModerationNotificationImpl = sendModerationNotification,
+  auditEnforcementOnceImpl = auditEnforcementOnce,
+}) {
+  await setSuspensionStage({
+    admin,
+    enforcementRef,
+    stage: 'auth_disabling',
+    patch: { authDisableStartedAt: admin.firestore.FieldValue.serverTimestamp() },
+  });
+  await admin.auth().updateUser(user.uid, { disabled: true });
+  await admin.auth().revokeRefreshTokens(user.uid);
+  await setSuspensionStage({
+    admin,
+    enforcementRef,
+    stage: 'auth_disabled',
+    patch: { authDisabledAt: admin.firestore.FieldValue.serverTimestamp() },
+  });
+
+  const userRef = admin.firestore().doc(`users/${user.uid}`);
+  await userRef.update({
+    'moderation.status': 'suspended',
+    'moderation.reason': reason,
+    'moderation.updatedAt': admin.firestore.FieldValue.serverTimestamp(),
+    'moderation.actorUid': auth.uid,
+    'moderation.enforcementId': enforcementId,
+    'moderation.permanent': endsAt == null,
+    'moderation.suspensionEndsAt': endsAt || admin.firestore.FieldValue.delete(),
+  });
+  await setSuspensionStage({
+    admin,
+    enforcementRef,
+    stage: 'profile_suspended',
+    patch: { profileSuspendedAt: admin.firestore.FieldValue.serverTimestamp() },
+  });
+
+  const privateProfile = await userRef.get();
+  if (privateProfile.exists) {
+    await setMediaAvailabilityImpl({
+      admin,
+      data: privateProfile.data(),
+      mediaBucket,
+      available: false,
+      reason: 'owner_suspended',
+    });
+  }
+  const hidden = await hideUserContentImpl({ admin, uid: user.uid, mediaBucket });
+  await admin.firestore().doc(`publicProfiles/${user.uid}`).delete().catch(() => {});
+  await setSuspensionStage({
+    admin,
+    enforcementRef,
+    stage: 'effects_applied',
+    patch: {
+      hidden,
+      effectsAppliedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+  });
+  await sendModerationNotificationImpl({
+    admin,
+    uid: user.uid,
+    subtype: 'account_suspended',
+    message: userMessage,
+    enforcementRef,
+  });
+  await auditEnforcementOnceImpl({
+    admin,
+    auth,
+    enforcementId,
+    action: 'user_suspended',
+    target: { uid: user.uid },
+    reason,
+    metadata: { hidden, enforcementId, durationHours },
+  });
+  await setSuspensionStage({
+    admin,
+    enforcementRef,
+    stage: 'complete',
+    patch: {
+      status: 'active',
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+  });
+  return { uid: user.uid, suspended: true, hidden, enforcementId, endsAt: serialize(endsAt) };
+}
+
+async function applyingSuspensionStillIntended({ admin, enforcement, enforcementId }) {
+  if (!enforcement.sourceCaseId) return true;
+  const snapshot = await admin.firestore()
+    .doc(`system/moderation/cases/${enforcement.sourceCaseId}`)
+    .get();
+  if (!snapshot.exists) return false;
+  const value = snapshot.data() || {};
+  if (!enforcement.operationId) {
+    if (value.resolution?.accountAction === 'suspend'
+      && value.resolution?.enforcementId === enforcementId) return true;
+    const retryOperationId = cleanOptionalOpaqueId(value.decisionRetry?.operationId, 'operationId');
+    const expectedEnforcementId = retryOperationId && value.decisionRetry?.accountAction === 'suspend'
+      ? crypto.createHash('sha256')
+        .update(`${enforcement.sourceCaseId}:${retryOperationId}:suspend`)
+        .digest('base64url')
+        .slice(0, 40)
+      : '';
+    return expectedEnforcementId === enforcementId ? true : null;
+  }
+  return value.decisionRetry?.operationId === enforcement.operationId
+    || value.resolution?.operationId === enforcement.operationId;
+}
+
+async function recoverApplyingSuspension({
+  admin,
+  enforcementEntry,
+  mediaBucket,
+  now = Date.now(),
+  applySuspensionEnforcementImpl = applySuspensionEnforcement,
+  reinstateUserAccountImpl = reinstateUserAccount,
+}) {
+  const enforcement = enforcementEntry.data() || {};
+  if (enforcement.type !== 'suspension' || enforcement.status !== 'applying') {
+    return { recovered: false, reason: 'not_applying' };
+  }
+  const uid = cleanOptionalText(enforcement.userUid, 180);
+  if (!uid) return { recovered: false, ambiguous: true, reason: 'user_missing' };
+  const db = admin.firestore();
+  const userRef = db.doc(`users/${uid}`);
+  const [userSnapshot, authUser] = await Promise.all([
+    userRef.get(),
+    admin.auth().getUser(uid).catch(() => null),
+  ]);
+  const userData = userSnapshot.exists ? userSnapshot.data() || {} : {};
+  const intended = await applyingSuspensionStillIntended({
+    admin,
+    enforcement,
+    enforcementId: enforcementEntry.id,
+  });
+  const disposition = applyingSuspensionDisposition({
+    enforcementId: enforcementEntry.id,
+    enforcement,
+    userExists: userSnapshot.exists,
+    userData,
+    authUser,
+    intended,
+    now,
+  });
+
+  if (disposition.action === 'ignore') {
+    return { recovered: false, reason: disposition.reason };
+  }
+  if (disposition.action === 'ambiguous') {
+    return { recovered: false, ambiguous: true, reason: disposition.reason };
+  }
+  if (disposition.action === 'supersede') {
+    await enforcementEntry.ref.set({
+      status: 'superseded',
+      stage: 'superseded',
+      recoveryReason: disposition.reason,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { recovered: true, superseded: true };
+  }
+
+  if (['cancel_before_activation', 'expire_before_activation'].includes(disposition.action)) {
+    if (authUser.disabled && enforcement.authDisableStartedAt) {
+      await admin.auth().updateUser(uid, { disabled: false });
+      await admin.auth().revokeRefreshTokens(uid);
+    }
+    await enforcementEntry.ref.set({
+      status: 'superseded',
+      stage: disposition.action,
+      recoveryReason: disposition.reason,
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { recovered: true, superseded: true };
+  }
+
+  if (disposition.action === 'expire') {
+    await enforcementEntry.ref.set({
+      status: 'active',
+      stage: 'expired_recovery',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const result = await reinstateUserAccountImpl({
+      admin,
+      uid,
+      mediaBucket,
+      actorUid: 'system',
+      reason: 'suspension_expired',
+      expectedEnforcementId: enforcementEntry.id,
+      requireExpired: true,
+      now,
+    });
+    return { recovered: result.reinstated === true, reinstated: result.reinstated === true, ...result };
+  }
+
+  const transition = await acquireModerationTransition({
+    admin,
+    uid,
+    operation: 'suspend_recovery',
+  });
+  if (!transition.acquired) {
+    return { recovered: false, retry: transition.retry === true, reason: transition.reason };
+  }
+  try {
+    const reason = cleanOptionalText(enforcement.reason, 500)
+      || policyReason(enforcement.reasonCode)?.label
+      || 'אכיפת חשבון';
+    return {
+      recovered: true,
+      resumed: true,
+      ...(await applySuspensionEnforcementImpl({
+        admin,
+        auth: { uid: enforcement.actorUid || 'system', token: { name: 'מערכת' } },
+        user: authUser,
+        mediaBucket,
+        enforcementId: enforcementEntry.id,
+        enforcementRef: enforcementEntry.ref,
+        endsAt: enforcement.endsAt || null,
+        durationHours: enforcement.durationHours ?? null,
+        reason,
+        userMessage: cleanOptionalText(enforcement.userMessage, 240)
+          || 'החשבון שלך הושעה בעקבות הפרה של כללי הקהילה.',
+      })),
+    };
+  } finally {
+    await releaseModerationTransition({ admin, transition }).catch(() => {});
+  }
+}
+
 async function setUserSuspension({ admin, auth, data, mediaBucket }) {
   await prepareAdminAction(admin, auth, 'setUserSuspension');
   const user = await resolveUser(admin, data);
   if (user.uid === auth.uid) fail('failed-precondition', 'You cannot suspend yourself.', 'self_admin_action');
   const suspended = data?.suspended === true;
   const reason = cleanText(data?.reason, 'reason');
+  const operationId = cleanOptionalOpaqueId(data?.operationId, 'operationId');
+  const explicitEnforcementId = cleanOptionalOpaqueId(data?.enforcementId, 'enforcementId');
+  const requestedEnforcementId = explicitEnforcementId || (suspended && operationId
+    ? directSuspensionEnforcementId(user.uid, operationId)
+    : '');
   if (suspended && user.customClaims?.admin === true) {
     fail('failed-precondition', 'Remove admin access before moderation enforcement.', 'admin_account_protected');
   }
@@ -2018,6 +2640,16 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
       reason,
     });
     if (!result.reinstated) {
+      const retryOperationId = cleanOptionalOpaqueId(data?.operationId, 'operationId');
+      const retryCaseId = cleanOptionalText(data?.sourceCaseId, 180);
+      if (result.reason === 'not_suspended' && retryOperationId && retryCaseId) {
+        const retryCase = await admin.firestore().doc(`system/moderation/cases/${retryCaseId}`).get();
+        const retryCaseData = retryCase.exists ? retryCase.data() || {} : {};
+        if (retryCaseData.decisionRetry?.operationId === retryOperationId
+          || retryCaseData.resolution?.operationId === retryOperationId) {
+          return { uid: user.uid, suspended: false, hidden: 0, reinstated: true, replayed: true };
+        }
+      }
       const retryable = result.retry === true || result.reason === 'enforcement_superseded';
       fail(
         retryable ? 'aborted' : 'failed-precondition',
@@ -2025,68 +2657,138 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
         retryable ? 'account_enforcement_conflict' : result.reason || 'invalid_account_state'
       );
     }
-    await audit({ admin, auth, action: 'user_unsuspended', target: { uid: user.uid }, reason });
     return { uid: user.uid, suspended: false, hidden: 0, ...result };
+  }
+  const sourceCaseId = cleanOptionalText(data?.sourceCaseId, 180);
+  const reasonCode = cleanOptionalText(data?.reasonCode, 80) || 'other';
+  const userMessage = cleanOptionalText(data?.userMessage, 240)
+    || policyReason(reasonCode)?.userMessage
+    || 'החשבון שלך הושעה בעקבות הפרה של כללי הקהילה.';
+  const internalNote = cleanOptionalText(data?.internalNote, 1000);
+  let existingEnforcement = null;
+  let existingEnforcementEntry = null;
+  let enforcementRef = null;
+  if (requestedEnforcementId) {
+    enforcementRef = admin.firestore().doc(`system/moderation/enforcements/${requestedEnforcementId}`);
+    const existing = await enforcementRef.get();
+    if (existing.exists) {
+      const value = existing.data() || {};
+      if (value.type !== 'suspension'
+        || value.userUid !== user.uid
+        || value.sourceCaseId !== sourceCaseId
+        || (value.durationHours ?? null) !== durationHours
+        || value.reasonCode !== reasonCode) {
+        fail('aborted', 'The account enforcement changed.', 'account_enforcement_conflict');
+      }
+      existingEnforcement = value;
+      existingEnforcementEntry = existing;
+      const replayDisposition = suspensionReplayDisposition(value.status);
+      if (replayDisposition === 'conflict') {
+        fail('aborted', 'The account enforcement is already terminal.', 'account_enforcement_conflict');
+      }
+      if (replayDisposition === 'replay') {
+        await sendModerationNotification({
+          admin,
+          uid: user.uid,
+          subtype: 'account_suspended',
+          message: userMessage,
+          enforcementRef,
+        });
+        await auditEnforcementOnce({
+          admin,
+          auth,
+          enforcementId: requestedEnforcementId,
+          action: 'user_suspended',
+          target: { uid: user.uid },
+          reason,
+          metadata: {
+            hidden: Number(value.hidden || 0),
+            enforcementId: requestedEnforcementId,
+            durationHours,
+          },
+        });
+        return {
+          uid: user.uid,
+          suspended: true,
+          hidden: Number(value.hidden || 0),
+          enforcementId: requestedEnforcementId,
+          endsAt: serialize(value.endsAt || null),
+          replayed: true,
+        };
+      }
+      const recovered = await recoverApplyingSuspension({
+        admin,
+        enforcementEntry: existingEnforcementEntry,
+        mediaBucket,
+      });
+      if (recovered.recovered && recovered.suspended) return recovered;
+      fail(
+        'aborted',
+        recovered.ambiguous
+          ? 'The partial account enforcement requires administrator repair.'
+          : 'The account enforcement changed.',
+        recovered.ambiguous ? 'account_enforcement_ambiguous' : 'account_enforcement_conflict'
+      );
+    }
   }
   const transition = await acquireModerationTransition({
     admin,
     uid: user.uid,
     operation: 'suspend',
     allowMissingUser: true,
+    requireNotSuspended: true,
   });
   if (!transition.acquired) {
-    fail('aborted', 'The account enforcement changed.', 'account_enforcement_conflict');
+    fail(
+      'aborted',
+      transition.reason === 'already_suspended'
+        ? 'The account is already suspended.'
+        : 'The account enforcement changed.',
+      transition.reason === 'already_suspended'
+        ? 'already_suspended'
+        : 'account_enforcement_conflict'
+    );
   }
   try {
-    const enforcementId = `${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
-    const endsAt = durationHours == null
+    const enforcementId = requestedEnforcementId || `${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+    enforcementRef = enforcementRef
+      || admin.firestore().doc(`system/moderation/enforcements/${enforcementId}`);
+    const endsAt = existingEnforcement?.endsAt || (durationHours == null
       ? null
-      : admin.firestore.Timestamp.fromMillis(Date.now() + durationHours * 60 * 60 * 1000);
-    await admin.auth().updateUser(user.uid, { disabled: true });
-    await admin.auth().revokeRefreshTokens(user.uid);
-    const userRef = admin.firestore().doc(`users/${user.uid}`);
-    await userRef.update({
-      'moderation.status': 'suspended',
-      'moderation.reason': reason,
-      'moderation.updatedAt': admin.firestore.FieldValue.serverTimestamp(),
-      'moderation.actorUid': auth.uid,
-      'moderation.enforcementId': enforcementId,
-      'moderation.permanent': endsAt == null,
-      'moderation.suspensionEndsAt': endsAt || admin.firestore.FieldValue.delete(),
-    });
-    const privateProfile = await userRef.get();
-    if (privateProfile.exists) {
-      await setMediaAvailability({
-        admin,
-        data: privateProfile.data(),
-        mediaBucket,
-        available: false,
-        reason: 'owner_suspended',
+      : admin.firestore.Timestamp.fromMillis(Date.now() + durationHours * 60 * 60 * 1000));
+    if (!existingEnforcement) {
+      await enforcementRef.create({
+        type: 'suspension',
+        status: 'applying',
+        userUid: user.uid,
+        sourceCaseId,
+        operationId: operationId || null,
+        reasonCode,
+        reason,
+        userMessage,
+        internalNote,
+        hidden: 0,
+        durationHours,
+        permanent: endsAt == null,
+        ...(endsAt ? { endsAt } : {}),
+        actorUid: auth.uid,
+        stage: 'created',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
-    const hidden = await hideUserContent({ admin, uid: user.uid, mediaBucket });
-    await admin.firestore().doc(`publicProfiles/${user.uid}`).delete().catch(() => {});
-    const reasonCode = cleanOptionalText(data?.reasonCode, 80) || 'other';
-    const userMessage = cleanOptionalText(data?.userMessage, 240)
-      || policyReason(reasonCode)?.userMessage
-      || 'החשבון שלך הושעה בעקבות הפרה של כללי הקהילה.';
-    await admin.firestore().doc(`system/moderation/enforcements/${enforcementId}`).create({
-      type: 'suspension',
-      status: 'active',
-      userUid: user.uid,
-      sourceCaseId: cleanOptionalText(data?.sourceCaseId, 180),
-      reasonCode,
-      userMessage,
-      internalNote: cleanOptionalText(data?.internalNote, 1000),
+    return await applySuspensionEnforcement({
+      admin,
+      auth,
+      user,
+      mediaBucket,
+      enforcementId,
+      enforcementRef,
+      endsAt,
       durationHours,
-      permanent: endsAt == null,
-      ...(endsAt ? { endsAt } : {}),
-      actorUid: auth.uid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      reason,
+      userMessage,
     });
-    await sendModerationNotification({ admin, uid: user.uid, subtype: 'account_suspended', message: userMessage });
-    await audit({ admin, auth, action: 'user_suspended', target: { uid: user.uid }, reason, metadata: { hidden, enforcementId, durationHours } });
-    return { uid: user.uid, suspended: true, hidden, enforcementId, endsAt: serialize(endsAt) };
   } finally {
     await releaseModerationTransition({ admin, transition }).catch(() => {});
   }
@@ -2098,16 +2800,47 @@ async function processExpiredModerationSuspensions({
   limit = 100,
   now = Date.now(),
   reinstateImpl = reinstateUserAccount,
-  auditImpl = audit,
+  recoverApplyingImpl = recoverApplyingSuspension,
 }) {
   const db = admin.firestore();
-  const snapshot = await db.collection('system/moderation/enforcements')
+  const boundedLimit = Math.max(1, Math.min(200, Math.trunc(Number(limit) || 100)));
+  const staleApplyingBefore = admin.firestore.Timestamp.fromMillis(now - MODERATION_TRANSITION_TTL_MS);
+  const [applyingSnapshot, snapshot] = await Promise.all([
+    db.collection('system/moderation/enforcements')
+      .where('type', '==', 'suspension')
+      .where('status', '==', 'applying')
+      .where('updatedAt', '<=', staleApplyingBefore)
+      .orderBy('updatedAt', 'asc')
+      .limit(boundedLimit)
+      .get(),
+    db.collection('system/moderation/enforcements')
     .where('type', '==', 'suspension')
     .where('status', '==', 'active')
     .where('endsAt', '<=', admin.firestore.Timestamp.fromMillis(now))
     .orderBy('endsAt', 'asc')
-    .limit(Math.max(1, Math.min(200, Math.trunc(Number(limit) || 100))))
-    .get();
+      .limit(boundedLimit)
+      .get(),
+  ]);
+  let applyingRecovered = 0;
+  let applyingSuperseded = 0;
+  let applyingAmbiguous = 0;
+  let applyingFailed = 0;
+  for (const entry of applyingSnapshot.docs) {
+    try {
+      const result = await recoverApplyingImpl({
+        admin,
+        enforcementEntry: entry,
+        mediaBucket,
+        now,
+      });
+      if (result.ambiguous) applyingAmbiguous += 1;
+      else if (result.superseded) applyingSuperseded += 1;
+      else if (result.recovered) applyingRecovered += 1;
+      else applyingFailed += 1;
+    } catch (_error) {
+      applyingFailed += 1;
+    }
+  }
   let reinstated = 0;
   let superseded = 0;
   for (const entry of snapshot.docs) {
@@ -2141,17 +2874,18 @@ async function processExpiredModerationSuspensions({
     }, { merge: true });
     if (result.reinstated) {
       reinstated += 1;
-      await auditImpl({
-        admin,
-        auth: { uid: 'system', token: { name: 'מערכת' } },
-        action: 'user_suspension_expired',
-        target: { uid: enforcement.userUid },
-        reason: 'suspension_expired',
-        metadata: { enforcementId: entry.id },
-      });
     } else superseded += 1;
   }
-  return { scanned: snapshot.size, reinstated, superseded };
+  return {
+    scanned: snapshot.size,
+    reinstated,
+    superseded,
+    applyingScanned: applyingSnapshot.size,
+    applyingRecovered,
+    applyingSuperseded,
+    applyingAmbiguous,
+    applyingFailed,
+  };
 }
 
 async function setUserEmailVerified({ admin, auth, data }) {
@@ -2270,13 +3004,17 @@ async function listModerationAudit({ admin, auth, data }) {
 }
 
 module.exports = {
+  applyingSuspensionDisposition,
+  applyingSuspensionStillIntended,
   audit,
   assertAdmin,
   assertRecentAuth,
+  applySuspensionEnforcement,
   bulkUpdateModerationCases,
   deleteAdminSavedView,
   sensitiveAdminActions,
   deleteUserAsAdmin,
+  directSuspensionEnforcementId,
   finalizeReinstatement,
   getAdminResource,
   getAdminUser,
@@ -2288,11 +3026,16 @@ module.exports = {
   listHeldContent,
   listModerationAudit,
   listModerationCases,
+  moderationDecisionOptions,
+  moderationCaseAuditId,
+  normalizeNoViolationContentAction,
   moderateContent,
   prepareAdmin,
   publicModerationCase,
   publicModerationReport,
+  recoverablePreviousCaseStatus,
   processExpiredModerationSuspensions,
+  recoverApplyingSuspension,
   reinstateUserAccount,
   resolveModerationCase,
   saveAdminSavedView,
@@ -2301,6 +3044,7 @@ module.exports = {
   setUserEmailVerified,
   prepareAdminAction,
   setUserSuspension,
+  suspensionReplayDisposition,
   updateModerationCase,
   updateAdminAttachedPlace,
 };

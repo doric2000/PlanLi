@@ -17,13 +17,21 @@ describe('AdminService callable deadlines', () => {
   });
 
   it('uses callable-specific timeouts aligned beyond long server operations', async () => {
-    await setUserSuspension('user-1', true, 'reason');
+    await setUserSuspension('user-1', true, 'reason', 168, 'operation-1');
     await deleteUserAsAdmin('user-2', 'reason');
     await getModerationDashboard();
     await resolveModerationCase({ caseId: 'case-1' });
 
     expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'setUserSuspension', {
       timeout: ADMIN_CALLABLE_TIMEOUTS.setUserSuspension,
+    });
+    const suspensionIndex = httpsCallable.mock.calls.findIndex(([, name]) => name === 'setUserSuspension');
+    expect(httpsCallable.mock.results[suspensionIndex].value).toHaveBeenCalledWith({
+      identifier: 'user-1',
+      suspended: true,
+      reason: 'reason',
+      durationHours: 168,
+      operationId: 'operation-1',
     });
     expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'deleteUserAsAdmin', {
       timeout: ADMIN_CALLABLE_TIMEOUTS.deleteUserAsAdmin,

@@ -69,6 +69,9 @@ test('destination and attached-place previews expose bounded location context', 
   });
   assert.equal(destination.title, 'חיפה');
   assert.equal(destination.author, null);
+  assert.deepEqual(destination.destination, {
+    countryId: 'IL', cityId: 'haifa', cityName: 'חיפה', countryName: 'ישראל',
+  });
   const attached = buildModerationPreview({
     target: {
       type: 'recommendation', id: 'rec-1',
@@ -114,13 +117,44 @@ test('stored report snapshots remain visible while reflecting current target ava
 test('stored report snapshots reflect the current moderation status', async () => {
   const stored = { available: true, title: 'הגרסה המקורית', status: 'active' };
   const [item] = await hydrateModerationPreviews(fakeAdmin({
-    'recommendations/rec-1': { title: 'גרסה נוכחית', status: 'moderation_hold' },
+    'recommendations/rec-1': {
+      title: 'גרסה נוכחית',
+      status: 'moderation_hold',
+      destination: { countryId: 'IL', cityId: 'haifa', cityName: 'חיפה', countryName: 'ישראל' },
+    },
   }), [{
     id: 'case-1',
     target: { type: 'recommendation', id: 'rec-1' },
     targetPreview: stored,
   }]);
   assert.equal(item.targetPreview.status, 'moderation_hold');
+  assert.equal(item.targetPreview.destination.countryId, 'IL');
+  assert.equal(item.targetPreview.destination.cityId, 'haifa');
+});
+
+test('legacy comment snapshots hydrate their live author and parent destination', async () => {
+  const [item] = await hydrateModerationPreviews(fakeAdmin({
+    'routes/route-1/comments/comment-1': {
+      authorId: 'author-1',
+      text: 'תגובה ישנה',
+      status: 'active',
+    },
+    'routes/route-1': {
+      ownerId: 'route-owner',
+      title: 'מסלול בחיפה',
+      destination: { countryId: 'IL', cityId: 'haifa', cityName: 'חיפה', countryName: 'ישראל' },
+    },
+  }), [{
+    id: 'case-comment',
+    target: { type: 'comment', id: 'comment-1', parentType: 'route', parentId: 'route-1' },
+    targetPreview: { available: true, title: 'מסלול בחיפה', author: { displayName: 'כותב' } },
+  }]);
+
+  assert.equal(item.targetOwnerId, 'author-1');
+  assert.equal(item.targetPreview.author.uid, 'author-1');
+  assert.deepEqual(item.targetPreview.destination, {
+    countryId: 'IL', cityId: 'haifa', cityName: 'חיפה', countryName: 'ישראל',
+  });
 });
 
 test('first-reported snapshots are immutable and unsafe preview input is bounded', () => {

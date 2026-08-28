@@ -49,7 +49,7 @@ function mergeDetails(previous, details) {
   };
 }
 
-export default function AdminDestinationsSection({ focusCountryId = '', focusCityId = '', onFocusHandled }) {
+export default function AdminDestinationsSection({ focusCountryId = '', focusCityId = '', onFocusHandled, onBackToCase }) {
   const uploader = useImagePickerWithUpload({ kind: 'route', aspect: [16, 9], normalizeToAspect: true, normalizeAspect: [16, 9] });
   const [state, setState] = useState({ loading: true, error: '', items: [], nextCursor: null });
   const [selectedId, setSelectedId] = useState('');
@@ -141,6 +141,7 @@ export default function AdminDestinationsSection({ focusCountryId = '', focusCit
 
   return (
     <View testID="admin-destinations-content">
+      {onBackToCase ? <AdminAction compact label="חזרה לתיק המודרציה" onPress={onBackToCase} testID="admin-destination-back-to-case" /> : null}
       <View style={styles.sectionHeading}><AppText style={styles.sectionTitle}>מקומות</AppText><AppText style={styles.sectionDescription}>אימות נתוני עיר, ספק, תמונה ושדה תעופה. כל שינוי נשמר עם סיבה ומצב לפני/אחרי.</AppText></View>
       <AdminAsyncState loading={state.loading} error={state.error} empty={!state.loading && !state.error && !state.items.length} onRetry={() => load()} testID="admin-destinations" />
       {detailState.error ? <View style={styles.error}><AppText style={styles.errorText}>{detailState.error}</AppText></View> : null}

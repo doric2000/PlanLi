@@ -10,5 +10,10 @@ describe('admin errors', () => {
     expect(safeAdminError({ code: 'functions/permission-denied', message: 'raw' })).toContain('לא אושרה בשרת');
     expect(safeAdminError({ code: 'functions/not-found', details: { reason: 'content_missing' }, message: 'raw' })).toContain('כבר אינו זמין');
     expect(safeAdminError({ code: 'functions/permission-denied', details: { reason: 'self_admin_action' }, message: 'raw' })).toContain('על החשבון שלך');
+    expect(safeAdminError({ details: { reason: 'owner_suspended' } })).toContain('החזרה לפעילות');
+    expect(safeAdminError({ details: { reason: 'thread_not_active' } })).toContain('השרשור הראשי');
+    expect(safeAdminError({ details: { reason: 'account_enforcement_conflict' } })).toContain('מצב האכיפה');
+    expect(safeAdminError({ details: { reason: 'decision_retry_conflict' } })).toContain('פרטי הניסיון החוזר');
+    expect(safeAdminError({ details: { reason: 'already_suspended' } })).toContain('כבר מושעה');
   });
 });

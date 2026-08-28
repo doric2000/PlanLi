@@ -70,6 +70,16 @@ export const AUDIT_LABELS = Object.freeze({
   content_dismiss: 'הדיווח נסגר ללא הפרה',
 });
 
+export const CASE_EVENT_LABELS = Object.freeze({
+  decision_started: 'החלטת המודרציה התחילה',
+  decision_completed: 'החלטת המודרציה הושלמה',
+  decision_failed: 'ההחלטה נעצרה והמצב רוענן',
+  claim: 'התיק הוקצה',
+  unclaim: 'ההקצאה הוסרה',
+  set_priority: 'עדיפות התיק שונתה',
+  add_note: 'נוספה הערה פנימית',
+});
+
 export function formatRelativeAge(value, now = Date.now()) {
   const milliseconds = typeof value === 'number'
     ? value

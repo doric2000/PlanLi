@@ -86,10 +86,17 @@ function mediaUrl(data) {
 function previewDestination(data) {
   const destination = data?.destination || (Array.isArray(data?.destinations) ? data.destinations[0] : null);
   if (!destination || typeof destination !== 'object') return null;
+  const countryId = cleanId(destination.countryId);
+  const cityId = cleanId(destination.cityId);
   const cityName = cleanText(destination.cityName, 120);
   const countryName = cleanText(destination.countryName, 120);
-  if (!cityName && !countryName) return null;
-  return compact({ cityName: cityName || undefined, countryName: countryName || undefined });
+  if (!countryId && !cityId && !cityName && !countryName) return null;
+  return compact({
+    countryId: countryId || undefined,
+    cityId: cityId || undefined,
+    cityName: cityName || undefined,
+    countryName: countryName || undefined,
+  });
 }
 
 function previewPlace(data) {
@@ -182,7 +189,12 @@ function buildModerationPreview({ target, data, parentData = null, ownerProfile 
     mediaCount: mediaEntries(sourceForImage).length,
     author: isDestination ? null : previewAuthor(target, data, ownerProfile),
     destination: isDestination
-      ? compact({ cityName: title || undefined, countryName: cleanText(data.countryName, 120) || undefined })
+      ? compact({
+          countryId: cleanId(target?.countryId) || undefined,
+          cityId: cleanId(target?.cityId || target?.id) || undefined,
+          cityName: title || undefined,
+          countryName: cleanText(data.countryName, 120) || undefined,
+        })
       : previewDestination(isComment ? parentData : data),
     place: target?.subject?.kind === 'attached_place' ? previewPlace(data) : null,
     subject: target?.subject || null,
@@ -198,7 +210,7 @@ async function hydrateModerationPreviews(admin, items) {
   const db = admin.firestore();
   const missing = items.filter((item) => !item?.targetPreview || typeof item.targetPreview !== 'object');
   const targetPaths = Array.from(new Set(items.map((item) => canonicalTargetPath(item.target)).filter(Boolean)));
-  const parentPaths = Array.from(new Set(missing.map((item) => parentTargetPath(item.target)).filter(Boolean)));
+  const parentPaths = Array.from(new Set(items.map((item) => parentTargetPath(item.target)).filter(Boolean)));
   const allContentPaths = Array.from(new Set([...targetPaths, ...parentPaths]));
   const contentSnapshots = allContentPaths.length
     ? await db.getAll(...allContentPaths.map((path) => db.doc(path)))
@@ -220,24 +232,35 @@ async function hydrateModerationPreviews(admin, items) {
     const path = canonicalTargetPath(item.target);
     const targetSnapshot = path ? contentByPath.get(path) : null;
     const targetData = targetSnapshot?.exists ? targetSnapshot.data() : null;
+    const parentPath = parentTargetPath(item.target);
+    const parentSnapshot = parentPath ? contentByPath.get(parentPath) : null;
+    const parentData = parentSnapshot?.exists ? parentSnapshot.data() : null;
+    const currentOwnerId = cleanId(item.target?.type === 'profile'
+      ? item.target?.id
+      : targetData?.authorId || targetData?.ownerId);
     if (item?.targetPreview && typeof item.targetPreview === 'object') {
+      const currentDestination = previewDestination(item.target?.type === 'comment' ? parentData : targetData);
+      const currentAuthor = previewAuthor(item.target, targetData || {}, null);
       return {
         ...item,
+        ...(item.targetOwnerId || !currentOwnerId ? {} : { targetOwnerId: currentOwnerId }),
         targetPreview: {
           ...item.targetPreview,
           available: Boolean(targetSnapshot?.exists),
           ...(targetData?.status ? { status: cleanText(targetData.status, 40) } : {}),
+          ...(currentAuthor?.uid
+            ? { author: { ...(item.targetPreview.author || {}), uid: currentAuthor.uid } }
+            : {}),
+          ...(currentDestination?.countryId && currentDestination?.cityId
+            ? { destination: { ...(item.targetPreview.destination || {}), ...currentDestination } }
+            : {}),
         },
       };
     }
-    const parentPath = parentTargetPath(item.target);
-    const parentSnapshot = parentPath ? contentByPath.get(parentPath) : null;
-    const parentData = parentSnapshot?.exists ? parentSnapshot.data() : null;
-    const ownerId = cleanId(item.target?.type === 'profile'
-      ? item.target?.id
-      : targetData?.authorId || targetData?.ownerId);
+    const ownerId = currentOwnerId;
     return {
       ...item,
+      ...(item.targetOwnerId || !ownerId ? {} : { targetOwnerId: ownerId }),
       targetPreview: buildModerationPreview({
         target: item.target,
         data: targetData,
