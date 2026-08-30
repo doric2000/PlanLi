@@ -32,16 +32,28 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function decodeNumericHtmlEntity(match, decimalCode, hexadecimalCode) {
+  const radix = hexadecimalCode ? 16 : 10;
+  const codePoint = Number.parseInt(hexadecimalCode || decimalCode, radix);
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10FFFF ||
+      (codePoint >= 0xD800 && codePoint <= 0xDFFF)) {
+    return '\uFFFD';
+  }
+  return String.fromCodePoint(codePoint);
+}
+
 function decodeHtml(value) {
   return String(value || '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
+    .replace(/&nbsp;/gi, ' ')
     .replace(/&quot;/gi, '"')
     .replace(/&#0*39;|&apos;/gi, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#(?:([0-9]+)|x([0-9a-f]+));/gi, decodeNumericHtmlEntity)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[<>]/g, ' ')
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
