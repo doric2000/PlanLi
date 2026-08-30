@@ -10,10 +10,15 @@ import {
 import { isTotpChallengeRequired } from '../../../services/MfaService';
 import AuthFormLayout from '../components/AuthFormLayout';
 import BrandWordmark from '../components/BrandWordmark';
-import { leaveAuthFlow, resetToMain } from '../../../navigation/authNavigation';
+import {
+  isAdminWebRuntime,
+  leaveAuthFlow,
+  resetToMain,
+} from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 
 export default function LoginScreen({ navigation, route }) {
+  const adminWeb = isAdminWebRuntime();
   const { clearPendingReturn, runAuthTransition } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +58,9 @@ export default function LoginScreen({ navigation, route }) {
         <>
           <View style={authStyles.formBrand} testID="auth-form-brand"><BrandWordmark form /></View>
           <AppText style={[authStyles.formTitle, compact && authStyles.formTitleCompact]}>ברוכים השבים</AppText>
-          <AppText style={authStyles.formSubtitle}>התחברו והמשיכו לתכנן את הטיול הבא.</AppText>
+          <AppText style={authStyles.formSubtitle}>
+            {adminWeb ? 'התחברות מאובטחת לממשק הניהול.' : 'התחברו והמשיכו לתכנן את הטיול הבא.'}
+          </AppText>
         </>
       )}
     >
@@ -103,10 +110,12 @@ export default function LoginScreen({ navigation, route }) {
             onPress={handleLogin} disabled={loading} testID="email-login-button">
             {loading ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>התחברות</AppText>}
           </TouchableOpacity>
-          <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer">
-            <AppText style={authStyles.footerText}>אין חשבון? </AppText>
-            <TouchableOpacity onPress={() => navigation.replace('Register')}><AppText style={authStyles.link}>הרשמה</AppText></TouchableOpacity>
-          </View>
+          {!adminWeb ? (
+            <View style={[authStyles.footerRow, authStyles.formFooterRow]} testID="auth-form-footer">
+              <AppText style={authStyles.footerText}>אין חשבון? </AppText>
+              <TouchableOpacity onPress={() => navigation.replace('Register')}><AppText style={authStyles.link}>הרשמה</AppText></TouchableOpacity>
+            </View>
+          ) : null}
         </>
       )}
     </AuthFormLayout>

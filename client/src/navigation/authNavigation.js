@@ -1,5 +1,7 @@
 const PUBLIC_MAIN_TABS = new Set(['Home', 'Community', 'Routes', 'Favorites']);
 
+export const isAdminWebRuntime = () => process.env.EXPO_PUBLIC_ADMIN_WEB === 'true';
+
 const normalizeFallbackTab = (screen) => (
   PUBLIC_MAIN_TABS.has(screen) ? screen : 'Home'
 );
@@ -20,6 +22,11 @@ const MAIN_TAB_PATH = (screen) => ({
   params: { screen },
 });
 
+const ADMIN_AUTH_PATH = (screen, screenParams) => ({
+  screen,
+  ...(screenParams ? { params: screenParams } : {}),
+});
+
 export function getRootNavigation(navigation) {
   let current = navigation;
   let parent = current?.getParent?.();
@@ -31,10 +38,18 @@ export function getRootNavigation(navigation) {
 }
 
 export function openAuthFlow(navigation, screen = 'AuthEntry', screenParams) {
+  if (isAdminWebRuntime()) {
+    getRootNavigation(navigation)?.navigate?.('AdminAuth', ADMIN_AUTH_PATH(screen, screenParams));
+    return;
+  }
   getRootNavigation(navigation)?.navigate?.('Main', AUTH_FLOW_PATH(screen, screenParams));
 }
 
 export function openMainTab(navigation, screen = 'Home') {
+  if (isAdminWebRuntime()) {
+    getRootNavigation(navigation)?.navigate?.('AdminPanel');
+    return;
+  }
   getRootNavigation(navigation)?.navigate?.('Main', MAIN_TAB_PATH(screen));
 }
 
@@ -58,9 +73,13 @@ export function resetToRootRoute(navigation, name, params) {
 }
 
 export function resetToMain(navigation, params) {
-  resetToRootRoute(navigation, 'Main', params);
+  resetToRootRoute(navigation, isAdminWebRuntime() ? 'AdminPanel' : 'Main', params);
 }
 
 export function resetToAuthFlow(navigation, screen = 'AuthEntry', screenParams) {
+  if (isAdminWebRuntime()) {
+    resetToRootRoute(navigation, 'AdminAuth', ADMIN_AUTH_PATH(screen, screenParams));
+    return;
+  }
   resetToMain(navigation, AUTH_FLOW_PATH(screen, screenParams));
 }

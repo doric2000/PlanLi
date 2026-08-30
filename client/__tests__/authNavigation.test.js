@@ -93,4 +93,30 @@ describe('authentication navigation helpers', () => {
       }],
     });
   });
+
+  it('keeps Admin Web authentication outside the consumer Main navigator', () => {
+    const previous = process.env.EXPO_PUBLIC_ADMIN_WEB;
+    process.env.EXPO_PUBLIC_ADMIN_WEB = 'true';
+    try {
+      const rootNavigation = { navigate: jest.fn(), reset: jest.fn() };
+      const navigation = { getParent: jest.fn(() => rootNavigation) };
+
+      openAuthFlow(navigation, 'Login');
+      resetToMain(navigation);
+      resetToAuthFlow(navigation, 'Login');
+
+      expect(rootNavigation.navigate).toHaveBeenCalledWith('AdminAuth', { screen: 'Login' });
+      expect(rootNavigation.reset).toHaveBeenNthCalledWith(1, {
+        index: 0,
+        routes: [{ name: 'AdminPanel' }],
+      });
+      expect(rootNavigation.reset).toHaveBeenNthCalledWith(2, {
+        index: 0,
+        routes: [{ name: 'AdminAuth', params: { screen: 'Login' } }],
+      });
+    } finally {
+      if (previous === undefined) delete process.env.EXPO_PUBLIC_ADMIN_WEB;
+      else process.env.EXPO_PUBLIC_ADMIN_WEB = previous;
+    }
+  });
 });

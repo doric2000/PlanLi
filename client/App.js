@@ -81,7 +81,6 @@ const AddRoutesActive = withRequireAuth(AddRoutesScreen, CAPABILITIES.ACTIVE);
  * - RouteDetail: Detailed view of a specific route
  */
 export default function App() {
-	const initialRouteName = process.env.EXPO_PUBLIC_ADMIN_WEB === 'true' ? 'AdminPanel' : 'Main';
 	const previousRouteNameRef = useRef(null);
 	const [navigationReady, setNavigationReady] = useState(false);
 	const [currentRouteName, setCurrentRouteName] = useState('');
@@ -124,7 +123,7 @@ export default function App() {
 					onStateChange={recordCurrentRoute}
 				>
 				<Stack.Navigator
-					initialRouteName={initialRouteName}
+					initialRouteName="Main"
 					screenOptions={rtlStackScreenOptions}
 				>
 					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />

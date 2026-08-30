@@ -5,6 +5,20 @@ const TEXT_EXTENSIONS = new Set(['.html', '.css', '.js', '.json']);
 const LOCAL_ASSET = /(?:\/admin\/)?assets\/(?:assets|node_modules)\/[A-Za-z0-9_@./+~-]+\.[A-Za-z0-9]+/g;
 const HTML_REFERENCE = /(?:src|href)=["']([^"']+)["']/g;
 const CSS_REFERENCE = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
+const REQUIRED_ADMIN_BUNDLE_MARKERS = [
+  'planli-admin-web-root',
+  'admin-totp-enrollment-required',
+  'admin-totp-signin-required',
+];
+const FORBIDDEN_CONSUMER_BUNDLE_MARKERS = [
+  'main-tab-',
+  'home-search-input',
+  'add-rec-guided-header',
+  'add-rec-submit',
+  'route-builder-guided-header',
+  'auth-gate-register',
+  'noya-tour-',
+];
 
 function filesUnder(root) {
   return fs.readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
@@ -74,8 +88,13 @@ function verifyAdminExport(
   ));
   if (webBundles.length) {
     const bundleText = webBundles.map((sourceFile) => fs.readFileSync(sourceFile, 'utf8')).join('\n');
-    for (const marker of ['admin-totp-enrollment-required', 'admin-totp-signin-required']) {
+    for (const marker of REQUIRED_ADMIN_BUNDLE_MARKERS) {
       if (!bundleText.includes(marker)) throw new Error(`Admin export is missing required security marker: ${marker}.`);
+    }
+    for (const marker of FORBIDDEN_CONSUMER_BUNDLE_MARKERS) {
+      if (bundleText.includes(marker)) {
+        throw new Error(`Admin export contains forbidden consumer application marker: ${marker}.`);
+      }
     }
     if (bundleText.includes('ExpoMediaLibraryNext')) {
       throw new Error('Admin export contains a native-only ExpoMediaLibraryNext dependency.');

@@ -10,6 +10,12 @@ const {
 } = require('./exportAdminWeb');
 const { verifyAdminExport } = require('./verifyAdminExport');
 
+const ADMIN_SECURITY_MARKERS = [
+  'planli-admin-web-root',
+  'admin-totp-enrollment-required',
+  'admin-totp-signin-required',
+].join(' ');
+
 function fixture(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-admin-export-'));
   for (const [name, content] of Object.entries(files)) {
@@ -57,7 +63,7 @@ test('admin export rejects missing TOTP controls and native-only media imports',
 
   const nativeMediaRoot = fixture({
     'index.html': '<script src="/admin/_expo/static/js/web/index.js"></script>',
-    '_expo/static/js/web/index.js': 'admin-totp-enrollment-required admin-totp-signin-required ExpoMediaLibraryNext',
+    '_expo/static/js/web/index.js': `${ADMIN_SECURITY_MARKERS} ExpoMediaLibraryNext`,
   });
   try {
     assert.throws(() => verifyAdminExport(nativeMediaRoot), /native-only ExpoMediaLibraryNext/);
@@ -69,7 +75,7 @@ test('admin export rejects missing TOTP controls and native-only media imports',
 test('admin export verifies that the configured App Check site key was embedded', () => {
   const root = fixture({
     'index.html': '<script src="/admin/_expo/static/js/web/index.js"></script>',
-    '_expo/static/js/web/index.js': 'admin-totp-enrollment-required admin-totp-signin-required configured-site-key',
+    '_expo/static/js/web/index.js': `${ADMIN_SECURITY_MARKERS} configured-site-key`,
   });
   try {
     assert.deepEqual(
@@ -79,6 +85,21 @@ test('admin export verifies that the configured App Check site key was embedded'
     assert.throws(
       () => verifyAdminExport(root, { expectedRecaptchaSiteKey: 'different-site-key' }),
       /does not contain the configured reCAPTCHA Enterprise site key/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('admin export rejects consumer application navigation in the bundle', () => {
+  const root = fixture({
+    'index.html': '<script src="/admin/_expo/static/js/web/index.js"></script>',
+    '_expo/static/js/web/index.js': `${ADMIN_SECURITY_MARKERS} main-tab-home`,
+  });
+  try {
+    assert.throws(
+      () => verifyAdminExport(root),
+      /forbidden consumer application marker: main-tab-/,
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

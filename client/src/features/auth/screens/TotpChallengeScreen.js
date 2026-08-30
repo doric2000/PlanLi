@@ -10,7 +10,11 @@ import {
   hasPendingTotpSignIn,
 } from '../../../services/MfaService';
 import { authStyles } from '../../../styles';
-import { resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
+import {
+  isAdminWebRuntime,
+  resetToMain,
+  resetToRootRoute,
+} from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 import AuthLayout from '../components/AuthLayout';
 
@@ -36,7 +40,7 @@ export default function TotpChallengeScreen({ navigation }) {
       await runAuthTransition(async () => {
         const result = await completeTotpSignIn(code);
         const bootstrap = await ensureAuthenticatedUserProfile(result.user, result.profile || {});
-        if (bootstrap?.created) resetToRootRoute(navigation, 'CompleteAccount');
+        if (bootstrap?.created && !isAdminWebRuntime()) resetToRootRoute(navigation, 'CompleteAccount');
         else resetToMain(navigation);
       }, 'sign_in_totp');
     } catch (challengeError) {
