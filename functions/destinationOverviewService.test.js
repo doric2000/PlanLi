@@ -140,8 +140,13 @@ test('destination overview exposes only supported automatic facts', async () => 
       },
     },
     'countries/gr/destinations/mykonos': {
+      schemaVersion: 3,
       name: 'מיקונוס',
       status: 'active',
+      googleCache: {
+        names: { he: 'מיקונוס', en: 'Mykonos' },
+        expiresAt: new Date('2020-01-01T00:00:00.000Z'),
+      },
       canonicalPolicy: {
         approved: true,
         registryId: 'gr-mykonos',

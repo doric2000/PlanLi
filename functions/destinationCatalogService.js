@@ -178,15 +178,8 @@ async function syncCountryDestinationCatalog({ admin, countryId, country, limit 
   return { processed };
 }
 
-function filterCatalogByActiveCountries(documents, activeCountryIds, nowMs = Date.now()) {
-  return documents.filter((document) => {
-    const data = document.data() || {};
-    const expiry = data.cacheExpiresAt;
-    const expiryMs = typeof expiry?.toMillis === 'function'
-      ? expiry.toMillis()
-      : expiry instanceof Date ? expiry.getTime() : Date.parse(expiry) || 0;
-    return activeCountryIds.has(data.countryId) && expiryMs > nowMs;
-  });
+function filterCatalogByActiveCountries(documents, activeCountryIds) {
+  return documents.filter((document) => activeCountryIds.has(document.data()?.countryId));
 }
 
 function cleanLimit(value) {
