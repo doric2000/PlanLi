@@ -484,6 +484,20 @@ describe('authentication screens', () => {
     dimensions.mockRestore();
   });
 
+  it('does not offer account registration in the isolated Admin Web login', () => {
+    const previous = process.env.EXPO_PUBLIC_ADMIN_WEB;
+    process.env.EXPO_PUBLIC_ADMIN_WEB = 'true';
+    try {
+      const screen = render(<LoginScreen navigation={{ navigate: jest.fn(), replace: jest.fn() }} />);
+      expect(screen.getByText('התחברות מאובטחת לממשק הניהול.')).toBeTruthy();
+      expect(screen.queryByTestId('auth-form-footer')).toBeNull();
+      expect(screen.queryByText('הרשמה')).toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.EXPO_PUBLIC_ADMIN_WEB;
+      else process.env.EXPO_PUBLIC_ADMIN_WEB = previous;
+    }
+  });
+
   it('keeps auth chrome fixed and enables only the form scroller while the keyboard is visible', () => {
     const callbacks = {};
     const dimensions = jest.spyOn(require('react-native'), 'useWindowDimensions').mockReturnValue({

@@ -1,3 +1,4 @@
 const { getSentryExpoConfig } = require('@sentry/react-native/metro');
+const { withAdminWebEntry } = require('./scripts/adminWebMetroResolver');
 
-module.exports = getSentryExpoConfig(__dirname);
+module.exports = withAdminWebEntry(getSentryExpoConfig(__dirname));
