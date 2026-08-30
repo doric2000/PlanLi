@@ -6,7 +6,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import TravelMediaComposer, { isTravelMediaSwipe } from '../src/components/TravelMediaComposer';
 
 jest.mock('expo-image-manipulator', () => ({ manipulateAsync: jest.fn() }));
-jest.mock('expo-media-library', () => ({
+jest.mock('expo-media-library/legacy', () => ({
   MediaType: { photo: 'photo' },
   SortBy: { creationTime: 'creationTime' },
   getAlbumsAsync: jest.fn(async () => []),

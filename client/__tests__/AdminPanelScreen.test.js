@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Dimensions } from 'react-native';
+import { Alert, Dimensions, ScrollView } from 'react-native';
 
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
@@ -117,6 +117,14 @@ describe('Admin console end-to-end surface', () => {
     AdminService.bulkUpdateModerationCases.mockResolvedValue({ results: [] });
     AdminService.resolveModerationCase.mockResolvedValue({ success: true });
   });
+
+  it('keeps standard admin sections inside a vertical scroll container', async () => {
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+    await screen.findByTestId('admin-overview-content', {}, { timeout: 10000 });
+    expect(
+      screen.UNSAFE_queryAllByType(ScrollView).some((scrollView) => scrollView.props.horizontal !== true),
+    ).toBe(true);
+  }, 20000);
 
   it('opens each workload metric as its matching filtered queue', async () => {
     const screen = render(<AdminPanelScreen navigation={navigation} />);
