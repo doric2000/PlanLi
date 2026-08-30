@@ -15,7 +15,7 @@ function hasValidApprovedCanonicalPolicy(destination, expectedCountryId = '') {
   const attestation = policy?.registryAttestation;
   return policy?.approved === true &&
     typeof policy.registryId === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)+$/u.test(policy.registryId) &&
-    ['city_hub', 'island', 'tourism_region', 'province'].includes(policy.kind) &&
+    ['city_hub', 'island', 'natural_feature', 'tourism_region', 'province'].includes(policy.kind) &&
     ['self', 'parent', 'approved_children'].includes(policy.groupingPolicy) &&
     Number.isInteger(Number(policy.registryVersion)) && Number(policy.registryVersion) >= 1 &&
     Number.isInteger(Number(policy.approvalRevision)) && Number(policy.approvalRevision) >= 1 &&

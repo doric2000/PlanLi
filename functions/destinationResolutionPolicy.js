@@ -2,6 +2,24 @@ const crypto = require('crypto');
 
 const CONTAINING_PLACES_PRO_MONTHLY_LIMIT = 4500;
 
+const DIRECT_DESTINATION_TYPES = Object.freeze([
+  'locality',
+  'postal_town',
+  'island',
+  'administrative_area_level_3',
+  'administrative_area_level_2',
+  'administrative_area_level_1',
+]);
+const EXPLICIT_NATURAL_DESTINATION_TYPES = Object.freeze([
+  'natural_feature',
+  'national_park',
+  'park',
+]);
+const DESTINATION_AUTOCOMPLETE_TYPES = new Set([
+  ...DIRECT_DESTINATION_TYPES,
+  ...EXPLICIT_NATURAL_DESTINATION_TYPES,
+]);
+
 function provisionalRegistryId(countryCode, providerPlaceId) {
   const code = String(countryCode || '').trim().toLowerCase() || 'xx';
   const digest = crypto.createHash('sha256')
@@ -14,11 +32,14 @@ function provisionalRegistryId(countryCode, providerPlaceId) {
 
 function provisionalDestinationKind(types = []) {
   const values = new Set(Array.isArray(types) ? types : []);
-  if (values.has('island')) return 'island';
+  if (values.has('island') || values.has('archipelago')) return 'island';
   if (values.has('administrative_area_level_1') || values.has('administrative_area_level_2')) {
     return 'province';
   }
-  if (values.has('natural_feature') || values.has('colloquial_area')) return 'tourism_region';
+  if (['natural_feature', 'national_park', 'park'].some((type) => values.has(type))) {
+    return 'natural_feature';
+  }
+  if (values.has('colloquial_area')) return 'tourism_region';
   return 'city_hub';
 }
 
@@ -47,6 +68,9 @@ async function consumeContainingPlacesProBudget(admin, now = new Date()) {
 
 module.exports = {
   CONTAINING_PLACES_PRO_MONTHLY_LIMIT,
+  DESTINATION_AUTOCOMPLETE_TYPES,
+  DIRECT_DESTINATION_TYPES,
+  EXPLICIT_NATURAL_DESTINATION_TYPES,
   consumeContainingPlacesProBudget,
   monthKey,
   provisionalDestinationKind,

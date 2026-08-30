@@ -6,6 +6,7 @@ const {
   REGISTRY_PATH,
   REGISTRY_VERSION,
   canonicalDestinationId,
+  destinationTypeForKind,
   validateRegistryEntry,
 } = require('../canonicalDestinationRegistry');
 const { syncDestinationCatalog } = require('../destinationCatalogService');
@@ -43,12 +44,6 @@ function parseArguments(argv) {
     reason: valueFor(argv, '--reason'),
     requestedBy: valueFor(argv, '--requested-by'),
   };
-}
-
-function destinationTypeForKind(kind) {
-  if (kind === 'city_hub') return 'city';
-  if (kind === 'island') return 'island';
-  return 'region';
 }
 
 function buildCanonicalDestination({ countryId, registryEntry, now = new Date() }) {

@@ -18,7 +18,10 @@ test('provisional registry identities are stable and country scoped', () => {
 
 test('provisional destination kind follows explicit area types', () => {
   assert.equal(provisionalDestinationKind(['island', 'natural_feature']), 'island');
+  assert.equal(provisionalDestinationKind(['archipelago', 'natural_feature']), 'island');
   assert.equal(provisionalDestinationKind(['administrative_area_level_1']), 'province');
+  assert.equal(provisionalDestinationKind(['natural_feature']), 'natural_feature');
+  assert.equal(provisionalDestinationKind(['national_park', 'park']), 'natural_feature');
   assert.equal(provisionalDestinationKind(['colloquial_area']), 'tourism_region');
   assert.equal(provisionalDestinationKind(['locality', 'political']), 'city_hub');
 });

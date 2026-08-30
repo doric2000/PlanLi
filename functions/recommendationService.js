@@ -45,6 +45,7 @@ const {
 } = require('./destinationReferencePolicy');
 const {
   canonicalDestinationId,
+  destinationTypeForKind,
   matchCanonicalEntry,
   registryEntriesForCountry,
 } = require('./canonicalDestinationRegistry');
@@ -56,6 +57,8 @@ const {
   transliterateDestinationName,
 } = require('./destinationLocalizationService');
 const {
+  DIRECT_DESTINATION_TYPES,
+  EXPLICIT_NATURAL_DESTINATION_TYPES,
   consumeContainingPlacesProBudget,
   provisionalDestinationKind,
   provisionalRegistryId,
@@ -81,14 +84,25 @@ const {
   destinationClaimId,
 } = require('./destinationV3Service');
 
-const DIRECT_DESTINATION_TYPES = new Set([
-  'locality',
-  'postal_town',
-  'island',
-  'administrative_area_level_3',
-  'administrative_area_level_2',
-  'administrative_area_level_1',
-]);
+const DIRECT_DESTINATION_TYPE_SET = new Set(DIRECT_DESTINATION_TYPES);
+const EXPLICIT_NATURAL_DESTINATION_TYPE_SET = new Set(EXPLICIT_NATURAL_DESTINATION_TYPES);
+
+function selectedDestinationTypePolicy(types, {
+  selectionIntent = 'exact_place',
+  destinationIntentVerified = false,
+} = {}) {
+  const selectedTypes = Array.isArray(types) ? types : [];
+  const selectedHasNaturalType = selectedTypes.some((type) =>
+    EXPLICIT_NATURAL_DESTINATION_TYPE_SET.has(type));
+  const explicitlySelectedNaturalDestination = destinationIntentVerified &&
+    selectionIntent === 'destination' && selectedHasNaturalType;
+  return {
+    explicitlySelectedNaturalDestination,
+    selectedIsDestination: explicitlySelectedNaturalDestination ||
+      (!selectedHasNaturalType && selectedTypes.some((type) =>
+        DIRECT_DESTINATION_TYPE_SET.has(type))),
+  };
+}
 const {
   readResolvedPlaceToken,
   storeResolvedPlaceDestination,
@@ -1241,8 +1255,10 @@ async function findExistingDestinationByAlias({
       aliasMatched: aliases.some((alias) => names.includes(alias)),
       isSettlement: isSettlementDestination(projectedDestination),
       isThaiProvince: isThaiProvinceDestination(projectedDestination),
+      isNaturalFeature: projectedDestination.destinationType === 'natural_feature' ||
+        projectedDestination.canonicalPolicy?.kind === 'natural_feature',
     };
-  }).filter(Boolean)
+  }).filter((entry) => entry && !entry.isNaturalFeature)
     .sort((left, right) => left.distanceKm - right.distanceKm || left.cityId.localeCompare(right.cityId));
   if (!matches.length) return null;
 
@@ -1298,6 +1314,7 @@ async function resolveGoogleDestination({
   placesProvider = 'new',
   restCountriesKey,
   selectionIntent = 'exact_place',
+  destinationIntentVerified = false,
   confirmedHebrewName = null,
   requestContext = providerRequestContext(),
 }) {
@@ -1312,10 +1329,12 @@ async function resolveGoogleDestination({
   // Only promote the Google entity the user selected directly. A venue's
   // locality/address components still go through the reviewed registry and
   // must never create raw destinations such as Rivas or Kannan Devan Hills.
-  // `natural_feature` is intentionally excluded: it can be a single lake,
-  // mountain or attraction rather than a traveler-facing destination.
-  const selectedIsDestination = (selectedEn.types || [])
-    .some((type) => DIRECT_DESTINATION_TYPES.has(type));
+  // A natural feature is promoted only when the user explicitly selected it as
+  // the trip destination. Selecting a park or lake as the recommendation's
+  // exact place still resolves through its containing reviewed destination.
+  const selectedTypes = Array.isArray(selectedEn.types) ? selectedEn.types : [];
+  const { explicitlySelectedNaturalDestination, selectedIsDestination } =
+    selectedDestinationTypePolicy(selectedTypes, { selectionIntent, destinationIntentVerified });
   const selectedCoordinates = selectedEn.coordinates || bilingual.he?.coordinates;
   const preliminaryCountry = await resolvePlaceCountry({
     parsedPlace: parsed,
@@ -1337,6 +1356,9 @@ async function resolveGoogleDestination({
         : []),
     ],
     coordinates: selectedCoordinates,
+    excludedKinds: explicitlySelectedNaturalDestination ? [] : ['natural_feature'],
+    allowBlockedExactKinds: explicitlySelectedNaturalDestination ? ['natural_feature'] : [],
+    exactOnlyKinds: explicitlySelectedNaturalDestination ? ['natural_feature'] : [],
   });
   if (!canonicalMatch && !selectedIsDestination && selectionIntent !== 'destination' &&
       placesProvider === 'new' && parsed.placeId) {
@@ -1360,6 +1382,7 @@ async function resolveGoogleDestination({
             providerPlaceId: containing.placeId,
             aliases: [containing.name],
             coordinates: selectedCoordinates,
+            excludedKinds: ['natural_feature'],
           });
           if (canonicalMatch) {
             canonicalMatch.source = 'canonical_containing_places_pro';
@@ -1600,6 +1623,7 @@ async function resolveGoogleDestination({
           ...localityNamesForPlace(localityEn),
         ],
         coordinates: selectedCoordinates,
+        excludedKinds: ['natural_feature'],
       });
       if (canonicalMatch?.ambiguity?.length) {
         const ambiguityError = new HttpsError(
@@ -1743,9 +1767,7 @@ async function resolveGoogleDestination({
       lng: canonicalCoordinates.lng + Number(canonicalEntry.radiusKm) / (111 * Math.max(0.2, Math.cos(canonicalCoordinates.lat * Math.PI / 180))),
     },
   } : null);
-  const canonicalType = {
-    city_hub: 'city', island: 'island', tourism_region: 'region', province: 'region',
-  }[canonicalEntry.kind];
+  const canonicalType = destinationTypeForKind(canonicalEntry.kind);
   const canonicalPlaceId = canonicalEntry.providerRefs?.googlePlaceId || null;
   const canonicalCityId = canonicalDestinationId(countryId, canonicalEntry.id);
   const builtDestination = {
@@ -2225,7 +2247,21 @@ async function resolveDestinationFromToken({
       admin.firestore(),
       resolvedPlace.destinationResolution
     );
+    const cachedIsNaturalFeature = cached.cityData?.destinationType === 'natural_feature' ||
+      cached.cityData?.canonicalPolicy?.kind === 'natural_feature';
+    if (cachedIsNaturalFeature) {
+      assert(
+        selectionIntent === 'destination' && resolvedPlace.searchMode === 'destinations',
+        'failed-precondition',
+        'Choose the nature destination again from the destination search.'
+      );
+    }
     return { ...cached, incidentId, providerCallCount: requestContext.count };
+  }
+  const destinationIntentVerified = resolvedPlace.searchMode === 'destinations';
+  if (selectionIntent === 'destination') {
+    assert(destinationIntentVerified, 'failed-precondition',
+      'Choose the place again from the destination search.');
   }
   await consumeProviderBudget({
     admin,
@@ -2242,6 +2278,7 @@ async function resolveDestinationFromToken({
     placesProvider,
     restCountriesKey,
     selectionIntent,
+    destinationIntentVerified,
     confirmedHebrewName,
     requestContext,
   });
@@ -2280,6 +2317,7 @@ async function resolveSubmittedPlaceDestination({
   providerBudgetConsumed = false,
   incidentId,
   selectionIntent = 'exact_place',
+  destinationIntentVerified = false,
   confirmedHebrewName = null,
 }) {
   const effectiveIncidentId = createIncidentId(incidentId);
@@ -2312,7 +2350,8 @@ async function resolveSubmittedPlaceDestination({
   const requestContext = providerRequestContext({ incidentId: effectiveIncidentId });
   const destination = await resolveGoogleDestination({
     admin, placeId, countryOverrideId, accessTokenProvider, projectId, placesProvider,
-    restCountriesKey, selectionIntent, confirmedHebrewName, requestContext,
+    restCountriesKey, selectionIntent, destinationIntentVerified,
+    confirmedHebrewName, requestContext,
   });
   return {
     ...destination,
@@ -3109,6 +3148,7 @@ module.exports = {
   findExistingDestinationByAlias,
   finalizeDestinationChoice,
   resolvePlaceCountry,
+  selectedDestinationTypePolicy,
   resolveGoogleDestination,
   resolveDestinationFromToken,
   resolveExactPlaceWithDestination,

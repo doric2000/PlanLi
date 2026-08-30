@@ -6,14 +6,25 @@ const { distanceKm } = require('./destinationIdentityService');
 const REGISTRY_PATH = 'system/destinationRegistry/entries';
 const REGISTRY_VERSION = 3;
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const DESTINATION_KINDS = Object.freeze(['city_hub', 'island', 'tourism_region', 'province']);
+const DESTINATION_KINDS = Object.freeze([
+  'city_hub',
+  'island',
+  'natural_feature',
+  'tourism_region',
+  'province',
+]);
 const GROUPING_POLICIES = Object.freeze(['self', 'parent', 'approved_children']);
 const MATCH_PROFILE_VERSION = 3;
 const DEFAULT_MATCH_RADIUS_KM = Object.freeze({
   city_hub: 35,
   island: 60,
+  natural_feature: 15,
   tourism_region: 60,
   province: 80,
+});
+const MAX_PROVIDER_VIEWPORT_DIAGONAL_KM = Object.freeze({
+  city_hub: 120,
+  natural_feature: 120,
 });
 const SMALL_SETTLEMENT_TYPES = new Set(['neighborhood', 'sublocality', 'sublocality_level_1']);
 const GEOGRAPHIC_TYPES = new Set([
@@ -120,6 +131,9 @@ function providerIdentityPolicy(kind, googleTypes = [], {
   } else if (kind === 'island') {
     compatible = types.has('island') || types.has('archipelago') || types.has('country') ||
       types.has('natural_feature') || hasGeographicType;
+  } else if (kind === 'natural_feature') {
+    compatible = ['natural_feature', 'national_park', 'park']
+      .some((type) => types.has(type));
   } else if (kind === 'tourism_region') {
     compatible = hasGeographicType || reviewedOverride;
   }
@@ -142,7 +156,7 @@ function providerGeometryPolicy(kind, viewport, options = {}) {
   const hasCenter = Number.isFinite(Number(options?.center?.lat)) &&
     Number.isFinite(Number(options?.center?.lng));
   const hasRadius = Number.isFinite(Number(options?.radiusKm)) && Number(options.radiusKm) > 0;
-  const autoMatchEligible = Boolean(DESTINATION_KINDS.includes(kind) &&
+  const autoMatchEligible = Boolean(kind !== 'natural_feature' && DESTINATION_KINDS.includes(kind) &&
     (diagonalKm !== null || (hasCenter && hasRadius)));
   return {
     autoMatchEligible,
@@ -180,6 +194,16 @@ function derivedRadiusKm(entry) {
   return DEFAULT_MATCH_RADIUS_KM[entry?.kind] || 35;
 }
 
+function destinationTypeForKind(kind) {
+  return {
+    city_hub: 'city',
+    island: 'island',
+    natural_feature: 'natural_feature',
+    tourism_region: 'region',
+    province: 'region',
+  }[kind] || null;
+}
+
 function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
   const hasProviderIdentity = Boolean((Array.isArray(entry?.googleTypes) && entry.googleTypes.length) ||
     entry?.providerRefs?.googlePlaceId ||
@@ -200,7 +224,7 @@ function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
   const areas = explicitAreas.slice();
   if (!areas.length && entry?.viewport) {
     const diagonal = viewportDiagonalKm(entry.viewport);
-    const maximumViewportKm = entry?.kind === 'city_hub' ? 120 : 2500;
+    const maximumViewportKm = MAX_PROVIDER_VIEWPORT_DIAGONAL_KM[entry?.kind] || 2500;
     if (diagonal !== null && diagonal <= maximumViewportKm) {
       areas.push({ type: 'viewport', viewport: entry.viewport });
     }
@@ -212,9 +236,9 @@ function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
       areas.push({ type: 'circle', center, radiusKm: Math.max(3, cappedRadius) });
     }
   }
-  const explicitlyBlockedV3 = Number(entry?.geometryPolicy?.version || 0) >= MATCH_PROFILE_VERSION &&
-    entry?.geometryPolicy?.autoMatchEligible === false;
-  const trusted = identity.compatible && areas.length > 0 && !explicitlyBlockedV3;
+  const explicitlyBlocked = entry?.geometryPolicy?.autoMatchEligible === false;
+  const exactOnlyNaturalFeature = entry?.kind === 'natural_feature';
+  const trusted = identity.compatible && areas.length > 0 && !explicitlyBlocked && !exactOnlyNaturalFeature;
   return {
     version: MATCH_PROFILE_VERSION,
     trust: trusted ? 'trusted' : 'blocked',
@@ -436,16 +460,39 @@ function registryCollectionIssues(entries) {
   ) === index);
 }
 
-function matchCanonicalEntry(entries, { countryCode, providerPlaceId, aliases = [], coordinates }) {
+function matchCanonicalEntry(entries, {
+  countryCode,
+  providerPlaceId,
+  aliases = [],
+  coordinates,
+  excludedKinds = [],
+  allowBlockedExactKinds = [],
+  exactOnlyKinds = [],
+}) {
   const code = String(countryCode || '').toUpperCase();
-  const candidates = prepareEntries(entries)
+  const excluded = new Set(excludedKinds);
+  const blockedExact = new Set(allowBlockedExactKinds);
+  const exactOnly = new Set(exactOnlyKinds);
+  const activeEntries = prepareEntries(entries)
     .filter((entry) => entry.status === 'active' && entry.countryCode === code &&
-      entry.matchProfile?.trust === 'trusted');
+      !excluded.has(entry.kind));
+  const candidates = activeEntries.filter((entry) => entry.matchProfile?.trust === 'trusted' &&
+    !exactOnly.has(entry.kind));
   if (providerPlaceId) {
-    const exact = candidates.find((entry) => entry.providerIdentity?.allowExactProviderMatch !== false &&
+    const exactCandidates = activeEntries.filter((entry) =>
+      entry.matchProfile?.trust === 'trusted' ||
+      (blockedExact.has(entry.kind) &&
+        !['incompatible_provider_identity', 'provider_types_missing']
+          .includes(entry.matchProfile?.identitySource))
+    );
+    const exact = exactCandidates.find((entry) =>
+      entry.providerIdentity?.allowExactProviderMatch !== false &&
       (entry.providerRefs?.googlePlaceId === providerPlaceId ||
         (entry.providerRefs?.googlePlaceIds || []).includes(providerPlaceId)));
-    if (exact) return { entry: groupedEntryFor(exact, candidates), source: 'canonical_google_place_id' };
+    if (exact) return {
+      entry: groupedEntryFor(exact, [...candidates, exact]),
+      source: 'canonical_google_place_id',
+    };
   }
   const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
   const rawContaining = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
@@ -551,6 +598,7 @@ module.exports = {
   buildMatchProfile,
   canonicalDestinationId,
   clearRegistryCache,
+  destinationTypeForKind,
   entryContainsPoint,
   matchCanonicalEntry,
   normalizeEntry,

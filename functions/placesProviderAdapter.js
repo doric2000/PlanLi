@@ -5,13 +5,13 @@ const {
   billingProjectId,
   getGoogleMapsAccessToken,
 } = require('./googleMapsOAuth');
+const { DESTINATION_AUTOCOMPLETE_TYPES } = require('./destinationResolutionPolicy');
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 6000;
 const MAX_PROVIDER_REQUESTS_PER_ATTEMPT = 10;
 const MAX_PROVIDER_ATTEMPTS = 2;
 const MAX_LOCALITY_QUERIES = 2;
 const MAX_LOCALITY_CANDIDATES_PER_QUERY = 3;
-
 const NEW_AUTOCOMPLETE_FIELD_MASK = [
   'suggestions.placePrediction.placeId',
   'suggestions.placePrediction.structuredFormat',
@@ -323,18 +323,8 @@ async function fetchNewBilingualPlace({
   return { he, en, fetchedAt: new Date() };
 }
 
-async function fetchNewSelectionPlace({ prediction, ...options }) {
-  const predictionTypes = new Set(prediction?.types || []);
-  const selectedIsDestination = [
-    'locality',
-    'postal_town',
-    'administrative_area_level_3',
-    'administrative_area_level_2',
-    'administrative_area_level_1',
-    'natural_feature',
-    'island',
-  ].some((type) => predictionTypes.has(type));
-  if (selectedIsDestination) {
+async function fetchNewSelectionPlace({ prediction, mode, ...options }) {
+  if (mode === 'destinations') {
     return fetchNewBilingualPlace({ ...options, placeId: prediction.placeId });
   }
   const details = await fetchNewPlaceDetails({
@@ -393,7 +383,10 @@ async function newAutocomplete({
         input: query,
         languageCode: language,
         ...(sessionToken ? { sessionToken } : {}),
-        ...(mode === 'destinations' ? { includedPrimaryTypes: ['(cities)'] } : {}),
+        // Google does not allow the `(cities)` collection to be combined with
+        // natural-feature primary types. Destination mode therefore uses the
+        // same single autocomplete call and filters the returned predictions
+        // below, instead of issuing a second billable provider request.
         ...(coordinates ? {
           locationBias: {
             circle: {
@@ -408,9 +401,13 @@ async function newAutocomplete({
     { fetchImpl, requestContext, accessTokenProvider, projectId }
   );
   const payload = await parseGoogleResponse(response, { notFoundMessage: 'No matching places were found.' });
-  return (Array.isArray(payload?.suggestions) ? payload.suggestions : [])
+  const predictions = (Array.isArray(payload?.suggestions) ? payload.suggestions : [])
     .map((suggestion) => normalizeNewPrediction(suggestion, randomSelectionId))
     .filter(Boolean);
+  return mode === 'destinations'
+    ? predictions.filter((prediction) => prediction.types.some((type) =>
+        DESTINATION_AUTOCOMPLETE_TYPES.has(type)))
+    : predictions;
 }
 
 async function autocompletePlaces(options) {

@@ -80,6 +80,7 @@ test('search callable returns the Place ID required by the selection contract', 
   });
   assert.equal(result.predictions[0].placeId, 'place-paris');
   assert.equal(writes[0].predictions[0].placeId, 'place-paris');
+  assert.equal(writes[0].mode, 'destinations');
 });
 
 test('search callable rejects invalid location bias before calling Google', async () => {

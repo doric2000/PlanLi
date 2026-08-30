@@ -25,6 +25,14 @@ test('legacy active destination policy is provisional and exact-selection only',
   assert.match(policy.registryId, /^il-legacy-/);
 });
 
+test('legacy natural destinations keep a distinct review kind', () => {
+  const policy = legacyPolicy({
+    countryCode: 'PE', countryId: 'PE', cityId: 'humantay',
+    destination: { destinationType: 'natural_feature' },
+  });
+  assert.equal(policy.kind, 'natural_feature');
+});
+
 test('reviewed geometry and sane provider viewports remain eligible for automatic matching', () => {
   assert.equal(registryGeometryPatch('it-dolomites').geometryPolicy.autoMatchEligible, true);
   assert.equal(registryGeometryPatch('it-dolomites').radiusKm, 65);
