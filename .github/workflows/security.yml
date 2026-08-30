@@ -120,6 +120,7 @@ jobs:
           --timeout 600
           --no-banner
           --no-color
+          --log-opts '--all -m'
           .
 
       - name: Upload Gitleaks SARIF

@@ -12,6 +12,7 @@ const {
   normalizePath,
   parseArgs,
   selectDependentTests,
+  shouldRunSecurityPreflight,
   transitiveDependencies,
   unique,
 } = require('./validationPlan');
@@ -78,6 +79,13 @@ test('security and legal tooling changes schedule their purpose-built checks', (
   assert.equal(legal.legalPolicy, true);
   assert.equal(legal.validationTooling, false);
   assert.equal(legal.securityTooling, false);
+});
+
+test('GitHub delegates scanner preflight to the dedicated security workflow', () => {
+  assert.equal(shouldRunSecurityPreflight({}), true);
+  assert.equal(shouldRunSecurityPreflight({ GITHUB_ACTIONS: 'false' }), true);
+  assert.equal(shouldRunSecurityPreflight({ GITHUB_ACTIONS: 'true' }), false);
+  assert.equal(shouldRunSecurityPreflight({ GITHUB_ACTIONS: 'TRUE' }), false);
 });
 
 test('boundary paths schedule only their purpose-built checks', () => {

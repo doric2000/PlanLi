@@ -605,6 +605,10 @@ function runTaxonomy(plan, repoRoot = REPO_ROOT) {
     ['run', 'test:travel-taxonomy'], repoRoot, repoRoot);
 }
 
+function shouldRunSecurityPreflight(env = process.env) {
+  return String(env.GITHUB_ACTIONS || '').toLowerCase() !== 'true';
+}
+
 function runTooling(plan, repoRoot = REPO_ROOT) {
   if (!plan.tooling) return;
   if (plan.validationTooling) {
@@ -614,8 +618,12 @@ function runTooling(plan, repoRoot = REPO_ROOT) {
   if (plan.securityTooling) {
     runCommand('security-local-scanner-tests', process.execPath,
       ['--test', '--test-reporter=spec', 'scripts/securityLocalScan.test.js'], repoRoot, repoRoot);
-    runCommand('security-local-preflight', process.execPath,
-      ['scripts/securityLocalScan.js', 'preflight'], repoRoot, repoRoot);
+    if (shouldRunSecurityPreflight()) {
+      runCommand('security-local-preflight', process.execPath,
+        ['scripts/securityLocalScan.js', 'preflight'], repoRoot, repoRoot);
+    } else {
+      console.log('SKIP security-local-preflight: GitHub Security analysis installs and runs the pinned scanners');
+    }
   }
   if (plan.legalPolicy) {
     runCommand('legal-policy-tests', process.execPath,
@@ -671,6 +679,7 @@ module.exports = {
   parseArgs,
   selectClientTestsWithJest,
   selectDependentTests,
+  shouldRunSecurityPreflight,
   transitiveDependencies,
   unique,
 };
