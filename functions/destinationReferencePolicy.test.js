@@ -36,6 +36,10 @@ test('only active canonically approved destinations accept public references', (
     reassignment: { state: 'reassigning', jobId: 'job-1' },
   }), false);
   assert.equal(destinationAcceptsNewReferences({ status: 'inactive' }), false);
+  assert.equal(destinationIsPublicAndReferenceable({
+    status: 'active',
+    canonicalPolicy: { ...approvedPolicy, kind: 'natural_feature' },
+  }), true);
   assert.equal(destinationIsOperational({
     status: 'active', canonicalPolicy: { ...approvedPolicy, approved: false },
   }), true);

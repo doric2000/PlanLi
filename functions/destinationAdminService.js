@@ -30,9 +30,11 @@ const { destinationHebrewName, hasHebrewName } = require('./destinationLocalizat
 const {
   DESTINATION_KINDS,
   GROUPING_POLICIES,
+  MATCH_PROFILE_VERSION,
   REGISTRY_PATH,
   REGISTRY_VERSION,
   clearRegistryCache,
+  destinationTypeForKind,
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
@@ -561,7 +563,7 @@ async function updateDestinationPolicy({ admin, auth, data }) {
         autoMatchEligible: false,
         aliasAutoMatchEligible: true,
         source: 'admin_approved_aliases',
-        version: 2,
+        version: MATCH_PROFILE_VERSION,
       },
       approval: { approvedByAdmin: false, reason, policyValidatedBy: auth.uid },
       status: 'pending_review',
@@ -578,7 +580,7 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     if (collectionIssues.length) {
       fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
     }
-    destinationType = kind === 'city_hub' ? 'city' : kind === 'island' ? 'island' : 'region';
+    destinationType = destinationTypeForKind(kind);
     transaction.update(bundle.cityRef, {
       publicationFence: {
         state: 'draining',

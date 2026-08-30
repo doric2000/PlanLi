@@ -425,6 +425,7 @@ describe('Admin console end-to-end surface', () => {
     fireEvent.press(screen.getByTestId('admin-tab-destinations'));
     fireEvent.press(await screen.findByTestId('admin-destination-destination-il-haifa'));
     expect(screen.getByText('IL/haifa')).toBeTruthy();
+    expect(screen.getByText('natural_feature')).toBeTruthy();
   });
 
   it('opens the exact case user even when the user is outside the current page', async () => {

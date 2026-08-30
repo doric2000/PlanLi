@@ -43,6 +43,7 @@ function legacyRegistryId(countryCode, countryId, cityId) {
 function legacyPolicy({ countryCode, countryId, cityId, destination }) {
   const destinationType = String(destination?.destinationType || 'city');
   const kind = destinationType === 'island' ? 'island'
+    : ['lake', 'natural_feature'].includes(destinationType) ? 'natural_feature'
     : destinationType === 'region' ? 'tourism_region' : 'city_hub';
   return {
     approved: false,

@@ -4,8 +4,11 @@ const assert = require('node:assert/strict');
 const { CANDIDATES, REGIONAL_COUNTS } = require('./data/canonicalDestinationCandidates');
 const {
   BUILTIN_POLICIES,
+  buildMatchProfile,
   canonicalDestinationId,
+  destinationTypeForKind,
   matchCanonicalEntry,
+  normalizeEntry,
   providerGeometryPolicy,
   providerIdentityNameMatches,
   providerIdentityPolicy,
@@ -183,7 +186,77 @@ test('a POI provider identity never auto-matches a city destination', () => {
     names: { en: 'Vienna' }, aliases: ['Vienna'], providerDisplayName: 'Austria',
   }), false);
   assert.equal(providerIdentityPolicy('island', ['country', 'political']).compatible, true);
+  assert.equal(providerIdentityPolicy('natural_feature', ['natural_feature']).compatible, true);
+  assert.equal(providerIdentityPolicy('natural_feature', ['national_park', 'park']).compatible, true);
+  assert.equal(providerIdentityPolicy('natural_feature', ['locality', 'political']).compatible, false);
   assert.equal(providerIdentityPolicy('tourism_region', ['country', 'political']).compatible, false);
+});
+
+test('canonical kinds map natural features without widening them into regions', () => {
+  assert.equal(destinationTypeForKind('city_hub'), 'city');
+  assert.equal(destinationTypeForKind('island'), 'island');
+  assert.equal(destinationTypeForKind('natural_feature'), 'natural_feature');
+  assert.equal(destinationTypeForKind('tourism_region'), 'region');
+  assert.equal(destinationTypeForKind('province'), 'region');
+  assert.equal(destinationTypeForKind('unknown'), null);
+});
+
+test('natural feature matching bounds provider geometry and requires explicit exact matching when blocked', () => {
+  const entry = {
+    id: 'pe-humantay-lake',
+    countryCode: 'PE',
+    names: { he: 'אגם הומאנטאי', en: 'Humantay Lake' },
+    aliases: ['Humantay Lake'],
+    kind: 'natural_feature',
+    groupingPolicy: 'self',
+    status: 'active',
+    providerRefs: { googlePlaceId: 'humantay-place' },
+    googleTypes: ['natural_feature'],
+    center: { lat: -13.4139, lng: -72.0832 },
+    viewport: {
+      southwest: { lat: -18, lng: -77 },
+      northeast: { lat: -8, lng: -67 },
+    },
+  };
+  const bounded = buildMatchProfile(entry);
+  assert.equal(bounded.areas.some((area) => area.type === 'viewport'), false);
+  assert.equal(bounded.areas.find((area) => area.type === 'circle').radiusKm, 15);
+
+  const blocked = normalizeEntry({
+    ...entry,
+    viewport: {
+      southwest: { lat: -13.43, lng: -72.1 },
+      northeast: { lat: -13.4, lng: -72.06 },
+    },
+    geometryPolicy: {
+      autoMatchEligible: false,
+      aliasAutoMatchEligible: true,
+      source: 'admin_approved_aliases',
+      version: 3,
+    },
+  });
+  assert.equal(blocked.matchProfile.trust, 'blocked');
+  const request = {
+    countryCode: 'PE', providerPlaceId: 'humantay-place',
+    aliases: ['Humantay Lake'], coordinates: entry.center,
+  };
+  assert.equal(matchCanonicalEntry([blocked], request), null);
+  assert.equal(matchCanonicalEntry([blocked], {
+    ...request,
+    allowBlockedExactKinds: ['natural_feature'],
+    exactOnlyKinds: ['natural_feature'],
+  }).entry.id, entry.id);
+  assert.equal(matchCanonicalEntry([blocked], {
+    ...request,
+    providerPlaceId: 'another-place',
+    allowBlockedExactKinds: ['natural_feature'],
+    exactOnlyKinds: ['natural_feature'],
+  }), null);
+  assert.equal(matchCanonicalEntry([blocked], {
+    ...request,
+    excludedKinds: ['natural_feature'],
+    allowBlockedExactKinds: ['natural_feature'],
+  }), null);
 });
 
 test('missing provider types are untrusted unless the identity is explicitly reviewed', () => {
@@ -215,7 +288,7 @@ test('missing provider types are untrusted unless the identity is explicitly rev
   assert.equal(providerIdentityPolicy('city_hub', [], { reviewedOverride: true }).compatible, true);
 });
 
-test('provider viewports remain eligible at small scales and receive a derived catchment', () => {
+test('provider viewports remain eligible at small scales except exact-only natural features', () => {
   const cityViewport = {
     southwest: { lat: 31.7, lng: 34.7 },
     northeast: { lat: 32.3, lng: 35.1 },
@@ -225,7 +298,24 @@ test('provider viewports remain eligible at small scales and receive a derived c
     northeast: { lat: 46.541, lng: 11.841 },
   };
   assert.equal(providerGeometryPolicy('city_hub', cityViewport).autoMatchEligible, true);
+  assert.equal(providerGeometryPolicy('natural_feature', tinyRegionViewport).autoMatchEligible, false);
   assert.equal(providerGeometryPolicy('tourism_region', tinyRegionViewport).autoMatchEligible, true);
+});
+
+test('an explicit geometry block is honored regardless of its historic policy version', () => {
+  const profile = buildMatchProfile({
+    id: 'zz-blocked-city',
+    countryCode: 'ZZ',
+    names: { he: 'עיר', en: 'City' },
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    googleTypes: ['locality'],
+    providerRefs: { googlePlaceId: 'blocked-city' },
+    center: { lat: 1, lng: 1 },
+    radiusKm: 20,
+    geometryPolicy: { version: 2, autoMatchEligible: false },
+  });
+  assert.equal(profile.trust, 'blocked');
 });
 
 test('a provider alias cannot assign a place outside its sane viewport', () => {

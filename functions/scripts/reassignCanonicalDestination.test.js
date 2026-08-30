@@ -68,6 +68,7 @@ test('buildCanonicalDestination rejects country mismatches', () => {
 test('destination kinds map to supported public destination types', () => {
   assert.equal(destinationTypeForKind('city_hub'), 'city');
   assert.equal(destinationTypeForKind('island'), 'island');
+  assert.equal(destinationTypeForKind('natural_feature'), 'natural_feature');
   assert.equal(destinationTypeForKind('tourism_region'), 'region');
   assert.equal(destinationTypeForKind('province'), 'region');
 });

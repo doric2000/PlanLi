@@ -9,9 +9,11 @@ const {
   normalizeDestinationForUse,
   parsePlaceDetails,
   resolveExistingDestination,
+  resolveDestinationFromToken,
   resolveGoogleDestination,
   resolveExactPlaceWithDestination,
   resolvePlaceCountry,
+  selectedDestinationTypePolicy,
   resolveRecommendationDestinationRef,
 	resolveRecommendationDestination,
 	resolveUnchangedExactRecommendation,
@@ -235,6 +237,47 @@ test('administrative aliases reuse a nearby known Chiang Rai destination before 
 
   assert.equal(result.countryId, 'TH');
   assert.equal(result.cityId, 'chiang-rai');
+});
+
+test('alias fallback never turns an exact place into a natural-feature destination', async () => {
+  const countryDocument = {
+    id: 'PE',
+    data: () => ({ code: 'PE', status: 'active', name: 'Peru' }),
+  };
+  const catalogDocument = {
+    id: 'PE_humantay',
+    data: () => ({
+      countryId: 'PE', cityId: 'humantay', status: 'active',
+      destinationType: 'natural_feature',
+      names: { he: 'אגם הומאנטאי', en: 'Humantay Lake' },
+      coordinates: { lat: -13.4139, lng: -72.0832 },
+    }),
+  };
+  const cityData = {
+    status: 'active',
+    destinationType: 'natural_feature',
+    canonicalPolicy: { ...approvedCanonicalPolicyFor('PE'), kind: 'natural_feature' },
+    googleCache: {
+      names: { he: 'אגם הומאנטאי', en: 'Humantay Lake' },
+      coordinates: { lat: -13.4139, lng: -72.0832 },
+    },
+  };
+  const queryFor = (docs) => ({
+    where: () => queryFor(docs),
+    limit: () => queryFor(docs),
+    get: async () => ({ docs, empty: docs.length === 0 }),
+  });
+  const db = {
+    collection: (path) => queryFor(path === 'countries' ? [countryDocument] : [catalogDocument]),
+    doc: () => ({ get: async () => ({ exists: true, data: () => cityData }) }),
+  };
+  const result = await findExistingDestinationByAlias({
+    db,
+    countryCode: 'PE',
+    localityCandidates: ['Humantay Lake'],
+    coordinates: { lat: -13.414, lng: -72.083 },
+  });
+  assert.equal(result, null);
 });
 
 test('a containing PlanLi city outranks a closer administrative region without an alias match', async () => {
@@ -1455,6 +1498,143 @@ test('a reliable Google Hebrew destination becomes provisional without manual co
   assert.equal(destination.cityData.canonicalPolicy.selectionSource, 'user_confirmed_destination');
   assert.equal(destination.cityData.googleCache.names.he, 'נס ציונה');
   assert.equal(destination.createCity, true);
+});
+
+test('an explicitly selected natural feature remains a distinct provisional destination', async () => {
+  const admin = createFakeAdmin({
+    'countries/PE': {
+      name: 'פרו', names: { he: 'פרו', en: 'Peru' }, code: 'PE',
+      region: 'Americas', currencyCode: 'PEN', status: 'active',
+    },
+  });
+  const coordinates = { lat: -13.4139, lng: -72.0832 };
+  const viewport = {
+    southwest: { lat: -13.43, lng: -72.1 },
+    northeast: { lat: -13.4, lng: -72.06 },
+  };
+  const resolvedPlace = {
+    fetchedAt: new Date(),
+    he: {
+      placeId: 'humantay-place', displayName: 'אגם הומאנטאי',
+      countryName: 'פרו', countryCode: 'PE', localityCandidates: [],
+      coordinates, viewport, types: ['natural_feature', 'establishment'],
+    },
+    en: {
+      placeId: 'humantay-place', displayName: 'Humantay Lake',
+      countryName: 'Peru', countryCode: 'PE', localityCandidates: [],
+      coordinates, viewport, types: ['natural_feature', 'establishment'],
+    },
+  };
+
+  const destination = await resolveGoogleDestination({
+    admin, selectionIntent: 'destination', destinationIntentVerified: true,
+    placesProvider: 'new', resolvedPlace,
+  });
+
+  assert.equal(destination.cityData.canonicalPolicy.kind, 'natural_feature');
+  assert.equal(destination.cityData.destinationType, 'natural_feature');
+  assert.deepEqual(destination.cityData.googleCache.viewport, viewport);
+  assert.equal(destination.cityData.canonicalPolicy.approved, false);
+  assert.equal(destination.createCity, true);
+});
+
+test('mixed natural and administrative provider types require verified destination mode', () => {
+  const types = ['natural_feature', 'administrative_area_level_1'];
+  assert.deepEqual(selectedDestinationTypePolicy(types, {
+    selectionIntent: 'exact_place', destinationIntentVerified: false,
+  }), {
+    explicitlySelectedNaturalDestination: false,
+    selectedIsDestination: false,
+  });
+  assert.deepEqual(selectedDestinationTypePolicy(types, {
+    selectionIntent: 'destination', destinationIntentVerified: true,
+  }), {
+    explicitlySelectedNaturalDestination: true,
+    selectedIsDestination: true,
+  });
+});
+
+test('destination intent is rejected when the resolved token came from place search', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const admin = createFakeAdmin({
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner',
+      searchMode: 'places',
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      he: { placeId: 'humantay-place' },
+      en: { placeId: 'humantay-place' },
+    },
+  });
+  await assert.rejects(resolveDestinationFromToken({
+    admin,
+    auth: verifiedAuth,
+    resolvedPlaceToken,
+    providerRateLimitKey,
+    selectionIntent: 'destination',
+  }), (error) => error?.code === 'failed-precondition' &&
+    /destination search/u.test(error.message));
+});
+
+test('a previously cached destination remains usable when an old token has no search mode', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const admin = createFakeAdmin({
+    'countries/IL': { code: 'IL', name: 'ישראל', status: 'active' },
+    'countries/IL/destinations/tel-aviv': {
+      status: 'active',
+      googleCache: { names: { he: 'תל אביב-יפו', en: 'Tel Aviv-Yafo' } },
+    },
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner',
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      he: { placeId: 'tel-aviv-place' },
+      en: { placeId: 'tel-aviv-place' },
+      destinationResolution: {
+        countryId: 'IL', cityId: 'tel-aviv', createCountry: false, createCity: false,
+      },
+    },
+  });
+  const result = await resolveDestinationFromToken({
+    admin,
+    auth: verifiedAuth,
+    resolvedPlaceToken,
+    providerRateLimitKey,
+    selectionIntent: 'destination',
+  });
+  assert.equal(result.cityId, 'tel-aviv');
+  assert.equal(result.createCity, false);
+});
+
+test('a cached natural feature requires a destination-search-bound token', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const admin = createFakeAdmin({
+    'countries/DE': { code: 'DE', name: 'גרמניה', status: 'active' },
+    'countries/DE/destinations/bastei': {
+      status: 'active',
+      destinationType: 'natural_feature',
+      canonicalPolicy: { ...approvedCanonicalPolicyFor('DE'), kind: 'natural_feature' },
+      googleCache: { names: { he: 'בסטאיי', en: 'Bastei' } },
+    },
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner',
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      he: { placeId: 'bastei-place' },
+      en: { placeId: 'bastei-place' },
+      destinationResolution: {
+        countryId: 'DE', cityId: 'bastei', createCountry: false, createCity: false,
+      },
+    },
+  });
+  await assert.rejects(resolveDestinationFromToken({
+    admin,
+    auth: verifiedAuth,
+    resolvedPlaceToken,
+    providerRateLimitKey,
+    selectionIntent: 'destination',
+  }), (error) => error?.code === 'failed-precondition' &&
+    /destination search/u.test(error.message));
 });
 
 test('Hod Hasharon selected directly is accepted as a stable provisional locality', async () => {

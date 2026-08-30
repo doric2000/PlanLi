@@ -190,6 +190,7 @@ async function resolvePlaceSelectionInternal({
   const bilingual = await fetchPlaceSelection({
     provider: session.provider || 'new',
     prediction,
+    mode: session.mode,
     sessionToken: session.providerSessionToken,
     fetchImpl,
     requestContext,
@@ -204,6 +205,7 @@ async function resolvePlaceSelectionInternal({
   await resolvedTokenRef(admin.firestore(), resolvedPlaceToken).create({
     uid: auth.uid,
     placeId: bilingual.he.placeId,
+    searchMode: session.mode,
     he: bilingual.he,
     en: bilingual.en,
     incidentId,
@@ -273,6 +275,9 @@ async function readResolvedPlaceToken({ admin, auth, resolvedPlaceToken, provide
   return {
     he: value.he,
     en: value.en,
+    searchMode: value.searchMode === 'destinations' || value.searchMode === 'places'
+      ? value.searchMode
+      : null,
     destinationResolution: value.destinationResolution || null,
     destinationNamingPolicyVersion: Number(value.destinationNamingPolicyVersion || 0),
     incidentId: createIncidentId(value.incidentId),

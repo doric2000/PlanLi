@@ -108,6 +108,42 @@ test('Places API New autocomplete applies a circular location bias', async () =>
   assert.equal(Object.prototype.hasOwnProperty.call(body, 'locationRestriction'), false);
 });
 
+test('destination autocomplete keeps cities and natural features in one provider request', async () => {
+  let body;
+  let providerCalls = 0;
+  let selection = 0;
+  const predictions = await newAutocomplete({
+    query: 'Humantay',
+    mode: 'destinations',
+    ...oauth,
+    randomSelectionId: () => `sel-${++selection}`,
+    fetchImpl: async (_url, options) => {
+      providerCalls += 1;
+      body = JSON.parse(options.body);
+      return { ok: true, status: 200, json: async () => ({ suggestions: [
+        { placePrediction: {
+          placeId: 'humantay',
+          structuredFormat: { mainText: { text: 'Humantay Lake' } },
+          types: ['establishment', 'natural_feature'],
+        } },
+        { placePrediction: {
+          placeId: 'cusco',
+          structuredFormat: { mainText: { text: 'Cusco' } },
+          types: ['locality', 'political'],
+        } },
+        { placePrediction: {
+          placeId: 'cafe',
+          structuredFormat: { mainText: { text: 'Humantay Cafe' } },
+          types: ['cafe', 'establishment'],
+        } },
+      ] }) };
+    },
+  });
+  assert.equal(providerCalls, 1);
+  assert.equal(body.includedPrimaryTypes, undefined);
+  assert.deepEqual(predictions.map((prediction) => prediction.placeId), ['humantay', 'cusco']);
+});
+
 test('Places API New fetches matching Hebrew and English details exactly once', async () => {
   const calls = [];
   const bilingual = await fetchNewBilingualPlace({
@@ -288,6 +324,36 @@ test('ordinary exact-place selection uses one Essentials details request', async
   assert.equal(new URL(calls[0].url).searchParams.get('languageCode'), 'en');
   assert.equal(selected.he.displayName, 'One Budget Hotel Chiangrai Soi Sawan');
   assert.equal(selected.en.countryCode, 'TH');
+});
+
+test('a destination-mode park selection uses the same bilingual destination details flow', async () => {
+  const calls = [];
+  const selected = await fetchNewSelectionPlace({
+    mode: 'destinations',
+    prediction: {
+      placeId: 'bastei-park',
+      text: 'Bastei',
+      types: ['park', 'natural_feature'],
+    },
+    ...oauth,
+    sessionToken: 'session-destination',
+    fetchImpl: async (url) => {
+      const language = new URL(url).searchParams.get('languageCode');
+      calls.push(language);
+      return { ok: true, status: 200, json: async () => ({
+        id: 'bastei-park',
+        displayName: { text: language === 'he' ? 'בסטאיי' : 'Bastei' },
+        addressComponents: [
+          { longText: language === 'he' ? 'גרמניה' : 'Germany', shortText: 'DE', types: ['country'] },
+        ],
+        location: { latitude: 50.9619, longitude: 14.0728 },
+        types: ['park', 'natural_feature'],
+      }) };
+    },
+  });
+  assert.deepEqual(calls.sort(), ['en', 'he']);
+  assert.equal(selected.he.displayName, 'בסטאיי');
+  assert.equal(selected.en.displayName, 'Bastei');
 });
 
 test('Chiang Rai district aliases resolve through one exact-coordinate reverse lookup', async () => {
