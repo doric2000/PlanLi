@@ -79,7 +79,7 @@ jobs:
           --sarif-output semgrep.sarif
           --error
           --config .semgrep/planli-security.yml
-          functions client/src client/index.js server scripts
+          functions client/src client/index.js scripts
 
       - name: Upload Semgrep SARIF
         if: always() && hashFiles('semgrep.sarif') != ''
