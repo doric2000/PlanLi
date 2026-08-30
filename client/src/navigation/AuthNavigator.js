@@ -6,6 +6,7 @@ import LoginScreen from '../features/auth/screens/LoginScreen';
 import RegisterScreen from '../features/auth/screens/RegisterScreen';
 import ForgotPasswordScreen from '../features/auth/screens/ForgotPasswordScreen';
 import ResetEmailSentScreen from '../features/auth/screens/ResetEmailSentScreen';
+import TotpChallengeScreen from '../features/auth/screens/TotpChallengeScreen';
 import LegalDocumentScreen from '../features/legal/screens/LegalDocumentScreen';
 import { rtlStackScreenOptions } from './rtlStackOptions';
 
@@ -19,6 +20,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="Register" component={RegisterScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="ResetEmailSent" component={ResetEmailSentScreen} />
+      <Stack.Screen name="TotpChallenge" component={TotpChallengeScreen} />
       <Stack.Screen name="Terms" component={LegalDocumentScreen} />
       <Stack.Screen name="Privacy" component={LegalDocumentScreen} />
     </Stack.Navigator>

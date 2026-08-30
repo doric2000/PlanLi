@@ -5,7 +5,7 @@
   "hosting": {
     "site": "planli-f0b12",
     "public": "hosting",
-    "ignore": ["firebase.json", "**/.*", "node_modules/**"],
+    "ignore": ["firebase.json", "**/.*", "node_modules/**", "**/*.map"],
     "headers": [
       {
         "source": "**",
@@ -15,7 +15,7 @@
           { "key": "X-Frame-Options", "value": "DENY" },
           { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
           { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
-          { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://securetoken.googleapis.com https://identitytoolkit.googleapis.com" }
+          { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://securetoken.googleapis.com https://identitytoolkit.googleapis.com" }
         ]
       },
       {

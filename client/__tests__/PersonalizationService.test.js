@@ -1,8 +1,15 @@
 const mockCallable = jest.fn();
 const mockHttpsCallable = jest.fn(() => mockCallable);
+const mockCallPublicCallable = jest.fn(async (name, payload) => {
+  const response = await mockCallable(payload);
+  return response?.data || null;
+});
 
 jest.mock('firebase/functions', () => ({
   httpsCallable: (...args) => mockHttpsCallable(...args),
+}));
+jest.mock('../src/services/PublicCallableService', () => ({
+  callPublicCallable: (...args) => mockCallPublicCallable(...args),
 }));
 
 jest.mock('../src/config/firebase', () => ({
@@ -49,6 +56,7 @@ describe('PersonalizationService discovery cache', () => {
     jest.spyOn(Date, 'now').mockImplementation(() => now);
     mockCallable.mockReset();
     mockHttpsCallable.mockClear();
+    mockCallPublicCallable.mockClear();
     mockLoadGuestNoyaProfile.mockReset();
     mockLoadGuestNoyaProfile.mockResolvedValue(null);
     mockLoadGuestBehaviorContext.mockReset();

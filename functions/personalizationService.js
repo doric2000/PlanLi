@@ -26,6 +26,7 @@ const {
   parseSearchQuery,
   searchRelevance,
 } = require('./discoverySearch');
+const { contentIsPubliclyVisible } = require('./destinationReferencePolicy');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const AFFINITY_HALF_LIFE_MS = 90 * DAY_MS;
@@ -661,7 +662,9 @@ function cleanDestinations(data) {
 }
 
 function candidateBase(collection, { context, route, discoveryRegionId }) {
-  let query = collection.where('status', '==', 'active');
+  let query = collection
+    .where('status', '==', 'active')
+    .where('publicationGate.destinationApprovalVerified', '==', true);
   if (discoveryRegionId) query = route
     ? query.where(`discoveryRegionMembership.${discoveryRegionId}`, '==', true)
     : query.where('discoveryRegionId', '==', discoveryRegionId);
@@ -918,7 +921,9 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
     });
   } catch {
     fallbackReason = 'candidate-query-failed';
-    const fallback = db.collection(collectionName).where('status', '==', 'active');
+    const fallback = db.collection(collectionName)
+      .where('status', '==', 'active')
+      .where('publicationGate.destinationApprovalVerified', '==', true);
     snapshots = [await fallback.orderBy('stats.likeCount', 'desc').limit(MAX_CANDIDATES).get()];
   }
   const byId = new Map();
@@ -927,6 +932,7 @@ async function getDiscoveryResults({ admin, auth, data, collectionName, route = 
   }));
   const suppressedPaths = new Set((normalizedActivity.suppressedTargets || []).map((entry) => entry.path));
   const candidates = Array.from(byId.values()).filter((item) => {
+    if (!contentIsPubliclyVisible(item)) return false;
     const path = `${collectionName}/${item.id}`;
     if (suppressedPaths.has(path)) return false;
     if (blockedUserIds.has(item.ownerId)) return false;
@@ -1013,7 +1019,8 @@ async function recordDiscoverySignal({ admin, auth, data }) {
   let changed = false;
   await db.runTransaction(async (transaction) => {
     const document = await transaction.get(db.doc(normalizedTarget.path));
-    assert(document.exists && document.data()?.status === 'active', 'not-found', 'Discovery target is unavailable.');
+    assert(document.exists && contentIsPubliclyVisible(document.data()),
+      'not-found', 'Discovery target is unavailable.');
     changed = await applyAffinitySignalInTransaction({
       transaction,
       db,
@@ -1119,7 +1126,7 @@ async function setPersonalizationFeedback({ admin, auth, data }) {
     ]);
     assert(userSnapshot.exists, 'failed-precondition', 'Profile setup is unavailable.');
     if (data.value === 'less') {
-      assert(document.exists && document.data()?.status === 'active',
+      assert(document.exists && contentIsPubliclyVisible(document.data()),
         'not-found', 'Discovery target is unavailable.');
     }
     const result = applyLessFeedback({
@@ -1187,7 +1194,7 @@ async function mergeGuestPersonalization({ admin, auth, data }) {
     }
     events.forEach((event, index) => {
       const document = documents[index];
-      if (!document.exists || document.data()?.status !== 'active') return;
+      if (!document.exists || !contentIsPubliclyVisible(document.data())) return;
       if (!isGuestEventAfterActivityReset(personalization, event)) return;
       const ageFactor = decayFactor(nowMs - event.createdAtMs);
       if (event.action === 'meaningful_view') {

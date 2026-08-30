@@ -43,7 +43,14 @@ jest.mock('../src/services/LocationService', () => ({
   searchPlaces: jest.fn(),
   resolveDestinationForPlacePreview: jest.fn(),
 }));
-jest.mock('../src/hooks/useAdminClaim', () => ({ useAdminClaim: () => ({ isAdmin: true, loading: false }) }));
+jest.mock('../src/hooks/useAdminClaim', () => ({
+  useAdminClaim: () => ({
+    isAdmin: true,
+    hasTotpEnrollment: true,
+    signedInWithTotp: true,
+    loading: false,
+  }),
+}));
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
 jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
   useImagePickerWithUpload: () => ({ pickFromGallery: jest.fn(), uploadImageAsset: jest.fn() }),

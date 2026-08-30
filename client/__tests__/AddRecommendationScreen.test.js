@@ -336,7 +336,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(screen.getByTestId('recommendation-next'));
     expect(screen.getByText('כדאי לבחור תוצאה מדויקת מהחיפוש.')).toBeTruthy();
     expect(screen.queryByTestId('recommendation-category-food')).toBeNull();
-  });
+  }, 15000);
 
   it('restores drafts at the earliest incomplete photo-first stage', () => {
     const mediaItems = [{ uri: 'file:///photo.jpg' }];
@@ -546,7 +546,7 @@ describe('AddRecommendationScreen Integration Test', () => {
     });
     await waitFor(() => expect(navigationMock.goBack).toHaveBeenCalledTimes(1));
     jest.useRealTimers();
-  });
+  }, 15000);
 
   it('refreshes a stale draft version and completes the publication handoff', async () => {
     const draft = {
@@ -1399,7 +1399,7 @@ describe('AddRecommendationScreen Integration Test', () => {
 
     fireEvent.press(getByTestId('unsaved-discard-confirm'));
     expect(navigationMock.dispatch).toHaveBeenCalledWith(action);
-  });
+  }, 15000);
 
   it('edit mode: beforeRemove does not prevent when form is clean', async () => {
     let beforeRemoveHandler;

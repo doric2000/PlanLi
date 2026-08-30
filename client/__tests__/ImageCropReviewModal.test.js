@@ -20,6 +20,17 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg' },
   manipulateAsync: jest.fn(),
 }));
+jest.mock('react-native-reanimated', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: { View },
+    useAnimatedStyle: (factory) => factory(),
+    useSharedValue: (value) => ReactModule.useRef({ value }).current,
+    withTiming: (value) => value,
+  };
+});
 jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
   const { View } = require('react-native');

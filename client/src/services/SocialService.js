@@ -2,10 +2,14 @@ import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
 
 const callables = new Map();
+const REPLAY_PROTECTED_CALLABLES = new Set(['deleteContent', 'requestAccountDeletion']);
 
 const call = async (name, payload = {}) => {
   if (!callables.has(name)) {
-    callables.set(name, httpsCallable(cloudFunctions, name));
+    const options = REPLAY_PROTECTED_CALLABLES.has(name)
+      ? { limitedUseAppCheckTokens: true }
+      : undefined;
+    callables.set(name, httpsCallable(cloudFunctions, name, options));
   }
   const response = await callables.get(name)(payload);
   return response.data;

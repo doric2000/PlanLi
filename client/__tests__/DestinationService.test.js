@@ -1,20 +1,23 @@
-import { httpsCallable } from 'firebase/functions';
 import {
   clearDestinationSearchCache,
   destinationCatalogItemToCity,
   searchDestinations,
 } from '../src/services/DestinationService';
 
-jest.mock('firebase/functions', () => ({ httpsCallable: jest.fn() }));
-jest.mock('../src/config/firebase', () => ({ cloudFunctions: {} }));
-
-const destinationCallable = jest.fn();
+const mockDestinationCallable = jest.fn();
+const mockCallPublicCallable = jest.fn(async (name, payload) => {
+  const response = await mockDestinationCallable(payload);
+  return response?.data || null;
+});
+jest.mock('../src/services/PublicCallableService', () => ({
+  callPublicCallable: (...args) => mockCallPublicCallable(...args),
+}));
 
 describe('DestinationService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    destinationCallable.mockReset();
-    httpsCallable.mockReturnValue(destinationCallable);
+    mockDestinationCallable.mockReset();
+    mockCallPublicCallable.mockClear();
     clearDestinationSearchCache();
   });
 
@@ -42,19 +45,19 @@ describe('DestinationService', () => {
   });
 
   it('coalesces in-flight formatting variants under one bounded cache key', async () => {
-    destinationCallable.mockResolvedValue({ data: { items: [{ cityId: 'st-johns' }] } });
+    mockDestinationCallable.mockResolvedValue({ data: { items: [{ cityId: 'st-johns' }] } });
 
     const [first, second] = await Promise.all([
       searchDestinations({ query: 'St. John’s', sort: 'popular', limit: 30 }),
       searchDestinations({ query: '  st johns ', sort: 'popular', limit: 30 }),
     ]);
 
-    expect(destinationCallable).toHaveBeenCalledTimes(1);
+    expect(mockDestinationCallable).toHaveBeenCalledTimes(1);
     expect(first).toEqual(second);
   });
 
   it('caches the default Home destination request', async () => {
-    destinationCallable.mockResolvedValue({ data: { items: [{ cityId: 'paris' }] } });
+    mockDestinationCallable.mockResolvedValue({ data: { items: [{ cityId: 'paris' }] } });
 
     const first = await searchDestinations({ sort: 'popular', limit: 10 });
     const second = await searchDestinations({ sort: 'popular', limit: 10 });
@@ -63,10 +66,10 @@ describe('DestinationService', () => {
   });
 
   it('removes punctuation-only text before sending a destination search', async () => {
-    destinationCallable.mockResolvedValue({ data: { items: [] } });
+    mockDestinationCallable.mockResolvedValue({ data: { items: [] } });
 
     await searchDestinations({ query: " !–' ", sort: 'popular', limit: 10 });
 
-    expect(destinationCallable).toHaveBeenCalledWith({ query: '', sort: 'popular', limit: 10 });
+    expect(mockDestinationCallable).toHaveBeenCalledWith({ query: '', sort: 'popular', limit: 10 });
   });
 });

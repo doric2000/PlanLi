@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
-	Linking,
 	Platform,
 	Pressable,
 	ScrollView,
@@ -24,6 +23,11 @@ import { getTravelCategoryPresentation } from '../../../constants/travelPresenta
 import { colors } from '../../../styles';
 import { getRecommendationImageUrls } from '../../../utils/mediaAssets';
 import { getDestinationImageUrl } from '../../../utils/destinationImages';
+import {
+  destinationSourceUrlPolicy,
+  getSafeExternalUrl,
+  openSafeExternalUrl,
+} from '../../../utils/safeExternalUrl';
 import { createDestinationStyles } from '../components/destinationStyles';
 import { useDestinationData } from '../hooks/useDestinationData';
 import { markNoyaContentViewed } from '../../profile/services/NoyaOnboardingStorage';
@@ -148,13 +152,15 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
         <View style={styles.sourcesList}>
           {rows.map((row) => {
             const updatedAt = dateLabel(row.updatedAt);
+            const policy = destinationSourceUrlPolicy(row.id);
+            const safeUrl = getSafeExternalUrl(row.url, policy);
             return (
               <Pressable
                 key={row.id}
-                disabled={!row.url}
-                accessibilityRole={row.url ? 'link' : undefined}
+                disabled={!safeUrl}
+                accessibilityRole={safeUrl ? 'link' : undefined}
                 accessibilityLabel={`${row.label}: ${row.value}`}
-                onPress={() => row.url && Linking.openURL(row.url).catch(() => {
+                onPress={() => safeUrl && openSafeExternalUrl(safeUrl, policy).catch(() => {
                   Alert.alert(
                     'לא ניתן לפתוח את הקישור',
                     'אפשר לנסות שוב מאוחר יותר.'
@@ -169,7 +175,7 @@ function SourcesDisclosure({ rows, open, onToggle, styles }) {
                 <AppText style={styles.sourceValue} numberOfLines={1}>
                   {[row.value, updatedAt].filter(Boolean).join(' · ')}
                 </AppText>
-                {!!row.url && (
+                {!!safeUrl && (
                   <Ionicons name="open-outline" size={13} color={colors.textLight} />
                 )}
               </Pressable>

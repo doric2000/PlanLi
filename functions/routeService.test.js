@@ -13,6 +13,7 @@ const {
   loadRouteDetails,
   loadTrustedRoutePlaces,
   preservedRouteStatus,
+  routePublicationState,
   resolveRoutePlaces,
   revisionVersion,
   sanitizeRouteInput,
@@ -578,6 +579,7 @@ test('PlanLi stop classification is reloaded from an active recommendation', asy
   const documents = {
     'recommendations/recommendation-1': {
       status: 'active',
+      publicationGate: { destinationApprovalVerified: true },
       categoryId: 'food',
       subcategoryIds: ['restaurant'],
       tags: ['cafe'],
@@ -638,6 +640,22 @@ test('route edits reject deletion races and changed revisions', () => {
   }, 'owner', false), /deletion is already in progress/);
   assert.equal(preservedRouteStatus({ status: 'inactive' }), 'inactive');
   assert.equal(preservedRouteStatus(null), 'active');
+});
+
+test('a provisional route destination fails closed until destination approval', () => {
+  const pending = routePublicationState(null, { safe: true }, ['IL:new-city']);
+  assert.equal(pending.status, 'moderation_hold');
+  assert.deepEqual(pending.publicationGate, { destinationApprovalVerified: false });
+  assert.equal(pending.moderation.systemGate, 'destination_pending_approval');
+  assert.deepEqual(pending.moderation.pendingDestinationKeys, ['IL:new-city']);
+
+  const released = routePublicationState({
+    status: 'moderation_hold',
+    moderation: { holdReason: 'destination_pending_approval' },
+  }, { safe: true }, []);
+  assert.equal(released.status, 'active');
+  assert.deepEqual(released.publicationGate, { destinationApprovalVerified: true });
+  assert.equal(released.moderation, undefined);
 });
 
 test('legacy provider fan-out is capped until resolved place tokens replace it', () => {
@@ -841,7 +859,11 @@ test('public route loading rejects more than 60 days before loading stops', asyn
   };
   const routeRef = {
     get: async () => ({
-      id: 'route-1', exists: true, data: () => ({ status: 'active', activeRevisionId: 'revision-1' }),
+      id: 'route-1', exists: true, data: () => ({
+        status: 'active',
+        publicationGate: { destinationApprovalVerified: true },
+        activeRevisionId: 'revision-1',
+      }),
     }),
     collection: (name) => {
       assert.equal(name, 'revisions');

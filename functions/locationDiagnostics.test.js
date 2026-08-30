@@ -92,11 +92,8 @@ test('temporary minute quota remains retryable', () => {
 });
 
 test('location logs discard query, identity and coordinate fields', () => {
-  const originalInfo = console.info;
   let captured;
-  console.info = (_message, payload) => { captured = payload; };
-  try {
-    locationLog('search', {
+  locationLog('search', {
       incidentId: 'loc_1234567890ab',
       outcome: 'succeeded',
       durationMs: 12,
@@ -105,10 +102,7 @@ test('location logs discard query, identity and coordinate fields', () => {
       placeId: 'private-place-id',
       uid: 'private-user',
       coordinates: { lat: 1, lng: 2 },
-    });
-  } finally {
-    console.info = originalInfo;
-  }
+    }, { info: (_message, payload) => { captured = payload; } });
 
   assert.deepEqual(Object.keys(captured).sort(), [
     'durationMs', 'functionRevision', 'incidentId', 'outcome', 'providerCalls', 'stage',
@@ -116,11 +110,8 @@ test('location logs discard query, identity and coordinate fields', () => {
 });
 
 test('provider diagnostics allow only a classified endpoint and status', () => {
-  const originalInfo = console.info;
   let captured;
-  console.info = (_message, payload) => { captured = payload; };
-  try {
-    locationLog('provider', {
+  locationLog('provider', {
       incidentId: 'loc_1234567890ab',
       outcome: 'succeeded',
       durationMs: 18,
@@ -128,12 +119,24 @@ test('provider diagnostics allow only a classified endpoint and status', () => {
       providerEndpoint: 'places_details',
       providerStatus: 200,
       url: 'https://provider/private-place-id',
-    });
-  } finally {
-    console.info = originalInfo;
-  }
+    }, { info: (_message, payload) => { captured = payload; } });
 
   assert.equal(captured.providerEndpoint, 'places_details');
   assert.equal(captured.providerStatus, 200);
   assert.equal(Object.hasOwn(captured, 'url'), false);
+});
+
+test('failed provider diagnostics are emitted as structured warning metadata', () => {
+  let message;
+  let captured;
+  locationLog('provider', {
+    incidentId: 'loc_1234567890ab',
+    outcome: 'failed',
+    durationMs: 18,
+    providerEndpoint: 'places_details',
+    providerStatus: 429,
+  }, { warn: (nextMessage, payload) => { message = nextMessage; captured = payload; } });
+  assert.equal(message, 'location_request');
+  assert.equal(captured.providerStatus, 429);
+  assert.equal(captured.providerEndpoint, 'places_details');
 });

@@ -60,10 +60,18 @@ service cloud.firestore {
       return resource.data.status == 'active';
     }
 
+    function activePublicContent() {
+      return activeResource()
+        && resource.data.publicationGate.destinationApprovalVerified == true;
+    }
+
     function activeParent(collectionName, contentId) {
       return get(
         /databases/$(database)/documents/$(collectionName)/$(contentId)
-      ).data.status == 'active';
+      ).data.status == 'active'
+        && get(
+          /databases/$(database)/documents/$(collectionName)/$(contentId)
+        ).data.publicationGate.destinationApprovalVerified == true;
     }
 
     function activeComment(collectionName, contentId) {
@@ -93,6 +101,21 @@ service cloud.firestore {
         || resource.data.googleCache.expiresAt > request.time;
     }
 
+    function approvedCanonicalDestination(countryId) {
+      return resource.data.canonicalPolicy.approved == true
+        && resource.data.canonicalPolicy.registryId is string
+        && resource.data.canonicalPolicy.registryVersion >= 1
+        && resource.data.canonicalPolicy.approvalRevision >= 1
+        && resource.data.canonicalPolicy.registryAttestation.approved == true
+        && resource.data.canonicalPolicy.registryAttestation.registryId
+          == resource.data.canonicalPolicy.registryId
+        && resource.data.canonicalPolicy.registryAttestation.registryVersion
+          == resource.data.canonicalPolicy.registryVersion
+        && resource.data.canonicalPolicy.registryAttestation.approvalRevision
+          == resource.data.canonicalPolicy.approvalRevision
+        && resource.data.canonicalPolicy.registryAttestation.countryId == countryId;
+    }
+
     function activeRouteRevision(contentId, revisionId) {
       let route = get(
         /databases/$(database)/documents/routes/$(contentId)
@@ -101,14 +124,15 @@ service cloud.firestore {
         /databases/$(database)/documents/routes/$(contentId)/revisions/$(revisionId)
       );
       return route.data.status == 'active'
+        && route.data.publicationGate.destinationApprovalVerified == true
         && route.data.activeRevisionId == revisionId
         && revision.data.state == 'active';
     }
 
     // Business documents are written exclusively through callable Functions.
     match /recommendations/{contentId} {
-      allow get: if admin() || activeResource();
-      allow list: if admin() || (bounded(50) && activeResource());
+      allow get: if admin() || activePublicContent();
+      allow list: if admin() || (bounded(50) && activePublicContent());
       allow write: if false;
 
       match /likes/{userId} {
@@ -125,8 +149,8 @@ service cloud.firestore {
     }
 
     match /routes/{contentId} {
-      allow get: if admin() || activeResource();
-      allow list: if admin() || (bounded(50) && activeResource());
+      allow get: if admin() || activePublicContent();
+      allow list: if admin() || (bounded(50) && activePublicContent());
       allow write: if false;
 
       match /days/{dayId} {
@@ -174,8 +198,8 @@ service cloud.firestore {
     }
 
     match /trips/{contentId} {
-      allow get: if admin() || activeResource();
-      allow list: if admin() || (bounded(50) && activeResource());
+      allow get: if admin() || activePublicContent();
+      allow list: if admin() || (bounded(50) && activePublicContent());
       allow write: if false;
 
       match /likes/{userId} {
@@ -201,6 +225,7 @@ service cloud.firestore {
           resource.data.countryId == countryId
           && activeCountry(countryId)
           && activeResource()
+          && approvedCanonicalDestination(countryId)
           && activeDestinationCache()
         );
         // Cross-destination discovery is served by the bounded callable catalog.

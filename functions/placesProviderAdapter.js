@@ -1,10 +1,10 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { locationLog } = require('./locationDiagnostics');
-const {
-  fetchLegacyBilingualPlace,
-  fetchLegacyLocalityPlaceId,
-} = require('./legacyPlacesAdapter');
 const { distanceKm, normalize } = require('./destinationIdentityService');
+const {
+  billingProjectId,
+  getGoogleMapsAccessToken,
+} = require('./googleMapsOAuth');
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 6000;
 const MAX_PROVIDER_REQUESTS_PER_ATTEMPT = 10;
@@ -46,16 +46,9 @@ function assert(condition, code, message) {
 }
 
 function selectedProvider(value) {
-  return String(value || 'legacy').trim().toLowerCase() === 'new' ? 'new' : 'legacy';
-}
-
-function providerKey({ provider, mapsKey, newPlacesKey }) {
-  const key = selectedProvider(provider) === 'new' ? newPlacesKey : mapsKey;
-  assert(typeof key === 'string' && key.trim(), 'failed-precondition',
-    selectedProvider(provider) === 'new'
-      ? 'GOOGLE_PLACES_NEW_KEY is not configured.'
-      : 'GOOGLE_MAPS_KEY is not configured.');
-  return key.trim();
+  const provider = String(value || 'new').trim().toLowerCase();
+  assert(provider === 'new', 'failed-precondition', 'The legacy Google Places provider is disabled.');
+  return provider;
 }
 
 function providerRequestContext(value = {}) {
@@ -148,6 +141,31 @@ async function fetchWithProviderPolicy(url, options = {}, {
     throw new HttpsError('deadline-exceeded', 'Google Places took too long to respond.');
   }
   throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
+}
+
+async function fetchWithGoogleMapsOAuth(url, options = {}, {
+  fetchImpl = global.fetch,
+  requestContext,
+  timeoutMs = PROVIDER_REQUEST_TIMEOUT_MS,
+  accessTokenProvider = getGoogleMapsAccessToken,
+  projectId,
+} = {}) {
+  const quotaProject = billingProjectId(projectId);
+  const execute = async (forceRefresh) => {
+    const token = await accessTokenProvider({ forceRefresh });
+    assert(typeof token === 'string' && token.trim(), 'failed-precondition',
+      'Google Maps OAuth credentials are unavailable.');
+    return fetchWithProviderPolicy(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token.trim()}`,
+        'X-Goog-User-Project': quotaProject,
+      },
+    }, { fetchImpl, requestContext, timeoutMs });
+  };
+  const response = await execute(false);
+  return response?.status === 401 ? execute(true) : response;
 }
 
 async function parseGoogleResponse(response, { notFoundMessage = 'The selected place no longer exists.' } = {}) {
@@ -259,37 +277,37 @@ async function fetchNewContainingPlaces(options) {
 
 async function fetchNewPlaceDetails({
   placeId,
-  newPlacesKey,
   language,
   sessionToken,
   fetchImpl = global.fetch,
   requestContext,
   fieldMask = NEW_DETAILS_FIELD_MASK,
+  accessTokenProvider,
+  projectId,
 }) {
   assert(typeof placeId === 'string' && placeId.trim().length >= 3, 'invalid-argument', 'placeId is invalid.');
-  providerKey({ provider: 'new', newPlacesKey });
   const url = new URL(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId.trim())}`);
   url.searchParams.set('languageCode', language);
   if (sessionToken) url.searchParams.set('sessionToken', sessionToken);
-  const response = await fetchWithProviderPolicy(url, {
+  const response = await fetchWithGoogleMapsOAuth(url, {
     headers: {
-      'X-Goog-Api-Key': newPlacesKey.trim(),
       'X-Goog-FieldMask': fieldMask,
     },
-  }, { fetchImpl, requestContext });
+  }, { fetchImpl, requestContext, accessTokenProvider, projectId });
   return parseGoogleResponse(response);
 }
 
 async function fetchNewBilingualPlace({
   placeId,
-  newPlacesKey,
   sessionToken,
   fetchImpl = global.fetch,
   requestContext,
+  accessTokenProvider,
+  projectId,
 }) {
   const [heDetails, enDetails] = await Promise.all([
-    fetchNewPlaceDetails({ placeId, newPlacesKey, language: 'he', sessionToken, fetchImpl, requestContext }),
-    fetchNewPlaceDetails({ placeId, newPlacesKey, language: 'en', sessionToken, fetchImpl, requestContext }),
+    fetchNewPlaceDetails({ placeId, language: 'he', sessionToken, fetchImpl, requestContext, accessTokenProvider, projectId }),
+    fetchNewPlaceDetails({ placeId, language: 'en', sessionToken, fetchImpl, requestContext, accessTokenProvider, projectId }),
   ]);
   const he = parseNewLocalizedPlace(heDetails);
   const en = parseNewLocalizedPlace(enDetails);
@@ -353,7 +371,6 @@ function normalizeNewPrediction(suggestion, randomSelectionId) {
 
 async function newAutocomplete({
   query,
-  newPlacesKey,
   language = 'he',
   mode = 'places',
   sessionToken,
@@ -361,15 +378,15 @@ async function newAutocomplete({
   randomSelectionId,
   coordinates,
   requestContext,
+  accessTokenProvider,
+  projectId,
 }) {
-  providerKey({ provider: 'new', newPlacesKey });
-  const response = await fetchWithProviderPolicy(
+  const response = await fetchWithGoogleMapsOAuth(
     'https://places.googleapis.com/v1/places:autocomplete',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Goog-Api-Key': newPlacesKey.trim(),
         'X-Goog-FieldMask': NEW_AUTOCOMPLETE_FIELD_MASK,
       },
       body: JSON.stringify({
@@ -388,7 +405,7 @@ async function newAutocomplete({
         includePureServiceAreaBusinesses: false,
       }),
     },
-    { fetchImpl, requestContext }
+    { fetchImpl, requestContext, accessTokenProvider, projectId }
   );
   const payload = await parseGoogleResponse(response, { notFoundMessage: 'No matching places were found.' });
   return (Array.isArray(payload?.suggestions) ? payload.suggestions : [])
@@ -397,27 +414,13 @@ async function newAutocomplete({
 }
 
 async function autocompletePlaces(options) {
-  if (selectedProvider(options.provider) === 'new') return newAutocomplete(options);
-  return options.legacyAutocomplete({
-    ...options,
-    fetchImpl: legacyPolicyFetch(options),
-  });
+  selectedProvider(options.provider);
+  return newAutocomplete(options);
 }
 
 async function fetchBilingualPlace(options) {
-  if (selectedProvider(options.provider) === 'new') return fetchNewBilingualPlace(options);
-  return fetchLegacyBilingualPlace({
-    ...options,
-    fetchImpl: legacyPolicyFetch(options),
-  });
-}
-
-function legacyPolicyFetch(options) {
-  const fetchImpl = options.fetchImpl || global.fetch;
-  return (url, requestOptions = {}) => fetchWithProviderPolicy(url, requestOptions, {
-    fetchImpl,
-    requestContext: options.requestContext,
-  });
+  selectedProvider(options.provider);
+  return fetchNewBilingualPlace(options);
 }
 
 async function fetchNewLocalityPlaceId(options) {
@@ -426,7 +429,6 @@ async function fetchNewLocalityPlaceId(options) {
   assert(wanted, 'failed-precondition', 'The selected place has no trustworthy containing locality.');
   const predictions = await newAutocomplete({
     query: [options.localityName, options.countryName].filter(Boolean).join(' '),
-    newPlacesKey: options.newPlacesKey,
     language: 'en',
     mode: 'destinations',
     sessionToken: options.sessionToken,
@@ -434,6 +436,8 @@ async function fetchNewLocalityPlaceId(options) {
     randomSelectionId: () => '',
     coordinates: options.coordinates,
     requestContext: options.requestContext,
+    accessTokenProvider: options.accessTokenProvider,
+    projectId: options.projectId,
   });
   const matches = predictions.filter((prediction) =>
     localityAliases(prediction.text, options.countryCode)
@@ -444,11 +448,12 @@ async function fetchNewLocalityPlaceId(options) {
   const candidates = (await Promise.all(ids.slice(0, MAX_LOCALITY_CANDIDATES_PER_QUERY).map(async (placeId) => {
     const details = parseNewLocalizedPlace(await fetchNewPlaceDetails({
       placeId,
-      newPlacesKey: options.newPlacesKey,
       language: 'en',
       sessionToken: options.sessionToken,
       fetchImpl: options.fetchImpl,
       requestContext: options.requestContext,
+      accessTokenProvider: options.accessTokenProvider,
+      projectId: options.projectId,
     }));
     const candidateNames = localityAliases(
       details.localityName || details.displayName,
@@ -479,12 +484,8 @@ async function fetchNewLocalityPlaceId(options) {
 }
 
 async function fetchPlaceSelection(options) {
-  if (selectedProvider(options.provider) === 'new') return fetchNewSelectionPlace(options);
-  return fetchLegacyBilingualPlace({
-    ...options,
-    placeId: options.prediction.placeId,
-    fetchImpl: legacyPolicyFetch(options),
-  });
+  selectedProvider(options.provider);
+  return fetchNewSelectionPlace(options);
 }
 
 const ADMINISTRATIVE_NAME_PREFIXES = [
@@ -576,46 +577,52 @@ function localitySearchNames(options) {
     .map((entry) => entry.query);
 }
 
-function legacyComponent(result, type) {
-  return (Array.isArray(result?.address_components) ? result.address_components : [])
+function geocodeComponent(result, type) {
+  return (Array.isArray(result?.addressComponents) ? result.addressComponents : [])
     .find((entry) => entry?.types?.includes(type));
 }
 
 async function fetchReverseLocalityCandidates(options) {
-  if (!options.mapsKey || !options.coordinates) return null;
-  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-  url.searchParams.set('latlng', `${options.coordinates.lat},${options.coordinates.lng}`);
-  url.searchParams.set(
-    'result_type',
-    'locality|postal_town|administrative_area_level_3|administrative_area_level_2|administrative_area_level_1'
-  );
-  url.searchParams.set('language', 'en');
-  url.searchParams.set('key', options.mapsKey);
+  if (!options.coordinates) return null;
+  const url = new URL(`https://geocode.googleapis.com/v4/geocode/location/${encodeURIComponent(`${options.coordinates.lat},${options.coordinates.lng}`)}`);
+  for (const type of [
+    'locality',
+    'postal_town',
+    'administrative_area_level_3',
+    'administrative_area_level_2',
+    'administrative_area_level_1',
+  ]) url.searchParams.append('types', type);
+  url.searchParams.set('languageCode', 'en');
   let response;
   try {
-    response = await fetchWithProviderPolicy(url, {}, {
+    response = await fetchWithGoogleMapsOAuth(url, {
+      headers: {
+        'X-Goog-FieldMask': 'results.placeId,results.addressComponents,results.types,results.location',
+      },
+    }, {
       fetchImpl: options.fetchImpl,
       requestContext: options.requestContext,
+      accessTokenProvider: options.accessTokenProvider,
+      projectId: options.projectId,
     });
   } catch (error) {
     if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted') throw error;
     return null;
   }
+  if (response?.status === 429) {
+    throw new HttpsError('resource-exhausted', 'Google Geocoding quota is temporarily unavailable.');
+  }
   if (!response?.ok) return null;
   const payload = await response.json();
-  if (payload?.status === 'ZERO_RESULTS') return null;
-  if (payload?.status === 'OVER_QUERY_LIMIT') {
-    throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
-  }
-  if (payload?.status !== 'OK' || !Array.isArray(payload.results)) return null;
+  if (!Array.isArray(payload?.results)) return null;
   const expectedCountry = String(options.countryCode || '').toUpperCase();
   const candidates = payload.results.map((result) => {
-    const placeId = String(result?.place_id || '').trim();
-    const country = legacyComponent(result, 'country');
-    const countryCode = String(country?.short_name || '').toUpperCase();
+    const placeId = String(result?.placeId || '').trim();
+    const country = geocodeComponent(result, 'country');
+    const countryCode = String(country?.shortText || '').toUpperCase();
     const types = Array.isArray(result?.types) ? result.types : [];
-    const lat = Number(result?.geometry?.location?.lat);
-    const lng = Number(result?.geometry?.location?.lng);
+    const lat = Number(result?.location?.latitude);
+    const lng = Number(result?.location?.longitude);
     const coordinates = Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
     if (!placeId || !coordinates || (expectedCountry && countryCode !== expectedCountry)) return null;
     return { placeId, types, distanceKm: distanceKm(options.coordinates, coordinates) };
@@ -695,12 +702,8 @@ async function fetchLocalityPlaceId(options) {
   }
   for (const localityName of localityNames) {
     const request = { ...options, localityName };
-    const placeId = selectedProvider(options.provider) === 'new'
-      ? await fetchNewLocalityPlaceId(request)
-      : await fetchLegacyLocalityPlaceId({
-          ...request,
-          fetchImpl: legacyPolicyFetch(request),
-        });
+    selectedProvider(options.provider);
+    const placeId = await fetchNewLocalityPlaceId(request);
     if (placeId) return placeId;
   }
   if (String(options.countryCode || '').toUpperCase() === 'TH') return null;
@@ -725,6 +728,7 @@ module.exports = {
   fetchReverseLocalityCandidates,
   fetchReverseLocalityPlaceId,
   fetchWithProviderPolicy,
+  fetchWithGoogleMapsOAuth,
   localityAliases,
   localitySearchNames,
   newAutocomplete,

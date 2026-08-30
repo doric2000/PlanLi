@@ -12,11 +12,26 @@ const {
   syncDestinationCatalog,
 } = require('./destinationCatalogService');
 
+const approvedPolicy = (countryId, registryId = `${countryId.toLowerCase()}-destination`) => ({
+  approved: true,
+  registryId,
+  kind: 'city_hub',
+  groupingPolicy: 'self',
+  registryVersion: 3,
+  approvalRevision: 1,
+  registryAttestation: {
+    approved: true, registryId, registryVersion: 3,
+    approvalRevision: 1, countryId,
+  },
+});
+
 test('catalog entries are public only when both destination and country are active', () => {
   const base = {
     countryId: 'FR',
     cityId: 'PAR',
-    city: { status: 'active', name: 'Paris', stats: { recommendationCount: 2 } },
+    city: {
+      status: 'active', name: 'Paris', stats: { recommendationCount: 2 }, canonicalPolicy: approvedPolicy('FR'),
+    },
     country: { status: 'active', name: 'France' },
     timestamp: 'NOW',
   };
@@ -24,6 +39,10 @@ test('catalog entries are public only when both destination and country are acti
   assert.equal(catalogData({
     ...base,
     country: { ...base.country, status: 'inactive' },
+  }).status, 'inactive');
+  assert.equal(catalogData({
+    ...base,
+    city: { ...base.city, canonicalPolicy: { ...approvedPolicy('FR'), approved: false } },
   }).status, 'inactive');
 });
 
@@ -40,6 +59,7 @@ test('catalog data stores bounded prefixes for full names and punctuation-separa
     cityId: 'st-johns',
     city: {
       status: 'active',
+      canonicalPolicy: approvedPolicy('CA'),
       googleCache: { names: { en: 'St. John’s', he: 'סנט ג׳ונס' } },
     },
     country: { status: 'active', names: { en: 'Canada', he: 'קנדה' } },
@@ -94,6 +114,23 @@ test('destination search uses one indexed query with a compact bounded prefix', 
   ]);
 });
 
+test('destination search rejects a cursor that changes the Firestore document path', async () => {
+  const firestoreQuery = {
+    where() { return this; },
+    orderBy() { return this; },
+  };
+  const firestore = () => ({ collection: () => firestoreQuery });
+
+  await assert.rejects(
+    searchDestinations({ admin: { firestore }, data: { cursor: 'country/city' } }),
+    (error) => error.code === 'invalid-argument'
+  );
+  await assert.rejects(
+    searchDestinations({ admin: { firestore }, data: { cursor: 'destination-id\n' } }),
+    (error) => error.code === 'invalid-argument'
+  );
+});
+
 test('a missing or building catalog index returns a retryable public error', async () => {
   await assert.rejects(
     getCatalogSnapshot({ get: async () => { throw Object.assign(new Error('missing index'), { code: 9 }); } }),
@@ -128,6 +165,7 @@ test('catalog synchronization replaces its owned document instead of merging sta
     cityId: 'PAR',
     city: {
       status: 'active',
+      canonicalPolicy: approvedPolicy('FR'),
       googleCache: { names: { en: 'Paris' }, expiresAt: new Date('2099-01-01') },
       destinationImage,
     },

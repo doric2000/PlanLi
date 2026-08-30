@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const logger = require('firebase-functions/logger');
 
 const INCIDENT_ID_PATTERN = /^loc_[A-Za-z0-9_-]{8,48}$/;
 const PROVIDER_ENDPOINTS = new Set([
@@ -121,7 +122,7 @@ function locationLog(stage, {
   fallbackPath,
   providerEndpoint,
   providerStatus,
-} = {}) {
+} = {}, loggerImpl = logger) {
   const safeProviderEndpoint = PROVIDER_ENDPOINTS.has(providerEndpoint)
     ? providerEndpoint
     : null;
@@ -140,8 +141,8 @@ function locationLog(stage, {
     ...(safeProviderEndpoint ? { providerEndpoint: safeProviderEndpoint } : {}),
     ...(safeProviderStatus !== null ? { providerStatus: safeProviderStatus } : {}),
   };
-  if (outcome === 'failed') console.warn('location_request', payload);
-  else console.info('location_request', payload);
+  if (outcome === 'failed') loggerImpl.warn('location_request', payload);
+  else loggerImpl.info('location_request', payload);
 }
 
 module.exports = {

@@ -50,17 +50,20 @@ test('reviewed enrichment overrides select an exact island identity from ambiguo
   const candidate = CANDIDATES.find((entry) => entry.id === 'es-ibiza');
   const country = { longText: 'Spain', shortText: 'ES', types: ['country'] };
   const result = await enrichCandidate(candidate, {
-    apiKey: 'test-key',
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
     fetchImpl: async () => ({
       ok: true,
       json: async () => ({ places: [
         {
           id: 'ChIJhRmdbbxGmRIRiPpXk_IayrY', displayName: { text: 'Eivissa' },
           addressComponents: [country], location: { latitude: 38.9, longitude: 1.43 },
+          types: ['locality', 'political'],
         },
         {
           id: 'ChIJQzkJhWNHmRIR1iaEzSVHBgk', displayName: { text: 'Ibiza' },
           addressComponents: [country], location: { latitude: 39.0, longitude: 1.45 },
+          types: ['island', 'natural_feature'],
           viewport: { low: { latitude: 38.8, longitude: 1.2 }, high: { latitude: 39.2, longitude: 1.7 } },
         },
       ] }),
@@ -79,7 +82,8 @@ test('city enrichment refuses a business Place ID even when it is the only resul
   const candidate = CANDIDATES.find((entry) => entry.id === 'at-vienna');
   let requestBody;
   const result = await enrichCandidate(candidate, {
-    apiKey: 'test-key',
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
     fetchImpl: async (_url, options) => {
       requestBody = JSON.parse(options.body);
       return { ok: true, json: async () => ({ places: [{

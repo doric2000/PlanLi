@@ -7,7 +7,11 @@ const {
   parseArgs,
   validateDeployedCommit,
   validateRepositoryState,
+  validateRootConfigFiles,
 } = require('./easProductionPreflight');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 test('uses the installed EAS launcher for each platform', () => {
   assert.equal(easExecutable('win32'), 'eas.cmd');
@@ -49,4 +53,15 @@ test('requires the currently deployed commit to be an ancestor', () => {
 test('accepts only the explicit deployed-commit argument', () => {
   assert.deepEqual(parseArgs(['--deployed-commit', 'abc1234']), { deployedCommit: 'abc1234' });
   assert.throws(() => parseArgs(['--force']), /Unknown argument/);
+});
+
+test('rejects stray root Expo and EAS configuration', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-eas-root-'));
+  try {
+    assert.doesNotThrow(() => validateRootConfigFiles(root));
+    fs.writeFileSync(path.join(root, 'app.json'), '{}');
+    assert.throws(() => validateRootConfigFiles(root), /must live under client/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

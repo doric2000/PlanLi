@@ -18,6 +18,10 @@ test('legacy media quarantine is allowlisted, bounded, and dry-run by default', 
   assert.equal(parseArgs(['--prefix', 'optimized', '--all']).all, true);
   assert.equal(parseArgs(['--prefix', 'trips', '--apply']).apply, true);
   assert.throws(() => parseArgs(['--prefix', 'media']), /prefix/);
+  assert.throws(
+    () => parseArgs(['--prefix', 'routes', '--bucket', 'attacker-controlled-bucket']),
+    /active PlanLi media bucket/
+  );
 });
 
 test('legacy media quarantine dry-run reuses listing metadata', () => {

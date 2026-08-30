@@ -1,9 +1,13 @@
 import { PRIVACY_VERSION, TERMS_VERSION } from '../../constants/authPolicy';
+import {
+  PRIVACY_EFFECTIVE_DATE_HE,
+  TERMS_EFFECTIVE_DATE_HE,
+} from '../../constants/legalPolicy.generated';
 
 export const TERMS_DOCUMENT = {
   title: 'תנאי שימוש',
   version: TERMS_VERSION,
-  effectiveDate: '15 באוגוסט 2026',
+  effectiveDate: TERMS_EFFECTIVE_DATE_HE,
   intro: 'תנאים אלה מסדירים את השימוש באפליקציית PlanLi Travels ובקהילה שלה.',
   sections: [
     { title: 'השימוש בשירות', body: 'PlanLi מסייעת לגלות, לשמור ולתכנן תוכן נסיעות. המשתמשים אחראים לדיוק התוכן שהם מפרסמים ולשימוש חוקי ומכבד בשירות.' },
@@ -19,7 +23,7 @@ export const TERMS_DOCUMENT = {
 export const PRIVACY_DOCUMENT = {
   title: 'מדיניות פרטיות',
   version: PRIVACY_VERSION,
-  effectiveDate: '18 באוגוסט 2026',
+  effectiveDate: PRIVACY_EFFECTIVE_DATE_HE,
   intro: 'מדיניות זו מסבירה אילו נתונים פלאן לי אוספת, מדוע הם נדרשים ואילו אפשרויות עומדות לרשותכם.',
   sections: [
     { title: 'המידע שאנו אוספים', body: 'פרטי חשבון ופרופיל, העדפות נסיעה, תוכן שאתם מעלים, פעולות כמו שמירות ולייקים, ונתונים טכניים הדרושים לאבטחה, לאבחון תקלות ולהפעלת השירות.' },
@@ -37,7 +41,7 @@ export const PRIVACY_DOCUMENT = {
 export const COMMUNITY_DOCUMENT = {
   title: 'כללי הקהילה',
   version: TERMS_VERSION,
-  effectiveDate: '15 באוגוסט 2026',
+  effectiveDate: TERMS_EFFECTIVE_DATE_HE,
   intro: 'פלאן לי היא קהילת מטיילים. הכללים הבאים נועדו לשמור עליה שימושית, בטוחה ומכבדת.',
   sections: [
     { title: 'מידע אמין ובטוח', body: 'אין לפרסם מידע מטעה או הנחיות שעלולות לסכן מטיילים. ציינו כאשר מידע אינו ודאי או עשוי להשתנות.' },

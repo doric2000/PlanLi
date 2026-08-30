@@ -111,6 +111,16 @@
       "collectionGroup": "recommendations",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "publicationGate.destinationApprovalVerified", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recommendations",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "destination.cityId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
@@ -132,6 +142,16 @@
         { "fieldPath": "destination.cityId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "recommendations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "destination.countryId", "order": "ASCENDING" },
+        { "fieldPath": "destination.cityId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "publicationGate.destinationApprovalVerified", "order": "ASCENDING" }
       ]
     },
     {
@@ -295,6 +315,16 @@
       "fields": [
         { "fieldPath": "ownerId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "routes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "publicationGate.destinationApprovalVerified", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
@@ -1127,6 +1157,24 @@
     },
     {
       "collectionGroup": "publicRateLimits",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "guestSessions",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "guestSessionNonces",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "guestSessionIssuance",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []

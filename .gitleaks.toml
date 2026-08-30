@@ -1,0 +1,29 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated artifacts, scanner state, dependencies, and Git internals"
+paths = [
+  '''(^|[/\\])\.codex_tmp([/\\]|$)''',
+  '''(^|[/\\])client[/\\](?:\.expo|dist)([/\\]|$)''',
+  '''(^|[/\\])\.expo-validation([/\\]|$)''',
+  '''(^|[/\\])\.git([/\\]|$)''',
+  '''(^|[/\\])graphify-out([/\\]|$)''',
+  '''(^|[/\\])hosting[/\\]admin([/\\]|$)''',
+  '''(^|[/\\])node_modules([/\\]|$)''',
+  '''(^|[/\\])functions[/\\]\.(?:budget-taxonomy-v5|canonical-media-migration|database-canonical-migration|destination-identities|destination-images|media-migration-state|prelaunch-reset|public-profiles-backfill|rating-removal|recommendation-catalog-v1|recommendation-curation|storage-eu-migration)([/\\]|$)''',
+]
+
+[[allowlists]]
+description = "Public client identifiers that are intentionally shipped and provider-restricted"
+regexTarget = "line"
+regexes = [
+  '''^EXPO_PUBLIC_FIREBASE_API_KEY\s*=''',
+]
+
+[[allowlists]]
+description = "Public MapTiler browser/mobile tokens intentionally shipped to the client"
+regexTarget = "match"
+regexes = [
+  '''EXPO_PUBLIC_MAPTILER''',
+]

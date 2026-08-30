@@ -4,13 +4,32 @@ const sharp = require('sharp');
 
 const {
   CACHE_CONTROL,
+  MAX_SOURCE_DIMENSION,
+  assertJpegSourceInfo,
   cleanupPreparedMedia,
   collectCanonicalMediaAssets,
   consumeMediaProcessingBudget,
   createPlaceholder,
   encodeVariant,
   MEDIA_MINUTE_MAXIMUM,
+  prepareMedia,
 } = require('./mediaProcessor');
+
+test('decoded JPEG validation rejects extreme single dimensions', () => {
+  assert.doesNotThrow(() => assertJpegSourceInfo({
+    format: 'jpeg', width: 4096, height: 4096,
+  }));
+  assert.throws(
+    () => assertJpegSourceInfo({
+      format: 'jpeg', width: MAX_SOURCE_DIMENSION + 1, height: 1,
+    }),
+    (error) => error.code === 'invalid-argument' && /dimensions/.test(error.message)
+  );
+  assert.throws(
+    () => assertJpegSourceInfo({ format: 'png', width: 100, height: 100 }),
+    (error) => error.code === 'invalid-argument' && /JPEG/.test(error.message)
+  );
+});
 
 test('canonical media uses a bounded cache so moderation takedowns can converge', () => {
   assert.equal(CACHE_CONTROL, 'public,max-age=300,must-revalidate');
@@ -48,6 +67,46 @@ test('media processing enforces aggregate per-user job and byte budgets', async 
     consumeMediaProcessingBudget({ admin, uid: 'user-1', sourceBytes: 1, nowMs: 1_000 }),
     (error) => error?.code === 'resource-exhausted'
   );
+});
+
+test('prepareMedia rejects non-JPEG bytes even when Storage metadata claims JPEG', async () => {
+  const source = await sharp({
+    create: {
+      width: 64,
+      height: 64,
+      channels: 3,
+      background: { r: 20, g: 80, b: 180 },
+    },
+  }).png().toBuffer();
+  const stagingFile = {
+    getMetadata: async () => [{
+      size: String(source.length),
+      contentType: 'image/jpeg',
+      metadata: { ownerUid: 'user-1', variant: 'staging' },
+    }],
+    download: async () => [source],
+  };
+  const db = {
+    doc: () => ({}),
+    runTransaction: async (handler) => handler({
+      get: async () => ({ exists: false, data: () => ({}) }),
+      set: () => {},
+    }),
+  };
+  const admin = {
+    firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'time' } }),
+    storage: () => ({ bucket: () => ({ file: () => stagingFile }) }),
+  };
+
+  await assert.rejects(prepareMedia({
+    admin,
+    auth: { uid: 'user-1' },
+    data: {
+      kind: 'recommendation',
+      stagingPath: 'media-staging/user-1/123e4567-e89b-42d3-a456-426614174000.jpg',
+    },
+    mediaBucket: 'planli-f0b12-media-eu',
+  }), (error) => error.code === 'invalid-argument' && /bytes must be JPEG/.test(error.message));
 });
 
 test('recommendation variants are WebP, square and never upscale', async () => {

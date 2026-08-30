@@ -1,0 +1,11 @@
+{
+  "profileDetailsVersion": 1,
+  "terms": {
+    "version": "2026-08-15-community-safety",
+    "effectiveDateHe": "15 באוגוסט 2026"
+  },
+  "privacy": {
+    "version": "2026-08-18-beta-observability",
+    "effectiveDateHe": "18 באוגוסט 2026"
+  }
+}

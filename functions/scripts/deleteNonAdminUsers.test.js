@@ -11,6 +11,10 @@ const {
 
 test('non-admin deletion is dry-run by default and requires an explicit keeper', () => {
   assert.throws(() => parseArgs([]), /keep-email/);
+  assert.throws(
+    () => parseArgs(['--keep-email', 'owner@example.com', '--media-bucket', 'attacker-controlled-bucket']),
+    /active PlanLi media bucket/
+  );
   assert.deepEqual(parseArgs(['--keep-email', 'owner@example.com']), {
     apply: false,
     confirmation: null,

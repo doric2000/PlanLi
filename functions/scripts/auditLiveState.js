@@ -1,8 +1,7 @@
 /* eslint-disable no-await-in-loop, no-console */
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { GoogleAuth } = require('google-auth-library');
-const { googleAuthOptions, initializeAdmin } = require('./localCredentials');
+const { gcloudAccessToken, initializeAdmin } = require('./localCredentials');
 const { destinationHebrewName, hasHebrewName } = require('../destinationLocalizationService');
 const {
   BUDGET_IDS,
@@ -66,6 +65,14 @@ const FORBIDDEN_FIELDS = new Set([
   'rating',
   'thumbnail_url',
   'tripDaysData',
+]);
+const SENSITIVE_CREDENTIAL_PATTERNS = Object.freeze([
+  { kind: 'gcp-api-key', pattern: /AIza[0-9A-Za-z_-]{35}/ },
+  { kind: 'private-key', pattern: /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/ },
+  { kind: 'firebase-refresh-token', pattern: /\b1\/[0-9A-Za-z_-]{20,}/ },
+  { kind: 'github-token', pattern: /\bgh[pousr]_[0-9A-Za-z]{30,}/ },
+  { kind: 'aws-access-key', pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
+  { kind: 'openai-api-key', pattern: /\bsk-(?:proj-)?[0-9A-Za-z_-]{20,}/ },
 ]);
 
 function initialize() {
@@ -294,6 +301,16 @@ function inspectValue(value, documentPath, keyPath, report) {
         report.usReferences.push({ documentPath, field: keyPath });
       }
       if (value.includes(EU_BUCKET)) report.euReferenceCount += 1;
+      for (const { kind, pattern } of SENSITIVE_CREDENTIAL_PATTERNS) {
+        if (pattern.test(value)) {
+          report.credentialReferences ||= [];
+          report.credentialReferences.push({
+            collectionShape: documentPath.split('/').filter((_, index) => index % 2 === 0).join('/*/'),
+            field: keyPath,
+            kind,
+          });
+        }
+      }
     }
     return;
   }
@@ -348,6 +365,7 @@ async function auditFirestore(db) {
     documentCount: documents.length,
     unexpectedRoots: roots.filter((root) => !isAllowedRoot(root)),
     forbiddenFields: [],
+    credentialReferences: [],
     usReferences: [],
     euReferenceCount: 0,
     invalidCountryIds: [],
@@ -522,11 +540,7 @@ async function auditStorage() {
 }
 
 async function auditFunctions() {
-  const auth = new GoogleAuth({
-    ...googleAuthOptions({ projectId: PROJECT_ID }),
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
-  const client = await auth.getClient();
+  const accessToken = gcloudAccessToken().access_token;
   const functions = [];
   let pageToken = null;
   do {
@@ -535,12 +549,17 @@ async function auditFunctions() {
     );
     url.searchParams.set('filter', 'environment="GEN_2"');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
-    const response = await client.request({ url: url.toString() });
-    functions.push(...(response.data.functions || []));
-    pageToken = response.data.nextPageToken || null;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) throw new Error(`Cloud Functions inventory failed with HTTP ${response.status}.`);
+    const payload = await response.json();
+    functions.push(...(payload.functions || []));
+    pageToken = payload.nextPageToken || null;
   } while (pageToken);
   const byServiceAccount = {};
   const unexpected = [];
+  const legacyMapsSecretBindings = [];
   for (const cloudFunction of functions) {
     const name = cloudFunction.name.split('/').pop();
     const serviceAccount = cloudFunction.serviceConfig?.serviceAccountEmail || null;
@@ -555,8 +574,13 @@ async function auditFunctions() {
     if (![CORE_SERVICE_ACCOUNT, MEDIA_SERVICE_ACCOUNT].includes(serviceAccount)) {
       unexpected.push({ name, reason: `unexpected-service-account:${serviceAccount}` });
     }
+    const legacySecrets = (cloudFunction.serviceConfig?.secretEnvironmentVariables || [])
+      .map((secret) => secret.key || secret.secret)
+      .filter((secret) => ['GOOGLE_MAPS_KEY', 'GOOGLE_PLACES_NEW_KEY'].includes(secret))
+      .sort();
+    if (legacySecrets.length) legacyMapsSecretBindings.push({ name, secrets: legacySecrets });
   }
-  return { count: functions.length, byServiceAccount, unexpected };
+  return { count: functions.length, byServiceAccount, unexpected, legacyMapsSecretBindings };
 }
 
 async function verifyPublicMediaRead(mediaPath) {
@@ -579,6 +603,7 @@ function failures(report) {
   return [
     ...firestore.unexpectedRoots,
     ...firestore.forbiddenFields,
+    ...(firestore.credentialReferences || []),
     ...firestore.usReferences,
     ...firestore.invalidCountryIds,
     ...firestore.invalidCityIds,
@@ -599,6 +624,7 @@ function failures(report) {
     ...(storage.eu.corsOrigins.includes('*') ? ['wildcard CORS origin'] : []),
     ...(storage.eu.stagingLifecycle ? [] : ['staging lifecycle missing']),
     ...report.functions.unexpected,
+    ...(report.functions.legacyMapsSecretBindings || []),
     ...(report.functions.count > 0 ? [] : ['no deployed functions']),
     ...(report.publicMediaRead.pathFound && !report.publicMediaRead.readable
       ? ['public media read failed']

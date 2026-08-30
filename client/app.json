@@ -2,8 +2,8 @@
   "expo": {
     "name": "PlanLi Travels",
     "slug": "client",
-    "scheme": "client",
-    "version": "1.1.0",
+    "scheme": "com.planli.planlitravels",
+    "version": "1.2.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -32,6 +32,7 @@
     },
     "android": {
       "package": "com.planli.planlitravels",
+      "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand-adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -53,6 +54,18 @@
       "favicon": "./assets/brand-favicon.png"
     },
     "plugins": [
+      "expo-font",
+      "expo-image",
+      "expo-splash-screen",
+      "expo-status-bar",
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check",
       [
         "expo-localization",
         {

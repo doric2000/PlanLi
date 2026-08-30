@@ -56,20 +56,6 @@ function resolvedTokenRef(db, token) {
   return db.doc(`system/runtime/resolvedPlaceTokens/${token}`);
 }
 
-function normalizePrediction(prediction) {
-  const placeId = String(prediction?.place_id || '').trim();
-  const text = String(prediction?.structured_formatting?.main_text || prediction?.description || '').trim();
-  const secondaryText = String(prediction?.structured_formatting?.secondary_text || '').trim();
-  if (!placeId || !text) return null;
-  return {
-    selectionId: randomId('sel'),
-    placeId,
-    text,
-    secondaryText,
-    types: Array.isArray(prediction?.types) ? prediction.types.filter((type) => typeof type === 'string').slice(0, 12) : [],
-  };
-}
-
 function normalizeLocationBias(value) {
   if (value == null) return null;
   const lat = Number(value?.lat);
@@ -79,43 +65,12 @@ function normalizeLocationBias(value) {
   return { lat, lng };
 }
 
-async function legacyAutocomplete({ query, mapsKey, fetchImpl = global.fetch, mode, coordinates }) {
-  const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
-  url.searchParams.set('input', query);
-  url.searchParams.set('language', 'he');
-  url.searchParams.set('key', mapsKey);
-  if (mode === 'destinations') url.searchParams.set('types', '(cities)');
-  if (coordinates) {
-    url.searchParams.set('location', `${coordinates.lat},${coordinates.lng}`);
-    url.searchParams.set('radius', '50000');
-  }
-  let response;
-  try {
-    response = await fetchImpl(url);
-  } catch {
-    throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
-  }
-  if (response?.status === 429) throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
-  if (!response?.ok) throw new HttpsError('unavailable', 'Google Places request failed.');
-  const payload = await response.json();
-  if (payload?.status === 'ZERO_RESULTS') return [];
-  if (payload?.status === 'OVER_QUERY_LIMIT') throw new HttpsError('resource-exhausted', 'Google Places quota is temporarily unavailable.');
-  if (payload?.status === 'UNKNOWN_ERROR') throw new HttpsError('unavailable', 'Google Places is temporarily unavailable.');
-  if (payload?.status === 'REQUEST_DENIED') throw new HttpsError('failed-precondition', 'Google Places is not configured correctly.');
-  if (payload?.status === 'INVALID_REQUEST') throw new HttpsError('invalid-argument', 'Google Places rejected the search request.');
-  if (payload?.status !== 'OK' || !Array.isArray(payload.predictions)) {
-    throw new HttpsError('failed-precondition', 'Google Places returned an invalid search response.');
-  }
-  return payload.predictions.map(normalizePrediction).filter(Boolean).slice(0, MAX_PREDICTIONS);
-}
-
 async function searchPlacesInternal({
   admin,
   auth,
   data,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
   providerRateLimitKey,
   fetchImpl = global.fetch,
   consumeBudget = consumeProviderBudget,
@@ -132,17 +87,16 @@ async function searchPlacesInternal({
   await consumeBudget({ admin, auth, action: 'autocomplete', key: providerRateLimitKey });
   const providerSessionToken = randomId('gst');
   const predictions = (await autocompletePlaces({
-    provider: placesProvider,
+    provider: 'new',
     query,
-    mapsKey,
-    newPlacesKey,
     fetchImpl,
     mode,
     sessionToken: providerSessionToken,
     randomSelectionId: () => randomId('sel'),
-    legacyAutocomplete,
     coordinates,
     requestContext,
+    accessTokenProvider,
+    projectId,
   })).slice(0, MAX_PREDICTIONS);
   if (requestContext.count === 0) requestContext.count = 1;
   const sessionId = randomId('ps');
@@ -151,7 +105,7 @@ async function searchPlacesInternal({
     uid: auth.uid,
     mode,
     predictions,
-    provider: placesProvider,
+    provider: 'new',
     providerSessionToken,
     incidentId,
     providerCallCount: requestContext.count,
@@ -208,9 +162,8 @@ async function resolvePlaceSelectionInternal({
   admin,
   auth,
   data,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
   providerRateLimitKey,
   fetchImpl = global.fetch,
   diagnosticContext,
@@ -235,13 +188,13 @@ async function resolvePlaceSelectionInternal({
   await consumeProviderBudget({ admin, auth, action: 'bilingualResolution', key: providerRateLimitKey });
   const providerCallsBefore = requestContext.count;
   const bilingual = await fetchPlaceSelection({
-    provider: session.provider || placesProvider,
+    provider: session.provider || 'new',
     prediction,
-    mapsKey,
-    newPlacesKey,
     sessionToken: session.providerSessionToken,
     fetchImpl,
     requestContext,
+    accessTokenProvider,
+    projectId,
   });
   if (requestContext.count === providerCallsBefore) requestContext.count += 2;
   assert(requestContext.count <= requestContext.maximum, 'resource-exhausted',
@@ -387,7 +340,6 @@ module.exports = {
   RESOLVED_TOKEN_TTL_MS,
   SESSION_TTL_MS,
   createResolvedPlaceToken,
-  legacyAutocomplete,
   normalizeLocationBias,
   readResolvedPlaceToken,
   renewResolvedPlaceTokenLeases,

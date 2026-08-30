@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "projectId": "planli-f0b12",
+  "desiredSubtype": "IDENTITY_PLATFORM",
+  "mfa": {
+    "state": "ENABLED",
+    "enabledProviders": [],
+    "providerConfigs": [
+      {
+        "state": "ENABLED",
+        "totpProviderConfig": {
+          "adjacentIntervals": 1
+        }
+      }
+    ]
+  }
+}

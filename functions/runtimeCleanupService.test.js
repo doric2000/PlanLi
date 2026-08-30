@@ -6,6 +6,9 @@ const { RUNTIME_COLLECTIONS, cleanupExpiredCollection } = require('./runtimeClea
 test('runtime cleanup covers public/provider limiters and private place sessions', () => {
   assert.deepEqual(RUNTIME_COLLECTIONS, [
     'system/runtime/publicRateLimits',
+    'system/runtime/guestSessions',
+    'system/runtime/guestSessionNonces',
+    'system/runtime/guestSessionIssuance',
     'system/runtime/providerRateLimits',
     'system/runtime/providerGlobalLimits',
     'system/runtime/placeSearchSessions',

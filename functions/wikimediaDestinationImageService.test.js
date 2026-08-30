@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  buildAttribution,
   candidateQualityScore,
   resolveWikimediaDestinationImage,
   usableCommonsCandidate,
@@ -56,6 +57,17 @@ test('Commons candidates must be licensed landscape photos that name the exact c
   assert.equal(usableCommonsCandidate(imageInfo({ title: 'File:Kfar Saba (Unsplash).jpg' }), ['Kfar Saba']), false);
   assert.ok(candidateQualityScore(imageInfo({ description: 'Kfar Saba aerial city view' })) >
     candidateQualityScore(imageInfo({ description: 'Kfar Saba' })));
+});
+
+test('Commons candidates and attribution reject deceptive external origins', () => {
+  const deceptiveSource = imageInfo();
+  deceptiveSource.imageinfo[0].descriptionurl = 'https://commons.wikimedia.org.evil.example/wiki/File:Example.jpg';
+  assert.equal(usableCommonsCandidate(deceptiveSource, ['Kfar Saba']), false);
+
+  const deceptiveLicense = imageInfo().imageinfo[0];
+  deceptiveLicense.extmetadata.LicenseUrl.value = 'javascript:alert(1)';
+  assert.equal(buildAttribution(deceptiveLicense).licenseUrl, null);
+  assert.equal(buildAttribution(deceptiveLicense).photoUrl, 'https://commons.wikimedia.org/wiki/File:Example.jpg');
 });
 
 test('Wikimedia fallback anchors aliases to an exact nearby Wikipedia city page', async () => {

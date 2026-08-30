@@ -168,6 +168,21 @@ test('push retry and receipt workers have indexes and TTL cleanup policies', () 
   }
 });
 
+test('guest-session security state has TTL cleanup policies', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  for (const collectionGroup of [
+    'guestSessions',
+    'guestSessionNonces',
+    'guestSessionIssuance',
+  ]) {
+    assert.ok(config.fieldOverrides.some((entry) => (
+      entry.collectionGroup === collectionGroup
+      && entry.fieldPath === 'expireAt'
+      && entry.ttl === true
+    )), `Missing guest-session TTL policy for ${collectionGroup}`);
+  }
+});
+
 test('blocked-like cleanup and durable notification cleanup have indexes', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const likeIndexes = config.indexes

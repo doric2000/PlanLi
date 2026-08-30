@@ -7,20 +7,23 @@ const {
   buildHeldMediaProjection,
   caseIdForPath,
   caseIdForTarget,
+  caseRevisionsForReport,
   caseStatusForReport,
   evaluateTextSafety,
   handleModerationCaseNotificationWrite,
   normalizeReportInput,
   normalizeReportTarget,
-  reportLeaseMutation,
   setBlockedUser,
   submitReport,
 } = require('./moderationService');
 
-test('a report invalidates an in-flight moderation decision lease', () => {
-  const deleted = Symbol('deleted');
-  assert.deepEqual(reportLeaseMutation('resolving', deleted), { decisionLease: deleted });
-  assert.deepEqual(reportLeaseMutation('open', deleted), {});
+test('a report has an independent revision and preserves an in-flight decision', () => {
+  assert.deepEqual(caseRevisionsForReport({
+    status: 'resolving', revision: 8, decisionRevision: 8, reportRevision: 3,
+  }), { revision: 8, decisionRevision: 8, reportRevision: 4 });
+  assert.deepEqual(caseRevisionsForReport({
+    status: 'open', revision: 8, reportRevision: 3,
+  }), { revision: 9, decisionRevision: 9, reportRevision: 4 });
 });
 
 test('normalizes every supported moderation target to a canonical path', () => {
@@ -45,6 +48,15 @@ test('normalizes every supported moderation target to a canonical path', () => {
   assert.throws(() => normalizeReportTarget({
     type: 'route', id: 'route-1', subject: { kind: 'attached_place' },
   }), (error) => error.details?.reason === 'invalid_target');
+});
+
+test('report target document IDs reject dot segments and control characters', () => {
+  for (const id of ['.', '..', 'nested/path', 'case\u0085id', 'case\n', '\tcase']) {
+    assert.throws(
+      () => normalizeReportTarget({ type: 'recommendation', id }),
+      (error) => error.details?.reason === 'invalid_target'
+    );
+  }
 });
 
 test('requires useful details for accuracy, rights and other reports', () => {
@@ -74,6 +86,8 @@ test('a new report reopens resolved cases while preserving unresolved states', (
   assert.equal(caseStatusForReport('open', false), 'open');
   assert.equal(caseStatusForReport('auto_held', false), 'auto_held');
   assert.equal(caseStatusForReport('open', true), 'auto_held');
+  assert.equal(caseStatusForReport('resolving', false), 'resolving');
+  assert.equal(caseStatusForReport('resolving', true), 'resolving');
 });
 
 test('admin notification projections version unique reports, escalations, and reopenings safely', () => {

@@ -1,112 +1,47 @@
-const { execFileSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { spawnSync } = require('node:child_process');
 
 const DEFAULT_PROJECT_ID = 'planli-f0b12';
+const DEFAULT_MEDIA_BUCKET = 'planli-f0b12-media-eu';
 
-function firebaseToolsLibDirectory() {
-  const candidates = [];
-  if (process.env.APPDATA) {
-    candidates.push(path.join(
-      process.env.APPDATA,
-      'npm',
-      'node_modules',
-      'firebase-tools',
-      'lib'
-    ));
+function gcloudAccessToken({ runner = spawnSync } = {}) {
+  const command = process.platform === 'win32' ? 'gcloud.cmd' : 'gcloud';
+  const result = runner(command, ['auth', 'print-access-token', '--quiet'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    shell: process.platform === 'win32',
+    timeout: 30_000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.error) throw new Error(`gcloud access-token fallback could not start: ${result.error.message}`);
+  if (result.status !== 0) throw new Error('gcloud access-token fallback failed; sign in with gcloud auth login.');
+  const accessToken = String(result.stdout || '').trim();
+  if (accessToken.length < 40 || accessToken.length > 4096 || /\s/.test(accessToken)) {
+    throw new Error('gcloud returned an invalid access token.');
   }
-  try {
-    const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const globalRoot = execFileSync(npmExecutable, ['root', '-g'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    candidates.push(path.join(globalRoot, 'firebase-tools', 'lib'));
-  } catch {
-    // The explicit candidates below produce the useful error message.
-  }
-
-  for (const directory of candidates) {
-    try {
-      require.resolve(path.join(directory, 'auth.js'));
-      return directory;
-    } catch {
-      // Continue to the next supported global npm location.
-    }
-  }
-  throw new Error('Firebase CLI was not found. Install it and run `firebase login`.');
-}
-
-function firebaseCliAuthorizedUser(options = {}) {
-  const directory = options.directory || firebaseToolsLibDirectory();
-  // eslint-disable-next-line import/no-dynamic-require, global-require
-  const auth = options.auth || require(path.join(directory, 'auth.js'));
-  // eslint-disable-next-line import/no-dynamic-require, global-require
-  const api = options.api || require(path.join(directory, 'api.js'));
-  const account = auth.getGlobalDefaultAccount();
-  if (!account?.tokens?.refresh_token) {
-    throw new Error('Run `firebase login` before running Admin maintenance scripts.');
-  }
-  return {
-    type: 'authorized_user',
-    client_id: api.clientId(),
-    client_secret: api.clientSecret(),
-    refresh_token: account.tokens.refresh_token,
-  };
-}
-
-let temporaryAdcDirectory = null;
-
-function cleanupTemporaryAdc() {
-  if (!temporaryAdcDirectory) return;
-  try {
-    fs.rmSync(temporaryAdcDirectory, { recursive: true, force: true });
-  } finally {
-    temporaryAdcDirectory = null;
-  }
-}
-
-function ensureApplicationDefaultCredentials() {
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    return process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  }
-  temporaryAdcDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-adc-'));
-  const credentialPath = path.join(temporaryAdcDirectory, 'application_default_credentials.json');
-  fs.writeFileSync(
-    credentialPath,
-    `${JSON.stringify({
-      ...firebaseCliAuthorizedUser(),
-      quota_project_id: DEFAULT_PROJECT_ID,
-    })}\n`,
-    { encoding: 'utf8', mode: 0o600 }
-  );
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialPath;
-  process.once('exit', cleanupTemporaryAdc);
-  return credentialPath;
+  return { access_token: accessToken, expires_in: 3000 };
 }
 
 function initializeAdmin(admin, options = {}) {
   if (admin.apps.length) return admin.app();
-  const configuration = {
-    projectId: options.projectId || DEFAULT_PROJECT_ID,
-    ...(options.storageBucket ? { storageBucket: options.storageBucket } : {}),
-  };
-  ensureApplicationDefaultCredentials();
-  configuration.credential = admin.credential.applicationDefault();
-  return admin.initializeApp(configuration);
+  const projectId = options.projectId || DEFAULT_PROJECT_ID;
+  const storageBucket = options.storageBucket || DEFAULT_MEDIA_BUCKET;
+  return admin.initializeApp({
+    projectId,
+    storageBucket,
+    credential: options.credential || admin.credential.applicationDefault(),
+  });
 }
 
 function googleAuthOptions(options = {}) {
-  const configuration = { projectId: options.projectId || DEFAULT_PROJECT_ID };
-  configuration.keyFilename = ensureApplicationDefaultCredentials();
-  return configuration;
+  return {
+    projectId: options.projectId || DEFAULT_PROJECT_ID,
+  };
 }
 
 module.exports = {
-  firebaseCliAuthorizedUser,
-  firebaseToolsLibDirectory,
+  DEFAULT_MEDIA_BUCKET,
+  DEFAULT_PROJECT_ID,
+  gcloudAccessToken,
   googleAuthOptions,
   initializeAdmin,
-  ensureApplicationDefaultCredentials,
 };

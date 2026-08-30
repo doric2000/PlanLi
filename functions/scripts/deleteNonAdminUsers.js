@@ -4,9 +4,10 @@ const admin = require('firebase-admin');
 
 const { deleteAccountInternal } = require('../deletionService');
 const { initializeAdmin } = require('./localCredentials');
+const { ACTIVE_MEDIA_BUCKET, assertActiveMediaBucket } = require('./storageTargetPolicy');
 
 const CONFIRMATION = 'DELETE_NON_ADMIN_USERS';
-const DEFAULT_MEDIA_BUCKET = 'planli-f0b12-media-eu';
+const DEFAULT_MEDIA_BUCKET = ACTIVE_MEDIA_BUCKET;
 
 function valueAfter(argv, flag) {
   const index = argv.indexOf(flag);
@@ -21,7 +22,9 @@ function parseArgs(argv) {
     confirmation: valueAfter(argv, '--confirm'),
     expectedFingerprint: valueAfter(argv, '--fingerprint'),
     keepEmail,
-    mediaBucket: valueAfter(argv, '--media-bucket') || DEFAULT_MEDIA_BUCKET,
+    mediaBucket: assertActiveMediaBucket(
+      valueAfter(argv, '--media-bucket') || DEFAULT_MEDIA_BUCKET
+    ),
   };
 }
 

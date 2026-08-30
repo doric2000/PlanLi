@@ -60,6 +60,8 @@ export const adminStyles = StyleSheet.create({
   loading: { paddingVertical: 50 },
   empty: { minHeight: 150, paddingVertical: 38, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: muted, fontFamily: fontFamilies.regular, textAlign: 'center', lineHeight: 21 },
+  primaryButton: { minHeight: 46, borderRadius: 12, backgroundColor: primary, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  primaryButtonText: { color: '#FFFFFF', fontFamily: fontFamilies.bold, textAlign: 'center' },
   error: { borderRadius: 13, backgroundColor: '#FEF3F2', borderWidth: 1, borderColor: '#FECDCA', padding: 13, marginBottom: 12 },
   errorText: { color: '#B42318', fontFamily: fontFamilies.semiBold, textAlign: 'right', lineHeight: 20 },
   inlineError: { color: '#B42318', fontFamily: fontFamilies.semiBold, textAlign: 'right', marginTop: 10 },

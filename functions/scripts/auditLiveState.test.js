@@ -53,10 +53,33 @@ test('live audit rejects rating fields at every object depth', () => {
   );
 });
 
+test('live audit detects embedded credentials without returning their values or document ids', () => {
+  const report = {
+    forbiddenFields: [],
+    credentialReferences: [],
+    usReferences: [],
+    euReferenceCount: 0,
+  };
+
+  inspectValue({
+    imageUrl: ['https://maps.googleapis.com/maps/api/place/photo?key=', 'AI',
+      'za', 'A'.repeat(35)].join(''),
+  }, 'countries/IL/destinations/dst_private', '', report);
+
+  assert.deepEqual(report.credentialReferences, [{
+    collectionShape: 'countries/*/destinations',
+    field: 'imageUrl',
+    kind: 'gcp-api-key',
+  }]);
+  assert.equal(JSON.stringify(report).includes('dst_private'), false);
+  assert.equal(JSON.stringify(report).includes('AIza'), false);
+});
+
 test('an empty prelaunch database does not fail only because no public media sample exists', () => {
   const report = {
     firestore: {
       unexpectedRoots: [], forbiddenFields: [], usReferences: [], invalidCountryIds: [],
+      credentialReferences: [],
       invalidCityIds: [], duplicateCountryCodes: [], duplicateCityProviders: [],
       invalidFavorites: [], orphanFavorites: [], counterMismatches: [],
       invalidTaxonomyContent: [], profileCountMismatch: null,
@@ -70,6 +93,30 @@ test('an empty prelaunch database does not fail only because no public media sam
   };
 
   assert.deepEqual(failures(report), []);
+});
+
+test('live audit blocks launch while a deployed function still binds a legacy Maps key', () => {
+  const report = {
+    firestore: {
+      unexpectedRoots: [], forbiddenFields: [], usReferences: [], invalidCountryIds: [],
+      credentialReferences: [], invalidCityIds: [], duplicateCountryCodes: [],
+      duplicateCityProviders: [], invalidFavorites: [], orphanFavorites: [],
+      counterMismatches: [], invalidTaxonomyContent: [], profileCountMismatch: null,
+    },
+    storage: {
+      missingInEurope: [], checksumMismatches: [],
+      eu: { location: 'EUROPE-WEST1', uniformAccess: true, corsOrigins: [], stagingLifecycle: true },
+    },
+    functions: {
+      count: 1,
+      unexpected: [],
+      legacyMapsSecretBindings: [{ name: 'searchPlaces', secrets: ['GOOGLE_PLACES_NEW_KEY'] }],
+    },
+    publicMediaRead: { pathFound: false, status: null },
+  };
+  assert.deepEqual(failures(report), [
+    { name: 'searchPlaces', secrets: ['GOOGLE_PLACES_NEW_KEY'] },
+  ]);
 });
 
 test('location audit covers active recommendations, route stops and deleted source links', () => {

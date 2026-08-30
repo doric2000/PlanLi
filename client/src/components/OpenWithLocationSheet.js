@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Alert, Linking, Modal, Pressable, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,6 +7,7 @@ import AppText from './AppText';
 import NavigationChevron from './NavigationChevron';
 import { colors, openWithLocationSheetStyles as styles } from '../styles';
 import { buildGoogleMapsUrl, buildWazeUrl } from '../utils/placeNavigation';
+import { openSafeExternalUrl } from '../utils/safeExternalUrl';
 
 export default function OpenWithLocationSheet({
   visible,
@@ -19,15 +20,15 @@ export default function OpenWithLocationSheet({
     const googleUrl = buildGoogleMapsUrl({ place, destination });
     const wazeUrl = buildWazeUrl(place);
     return [
-      googleUrl ? { id: 'google', label: 'Google Maps', icon: 'map-outline', url: googleUrl } : null,
-      wazeUrl ? { id: 'waze', label: 'Waze', icon: 'navigate-outline', url: wazeUrl } : null,
+      googleUrl ? { id: 'google', label: 'Google Maps', icon: 'map-outline', policy: 'googleMaps', url: googleUrl } : null,
+      wazeUrl ? { id: 'waze', label: 'Waze', icon: 'navigate-outline', policy: 'waze', url: wazeUrl } : null,
     ].filter(Boolean);
   }, [destination, place]);
 
   const openProvider = async (option) => {
     onClose?.();
     try {
-      await Linking.openURL(option.url);
+      await openSafeExternalUrl(option.url, option.policy);
     } catch {
       Alert.alert(
         'לא ניתן לפתוח את המפה',

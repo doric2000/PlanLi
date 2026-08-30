@@ -1,0 +1,16 @@
+{
+  "project_info": {
+    "project_number": "123456789",
+    "project_id": "planli-staging-f0b12"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123456789:android:stagingfixture",
+        "android_client_info": {
+          "package_name": "com.planli.planlitravels"
+        }
+      }
+    }
+  ]
+}

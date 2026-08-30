@@ -1,10 +1,15 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, initializeAuth, getReactNativePersistence } from "firebase/auth";
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  browserSessionPersistence,
+  getReactNativePersistence,
+  initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 import { Platform } from 'react-native'; // <--- Import Platform
+import { initializePlanLiAppCheck } from './appCheck';
+import { secureAuthStorage } from './secureAuthStorage';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyDummyKey",
@@ -19,17 +24,16 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const appCheck = initializePlanLiAppCheck(app, firebaseConfig);
 
 // Initialize Auth conditionally
 let auth;
 
 if (Platform.OS === 'web') {
-  // 1. On Web: Use standard getAuth() (uses browser memory/cookies)
-  auth = getAuth(app);
+  auth = initializeAuth(app, { persistence: browserSessionPersistence });
 } else {
-  // 2. On Mobile: Use AsyncStorage for persistence
   auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+    persistence: getReactNativePersistence(secureAuthStorage)
   });
 }
 
@@ -45,4 +49,4 @@ const storage = getStorage(
 );
 const cloudFunctions = getFunctions(app, "europe-west1");
 
-export { app, auth, cloudFunctions, db, mediaBucket, storage };
+export { app, appCheck, auth, cloudFunctions, db, mediaBucket, storage };

@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "projectId": "planli-f0b12",
+  "channel": {
+    "type": "email",
+    "displayName": "PlanLi production security alerts",
+    "description": "Primary production security notification channel. Verification is required before launch.",
+    "labels": {
+      "email_address": "doric9@gmail.com"
+    },
+    "userLabels": {
+      "managed_by": "planli",
+      "planli_control": "security-alert-email"
+    },
+    "enabled": true
+  },
+  "policies": [
+    {
+      "displayName": "PlanLi Critical - Service account key created",
+      "documentation": {
+        "content": "A user-managed service-account key was created. Follow docs/security-incident-response.md immediately and identify the exact key before containment.",
+        "mimeType": "text/markdown"
+      },
+      "userLabels": {
+        "managed_by": "planli",
+        "planli_control": "service-account-key-created"
+      },
+      "conditions": [
+        {
+          "displayName": "CreateServiceAccountKey audit log",
+          "conditionMatchedLog": {
+            "filter": "logName=\"projects/planli-f0b12/logs/cloudaudit.googleapis.com%2Factivity\" AND protoPayload.methodName=\"google.iam.admin.v1.CreateServiceAccountKey\""
+          }
+        }
+      ],
+      "combiner": "OR",
+      "enabled": true,
+      "alertStrategy": {
+        "notificationRateLimit": {
+          "period": "300s"
+        },
+        "autoClose": "86400s",
+        "notificationPrompts": [
+          "OPENED"
+        ]
+      },
+      "severity": "CRITICAL"
+    },
+    {
+      "displayName": "PlanLi Error - Sustained Cloud Run 5xx",
+      "documentation": {
+        "content": "A Cloud Run service exceeded five 5xx responses per five-minute window for ten minutes. Identify the service/revision, inspect recent deploys and follow docs/security-incident-response.md.",
+        "mimeType": "text/markdown"
+      },
+      "userLabels": {
+        "managed_by": "planli",
+        "planli_control": "cloud-run-sustained-5xx"
+      },
+      "conditions": [
+        {
+          "displayName": "Per-service 5xx sum greater than 5",
+          "conditionThreshold": {
+            "filter": "resource.type=\"cloud_run_revision\" AND metric.type=\"run.googleapis.com/request_count\" AND metric.label.\"response_code_class\"=\"5xx\"",
+            "aggregations": [
+              {
+                "alignmentPeriod": "300s",
+                "perSeriesAligner": "ALIGN_DELTA",
+                "crossSeriesReducer": "REDUCE_SUM",
+                "groupByFields": [
+                  "resource.label.service_name"
+                ]
+              }
+            ],
+            "comparison": "COMPARISON_GT",
+            "thresholdValue": 5,
+            "duration": "600s",
+            "trigger": {
+              "count": 1
+            },
+            "evaluationMissingData": "EVALUATION_MISSING_DATA_INACTIVE"
+          }
+        }
+      ],
+      "combiner": "OR",
+      "enabled": true,
+      "alertStrategy": {
+        "notificationPrompts": [
+          "OPENED",
+          "CLOSED"
+        ],
+        "autoClose": "86400s"
+      },
+      "severity": "ERROR"
+    },
+    {
+      "displayName": "PlanLi Error - App Check rejected request",
+      "documentation": {
+        "content": "A callable received a missing or invalid App Check attestation. This policy must remain disabled until the same rollout enables App Check enforcement.",
+        "mimeType": "text/markdown"
+      },
+      "userLabels": {
+        "managed_by": "planli",
+        "planli_control": "app-check-rejected"
+      },
+      "conditions": [
+        {
+          "displayName": "Callable App Check missing or invalid",
+          "conditionMatchedLog": {
+            "filter": "labels.\"firebase-log-type\"=\"callable-request-verification\" AND (jsonPayload.verifications.app=(\"MISSING\" OR \"INVALID\") OR jsonPayload.verifications.appCheck=(\"MISSING\" OR \"INVALID\"))"
+          }
+        }
+      ],
+      "combiner": "OR",
+      "enabled": false,
+      "alertStrategy": {
+        "notificationRateLimit": {
+          "period": "300s"
+        },
+        "autoClose": "1800s",
+        "notificationPrompts": [
+          "OPENED"
+        ]
+      },
+      "severity": "ERROR"
+    },
+    {
+      "displayName": "PlanLi Warning - Location provider returned 429",
+      "documentation": {
+        "content": "A structured location_request log reported providerStatus 429. Inspect quota use and abuse signals before increasing a quota.",
+        "mimeType": "text/markdown"
+      },
+      "userLabels": {
+        "managed_by": "planli",
+        "planli_control": "location-provider-429"
+      },
+      "conditions": [
+        {
+          "displayName": "Structured provider 429",
+          "conditionMatchedLog": {
+            "filter": "resource.type=\"cloud_run_revision\" AND jsonPayload.message=\"location_request\" AND jsonPayload.providerStatus=429"
+          }
+        }
+      ],
+      "combiner": "OR",
+      "enabled": true,
+      "alertStrategy": {
+        "notificationRateLimit": {
+          "period": "300s"
+        },
+        "autoClose": "1800s",
+        "notificationPrompts": [
+          "OPENED"
+        ]
+      },
+      "severity": "WARNING"
+    }
+  ]
+}

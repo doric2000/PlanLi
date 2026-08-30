@@ -33,6 +33,7 @@ const { saveTrip } = require('./tripService');
 const { listMyPendingContent } = require('./myPendingContentService');
 const { completeAccountSetup, registerUser, updateProfile } = require('./profileService');
 const { authorizeRequest } = require('./authPolicy');
+const { normalizeCallableInput } = require('./callableInputSecurity');
 const {
   getPersonalizedRecommendations,
   getPersonalizedRoutes,
@@ -44,7 +45,10 @@ const {
 } = require('./personalizationService');
 const { getMapRecommendations } = require('./mapRecommendationsService');
 const { setDiscoveryRegion } = require('./discoveryRegionPreferenceService');
-const { consumePublicReadBudget } = require('./publicRateLimitService');
+const {
+  consumePublicReadBudget,
+  issueGuestSession: issueGuestSessionHandler,
+} = require('./publicRateLimitService');
 const {
   PROVIDER_CALLABLE_LIMITS,
   PROVIDER_ROUTE_CALLABLE_LIMITS,
@@ -55,9 +59,11 @@ const {
 } = require('./placesGatewayService');
 const { cleanupExpiredRuntimeDocuments } = require('./runtimeCleanupService');
 const {
+  SCHEDULED_CACHE_REFRESH_LIMITS,
   hasUsableDestinationCache,
   refreshDestinationCaches,
   refreshExactPlaceCaches,
+  scheduledCacheRequestContext,
 } = require('./destinationCacheService');
 const {
   cleanupOrphanFavorites,
@@ -109,8 +115,8 @@ const {
   listHeldContent,
   listModerationAudit,
   listModerationCases,
-  moderateContent,
   processExpiredModerationSuspensions,
+  reconcileStaleModerationDecisions,
   resolveModerationCase,
   saveAdminSavedView,
   searchAdminResources,
@@ -139,6 +145,8 @@ const {
   setDestinationHebrewName,
   startDestinationReassignment,
   previewDestinationReassignment,
+  reconcileDestinationApprovalReleases,
+  reconcileDestinationPublicationFences,
   updateDestinationPolicy,
   setDestinationUploadedImage,
 } = require('./destinationAdminService');
@@ -171,15 +179,13 @@ const {
   reasonForLocationError,
 } = require('./locationDiagnostics');
 
-admin.initializeApp();
+admin.initializeApp({ storageBucket: 'planli-f0b12-media-eu' });
 
 const REGION = 'europe-west1';
 const CORE_SERVICE_ACCOUNT =
   'planli-core-functions@planli-f0b12.iam.gserviceaccount.com';
 const MEDIA_SERVICE_ACCOUNT =
   'planli-media-functions@planli-f0b12.iam.gserviceaccount.com';
-const googleMapsKey = defineSecret('GOOGLE_MAPS_KEY');
-const googlePlacesNewKey = defineSecret('GOOGLE_PLACES_NEW_KEY');
 const restCountriesKey = defineSecret('REST_COUNTRIES_KEY');
 const openWeatherKey = defineSecret('OPENWEATHER_API_KEY');
 const unsplashAccessKey = defineSecret('UNSPLASH_ACCESS_KEY');
@@ -195,12 +201,6 @@ const appleSignInKeyId = defineString('APPLE_SIGN_IN_KEY_ID', {
 const appleSignInClientId = defineString('APPLE_SIGN_IN_CLIENT_ID', {
   description: 'Native Sign in with Apple client ID.',
   default: 'com.planli.planlitravels',
-});
-const placesProvider = defineString('PLACES_PROVIDER', {
-  description: 'Google Places provider adapter: new or legacy.',
-  // Places API (New) passed the live fixture gate. Set PLACES_PROVIDER=legacy
-  // in the deployment environment for an immediate provider rollback.
-  default: 'new',
 });
 const mediaStorageBucket = defineString('MEDIA_STORAGE_BUCKET', {
   description: 'European Cloud Storage bucket used for PlanLi media.',
@@ -227,14 +227,26 @@ function callable(options, handler) {
   } = options;
   if (!access) throw new Error('Every callable must declare an access level.');
   return onCall({ ...CALLABLE_OPTIONS, ...firebaseOptions }, async (request) => {
+    const safeRequest = { ...request, data: normalizeCallableInput(request.data) };
     const accessContext = await authorizeRequest({
       admin,
-      auth: request.auth,
+      auth: safeRequest.auth,
       access,
       allowSuspended,
     });
-    return handler(request, accessContext);
+    return handler(safeRequest, accessContext);
   });
+}
+
+async function consumePublicRequest(request, action) {
+  const result = await consumePublicReadBudget({
+    admin,
+    auth: request.auth,
+    request,
+    action,
+    key: publicRateLimitKey.value(),
+  });
+  return result.data;
 }
 
 function firestoreWritten(document, handler, options = {}) {
@@ -283,7 +295,7 @@ async function locationSave(stage, request, task) {
 exports.saveRecommendation = callable(
   {
     access: 'active',
-    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    secrets: [restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 120,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -291,9 +303,6 @@ exports.saveRecommendation = callable(
     admin,
     auth: request.auth,
     data: { ...(request.data || {}), incidentId },
-    mapsKey: googleMapsKey.value(),
-    newPlacesKey: googlePlacesNewKey.value(),
-    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     mediaBucket: mediaStorageBucket.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
@@ -328,7 +337,7 @@ exports.publishRecommendationDraft = callable(
     access: 'active',
     timeoutSeconds: 300,
     memory: '1GiB',
-    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    secrets: [restCountriesKey, publicRateLimitKey],
     ...PROVIDER_CALLABLE_LIMITS,
   },
   (request) => locationSave('recommendation_draft_publish', request, (incidentId) => (
@@ -336,9 +345,6 @@ exports.publishRecommendationDraft = callable(
       admin,
       auth: request.auth,
       data: { ...(request.data || {}), incidentId },
-      mapsKey: googleMapsKey.value(),
-      newPlacesKey: googlePlacesNewKey.value(),
-      placesProvider: placesProvider.value(),
       restCountriesKey: restCountriesKey.value(),
       mediaBucket: mediaStorageBucket.value(),
       providerRateLimitKey: publicRateLimitKey.value(),
@@ -349,7 +355,7 @@ exports.publishRecommendationDraft = callable(
 exports.resolveRecommendationDestination = callable(
   {
     access: 'active',
-    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    secrets: [restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 60,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -357,9 +363,6 @@ exports.resolveRecommendationDestination = callable(
     admin,
     auth: request.auth,
     data: request.data,
-    mapsKey: googleMapsKey.value(),
-    newPlacesKey: googlePlacesNewKey.value(),
-    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
@@ -368,7 +371,7 @@ exports.resolveRecommendationDestination = callable(
 exports.searchPlaces = callable(
   {
     access: 'active',
-    secrets: [googleMapsKey, googlePlacesNewKey, publicRateLimitKey],
+    secrets: [publicRateLimitKey],
     timeoutSeconds: 30,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -376,9 +379,6 @@ exports.searchPlaces = callable(
     admin,
     auth: request.auth,
     data: request.data,
-    mapsKey: googleMapsKey.value(),
-    newPlacesKey: googlePlacesNewKey.value(),
-    placesProvider: placesProvider.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   })
 );
@@ -386,7 +386,7 @@ exports.searchPlaces = callable(
 exports.resolvePlaceSelection = callable(
   {
     access: 'active',
-    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    secrets: [restCountriesKey, publicRateLimitKey],
     timeoutSeconds: 60,
     ...PROVIDER_CALLABLE_LIMITS,
   },
@@ -406,9 +406,6 @@ exports.resolvePlaceSelection = callable(
       admin,
       auth: request.auth,
       data: request.data,
-      mapsKey: googleMapsKey.value(),
-      newPlacesKey: googlePlacesNewKey.value(),
-      placesProvider: placesProvider.value(),
       providerRateLimitKey: publicRateLimitKey.value(),
     });
     const destination = await resolveRecommendationDestination({
@@ -424,9 +421,6 @@ exports.resolvePlaceSelection = callable(
           : 'exact_place',
         confirmedHebrewName: request.data?.confirmedHebrewName || null,
       },
-      mapsKey: googleMapsKey.value(),
-      newPlacesKey: googlePlacesNewKey.value(),
-      placesProvider: placesProvider.value(),
       restCountriesKey: restCountriesKey.value(),
       providerRateLimitKey: publicRateLimitKey.value(),
     });
@@ -455,7 +449,7 @@ exports.saveRoute = callable(
     access: 'active',
     timeoutSeconds: 300,
     memory: '1GiB',
-    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    secrets: [restCountriesKey, publicRateLimitKey],
     ...PROVIDER_ROUTE_CALLABLE_LIMITS,
   },
   (request) => locationSave('route_save', request, (incidentId) => saveRoute({
@@ -463,9 +457,6 @@ exports.saveRoute = callable(
     auth: request.auth,
     data: { ...(request.data || {}), incidentId },
     mediaBucket: mediaStorageBucket.value(),
-    mapsKey: googleMapsKey.value(),
-    newPlacesKey: googlePlacesNewKey.value(),
-    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   }))
@@ -499,7 +490,7 @@ exports.publishRouteDraft = callable(
     access: 'active',
     timeoutSeconds: 300,
     memory: '1GiB',
-    secrets: [googleMapsKey, googlePlacesNewKey, restCountriesKey, publicRateLimitKey],
+    secrets: [restCountriesKey, publicRateLimitKey],
     ...PROVIDER_ROUTE_CALLABLE_LIMITS,
   },
   (request) => locationSave('route_draft_publish', request, (incidentId) => publishRouteDraft({
@@ -507,9 +498,6 @@ exports.publishRouteDraft = callable(
     auth: request.auth,
     data: { ...(request.data || {}), incidentId },
     mediaBucket: mediaStorageBucket.value(),
-    mapsKey: googleMapsKey.value(),
-    newPlacesKey: googlePlacesNewKey.value(),
-    placesProvider: placesProvider.value(),
     restCountriesKey: restCountriesKey.value(),
     providerRateLimitKey: publicRateLimitKey.value(),
   }))
@@ -520,17 +508,27 @@ exports.listMyPendingContent = callable(
   (request) => listMyPendingContent({ admin, auth: request.auth, data: request.data })
 );
 
+exports.issueGuestSession = callable(
+  {
+    access: 'public',
+    ...PUBLIC_READ_OPTIONS,
+    timeoutSeconds: 20,
+    enforceAppCheck: ENFORCE_APP_CHECK,
+    consumeAppCheckToken: true,
+    secrets: [publicRateLimitKey],
+  },
+  (request) => issueGuestSessionHandler({
+    admin,
+    request,
+    key: publicRateLimitKey.value(),
+  })
+);
+
 exports.loadRouteDetails = callable(
   { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
-    await consumePublicReadBudget({
-      admin,
-      auth: request.auth,
-      request,
-      action: 'routeDetails',
-      key: publicRateLimitKey.value(),
-    });
-    return loadRouteDetails({ admin, data: request.data });
+    const data = await consumePublicRequest(request, 'routeDetails');
+    return loadRouteDetails({ admin, data });
   }
 );
 
@@ -604,40 +602,40 @@ exports.updateProfile = callable(
 exports.getPersonalizedRecommendations = callable(
   { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
-    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
-    return getPersonalizedRecommendations({ admin, auth: request.auth, data: request.data });
+    const data = await consumePublicRequest(request, 'discovery');
+    return getPersonalizedRecommendations({ admin, auth: request.auth, data });
   }
 );
 
 exports.getMapRecommendations = callable(
   { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, memory: '512MiB', secrets: [publicRateLimitKey] },
   async (request) => {
-    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'map', key: publicRateLimitKey.value() });
-    return getMapRecommendations({ admin, auth: request.auth, data: request.data });
+    const data = await consumePublicRequest(request, 'map');
+    return getMapRecommendations({ admin, auth: request.auth, data });
   }
 );
 
 exports.getPersonalizedRoutes = callable(
   { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [publicRateLimitKey] },
   async (request) => {
-    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
-    return getPersonalizedRoutes({ admin, auth: request.auth, data: request.data });
+    const data = await consumePublicRequest(request, 'discovery');
+    return getPersonalizedRoutes({ admin, auth: request.auth, data });
   }
 );
 
 exports.getDestinationOverview = callable(
   { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 30, secrets: [openWeatherKey, publicRateLimitKey] },
   async (request) => {
-    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'destinationOverview', key: publicRateLimitKey.value() });
-    return getDestinationOverview({ admin, data: request.data, weatherApiKey: openWeatherKey.value() });
+    const data = await consumePublicRequest(request, 'destinationOverview');
+    return getDestinationOverview({ admin, data, weatherApiKey: openWeatherKey.value() });
   }
 );
 
 exports.searchDestinations = callable(
   { access: 'public', ...PUBLIC_READ_OPTIONS, timeoutSeconds: 20, secrets: [publicRateLimitKey] },
   async (request) => {
-    await consumePublicReadBudget({ admin, auth: request.auth, request, action: 'discovery', key: publicRateLimitKey.value() });
-    return searchDestinations({ admin, data: request.data });
+    const data = await consumePublicRequest(request, 'discovery');
+    return searchDestinations({ admin, data });
   }
 );
 
@@ -758,10 +756,6 @@ exports.updateAdminAttachedPlace = callable(
 );
 exports.listHeldContent = callable({ access: 'signedIn' }, (request) =>
   listHeldContent({ admin, auth: request.auth, data: request.data })
-);
-exports.moderateContent = callable(
-  { access: 'signedIn', timeoutSeconds: 300, memory: '1GiB', serviceAccount: MEDIA_SERVICE_ACCOUNT },
-  (request) => moderateContent({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() })
 );
 exports.listAdminUsers = callable({ access: 'signedIn', serviceAccount: MEDIA_SERVICE_ACCOUNT }, (request) =>
   listAdminUsers({ admin, auth: request.auth, data: request.data })
@@ -1148,6 +1142,42 @@ exports.auditDestinationQualityScheduled = onSchedule(
   }
 );
 
+exports.reconcileStaleModerationDecisionsScheduled = onSchedule(
+  {
+    schedule: 'every 15 minutes',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 120,
+    memory: '256MiB',
+    serviceAccount: MEDIA_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const result = await reconcileStaleModerationDecisions({ admin, limit: 100 });
+    console.log('Stale moderation decision reconciliation complete.', result);
+  }
+);
+
+exports.reconcileDestinationApprovalReleasesScheduled = onSchedule(
+  {
+    schedule: 'every 15 minutes',
+    timeZone: 'Asia/Jerusalem',
+    region: REGION,
+    timeoutSeconds: 300,
+    memory: '512MiB',
+    serviceAccount: CORE_SERVICE_ACCOUNT,
+  },
+  async () => {
+    const [releaseResult, fenceResult] = await Promise.all([
+      reconcileDestinationApprovalReleases({ admin, limit: 50 }),
+      reconcileDestinationPublicationFences({ admin, limit: 50 }),
+    ]);
+    console.log('Destination publication reconciliation complete.', {
+      releases: releaseResult,
+      fences: fenceResult,
+    });
+  }
+);
+
 exports.repairDestinationImagesScheduled = onSchedule(
   {
     schedule: 'every hour',
@@ -1179,22 +1209,23 @@ exports.refreshDestinationCachesScheduled = onSchedule(
     region: REGION,
     timeoutSeconds: 300,
     serviceAccount: CORE_SERVICE_ACCOUNT,
-    secrets: [googleMapsKey, googlePlacesNewKey],
   },
   async () => {
-    const [destinations, exactPlaces] = await Promise.all([
-      refreshDestinationCaches({
-        admin, mapsKey: googleMapsKey.value(), newPlacesKey: googlePlacesNewKey.value(),
-        placesProvider: placesProvider.value(), limit: 50,
-      }),
-      refreshExactPlaceCaches({
-        admin, mapsKey: googleMapsKey.value(), newPlacesKey: googlePlacesNewKey.value(),
-        placesProvider: placesProvider.value(), limit: 50,
-      }),
-    ]);
+    // Run these queues sequentially and below the 30/minute provider ceiling.
+    // The shared context counts every provider attempt, including retries.
+    const requestContext = scheduledCacheRequestContext();
+    const destinations = await refreshDestinationCaches({
+      admin, limit: SCHEDULED_CACHE_REFRESH_LIMITS.destinations,
+      requestContext,
+    });
+    const exactPlaces = await refreshExactPlaceCaches({
+      admin, limit: SCHEDULED_CACHE_REFRESH_LIMITS.exactPlaces,
+      requestContext,
+    });
     console.log('Google cache refresh complete.', {
       destinations: destinations.length,
       exactPlaces: exactPlaces.length,
+      providerRequests: requestContext.count,
     });
   }
 );

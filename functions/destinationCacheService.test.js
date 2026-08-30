@@ -2,11 +2,66 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  SCHEDULED_CACHE_REFRESH_LIMITS,
   cachedProviderLoad,
   hasUsableDestinationCache,
   millis,
   refreshDestinationCaches,
+  scheduledCacheRequestContext,
 } = require('./destinationCacheService');
+
+test('scheduled refresh reserves most of the zero-cost daily quota for interactive users', () => {
+  const records = SCHEDULED_CACHE_REFRESH_LIMITS.destinations
+    + SCHEDULED_CACHE_REFRESH_LIMITS.exactPlaces;
+  assert.equal(records * 2, SCHEDULED_CACHE_REFRESH_LIMITS.maximumDetailsRequests);
+  assert.ok(SCHEDULED_CACHE_REFRESH_LIMITS.maximumDetailsRequests < 30);
+  assert.ok(SCHEDULED_CACHE_REFRESH_LIMITS.maximumDetailsRequests < 150);
+  assert.deepEqual(scheduledCacheRequestContext(), {
+    count: 0,
+    maximum: SCHEDULED_CACHE_REFRESH_LIMITS.maximumDetailsRequests,
+  });
+});
+
+test('scheduled refresh request context is a hard provider-attempt ceiling, including retries', async () => {
+  let providerCalls = 0;
+  let update = null;
+  const document = {
+    data: () => ({
+      countryId: 'IL',
+      status: 'active',
+      providerRefs: { googlePlaceId: 'place-1' },
+      googleCache: { names: { he: 'חיפה', en: 'Haifa' } },
+    }),
+    ref: {
+      path: 'countries/IL/destinations/haifa',
+      update: async (value) => { update = value; },
+    },
+  };
+  const query = {
+    where() { return this; }, orderBy() { return this; }, limit() { return this; },
+    get: async () => ({ docs: [document] }),
+  };
+  const firestore = () => ({ collectionGroup: () => query });
+  firestore.FieldValue = { serverTimestamp: () => 'NOW' };
+  const requestContext = { count: 0, maximum: 1 };
+
+  const result = await refreshDestinationCaches({
+    admin: { firestore },
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
+    requestContext,
+    fetchImpl: async () => {
+      providerCalls += 1;
+      return { ok: false, status: 500, json: async () => ({}) };
+    },
+    now: new Date('2026-08-30T00:00:00Z'),
+  });
+
+  assert.equal(providerCalls, 1);
+  assert.equal(requestContext.count, 1);
+  assert.equal(result[0].state, 'retry');
+  assert.ok(update['googleCache.refreshAfter'] instanceof Date);
+});
 
 test('v3 destinations require complete bilingual Google data before expiry', () => {
   const now = Date.parse('2026-08-12T00:00:00Z');
@@ -96,8 +151,8 @@ test('destination refresh cannot restore a Latin value into the Hebrew name fiel
 
   const result = await refreshDestinationCaches({
     admin,
-    newPlacesKey: 'new-key',
-    placesProvider: 'new',
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
     fetchImpl: async (url) => ({
       ok: true,
       status: 200,
@@ -146,8 +201,8 @@ test('destination refresh preserves an admin Hebrew name', async () => {
 
   await refreshDestinationCaches({
     admin,
-    newPlacesKey: 'new-key',
-    placesProvider: 'new',
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
     fetchImpl: async (url) => ({
       ok: true,
       status: 200,

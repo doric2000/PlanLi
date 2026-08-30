@@ -1,5 +1,8 @@
 const RUNTIME_COLLECTIONS = Object.freeze([
   'system/runtime/publicRateLimits',
+  'system/runtime/guestSessions',
+  'system/runtime/guestSessionNonces',
+  'system/runtime/guestSessionIssuance',
   'system/runtime/providerRateLimits',
   'system/runtime/providerGlobalLimits',
   'system/runtime/placeSearchSessions',

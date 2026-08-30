@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>PROJECT_ID</key><string>planli-staging-f0b12</string>
+  <key>GCM_SENDER_ID</key><string>123456789</string>
+  <key>GOOGLE_APP_ID</key><string>1:123456789:ios:stagingfixture</string>
+  <key>BUNDLE_ID</key><string>com.planli.planlitravels</string>
+</dict>
+</plist>

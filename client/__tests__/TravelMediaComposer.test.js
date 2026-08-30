@@ -6,6 +6,15 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import TravelMediaComposer, { isTravelMediaSwipe } from '../src/components/TravelMediaComposer';
 
 jest.mock('expo-image-manipulator', () => ({ manipulateAsync: jest.fn() }));
+jest.mock('expo-media-library', () => ({
+  MediaType: { photo: 'photo' },
+  SortBy: { creationTime: 'creationTime' },
+  getAlbumsAsync: jest.fn(async () => []),
+  getAssetInfoAsync: jest.fn(async () => null),
+  getAssetsAsync: jest.fn(async () => ({ assets: [], endCursor: null, hasNextPage: false })),
+  presentPermissionsPickerAsync: jest.fn(async () => undefined),
+  requestPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true })),
+}));
 jest.mock('../src/components/CachedImage', () => {
   const { View } = require('react-native');
   return (props) => <View {...props} />;

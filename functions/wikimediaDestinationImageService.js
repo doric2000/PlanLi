@@ -1,4 +1,5 @@
 const { normalize } = require('./destinationIdentityService');
+const { safeExactHttpsUrl } = require('./externalUrlPolicy');
 
 const PROVIDER_NAME = 'Wikimedia Commons';
 const PROVIDER_URL = 'https://commons.wikimedia.org/';
@@ -29,14 +30,6 @@ let lastMediaWikiRequestAt = 0;
 
 function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function isHttpsUrl(value) {
-  try {
-    return new URL(value).protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 function decodeHtml(value) {
@@ -166,7 +159,9 @@ function imageText(page, imageInfo) {
 
 function usableCommonsCandidate(page, aliases) {
   const imageInfo = page?.imageinfo?.[0];
-  if (!imageInfo || !isHttpsUrl(imageInfo.thumburl) || !isHttpsUrl(imageInfo.descriptionurl)) return false;
+  if (!imageInfo ||
+    !safeExactHttpsUrl(imageInfo.thumburl, 'upload.wikimedia.org') ||
+    !safeExactHttpsUrl(imageInfo.descriptionurl, 'commons.wikimedia.org')) return false;
   if (!/\.(?:jpe?g|webp)$/i.test(String(page.title || ''))) return false;
   if (Number(imageInfo.width || 0) < MIN_IMAGE_WIDTH || Number(imageInfo.height || 0) < MIN_IMAGE_HEIGHT) return false;
   const ratio = Number(imageInfo.width || 0) / Number(imageInfo.height || 1);
@@ -235,8 +230,9 @@ async function imageVariant(fileTitle, width, fetchImpl = global.fetch) {
   const page = Object.values(payload?.query?.pages || {})[0];
   const imageInfo = page?.imageinfo?.[0];
   const url = imageInfo?.thumburl || imageInfo?.url;
-  return isHttpsUrl(url) ? {
-    url,
+  const safeUrl = safeExactHttpsUrl(url, 'upload.wikimedia.org');
+  return safeUrl ? {
+    url: safeUrl,
     width: Number(imageInfo.thumbwidth || imageInfo.width || 0),
     height: Number(imageInfo.thumbheight || imageInfo.height || 0),
     imageInfo,
@@ -248,18 +244,20 @@ function variantFromImageInfo(imageInfo, width) {
   const originalHeight = Number(imageInfo?.height || 0);
   if (!originalWidth || !originalHeight) return null;
   const targetWidth = Math.min(width, originalWidth);
-  if (targetWidth === originalWidth && isHttpsUrl(imageInfo?.url)) {
-    return { url: imageInfo.url, width: originalWidth, height: originalHeight };
+  const originalUrl = safeExactHttpsUrl(imageInfo?.url, 'upload.wikimedia.org');
+  const thumbnailUrl = safeExactHttpsUrl(imageInfo?.thumburl, 'upload.wikimedia.org');
+  if (targetWidth === originalWidth && originalUrl) {
+    return { url: originalUrl, width: originalWidth, height: originalHeight };
   }
-  if (!isHttpsUrl(imageInfo?.thumburl) || !isHttpsUrl(imageInfo?.url)) return null;
-  const url = new URL(imageInfo.thumburl);
+  if (!thumbnailUrl || !originalUrl) return null;
+  const url = new URL(thumbnailUrl);
   const segments = url.pathname.split('/');
   const fileName = segments.at(-1);
   if (/^\d+px-/.test(fileName || '')) {
     segments[segments.length - 1] = fileName.replace(/^\d+px-/, `${targetWidth}px-`);
     url.pathname = segments.join('/');
   } else {
-    const original = new URL(imageInfo.url);
+    const original = new URL(originalUrl);
     const originalSegments = original.pathname.split('/');
     const commonsIndex = originalSegments.indexOf('commons');
     const originalFileName = originalSegments.at(-1);
@@ -282,7 +280,7 @@ function variantFromImageInfo(imageInfo, width) {
 
 function buildAttribution(imageInfo) {
   const creator = metadataValue(imageInfo, 'Artist') || 'Wikimedia Commons contributor';
-  const photoUrl = imageInfo.descriptionurl;
+  const photoUrl = safeExactHttpsUrl(imageInfo.descriptionurl, 'commons.wikimedia.org');
   return {
     photographerName: creator,
     photographerProfileUrl: photoUrl,
@@ -290,7 +288,7 @@ function buildAttribution(imageInfo) {
     providerName: PROVIDER_NAME,
     providerUrl: PROVIDER_URL,
     licenseName: metadataValue(imageInfo, 'LicenseShortName') || null,
-    licenseUrl: metadataValue(imageInfo, 'LicenseUrl') || null,
+    licenseUrl: safeExactHttpsUrl(metadataValue(imageInfo, 'LicenseUrl'), 'creativecommons.org'),
   };
 }
 

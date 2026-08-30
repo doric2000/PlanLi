@@ -26,6 +26,7 @@ function candidate(id, overrides = {}) {
   return {
     id,
     status: 'active',
+    publicationGate: { destinationApprovalVerified: true },
     title: `Place ${id}`,
     categoryId: 'food',
     category: 'אוכל',

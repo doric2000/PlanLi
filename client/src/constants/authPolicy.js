@@ -16,9 +16,16 @@ export const CAPABILITIES = Object.freeze({
   PREFERENCES_SETUP: 'preferencesSetup',
 });
 
-export const PROFILE_DETAILS_VERSION = 1;
-export const TERMS_VERSION = '2026-08-15-community-safety';
-export const PRIVACY_VERSION = '2026-08-18-beta-observability';
+export {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} from './legalPolicy.generated';
+import {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} from './legalPolicy.generated';
 
 export const AUTH_REASONS = Object.freeze({
   SIGN_IN_REQUIRED: 'SIGN_IN_REQUIRED',

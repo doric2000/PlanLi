@@ -48,6 +48,25 @@ test('Unsplash selection preserves ixid and required attribution links', () => {
   assert.match(image.attribution.photoUrl, /utm_medium=referral/);
 });
 
+test('Unsplash selection rejects deceptive media and attribution origins', () => {
+  const base = {
+    id: 'photo-1',
+    width: 2400,
+    height: 1600,
+    urls: { raw: 'https://images.unsplash.com/photo-1' },
+    links: { html: 'https://unsplash.com/photos/photo-1' },
+    user: { name: 'Traveler', links: { html: 'https://unsplash.com/@traveler' } },
+  };
+  assert.equal(buildUnsplashDestinationImage({
+    ...base,
+    urls: { raw: 'https://images.unsplash.com.evil.example/photo-1' },
+  }, 'Paris France'), null);
+  assert.equal(buildUnsplashDestinationImage({
+    ...base,
+    user: { ...base.user, links: { html: 'https://unsplash.com@evil.example/@traveler' } },
+  }, 'Paris France'), null);
+});
+
 test('recommendation fallback skips inactive and missing media, then applies stable ranking', () => {
   const image = selectMostPopularRecommendationImage([
     { id: 'a', data: { status: 'active', stats: { likeCount: 100 }, createdAt: '2026-01-01' } },

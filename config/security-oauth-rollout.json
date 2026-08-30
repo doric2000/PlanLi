@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "projectId": "planli-f0b12",
+  "region": "europe-west1",
+  "serviceAccount": "planli-core-functions@planli-f0b12.iam.gserviceaccount.com",
+  "requiredServices": [
+    "geocoding-backend.googleapis.com",
+    "places.googleapis.com"
+  ],
+  "requiredRole": "roles/serviceusage.serviceUsageConsumer",
+  "functionTargets": [
+    "publishRecommendationDraft",
+    "publishRouteDraft",
+    "refreshDestinationCachesScheduled",
+    "resolvePlaceSelection",
+    "resolveRecommendationDestination",
+    "saveRecommendation",
+    "saveRoute",
+    "searchPlaces"
+  ],
+  "legacySecrets": [
+    "GOOGLE_MAPS_KEY",
+    "GOOGLE_PLACES_NEW_KEY"
+  ],
+  "apiKeyDeletionTargets": [
+    {
+      "uid": "1c999850-18fb-4b03-984e-ce90ed6dd872",
+      "displayName": "Places API"
+    },
+    {
+      "uid": "9fea6ed1-d5d6-4c9b-8205-48dd0da9cefb",
+      "displayName": "PlanLi Places API New server"
+    }
+  ]
+}

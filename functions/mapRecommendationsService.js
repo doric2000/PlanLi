@@ -5,6 +5,7 @@ const { matchesDestinations, parseSearchQuery, searchRelevance } = require('./di
 const { cleanDestinations, cleanFilters, matchesFilters } = require('./personalizationService');
 const { normalizeMapCoordinates } = require('./mapLocation');
 const { cleanDiscoveryRegionId } = require('./discoveryRegions');
+const { contentIsPubliclyVisible } = require('./destinationReferencePolicy');
 
 const MIN_MAP_ZOOM = 4;
 const MAX_MAP_RESULTS = 200;
@@ -118,7 +119,7 @@ function filterMapCandidates(candidates, { viewport, parsedQuery, destinations, 
   const byId = new Map();
   candidates.forEach((item) => {
     if (!item?.id || byId.has(item.id)) return;
-    if (item.status !== 'active') return;
+    if (!contentIsPubliclyVisible(item)) return;
     if (discoveryRegionId && item.discoveryRegionId !== discoveryRegionId) return;
     if (!viewportContains(viewport, item.mapLocation || item?.place?.coordinates)) return;
     if (!matchesDestinations(item, destinations)) return;
@@ -133,7 +134,9 @@ function filterMapCandidates(candidates, { viewport, parsedQuery, destinations, 
 async function queryMapCandidates(db, viewport, discoveryRegionId = null) {
   const bounds = getViewportGeohashBounds(viewport);
   const snapshots = await Promise.all(bounds.map(([start, end]) => {
-    let query = db.collection('recommendations').where('status', '==', 'active');
+    let query = db.collection('recommendations')
+      .where('status', '==', 'active')
+      .where('publicationGate.destinationApprovalVerified', '==', true);
     if (discoveryRegionId) query = query.where('discoveryRegionId', '==', discoveryRegionId);
     return query
     .orderBy('mapLocation.geohash')

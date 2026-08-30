@@ -1,4 +1,4 @@
-const { exactPlaceGoogleCacheFor, googleCacheFor } = require('./legacyPlacesAdapter');
+const { exactPlaceGoogleCacheFor, googleCacheFor } = require('./placesCache');
 const { fetchBilingualPlace } = require('./placesProviderAdapter');
 const { buildMapLocation } = require('./mapLocation');
 const {
@@ -8,6 +8,15 @@ const {
 } = require('./destinationLocalizationService');
 
 const CACHE_RETRY_DELAY_MS = 6 * 60 * 60 * 1000;
+const SCHEDULED_CACHE_REFRESH_LIMITS = Object.freeze({
+  destinations: 5,
+  exactPlaces: 5,
+  maximumDetailsRequests: 20,
+});
+
+function scheduledCacheRequestContext() {
+  return { count: 0, maximum: SCHEDULED_CACHE_REFRESH_LIMITS.maximumDetailsRequests };
+}
 
 function millis(value) {
   if (!value) return 0;
@@ -37,10 +46,10 @@ function retryAt(now) {
 
 async function refreshDestinationCaches({
   admin,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
   fetchImpl = global.fetch,
+  requestContext,
   limit = 25,
   now = new Date(),
 }) {
@@ -59,7 +68,7 @@ async function refreshDestinationCaches({
     try {
       const bilingual = await cachedProviderLoad(providerLoads, placeId, () =>
         fetchBilingualPlace({
-          provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
+          provider: 'new', placeId, fetchImpl, requestContext, accessTokenProvider, projectId,
         })
       );
       if (bilingual.he.placeId !== placeId || bilingual.en.placeId !== placeId) {
@@ -121,10 +130,10 @@ function exactPlaceFromBilingual(bilingual, fetchedAt) {
 
 async function refreshExactPlaceCaches({
   admin,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
   fetchImpl = global.fetch,
+  requestContext,
   limit = 50,
   now = new Date(),
 }) {
@@ -161,7 +170,7 @@ async function refreshExactPlaceCaches({
     try {
       const bilingual = await cachedProviderLoad(providerLoads, placeId, () =>
         fetchBilingualPlace({
-          provider: placesProvider, placeId, mapsKey, newPlacesKey, fetchImpl,
+          provider: 'new', placeId, fetchImpl, requestContext, accessTokenProvider, projectId,
         })
       );
       const place = exactPlaceFromBilingual(bilingual, now);
@@ -183,9 +192,11 @@ async function refreshExactPlaceCaches({
 }
 
 module.exports = {
+  SCHEDULED_CACHE_REFRESH_LIMITS,
   cachedProviderLoad,
   hasUsableDestinationCache,
   millis,
   refreshDestinationCaches,
   refreshExactPlaceCaches,
+  scheduledCacheRequestContext,
 };

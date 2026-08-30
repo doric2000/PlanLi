@@ -16,9 +16,11 @@ const AUTH_REASONS = Object.freeze({
   ACCOUNT_DELETING: 'ACCOUNT_DELETING',
 });
 
-const PROFILE_DETAILS_VERSION = 1;
-const TERMS_VERSION = '2026-08-15-community-safety';
-const PRIVACY_VERSION = '2026-08-18-beta-observability';
+const {
+  PRIVACY_VERSION,
+  PROFILE_DETAILS_VERSION,
+  TERMS_VERSION,
+} = require('./legalPolicy.generated');
 
 function policyError(code, message, reason) {
   return new HttpsError(code, message, { reason });

@@ -99,4 +99,36 @@ describe('PhotoAttribution', () => {
     );
     expect(screen.toJSON()).toBeNull();
   });
+
+  it('suppresses hostile legacy provider links while preserving local credit text', () => {
+    const screen = render(<PhotoAttribution image={{
+      ...wikimediaImage,
+      attribution: {
+        ...wikimediaImage.attribution,
+        photoUrl: 'https://commons.wikimedia.org.evil.example/wiki/File:Traveler.jpg',
+        licenseUrl: 'javascript:alert(1)',
+      },
+    }} />);
+
+    fireEvent.press(screen.getByLabelText('פרטי קרדיט לתמונה מאת Traveler'));
+
+    expect(screen.getByText('Traveler')).toBeTruthy();
+    expect(screen.queryByLabelText('פתיחת עמוד המקור')).toBeNull();
+    expect(screen.queryByLabelText('פתיחת פרטי הרישיון')).toBeNull();
+    expect(Linking.openURL).not.toHaveBeenCalled();
+  });
+
+  it('renders an unsafe Unsplash profile as non-clickable credit', () => {
+    const screen = render(<PhotoAttribution image={{
+      ...unsplashImage,
+      attribution: {
+        ...unsplashImage.attribution,
+        photographerProfileUrl: 'https://unsplash.com@evil.example/@traveler',
+      },
+    }} />);
+
+    expect(screen.getByText('Annie Spratt')).toBeTruthy();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(Linking.openURL).not.toHaveBeenCalled();
+  });
 });

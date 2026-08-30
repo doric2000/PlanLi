@@ -1,5 +1,6 @@
 /* eslint-disable no-await-in-loop, no-console */
 const admin = require('firebase-admin');
+const { fetchWithGoogleMapsOAuth } = require('../placesProviderAdapter');
 
 const { initializeAdmin } = require('./localCredentials');
 const { CANDIDATES, REGIONAL_COUNTS } = require('../data/canonicalDestinationCandidates');
@@ -7,7 +8,6 @@ const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
-  REVIEWED_PROVIDER_IDENTITY_IDS,
   buildMatchProfile,
   providerGeometryPolicy,
   providerIdentityNameMatches,
@@ -22,6 +22,12 @@ const SEARCH_FIELDS = [
   'places.id', 'places.displayName', 'places.formattedAddress', 'places.location',
   'places.viewport', 'places.types', 'places.addressComponents',
 ].join(',');
+const REVIEWED_PROVIDER_IDENTITY_IDS = new Set([
+  'it-amalfi-coast',
+  'gr-meteora',
+  'is-south-iceland',
+  'no-norwegian-fjords',
+]);
 
 // Google Text Search has a small set of stable tourism destinations whose
 // obvious query is either ambiguous (island vs. city) or has no country
@@ -131,13 +137,16 @@ function mergePolicy(candidate) {
   } : candidate;
 }
 
-async function enrichCandidate(candidate, { apiKey, fetchImpl = global.fetch }) {
+async function enrichCandidate(candidate, {
+  accessTokenProvider,
+  projectId = DEFAULT_PROJECT_ID,
+  fetchImpl = global.fetch,
+}) {
   const override = ENRICHMENT_OVERRIDES[candidate.id] || {};
-  const response = await fetchImpl(SEARCH_URL, {
+  const response = await fetchWithGoogleMapsOAuth(SEARCH_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': SEARCH_FIELDS,
     },
     body: JSON.stringify({
@@ -148,7 +157,7 @@ async function enrichCandidate(candidate, { apiKey, fetchImpl = global.fetch }) 
         strictTypeFiltering: true,
       } : {}),
     }),
-  });
+  }, { fetchImpl, accessTokenProvider, projectId });
   if (!response.ok) throw new Error(`Google search failed (${response.status}) for ${candidate.id}.`);
   const body = await response.json();
   const providerResults = body.places || [];
@@ -267,7 +276,7 @@ async function run({
   projectId = DEFAULT_PROJECT_ID,
   adminImpl = admin,
   fetchImpl = global.fetch,
-  apiKey = process.env.GOOGLE_PLACES_NEW_KEY,
+  accessTokenProvider,
 } = {}) {
   if (apply && !enrich) throw new Error('--apply requires --enrich; unresolved candidates are never written.');
   if (!/^[a-z0-9-]+$/.test(projectId)) throw new Error('Project ID is invalid.');
@@ -279,10 +288,9 @@ async function run({
     console.log(JSON.stringify(result, null, 2));
     return result;
   }
-  if (!apiKey) throw new Error('GOOGLE_PLACES_NEW_KEY is required with --enrich.');
   const enriched = [];
   for (const candidate of entries) {
-    enriched.push(await enrichCandidate(candidate, { apiKey, fetchImpl }));
+    enriched.push(await enrichCandidate(candidate, { accessTokenProvider, projectId, fetchImpl }));
   }
   entries = enriched;
   result.materializedAudit = auditEntries(entries, { requireProviderIdentity: true });

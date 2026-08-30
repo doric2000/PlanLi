@@ -7,6 +7,7 @@ import AppFontProvider from "./src/components/AppFontProvider";
 
 import VerifyEmailScreen from "./src/features/auth/screens/VerifyEmailScreen";
 import CompleteAccountScreen from "./src/features/auth/screens/CompleteAccountScreen";
+import TotpEnrollmentScreen from "./src/features/auth/screens/TotpEnrollmentScreen";
 import LegalDocumentScreen from "./src/features/legal/screens/LegalDocumentScreen";
 import ChangeNameScreen from "./src/features/profile/screens/ChangeNameScreen";
 import ChangePasswordScreen from "./src/features/profile/screens/ChangePasswordScreen";
@@ -57,6 +58,7 @@ const NotificationSettingsAuthed = withRequireAuth(NotificationSettingsScreen);
 const SettingsAuthed = withRequireAuth(SettingsScreen);
 const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
 const ChangePasswordAuthed = withRequireAuth(ChangePasswordScreen);
+const TotpEnrollmentAuthed = withRequireAuth(TotpEnrollmentScreen);
 const BlockedUsersAuthed = withRequireAuth(BlockedUsersScreen);
 const AdminPanelAuthed = withRequireAuth(AdminPanelScreen);
 const AddRecommendationActive = withRequireAuth(AddRecommendationScreen, CAPABILITIES.ACTIVE);
@@ -139,6 +141,7 @@ export default function App() {
 					<Stack.Screen name='BlockedUsers' component={BlockedUsersAuthed} />
 					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} />
 					<Stack.Screen name="ChangePassword" component={ChangePasswordAuthed} /> 
+					<Stack.Screen name="TotpEnrollment" component={TotpEnrollmentAuthed} />
 					<Stack.Screen name='UserProfile' component={UserProfileScreen} />
 					<Stack.Screen name="AdminPanel" component={AdminPanelAuthed} />
 					<Stack.Screen name='Route' component={RoutesScreen} />

@@ -5,6 +5,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const CACHE_CONTROL = 'public,max-age=300,must-revalidate';
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_PIXELS = 40 * 1000 * 1000;
+const MAX_SOURCE_DIMENSION = 16_384;
 const MEDIA_MINUTE_MAXIMUM = 40;
 const MEDIA_DAY_MAXIMUM = 40;
 const MEDIA_DAY_BYTES_MAXIMUM = 250 * 1024 * 1024;
@@ -42,6 +43,24 @@ const MEDIA_PRESETS = Object.freeze({
 
 function assert(condition, code, message) {
   if (!condition) throw new HttpsError(code, message);
+}
+
+function assertJpegSourceInfo(sourceInfo) {
+  assert(
+    sourceInfo?.format === 'jpeg',
+    'invalid-argument',
+    'Staging media bytes must be JPEG.'
+  );
+  const width = Number(sourceInfo.width);
+  const height = Number(sourceInfo.height);
+  assert(
+    Number.isSafeInteger(width) && Number.isSafeInteger(height) &&
+      width > 0 && height > 0 &&
+      width <= MAX_SOURCE_DIMENSION && height <= MAX_SOURCE_DIMENSION &&
+      width * height <= MAX_SOURCE_PIXELS,
+    'invalid-argument',
+    'Staging image dimensions are too large.'
+  );
 }
 
 function normalizeBucketName(value) {
@@ -297,13 +316,7 @@ async function prepareMedia({
   } catch {
     throw new HttpsError('invalid-argument', 'Staging image is invalid.');
   }
-  assert(
-    sourceInfo.width &&
-      sourceInfo.height &&
-      sourceInfo.width * sourceInfo.height <= MAX_SOURCE_PIXELS,
-    'invalid-argument',
-    'Staging image dimensions are too large.'
-  );
+  assertJpegSourceInfo(sourceInfo);
 
   const assetId = crypto.randomUUID();
   const variants = ['large', 'feed', 'thumb'];
@@ -458,12 +471,14 @@ module.exports = {
   CACHE_CONTROL,
   FINAL_PATH_PATTERN,
   MAX_SOURCE_BYTES,
+  MAX_SOURCE_DIMENSION,
   MAX_SOURCE_PIXELS,
   MEDIA_DAY_BYTES_MAXIMUM,
   MEDIA_DAY_MAXIMUM,
   MEDIA_MINUTE_MAXIMUM,
   MEDIA_PRESETS,
   STAGING_PATH_PATTERN,
+  assertJpegSourceInfo,
   buildDownloadUrl,
   cleanupPreparedMedia,
   collectCanonicalMediaAssets,

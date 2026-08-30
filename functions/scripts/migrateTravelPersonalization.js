@@ -64,7 +64,7 @@ function parseArgs(argv) {
       ? parsedLimit
       : Number.POSITIVE_INFINITY,
     stateDir: path.resolve(valueAfter(argv, '--state-dir') || DEFAULT_STATE_DIR),
-    mapsKey: process.env.GOOGLE_MAPS_KEY || '',
+    projectId: process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || 'planli-f0b12',
     restCountriesKey: process.env.REST_COUNTRIES_KEY || '',
   };
 }
@@ -571,13 +571,12 @@ async function readRouteStops(routeDocument) {
 }
 
 async function resolveMigrationRouteStops(stops, options) {
-  if (!options.mapsKey) return { stops, catalogDestinations: [], resolved: false };
   const placeIds = Array.from(new Set(stops.map((entry) => entry.data?.place?.placeId).filter(Boolean)));
   if (!placeIds.length) return { stops, catalogDestinations: [], resolved: false };
   const destinations = await mapWithConcurrency(placeIds, 5, (placeId) => resolveGoogleDestination({
     admin,
     placeId,
-    mapsKey: options.mapsKey,
+    projectId: options.projectId,
     restCountriesKey: options.restCountriesKey,
   }));
   const byPlaceId = new Map(placeIds.map((placeId, index) => [placeId, destinations[index]]));

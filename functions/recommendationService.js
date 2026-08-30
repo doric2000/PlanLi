@@ -40,6 +40,7 @@ const { buildSearchIndex } = require('./discoverySearch');
 const { compactDestinationSearchText } = require('./destinationCatalogService');
 const {
   destinationAcceptsNewReferences,
+  destinationIsOperational,
   isDestinationReassigning,
 } = require('./destinationReferencePolicy');
 const {
@@ -64,14 +65,15 @@ const { buildMapLocation, normalizeMapCoordinates } = require('./mapLocation');
 const { consumeProviderBudget } = require('./providerRateLimitService');
 const {
   exactPlaceGoogleCacheFor,
-} = require('./legacyPlacesAdapter');
+} = require('./placesCache');
 const {
   fetchBilingualPlace,
   fetchNewContainingPlaces,
-  fetchWithProviderPolicy,
+  fetchWithGoogleMapsOAuth,
   fetchLocalityPlaceId,
   localityAliases,
   providerRequestContext,
+  selectedProvider,
 } = require('./placesProviderAdapter');
 const {
   buildDestinationV3,
@@ -133,6 +135,16 @@ function normalizeDestinationForUse(destination, countryCode) {
     namingPolicyVersion: DESTINATION_NAMING_POLICY_VERSION,
     repairCityName: destination?.repairCityName === true || normalized.changed,
   };
+}
+
+function destinationMatchesResolvedPolicy(current, resolved, countryId = '') {
+  if (destinationAcceptsNewReferences(current, countryId)) return true;
+  return destinationIsOperational(current) &&
+    resolved?.canonicalPolicy?.approved !== true &&
+    resolved?.canonicalPolicy?.provisional === true &&
+    current?.canonicalPolicy?.approved !== true &&
+    current?.canonicalPolicy?.provisional === true &&
+    current?.canonicalPolicy?.registryId === resolved?.canonicalPolicy?.registryId;
 }
 
 function destinationHebrewWritePatch(cityData) {
@@ -516,90 +528,40 @@ function localityNamesForPlace(place) {
   ].map((value) => String(value || '').trim()).filter(Boolean))).slice(0, 5);
 }
 
-async function fetchGooglePlace(placeId, mapsKey) {
-  const normalizedPlaceId = cleanString(placeId, {
-    field: 'placeId',
-    min: 3,
-    max: 300,
-  });
-  assert(mapsKey, 'failed-precondition', 'GOOGLE_MAPS_KEY is not configured.');
-
-  const fields =
-    'name,formatted_address,address_components,geometry,place_id,url';
-  const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-  url.searchParams.set('place_id', normalizedPlaceId);
-  url.searchParams.set('fields', fields);
-  url.searchParams.set('language', 'he');
-  url.searchParams.set('key', mapsKey);
-
-  const response = await fetch(url);
-  assert(response.ok, 'unavailable', 'Google Places request failed.');
-  const payload = await response.json();
-  assert(payload?.status === 'OK' && payload?.result, 'invalid-argument', 'Invalid Google place.');
-  return payload.result;
-}
-
-async function fetchGoogleCityPlace(parsedPlace, mapsKey) {
-  const queryText = [parsedPlace.cityName, parsedPlace.countryName]
-    .filter(Boolean)
-    .join(' ');
-  if (!queryText) return null;
-
-  try {
-    const url = new URL(
-      'https://maps.googleapis.com/maps/api/place/autocomplete/json'
-    );
-    url.searchParams.set('input', queryText);
-    url.searchParams.set('types', '(cities)');
-    url.searchParams.set('language', 'he');
-    url.searchParams.set('key', mapsKey);
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const payload = await response.json();
-    const cityPlaceId = payload?.predictions?.[0]?.place_id;
-    if (!cityPlaceId) return null;
-    return fetchGooglePlace(cityPlaceId, mapsKey);
-  } catch {
-    return null;
-  }
-}
-
 async function fetchGoogleReverseCountry(
   coordinates,
-  mapsKey,
   {
     fetchImpl = global.fetch,
     timeoutMs = GOOGLE_REVERSE_GEOCODE_TIMEOUT_MS,
     requestContext,
+    accessTokenProvider,
+    projectId,
   } = {}
 ) {
   const normalized = normalizeCoordinates(coordinates);
-  if (!normalized || !mapsKey || typeof fetchImpl !== 'function') return null;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  if (!normalized || typeof fetchImpl !== 'function') return null;
   try {
-    const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-    url.searchParams.set('latlng', `${normalized.lat},${normalized.lng}`);
-    url.searchParams.set('result_type', 'country');
-    url.searchParams.set('language', 'he');
-    url.searchParams.set('key', mapsKey);
-    const response = requestContext
-      ? await fetchWithProviderPolicy(url, {}, { fetchImpl, requestContext, timeoutMs })
-      : await fetchImpl(url, { signal: controller.signal });
+    const url = new URL(`https://geocode.googleapis.com/v4/geocode/location/${encodeURIComponent(`${normalized.lat},${normalized.lng}`)}`);
+    url.searchParams.set('types', 'country');
+    url.searchParams.set('languageCode', 'he');
+    const response = await fetchWithGoogleMapsOAuth(url, {
+      headers: {
+        'X-Goog-FieldMask': 'results.addressComponents',
+      },
+    }, { fetchImpl, requestContext, timeoutMs, accessTokenProvider, projectId });
     if (!response.ok) return null;
     const payload = await response.json();
-    if (payload?.status !== 'OK' || !Array.isArray(payload.results)) return null;
+    if (!Array.isArray(payload.results)) return null;
 
     for (const result of payload.results) {
-      const country = result?.address_components?.find((component) =>
+      const country = result?.addressComponents?.find((component) =>
         component.types?.includes('country')
       );
-      const countryCode = String(country?.short_name || '').toUpperCase();
+      const countryCode = String(country?.shortText || '').toUpperCase();
       if (/^[A-Z]{2}$/.test(countryCode)) {
         return {
           countryCode,
-          countryName: country.long_name || getHebrewCountryName(countryCode),
+          countryName: country.longText || getHebrewCountryName(countryCode),
           resolutionSource: 'google-reverse',
         };
       }
@@ -608,8 +570,6 @@ async function fetchGoogleReverseCountry(
   } catch (error) {
     if (String(error?.code || '').replace(/^functions\//, '') === 'resource-exhausted') throw error;
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -627,8 +587,9 @@ function countryFromParsedPlace(parsed, resolutionSource) {
 async function resolvePlaceCountry({
   parsedPlace,
   parsedCity,
-  mapsKey,
   requestContext,
+  accessTokenProvider,
+  projectId,
 }) {
   const coordinates =
     normalizeCoordinates(parsedPlace?.coordinates) ||
@@ -671,7 +632,11 @@ async function resolvePlaceCountry({
     return localCountry;
   }
 
-  const reverseCountry = await fetchGoogleReverseCountry(coordinates, mapsKey, { requestContext });
+  const reverseCountry = await fetchGoogleReverseCountry(coordinates, {
+    requestContext,
+    accessTokenProvider,
+    projectId,
+  });
   if (reverseCountry && !(reverseCountry.countryCode === 'IL' && localCountry?.countryCode === 'PS')) {
     return reverseCountry;
   }
@@ -950,7 +915,7 @@ async function resolveExistingDestination(db, destinationRef) {
         { reason: 'destination_reassignment_in_progress', retryable: true }
       );
     }
-    if (destinationAcceptsNewReferences(cityData)) {
+    if (destinationAcceptsNewReferences(cityData, countryId)) {
       if (!countrySnap.exists || countrySnap.data()?.status !== 'active') {
         destinationUnavailable('Destination is not active.');
       }
@@ -982,9 +947,9 @@ async function resolveRecommendationDestinationRef({
   admin,
   auth,
   destinationRef,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
   resolveExisting = resolveExistingDestination,
@@ -999,8 +964,8 @@ async function resolveRecommendationDestinationRef({
     auth,
     placeId: cleaned.providerPlaceId,
     resolvedPlaceToken: cleaned.resolvedPlaceToken || null,
-    mapsKey,
-    newPlacesKey,
+    accessTokenProvider,
+    projectId,
     placesProvider,
     restCountriesKey,
     providerRateLimitKey,
@@ -1328,17 +1293,18 @@ async function resolveGoogleDestination({
   placeId,
   resolvedPlace,
   countryOverrideId,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   selectionIntent = 'exact_place',
   confirmedHebrewName = null,
   requestContext = providerRequestContext(),
 }) {
+  selectedProvider(placesProvider);
   const db = admin.firestore();
   const bilingual = resolvedPlace || await fetchBilingualPlace({
-    provider: placesProvider, placeId, mapsKey, newPlacesKey,
+    provider: placesProvider, placeId, accessTokenProvider, projectId,
     requestContext,
   });
   const parsed = parseResolvedBilingualPlace(bilingual);
@@ -1354,8 +1320,9 @@ async function resolveGoogleDestination({
   const preliminaryCountry = await resolvePlaceCountry({
     parsedPlace: parsed,
     parsedCity: parsed,
-    mapsKey,
     requestContext,
+    accessTokenProvider,
+    projectId,
   });
   const registryEntries = await registryEntriesForCountry(db, preliminaryCountry.countryCode);
   let canonicalMatch = matchCanonicalEntry(registryEntries, {
@@ -1383,7 +1350,8 @@ async function resolveGoogleDestination({
       try {
         const containingPlaces = await fetchNewContainingPlaces({
           placeId: parsed.placeId,
-          newPlacesKey,
+          accessTokenProvider,
+          projectId,
           requestContext,
         });
         for (const containing of containingPlaces) {
@@ -1505,7 +1473,7 @@ async function resolveGoogleDestination({
     });
     const approvedAmbiguity = existingDestination?.ambiguity?.filter((candidate) =>
       candidate.cityData?.canonicalPolicy?.approved === true &&
-      destinationAcceptsNewReferences(candidate.cityData)
+      destinationAcceptsNewReferences(candidate.cityData, candidate.countryId)
     ) || [];
     const deferAdministrativeAmbiguity = approvedAmbiguity.length &&
       preliminaryCountry.countryCode !== 'TH' &&
@@ -1534,7 +1502,7 @@ async function resolveGoogleDestination({
       existingDestination.cityData?.providerRefs?.googlePlaceId === parsed.placeId;
     const approvedExistingDestination = existingDestination && !existingDestination.ambiguity &&
       (existingDestination.cityData?.canonicalPolicy?.approved === true || explicitlySelectedLegacyDestination) &&
-      destinationAcceptsNewReferences(existingDestination.cityData);
+      destinationAcceptsNewReferences(existingDestination.cityData, existingDestination.countryId);
     const deferAdministrativeFallback = approvedExistingDestination &&
       preliminaryCountry.countryCode !== 'TH' &&
       isAdministrativeDestination(approvedExistingDestination.cityData);
@@ -1559,9 +1527,7 @@ async function resolveGoogleDestination({
       };
       return normalizeDestinationForUse(destination, preliminaryCountry.countryCode);
     }
-    const localityProviderConfigured = placesProvider === 'new'
-      ? Boolean(newPlacesKey || mapsKey)
-      : Boolean(mapsKey);
+    const localityProviderConfigured = placesProvider === 'new';
     let localityPlaceId = null;
     try {
       localityPlaceId = localityCandidates.length && localityProviderConfigured
@@ -1573,8 +1539,8 @@ async function resolveGoogleDestination({
             countryCode: selectedEn.countryCode || bilingual.he?.countryCode ||
               preliminaryCountry.countryCode,
             coordinates: selectedCoordinates,
-            mapsKey,
-            newPlacesKey,
+            accessTokenProvider,
+            projectId,
             requestContext,
           })
         : null;
@@ -1590,8 +1556,8 @@ async function resolveGoogleDestination({
       const localityBilingual = await fetchBilingualPlace({
         provider: placesProvider,
         placeId: localityPlaceId,
-        mapsKey,
-        newPlacesKey,
+        accessTokenProvider,
+        projectId,
         requestContext,
       });
       const localityEn = localityBilingual.en || {};
@@ -1842,7 +1808,7 @@ async function resolveGoogleDestination({
     cityId = canonicalCitySnapshot.id;
     cityData = canonicalCitySnapshot.data();
     assert(
-      destinationAcceptsNewReferences(cityData) &&
+      destinationIsOperational(cityData) &&
         (cityData?.canonicalPolicy?.approved === true ||
           (provisionalDestination && cityData?.canonicalPolicy?.provisional === true)) &&
         cityData?.canonicalPolicy?.registryId === canonicalEntry.id,
@@ -1858,7 +1824,7 @@ async function resolveGoogleDestination({
       .get();
     const approvedMatch = providerMatches.docs.find((document) => {
       const data = document.data() || {};
-      return destinationAcceptsNewReferences(data) &&
+      return destinationIsOperational(data) &&
         (data.canonicalPolicy?.approved === true ||
           (provisionalDestination && data.canonicalPolicy?.provisional === true)) &&
         data.canonicalPolicy?.registryId === canonicalEntry.id;
@@ -1888,7 +1854,7 @@ async function resolveGoogleDestination({
           .doc(`countries/${countryId}/destinations/${claimedDestinationId}`)
           .get();
         const claimedCity = claimedCitySnapshot.exists ? claimedCitySnapshot.data() || {} : null;
-        if (claimedCity && destinationAcceptsNewReferences(claimedCity) &&
+        if (claimedCity && destinationIsOperational(claimedCity) &&
             (claimedCity.canonicalPolicy?.approved === true ||
               (provisionalDestination && claimedCity.canonicalPolicy?.provisional === true)) &&
             claimedCity.canonicalPolicy?.registryId === canonicalEntry.id) {
@@ -1909,7 +1875,7 @@ async function resolveGoogleDestination({
     if (namedCitySnapshot.exists) {
       cityData = namedCitySnapshot.data();
       assert(
-        destinationAcceptsNewReferences(cityData),
+        destinationIsOperational(cityData),
         'failed-precondition',
         'The matching destination is not active.'
       );
@@ -2192,7 +2158,7 @@ async function materializeDestinationResolution(db, stored) {
       { reason: 'destination_reassignment_in_progress', retryable: true }
     );
   }
-  if (citySnapshot.exists && !destinationAcceptsNewReferences(cityData) &&
+  if (citySnapshot.exists && !destinationMatchesResolvedPolicy(cityData, stored.cityData, stored.countryId) &&
       cityData.mergedInto?.countryId && cityData.mergedInto?.cityId) {
     const redirected = await resolveExistingDestination(db, cityData.mergedInto);
     return {
@@ -2202,7 +2168,7 @@ async function materializeDestinationResolution(db, stored) {
     };
   }
   assert(!countrySnapshot.exists || countryData.status === 'active', 'failed-precondition', 'The matching country is not active.');
-  assert(!citySnapshot.exists || destinationAcceptsNewReferences(cityData), 'failed-precondition',
+  assert(!citySnapshot.exists || destinationMatchesResolvedPolicy(cityData, stored.cityData, stored.countryId), 'failed-precondition',
     'The matching destination is not available for new content.');
   if (claimSnapshot?.exists) {
     const claimed = claimSnapshot.data() || {};
@@ -2237,9 +2203,9 @@ async function resolveDestinationFromToken({
   admin,
   auth,
   resolvedPlaceToken,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
   countryOverrideId,
@@ -2271,8 +2237,8 @@ async function resolveDestinationFromToken({
     admin,
     resolvedPlace,
     countryOverrideId,
-    mapsKey,
-    newPlacesKey,
+    accessTokenProvider,
+    projectId,
     placesProvider,
     restCountriesKey,
     selectionIntent,
@@ -2306,9 +2272,9 @@ async function resolveSubmittedPlaceDestination({
   placeId,
   resolvedPlaceToken,
   countryOverrideId,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
   providerBudgetConsumed = false,
@@ -2320,8 +2286,8 @@ async function resolveSubmittedPlaceDestination({
   if (resolvedPlaceToken) {
     try {
       return await resolveDestinationFromToken({
-        admin, auth, resolvedPlaceToken, countryOverrideId, mapsKey,
-        newPlacesKey, placesProvider, restCountriesKey, providerRateLimitKey,
+        admin, auth, resolvedPlaceToken, countryOverrideId, accessTokenProvider,
+        projectId, placesProvider, restCountriesKey, providerRateLimitKey,
         selectionIntent, confirmedHebrewName,
       });
     } catch (error) {
@@ -2345,7 +2311,7 @@ async function resolveSubmittedPlaceDestination({
   }
   const requestContext = providerRequestContext({ incidentId: effectiveIncidentId });
   const destination = await resolveGoogleDestination({
-    admin, placeId, countryOverrideId, mapsKey, newPlacesKey, placesProvider,
+    admin, placeId, countryOverrideId, accessTokenProvider, projectId, placesProvider,
     restCountriesKey, selectionIntent, confirmedHebrewName, requestContext,
   });
   return {
@@ -2361,9 +2327,9 @@ async function resolveExactPlaceWithDestination({
   placeId,
   resolvedPlaceToken,
   destinationRef,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
   providerBudgetConsumed = false,
@@ -2419,8 +2385,8 @@ async function resolveExactPlaceWithDestination({
       admin,
       auth,
       destinationRef: cleanedDestinationRef,
-      mapsKey,
-      newPlacesKey,
+      accessTokenProvider,
+      projectId,
       placesProvider,
       restCountriesKey,
       providerRateLimitKey,
@@ -2444,8 +2410,8 @@ async function resolveExactPlaceWithDestination({
     resolvedPlace = await fetchBilingualPlace({
       provider: placesProvider,
       placeId,
-      mapsKey,
-      newPlacesKey,
+      accessTokenProvider,
+      projectId,
       requestContext,
     });
   }
@@ -2454,8 +2420,9 @@ async function resolveExactPlaceWithDestination({
   const resolvedCountry = await resolvePlaceCountry({
     parsedPlace,
     parsedCity: parsedPlace,
-    mapsKey,
     requestContext,
+    accessTokenProvider,
+    projectId,
   });
   const destinationCountryCode = String(
     destination.countryData?.code || destination.countryId || ''
@@ -2497,9 +2464,9 @@ async function resolveRecommendationDestinationInternal({
   admin,
   auth,
   data,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
 }) {
@@ -2515,8 +2482,8 @@ async function resolveRecommendationDestinationInternal({
       auth,
       placeId: data?.placeId,
       resolvedPlaceToken: data?.resolvedPlaceToken,
-      mapsKey,
-      newPlacesKey,
+      accessTokenProvider,
+      projectId,
       placesProvider,
       restCountriesKey,
       providerRateLimitKey,
@@ -2604,9 +2571,9 @@ async function saveRecommendation({
   admin,
   auth,
   data,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   mediaBucket,
   providerRateLimitKey,
@@ -2640,7 +2607,7 @@ async function saveRecommendation({
   const previousSnap = recommendationId ? await recommendationRef.get() : null;
   const previousData = previousSnap?.exists ? previousSnap.data() : null;
   const isAdmin = recommendationId
-    ? await hasActiveAdminAccess({ admin, auth })
+    ? await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true })
     : false;
 
   if (!recommendationId && publishRequestId) {
@@ -2767,8 +2734,8 @@ async function saveRecommendation({
           placeId: data?.placeId,
           resolvedPlaceToken: data?.resolvedPlaceToken,
           destinationRef: data.destinationRef,
-          mapsKey,
-          newPlacesKey,
+          accessTokenProvider,
+          projectId,
           placesProvider,
           restCountriesKey,
           providerRateLimitKey,
@@ -2778,8 +2745,8 @@ async function saveRecommendation({
           admin,
           auth,
           destinationRef: data.destinationRef,
-          mapsKey,
-          newPlacesKey,
+          accessTokenProvider,
+          projectId,
           placesProvider,
           restCountriesKey,
           providerRateLimitKey,
@@ -2822,8 +2789,8 @@ async function saveRecommendation({
       placeId: data?.placeId,
       resolvedPlaceToken: data?.resolvedPlaceToken,
       countryOverrideId: data?.countryOverrideId,
-      mapsKey,
-      newPlacesKey,
+      accessTokenProvider,
+      projectId,
       placesProvider,
       restCountriesKey,
       providerRateLimitKey,
@@ -2857,8 +2824,6 @@ async function saveRecommendation({
     subcategoryIds: content.subcategoryIds || content.tags,
     interestIds: Array.from(new Set([...(facets.interests || []), ...(content.catalogInterestIds || [])])),
   });
-  const moderationHoldReason = !textSafety.safe ? textSafety.reason : '';
-
   const transactionOutcome = await db.runTransaction(async (transaction) => {
     const current = await transaction.get(recommendationRef);
     const currentData = current.exists ? current.data() : null;
@@ -2878,7 +2843,6 @@ async function saveRecommendation({
       : null;
     const destinationChanged =
       !currentData || previousCityRef?.path !== destination.cityRef.path;
-    const contributesToDestinationStats = !currentData || (currentData.status || 'active') === 'active';
     const [countrySnapshot, citySnapshot, previousCitySnapshot, claimSnapshot] = await Promise.all([
       transaction.get(destination.countryRef),
       transaction.get(destination.cityRef),
@@ -2904,7 +2868,7 @@ async function saveRecommendation({
       ...payload.destination,
       cityName: canonicalCity.name,
     };
-    const transactionPayload = canonicalCity.name === payload.destination.cityName
+    const localizedPayload = canonicalCity.name === payload.destination.cityName
       ? payload
       : {
         ...payload,
@@ -2919,6 +2883,33 @@ async function saveRecommendation({
           interestIds: Array.from(new Set([...(facets.interests || []), ...(content.catalogInterestIds || [])])),
         }),
       };
+    const destinationPendingApproval = !destinationAcceptsNewReferences(
+      canonicalCity.destination,
+      destination.countryId
+    );
+    const moderationHoldReason = !textSafety.safe
+      ? textSafety.reason
+      : destinationPendingApproval ? 'destination_pending_approval' : '';
+    const transactionPayload = {
+      ...localizedPayload,
+      publicationGate: {
+        destinationApprovalVerified: !destinationPendingApproval,
+      },
+    };
+    const existingStatus = currentData?.status || 'active';
+    const releasesSystemHold = existingStatus === 'moderation_hold'
+      && ['taxonomy_other', 'destination_pending_approval'].includes(currentData?.moderation?.holdReason)
+      && !moderationHoldReason;
+    const nextStatus = moderationHoldReason && existingStatus === 'active'
+      ? 'moderation_hold'
+      : releasesSystemHold
+        ? 'active'
+        : existingStatus;
+    const previouslyContributesToDestinationStats = current.exists && existingStatus === 'active';
+    const nextContributesToDestinationStats = nextStatus === 'active';
+    const currentDestinationStatsDelta = destinationChanged
+      ? Number(nextContributesToDestinationStats)
+      : Number(nextContributesToDestinationStats) - Number(previouslyContributesToDestinationStats);
     if (recommendationId) {
       assert(current.exists, 'not-found', 'Recommendation no longer exists.');
       assert(
@@ -2963,22 +2954,22 @@ async function saveRecommendation({
         discoveryRegionId: discoveryRegionForCountry(destination.countryId),
         stats: {
           ...(destination.cityData.stats || {}),
-          recommendationCount: destinationChanged && contributesToDestinationStats ? 1 : 0,
+          recommendationCount: nextContributesToDestinationStats ? 1 : 0,
         },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {
       assert(
-        destinationAcceptsNewReferences(citySnapshot.data()),
+        destinationMatchesResolvedPolicy(citySnapshot.data(), destination.cityData, destination.countryId),
         'failed-precondition',
         'The selected destination is no longer active.'
       );
-      if (destinationChanged && contributesToDestinationStats) {
+      if (currentDestinationStatsDelta) {
         transaction.update(destination.cityRef, {
           'stats.recommendationCount': Math.max(
             0,
-            Number(citySnapshot.data()?.stats?.recommendationCount || 0) + 1
+            Number(citySnapshot.data()?.stats?.recommendationCount || 0) + currentDestinationStatsDelta
           ),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -3025,7 +3016,7 @@ async function saveRecommendation({
         });
       }
     }
-    if (previousCitySnapshot?.exists && contributesToDestinationStats) {
+    if (previousCitySnapshot?.exists && previouslyContributesToDestinationStats) {
       transaction.update(previousCityRef, {
         'stats.recommendationCount': Math.max(
           0,
@@ -3035,22 +3026,20 @@ async function saveRecommendation({
       });
     }
 
-    const existingStatus = currentData?.status || 'active';
-    const releasesLegacyTaxonomyHold = existingStatus === 'moderation_hold'
-      && currentData?.moderation?.holdReason === 'taxonomy_other'
-      && !moderationHoldReason;
-    const nextStatus = moderationHoldReason && existingStatus === 'active'
-      ? 'moderation_hold'
-      : releasesLegacyTaxonomyHold
-        ? 'active'
-        : existingStatus;
+    const moderation = moderationHoldReason ? {
+      holdReason: moderationHoldReason,
+      ...(moderationHoldReason === 'destination_pending_approval' ? {
+        systemGate: 'destination_pending_approval',
+        destination: { countryId: destination.countryId, cityId: destination.cityId },
+      } : {}),
+    } : null;
     if (recommendationId) {
       transaction.update(recommendationRef, {
         ...transactionPayload,
         status: nextStatus,
         ...(moderationHoldReason
-          ? { moderation: { holdReason: moderationHoldReason } }
-          : releasesLegacyTaxonomyHold
+          ? { moderation }
+          : releasesSystemHold
             ? { moderation: admin.firestore.FieldValue.delete() }
             : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -3059,14 +3048,18 @@ async function saveRecommendation({
       transaction.create(recommendationRef, {
         ...transactionPayload,
         status: moderationHoldReason ? 'moderation_hold' : 'active',
-        ...(moderationHoldReason ? { moderation: { holdReason: moderationHoldReason } } : {}),
+        ...(moderationHoldReason ? { moderation } : {}),
         ownerId: uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         stats: { likeCount: 0, commentCount: 0 },
       });
     }
-    return { replay: false, destination: transactionPayload.destination, status: nextStatus };
+    return {
+      replay: false,
+      destination: transactionPayload.destination,
+      status: current.exists ? nextStatus : (moderationHoldReason ? 'moderation_hold' : 'active'),
+    };
   });
 
   console.info('recommendation_save_timing', {

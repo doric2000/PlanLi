@@ -4,6 +4,7 @@ const {
   manifestEntry,
   parseArgs,
   rewriteBucketReferences,
+  run,
   sameChecksum,
 } = require('./migrateStorageToEurope');
 
@@ -21,6 +22,13 @@ test('rollback source restoration requires an explicit flag', () => {
   assert.equal(options.restoreSource, true);
   assert.equal(options.apply, true);
   assert.equal(options.resume, true);
+});
+
+test('storage migration refuses arbitrary bucket targets before initialization', async () => {
+  await assert.rejects(
+    run({ ...parseArgs([]), target: 'attacker-controlled-bucket' }),
+    /restricted/
+  );
 });
 
 test('Firestore bucket URL rewriting preserves document structure', () => {

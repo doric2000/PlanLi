@@ -5,9 +5,14 @@ const admin = require('firebase-admin');
 const { deleteContentInternal } = require('../deletionService');
 const { collectManagedMediaPaths } = require('../mediaCleanup');
 const { initializeAdmin } = require('./localCredentials');
+const {
+  ACTIVE_MEDIA_BUCKET,
+  assertActiveMediaBucket,
+  isApprovedPlanLiMediaBucket,
+} = require('./storageTargetPolicy');
 
 const CONFIRMATION = 'DELETE_ALL_RECOMMENDATIONS';
-const DEFAULT_MEDIA_BUCKET = 'planli-f0b12-media-eu';
+const DEFAULT_MEDIA_BUCKET = ACTIVE_MEDIA_BUCKET;
 
 function valueAfter(argv, flag) {
   const index = argv.indexOf(flag);
@@ -15,11 +20,14 @@ function valueAfter(argv, flag) {
 }
 
 function parseArgs(argv) {
+  const mediaBucket = assertActiveMediaBucket(
+    valueAfter(argv, '--media-bucket') || DEFAULT_MEDIA_BUCKET
+  );
   return {
     apply: argv.includes('--apply'),
     confirmation: valueAfter(argv, '--confirm'),
     expectedFingerprint: valueAfter(argv, '--fingerprint'),
-    mediaBucket: valueAfter(argv, '--media-bucket') || DEFAULT_MEDIA_BUCKET,
+    mediaBucket,
   };
 }
 
@@ -32,7 +40,8 @@ function legacyRecommendationObject(value, recommendationId) {
     if (!match) return null;
     const bucket = decodeURIComponent(match[1]);
     const objectPath = decodeURIComponent(match[2]);
-    if (!objectPath.startsWith(`recommendations/${recommendationId}/`)) return null;
+    if (!isApprovedPlanLiMediaBucket(bucket) ||
+        !objectPath.startsWith(`recommendations/${recommendationId}/`)) return null;
     return { bucket, objectPath };
   } catch {
     return null;

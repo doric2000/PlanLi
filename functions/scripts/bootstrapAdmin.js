@@ -1,59 +1,167 @@
 /* eslint-disable no-console */
+const crypto = require('node:crypto');
 const admin = require('firebase-admin');
 const { initializeAdmin } = require('./localCredentials');
 
-function initAdmin() {
-  initializeAdmin(admin);
+const PRODUCTION_PROJECT_ID = 'planli-f0b12';
+
+function fail(message) {
+  const error = new Error(message);
+  error.code = 'BOOTSTRAP_ADMIN_PREFLIGHT_FAILED';
+  throw error;
 }
 
 function parseArgs(argv) {
+  const options = {
+    apply: false,
+    confirmProduction: '',
+    identifier: '',
+    manifestHash: '',
+    projectId: '',
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+    if (value === '--apply') options.apply = true;
+    else if (['--confirm-production', '--identifier', '--manifest-hash', '--project'].includes(value)) {
+      const next = String(argv[index + 1] || '').trim();
+      if (!next) fail(`${value} requires a value.`);
+      index += 1;
+      if (value === '--confirm-production') options.confirmProduction = next;
+      if (value === '--identifier') options.identifier = next;
+      if (value === '--manifest-hash') options.manifestHash = next.toLowerCase();
+      if (value === '--project') options.projectId = next;
+    } else fail(`Unknown argument: ${value}`);
+  }
+  if (!options.projectId) fail('--project is required.');
+  if (!options.identifier) fail('--identifier is required.');
+  return options;
+}
+
+function enrolledTotpFactors(user) {
+  const factors = user?.multiFactor?.enrolledFactors;
+  if (!Array.isArray(factors)) return [];
+  return factors.filter((factor) => factor?.factorId === 'totp');
+}
+
+function assertEligibleUser(user) {
+  if (user.disabled === true) fail('The target user is disabled.');
+  if (user.emailVerified !== true) fail('The target user must have a verified email.');
+  if (enrolledTotpFactors(user).length === 0) {
+    fail('The target user must enroll a TOTP second factor before receiving admin access.');
+  }
+}
+
+function canonicalManifest({ projectId, user, registry }) {
+  const existingClaims = Object.fromEntries(
+    Object.entries(user.customClaims || {}).sort(([left], [right]) => left.localeCompare(right))
+  );
   return {
-    identifier: argv.find((value) => !value.startsWith('--')) || null,
-    apply: argv.includes('--apply'),
+    action: 'bootstrap_admin',
+    projectId,
+    uid: user.uid,
+    email: user.email || null,
+    prerequisites: {
+      disabled: user.disabled === true,
+      emailVerified: user.emailVerified === true,
+      totpFactors: enrolledTotpFactors(user).length,
+    },
+    before: {
+      claims: existingClaims,
+      registryActive: registry?.active === true,
+    },
+    after: {
+      claims: { ...existingClaims, admin: true },
+      registryActive: true,
+    },
   };
 }
 
-async function bootstrapAdmin({ adminApi, identifier, apply }) {
-  if (!identifier) {
-    throw new Error('Usage: node scripts/bootstrapAdmin.js <uid|email> [--apply]');
-  }
-  const isEmail = identifier.includes('@');
-  const user = isEmail
-    ? await adminApi.auth().getUserByEmail(identifier)
-    : await adminApi.auth().getUser(identifier);
+function manifestHash(manifest) {
+  return crypto.createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
+}
 
-  const existing = user.customClaims || {};
-  const nextClaims = { ...existing, admin: true };
-  if (apply) {
-    await adminApi.auth().setCustomUserClaims(user.uid, nextClaims);
-    await adminApi.firestore().doc(`system/moderation/admins/${user.uid}`).set({
+function assertApplyAuthority(options, expectedHash) {
+  if (!options.apply) return;
+  if (!/^[0-9a-f]{64}$/.test(options.manifestHash) || options.manifestHash !== expectedHash) {
+    fail('Apply requires --manifest-hash matching the current dry-run manifest.');
+  }
+  if (
+    options.projectId === PRODUCTION_PROJECT_ID
+    && options.confirmProduction !== PRODUCTION_PROJECT_ID
+  ) {
+    fail(`Production apply requires --confirm-production ${PRODUCTION_PROJECT_ID}.`);
+  }
+}
+
+async function run(options, adminSdk = admin) {
+  initializeAdmin(adminSdk, { projectId: options.projectId });
+  const auth = adminSdk.auth();
+  const firestore = adminSdk.firestore();
+  const user = options.identifier.includes('@')
+    ? await auth.getUserByEmail(options.identifier)
+    : await auth.getUser(options.identifier);
+  assertEligibleUser(user);
+
+  const registryRef = firestore.doc(`system/moderation/admins/${user.uid}`);
+  const registrySnapshot = await registryRef.get();
+  const manifest = canonicalManifest({
+    projectId: options.projectId,
+    user,
+    registry: registrySnapshot.exists ? registrySnapshot.data() : null,
+  });
+  const hash = manifestHash(manifest);
+  assertApplyAuthority(options, hash);
+
+  if (options.apply) {
+    await registryRef.set({
       uid: user.uid,
       active: true,
-      bootstrappedAt: adminApi.firestore.FieldValue.serverTimestamp(),
+      bootstrappedAt: adminSdk.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+    await auth.setCustomUserClaims(user.uid, manifest.after.claims);
+
+    const [updatedUser, updatedRegistry] = await Promise.all([
+      auth.getUser(user.uid),
+      registryRef.get(),
+    ]);
+    if (
+      updatedUser.customClaims?.admin !== true
+      || !updatedRegistry.exists
+      || updatedRegistry.data()?.active !== true
+    ) {
+      fail('Post-apply read-back did not confirm both the admin claim and active registry.');
+    }
   }
+
   return {
-    mode: apply ? 'apply' : 'dry-run',
-    uid: user.uid,
-    adminClaim: true,
-    registryActive: true,
-    tokenRefreshRequired: apply,
+    applied: options.apply,
+    changed: manifest.before.claims.admin !== true || manifest.before.registryActive !== true,
+    hash,
+    manifest,
+    tokenRefreshRequired: options.apply,
   };
 }
 
 async function main() {
-  const options = parseArgs(process.argv.slice(2));
-  initAdmin();
-  const result = await bootstrapAdmin({ adminApi: admin, ...options });
+  const result = await run(parseArgs(process.argv.slice(2)));
   console.log(JSON.stringify(result, null, 2));
-  if (!options.apply) console.log('No data changed. Re-run with --apply after reviewing the UID.');
+  if (!result.applied) {
+    console.log(`DRY RUN ONLY. Re-run with --apply --manifest-hash ${result.hash}`);
+  }
 }
 
 if (require.main === module) {
-  main().catch((e) => {
-    console.error(e);
-    process.exit(1);
+  main().catch((error) => {
+    console.error(`bootstrapAdmin failed: ${error.message}`);
+    process.exitCode = 1;
   });
 }
 
-module.exports = { bootstrapAdmin, parseArgs };
+module.exports = {
+  assertApplyAuthority,
+  assertEligibleUser,
+  canonicalManifest,
+  manifestHash,
+  parseArgs,
+  run,
+};

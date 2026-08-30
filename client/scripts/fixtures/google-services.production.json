@@ -1,0 +1,16 @@
+{
+  "project_info": {
+    "project_number": "633543026638",
+    "project_id": "planli-f0b12"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633543026638:android:4f0dc56759f6923b46ad9f",
+        "android_client_info": {
+          "package_name": "com.planli.planlitravels"
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Linking, Modal, SafeAreaView, ScrollView, TouchableOpacity, View } from "react-native";
+import { Modal, SafeAreaView, ScrollView, TouchableOpacity, View } from "react-native";
 import AppText from "../../../components/AppText";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -7,6 +7,7 @@ import CachedImage from "../../../components/CachedImage";
 import { colors, dayViewModalStyles as styles } from "../../../styles";
 import { getMediaVariantUrl } from "../../../utils/mediaAssets";
 import { buildGoogleMapsPlaceUrl } from "../utils/routeStops";
+import { openSafeExternalUrl } from "../../../utils/safeExternalUrl";
 
 const text = {
 	day: "\u05d9\u05d5\u05dd",
@@ -23,7 +24,7 @@ export default function DayViewModal({ visible, onClose, dayData, dayIndex }) {
 	const openStop = (stop) => {
 		const url = buildGoogleMapsPlaceUrl(stop);
 		if (!url) return;
-		Linking.openURL(url).catch(() => {});
+		openSafeExternalUrl(url, 'googleMaps').catch(() => {});
 	};
 
 	return (

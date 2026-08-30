@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { Linking, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import AppText from './AppText';
+import { fontFamilies } from '../styles';
 import { getDestinationCreditPolicy } from '../utils/destinationImages';
+import { getSafeExternalUrl, openSafeExternalUrl } from '../utils/safeExternalUrl';
 
-function openLink(event, url) {
+function openLink(event, url, policy) {
   event?.stopPropagation?.();
-  if (url) Linking.openURL(url).catch(() => {});
+  if (url) openSafeExternalUrl(url, policy).catch(() => {});
 }
 
 function CreditDetailsModal({ attribution, visible, onClose }) {
   if (!visible) return null;
-  const sourceUrl = attribution.photoUrl || attribution.providerUrl;
+  const sourceUrl = getSafeExternalUrl(
+    attribution.photoUrl || attribution.providerUrl,
+    'wikimediaSource'
+  );
+  const licenseUrl = getSafeExternalUrl(attribution.licenseUrl, 'creativeCommonsLicense');
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -51,17 +57,17 @@ function CreditDetailsModal({ attribution, visible, onClose }) {
                 accessibilityRole="link"
                 accessibilityLabel="פתיחת עמוד המקור"
                 style={styles.sheetAction}
-                onPress={(event) => openLink(event, sourceUrl)}
+                onPress={(event) => openLink(event, sourceUrl, 'wikimediaSource')}
               >
                 <AppText style={styles.sheetActionText}>עמוד המקור</AppText>
               </Pressable>
             ) : null}
-            {attribution.licenseUrl ? (
+            {licenseUrl ? (
               <Pressable
                 accessibilityRole="link"
                 accessibilityLabel="פתיחת פרטי הרישיון"
                 style={styles.sheetAction}
-                onPress={(event) => openLink(event, attribution.licenseUrl)}
+                onPress={(event) => openLink(event, licenseUrl, 'creativeCommonsLicense')}
               >
                 <AppText style={styles.sheetActionText}>פרטי הרישיון</AppText>
               </Pressable>
@@ -79,6 +85,10 @@ export default function PhotoAttribution({ destination, image, placement = 'card
   if (!['inline', 'details'].includes(policy.mode)) return null;
   const attribution = policy.attribution;
   const creditName = attribution.photographerName;
+  const photographerProfileUrl = getSafeExternalUrl(
+    attribution.photographerProfileUrl,
+    'unsplashProfile'
+  );
   const placementStyle = placement === 'hero'
     ? styles.heroPlacement
     : placement === 'admin'
@@ -121,14 +131,18 @@ export default function PhotoAttribution({ destination, image, placement = 'card
         style={StyleSheet.absoluteFill}
       />
       <AppText style={styles.text}>צילום: </AppText>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel={`פתיחת הפרופיל של ${creditName} ב-Unsplash`}
-        onPress={(event) => openLink(event, attribution.photographerProfileUrl)}
-        style={styles.photographerLink}
-      >
-        <AppText style={styles.link} numberOfLines={1}>{creditName}</AppText>
-      </Pressable>
+      {photographerProfileUrl ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`פתיחת הפרופיל של ${creditName} ב-Unsplash`}
+          onPress={(event) => openLink(event, photographerProfileUrl, 'unsplashProfile')}
+          style={styles.photographerLink}
+        >
+          <AppText style={styles.link} numberOfLines={1}>{creditName}</AppText>
+        </Pressable>
+      ) : (
+        <AppText style={styles.text} numberOfLines={1}>{creditName}</AppText>
+      )}
       <AppText style={styles.text}> · Unsplash</AppText>
     </View>
   );
@@ -223,7 +237,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     color: '#1E3A5F',
     fontSize: 20,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -264,6 +278,6 @@ const styles = StyleSheet.create({
   sheetActionText: {
     color: '#1E3A5F',
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
   },
 });

@@ -23,13 +23,6 @@ const GEOGRAPHIC_TYPES = new Set([
   'colloquial_area', 'natural_feature', 'island',
   'archipelago', 'national_park', 'park',
 ]);
-const REVIEWED_PROVIDER_IDENTITY_IDS = new Set([
-  'it-amalfi-coast',
-  'gr-meteora',
-  'is-south-iceland',
-  'no-norwegian-fjords',
-]);
-
 // These policies are deliberately small and ship with the resolver so the known
 // failures are fixed before the private registry seed is applied. The seed tool
 // enriches the full researched catalog with Google identity and viewport data.
@@ -59,7 +52,6 @@ const BUILTIN_POLICIES = Object.freeze([
   { id: 'ph-el-nido', countryCode: 'PH', names: { he: 'אל נידו', en: 'El Nido' }, aliases: ['El Nido'], kind: 'city_hub', parentId: 'ph-palawan', groupingPolicy: 'self', center: { lat: 11.2027, lng: 119.4166 }, radiusKm: 42 },
   { id: 'ph-coron', countryCode: 'PH', names: { he: 'קורון', en: 'Coron' }, aliases: ['Coron'], kind: 'city_hub', parentId: 'ph-palawan', groupingPolicy: 'self', center: { lat: 12.0, lng: 120.204 }, radiusKm: 48 },
 ]);
-
 let cache = new Map();
 
 function normalizedAliases(entry) {
@@ -106,7 +98,10 @@ function providerIdentityPolicy(kind, googleTypes = [], {
   administrativeNameMatch = false,
 } = {}) {
   const types = new Set(Array.isArray(googleTypes) ? googleTypes : []);
-  if (!types.size) return { compatible: true, source: 'provider_types_missing' };
+  if (!types.size) return {
+    compatible: reviewedOverride,
+    source: reviewedOverride ? 'reviewed_provider_identity' : 'provider_types_missing',
+  };
   if (reviewedOverride) return { compatible: true, source: 'reviewed_provider_identity' };
   const hasGeographicType = [...types].some((type) => GEOGRAPHIC_TYPES.has(type));
   let compatible = false;
@@ -186,13 +181,16 @@ function derivedRadiusKm(entry) {
 }
 
 function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
-  const reviewedOverride = entry?.providerIdentity?.reviewedOverride === true ||
-    entry?.matchProfile?.identityReviewed === true ||
-    REVIEWED_PROVIDER_IDENTITY_IDS.has(entry?.id);
-  const identity = providerIdentityPolicy(entry?.kind, entry?.googleTypes, {
-    reviewedOverride,
-    administrativeNameMatch: providerIdentityNameMatches(entry),
-  });
+  const hasProviderIdentity = Boolean((Array.isArray(entry?.googleTypes) && entry.googleTypes.length) ||
+    entry?.providerRefs?.googlePlaceId ||
+    (Array.isArray(entry?.providerRefs?.googlePlaceIds) && entry.providerRefs.googlePlaceIds.length));
+  const reviewedOverride = entry?.providerIdentity?.reviewedOverride === true;
+  const identity = hasProviderIdentity
+    ? providerIdentityPolicy(entry?.kind, entry?.googleTypes, {
+        reviewedOverride,
+        administrativeNameMatch: providerIdentityNameMatches(entry),
+      })
+    : { compatible: true, source: 'planli_defined_identity' };
   const explicitAreas = (Array.isArray(entry?.matchProfile?.areas) ? entry.matchProfile.areas : [])
     .map(normalizeArea).filter(Boolean);
   const legacyReviewed = Number.isFinite(Number(entry?.radiusKm)) && Number(entry.radiusKm) > 0;
@@ -249,7 +247,10 @@ function normalizeEntry(entry) {
   return { ...normalized, matchProfile: buildMatchProfile(normalized) };
 }
 
-function validateRegistryEntry(entry, { requireProviderIdentity = true } = {}) {
+function validateRegistryEntry(entry, {
+  requireProviderIdentity = true,
+  requireResearchSources = true,
+} = {}) {
   const normalized = normalizeEntry(entry);
   const errors = [];
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(String(normalized.id || ''))) errors.push('invalid_id');
@@ -263,6 +264,10 @@ function validateRegistryEntry(entry, { requireProviderIdentity = true } = {}) {
   if (requireProviderIdentity && normalized.matchProfile.identitySource === 'incompatible_provider_identity') {
     errors.push('incompatible_google_place_type');
   }
+  if (requireProviderIdentity && normalized.providerRefs?.googlePlaceId &&
+      normalized.matchProfile.identitySource === 'provider_types_missing') {
+    errors.push('missing_google_place_types');
+  }
   const viewportCoordinates = [
     normalized.viewport?.southwest?.lat,
     normalized.viewport?.southwest?.lng,
@@ -275,7 +280,10 @@ function validateRegistryEntry(entry, { requireProviderIdentity = true } = {}) {
     Number.isFinite(Number(normalized.radiusKm)) && Number(normalized.radiusKm) > 0;
   if (requireProviderIdentity && !validViewport && !validRadius) errors.push('missing_geometry');
   const sources = Array.isArray(normalized.researchSources) ? normalized.researchSources : [];
-  if (normalized.approval?.approvedByAdmin !== true && new Set(sources.map((source) => source?.url).filter(Boolean)).size < 2) errors.push('insufficient_research_sources');
+  if (requireResearchSources && normalized.approval?.approvedByAdmin !== true &&
+      new Set(sources.map((source) => source?.url).filter(Boolean)).size < 2) {
+    errors.push('insufficient_research_sources');
+  }
   return { valid: errors.length === 0, errors, entry: normalized };
 }
 
@@ -522,14 +530,6 @@ async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
         source: 'planli_reviewed',
         version: MATCH_PROFILE_VERSION,
       },
-      matchProfile: {
-        version: MATCH_PROFILE_VERSION,
-        trust: 'trusted',
-        source: 'planli_reviewed',
-        identityReviewed: true,
-        areas: reviewed.radiusKm ? [{ type: 'circle', center: reviewed.center, radiusKm: reviewed.radiusKm }] : [],
-        aliasMaxDistanceKm: reviewed.radiusKm || 35,
-      },
     }) : entry);
   });
   const entries = Array.from(merged.values());
@@ -548,7 +548,6 @@ module.exports = {
   REGISTRY_PATH,
   REGISTRY_VERSION,
   MATCH_PROFILE_VERSION,
-  REVIEWED_PROVIDER_IDENTITY_IDS,
   buildMatchProfile,
   canonicalDestinationId,
   clearRegistryCache,

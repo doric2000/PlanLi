@@ -1,4 +1,5 @@
 const { execFileSync, spawnSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 function fail(message) {
@@ -25,6 +26,11 @@ function validateRepositoryState({ branch, head, originMain, status }) {
   if (branch !== 'main') fail(`Production updates must run from main, not ${branch || 'detached HEAD'}.`);
   if (status.trim()) fail('Production updates require a completely clean checkout, including untracked files.');
   if (head !== originMain) fail('Local main must exactly match origin/main before publishing.');
+}
+
+function validateRootConfigFiles(repoRoot) {
+  const forbidden = ['app.json', 'eas.json'].filter((name) => fs.existsSync(path.join(repoRoot, name)));
+  if (forbidden.length) fail(`Expo configuration must live under client/: ${forbidden.join(', ')}`);
 }
 
 function validateDeployedCommit({ deployedCommit, head, isAncestor }) {
@@ -78,6 +84,7 @@ function currentProductionCommit(clientRoot) {
 }
 
 function runPreflight({ repoRoot, deployedCommit = '' }) {
+  validateRootConfigFiles(repoRoot);
   git(repoRoot, ['fetch', '--quiet', 'origin', 'main']);
   const state = {
     branch: git(repoRoot, ['branch', '--show-current']),
@@ -120,6 +127,8 @@ module.exports = {
   easExecutable,
   easExecOptions,
   parseArgs,
+  runPreflight,
   validateDeployedCommit,
   validateRepositoryState,
+  validateRootConfigFiles,
 };

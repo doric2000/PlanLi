@@ -12,5 +12,9 @@ test('media availability backfill is scoped, bounded, and dry-run by default', (
     limit: 100,
   });
   assert.throws(() => parseArgs(['--collection', 'system']), /collection/);
+  assert.throws(
+    () => parseArgs(['--collection', 'users', '--bucket', 'attacker-controlled-bucket']),
+    /active PlanLi media bucket/
+  );
   assert.equal(parseArgs(['--collection', 'users', '--limit', '999']).limit, 100);
 });

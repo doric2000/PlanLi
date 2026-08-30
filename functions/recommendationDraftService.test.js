@@ -235,7 +235,19 @@ test('source edits require ownership or an active registered admin', async () =>
     assertEditableSource({ admin: firestoreAdmin(db), auth, sourceRecommendationId: 'rec-1' }),
     (error) => error?.details?.reason === 'RECOMMENDATION_SOURCE_FORBIDDEN'
   );
-  const adminAuth = { ...auth, token: { ...auth.token, admin: true } };
+  const staleAdminAuth = {
+    ...auth,
+    token: {
+      ...auth.token,
+      admin: true,
+      auth_time: Math.floor(Date.now() / 1000) - 601,
+      firebase: { ...auth.token.firebase, sign_in_second_factor: 'totp' },
+    },
+  };
+  const adminAuth = {
+    ...staleAdminAuth,
+    token: { ...staleAdminAuth.token, auth_time: Math.floor(Date.now() / 1000) },
+  };
   const adminDb = {
     doc: (path) => ({
       get: async () => ({
@@ -244,6 +256,12 @@ test('source edits require ownership or an active registered admin', async () =>
       }),
     }),
   };
+  await assert.rejects(
+    assertEditableSource({
+      admin: firestoreAdmin(adminDb), auth: staleAdminAuth, sourceRecommendationId: 'rec-1',
+    }),
+    (error) => error?.details?.reason === 'recent_sign_in_required'
+  );
   const accepted = await assertEditableSource({
     admin: firestoreAdmin(adminDb), auth: adminAuth, sourceRecommendationId: 'rec-1',
   });

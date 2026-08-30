@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
+import { callPublicCallable } from './PublicCallableService';
 import {
   clearPersonalizationDiscoveryCache,
   getPersonalizedRoutes,
@@ -9,7 +10,6 @@ import {
 } from './PersonalizationService';
 
 let saveRouteCallable;
-let loadRouteDetailsCallable;
 let getCurrentRouteDraftCallable;
 let saveRouteDraftCallable;
 let discardRouteDraftCallable;
@@ -31,9 +31,8 @@ export const saveRoute = async (route, routeId = null, publishRequestId = null) 
 };
 
 export const loadRouteDetails = async (routeId) => {
-  loadRouteDetailsCallable ||= httpsCallable(cloudFunctions, 'loadRouteDetails');
-  const response = await loadRouteDetailsCallable({ routeId });
-  return response.data?.route || null;
+  const response = await callPublicCallable('loadRouteDetails', { routeId });
+  return response?.route || null;
 };
 
 export const getCurrentRouteDraft = async () => {

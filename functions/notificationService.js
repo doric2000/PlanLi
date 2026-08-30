@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { assertRecentTotpAdminAuthentication } = require('./adminAuthorization');
 
 const NOTIFICATION_SCHEMA_VERSION = 2;
 const OWNER_NOTIFICATION_OUTBOX_SCHEMA_VERSION = 1;
@@ -545,6 +546,7 @@ async function assertAdminChannelAccessInTransaction({ transaction, db, auth, ch
   if (!auth?.uid || auth.token?.admin !== true) {
     fail('permission-denied', 'Admin access is required.', 'admin_required');
   }
+  assertRecentTotpAdminAuthentication(auth);
   const registry = await transaction.get(db.doc(`system/moderation/admins/${auth.uid}`));
   if (!registry.exists || registry.data()?.active !== true) {
     fail('permission-denied', 'Admin access is required.', 'admin_required');
@@ -633,6 +635,7 @@ async function mutateChannelInBatches({ admin, auth, channel, operation }) {
   if (channel === 'admin' && auth.token?.admin !== true) {
     fail('permission-denied', 'Admin access is required.', 'admin_required');
   }
+  if (channel === 'admin') assertRecentTotpAdminAuthentication(auth);
   const db = admin.firestore();
   let changed = 0;
   while (true) {

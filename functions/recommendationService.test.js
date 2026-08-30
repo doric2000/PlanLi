@@ -30,6 +30,19 @@ const { provisionalRegistryId } = require('./destinationResolutionPolicy');
 const { createResolvedPlaceToken } = require('./placesGatewayService');
 const { hasHebrewName } = require('./destinationLocalizationService');
 
+const approvedCanonicalPolicyFor = (countryId) => ({
+  approved: true,
+  registryId: 'test-approved',
+  kind: 'city_hub',
+  groupingPolicy: 'self',
+  registryVersion: 3,
+  approvalRevision: 1,
+  registryAttestation: {
+    approved: true, registryId: 'test-approved', registryVersion: 3,
+    approvalRevision: 1, countryId,
+  },
+});
+
 test('verified caller accepts verified password users, social users and admins', () => {
   assert.equal(
     isVerifiedCaller({
@@ -192,6 +205,7 @@ test('administrative aliases reuse a nearby known Chiang Rai destination before 
   };
   const cityData = {
     status: 'active',
+    canonicalPolicy: approvedCanonicalPolicyFor('TH'),
     googleCache: {
       names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' },
       coordinates: { lat: 19.9105, lng: 99.8406 },
@@ -354,6 +368,7 @@ test('an ambiguous destination choice finalizes from transient trusted data with
     countryData: { code: 'TH', name: 'Thailand', status: 'active' },
     cityData: {
       status: 'active',
+      canonicalPolicy: approvedCanonicalPolicyFor('TH'),
       destinationType: 'city',
       googleCache: { names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' } },
     },
@@ -442,6 +457,7 @@ test('fallback destination finalization rejects a destination from another count
         if (path === 'countries/JP/destinations/tokyo') {
           return { exists: true, data: () => ({
             status: 'active',
+            canonicalPolicy: approvedCanonicalPolicyFor('JP'),
             googleCache: { names: { he: 'טוקיו', en: 'Tokyo' } },
           }) };
         }
@@ -558,7 +574,6 @@ test('Ariel and selected Israel policy areas resolve to Israel before providers'
       coordinates: { lat: 32.1045, lng: 35.1741 },
     },
     parsedCity: null,
-    mapsKey: 'unused',
   });
   assert.equal(result.countryCode, 'IL');
   assert.equal(result.countryName, 'ישראל');
@@ -575,7 +590,6 @@ test('country resolution uses city details when venue details omit country', asy
       countryCode: 'JP',
       coordinates: { lat: 35.6762, lng: 139.6503 },
     },
-    mapsKey: 'unused',
   });
   assert.equal(result.countryCode, 'JP');
   assert.equal(result.resolutionSource, 'city-place');
@@ -583,17 +597,16 @@ test('country resolution uses city details when venue details omit country', asy
 
 test('country resolution prefers local boundaries before Google reverse', async () => {
   const originalFetch = global.fetch;
-  global.fetch = async (urlValue) => {
+  global.fetch = async (urlValue, options = {}) => {
     const url = new URL(String(urlValue));
-    assert.equal(url.pathname, '/maps/api/geocode/json');
+    assert.match(url.pathname, /^\/v4\/geocode\/location\//);
     return {
       ok: true,
       json: async () => ({
-        status: 'OK',
         results: [{
-          address_components: [{
-            long_name: 'צרפת',
-            short_name: 'FR',
+          addressComponents: [{
+            longText: 'צרפת',
+            shortText: 'FR',
             types: ['country', 'political'],
           }],
         }],
@@ -604,19 +617,21 @@ test('country resolution prefers local boundaries before Google reverse', async 
     const reverse = await resolvePlaceCountry({
       parsedPlace: { coordinates: { lat: 0, lng: -30 } },
       parsedCity: null,
-      mapsKey: 'maps-key',
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
     });
     assert.equal(reverse.countryCode, 'FR');
     assert.equal(reverse.resolutionSource, 'google-reverse');
 
     global.fetch = async () => ({
       ok: true,
-      json: async () => ({ status: 'ZERO_RESULTS', results: [] }),
+      json: async () => ({ results: [] }),
     });
     const local = await resolvePlaceCountry({
       parsedPlace: { coordinates: { lat: -33.8688, lng: 151.2093 } },
       parsedCity: null,
-      mapsKey: 'maps-key',
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
     });
     assert.equal(local.countryCode, 'AU');
     assert.equal(local.resolutionSource, 'local-boundary');
@@ -628,9 +643,10 @@ test('country resolution prefers local boundaries before Google reverse', async 
 test('Google reverse timeout returns null instead of blocking destination fallback', async () => {
   const result = await fetchGoogleReverseCountry(
     { lat: 1, lng: 1 },
-    'maps-key',
     {
       timeoutMs: 5,
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       fetchImpl: (_url, { signal }) =>
         new Promise((resolve, reject) => {
           signal.addEventListener('abort', () => {
@@ -813,7 +829,16 @@ test('authorized edits can retain media already attached to the document', async
 });
 
 function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
-  const documents = new Map(Object.entries(seed));
+  const documents = new Map(Object.entries(seed).map(([path, data]) => [
+    path,
+    /^countries\/[^/]+\/destinations\/[^/]+$/u.test(path) &&
+      data && typeof data === 'object' && !data.canonicalPolicy
+      ? {
+          ...data,
+          canonicalPolicy: approvedCanonicalPolicyFor(path.split('/')[1]),
+        }
+      : data,
+  ]));
   const deleteField = Symbol('delete-field');
   let autoId = 0;
   const snapshot = (ref) => ({
@@ -1200,7 +1225,7 @@ test('Hampi venues resolve to the shared tourism region without locality provide
   }
 });
 
-test('a containing locality without a reliable Hebrew name still requires user confirmation', async () => {
+test('an approved Vlorë alias resolves to the reviewed canonical destination without user confirmation', async () => {
   const admin = createFakeAdmin({
     'countries/AL': {
       name: 'Albania',
@@ -1275,22 +1300,24 @@ test('a containing locality without a reliable Hebrew name still requires user c
   };
 
   try {
-    await assert.rejects(resolveGoogleDestination({
+    const destination = await resolveGoogleDestination({
       admin,
       placeId: selectedPlace.en.placeId,
       resolvedPlace: selectedPlace,
       mapsKey: 'maps-key',
       newPlacesKey: 'new-key',
       placesProvider: 'new',
-    }), /not mapped to an approved PlanLi destination/);
-    assert.ok(calls.includes('geocode'));
-    assert.ok(calls.some((call) => call.startsWith('details:')));
+    });
+    assert.equal(destination.cityId, canonicalDestinationId('AL', 'al-vlore'));
+    assert.equal(destination.cityData.canonicalPolicy.approved, true);
+    assert.equal(destination.resolutionSource, 'canonical_alias_and_geometry');
+    assert.deepEqual(calls, []);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('the current client receives destination search state instead of an unknown-destination error', async () => {
+test('the current client receives the approved Vlorë destination for its reviewed alias', async () => {
   clearRegistryCache();
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -1321,17 +1348,17 @@ test('the current client receives destination search state instead of an unknown
       admin,
       auth: verifiedAuth,
       providerRateLimitKey,
-      placesProvider: 'legacy',
+      placesProvider: 'new',
       data: {
         resolvedPlaceToken,
         supportsDestinationChoice: true,
         supportsDestinationSearch: true,
       },
     });
-    assert.equal(result.status, 'destination_choice_required');
-    assert.equal(result.allowDestinationSearch, true);
-    assert.deepEqual(result.alternatives, []);
-    assert.match(result.resolutionId, /^dcr_/);
+    assert.equal(result.status, 'resolved');
+    assert.equal(result.destination.city.id, canonicalDestinationId('AL', 'al-vlore'));
+    assert.equal(result.destination.city.name, 'ולורה');
+    assert.equal(result.persisted, false);
     assert.equal(result.place.placeId, 'hotel-liro');
     assert.deepEqual(result.place.coordinates, coordinates);
   } finally {
@@ -1339,7 +1366,7 @@ test('the current client receives destination search state instead of an unknown
   }
 });
 
-test('an ambiguous verified locality opens destination search instead of a dead-end error', async () => {
+test('a reviewed Vlorë alias outranks ambiguous provider locality candidates', async () => {
   clearRegistryCache();
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -1384,13 +1411,14 @@ test('an ambiguous verified locality opens destination search instead of a dead-
   try {
     const result = await resolveRecommendationDestination({
       admin, auth: verifiedAuth, mapsKey: 'maps-key', providerRateLimitKey,
-      placesProvider: 'legacy',
+      placesProvider: 'new',
       data: {
         resolvedPlaceToken, supportsDestinationChoice: true, supportsDestinationSearch: true,
       },
     });
-    assert.equal(result.status, 'destination_choice_required');
-    assert.equal(result.allowDestinationSearch, true);
+    assert.equal(result.status, 'resolved');
+    assert.equal(result.destination.city.id, canonicalDestinationId('AL', 'al-vlore'));
+    assert.equal(result.destination.city.name, 'ולורה');
     assert.equal(result.place.placeId, 'ambiguous-hotel');
   } finally {
     global.fetch = originalFetch;
@@ -1870,6 +1898,7 @@ test('canonical destination wins when an inactive merged source shares its provi
     },
     [`countries/ZZ/destinations/${canonicalId}`]: {
       status: 'active', destinationType: 'city', providerRefs: { googlePlaceId: providerPlaceId },
+      googleTypes: ['locality', 'political'],
       canonicalPolicy,
       googleCache: {
         names: { he: 'יעד קנוני', en: 'Canonical Hub' },
@@ -1880,7 +1909,7 @@ test('canonical destination wins when an inactive merged source shares its provi
       countryCode: 'ZZ', names: { he: 'יעד קנוני', en: 'Canonical Hub' },
       aliases: ['Canonical Hub'], kind: 'city_hub', groupingPolicy: 'self',
       providerRefs: { googlePlaceId: providerPlaceId }, center: { lat: 1, lng: 1 },
-      radiusKm: 10, status: 'active', registryVersion: 1,
+      googleTypes: ['locality', 'political'], radiusKm: 10, status: 'active', registryVersion: 1,
     },
   });
   const selectedPlace = {
@@ -2319,7 +2348,14 @@ test('admin edits retain the original owner media without trusting client media 
 
   await saveRecommendation({
     admin,
-    auth: { uid: 'admin-editor', token: { admin: true } },
+    auth: {
+      uid: 'admin-editor',
+      token: {
+        admin: true,
+        auth_time: Math.floor(Date.now() / 1000),
+        firebase: { sign_in_second_factor: 'totp' },
+      },
+    },
     mediaBucket: 'test.appspot.com',
     mapsKey: 'unused',
     data: {
@@ -2443,7 +2479,7 @@ test('saveRecommendation rejects unverified and foreign edits', async () => {
 test('Google place cannot create an unapproved destination document', async () => {
   const admin = createFakeAdmin();
   const originalFetch = global.fetch;
-  global.fetch = async (urlValue) => {
+  global.fetch = async (urlValue, options = {}) => {
     const url = new URL(String(urlValue));
     if (url.hostname === 'api.restcountries.com') {
       return {
@@ -2459,32 +2495,32 @@ test('Google place cannot create an unapproved destination document', async () =
         }),
       };
     }
-    if (url.pathname.includes('/autocomplete/')) {
+    if (url.pathname.endsWith('/places:autocomplete')) {
       return {
-        ok: true,
+        ok: true, status: 200,
         json: async () => ({
-          status: 'OK',
-          predictions: [{ place_id: 'city-google-id', structured_formatting: { main_text: 'Tel Aviv' } }],
+          suggestions: [{ placePrediction: {
+            placeId: 'city-google-id',
+            structuredFormat: { mainText: { text: 'Tel Aviv' } },
+            types: ['locality'],
+          } }],
         }),
       };
     }
-    const requestedPlaceId = url.searchParams.get('place_id');
-    assert.equal(url.searchParams.get('fields').includes('rating'), false);
+    const requestedPlaceId = decodeURIComponent(url.pathname.split('/').at(-1));
+    assert.equal(String(options.headers?.['X-Goog-FieldMask']).includes('rating'), false);
     return {
-      ok: true,
+      ok: true, status: 200,
       json: async () => ({
-        status: 'OK',
-        result: {
-          place_id: requestedPlaceId,
-          name: requestedPlaceId === 'venue-google-id' ? 'Cafe' : 'Tel Aviv',
-          formatted_address: 'Tel Aviv, Israel',
-          address_components: [
-            { long_name: 'Tel Aviv', short_name: 'Tel Aviv', types: ['locality'] },
-            { long_name: 'Israel', short_name: 'IL', types: ['country'] },
-          ],
-          geometry: { location: { lat: 32.08, lng: 34.78 } },
-          types: requestedPlaceId === 'venue-google-id' ? ['restaurant'] : ['locality', 'political'],
-        },
+        id: requestedPlaceId,
+        displayName: { text: requestedPlaceId === 'venue-google-id' ? 'Cafe' : 'Tel Aviv' },
+        formattedAddress: 'Tel Aviv, Israel',
+        addressComponents: [
+          { longText: 'Tel Aviv', shortText: 'Tel Aviv', types: ['locality'] },
+          { longText: 'Israel', shortText: 'IL', types: ['country'] },
+        ],
+        location: { latitude: 32.08, longitude: 34.78 },
+        types: requestedPlaceId === 'venue-google-id' ? ['restaurant'] : ['locality', 'political'],
       }),
     };
   };
@@ -2494,7 +2530,8 @@ test('Google place cannot create an unapproved destination document', async () =
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
-      mapsKey: 'secret-key',
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       restCountriesKey: 'rest-secret',
       data: {
         placeId: 'venue-google-id',
@@ -2555,25 +2592,22 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
     },
   });
   const originalFetch = global.fetch;
-  global.fetch = async (urlValue) => {
+  global.fetch = async (urlValue, options = {}) => {
     const url = new URL(String(urlValue));
-    const placeId = url.searchParams.get('place_id');
+    const placeId = decodeURIComponent(url.pathname.split('/').at(-1));
     const second = placeId === 'springfield-b';
     return {
-      ok: true,
+      ok: true, status: 200,
       json: async () => ({
-        status: 'OK',
-        result: {
-          place_id: placeId,
-          name: 'Springfield',
-          formatted_address: 'Springfield, United States',
-          address_components: [
-            { long_name: 'Springfield', types: ['locality', 'political'] },
-            { long_name: 'United States', short_name: 'US', types: ['country', 'political'] },
-          ],
-          geometry: { location: { lat: second ? 44.05 : 39.78, lng: second ? -123.02 : -89.64 } },
-          types: ['locality', 'political'],
-        },
+        id: placeId,
+        displayName: { text: 'Springfield' },
+        formattedAddress: 'Springfield, United States',
+        addressComponents: [
+          { longText: 'Springfield', types: ['locality', 'political'] },
+          { longText: 'United States', shortText: 'US', types: ['country', 'political'] },
+        ],
+        location: { latitude: second ? 44.05 : 39.78, longitude: second ? -123.02 : -89.64 },
+        types: ['locality', 'political'],
       }),
     };
   };
@@ -2581,11 +2615,13 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
   try {
     await assert.rejects((async () => {
     const first = await saveRecommendation({
-      admin, auth: verifiedAuth, mapsKey: 'maps-key',
+      admin, auth: verifiedAuth, projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       data: { placeId: 'springfield-a', recommendation: { ...validContent, title: 'First Springfield' } },
     });
     const second = await saveRecommendation({
-      admin, auth: verifiedAuth, mapsKey: 'maps-key',
+      admin, auth: verifiedAuth, projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       data: { placeId: 'springfield-b', recommendation: { ...validContent, title: 'Second Springfield' } },
     });
 
@@ -2618,30 +2654,31 @@ test('a verified containing locality reuses the existing country and creates a p
   global.fetch = async (urlValue) => {
     const url = new URL(String(urlValue));
     assert.notEqual(url.hostname, 'api.restcountries.com');
-    if (url.pathname.includes('/autocomplete/')) {
+    if (url.pathname.endsWith('/places:autocomplete')) {
       return {
-        ok: true,
+        ok: true, status: 200,
         json: async () => ({
-          status: 'OK',
-          predictions: [{ place_id: 'jerusalem-place-id', structured_formatting: { main_text: 'ירושלים' } }],
+          suggestions: [{ placePrediction: {
+            placeId: 'jerusalem-place-id',
+            structuredFormat: { mainText: { text: 'ירושלים' } },
+            types: ['locality'],
+          } }],
         }),
       };
     }
-    const requestedPlaceId = url.searchParams.get('place_id');
+    const requestedPlaceId = decodeURIComponent(url.pathname.split('/').at(-1));
     return {
-      ok: true,
+      ok: true, status: 200,
       json: async () => ({
-        status: 'OK',
-        result: {
-          place_id: requestedPlaceId,
-          name: requestedPlaceId === 'venue-id' ? 'מוזיאון' : 'ירושלים',
-          formatted_address: 'ירושלים, ישראל',
-          address_components: [
-            { long_name: 'ירושלים', types: ['locality'] },
-            { long_name: 'ישראל', short_name: 'IL', types: ['country'] },
-          ],
-          geometry: { location: { lat: 31.77, lng: 35.21 } },
-        },
+        id: requestedPlaceId,
+        displayName: { text: requestedPlaceId === 'venue-id' ? 'מוזיאון' : 'ירושלים' },
+        formattedAddress: 'ירושלים, ישראל',
+        addressComponents: [
+          { longText: 'ירושלים', types: ['locality'] },
+          { longText: 'ישראל', shortText: 'IL', types: ['country'] },
+        ],
+        location: { latitude: 31.77, longitude: 35.21 },
+        types: requestedPlaceId === 'venue-id' ? ['museum'] : ['locality'],
       }),
     };
   };
@@ -2650,7 +2687,8 @@ test('a verified containing locality reuses the existing country and creates a p
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
-      mapsKey: 'maps-secret',
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       restCountriesKey: 'rest-secret',
       data: {
         placeId: 'venue-id',
@@ -2694,35 +2732,37 @@ test('country policy and a verified locality create one stable provisional desti
   const originalFetch = global.fetch;
   global.fetch = async (urlValue) => {
     const url = new URL(String(urlValue));
-    if (url.pathname.includes('/autocomplete/')) {
+    if (url.pathname.endsWith('/places:autocomplete')) {
       return {
-        ok: true,
+        ok: true, status: 200,
         json: async () => ({
-          status: 'OK',
-          predictions: [{ place_id: 'ariel-city-place-id', structured_formatting: { main_text: 'אריאל' } }],
+          suggestions: [{ placePrediction: {
+            placeId: 'ariel-city-place-id',
+            structuredFormat: { mainText: { text: 'אריאל' } },
+            types: ['locality'],
+          } }],
         }),
       };
     }
     if (url.pathname.includes('/geocode/')) {
-      throw new Error('Israel policy must resolve before reverse geocoding.');
+      return { ok: true, status: 200, json: async () => ({ results: [] }) };
     }
-    const requestedPlaceId = url.searchParams.get('place_id');
+    const requestedPlaceId = decodeURIComponent(url.pathname.split('/').at(-1));
     return {
-      ok: true,
+      ok: true, status: 200,
       json: async () => ({
-        status: 'OK',
-        result: {
-          place_id: requestedPlaceId,
-          name:
+        id: requestedPlaceId,
+        displayName: { text:
             requestedPlaceId === 'ariel-venue-place-id'
               ? 'מסעדה באריאל'
-              : 'אריאל',
-          formatted_address: 'אריאל',
-          address_components: [
-            { long_name: 'אריאל', types: ['locality'] },
-          ],
-          geometry: { location: { lat: 32.1045, lng: 35.1741 } },
-        },
+              : 'אריאל' },
+        formattedAddress: 'אריאל',
+        addressComponents: [
+          { longText: 'אריאל', types: ['locality'] },
+          { longText: 'ישראל', shortText: 'IL', types: ['country'] },
+        ],
+        location: { latitude: 32.1045, longitude: 35.1741 },
+        types: requestedPlaceId === 'ariel-venue-place-id' ? ['restaurant'] : ['locality'],
       }),
     };
   };
@@ -2731,7 +2771,8 @@ test('country policy and a verified locality create one stable provisional desti
     const preview = await resolveRecommendationDestination({
       admin,
       auth: verifiedAuth,
-      mapsKey: 'maps-secret',
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       restCountriesKey: 'rest-secret',
       data: { placeId: 'ariel-venue-place-id' },
     });
@@ -2752,7 +2793,8 @@ test('country policy and a verified locality create one stable provisional desti
     const saved = await saveRecommendation({
       admin,
       auth: verifiedAuth,
-      mapsKey: 'maps-secret',
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
       restCountriesKey: 'rest-secret',
       data: {
         placeId: 'ariel-venue-place-id',
@@ -2772,8 +2814,9 @@ test('Google errors and unknown country overrides are rejected', async () => {
   const admin = createFakeAdmin();
   const originalFetch = global.fetch;
   global.fetch = async () => ({
-    ok: true,
-    json: async () => ({ status: 'ZERO_RESULTS' }),
+    ok: false,
+    status: 404,
+    json: async () => ({}),
   });
 
   try {
@@ -2781,7 +2824,8 @@ test('Google errors and unknown country overrides are rejected', async () => {
       saveRecommendation({
         admin,
         auth: verifiedAuth,
-        mapsKey: 'secret-key',
+        projectId: 'planli-f0b12',
+        accessTokenProvider: async () => 'oauth-token',
         data: {
           placeId: 'bad-place',
           recommendation: validContent,
@@ -2795,18 +2839,16 @@ test('Google errors and unknown country overrides are rejected', async () => {
 
   global.fetch = async () => ({
     ok: true,
+    status: 200,
     json: async () => ({
-      status: 'OK',
-      result: {
-        place_id: 'venue-google-id',
-        name: 'Cafe',
-        types: ['locality'],
-        address_components: [
-          { long_name: 'Tel Aviv', types: ['locality'] },
-          { long_name: 'Israel', short_name: 'IL', types: ['country'] },
-        ],
-        geometry: { location: { lat: 32.08, lng: 34.78 } },
-      },
+      id: 'venue-google-id',
+      displayName: { text: 'Cafe' },
+      types: ['locality'],
+      addressComponents: [
+        { longText: 'Tel Aviv', types: ['locality'] },
+        { longText: 'Israel', shortText: 'IL', types: ['country'] },
+      ],
+      location: { latitude: 32.08, longitude: 34.78 },
     }),
   });
   try {
@@ -2814,7 +2856,8 @@ test('Google errors and unknown country overrides are rejected', async () => {
       saveRecommendation({
         admin,
         auth: verifiedAuth,
-        mapsKey: 'secret-key',
+        projectId: 'planli-f0b12',
+        accessTokenProvider: async () => 'oauth-token',
         data: {
           placeId: 'venue-google-id',
           countryOverrideId: 'missing-country',

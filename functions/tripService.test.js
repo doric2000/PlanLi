@@ -3,6 +3,19 @@ const assert = require('node:assert/strict');
 
 const { saveTrip } = require('./tripService');
 
+const approvedCanonicalPolicy = {
+  approved: true,
+  registryId: 'test-approved',
+  kind: 'city_hub',
+  groupingPolicy: 'self',
+  registryVersion: 3,
+  approvalRevision: 1,
+  registryAttestation: {
+    approved: true, registryId: 'test-approved', registryVersion: 3,
+    approvalRevision: 1, countryId: 'IL',
+  },
+};
+
 function fakeAdmin(seed) {
   const documents = new Map(Object.entries(seed));
   const makeRef = (path) => ({
@@ -47,6 +60,7 @@ test('trip edits cannot remove a source destination while its reassignment is ru
     },
     'countries/IL/destinations/target': {
       names: { he: 'יעד חדש', en: 'Target' }, status: 'active',
+      canonicalPolicy: approvedCanonicalPolicy,
     },
   });
   const auth = {
