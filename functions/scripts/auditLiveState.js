@@ -1,7 +1,9 @@
 /* eslint-disable no-await-in-loop, no-console */
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { gcloudAccessToken, initializeAdmin } = require('./localCredentials');
+const { gcloudAccessToken } = require('./localCredentials');
+const { collectDocumentsRest } = require('./auditLiveCredentialReferencesRest');
+const { decodeFirestoreValue } = require('./migrateDestinationPublicationGate');
 const { destinationHebrewName, hasHebrewName } = require('../destinationLocalizationService');
 const {
   BUDGET_IDS,
@@ -74,11 +76,6 @@ const SENSITIVE_CREDENTIAL_PATTERNS = Object.freeze([
   { kind: 'aws-access-key', pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
   { kind: 'openai-api-key', pattern: /\bsk-(?:proj-)?[0-9A-Za-z_-]{20,}/ },
 ]);
-
-function initialize() {
-  initializeAdmin(admin, { projectId: PROJECT_ID });
-  return admin.firestore();
-}
 
 function favoriteKeyForPath(targetPath) {
   return crypto.createHash('sha256').update(targetPath).digest('base64url');
@@ -343,6 +340,18 @@ async function collectAllDocuments(db) {
   return { roots: roots.map((entry) => entry.id).sort(), documents: result };
 }
 
+function restDocumentSnapshot(document) {
+  const marker = '/documents/';
+  const name = String(document?.name || '');
+  const markerIndex = name.indexOf(marker);
+  if (markerIndex < 0) throw new Error('Firestore REST audit returned a malformed document name.');
+  const documentPath = name.slice(markerIndex + marker.length);
+  const id = documentPath.split('/').at(-1);
+  const data = Object.fromEntries(Object.entries(document.fields || {})
+    .map(([key, value]) => [key, decodeFirestoreValue(value)]));
+  return { id, ref: { path: documentPath }, data: () => data };
+}
+
 function allowedMergedProviderGroup(documents) {
   if (!Array.isArray(documents) || documents.length < 2) return false;
   const active = documents.filter((document) => document.data()?.status === 'active');
@@ -359,7 +368,10 @@ function allowedMergedProviderGroup(documents) {
 }
 
 async function auditFirestore(db) {
-  const { roots, documents } = await collectAllDocuments(db);
+  return auditFirestoreInventory(await collectAllDocuments(db));
+}
+
+function auditFirestoreInventory({ roots, documents }) {
   const report = {
     roots,
     documentCount: documents.length,
@@ -456,17 +468,33 @@ async function auditFirestore(db) {
   return report;
 }
 
-async function listBucket(bucket) {
+async function auditFirestoreRest({ tokenProvider = gcloudAccessToken } = {}) {
+  const accessToken = tokenProvider().access_token;
+  const inventory = await collectDocumentsRest(accessToken);
+  return auditFirestoreInventory({
+    roots: inventory.roots,
+    documents: inventory.documents.map(restDocumentSnapshot),
+  });
+}
+
+async function storageJson(url, accessToken) {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new Error(`Cloud Storage inventory failed with HTTP ${response.status}.`);
+  return response.json();
+}
+
+async function listBucketRest(bucketName, accessToken) {
   const files = [];
-  let pageToken;
+  let pageToken = '';
   do {
-    const [page, , response] = await bucket.getFiles({
-      autoPaginate: false,
-      maxResults: 1000,
-      ...(pageToken ? { pageToken } : {}),
-    });
-    files.push(...page);
-    pageToken = response?.nextPageToken;
+    const url = new URL(`https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucketName)}/o`);
+    url.searchParams.set('maxResults', '1000');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+    const payload = await storageJson(url, accessToken);
+    files.push(...(payload.items || []).map((metadata) => ({ name: metadata.name, metadata })));
+    pageToken = payload.nextPageToken || '';
   } while (pageToken);
   return files;
 }
@@ -475,15 +503,14 @@ function checksum(metadata = {}) {
   return metadata.crc32c || metadata.md5Hash || null;
 }
 
-async function auditStorage() {
-  const storage = admin.storage();
-  const usBucket = storage.bucket(US_BUCKET);
-  const euBucket = storage.bucket(EU_BUCKET);
-  const [[usMetadata], [euMetadata], usFiles, euFiles] = await Promise.all([
-    usBucket.getMetadata(),
-    euBucket.getMetadata(),
-    listBucket(usBucket),
-    listBucket(euBucket),
+async function auditStorage({ tokenProvider = gcloudAccessToken } = {}) {
+  const accessToken = tokenProvider().access_token;
+  const bucketUrl = (name) => `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(name)}`;
+  const [usMetadata, euMetadata, usFiles, euFiles] = await Promise.all([
+    storageJson(bucketUrl(US_BUCKET), accessToken),
+    storageJson(bucketUrl(EU_BUCKET), accessToken),
+    listBucketRest(US_BUCKET, accessToken),
+    listBucketRest(EU_BUCKET, accessToken),
   ]);
   const euByName = new Map(euFiles.map((file) => [file.name, file]));
   const missingInEurope = [];
@@ -633,8 +660,7 @@ function failures(report) {
 }
 
 async function main() {
-  const db = initialize();
-  const firestore = await auditFirestore(db);
+  const firestore = await auditFirestoreRest();
   const report = {
     auditedAt: new Date().toISOString(),
     firestore,
@@ -661,9 +687,12 @@ module.exports = {
   allowedMergedProviderGroup,
   activeLocationIntegrity,
   auditFirestore,
+  auditFirestoreInventory,
+  auditFirestoreRest,
   favoriteKeyForPath,
   failures,
   inspectValue,
   isAllowedRoot,
+  restDocumentSnapshot,
   taxonomyContentErrors,
 };

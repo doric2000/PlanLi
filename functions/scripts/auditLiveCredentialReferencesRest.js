@@ -110,12 +110,11 @@ async function listDocuments(accessToken, collectionPath) {
   return documents;
 }
 
-async function audit({ tokenProvider = gcloudAccessToken } = {}) {
-  const accessToken = tokenProvider().access_token;
+async function collectDocumentsRest(accessToken) {
   const rootIds = await listCollectionIds(accessToken);
   const pending = [...new Set(rootIds)].sort();
   const seenCollections = new Set();
-  const findings = [];
+  const documents = [];
   let documentCount = 0;
 
   while (pending.length) {
@@ -127,27 +126,43 @@ async function audit({ tokenProvider = gcloudAccessToken } = {}) {
       const documents = await listDocuments(accessToken, collectionPath);
       const children = [];
       for (const document of documents) {
-        findings.push(...credentialReferencesForDocument(document));
         const documentPath = relativeDocumentPath(document.name);
         const childIds = await listCollectionIds(accessToken, documentPath);
         children.push(...childIds.map((id) => `${documentPath}/${id}`));
       }
-      return { documents: documents.length, children };
+      return { rawDocuments: documents, children };
     }));
     for (const result of results) {
-      documentCount += result.documents;
+      const liveDocuments = result.rawDocuments.filter((document) => (
+        document.fields || document.createTime || document.updateTime
+      ));
+      documents.push(...liveDocuments);
+      documentCount += liveDocuments.length;
       pending.push(...result.children.filter((entry) => !seenCollections.has(entry)));
     }
     if (documentCount > MAX_DOCUMENTS) throw new Error('Document safety limit exceeded.');
   }
+
+  return {
+    roots: [...new Set(rootIds)].sort(),
+    documents,
+    documentCount,
+    collectionPathCount: seenCollections.size,
+  };
+}
+
+async function audit({ tokenProvider = gcloudAccessToken } = {}) {
+  const accessToken = tokenProvider().access_token;
+  const inventory = await collectDocumentsRest(accessToken);
+  const findings = inventory.documents.flatMap(credentialReferencesForDocument);
 
   const credentialReferences = summarizeFindings(findings);
   return {
     auditedAt: new Date().toISOString(),
     projectId: PROJECT_ID,
     databaseId: DATABASE_ID,
-    documentCount,
-    collectionPathCount: seenCollections.size,
+    documentCount: inventory.documentCount,
+    collectionPathCount: inventory.collectionPathCount,
     credentialReferences,
     ok: credentialReferences.length === 0,
   };
@@ -165,6 +180,7 @@ if (require.main === module) {
 
 module.exports = {
   audit,
+  collectDocumentsRest,
   collectionShape,
   credentialReferencesForDocument,
   summarizeFindings,
