@@ -121,10 +121,10 @@ Text Search and Identity Toolkit limits; the current reviewed manifest SHA-256 i
 Places is capped at 300 autocomplete requests/day and 150 place-detail
 requests/day, with 30/minute burst ceilings; the manual canonical-registry Text
 Search command is currently blocked at zero unless a temporary administrative
-quota is separately approved. The unreleased security candidate limits its
-scheduled cache refresh to at most 20 place-detail requests/day so, after its
-deployment, it cannot consume the full interactive allowance; the live Function
-has not yet been changed.
+quota is separately approved. The production destination-cache scheduler is
+selected for retirement rather than quota expansion. The local candidate removes
+its daily provider traffic entirely; the live Function remains deployed until a
+separately authorized deletion.
 Unused Places photo, media, nearby and review endpoints are zero.
 Geocoding is capped at 300 reverse-geocoding requests/day and 30/minute, and its
 unused address/place/destination endpoints are zero. reCAPTCHA Enterprise
@@ -202,14 +202,31 @@ The native-to-Firebase-JS bridge uses the normal cached App Check token. Only
 the three replay-protected callables request a consumable limited-use token;
 ordinary Firestore, Storage and callable traffic must never reuse a consumable
 token globally.
-The read-only `npm run security:oauth-readiness` audit has manifest SHA-256
-`b86cf1b50e07cc4c225638dbed4295b24feaa0d29b367334fcaadc3d411c61ed`.
-It confirms the local source is keyless, prerequisites are live, and all eight
-exact production targets run under the core service account. All eight deployed targets
-still bind both legacy Maps secrets, and both exact API-key deletion targets and
-Secret Manager resources still exist. Therefore deploy is blocked and key/secret
-deletion is explicitly unsafe. The live audit now fails launch while any such
-binding remains.
+The eight OAuth-backed Functions were deployed to production from `main` commit
+`c66364df802b723c74d15891cc7ffff006394842` on 2026-08-30. The clean deployment
+archive had SHA-256
+`e9a9e031ba4d12b3f01d67bfa99d6c202e20d7b174c4539842a1ddd52aba09cf`.
+All eight targets are active under the core service account. Seven interactive
+targets no longer bind the legacy Maps secrets and returned the expected HTTP 401
+for unauthenticated smoke requests. The scheduled cache refresh was not manually
+invoked during verification. Its deployed revision
+`refreshdestinationcachesscheduled-00017-vog` still retains both legacy bindings;
+historical logs show that its nightly invocation has failed since at least
+2026-08-18 on a missing Firestore collection-group index. Both deployment Cloud
+Build jobs succeeded and no new service errors occurred in the immediate
+post-deployment window. The API keys and Secret Manager resources still exist and
+must not be deleted while the scheduled Function remains deployed.
+
+On 2026-08-30 the project owner explicitly accepted the Google Maps contractual
+retention risk of keeping the existing stored place snapshot after its historical
+28-day expiry. This acceptance does not represent Google policy compliance and is
+not classified as a security fix. The local candidate removes the daily cache
+refresh Function and its provider-call implementation, preserves complete stored
+destination names after expiry, stops Firestore Rules, catalog filtering and the
+client favorites list from hiding otherwise approved destinations, and makes the
+OAuth readiness audit require the retired Function to be absent before legacy
+credentials may be deleted. These changes are not live until a reviewed merge,
+targeted Rules deployment and explicit production Function deletion are completed.
 
 ### Credential scan and local rollback hygiene
 

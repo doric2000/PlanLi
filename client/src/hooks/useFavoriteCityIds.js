@@ -1,14 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFavorites } from './useFavorites';
 
-export function favoriteCityPreviewIsCurrent(favorite, now = Date.now()) {
-  const expiresAt = favorite?.preview?.cacheExpiresAt;
-  const expiresAtMs = typeof expiresAt?.toMillis === 'function'
-    ? expiresAt.toMillis()
-    : expiresAt instanceof Date
-      ? expiresAt.getTime()
-    : Date.parse(expiresAt || '');
-  return Number.isFinite(expiresAtMs) && expiresAtMs > now;
+export function favoriteCityPreviewIsUsable(favorite) {
+  return typeof favorite?.preview?.title === 'string' && favorite.preview.title.trim().length > 0;
 }
 
 let countryNameCache = null;
@@ -72,9 +66,8 @@ export function useFavoriteCityIds({ enabled = true } = {}) {
     };
   }, [enabled, needsCountryNames]);
 
-  const now = Date.now();
   const favorites = result.favorites.filter((favorite) =>
-    favoriteCityPreviewIsCurrent(favorite, now)
+    favoriteCityPreviewIsUsable(favorite)
   ).map((favorite) => ({
     id: favorite.target.id,
     countryId: favorite.target.countryId,

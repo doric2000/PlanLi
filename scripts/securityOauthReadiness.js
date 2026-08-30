@@ -20,10 +20,10 @@ function sha256(value) {
 
 function validatePlan(plan) {
   const expectedFunctions = [
-    'publishRecommendationDraft', 'publishRouteDraft', 'refreshDestinationCachesScheduled',
-    'resolvePlaceSelection', 'resolveRecommendationDestination', 'saveRecommendation',
-    'saveRoute', 'searchPlaces',
+    'publishRecommendationDraft', 'publishRouteDraft', 'resolvePlaceSelection',
+    'resolveRecommendationDestination', 'saveRecommendation', 'saveRoute', 'searchPlaces',
   ];
+  const expectedRetiredFunctions = ['refreshDestinationCachesScheduled'];
   const expectedKeys = [
     { uid: '1c999850-18fb-4b03-984e-ce90ed6dd872', displayName: 'Places API' },
     { uid: '9fea6ed1-d5d6-4c9b-8205-48dd0da9cefb', displayName: 'PlanLi Places API New server' },
@@ -33,9 +33,10 @@ function validatePlan(plan) {
       plan.serviceAccount !== 'planli-core-functions@planli-f0b12.iam.gserviceaccount.com' ||
       JSON.stringify(plan.requiredServices) !== JSON.stringify([
         'geocoding-backend.googleapis.com', 'places.googleapis.com',
-      ]) || plan.requiredRole !== 'roles/serviceusage.serviceUsageConsumer' ||
-      JSON.stringify(plan.functionTargets) !== JSON.stringify(expectedFunctions) ||
-      JSON.stringify(plan.legacySecrets) !== JSON.stringify([
+       ]) || plan.requiredRole !== 'roles/serviceusage.serviceUsageConsumer' ||
+       JSON.stringify(plan.functionTargets) !== JSON.stringify(expectedFunctions) ||
+       JSON.stringify(plan.retiredFunctionTargets) !== JSON.stringify(expectedRetiredFunctions) ||
+       JSON.stringify(plan.legacySecrets) !== JSON.stringify([
         'GOOGLE_MAPS_KEY', 'GOOGLE_PLACES_NEW_KEY',
       ]) || JSON.stringify(plan.apiKeyDeletionTargets) !== JSON.stringify(expectedKeys)) {
     throw new Error('OAuth rollout manifest differs from the reviewed production scope.');
@@ -79,9 +80,13 @@ function localSourceState(plan, readFile = fs.readFileSync) {
   const boundLegacySecrets = plan.legacySecrets.filter((secret) =>
     new RegExp(`defineSecret\\(['\"]${secret}['\"]\\)`, 'u').test(indexSource)
   );
+  const retiredFunctionExports = plan.retiredFunctionTargets.filter((name) =>
+    new RegExp(`exports\\.${name}\\s*=`, 'u').test(indexSource)
+  );
   return {
     legacyAdapterExists,
     boundLegacySecrets,
+    retiredFunctionExports,
     oauthModuleExists: fs.existsSync(path.join(REPO_ROOT, 'functions', 'googleMapsOAuth.js')),
   };
 }
@@ -104,9 +109,11 @@ function summarize(plan, inventory, sourceState = localSourceState(plan)) {
     cloudFunction.buildConfig?.entryPoint || cloudFunction.name?.split('/').pop(), cloudFunction,
   ]));
   const missingFunctions = plan.functionTargets.filter((name) => !byEntryPoint.has(name));
+  const retiredFunctionsStillDeployed = plan.retiredFunctionTargets
+    .filter((name) => byEntryPoint.has(name));
   const legacyBindings = [];
   const wrongServiceAccounts = [];
-  for (const name of plan.functionTargets) {
+  for (const name of [...plan.functionTargets, ...plan.retiredFunctionTargets]) {
     const cloudFunction = byEntryPoint.get(name);
     if (!cloudFunction) continue;
     const secrets = (cloudFunction.serviceConfig?.secretEnvironmentVariables || [])
@@ -133,16 +140,19 @@ function summarize(plan, inventory, sourceState = localSourceState(plan)) {
   ));
   const legacySecretResources = plan.legacySecrets.filter((secret) => secretNames.has(secret));
   const sourceReady = sourceState.oauthModuleExists && !sourceState.legacyAdapterExists &&
-    sourceState.boundLegacySecrets.length === 0;
+    sourceState.boundLegacySecrets.length === 0 &&
+    (sourceState.retiredFunctionExports || []).length === 0;
   const readyToDeployOauth = sourceReady && missingServices.length === 0 &&
     serviceUsageRoleGranted && missingFunctions.length === 0 && wrongServiceAccounts.length === 0 &&
     apiKeyTargets.every((target) => target.exists && target.identityMatches);
-  const readyToDeleteLegacyCredentials = readyToDeployOauth && legacyBindings.length === 0;
+  const readyToDeleteLegacyCredentials = readyToDeployOauth && legacyBindings.length === 0 &&
+    retiredFunctionsStillDeployed.length === 0;
   return {
     missingServices,
     serviceUsageRoleGranted,
     conditionalServiceUsageBindings,
     missingFunctions,
+    retiredFunctionsStillDeployed,
     wrongServiceAccounts,
     legacyBindings,
     legacySecretResources,

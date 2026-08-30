@@ -15,7 +15,11 @@ function functionRow(name, secrets = [], serviceAccount =
   };
 }
 
-function exactInventory(plan, bound = false) {
+function exactInventory(plan, bound = false, includeRetired = false) {
+  const targets = [
+    ...plan.functionTargets,
+    ...(includeRetired ? plan.retiredFunctionTargets : []),
+  ];
   return {
     enabledServices: plan.requiredServices.map((name) => ({ config: { name } })),
     iam: {
@@ -24,7 +28,7 @@ function exactInventory(plan, bound = false) {
         members: [`serviceAccount:${plan.serviceAccount}`],
       }],
     },
-    functions: plan.functionTargets.map((name) => functionRow(
+    functions: targets.map((name) => functionRow(
       name, bound ? plan.legacySecrets : [],
     )),
     apiKeys: plan.apiKeyDeletionTargets.map((target) => ({ ...target })),
@@ -34,7 +38,8 @@ function exactInventory(plan, bound = false) {
 
 test('OAuth rollout manifest pins exact functions, identities and credential deletion targets', () => {
   const plan = loadPlan();
-  assert.equal(plan.functionTargets.length, 8);
+  assert.equal(plan.functionTargets.length, 7);
+  assert.deepEqual(plan.retiredFunctionTargets, ['refreshDestinationCachesScheduled']);
   assert.equal(plan.apiKeyDeletionTargets.length, 2);
   assert.equal(plan.legacySecrets.length, 2);
   assert.deepEqual(plan.requiredServices, [
@@ -49,13 +54,18 @@ test('readiness distinguishes deploy readiness from safe credential deletion', (
   const sourceState = {
     oauthModuleExists: true, legacyAdapterExists: false, boundLegacySecrets: [],
   };
-  const beforeDeploy = summarize(plan, exactInventory(plan, true), sourceState);
+  const beforeDeploy = summarize(plan, exactInventory(plan, true, true), sourceState);
   assert.equal(beforeDeploy.readyToDeployOauth, true);
   assert.equal(beforeDeploy.readyToDeleteLegacyCredentials, false);
   assert.equal(beforeDeploy.legacyBindings.length, 8);
+  assert.deepEqual(beforeDeploy.retiredFunctionsStillDeployed, ['refreshDestinationCachesScheduled']);
+  const retiredButUnbound = summarize(plan, exactInventory(plan, false, true), sourceState);
+  assert.equal(retiredButUnbound.readyToDeployOauth, true);
+  assert.equal(retiredButUnbound.readyToDeleteLegacyCredentials, false);
   const afterDeploy = summarize(plan, exactInventory(plan, false), sourceState);
   assert.equal(afterDeploy.readyToDeployOauth, true);
   assert.equal(afterDeploy.readyToDeleteLegacyCredentials, true);
+  assert.deepEqual(afterDeploy.retiredFunctionsStillDeployed, []);
 });
 
 test('readiness fails closed on missing API, IAM, target, identity or local source removal', () => {

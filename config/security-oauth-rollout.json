@@ -11,12 +11,14 @@
   "functionTargets": [
     "publishRecommendationDraft",
     "publishRouteDraft",
-    "refreshDestinationCachesScheduled",
     "resolvePlaceSelection",
     "resolveRecommendationDestination",
     "saveRecommendation",
     "saveRoute",
     "searchPlaces"
+  ],
+  "retiredFunctionTargets": [
+    "refreshDestinationCachesScheduled"
   ],
   "legacySecrets": [
     "GOOGLE_MAPS_KEY",

@@ -138,13 +138,14 @@ test('a missing or building catalog index returns a retryable public error', asy
   );
 });
 
-test('catalog page filtering removes entries whose parent country is inactive', () => {
+test('catalog page filtering keeps expired snapshots and removes inactive countries', () => {
   const documents = [
-    { data: () => ({ countryId: 'FR', cityId: 'PAR', cacheExpiresAt: new Date('2099-01-01') }) },
+    { data: () => ({ countryId: 'FR', cityId: 'PAR', cacheExpiresAt: new Date('2020-01-01') }) },
+    { data: () => ({ countryId: 'FR', cityId: 'LYO' }) },
     { data: () => ({ countryId: 'ZZ', cityId: 'HIDDEN', cacheExpiresAt: new Date('2099-01-01') }) },
   ];
   const filtered = filterCatalogByActiveCountries(documents, new Set(['FR']));
-  assert.deepEqual(filtered.map((entry) => entry.data().cityId), ['PAR']);
+  assert.deepEqual(filtered.map((entry) => entry.data().cityId), ['PAR', 'LYO']);
 });
 
 test('catalog synchronization replaces its owned document instead of merging stale image source fields', async () => {
@@ -166,7 +167,7 @@ test('catalog synchronization replaces its owned document instead of merging sta
     city: {
       status: 'active',
       canonicalPolicy: approvedPolicy('FR'),
-      googleCache: { names: { en: 'Paris' }, expiresAt: new Date('2099-01-01') },
+      googleCache: { names: { en: 'Paris', he: 'פריז' }, expiresAt: new Date('2020-01-01') },
       destinationImage,
     },
   });

@@ -96,11 +96,6 @@ service cloud.firestore {
       ).data.status == 'active';
     }
 
-    function activeDestinationCache() {
-      return resource.data.schemaVersion < 3
-        || resource.data.googleCache.expiresAt > request.time;
-    }
-
     function approvedCanonicalDestination(countryId) {
       return resource.data.canonicalPolicy.approved == true
         && resource.data.canonicalPolicy.registryId is string
@@ -226,10 +221,8 @@ service cloud.firestore {
           && activeCountry(countryId)
           && activeResource()
           && approvedCanonicalDestination(countryId)
-          && activeDestinationCache()
         );
         // Cross-destination discovery is served by the bounded callable catalog.
-        // Firestore cannot prove each child's expiring cache in a collection query.
         allow list: if admin();
         allow write: if false;
       }

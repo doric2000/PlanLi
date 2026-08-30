@@ -110,7 +110,7 @@ test.beforeEach(async () => {
           approvalRevision: 1, countryId: 'cty_il',
         },
       },
-      googleCache: { names: { he: 'Tel Aviv', en: 'Tel Aviv' }, expiresAt: new Date('2099-01-01') },
+      googleCache: { names: { he: 'Tel Aviv', en: 'Tel Aviv' }, expiresAt: new Date('2020-01-01') },
     });
     await setDoc(doc(db, 'recommendations', 'rec-active'), {
       ownerId: 'owner', title: 'Active', status: 'active',
@@ -245,6 +245,7 @@ test('public active documents are readable while private and deleting documents 
   const db = env.unauthenticatedContext().firestore();
   await assertSucceeds(getDoc(doc(db, 'recommendations', 'rec-active')));
   await assertFails(getDoc(doc(db, 'recommendations', 'rec-deleting')));
+  await assertSucceeds(getDoc(doc(db, 'countries', 'cty_il', 'destinations', 'city_tlv')));
   await assertSucceeds(getDoc(doc(db, 'publicProfiles', 'owner')));
   await assertFails(getDoc(doc(db, 'users', 'owner')));
   await assertFails(getDoc(doc(db, 'system', 'accountDeletion', 'jobs', 'private')));

@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   MAPS_OAUTH_SCOPES,
@@ -17,4 +19,10 @@ test('Maps OAuth requests only the Places and Geocoding scopes', () => {
 test('quota billing project is explicit and rejects malformed values', () => {
   assert.equal(billingProjectId('planli-f0b12'), 'planli-f0b12');
   assert.throws(() => billingProjectId('not a project'), /billing project/);
+});
+
+test('daily destination cache refresh is not exported for deployment', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'index.js'), 'utf8');
+  assert.doesNotMatch(source, /exports\.refreshDestinationCachesScheduled\s*=/u);
+  assert.doesNotMatch(source, /refreshDestinationCaches|refreshExactPlaceCaches/u);
 });

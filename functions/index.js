@@ -58,13 +58,7 @@ const {
   searchPlaces,
 } = require('./placesGatewayService');
 const { cleanupExpiredRuntimeDocuments } = require('./runtimeCleanupService');
-const {
-  SCHEDULED_CACHE_REFRESH_LIMITS,
-  hasUsableDestinationCache,
-  refreshDestinationCaches,
-  refreshExactPlaceCaches,
-  scheduledCacheRequestContext,
-} = require('./destinationCacheService');
+const { hasUsableDestinationCache } = require('./destinationCacheService');
 const {
   cleanupOrphanFavorites,
   deleteComment,
@@ -1199,34 +1193,6 @@ exports.repairDestinationImagesScheduled = onSchedule(
       limit: 5,
     });
     console.log('Destination image repair complete.', { processed: results.length, audit });
-  }
-);
-
-exports.refreshDestinationCachesScheduled = onSchedule(
-  {
-    schedule: 'every day 02:30',
-    timeZone: 'Asia/Jerusalem',
-    region: REGION,
-    timeoutSeconds: 300,
-    serviceAccount: CORE_SERVICE_ACCOUNT,
-  },
-  async () => {
-    // Run these queues sequentially and below the 30/minute provider ceiling.
-    // The shared context counts every provider attempt, including retries.
-    const requestContext = scheduledCacheRequestContext();
-    const destinations = await refreshDestinationCaches({
-      admin, limit: SCHEDULED_CACHE_REFRESH_LIMITS.destinations,
-      requestContext,
-    });
-    const exactPlaces = await refreshExactPlaceCaches({
-      admin, limit: SCHEDULED_CACHE_REFRESH_LIMITS.exactPlaces,
-      requestContext,
-    });
-    console.log('Google cache refresh complete.', {
-      destinations: destinations.length,
-      exactPlaces: exactPlaces.length,
-      providerRequests: requestContext.count,
-    });
   }
 );
 
