@@ -202,31 +202,49 @@ The native-to-Firebase-JS bridge uses the normal cached App Check token. Only
 the three replay-protected callables request a consumable limited-use token;
 ordinary Firestore, Storage and callable traffic must never reuse a consumable
 token globally.
-The eight OAuth-backed Functions were deployed to production from `main` commit
-`c66364df802b723c74d15891cc7ffff006394842` on 2026-08-30. The clean deployment
-archive had SHA-256
-`e9a9e031ba4d12b3f01d67bfa99d6c202e20d7b174c4539842a1ddd52aba09cf`.
-All eight targets are active under the core service account. Seven interactive
-targets no longer bind the legacy Maps secrets and returned the expected HTTP 401
-for unauthenticated smoke requests. The scheduled cache refresh was not manually
-invoked during verification. Its deployed revision
-`refreshdestinationcachesscheduled-00017-vog` still retains both legacy bindings;
-historical logs show that its nightly invocation has failed since at least
-2026-08-18 on a missing Firestore collection-group index. Both deployment Cloud
-Build jobs succeeded and no new service errors occurred in the immediate
-post-deployment window. The API keys and Secret Manager resources still exist and
-must not be deleted while the scheduled Function remains deployed.
+PR `#265` was squash-merged to `main` commit
+`60399fbdbe38485d3a4087ef658cf96ed1bb4127` at `2026-08-30T12:49:05Z`.
+The production `refreshDestinationCachesScheduled` Function was then deleted
+from `europe-west1`; independent Function and Cloud Scheduler inventory confirms
+that both the Function and its daily job are absent. The first targeted deploy
+attempt stopped during local source discovery before any live Function update;
+the single documented retry with `FUNCTIONS_DISCOVERY_TIMEOUT=60000` deployed
+only `getDestinationOverview`, `searchDestinations`,
+`onCityFavoriteProjection`, `onDestinationCatalogSync`,
+`onCountryDestinationCatalogSync`, `approveDestination` and
+`updateDestinationPolicy`. Their active Node.js 22 Cloud Run revisions are
+`getdestinationoverview-00022-xun`, `searchdestinations-00021-qam`,
+`oncityfavoriteprojection-00027-xis`,
+`ondestinationcatalogsync-00021-vet`,
+`oncountrydestinationcatalogsync-00018-kos`,
+`approvedestination-00012-ruv` and
+`updatedestinationpolicy-00005-kad`; every target uses
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com`.
+
+Firestore Rules were released as ruleset
+`706a690a-4453-4d86-a0b7-1be62a3d568c`. Independent API read-back produced the
+same local and live SHA-256
+`7227514745ee03b3af92145b16c2097ba4204871842c0c0b2510d5042b9cfdb2`.
+Unauthenticated smoke requests returned the expected HTTP 401
+`APP_CHECK_REQUIRED` for the two public callables and `SIGN_IN_REQUIRED` for
+the two admin callables; no provider request or Firestore mutation was made.
+Cloud Run logging from `2026-08-30T12:55:00Z` returned zero `ERROR` entries for
+the seven deployed services. The read-only OAuth audit, manifest SHA-256
+`2ed68b04cd3f284ff2cb3fa51f80c07fbb31a696ce91a2999d39621f6e791165`,
+reports no missing services or Functions, no wrong service accounts, no legacy
+bindings, no deployed retired Function, and both readiness gates `true`. The two
+legacy API keys and Secret Manager resources still exist and were not deleted.
 
 On 2026-08-30 the project owner explicitly accepted the Google Maps contractual
 retention risk of keeping the existing stored place snapshot after its historical
 28-day expiry. This acceptance does not represent Google policy compliance and is
-not classified as a security fix. The local candidate removes the daily cache
-refresh Function and its provider-call implementation, preserves complete stored
-destination names after expiry, stops Firestore Rules, catalog filtering and the
-client favorites list from hiding otherwise approved destinations, and makes the
-OAuth readiness audit require the retired Function to be absent before legacy
-credentials may be deleted. These changes are not live until a reviewed merge,
-targeted Rules deployment and explicit production Function deletion are completed.
+not classified as a security fix. The backend and Rules changes are now live:
+complete stored destination names remain usable after expiry and no daily Google
+cache refresh remains. The client favorite-preview change is merged but is not
+delivered to installed apps because no EAS build or OTA was authorized; app
+version, build numbers, runtime `1.1.0` and the latest production OTA group remain
+unchanged. No migration, data/object deletion, API-key or secret deletion, EAS
+build, OTA, TestFlight/App Store or Google Play action accompanied this rollout.
 
 ### Credential scan and local rollback hygiene
 
