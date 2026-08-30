@@ -3,6 +3,7 @@ import {
   leaveAuthFlow,
   openAuthFlow,
   openMainTab,
+  resetToAuthFlow,
   resetToMain,
 } from '../src/navigation/authNavigation';
 
@@ -69,6 +70,27 @@ describe('authentication navigation helpers', () => {
     expect(rootNavigation.reset).toHaveBeenCalledWith({
       index: 0,
       routes: [{ name: 'Main' }],
+    });
+  });
+
+  it('resets enrollment completion to a clean nested login flow', () => {
+    const rootNavigation = { reset: jest.fn() };
+    const navigation = { getParent: jest.fn(() => rootNavigation) };
+
+    resetToAuthFlow(navigation, 'Login');
+
+    expect(rootNavigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{
+        name: 'Main',
+        params: {
+          screen: 'Tabs',
+          params: {
+            screen: 'Auth',
+            params: { screen: 'Login' },
+          },
+        },
+      }],
     });
   });
 });
