@@ -29,6 +29,21 @@ const VALIDATION_TOOLING_PATHS = new Set([
   '.github/workflows/pr-validation.yml',
   '.github/workflows/release-readiness.yml',
 ]);
+const SECURITY_TOOLING_PATHS = new Set([
+  '.gitignore',
+  '.gitleaks.toml',
+  'docs/security-scanning.md',
+  'scripts/securityLocalScan.js',
+  'scripts/securityLocalScan.test.js',
+]);
+const LEGAL_POLICY_PATHS = new Set([
+  'config/legal-policy.json',
+  'client/src/constants/legalPolicy.generated.js',
+  'functions/legalPolicy.generated.js',
+  'scripts/syncLegalPolicy.js',
+  'scripts/syncLegalPolicy.test.js',
+  'storage.rules',
+]);
 const NATIVE_INPUTS = [
   /^client\/(?:app\.json|app\.config\.js|eas\.json|index\.js|metro\.config\.js)$/,
   /^client\/assets\//,
@@ -205,10 +220,18 @@ function classifyChanges(files) {
   const functionsDependency = functionsFiles.some((file) => PACKAGE_FILE_RE.test(file));
   const clientLockfile = clientFiles.includes('client/package-lock.json');
   const functionsLockfile = functionsFiles.includes('functions/package-lock.json');
+  const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file));
+  const securityTooling = changedFiles.some((file) => (
+    SECURITY_TOOLING_PATHS.has(file) || file.startsWith('.semgrep/')
+  ));
+  const legalPolicy = changedFiles.some((file) => LEGAL_POLICY_PATHS.has(file));
 
   return {
     changedFiles,
-    tooling: changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file)),
+    tooling: validationTooling || securityTooling || legalPolicy,
+    validationTooling,
+    securityTooling,
+    legalPolicy,
     client: clientRuntimeFiles.length > 0 || taxonomy,
     functions: functionsRuntimeFiles.length > 0 || taxonomy || indexes,
     rules,
@@ -391,6 +414,9 @@ function printablePlan(plan) {
     changedFiles: plan.changedFiles,
     checks: {
       tooling: plan.tooling,
+      validationTooling: plan.validationTooling,
+      securityTooling: plan.securityTooling,
+      legalPolicy: plan.legalPolicy,
       client: plan.client,
       functions: plan.functions,
       rules: plan.rules,
@@ -414,8 +440,14 @@ function printablePlan(plan) {
 function compactPlan(plan) {
   const checks = ['tooling', 'client', 'functions', 'rules', 'taxonomy']
     .filter((check) => plan[check]);
+  const toolingChecks = [
+    plan.validationTooling && 'planner',
+    plan.securityTooling && 'security',
+    plan.legalPolicy && 'legal',
+  ].filter(Boolean);
   return [
     `checks=${checks.length ? checks.join(',') : 'none'}`,
+    `toolingChecks=${toolingChecks.length ? toolingChecks.join(',') : 'none'}`,
     `clientTests=${plan.clientFull ? 'full' : plan.clientTests.length}`,
     `functionsTests=${plan.functionsFull ? 'full' : plan.functionsTests.length}`,
     `exports=${[plan.adminExport && 'admin', plan.nativeExport && 'ios'].filter(Boolean).join(',') || 'none'}`,
@@ -573,10 +605,32 @@ function runTaxonomy(plan, repoRoot = REPO_ROOT) {
     ['run', 'test:travel-taxonomy'], repoRoot, repoRoot);
 }
 
+function shouldRunSecurityPreflight(env = process.env) {
+  return String(env.GITHUB_ACTIONS || '').toLowerCase() !== 'true';
+}
+
 function runTooling(plan, repoRoot = REPO_ROOT) {
   if (!plan.tooling) return;
-  runCommand('validation-planner-tests', process.execPath,
-    ['--test', '--test-reporter=spec', 'scripts/validationPlan.test.js'], repoRoot, repoRoot);
+  if (plan.validationTooling) {
+    runCommand('validation-planner-tests', process.execPath,
+      ['--test', '--test-reporter=spec', 'scripts/validationPlan.test.js'], repoRoot, repoRoot);
+  }
+  if (plan.securityTooling) {
+    runCommand('security-local-scanner-tests', process.execPath,
+      ['--test', '--test-reporter=spec', 'scripts/securityLocalScan.test.js'], repoRoot, repoRoot);
+    if (shouldRunSecurityPreflight()) {
+      runCommand('security-local-preflight', process.execPath,
+        ['scripts/securityLocalScan.js', 'preflight'], repoRoot, repoRoot);
+    } else {
+      console.log('SKIP security-local-preflight: GitHub Security analysis installs and runs the pinned scanners');
+    }
+  }
+  if (plan.legalPolicy) {
+    runCommand('legal-policy-tests', process.execPath,
+      ['--test', '--test-reporter=spec', 'scripts/syncLegalPolicy.test.js'], repoRoot, repoRoot);
+    runCommand('legal-policy-drift', process.execPath,
+      ['scripts/syncLegalPolicy.js', '--check'], repoRoot, repoRoot);
+  }
 }
 
 function runPlan(plan, scope, repoRoot = REPO_ROOT) {
@@ -625,6 +679,7 @@ module.exports = {
   parseArgs,
   selectClientTestsWithJest,
   selectDependentTests,
+  shouldRunSecurityPreflight,
   transitiveDependencies,
   unique,
 };

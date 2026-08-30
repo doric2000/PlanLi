@@ -117,8 +117,8 @@ function runAsync(command, args, {
   });
 }
 
-function git(args) {
-  return run('git', args, { capture: true }).stdout.trim();
+function git(args, cwd = REPO_ROOT) {
+  return run('git', args, { cwd, capture: true }).stdout.trim();
 }
 
 function sha256File(file) {
@@ -251,7 +251,9 @@ function localEnvironmentFiles(root = REPO_ROOT) {
         if (!EXCLUDED_DIRECTORIES.has(entry.name)) visit(path.join(directory, entry.name));
         continue;
       }
-      if (!entry.isFile() || !/^\.env(?:\..+)?$/i.test(entry.name)) continue;
+      const isEnvironmentFile = /^\.env(?:\..+)?$/i.test(entry.name);
+      const isFirebaseDebugLog = /^(?:firebase|firestore|storage)-debug.*\.log$/i.test(entry.name);
+      if (!entry.isFile() || (!isEnvironmentFile && !isFirebaseDebugLog)) continue;
       files.push(normalize(path.relative(root, path.join(directory, entry.name))));
     }
   }
@@ -343,13 +345,13 @@ async function runSemgrep({ reportDir, targets }) {
 }
 
 function runGitleaks({ reportDir, logOpts }) {
-  const expectedCommitCount = Number(git(['rev-list', '--count', logOpts === '--all' ? '--all' : logOpts]));
+  const expectedCommitCount = gitleaksExpectedCommitCount(logOpts);
   if (!Number.isInteger(expectedCommitCount) || expectedCommitCount < 1) fail('Gitleaks target contains no commits.');
   const gitleaks = bootstrapGitleaks();
   const reportPath = path.join(reportDir, 'gitleaks.json');
   const args = ['git', '--redact=100', '--report-format', 'json', '--report-path', reportPath,
     '--timeout', '600', '--no-banner', '--no-color'];
-  if (logOpts) args.push('--log-opts', logOpts);
+  if (logOpts) args.push('--log-opts', gitleaksHistoryLogOptions(logOpts));
   args.push(REPO_ROOT);
   const result = run(gitleaks, args, {
     allowedExitCodes: [0, 1],
@@ -359,9 +361,7 @@ function runGitleaks({ reportDir, logOpts }) {
   const scannerLog = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
   if (scannerLog) process.stderr.write(`${scannerLog}\n`);
   const reportedCommitCount = gitleaksReportedCommitCount(scannerLog);
-  if (!Number.isInteger(reportedCommitCount) || reportedCommitCount < 1) {
-    fail('Gitleaks did not report a non-empty commit scan.');
-  }
+  assertGitleaksCommitCoverage(expectedCommitCount, reportedCommitCount);
   if (!fs.existsSync(reportPath)) fail('Gitleaks did not produce JSON output.');
   const findings = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   return {
@@ -438,6 +438,98 @@ function runGitleaksWorkingTree({ reportDir }) {
 
 function gitleaksReportedCommitCount(scannerLog) {
   return Number(String(scannerLog || '').match(/(\d+) commits scanned/i)?.[1] || 0);
+}
+
+function gitleaksHistoryLogOptions(logOpts) {
+  return `${logOpts} -m`;
+}
+
+function gitleaksExpectedCommitCount(logOpts, root = REPO_ROOT) {
+  const output = git(['log', '--format=@@%H', '--numstat', '-m', logOpts], root);
+  const commits = new Set();
+  let currentCommit = '';
+  for (const line of output.split(/\r?\n/)) {
+    const marker = line.match(/^@@([0-9a-f]{40})$/i);
+    if (marker) {
+      currentCommit = marker[1].toLowerCase();
+    } else if (currentCommit && /^[1-9]\d*[\t ]+\d+[\t ]+/.test(line)) {
+      commits.add(currentCommit);
+    }
+  }
+  return commits.size;
+}
+
+function assertGitleaksCommitCoverage(expectedCommitCount, reportedCommitCount) {
+  if (!Number.isInteger(reportedCommitCount) || reportedCommitCount < 1) {
+    fail('Gitleaks did not report a non-empty commit scan.');
+  }
+  if (reportedCommitCount < expectedCommitCount) {
+    fail(`Gitleaks reported ${reportedCommitCount} commits; expected at least ${expectedCommitCount} text-addition commits.`);
+  }
+}
+
+function verifyGitleaksGitMergeCanary(gitleaks) {
+  const canaryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-security-git-canary-'));
+  const reportPath = path.join(canaryDir, 'gitleaks.json');
+  const gitEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'PlanLi Security Canary',
+    GIT_AUTHOR_EMAIL: 'security-canary@example.invalid',
+    GIT_COMMITTER_NAME: 'PlanLi Security Canary',
+    GIT_COMMITTER_EMAIL: 'security-canary@example.invalid',
+    GIT_TERMINAL_PROMPT: '0',
+  };
+  const gitRun = (args, allowedExitCodes = [0]) => run('git', args, {
+    cwd: canaryDir,
+    allowedExitCodes,
+    capture: true,
+    env: gitEnv,
+  });
+  const writeFixture = (content) => fs.writeFileSync(path.join(canaryDir, 'fixture.txt'), content, 'utf8');
+  try {
+    gitRun(['init', '--initial-branch', 'main']);
+    writeFixture('base\n');
+    gitRun(['add', 'fixture.txt']);
+    gitRun(['commit', '-m', 'base']);
+
+    gitRun(['checkout', '-b', 'left']);
+    writeFixture('left\n');
+    gitRun(['commit', '-am', 'left']);
+
+    gitRun(['checkout', 'main']);
+    gitRun(['checkout', '-b', 'right']);
+    writeFixture('right\n');
+    gitRun(['commit', '-am', 'right']);
+
+    gitRun(['checkout', 'left']);
+    gitRun(['merge', 'right', '--no-ff', '-m', 'merge'], [1]);
+    if (!fs.existsSync(path.join(canaryDir, '.git', 'MERGE_HEAD'))) {
+      fail('Gitleaks merge canary did not produce the expected merge conflict.');
+    }
+    writeFixture(['resolved\nAWS_ACCESS_KEY_ID=', 'AKIA', 'QWERTYUIOPASDFGH', '\n'].join(''));
+    gitRun(['add', 'fixture.txt']);
+    gitRun(['commit', '-m', 'merge-resolution-canary']);
+
+    writeFixture('resolved\n');
+    gitRun(['commit', '-am', 'remove-canary']);
+
+    const expectedCommitCount = gitleaksExpectedCommitCount('--all', canaryDir);
+    const result = run(gitleaks, [
+      'git', '--config', path.join(REPO_ROOT, '.gitleaks.toml'), '--redact=100',
+      '--report-format', 'json', '--report-path', reportPath, '--timeout', '60',
+      '--no-banner', '--no-color', '--log-opts', gitleaksHistoryLogOptions('--all'), canaryDir,
+    ], { allowedExitCodes: [0, 1], capture: true, timeoutMs: 90 * 1000 });
+    const scannerLog = `${result.stdout || ''}\n${result.stderr || ''}`.trim();
+    assertGitleaksCommitCoverage(expectedCommitCount, gitleaksReportedCommitCount(scannerLog));
+    if (!fs.existsSync(reportPath)) fail('Gitleaks merge-history canary produced no report.');
+    const findings = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    if (!Array.isArray(findings) || !findings.some((finding) => finding.RuleID === 'aws-access-token')) {
+      fail('Gitleaks merge-history canary was not detected; refusing to trust the history scan.');
+    }
+    return true;
+  } finally {
+    fs.rmSync(canaryDir, { recursive: true, force: true });
+  }
 }
 
 function runAudit(workspace, reportDir) {
@@ -547,12 +639,15 @@ function preflight() {
   const canaryDetected = verifySemgrepCanary();
   progress('Running an intentional ignored-.env credential canary.');
   const localEnvironmentCanaryDetected = verifyGitleaksFilesystemCanary(gitleaks);
+  progress('Running an intentional merge-only Git-history credential canary.');
+  const gitMergeCanaryDetected = verifyGitleaksGitMergeCanary(gitleaks);
   return {
     semgrepVersion,
     gitleaksVersion,
     customRulesSha256: sha256File(semgrepConfigs()[0]),
     canaryDetected,
     localEnvironmentCanaryDetected,
+    gitMergeCanaryDetected,
   };
 }
 
@@ -659,10 +754,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertGitleaksCommitCoverage,
   batchesOf,
   changedTargets,
   collectSourceFiles,
   fullScanTargets,
+  gitleaksExpectedCommitCount,
+  gitleaksHistoryLogOptions,
   gitleaksReportedCommitCount,
   localEnvironmentFiles,
   mergeSarif,

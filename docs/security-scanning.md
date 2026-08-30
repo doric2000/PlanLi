@@ -6,6 +6,12 @@ rules, a pinned Gitleaks release over Git history and the current working tree,
 and `npm audit` over the locked dependency trees. GitHub additionally runs CodeQL with `security-extended`, the
 dependency review action, Gitleaks, and the same PlanLi Semgrep rules.
 
+The local gate emits merge commits as a separate diff against every parent, then
+independently counts the unique commits that contain text additions and
+requires Gitleaks to report at least that count. Gitleaks can also count some
+deletion-only modifications and supported archives, so a larger reported count is valid. A merge-only
+credential canary must be detected before any history result is trusted.
+
 ## Local commands
 
 Run commands from the repository root:
@@ -17,9 +23,10 @@ npm.cmd run security:diff -- --base <base-sha> --head <head-sha>
 npm.cmd run security:full
 ```
 
-`security:preflight` verifies the exact scanner versions and executes both an
-intentional command-injection canary and an ignored-`.env` credential canary.
-The preflight fails unless both canaries are detected. The other commands run
+`security:preflight` verifies the exact scanner versions and executes an
+intentional command-injection canary, an ignored-`.env` credential canary, and a
+credential canary that exists only in merge-conflict resolution history. The
+preflight fails unless all canaries are detected. The other commands run
 the preflight first and fail when the requested revision range or source
 inventory is empty.
 
@@ -36,8 +43,8 @@ issue, a secret, or a moderate-or-higher dependency advisory. Scanner errors are
 recorded as `failed`; completed scans record `gatePassed` explicitly.
 
 Every input/full/diff run also scans the current working tree—including
-uncommitted source—and inventories ignored local `.env*` files outside `.git`,
-`.codex_tmp`, and `node_modules`. Reports retain only redacted rule/path/line
+uncommitted source—and inventories ignored local `.env*` files and Firebase
+debug logs outside `.git`, `.codex_tmp`, and `node_modules`. Reports retain only redacted rule/path/line
 metadata. The committed
 `.gitleaks.toml` allows only explicitly public Firebase/MapTiler client-variable
 forms; deprecated Google Maps, Weather, server credentials, and any other

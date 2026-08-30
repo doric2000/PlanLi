@@ -12,6 +12,7 @@ const {
   normalizePath,
   parseArgs,
   selectDependentTests,
+  shouldRunSecurityPreflight,
   transitiveDependencies,
   unique,
 } = require('./validationPlan');
@@ -58,9 +59,33 @@ test('documentation-only changes do not schedule application validation', () => 
 test('validation tooling changes schedule only the lightweight planner suite', () => {
   const plan = classifyChanges(['scripts/validationPlan.js', '.github/workflows/pr-validation.yml']);
   assert.equal(plan.tooling, true);
+  assert.equal(plan.validationTooling, true);
+  assert.equal(plan.securityTooling, false);
+  assert.equal(plan.legalPolicy, false);
   assert.equal(plan.client, false);
   assert.equal(plan.functions, false);
   assert.equal(plan.rules, false);
+});
+
+test('security and legal tooling changes schedule their purpose-built checks', () => {
+  const security = classifyChanges(['scripts/securityLocalScan.js', '.semgrep/planli.yml']);
+  assert.equal(security.tooling, true);
+  assert.equal(security.securityTooling, true);
+  assert.equal(security.validationTooling, false);
+  assert.equal(security.legalPolicy, false);
+
+  const legal = classifyChanges(['scripts/syncLegalPolicy.js', 'config/legal-policy.json']);
+  assert.equal(legal.tooling, true);
+  assert.equal(legal.legalPolicy, true);
+  assert.equal(legal.validationTooling, false);
+  assert.equal(legal.securityTooling, false);
+});
+
+test('GitHub delegates scanner preflight to the dedicated security workflow', () => {
+  assert.equal(shouldRunSecurityPreflight({}), true);
+  assert.equal(shouldRunSecurityPreflight({ GITHUB_ACTIONS: 'false' }), true);
+  assert.equal(shouldRunSecurityPreflight({ GITHUB_ACTIONS: 'true' }), false);
+  assert.equal(shouldRunSecurityPreflight({ GITHUB_ACTIONS: 'TRUE' }), false);
 });
 
 test('boundary paths schedule only their purpose-built checks', () => {

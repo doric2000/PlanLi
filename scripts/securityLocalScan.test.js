@@ -5,9 +5,12 @@ const path = require('node:path');
 const test = require('node:test');
 
 const {
+  assertGitleaksCommitCoverage,
   batchesOf,
   collectSourceFiles,
   fullScanTargets,
+  gitleaksExpectedCommitCount,
+  gitleaksHistoryLogOptions,
   gitleaksReportedCommitCount,
   localEnvironmentFiles,
   mergeSarif,
@@ -51,6 +54,17 @@ test('Semgrep batches are bounded and SARIF results are merged', () => {
 test('Gitleaks reported commit evidence is parsed separately from Git inventory', () => {
   assert.equal(gitleaksReportedCommitCount('INF 428 commits scanned.'), 428);
   assert.equal(gitleaksReportedCommitCount('no scan summary'), 0);
+  assert.equal(gitleaksHistoryLogOptions('--all'), '--all -m');
+  assert.equal(gitleaksHistoryLogOptions('abc123..def456'), 'abc123..def456 -m');
+  assert.doesNotThrow(() => assertGitleaksCommitCoverage(428, 428));
+  assert.doesNotThrow(() => assertGitleaksCommitCoverage(428, 429));
+  assert.throws(() => assertGitleaksCommitCoverage(428, 427), /expected at least 428 text-addition commits/);
+});
+
+test('Gitleaks expected coverage includes per-parent merge diffs with text additions', () => {
+  const expected = gitleaksExpectedCommitCount('--all');
+  assert.ok(Number.isInteger(expected));
+  assert.ok(expected > 0);
 });
 
 test('source snapshots are stable and exclude test fixtures', () => {
@@ -62,19 +76,23 @@ test('source snapshots are stable and exclude test fixtures', () => {
   assert.equal(snapshotFiles(first), snapshotFiles(second));
 });
 
-test('ignored local environment inventory is non-empty and excludes scanner artifacts', () => {
+test('ignored local secret-bearing inventory includes Firebase logs and excludes scanner artifacts', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-env-inventory-'));
   try {
     fs.mkdirSync(path.join(fixture, 'client'), { recursive: true });
+    fs.mkdirSync(path.join(fixture, 'functions'), { recursive: true });
     fs.mkdirSync(path.join(fixture, '.codex_tmp'), { recursive: true });
     fs.mkdirSync(path.join(fixture, 'node_modules', 'package'), { recursive: true });
     fs.writeFileSync(path.join(fixture, 'client', '.env'), 'TOKEN=redacted\n');
     fs.writeFileSync(path.join(fixture, 'client', '.env.example'), 'TOKEN=\n');
+    fs.writeFileSync(path.join(fixture, 'functions', 'firebase-debug (1).log'), 'TOKEN=redacted\n');
     fs.writeFileSync(path.join(fixture, '.codex_tmp', '.env'), 'CANARY=ignored\n');
+    fs.writeFileSync(path.join(fixture, '.codex_tmp', 'firebase-debug.log'), 'TOKEN=ignored\n');
     fs.writeFileSync(path.join(fixture, 'node_modules', 'package', '.env'), 'TOKEN=ignored\n');
     assert.deepEqual(localEnvironmentFiles(fixture), [
       'client/.env',
       'client/.env.example',
+      'functions/firebase-debug (1).log',
     ]);
   } finally {
     fs.rmSync(fixture, { recursive: true, force: true });
