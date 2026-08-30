@@ -159,6 +159,7 @@ export const adminStyles = StyleSheet.create({
   destinationLayout: { flexDirection: 'row-reverse', flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 },
   destinationList: { flex: 0.85, minWidth: 280 },
   destinationDetail: { flex: 1.15, minWidth: 320, borderRadius: 15, borderWidth: 1, borderColor: border, backgroundColor: '#FFFFFF', padding: 16 },
+  destinationContextCard: { flexGrow: 0, flexBasis: 'auto', width: '100%' },
   destinationImageWrap: { width: '100%', height: 220, position: 'relative', overflow: 'hidden', borderRadius: 13, marginTop: 12, backgroundColor: '#EAECF0' },
   destinationImage: { width: '100%', height: '100%' },
   issue: { borderRadius: 9, backgroundColor: '#FFFAEB', paddingHorizontal: 9, paddingVertical: 7, marginTop: 7 },
