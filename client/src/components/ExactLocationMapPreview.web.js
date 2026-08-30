@@ -14,11 +14,7 @@ export default function ExactLocationMapPreview({
   const lat = Number(coordinates?.lat);
   const lng = Number(coordinates?.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const embedKey = String(
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_EMBED_KEY ||
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ||
-    ''
-  ).trim();
+  const embedKey = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_EMBED_KEY || '').trim();
   const query = place?.placeId ? `place_id:${place.placeId}` : `${lat},${lng}`;
   const src = embedKey
     ? `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(embedKey)}&q=${encodeURIComponent(query)}`

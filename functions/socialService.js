@@ -24,7 +24,11 @@ const {
   stageNotificationDelete,
 } = require('./notificationService');
 const { destinationHebrewName } = require('./destinationLocalizationService');
-const { isDestinationReassigning } = require('./destinationReferencePolicy');
+const {
+  contentIsPubliclyVisible,
+  destinationIsPublicInCountry,
+  isDestinationReassigning,
+} = require('./destinationReferencePolicy');
 
 const TARGETS = Object.freeze({
   recommendation: { collection: 'recommendations' },
@@ -216,10 +220,16 @@ async function loadAuthorProfile(transaction, db, ownerId) {
   return snapshot.exists ? snapshot.data() : null;
 }
 
-function assertActiveTarget(snapshot, target) {
+function assertActiveTarget(snapshot, target, country = null) {
   assert(snapshot.exists, 'not-found', 'The selected item no longer exists.');
   const data = snapshot.data();
-  assert(data?.status === 'active', 'failed-precondition', 'The selected item is not available.');
+  assert(
+    target?.type === 'city'
+      ? destinationIsPublicInCountry(data, country, target.countryId)
+      : contentIsPubliclyVisible(data),
+    'failed-precondition',
+    'The selected item is not available.'
+  );
   assert(target?.type !== 'city' || !isDestinationReassigning(data), 'failed-precondition',
     'The selected destination is being reassigned. Try again shortly.');
   return data;
@@ -243,9 +253,16 @@ async function setFavorite({ admin, auth, data }) {
   const targetRef = db.doc(target.path);
 
   await db.runTransaction(async (transaction) => {
-    const targetSnapshot = await transaction.get(targetRef);
+    const [targetSnapshot, countrySnapshot] = await Promise.all([
+      transaction.get(targetRef),
+      target.type === 'city'
+        ? transaction.get(db.doc(`countries/${target.countryId}`))
+        : Promise.resolve(null),
+    ]);
     assertDestinationFavoriteMutationAllowed(target, targetSnapshot.data());
-    const targetData = saved ? assertActiveTarget(targetSnapshot, target) : targetSnapshot.data();
+    const targetData = saved
+      ? assertActiveTarget(targetSnapshot, target, countrySnapshot?.data?.())
+      : targetSnapshot.data();
     const publicProfile = saved
       ? await loadAuthorProfile(transaction, db, targetData.ownerId)
       : null;
@@ -300,7 +317,7 @@ async function setReaction({ admin, auth, data }) {
       transaction.get(targetRef),
       transaction.get(likeRef),
     ]);
-    const targetData = assertActiveTarget(targetSnapshot);
+    const targetData = assertActiveTarget(targetSnapshot, target);
     const wasLiked = likeSnapshot.exists;
     const currentCount = Math.max(0, Number(targetData?.stats?.likeCount || 0));
     nextCount = currentCount;
@@ -424,7 +441,7 @@ async function getReactionState({ admin, auth, data }) {
 }
 
 async function saveComment({ admin, auth, data }) {
-  const isAdmin = await hasActiveAdminAccess({ admin, auth });
+  const isAdmin = await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
   if (!isAdmin) assertVerified(auth);
   const target = normalizeTarget(data?.target);
   assert(target.type !== 'city', 'invalid-argument', 'Cities do not support comments.');
@@ -455,7 +472,7 @@ async function saveComment({ admin, auth, data }) {
       transaction.get(commentRef),
       transaction.get(db.doc(`publicProfiles/${auth.uid}`)),
     ]);
-    const targetData = assertActiveTarget(targetSnapshot);
+    const targetData = assertActiveTarget(targetSnapshot, target);
     const author = authorSnapshot.exists ? authorSnapshot.data() : {};
     const authorPreview = {
       displayName: author.displayName || 'Traveler',
@@ -731,7 +748,9 @@ async function handleCommentThreadDeletionJobWrite({ admin, event }) {
 
 async function deleteComment({ admin, auth, data, internalActorUid = null }) {
   const internalUid = internalActorUid ? cleanId(internalActorUid, 'internalActorUid') : null;
-  const isAdmin = internalUid ? true : await hasActiveAdminAccess({ admin, auth });
+  const isAdmin = internalUid
+    ? true
+    : await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
   if (!isAdmin) assertVerified(auth);
   const actorUid = internalUid || auth.uid;
   const target = normalizeTarget(data?.target);

@@ -199,7 +199,7 @@ async function deleteContentInternal({
 
 async function deleteContent({ admin, auth, data, mediaBucket }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
-  const isAdmin = await hasActiveAdminAccess({ admin, auth });
+  const isAdmin = await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
   assert(isVerified(auth) || isAdmin, 'permission-denied', 'Email verification is required.');
   await consumeRateLimit({ admin, uid: auth.uid, action: 'deleteContent' });
   return deleteContentInternal({

@@ -7,6 +7,7 @@ import {
   formatAuthError,
   signInWithEmail,
 } from '../../../services/AuthService';
+import { isTotpChallengeRequired } from '../../../services/MfaService';
 import AuthFormLayout from '../components/AuthFormLayout';
 import BrandWordmark from '../components/BrandWordmark';
 import { leaveAuthFlow, resetToMain } from '../../../navigation/authNavigation';
@@ -37,7 +38,8 @@ export default function LoginScreen({ navigation, route }) {
         complete();
       }, 'sign_in_email');
     } catch (loginError) {
-      setError(formatAuthError(loginError));
+      if (isTotpChallengeRequired(loginError)) navigation.navigate('TotpChallenge');
+      else setError(formatAuthError(loginError));
     } finally {
       setLoading(false);
     }

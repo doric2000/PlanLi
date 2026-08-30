@@ -18,6 +18,7 @@ const mockEnsureAuthenticatedUserProfile = jest.fn();
 const mockSignInWithGoogle = jest.fn();
 const mockSignInWithApple = jest.fn();
 const mockIsProviderCancellation = jest.fn(() => false);
+const mockIsTotpChallengeRequired = jest.fn(() => false);
 const mockRunAuthTransition = jest.fn(async (operation) => operation());
 const mockCompleteAccountSetup = jest.fn();
 const mockSynchronizeUserDocument = jest.fn();
@@ -86,6 +87,10 @@ jest.mock('../src/services/AuthService', () => ({
   validateNewPassword: (...args) => mockValidateNewPassword(...args),
 }));
 
+jest.mock('../src/services/MfaService', () => ({
+  isTotpChallengeRequired: (...args) => mockIsTotpChallengeRequired(...args),
+}));
+
 describe('authentication screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -94,6 +99,7 @@ describe('authentication screens', () => {
     mockValidateNewPassword.mockResolvedValue({ isValid: true });
     mockEnsureAuthenticatedUserProfile.mockResolvedValue({ created: false });
     mockIsProviderCancellation.mockReturnValue(false);
+    mockIsTotpChallengeRequired.mockReturnValue(false);
     mockCompleteAccountSetup.mockResolvedValue({ ok: true, userDocument: { displayName: 'Admin' } });
     mockSynchronizeUserDocument.mockReturnValue(AUTH_STATES.READY);
     mockAuthStatus = AUTH_STATES.ACCOUNT_SETUP_REQUIRED;
@@ -121,6 +127,23 @@ describe('authentication screens', () => {
     const screen = render(<LoginScreen navigation={navigation} />);
     fireEvent.press(screen.getByText('שכחתי סיסמה'));
     expect(navigation.navigate).toHaveBeenCalledWith('ForgotPassword');
+  });
+
+  it('routes an email MFA challenge to the TOTP screen without exposing provider details', async () => {
+    const navigation = { navigate: jest.fn(), reset: jest.fn(), replace: jest.fn() };
+    const challenge = Object.assign(new Error('provider payload'), {
+      code: 'auth/multi-factor-auth-required',
+    });
+    mockSignInWithEmail.mockRejectedValueOnce(challenge);
+    mockIsTotpChallengeRequired.mockImplementationOnce((error) => error === challenge);
+    const screen = render(<LoginScreen navigation={navigation} />);
+
+    fireEvent.changeText(screen.getByTestId('login-email'), 'admin@example.com');
+    fireEvent.changeText(screen.getByTestId('login-password'), 'secret');
+    fireEvent.press(screen.getByTestId('email-login-button'));
+
+    await waitFor(() => expect(navigation.navigate).toHaveBeenCalledWith('TotpChallenge'));
+    expect(screen.queryByText('provider payload')).toBeNull();
   });
 
   it('keeps login provider-free and provides a working back action', () => {

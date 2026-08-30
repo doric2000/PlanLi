@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const { assertActiveMediaBucket } = require('./storageTargetPolicy');
 
 const { initializeAdmin } = require('./localCredentials');
 
@@ -259,6 +260,7 @@ async function main() {
   if (!fs.existsSync(filePath)) throw new Error(`Manifest not found: ${filePath}`);
   const mediaBucket = String(process.env.MEDIA_STORAGE_BUCKET || '').trim();
   if (!mediaBucket) throw new Error('Set MEDIA_STORAGE_BUCKET before applying the reset.');
+  assertActiveMediaBucket(mediaBucket);
   const manifest = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   const result = await applyManifest({ db, auth, bucket: admin.storage().bucket(mediaBucket), manifest });
   manifest.mode = 'applied';

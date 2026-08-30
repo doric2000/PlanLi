@@ -1,11 +1,10 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Rollback bucket: existing public media can be fetched, but no client may
-    // create, overwrite, delete, or enumerate objects during the 30-day hold.
+    // Retired rollback bucket: no client access is permitted. Objects remain
+    // available only to explicitly authorized operators during the hold.
     match /{path=**} {
-      allow get: if true;
-      allow list, write: if false;
+      allow read, write: if false;
     }
   }
 }

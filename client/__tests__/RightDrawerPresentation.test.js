@@ -3,6 +3,18 @@ import { render } from '@testing-library/react-native';
 
 import { DrawerIdentity, getDrawerWidth } from '../src/navigation/RightDrawerNavigator';
 
+jest.mock('@react-navigation/drawer', () => {
+  const ReactRuntime = require('react');
+  const { View } = require('react-native');
+  return {
+    createDrawerNavigator: () => ({
+      Navigator: (props) => ReactRuntime.createElement(View, props),
+      Screen: (props) => ReactRuntime.createElement(View, props),
+    }),
+    DrawerContentScrollView: (props) => ReactRuntime.createElement(View, props),
+  };
+});
+
 jest.mock('@expo/vector-icons', () => {
   const ReactRuntime = require('react');
   const { Text } = require('react-native');

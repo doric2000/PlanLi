@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Alert, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
@@ -12,13 +12,14 @@ import {
   hasValidStopLocation,
 } from '../utils/routeStops';
 import { colors, routeMapStyles as styles } from '../../../styles';
+import { openSafeExternalUrl } from '../../../utils/safeExternalUrl';
 
 const ALL_DAYS = 'all';
 
 async function openUrl(url) {
   if (!url) return;
   try {
-    await Linking.openURL(url);
+    await openSafeExternalUrl(url, 'googleMaps');
   } catch {
     Alert.alert('לא ניתן לפתוח את המפה', 'לא הצלחנו לפתוח את Google Maps. אפשר לנסות שוב.');
   }

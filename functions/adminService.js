@@ -1,7 +1,11 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { geohashForLocation } = require('geofire-common');
-const { caseIdForTarget, normalizeReportTarget } = require('./moderationService');
+const {
+  caseIdForTarget,
+  moderationDecisionRevision,
+  normalizeReportTarget,
+} = require('./moderationService');
 const { buildModerationPreview, canonicalTargetPath, hydrateModerationPreviews } = require('./moderationPreview');
 const {
   ACCOUNT_ACTIONS,
@@ -42,10 +46,8 @@ const MAX_CASE_EVENTS = 100;
 const RECENT_AUTH_SECONDS = 10 * 60;
 const MODERATION_TRANSITION_TTL_MS = 10 * 60 * 1000;
 const TERMINAL_ENFORCEMENT_STATUSES = new Set(['complete', 'revoked', 'superseded', 'failed']);
-// Only actions that can change account authority, account trust level, or
-// suspend/remove content are marked sensitive. CRUD-like content-enrichment and
-// destination maintenance actions stay non-sensitive to avoid unnecessary
-// re-auth flow in normal moderation work.
+// Every admin state mutation requires a recent TOTP-backed authentication event.
+// Read-only operations deliberately stay outside this list.
 const SENSITIVE_ADMIN_ACTIONS = Object.freeze({
   moderateContent: {
     recentSignIn: true,
@@ -95,6 +97,38 @@ const SENSITIVE_ADMIN_ACTIONS = Object.freeze({
     recentSignIn: true,
     reason: 'correcting an attached place changes published location data.',
   },
+  updateModerationCase: {
+    recentSignIn: true,
+    reason: 'case assignment, notes and priority changes mutate moderation state.',
+  },
+  saveAdminSavedView: {
+    recentSignIn: true,
+    reason: 'saving an admin view mutates server-owned admin state.',
+  },
+  deleteAdminSavedView: {
+    recentSignIn: true,
+    reason: 'deleting an admin view mutates server-owned admin state.',
+  },
+  recheckDestination: {
+    recentSignIn: true,
+    reason: 'destination rechecks update review state and may schedule provider work.',
+  },
+  approveDestination: {
+    recentSignIn: true,
+    reason: 'destination approval publishes a destination and releases linked content.',
+  },
+  selectDestinationImageCandidate: {
+    recentSignIn: true,
+    reason: 'selecting an image changes public destination media.',
+  },
+  setDestinationUploadedImage: {
+    recentSignIn: true,
+    reason: 'uploading an image changes public destination media.',
+  },
+  setDestinationAirport: {
+    recentSignIn: true,
+    reason: 'changing an airport updates public destination facts.',
+  },
 });
 
 function isRecentSignInRequired(action) {
@@ -124,6 +158,28 @@ function cleanText(value, field, maximum = 500) {
   const result = typeof value === 'string' ? value.trim() : '';
   if (!result || result.length > maximum) fail('invalid-argument', `${field} is invalid.`, 'invalid_input');
   return result;
+}
+
+function assertTotpSecondFactor(auth) {
+  if (auth?.token?.firebase?.sign_in_second_factor !== 'totp') {
+    fail('failed-precondition', 'TOTP multi-factor authentication is required.', 'totp_required');
+  }
+}
+
+function cleanId(value, field, maximum = 180) {
+  if (typeof value !== 'string' || value !== value.trim()) {
+    fail('invalid-argument', `${field} is invalid.`, 'invalid_input');
+  }
+  const result = cleanText(value, field, maximum);
+  if (result === '.' || result === '..' || /[/\u0000-\u001F\u007F-\u009F]/u.test(result)) {
+    fail('invalid-argument', `${field} is invalid.`, 'invalid_input');
+  }
+  return result;
+}
+
+function cleanOptionalId(value, field, maximum = 180) {
+  if (value == null || value === '') return '';
+  return cleanId(value, field, maximum);
 }
 
 function serialize(value) {
@@ -225,6 +281,59 @@ function moderationCaseAuditId(caseId, operationId) {
     .slice(0, 40)}`;
 }
 
+function moderationOperationDocumentId(caseId, operationId) {
+  return crypto.createHash('sha256')
+    .update(`moderation:${caseId}:${operationId}`)
+    .digest('base64url')
+    .slice(0, 48);
+}
+
+function moderationOperationMatches(value, {
+  caseId,
+  operationId,
+  target,
+  requestedContentAction,
+  contentAction,
+  accountAction,
+}) {
+  return value?.caseId === caseId
+    && value?.operationId === operationId
+    && value?.target?.path === target?.path
+    && value?.requestedContentAction === requestedContentAction
+    && value?.contentAction === contentAction
+    && value?.accountAction === accountAction;
+}
+
+function assertModerationRetryOperation(retryDecision, operationId) {
+  if (!retryDecision || typeof retryDecision !== 'object') return;
+  if (retryDecision.operationId !== operationId) {
+    fail(
+      'aborted',
+      'The moderation decision must resume its recorded operation.',
+      'decision_retry_conflict'
+    );
+  }
+}
+
+function moderationDeletionCanResumeFromOperation(operation, {
+  caseId,
+  operationId,
+  target,
+  requestedContentAction,
+  accountAction,
+}) {
+  return requestedContentAction === 'delete'
+    && moderationOperationMatches(operation, {
+      caseId,
+      operationId,
+      target,
+      requestedContentAction,
+      contentAction: 'delete',
+      accountAction,
+    })
+    && ['target_deleted', 'effects_applied'].includes(operation?.stage);
+}
+
 function directSuspensionEnforcementId(uid, operationId) {
   return crypto.createHash('sha256')
     .update(`direct:${uid}:${operationId}:suspend`)
@@ -262,7 +371,9 @@ function publicModerationCase(item = {}) {
     status: item.status || 'open',
     priority: item.priority || 'normal',
     source: item.source || 'report',
-    revision: Math.max(0, Number(item.revision || 0)),
+    revision: moderationDecisionRevision(item),
+    decisionRevision: moderationDecisionRevision(item),
+    reportRevision: Math.max(0, Number(item.reportRevision || 0)),
     assignment: item.assignment && typeof item.assignment === 'object'
       ? {
           uid: item.assignment.uid || '',
@@ -360,14 +471,16 @@ async function auditEnforcementOnce({ admin, auth, enforcementId, action, target
   return id;
 }
 
-async function prepareAdmin(admin, auth, { recent = false } = {}) {
+async function prepareAdmin(admin, auth, { recent = false, totp = false } = {}) {
   assertAdmin(auth);
   if (recent) assertRecentAuth(auth);
+  if (totp) assertTotpSecondFactor(auth);
   await assertActiveAdminRegistry({ admin, auth });
 }
 
 async function prepareAdminAction(admin, auth, action) {
-  await prepareAdmin(admin, auth, { recent: isRecentSignInRequired(action) });
+  const sensitive = isRecentSignInRequired(action);
+  await prepareAdmin(admin, auth, { recent: sensitive, totp: sensitive });
 }
 
 async function getModerationDashboard({ admin, auth }) {
@@ -432,7 +545,7 @@ async function listModerationCases({ admin, auth, data }) {
     sort === 'due_asc' ? 'asc' : 'desc'
   ).limit(scanLimit);
   if (data?.cursor) {
-    const cursor = await admin.firestore().doc(`system/moderation/cases/${cleanText(data.cursor, 'cursor', 180)}`).get();
+    const cursor = await admin.firestore().doc(`system/moderation/cases/${cleanId(data.cursor, 'cursor')}`).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
   const snapshot = await query.get();
@@ -482,7 +595,7 @@ async function listModerationCases({ admin, auth, data }) {
 
 async function getModerationCase({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'getModerationCase');
-  const caseId = cleanText(data?.caseId, 'caseId', 180);
+  const caseId = cleanId(data?.caseId, 'caseId');
   const ref = admin.firestore().doc(`system/moderation/cases/${caseId}`);
   const [snapshot, reports, events, enforcements] = await Promise.all([
     ref.get(),
@@ -548,7 +661,7 @@ function cleanOptionalOpaqueId(value, field, maximum = 120) {
 
 async function updateModerationCase({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'updateModerationCase');
-  const caseId = cleanText(data?.caseId, 'caseId', 180);
+  const caseId = cleanId(data?.caseId, 'caseId');
   const revision = expectedRevision(data?.expectedRevision);
   const operation = cleanEnum(
     data?.operation,
@@ -567,11 +680,12 @@ async function updateModerationCase({ admin, auth, data }) {
     if (previous.status === 'resolving') {
       fail('aborted', 'The moderation case is being resolved by another admin.', 'case_revision_conflict');
     }
-    if (Math.max(0, Number(previous.revision || 0)) !== revision) {
+    if (moderationDecisionRevision(previous) !== revision) {
       fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
     }
     const patch = {
       revision: revision + 1,
+      decisionRevision: revision + 1,
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -648,7 +762,7 @@ async function listAdminSavedViews({ admin, auth }) {
 
 async function saveAdminSavedView({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'saveAdminSavedView');
-  const id = data?.id ? cleanText(data.id, 'id', 80) : crypto.randomBytes(12).toString('base64url');
+  const id = data?.id ? cleanId(data.id, 'id', 80) : crypto.randomBytes(12).toString('base64url');
   const name = cleanText(data?.name, 'name', 40);
   const filters = cleanSavedViewFilters(data?.filters);
   const ref = admin.firestore().doc(`system/moderation/admins/${auth.uid}/savedViews/${id}`);
@@ -663,7 +777,7 @@ async function saveAdminSavedView({ admin, auth, data }) {
 
 async function deleteAdminSavedView({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'deleteAdminSavedView');
-  const id = cleanText(data?.id, 'id', 80);
+  const id = cleanId(data?.id, 'id', 80);
   await admin.firestore().doc(`system/moderation/admins/${auth.uid}/savedViews/${id}`).delete();
   return { id, deleted: true };
 }
@@ -701,7 +815,7 @@ async function searchAdminResources({ admin, auth, data }) {
   if (terms.length) query = query.where('search.prefixes', 'array-contains', terms[0].slice(0, 16));
   query = query.orderBy('updatedAt', 'desc').limit(PAGE_SIZE * 2);
   if (data?.cursor) {
-    const cursor = await admin.firestore().doc(`system/moderation/search/${cleanText(data.cursor, 'cursor', 180)}`).get();
+    const cursor = await admin.firestore().doc(`system/moderation/search/${cleanId(data.cursor, 'cursor')}`).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
   const snapshot = await query.get();
@@ -866,7 +980,7 @@ async function updateAdminAttachedPlace({ admin, auth, data, providerRateLimitKe
   }
   const action = cleanEnum(data?.action, ['replace', 'city_only'], 'action');
   const reason = cleanText(data?.reason, 'reason', 500);
-  const caseId = cleanOptionalText(data?.caseId, 180);
+  const caseId = cleanOptionalId(data?.caseId, 'caseId');
   const revision = caseId ? expectedRevision(data?.expectedRevision) : null;
   const db = admin.firestore();
   const rootRef = db.doc(target.path);
@@ -922,7 +1036,7 @@ async function updateAdminAttachedPlace({ admin, auth, data, providerRateLimitKe
     if (caseRef) {
       if (!caseSnapshot.exists) fail('not-found', 'The moderation case was not found.', 'case_missing');
       const caseData = caseSnapshot.data() || {};
-      if (caseData.status === 'resolving' || Math.max(0, Number(caseData.revision || 0)) !== revision) {
+      if (caseData.status === 'resolving' || moderationDecisionRevision(caseData) !== revision) {
         fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
       }
       if (
@@ -971,6 +1085,7 @@ async function updateAdminAttachedPlace({ admin, auth, data, providerRateLimitKe
       nextRevision = revision + 1;
       transaction.set(caseRef, {
         revision: nextRevision,
+        decisionRevision: nextRevision,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -1076,21 +1191,31 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
     fail('invalid-argument', 'Target cannot be moderated here.', 'invalid_target');
   }
   const db = admin.firestore();
-  const caseId = data?.caseId ? cleanText(data.caseId, 'caseId', 180) : null;
+  const caseId = data?.caseId ? cleanId(data.caseId, 'caseId') : null;
   const caseRef = caseId ? db.doc(`system/moderation/cases/${caseId}`) : null;
+  const operationId = cleanOptionalOpaqueId(data?.operationId, 'operationId');
+  const operationRef = caseId && operationId
+    ? db.doc(`system/moderation/operations/${moderationOperationDocumentId(caseId, operationId)}`)
+    : null;
   if (action === 'dismiss' && !caseId) {
     fail('invalid-argument', 'A moderation case is required to dismiss a report.', 'case_required');
   }
   let caseSnapshot = null;
   let caseRevision = null;
+  let managedByDecision = false;
   if (caseId) {
     caseSnapshot = await caseRef.get();
     if (!caseSnapshot.exists) fail('not-found', 'Moderation case was not found.', 'case_missing');
     const caseData = caseSnapshot.data() || {};
     if (caseData.status === 'resolving') {
-      fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
+      managedByDecision = Boolean(
+        operationId && caseData.decisionLease?.operationId === operationId
+      );
+      if (!managedByDecision) {
+        fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
+      }
     }
-    caseRevision = Math.max(0, Number(caseData.revision || 0));
+    caseRevision = moderationDecisionRevision(caseData);
     if (data?.expectedRevision != null && expectedRevision(data.expectedRevision) !== caseRevision) {
       fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
     }
@@ -1098,11 +1223,11 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
     if (caseTarget.path !== target.path) fail('invalid-argument', 'Moderation target does not match the case.', 'invalid_target');
   }
   const finalizeCase = async () => {
-    if (!caseRef) return;
+    if (!caseRef || managedByDecision) return;
     await db.runTransaction(async (transaction) => {
       const current = await transaction.get(caseRef);
       const currentData = current.exists ? current.data() || {} : {};
-      const currentRevision = Math.max(0, Number(currentData.revision || 0));
+      const currentRevision = moderationDecisionRevision(currentData);
       if (!current.exists || currentData.status === 'resolving' || currentRevision !== caseRevision) {
         fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
       }
@@ -1116,6 +1241,7 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
               ? 'resolved_deleted'
               : 'resolved_held',
         revision: nextRevision,
+        decisionRevision: nextRevision,
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
         resolvedBy: auth.uid,
         resolutionReason: reason,
@@ -1134,7 +1260,24 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
   };
   const targetSnapshot = await db.doc(target.path).get();
   if (!targetSnapshot.exists) {
-    if (action === 'delete') {
+    if (action === 'delete' && operationRef) {
+      const operationSnapshot = await operationRef.get();
+      const operation = operationSnapshot.exists ? operationSnapshot.data() || {} : {};
+      const deletionProven = moderationOperationMatches(operation, {
+        caseId,
+        operationId,
+        target,
+        requestedContentAction: operation.requestedContentAction,
+        contentAction: action,
+        accountAction: operation.accountAction,
+      }) && ['target_deleted', 'effects_applied', 'case_finalized'].includes(operation.stage);
+      if (!deletionProven) {
+        fail(
+          'failed-precondition',
+          'A missing target cannot be attributed to this moderation operation.',
+          'manual_review_required'
+        );
+      }
       const outboxId = ownerNotificationOutboxId('content_deleted', target.path);
       const outbox = await db.doc(
         `system/moderation/ownerNotifications/${outboxId}`
@@ -1212,6 +1355,13 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
       });
     } else {
       await deleteContentInternal({ admin, target, actorUid: auth.uid, isAdmin: true, mediaBucket });
+    }
+    if (operationRef) {
+      await operationRef.set({
+        stage: 'target_deleted',
+        targetDeletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
     }
     if (deletionOutbox) {
       await completeOwnerNotificationOutbox({
@@ -1374,7 +1524,7 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
   await prepareAdminAction(admin, auth, 'resolveModerationCase');
   const db = admin.firestore();
   const requestedTarget = data?.target ? normalizeReportTarget(data.target) : null;
-  const suppliedCaseId = cleanOptionalText(data?.caseId, 180);
+  const suppliedCaseId = cleanOptionalId(data?.caseId, 'caseId');
   const caseId = suppliedCaseId || (requestedTarget ? caseIdForTarget(requestedTarget) : '');
   if (!caseId) fail('invalid-argument', 'A moderation case or target is required.', 'invalid_input');
   const revision = expectedRevision(data?.expectedRevision);
@@ -1401,6 +1551,9 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
   const caseRef = db.doc(`system/moderation/cases/${caseId}`);
   const operationId = cleanOptionalOpaqueId(data?.operationId, 'operationId')
     || crypto.randomBytes(16).toString('base64url');
+  const operationRef = db.doc(
+    `system/moderation/operations/${moderationOperationDocumentId(caseId, operationId)}`
+  );
   const requestedDurationHours = accountAction === 'suspend' && account.durationHours != null
     ? Number(account.durationHours)
     : null;
@@ -1417,9 +1570,13 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
   let previousStatus = 'open';
   let replayResult = null;
   await db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(caseRef);
+    const [snapshot, operationSnapshot] = await Promise.all([
+      transaction.get(caseRef),
+      transaction.get(operationRef),
+    ]);
     const previous = snapshot.exists ? snapshot.data() || {} : {};
-    const currentRevision = Math.max(0, Number(previous.revision || 0));
+    const existingOperation = operationSnapshot.exists ? operationSnapshot.data() || {} : null;
+    const currentRevision = moderationDecisionRevision(previous);
     if (previous.resolution?.operationId === operationId && String(previous.status || '').startsWith('resolved_')) {
       replayResult = publicModerationCase({ id: caseId, ...previous });
       return;
@@ -1438,7 +1595,15 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
     }
     if (['recommendation', 'route', 'trip', 'comment'].includes(target.type)) {
       const liveTarget = await transaction.get(db.doc(target.path));
-      if (!liveTarget.exists) fail('not-found', 'Moderated content is unavailable.', 'content_missing');
+      if (!liveTarget.exists && !moderationDeletionCanResumeFromOperation(existingOperation, {
+        caseId,
+        operationId,
+        target,
+        requestedContentAction,
+        accountAction,
+      })) {
+        fail('not-found', 'Moderated content is unavailable.', 'content_missing');
+      }
       const liveStatus = liveTarget.data()?.status;
       if (reasonCode === 'no_violation') {
         contentAction = normalizeNoViolationContentAction({
@@ -1453,6 +1618,7 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
     const retryDecision = previous.decisionRetry && typeof previous.decisionRetry === 'object'
       ? previous.decisionRetry
       : null;
+    assertModerationRetryOperation(retryDecision, operationId);
     if (retryDecision?.operationId === operationId) {
       const retryMatches = retryDecision.requestedContentAction === requestedContentAction
         && retryDecision.contentAction === contentAction
@@ -1464,6 +1630,19 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       if (!retryMatches) {
         fail('aborted', 'The moderation retry no longer matches the recorded decision.', 'decision_retry_conflict');
       }
+    }
+    if (existingOperation && !moderationOperationMatches(existingOperation, {
+      caseId,
+      operationId,
+      target,
+      requestedContentAction,
+      contentAction,
+      accountAction,
+    })) {
+      fail('aborted', 'The moderation operation conflicts with a prior request.', 'decision_retry_conflict');
+    }
+    if (existingOperation?.stage === 'case_finalized') {
+      fail('aborted', 'The moderation operation state is inconsistent.', 'manual_review_required');
     }
     previousStatus = recoverablePreviousCaseStatus(previous);
     ownerId = previous.targetOwnerId || (target.type === 'profile' ? target.id : '');
@@ -1499,6 +1678,7 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       },
       assignmentUid: previous.assignmentUid || actor.uid,
       revision: leaseRevision,
+      decisionRevision: leaseRevision,
       decisionLease: {
         id: leaseId,
         operationId,
@@ -1519,6 +1699,20 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+    if (!operationSnapshot.exists) {
+      transaction.set(operationRef, {
+        caseId,
+        operationId,
+        target,
+        requestedContentAction,
+        contentAction,
+        accountAction,
+        stage: 'started',
+        actorUid: actor.uid,
+        startedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
     transaction.set(caseEventRef(db, caseId), {
       type: 'decision_started',
       actor,
@@ -1570,6 +1764,8 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
           target,
           action: contentAction,
           reason: reasonDefinition.label,
+          caseId,
+          operationId,
           allowSuspendedRestore: contentAction === 'restore' && accountAction === 'reinstate',
         },
         mediaBucket,
@@ -1616,6 +1812,30 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       }
     }
 
+    await db.runTransaction(async (transaction) => {
+      const operationSnapshot = await transaction.get(operationRef);
+      const operation = operationSnapshot.exists ? operationSnapshot.data() || {} : {};
+      if (!operationSnapshot.exists || !moderationOperationMatches(operation, {
+        caseId,
+        operationId,
+        target,
+        requestedContentAction,
+        contentAction,
+        accountAction,
+      })) {
+        fail('aborted', 'The moderation operation state is invalid.', 'manual_review_required');
+      }
+      if (!['started', 'target_deleted', 'effects_applied'].includes(operation.stage)
+        || (contentAction === 'delete' && operation.stage === 'started')) {
+        fail('aborted', 'The moderation operation cannot prove its effects.', 'manual_review_required');
+      }
+      transaction.set(operationRef, {
+        stage: 'effects_applied',
+        effectsAppliedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+
     const resolvedStatus = accountAction !== 'none'
       ? 'resolved_actioned'
       : contentAction === 'dismiss'
@@ -1639,22 +1859,34 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       `system/moderation/audit/${moderationCaseAuditId(caseId, operationId)}`
     );
     await db.runTransaction(async (transaction) => {
-      const [snapshot, auditSnapshot] = await Promise.all([
+      const [snapshot, auditSnapshot, operationSnapshot] = await Promise.all([
         transaction.get(caseRef),
         transaction.get(resolutionAuditRef),
+        transaction.get(operationRef),
       ]);
       const current = snapshot.exists ? snapshot.data() || {} : {};
+      const operation = operationSnapshot.exists ? operationSnapshot.data() || {} : {};
       if (
         !snapshot.exists
         || current.status !== 'resolving'
-        || Math.max(0, Number(current.revision || 0)) !== leaseRevision
+        || moderationDecisionRevision(current) !== leaseRevision
         || current.decisionLease?.id !== leaseId
+        || operation.stage !== 'effects_applied'
+        || !moderationOperationMatches(operation, {
+          caseId,
+          operationId,
+          target,
+          requestedContentAction,
+          contentAction,
+          accountAction,
+        })
       ) {
         fail('aborted', 'The moderation case changed.', 'case_revision_conflict');
       }
       transaction.set(caseRef, {
         status: resolvedStatus,
         revision: finalRevision,
+        decisionRevision: finalRevision,
         resolution,
         resolutionReason: reasonDefinition.label,
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1664,6 +1896,11 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
         resolutionError: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(operationRef, {
+        stage: 'case_finalized',
+        caseFinalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       transaction.set(caseEventRef(db, caseId), {
         type: 'decision_completed',
@@ -1692,12 +1929,13 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
       if (
         !current.exists
         || currentData.status !== 'resolving'
-        || Math.max(0, Number(currentData.revision || 0)) !== leaseRevision
+        || moderationDecisionRevision(currentData) !== leaseRevision
         || currentData.decisionLease?.id !== leaseId
       ) return;
       transaction.set(caseRef, {
         status: previousStatus,
         revision: revision + 2,
+        decisionRevision: revision + 2,
         decisionLease: admin.firestore.FieldValue.delete(),
         resolutionError: error?.details?.reason || 'operation_failed',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1717,7 +1955,7 @@ async function resolveModerationCase({ admin, auth, data, mediaBucket }) {
 
 async function bulkUpdateModerationCases({ admin, auth, data, mediaBucket }) {
   const operation = cleanEnum(data?.operation, BULK_OPERATIONS, 'operation');
-  await prepareAdmin(admin, auth, { recent: operation === 'dismiss' });
+  await prepareAdminAction(admin, auth, 'bulkUpdateModerationCases');
   const cases = Array.isArray(data?.cases) ? data.cases : [];
   if (!cases.length || cases.length > MAX_BULK_CASES) {
     fail('invalid-argument', 'Bulk moderation requires 1-25 cases.', 'invalid_input');
@@ -1725,7 +1963,7 @@ async function bulkUpdateModerationCases({ admin, auth, data, mediaBucket }) {
   const results = [];
   for (const item of cases) {
     try {
-      const caseId = cleanText(item?.caseId, 'caseId', 180);
+      const caseId = cleanId(item?.caseId, 'caseId');
       const revision = expectedRevision(item?.expectedRevision);
       if (operation === 'dismiss') {
         const result = await resolveModerationCase({
@@ -2092,6 +2330,7 @@ async function acquireModerationTransition({
       userRef,
       enforcementId,
       enforcementRef: enforcementRef && enforcement ? enforcementRef : null,
+      enforcement,
     };
   });
 }
@@ -2254,9 +2493,13 @@ async function reinstateUserAccount({
   let mediaRestored = false;
   let stateFinalized = false;
   try {
-    await admin.auth().updateUser(uid, { disabled: false });
-    authEnabled = true;
-    await admin.auth().revokeRefreshTokens(uid);
+    const shouldEnableAuth = transition.enforcement?.authDisabledBefore === false &&
+      transition.enforcement?.authDisableIntent === 'disable_for_suspension';
+    if (shouldEnableAuth) {
+      await admin.auth().updateUser(uid, { disabled: false });
+      authEnabled = true;
+      await admin.auth().revokeRefreshTokens(uid);
+    }
     await setMediaAvailabilityImpl({
       admin,
       data: transition.userData,
@@ -2278,7 +2521,12 @@ async function reinstateUserAccount({
       }).catch(() => {});
       return { uid, reinstated: false, reason: 'enforcement_superseded' };
     }
-    return { uid, reinstated: true, enforcementId: transition.enforcementId };
+    return {
+      uid,
+      reinstated: true,
+      enforcementId: transition.enforcementId,
+      authPreservedDisabled: transition.enforcement?.authDisabledBefore === true,
+    };
   } catch (error) {
     if (authEnabled && !stateFinalized) {
       await admin.auth().updateUser(uid, { disabled: true }).catch(() => {});
@@ -2318,8 +2566,13 @@ function applyingSuspensionDisposition({
   const hasDifferentEnforcement = Boolean(moderation.enforcementId && !currentSame);
   const stage = String(enforcement.stage || '');
   const beforeProfileMutation = ['created', 'auth_disabling', 'auth_disabled'].includes(stage);
+  const authChangedByThisEnforcement = enforcement.authDisabledBefore === false &&
+    enforcement.authDisableIntent === 'disable_for_suspension' &&
+    Boolean(enforcement.authDisableStartedAt);
+  const preservedPreDisabledState = enforcement.authDisabledBefore === true &&
+    enforcement.authDisableIntent === 'preserve_disabled';
   const canCancelBeforeProfile = beforeProfileMutation
-    && (authUser.disabled !== true || Boolean(enforcement.authDisableStartedAt));
+    && (authUser.disabled !== true || authChangedByThisEnforcement || preservedPreDisabledState);
   if (hasDifferentEnforcement) return { action: 'supersede', reason: 'newer_enforcement' };
   if (userData.status === 'deleting' || moderation.status === 'deleting') {
     return { action: 'supersede', reason: 'user_deleting' };
@@ -2381,18 +2634,31 @@ async function applySuspensionEnforcement({
   durationHours,
   reason,
   userMessage,
+  authDisabledBefore,
+  authDisableIntent,
   setMediaAvailabilityImpl = setMediaAvailability,
   hideUserContentImpl = hideUserContent,
   sendModerationNotificationImpl = sendModerationNotification,
   auditEnforcementOnceImpl = auditEnforcementOnce,
 }) {
+  const recordedAuthDisabledBefore = typeof authDisabledBefore === 'boolean'
+    ? authDisabledBefore
+    : user?.disabled === true;
+  const recordedAuthDisableIntent = authDisableIntent ||
+    (recordedAuthDisabledBefore ? 'preserve_disabled' : 'disable_for_suspension');
   await setSuspensionStage({
     admin,
     enforcementRef,
     stage: 'auth_disabling',
-    patch: { authDisableStartedAt: admin.firestore.FieldValue.serverTimestamp() },
+    patch: {
+      authDisabledBefore: recordedAuthDisabledBefore,
+      authDisableIntent: recordedAuthDisableIntent,
+      authDisableStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
   });
-  await admin.auth().updateUser(user.uid, { disabled: true });
+  if (recordedAuthDisableIntent === 'disable_for_suspension') {
+    await admin.auth().updateUser(user.uid, { disabled: true });
+  }
   await admin.auth().revokeRefreshTokens(user.uid);
   await setSuspensionStage({
     admin,
@@ -2544,7 +2810,8 @@ async function recoverApplyingSuspension({
   }
 
   if (['cancel_before_activation', 'expire_before_activation'].includes(disposition.action)) {
-    if (authUser.disabled && enforcement.authDisableStartedAt) {
+    if (authUser.disabled && enforcement.authDisabledBefore === false &&
+        enforcement.authDisableIntent === 'disable_for_suspension' && enforcement.authDisableStartedAt) {
       await admin.auth().updateUser(uid, { disabled: false });
       await admin.auth().revokeRefreshTokens(uid);
     }
@@ -2602,6 +2869,8 @@ async function recoverApplyingSuspension({
         endsAt: enforcement.endsAt || null,
         durationHours: enforcement.durationHours ?? null,
         reason,
+        authDisabledBefore: enforcement.authDisabledBefore,
+        authDisableIntent: enforcement.authDisableIntent,
         userMessage: cleanOptionalText(enforcement.userMessage, 240)
           || 'החשבון שלך הושעה בעקבות הפרה של כללי הקהילה.',
       })),
@@ -2641,7 +2910,7 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
     });
     if (!result.reinstated) {
       const retryOperationId = cleanOptionalOpaqueId(data?.operationId, 'operationId');
-      const retryCaseId = cleanOptionalText(data?.sourceCaseId, 180);
+      const retryCaseId = cleanOptionalId(data?.sourceCaseId, 'sourceCaseId');
       if (result.reason === 'not_suspended' && retryOperationId && retryCaseId) {
         const retryCase = await admin.firestore().doc(`system/moderation/cases/${retryCaseId}`).get();
         const retryCaseData = retryCase.exists ? retryCase.data() || {} : {};
@@ -2659,7 +2928,7 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
     }
     return { uid: user.uid, suspended: false, hidden: 0, ...result };
   }
-  const sourceCaseId = cleanOptionalText(data?.sourceCaseId, 180);
+  const sourceCaseId = cleanOptionalId(data?.sourceCaseId, 'sourceCaseId');
   const reasonCode = cleanOptionalText(data?.reasonCode, 80) || 'other';
   const userMessage = cleanOptionalText(data?.userMessage, 240)
     || policyReason(reasonCode)?.userMessage
@@ -2756,6 +3025,12 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
     const endsAt = existingEnforcement?.endsAt || (durationHours == null
       ? null
       : admin.firestore.Timestamp.fromMillis(Date.now() + durationHours * 60 * 60 * 1000));
+    const authUserBefore = existingEnforcement
+      ? user
+      : await admin.auth().getUser(user.uid);
+    const authDisabledBefore = existingEnforcement?.authDisabledBefore ?? (authUserBefore.disabled === true);
+    const authDisableIntent = existingEnforcement?.authDisableIntent ||
+      (authDisabledBefore ? 'preserve_disabled' : 'disable_for_suspension');
     if (!existingEnforcement) {
       await enforcementRef.create({
         type: 'suspension',
@@ -2763,6 +3038,8 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
         userUid: user.uid,
         sourceCaseId,
         operationId: operationId || null,
+        authDisabledBefore,
+        authDisableIntent,
         reasonCode,
         reason,
         userMessage,
@@ -2780,13 +3057,15 @@ async function setUserSuspension({ admin, auth, data, mediaBucket }) {
     return await applySuspensionEnforcement({
       admin,
       auth,
-      user,
+      user: authUserBefore,
       mediaBucket,
       enforcementId,
       enforcementRef,
       endsAt,
       durationHours,
       reason,
+      authDisabledBefore,
+      authDisableIntent,
       userMessage,
     });
   } finally {
@@ -2888,6 +3167,79 @@ async function processExpiredModerationSuspensions({
   };
 }
 
+async function reconcileStaleModerationDecisions({ admin, limit = 100, now = Date.now() }) {
+  const db = admin.firestore();
+  const boundedLimit = Math.max(1, Math.min(200, Math.trunc(Number(limit) || 100)));
+  const snapshot = await db.collection('system/moderation/cases')
+    .where('status', '==', 'resolving')
+    .limit(boundedLimit)
+    .get();
+  let recovered = 0;
+  let fresh = 0;
+  let invalid = 0;
+  for (const entry of snapshot.docs) {
+    const initial = entry.data() || {};
+    const startedAtMs = Number(initial.decisionLease?.startedAtMs || 0);
+    if (startedAtMs > 0 && now - startedAtMs <= MODERATION_TRANSITION_TTL_MS) {
+      fresh += 1;
+      continue;
+    }
+    const operationId = typeof initial.decisionLease?.operationId === 'string'
+      && /^[A-Za-z0-9_-]{8,120}$/u.test(initial.decisionLease.operationId)
+      ? initial.decisionLease.operationId
+      : '';
+    const operationRef = operationId
+      ? db.doc(`system/moderation/operations/${moderationOperationDocumentId(entry.id, operationId)}`)
+      : null;
+    const eventRef = caseEventRef(db, entry.id);
+    let changed = false;
+    await db.runTransaction(async (transaction) => {
+      const currentSnapshot = await transaction.get(entry.ref);
+      const operationSnapshot = operationRef ? await transaction.get(operationRef) : null;
+      if (!currentSnapshot.exists) return;
+      const current = currentSnapshot.data() || {};
+      const currentStartedAtMs = Number(current.decisionLease?.startedAtMs || 0);
+      if (current.status !== 'resolving'
+        || (currentStartedAtMs > 0 && now - currentStartedAtMs <= MODERATION_TRANSITION_TTL_MS)) return;
+      const nextRevision = moderationDecisionRevision(current) + 1;
+      transaction.set(entry.ref, {
+        status: recoverablePreviousCaseStatus(current),
+        revision: nextRevision,
+        decisionRevision: nextRevision,
+        decisionLease: admin.firestore.FieldValue.delete(),
+        resolutionError: 'stale_decision_lease',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActivityAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      transaction.set(eventRef, {
+        type: 'decision_lease_expired',
+        actor: { uid: 'system', displayName: 'System' },
+        revision: nextRevision,
+        operationId: operationId || null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      if (operationSnapshot?.exists) {
+        transaction.set(operationRef, {
+          reconciliation: {
+            status: 'retry_required',
+            detectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      changed = true;
+    });
+    if (changed) {
+      recovered += 1;
+      if (!operationId) invalid += 1;
+    }
+  }
+  if (recovered > 0) {
+    console.warn('Stale moderation decision leases recovered.', { recovered, invalid });
+  }
+  return { scanned: snapshot.size, recovered, fresh, invalid };
+}
+
 async function setUserEmailVerified({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'setUserEmailVerified');
   const user = await resolveUser(admin, data);
@@ -2979,7 +3331,7 @@ async function listModerationAudit({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'listModerationAudit');
   let query = admin.firestore().collection('system/moderation/audit').orderBy('createdAt', 'desc').limit(PAGE_SIZE);
   if (data?.cursor) {
-    const cursor = await admin.firestore().doc(`system/moderation/audit/${cleanText(data.cursor, 'cursor', 180)}`).get();
+    const cursor = await admin.firestore().doc(`system/moderation/audit/${cleanId(data.cursor, 'cursor')}`).get();
     if (cursor.exists) query = query.startAfter(cursor);
   }
   const snapshot = await query.get();
@@ -3008,9 +3360,12 @@ module.exports = {
   applyingSuspensionStillIntended,
   audit,
   assertAdmin,
+  assertModerationRetryOperation,
   assertRecentAuth,
   applySuspensionEnforcement,
   bulkUpdateModerationCases,
+  cleanId,
+  cleanOptionalId,
   deleteAdminSavedView,
   sensitiveAdminActions,
   deleteUserAsAdmin,
@@ -3027,7 +3382,9 @@ module.exports = {
   listModerationAudit,
   listModerationCases,
   moderationDecisionOptions,
+  moderationDeletionCanResumeFromOperation,
   moderationCaseAuditId,
+  moderationOperationDocumentId,
   normalizeNoViolationContentAction,
   moderateContent,
   prepareAdmin,
@@ -3035,6 +3392,7 @@ module.exports = {
   publicModerationReport,
   recoverablePreviousCaseStatus,
   processExpiredModerationSuspensions,
+  reconcileStaleModerationDecisions,
   recoverApplyingSuspension,
   reinstateUserAccount,
   resolveModerationCase,
@@ -3045,6 +3403,7 @@ module.exports = {
   prepareAdminAction,
   setUserSuspension,
   suspensionReplayDisposition,
+  assertTotpSecondFactor,
   updateModerationCase,
   updateAdminAttachedPlace,
 };

@@ -1,6 +1,7 @@
 const { FieldPath } = require('firebase-admin/firestore');
 const { cityName, distanceKm } = require('./destinationIdentityService');
 const { resolveWikimediaDestinationImage } = require('./wikimediaDestinationImageService');
+const { safeExactHttpsUrl } = require('./externalUrlPolicy');
 
 const MAX_IMAGE_SYNC_ATTEMPTS = 6;
 const IDENTITY_STRATEGY_VERSION = 3;
@@ -42,16 +43,18 @@ function isHttpsUrl(value) {
 }
 
 function addUtm(value) {
-  if (!isHttpsUrl(value)) return null;
-  const url = new URL(value);
+  const safeUrl = safeExactHttpsUrl(value, 'unsplash.com');
+  if (!safeUrl) return null;
+  const url = new URL(safeUrl);
   url.searchParams.set('utm_source', UTM_SOURCE);
   url.searchParams.set('utm_medium', UTM_MEDIUM);
   return url.toString();
 }
 
 function resizeUnsplashUrl(value, width) {
-  if (!isHttpsUrl(value)) return null;
-  const url = new URL(value);
+  const safeUrl = safeExactHttpsUrl(value, 'images.unsplash.com');
+  if (!safeUrl) return null;
+  const url = new URL(safeUrl);
   url.searchParams.set('auto', 'format');
   url.searchParams.set('fit', 'max');
   url.searchParams.set('q', '80');
@@ -347,9 +350,10 @@ async function fetchUnsplashPhoto({ photoId, accessKey, fetchImpl = global.fetch
 
 async function trackUnsplashDownload({ downloadLocation, accessKey, fetchImpl = global.fetch, onRequest = async () => {} }) {
   if (!downloadLocation) return;
-  if (!isHttpsUrl(downloadLocation)) throw new Error('Invalid Unsplash download tracking URL.');
+  const safeDownloadLocation = safeExactHttpsUrl(downloadLocation, 'api.unsplash.com');
+  if (!safeDownloadLocation) throw new Error('Invalid Unsplash download tracking URL.');
   await onRequest();
-  const response = await fetchImpl(downloadLocation, {
+  const response = await fetchImpl(safeDownloadLocation, {
     headers: {
       Authorization: `Client-ID ${accessKey}`,
       'Accept-Version': 'v1',

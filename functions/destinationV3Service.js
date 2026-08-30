@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { distanceKm, normalize } = require('./destinationIdentityService');
-const { destinationTypeFor, googleCacheFor, normalizeName } = require('./legacyPlacesAdapter');
+const { destinationTypeFor, googleCacheFor, normalizeName } = require('./placesCache');
 const {
   DESTINATION_NAMING_POLICY_VERSION,
   resolveHebrewDestinationName,

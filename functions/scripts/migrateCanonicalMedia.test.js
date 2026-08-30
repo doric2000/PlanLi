@@ -7,20 +7,22 @@ const {
   migrateUser,
   parseArgs,
   parseStorageUrl,
+  ACTIVE_MEDIA_BUCKET,
+  ROLLBACK_MEDIA_BUCKET,
 } = require('./migrateCanonicalMedia');
 
 test('canonical migration is dry-run by default and accepts explicit buckets', () => {
   const options = parseArgs([
     '--source-bucket',
-    'gs://planli-us',
+    `gs://${ROLLBACK_MEDIA_BUCKET}`,
     '--target-bucket',
-    'planli-eu',
+    ACTIVE_MEDIA_BUCKET,
     '--limit',
     '25',
   ]);
   assert.equal(options.apply, false);
-  assert.equal(options.sourceBucket, 'planli-us');
-  assert.equal(options.targetBucket, 'planli-eu');
+  assert.equal(options.sourceBucket, ROLLBACK_MEDIA_BUCKET);
+  assert.equal(options.targetBucket, ACTIVE_MEDIA_BUCKET);
   assert.equal(options.limit, 25);
 });
 

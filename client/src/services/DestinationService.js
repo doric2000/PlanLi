@@ -1,11 +1,7 @@
-import { httpsCallable } from 'firebase/functions';
-
-import { cloudFunctions } from '../config/firebase';
 import { compactDestinationText } from '../utils/destinationSearch';
 import { createRequestCoordinator } from '../utils/requestCoordinator';
+import { callPublicCallable } from './PublicCallableService';
 
-let destinationOverviewCallable = null;
-let destinationSearchCallable = null;
 const DESTINATION_SEARCH_FRESH_MS = 30 * 1000;
 const DESTINATION_SEARCH_STALE_MS = 5 * 60 * 1000;
 const DESTINATION_SEARCH_RETRY_MS = 15 * 1000;
@@ -30,27 +26,17 @@ function destinationSearchCacheKey(payload) {
 }
 
 export async function getDestinationOverview(payload) {
-  if (!destinationOverviewCallable) {
-    destinationOverviewCallable = httpsCallable(
-      cloudFunctions,
-      'getDestinationOverview'
-    );
-  }
-  const response = await destinationOverviewCallable(payload);
-  return response?.data || null;
+  return callPublicCallable('getDestinationOverview', payload);
 }
 
 export function requestDestinations(payload = {}) {
-  if (!destinationSearchCallable) {
-    destinationSearchCallable = httpsCallable(cloudFunctions, 'searchDestinations');
-  }
   const trimmedQuery = String(payload?.query || '').trim();
   const requestPayload = payload?.query === undefined
     ? payload
     : { ...payload, query: compactDestinationText(trimmedQuery) ? trimmedQuery : '' };
   const cacheKey = destinationSearchCacheKey(requestPayload);
-  const loader = () => destinationSearchCallable(requestPayload)
-    .then((response) => response?.data || { items: [], nextCursor: null });
+  const loader = () => callPublicCallable('searchDestinations', requestPayload)
+    .then((response) => response || { items: [], nextCursor: null });
   if (!cacheKey) return { requested: true, source: 'network', promise: loader() };
   return destinationSearchCoordinator.request(cacheKey, loader);
 }

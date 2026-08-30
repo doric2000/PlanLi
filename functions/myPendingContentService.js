@@ -5,6 +5,7 @@ const MAX_PAGE_SIZE = 50;
 const CONTENT_TYPES = Object.freeze([
   { type: 'recommendation', collection: 'recommendations' },
   { type: 'route', collection: 'routes' },
+  { type: 'trip', collection: 'trips' },
 ]);
 
 function fail(message) {
@@ -21,18 +22,25 @@ function cleanPageSize(value) {
 }
 
 function cleanCursorId(value) {
-  const id = typeof value === 'string' ? value.trim() : '';
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value !== value.trim()) fail('cursor is invalid.');
+  const id = value;
   if (!id) return null;
-  if (id.length > 180 || id.includes('/')) fail('cursor is invalid.');
+  if (id.length > 180 || id.includes('/') || id === '.' || id === '..' ||
+      /[\u0000-\u001f\u007f-\u009f]/u.test(id)) fail('cursor is invalid.');
   return id;
 }
 
 function cleanCursor(value) {
-  if (value == null) return { recommendationId: null, routeId: null };
+  if (value == null) return { recommendationId: null, routeId: null, tripId: null };
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('cursor is invalid.');
+  if (Object.keys(value).some((key) => !['recommendationId', 'routeId', 'tripId'].includes(key))) {
+    fail('cursor is invalid.');
+  }
   return {
     recommendationId: cleanCursorId(value.recommendationId),
     routeId: cleanCursorId(value.routeId),
+    tripId: cleanCursorId(value.tripId),
   };
 }
 
@@ -58,7 +66,8 @@ function pendingItem(type, entry) {
   return {
     id: entry.id,
     contentType: type,
-    title: safeText(data.title || data.Title, 180) || (type === 'route' ? 'מסלול' : 'המלצה'),
+    title: safeText(data.title || data.Title, 180) ||
+      (type === 'route' ? 'מסלול' : type === 'trip' ? 'טיול' : 'המלצה'),
     thumbnailUrl: safeThumbUrl(data),
     publicationStatus: 'moderation_hold',
     submittedAtMs,

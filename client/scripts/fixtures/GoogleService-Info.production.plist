@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>PROJECT_ID</key><string>planli-f0b12</string>
+  <key>GCM_SENDER_ID</key><string>633543026638</string>
+  <key>GOOGLE_APP_ID</key><string>1:633543026638:ios:b13b28c424e4c9e846ad9f</string>
+  <key>BUNDLE_ID</key><string>com.planli.planlitravels</string>
+</dict>
+</plist>

@@ -19,6 +19,7 @@ const {
   normalizeDestinationHebrewData,
 } = require('./destinationLocalizationService');
 const {
+  contentIsPubliclyVisible,
   destinationAcceptsNewReferences,
   isDestinationReassigning,
 } = require('./destinationReferencePolicy');
@@ -630,7 +631,7 @@ async function loadTrustedRecommendationSources(db, days) {
   return new Map(snapshots.map((snapshot, index) => {
     if (!snapshot.exists) return null;
     const recommendation = snapshot.data() || {};
-    if (recommendation.status !== 'active') return null;
+    if (!contentIsPubliclyVisible(recommendation)) return null;
     const catalogCategoryId = normalizeRecommendationCategory(recommendation.categoryId);
     const catalogSubcategoryIds = normalizeRecommendationSubcategories(
       recommendation.subcategoryIds,
@@ -653,9 +654,9 @@ async function resolveRoutePlaces({
   admin,
   auth,
   days,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
   trustedPlaces = new Map(),
@@ -741,8 +742,8 @@ async function resolveRoutePlaces({
             placeId: entry.placeId,
             resolvedPlaceToken: entry.resolvedPlaceToken,
             destinationRef: entry.destinationRef,
-            mapsKey,
-            newPlacesKey,
+            accessTokenProvider,
+            projectId,
             placesProvider,
             restCountriesKey,
             providerRateLimitKey,
@@ -753,8 +754,8 @@ async function resolveRoutePlaces({
             auth,
             placeId: entry.placeId,
             resolvedPlaceToken: entry.resolvedPlaceToken,
-            mapsKey,
-            newPlacesKey,
+            accessTokenProvider,
+            projectId,
             placesProvider,
             restCountriesKey,
             providerRateLimitKey,
@@ -795,8 +796,8 @@ async function resolveRoutePlaces({
         auth,
         placeId: destinationRef.providerPlaceId,
         resolvedPlaceToken: destinationRef.resolvedPlaceToken || null,
-        mapsKey,
-        newPlacesKey,
+        accessTokenProvider,
+        projectId,
         placesProvider,
         restCountriesKey,
         providerRateLimitKey,
@@ -946,14 +947,43 @@ function preservedRouteStatus(routeData) {
   return routeData?.status || 'active';
 }
 
+function routePublicationState(currentRoute, textSafety, pendingDestinationKeys = []) {
+  const uniquePendingKeys = Array.from(new Set(pendingDestinationKeys.filter(Boolean)));
+  const destinationPendingApproval = uniquePendingKeys.length > 0;
+  const holdReason = !textSafety?.safe
+    ? textSafety?.reason || 'unsafe_text'
+    : destinationPendingApproval ? 'destination_pending_approval' : '';
+  const existingStatus = preservedRouteStatus(currentRoute);
+  const releasesDestinationHold = existingStatus === 'moderation_hold'
+    && currentRoute?.moderation?.holdReason === 'destination_pending_approval'
+    && !holdReason;
+  const status = holdReason && existingStatus === 'active'
+    ? 'moderation_hold'
+    : releasesDestinationHold ? 'active' : existingStatus;
+
+  return {
+    status,
+    publicationGate: { destinationApprovalVerified: !destinationPendingApproval },
+    ...(holdReason ? {
+      moderation: {
+        holdReason,
+        ...(destinationPendingApproval ? {
+          systemGate: 'destination_pending_approval',
+          pendingDestinationKeys: uniquePendingKeys,
+        } : {}),
+      },
+    } : {}),
+  };
+}
+
 async function saveRoute({
   admin,
   auth,
   data,
   mediaBucket,
-  mapsKey,
-  newPlacesKey,
-  placesProvider = 'legacy',
+  accessTokenProvider,
+  projectId,
+  placesProvider = 'new',
   restCountriesKey,
   providerRateLimitKey,
   serverTrustedPlaces = new Map(),
@@ -961,8 +991,6 @@ async function saveRoute({
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'Email verification is required.');
-  assert(placesProvider === 'new' ? newPlacesKey : mapsKey, 'failed-precondition',
-    placesProvider === 'new' ? 'GOOGLE_PLACES_NEW_KEY is not configured.' : 'GOOGLE_MAPS_KEY is not configured.');
   const db = admin.firestore();
   const uid = auth.uid;
   const routeId = typeof data?.routeId === 'string' && data.routeId.trim()
@@ -980,7 +1008,9 @@ async function saveRoute({
       ? db.doc(`routes/${stableDocumentId('route', `${uid}:${publishRequestId}`)}`)
       : db.collection('routes').doc();
   const existingSnapshot = await routeRef.get();
-  const isAdmin = routeId ? await hasActiveAdminAccess({ admin, auth }) : false;
+  const isAdmin = routeId
+    ? await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true })
+    : false;
   const existingRoute = routeId
     ? assertEditableRoute(existingSnapshot, uid, isAdmin)
     : null;
@@ -1054,8 +1084,8 @@ async function saveRoute({
     admin,
     auth,
     days: mediaDays,
-    mapsKey,
-    newPlacesKey,
+    accessTokenProvider,
+    projectId,
     placesProvider,
     restCountriesKey,
     providerRateLimitKey,
@@ -1206,6 +1236,7 @@ async function saveRoute({
       'A route destination is being reassigned. Try again shortly.'
     );
     const canonicalDestinationNames = new Map();
+    const pendingDestinationKeys = [];
 
     destinationEntries.forEach((entry, index) => {
       const snapshot = destinationSnapshots[index];
@@ -1221,13 +1252,19 @@ async function saveRoute({
           updatedAt: now,
         });
         if (entry.kind === 'destination') {
+          const countryId = entry.ref.path.split('/')[1];
           canonicalDestinationNames.set(entry.ref.path, destinationHebrewName(entry.data));
+          if (!destinationAcceptsNewReferences(entry.data, countryId)) {
+            pendingDestinationKeys.push(destinationKey(countryId, entry.ref.id));
+          }
         }
         return;
       }
       assert(
         snapshot.data()?.status === 'active' &&
-          (entry.kind !== 'destination' || destinationAcceptsNewReferences(snapshot.data())),
+          (entry.kind !== 'destination' || destinationAcceptsNewReferences(
+            snapshot.data(), entry.ref.path.split('/')[1]
+          )),
         'failed-precondition',
         `The selected ${entry.kind} is no longer active.`
       );
@@ -1310,10 +1347,7 @@ async function saveRoute({
       title: route.title,
       description: route.description,
       routeSchemaVersion: route.routeSchemaVersion,
-      status: preservedRouteStatus(currentRoute) === 'active' && !textSafety.safe
-        ? 'moderation_hold'
-        : preservedRouteStatus(currentRoute),
-      ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
+      ...routePublicationState(currentRoute, textSafety, pendingDestinationKeys),
       dayCount: route.dayCount,
       distanceKm: routeLegs.distanceKm,
       priceBasis: route.priceBasis || 'whole_route',
@@ -1410,7 +1444,8 @@ async function loadRouteDetails({ admin, data }) {
   const routeId = cleanDocumentId(data?.routeId, 'routeId', '');
   const routeRef = admin.firestore().doc(`routes/${routeId}`);
   const routeSnapshot = await routeRef.get();
-  assert(routeSnapshot.exists && routeSnapshot.data()?.status === 'active', 'not-found', 'Route does not exist.');
+  assert(routeSnapshot.exists && contentIsPubliclyVisible(routeSnapshot.data()),
+    'not-found', 'Route does not exist.');
   const routeData = routeSnapshot.data();
   const revisionId = routeData.activeRevisionId;
   assert(revisionId, 'failed-precondition', 'Route has no active revision.');
@@ -1496,6 +1531,7 @@ module.exports = {
   resolveRoutePlaces,
   revisionVersion,
   preservedRouteStatus,
+  routePublicationState,
   sanitizeRouteInput,
   sanitizeRouteMetadata,
   saveRoute,

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "projectId": "planli-f0b12",
+  "policy": "no-cost-launch-guardrails",
+  "quotas": [
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "AutocompletePlacesRequestPerDayPerProject",
+      "preferredValue": 300,
+      "purpose": "Place suggestions; 300/day stays below 10,000 requests in a 31-day month."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "AutocompletePlacesRequestPerMinutePerProject",
+      "preferredValue": 30,
+      "purpose": "Limits autocomplete abuse bursts."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "GetPlaceRequestPerDayPerProject",
+      "preferredValue": 150,
+      "purpose": "Place details; 150/day stays below 5,000 requests in a 31-day month."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "GetPlaceRequestPerMinutePerProject",
+      "preferredValue": 30,
+      "purpose": "Limits place-details abuse bursts."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "SearchTextRequestPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Disabled for the launch: only the manual canonical-registry enrichment command uses Text Search, and it requires a separately approved temporary quota."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "SearchTextRequestPerMinutePerProject",
+      "preferredValue": 0,
+      "purpose": "Blocks the manual canonical-registry enrichment command unless a temporary administrative quota is explicitly approved."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "GetPhotoMediaRequestPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused; PlanLi rejects legacy Google photo URLs and uses canonical media."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "SearchMediaRequestPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused Places media search."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "SearchNearbyRequestPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused nearby search."
+    },
+    {
+      "service": "places.googleapis.com",
+      "quotaId": "SearchReviewPostsRequestPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused review-post search."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "BillableDefaultPerDayPerProject",
+      "preferredValue": 300,
+      "purpose": "Aggregate Geocoding safety ceiling."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "BillableDefaultPerMinutePerProject",
+      "preferredValue": 30,
+      "purpose": "Limits aggregate Geocoding abuse bursts."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "V4GeocodeLocationPerDayPerProject",
+      "preferredValue": 300,
+      "purpose": "Reverse geocoding used to verify a selected map location."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "V4GeocodeLocationPerMinutePerProject",
+      "preferredValue": 30,
+      "purpose": "Limits reverse-geocoding abuse bursts."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "V4GeocodeAddressPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused address geocoding."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "V4GeocodePlacePerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused place geocoding."
+    },
+    {
+      "service": "geocoding-backend.googleapis.com",
+      "quotaId": "V4SearchDestinationsPerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Unused destination search endpoint."
+    },
+    {
+      "service": "recaptchaenterprise.googleapis.com",
+      "quotaId": "CreateAssessmentRequestsPerDayPerProject",
+      "preferredValue": 300,
+      "purpose": "Web App Check; 300/day stays below 10,000 assessments in a 31-day month."
+    },
+    {
+      "service": "recaptchaenterprise.googleapis.com",
+      "quotaId": "RequestsPerMinutePerProject",
+      "preferredValue": 60,
+      "purpose": "Limits reCAPTCHA API abuse bursts without enabling App Check enforcement."
+    },
+    {
+      "service": "identitytoolkit.googleapis.com",
+      "quotaId": "defaultPerMinutePerProject",
+      "preferredValue": 60,
+      "purpose": "Limits broad authentication abuse bursts for the first 200-user release; it is not an MAU billing cap."
+    },
+    {
+      "service": "identitytoolkit.googleapis.com",
+      "quotaId": "signInWithCustomTokenPerMinutePerProject",
+      "preferredValue": 0,
+      "purpose": "Disabled because PlanLi has no custom-token sign-in flow."
+    },
+    {
+      "service": "identitytoolkit.googleapis.com",
+      "quotaId": "sendVerificationCodePerDayPerProject",
+      "preferredValue": 0,
+      "purpose": "Phone/SMS verification is disabled; PlanLi uses TOTP instead of SMS MFA."
+    }
+  ]
+}

@@ -1,5 +1,4 @@
 /* eslint-disable no-await-in-loop, no-console */
-const { execFileSync } = require('child_process');
 const admin = require('firebase-admin');
 const { initializeAdmin } = require('./localCredentials');
 const { buildDestinationV3, destinationClaimId } = require('../destinationV3Service');
@@ -67,24 +66,6 @@ function referencePlan({ recommendations, stops, routes, trips, favorites, viewp
     favorites,
     canRetireSource: trips.length === 0 && favorites.length === 0,
   };
-}
-
-function firebaseSecret(name, projectId = DEFAULT_PROJECT_ID) {
-  if (!/^[A-Z0-9_]+$/.test(name) || !/^[a-z0-9-]+$/.test(projectId)) {
-    throw new Error('Secret name or project ID is invalid.');
-  }
-  const output = process.platform === 'win32'
-    ? execFileSync(process.env.ComSpec || 'cmd.exe', [
-        '/d', '/s', '/c',
-        `firebase.cmd functions:secrets:access ${name} --project ${projectId} --non-interactive`,
-      ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-    : execFileSync('firebase', [
-        'functions:secrets:access', name, '--project', projectId, '--non-interactive',
-      ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-  const value = output.split(/\r?\n/).map((line) => line.trim())
-    .findLast((line) => /^AIza[0-9A-Za-z_-]+$/.test(line));
-  if (!value) throw new Error(`Secret ${name} did not return an API key.`);
-  return value;
 }
 
 function targetDestinationSummary(countryId, cityId, country, city) {
@@ -155,7 +136,8 @@ async function run({
   sourceCityId,
   targetPlaceId,
   adminImpl = admin,
-  newPlacesKey,
+  accessTokenProvider,
+  projectId = DEFAULT_PROJECT_ID,
   fetchImpl = global.fetch,
   syncCatalog = syncDestinationCatalog,
 } = {}) {
@@ -164,10 +146,8 @@ async function run({
   }
   initializeAdmin(adminImpl);
   const db = adminImpl.firestore();
-  const providerKey = newPlacesKey || process.env.GOOGLE_PLACES_NEW_KEY ||
-    firebaseSecret('GOOGLE_PLACES_NEW_KEY');
   const bilingual = await fetchBilingualPlace({
-    provider: 'new', placeId: targetPlaceId, newPlacesKey: providerKey, fetchImpl,
+    provider: 'new', placeId: targetPlaceId, accessTokenProvider, projectId, fetchImpl,
   });
   const built = buildDestinationV3({ countryId, he: bilingual.he, en: bilingual.en });
   if (!['city', 'town', 'village'].includes(built.data.destinationType)) {

@@ -1,6 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { auth, cloudFunctions } from '../config/firebase';
 import { createRequestCoordinator } from '../utils/requestCoordinator';
+import { callPublicCallable } from './PublicCallableService';
 import { loadGuestNoyaProfile } from '../features/profile/services/NoyaOnboardingStorage';
 import {
   clearGuestPersonalizationAfterMerge,
@@ -59,6 +60,9 @@ function discoveryVersion(name) {
 }
 
 const call = async (name, payload = {}) => {
+  if (Object.values(DISCOVERY_CALLABLES).includes(name)) {
+    return callPublicCallable(name, payload);
+  }
   if (!callables.has(name)) callables.set(name, httpsCallable(cloudFunctions, name));
   const response = await callables.get(name)(payload);
   return response?.data || null;

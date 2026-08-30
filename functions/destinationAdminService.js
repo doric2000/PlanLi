@@ -8,7 +8,7 @@ const {
   downloadAirports,
   nearestScheduledAirports,
 } = require('./airportFacts');
-const { syncDestinationCatalog } = require('./destinationCatalogService');
+const { catalogId, syncDestinationCatalog } = require('./destinationCatalogService');
 const {
   consumeUnsplashBudget,
   destinationImageContext,
@@ -22,6 +22,10 @@ const {
 const { resolveWikimediaDestinationImage } = require('./wikimediaDestinationImageService');
 const { buildDownloadUrl, getMediaBucket } = require('./mediaProcessor');
 const { destinationKey } = require('./discoverySearch');
+const {
+  destinationAcceptsNewReferences,
+  destinationIsPublicAndReferenceable,
+} = require('./destinationReferencePolicy');
 const { destinationHebrewName, hasHebrewName } = require('./destinationLocalizationService');
 const {
   DESTINATION_KINDS,
@@ -54,6 +58,7 @@ const {
 const PAGE_SIZE = 30;
 const IMAGE_VARIANTS = ['large', 'feed', 'thumb'];
 const IMAGE_VALIDATION_VERSION = 1;
+const DESTINATION_PUBLICATION_FENCE_RECOVERY_MS = 10 * 60 * 1000;
 
 function fail(code, message, reason) {
   throw new HttpsError(code, message, { reason });
@@ -502,21 +507,26 @@ async function updateDestinationPolicy({ admin, auth, data }) {
   const aliases = cleanPolicyAliases(data?.aliases || []);
   const bundle = await destinationBundle(admin, countryId, cityId);
   const registryId = bundle.city?.canonicalPolicy?.registryId || `${String(bundle.country?.code || countryId).toLowerCase()}-${cityId.toLowerCase()}`;
-  const policy = {
-    approved: true,
+  let policy = {
+    approved: false,
     registryId,
     kind,
     parentId,
     groupingPolicy,
     aliases,
     registryVersion: REGISTRY_VERSION,
-    approvedBy: auth.uid,
+    provisional: true,
+    reviewState: 'policy_validated',
+    policyValidatedBy: auth.uid,
   };
   const db = admin.firestore();
   const countryRef = db.doc(`countries/${countryId}`);
   const registryRef = db.doc(`${REGISTRY_PATH}/${registryId}`);
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const drainOperationId = crypto.randomUUID();
   let syncedCity = null;
+  let destinationType = '';
+  let registryData = null;
   await db.runTransaction(async (transaction) => {
     const [citySnapshot, countrySnapshot, registrySnapshot] = await Promise.all([
       transaction.get(bundle.cityRef),
@@ -528,6 +538,10 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     }
     const currentCity = citySnapshot.data() || {};
     const currentCountry = countrySnapshot.data() || {};
+    policy = {
+      ...policy,
+      approvalRevision: Math.max(0, Number(currentCity.canonicalPolicy?.approvalRevision || 0)) + 1,
+    };
     const registryEntry = {
       id: registryId,
       countryCode: String(currentCountry.code || countryId).toUpperCase(),
@@ -549,11 +563,11 @@ async function updateDestinationPolicy({ admin, auth, data }) {
         source: 'admin_approved_aliases',
         version: 2,
       },
-      approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
-      status: 'active',
+      approval: { approvedByAdmin: false, reason, policyValidatedBy: auth.uid },
+      status: 'pending_review',
       registryVersion: REGISTRY_VERSION,
     };
-    const entryValidation = validateRegistryEntry(registryEntry);
+    const entryValidation = validateRegistryEntry(registryEntry, { requireResearchSources: false });
     if (!entryValidation.valid) {
       fail('failed-precondition', 'Destination policy does not satisfy registry requirements.', entryValidation.errors[0]);
     }
@@ -564,21 +578,172 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     if (collectionIssues.length) {
       fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
     }
-    const destinationType = kind === 'city_hub' ? 'city' : kind === 'island' ? 'island' : 'region';
+    destinationType = kind === 'city_hub' ? 'city' : kind === 'island' ? 'island' : 'region';
+    transaction.update(bundle.cityRef, {
+      publicationFence: {
+        state: 'draining',
+        reason: 'destination_policy_review',
+        operationId: drainOperationId,
+        actorUid: auth.uid,
+        approvalRevision: policy.approvalRevision,
+        fencedAt: timestamp,
+      },
+      updatedAt: timestamp,
+    });
+    registryData = { ...registryEntry };
+    delete registryData.id;
+  });
+  const held = await holdLinkedDestinationContent({
+    admin,
+    countryId,
+    cityId,
+    reason,
+    actorUid: auth.uid,
+    holdReason: 'destination_policy_review',
+  });
+  await db.runTransaction(async (transaction) => {
+    const [citySnapshot, countrySnapshot, registrySnapshot, activeLinkedContent] = await Promise.all([
+      transaction.get(bundle.cityRef),
+      transaction.get(countryRef),
+      transaction.get(db.collection(REGISTRY_PATH)),
+      activeLinkedDestinationContentInTransaction({ transaction, db, countryId, cityId }),
+    ]);
+    const currentCity = citySnapshot.data() || {};
+    const currentFence = currentCity.publicationFence || {};
+    if (!citySnapshot.exists || !countrySnapshot.exists || countrySnapshot.data()?.status !== 'active' ||
+        currentFence.state !== 'draining' || currentFence.reason !== 'destination_policy_review' ||
+        currentFence.operationId !== drainOperationId ||
+        Number(currentFence.approvalRevision || 0) !== Number(policy.approvalRevision || 0) ||
+        Number(currentCity.canonicalPolicy?.approvalRevision || 0) !== Number(policy.approvalRevision || 0) - 1) {
+      fail('aborted', 'Destination changed while linked content was being held.', 'destination_fence_changed');
+    }
+    if (activeLinkedContent.length) {
+      fail('aborted', 'Linked public content changed while the destination was being held.', 'destination_drain_incomplete');
+    }
+    const pendingRegistryEntry = { id: registryId, ...registryData };
+    const entries = registrySnapshot.docs
+      .filter((document) => document.id !== registryId)
+      .map((document) => ({ id: document.id, ...document.data() }));
+    const collectionIssues = registryCollectionIssues([...entries, pendingRegistryEntry]);
+    if (collectionIssues.length) {
+      fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
+    }
     syncedCity = { ...currentCity, canonicalPolicy: policy, destinationType };
     transaction.update(bundle.cityRef, {
       canonicalPolicy: policy,
       destinationType,
+      publicationFence: {
+        ...currentFence,
+        state: 'complete',
+        completedAt: timestamp,
+        held: held.counts,
+      },
       updatedAt: timestamp,
     });
-    const registryData = { ...registryEntry };
-    delete registryData.id;
     transaction.set(registryRef, { ...registryData, updatedAt: timestamp }, { merge: true });
+    transaction.set(reviewRef(db, countryId, cityId), {
+      status: 'ready',
+      approvedAt: admin.firestore.FieldValue.delete(),
+      approvedBy: admin.firestore.FieldValue.delete(),
+      policyValidatedAt: timestamp,
+      policyValidatedBy: auth.uid,
+      updatedAt: timestamp,
+    }, { merge: true });
   });
   clearRegistryCache();
   await syncDestinationCatalog({ admin, countryId, cityId, city: syncedCity });
-  await audit({ admin, auth, action: 'destination_policy_updated', target: { countryId, cityId }, reason, metadata: policy });
-  return { success: true, policy };
+  await audit({
+    admin,
+    auth,
+    action: 'destination_policy_updated',
+    target: { countryId, cityId },
+    reason,
+    metadata: { policy, held: held.counts },
+  });
+  return { success: true, policy, held: held.counts };
+}
+
+function destinationCanEnterAdminApproval(destination) {
+  const policy = destination?.canonicalPolicy || {};
+  const reviewState = String(policy.reviewState || '').trim();
+  const policyReady = reviewState === 'policy_validated';
+  const alreadyApproved = policy.approved === true && reviewState === 'approved';
+  const legacyNeedsAttestation = policy.approved === true && !reviewState &&
+    !policy.registryAttestation && !policy.approvalRevision;
+  return policyReady || alreadyApproved || legacyNeedsAttestation;
+}
+
+function destinationApprovalHasConflictingFence(destination) {
+  const state = String(destination?.publicationFence?.state || '').trim();
+  return ['draining', 'awaiting_admin_finalize', 'manual_review_required'].includes(state);
+}
+
+function publicationFenceReadyForRecovery(fence, nowMs = Date.now()) {
+  const value = fence?.fencedAt;
+  const fencedAtMs = typeof value?.toMillis === 'function'
+    ? value.toMillis()
+    : value instanceof Date
+      ? value.getTime()
+      : Date.parse(value || '') || 0;
+  return !fencedAtMs || nowMs - fencedAtMs >= DESTINATION_PUBLICATION_FENCE_RECOVERY_MS;
+}
+
+function canonicalApprovalBindingIssues(destination, registryEntry) {
+  const policy = destination?.canonicalPolicy || {};
+  const destinationPlaceId = String(
+    destination?.providerRefs?.googlePlaceId || destination?.googleCache?.placeId || ''
+  ).trim();
+  const registryPlaceId = String(registryEntry?.providerRefs?.googlePlaceId || '').trim();
+  const normalizeParentId = (value) => String(value || '').trim();
+  const issues = [];
+  if (policy.registryId !== registryEntry?.id) issues.push('destination_registry_id_mismatch');
+  if (policy.kind !== registryEntry?.kind) issues.push('destination_registry_kind_mismatch');
+  if (policy.groupingPolicy !== registryEntry?.groupingPolicy) {
+    issues.push('destination_registry_grouping_mismatch');
+  }
+  if (normalizeParentId(policy.parentId) !== normalizeParentId(registryEntry?.parentId)) {
+    issues.push('destination_registry_parent_mismatch');
+  }
+  if (!destinationPlaceId || destinationPlaceId !== registryPlaceId) {
+    issues.push('destination_registry_provider_mismatch');
+  }
+  return issues;
+}
+
+function buildApprovedCanonicalPolicy({
+  currentPolicy,
+  registryEntry,
+  approvalRevision,
+  countryId,
+  actorUid,
+  timestamp,
+}) {
+  const registryVersion = Number(registryEntry.registryVersion || REGISTRY_VERSION);
+  return {
+    ...currentPolicy,
+    approved: true,
+    registryId: registryEntry.id,
+    kind: registryEntry.kind,
+    parentId: registryEntry.parentId || null,
+    groupingPolicy: registryEntry.groupingPolicy,
+    aliases: Array.isArray(registryEntry.aliases) ? registryEntry.aliases : [],
+    provisional: false,
+    reviewState: 'approved',
+    registryVersion,
+    approvalRevision,
+    registryAttestation: {
+      approved: true,
+      registryId: registryEntry.id,
+      registryVersion,
+      approvalRevision,
+      countryId,
+      countryCode: registryEntry.countryCode,
+      issuedBy: actorUid,
+      issuedAt: timestamp,
+    },
+    approvedBy: actorUid,
+    approvedAt: timestamp,
+  };
 }
 
 async function previewDestinationReassignment({ admin, auth, data }) {
@@ -635,25 +800,339 @@ async function recheckDestination({ admin, auth, data, unsplashKey, mediaBucket 
   return result;
 }
 
+function approvalReleaseOperationId(countryId, cityId, registryId, registryVersion, approvalRevision) {
+  return crypto.createHash('sha256')
+    .update(`destination-approval\n${countryId}\n${cityId}\n${registryId}\n${registryVersion}\n${approvalRevision}`)
+    .digest('base64url');
+}
+
+function storedDestinationReference(countryId, cityId) {
+  const country = typeof countryId === 'string' ? countryId.trim() : '';
+  const city = typeof cityId === 'string' ? cityId.trim() : '';
+  const invalid = (value) => !value || value.length > 180 || value.includes('/') ||
+    value === '.' || value === '..' || /[\u0000-\u001f\u007f-\u009f]/u.test(value);
+  return invalid(country) || invalid(city) ? null : { countryId: country, cityId: city };
+}
+
+function contentDestinationReferences(content, type) {
+  if (type === 'route') {
+    if (!Array.isArray(content?.destinations)) return [];
+    return content.destinations
+      .map((destination) => storedDestinationReference(destination?.countryId, destination?.cityId))
+      .filter(Boolean);
+  }
+  const reference = storedDestinationReference(content?.destination?.countryId, content?.destination?.cityId);
+  return reference ? [reference] : [];
+}
+
+function heldForPendingDestination(content, countryId, cityId) {
+  if (content?.status !== 'moderation_hold' ||
+      content?.moderation?.systemGate !== 'destination_pending_approval' ||
+      content?.moderation?.holdReason !== 'destination_pending_approval') return false;
+  const heldDestination = content.moderation.destination;
+  if (heldDestination?.countryId === countryId && heldDestination?.cityId === cityId) return true;
+  return Array.isArray(content.moderation.pendingDestinationKeys) &&
+    content.moderation.pendingDestinationKeys.includes(destinationKey(countryId, cityId));
+}
+
+async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
+  const db = admin.firestore();
+  const [countrySnapshot, destinationSnapshot] = await Promise.all([
+    db.doc(`countries/${countryId}`).get(),
+    db.doc(`countries/${countryId}/destinations/${cityId}`).get(),
+  ]);
+  const destination = destinationSnapshot.data() || {};
+  if (!destinationSnapshot.exists || !countrySnapshot.exists ||
+      countrySnapshot.data()?.status !== 'active' ||
+      !destinationAcceptsNewReferences(destination, countryId)) {
+    fail('failed-precondition', 'Destination is not approved for public references.', 'destination_not_public');
+  }
+  const policy = destination.canonicalPolicy;
+  const operationId = approvalReleaseOperationId(
+    countryId,
+    cityId,
+    policy.registryId,
+    policy.registryVersion,
+    policy.approvalRevision
+  );
+  const operationRef = db.doc(`system/moderation/operations/${operationId}`);
+  const existingOperation = await operationRef.get();
+  if (existingOperation.exists && existingOperation.data()?.step === 'case_finalized') {
+    return { operationId, released: existingOperation.data()?.released || {}, replay: true };
+  }
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  if (existingOperation.exists && existingOperation.data()?.step === 'effects_applied') {
+    const released = existingOperation.data()?.released || {};
+    await operationRef.set({ step: 'case_finalized', finalizedAt: timestamp, updatedAt: timestamp }, { merge: true });
+    return { operationId, released, replay: true };
+  }
+  await operationRef.set(existingOperation.exists ? {
+    retryCount: admin.firestore.FieldValue.increment(1),
+    lastAttemptAt: timestamp,
+    updatedAt: timestamp,
+  } : {
+    type: 'destination_approval_release',
+    step: 'started',
+    destination: { countryId, cityId },
+    registryId: policy.registryId,
+    registryVersion: policy.registryVersion,
+    approvalRevision: policy.approvalRevision,
+    retryCount: 0,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+  }, { merge: true });
+
+  const [recommendations, trips, routes] = await Promise.all([
+    db.collection('recommendations').where('destination.cityId', '==', cityId).get(),
+    db.collection('trips').where('destination.cityId', '==', cityId).get(),
+    db.collection('routes').where('destinationKeys', 'array-contains', destinationKey(countryId, cityId)).get(),
+  ]);
+  const candidates = [
+    ...recommendations.docs.map((entry) => ({ type: 'recommendation', entry })),
+    ...trips.docs.map((entry) => ({ type: 'trip', entry })),
+    ...routes.docs.map((entry) => ({ type: 'route', entry })),
+  ].filter(({ entry }) => heldForPendingDestination(entry.data() || {}, countryId, cityId));
+  const released = { recommendations: 0, trips: 0, routes: 0 };
+
+  for (let offset = 0; offset < candidates.length; offset += 10) {
+    await Promise.all(candidates.slice(offset, offset + 10).map(async ({ type, entry }) => {
+      const didRelease = await db.runTransaction(async (transaction) => {
+        const currentSnapshot = await transaction.get(entry.ref);
+        const current = currentSnapshot.data() || {};
+        if (!currentSnapshot.exists || !heldForPendingDestination(current, countryId, cityId)) return false;
+        const references = contentDestinationReferences(current, type);
+        if (!references.length) return false;
+        const countryIds = [...new Set(references.map((reference) => reference.countryId))];
+        const [countrySnapshots, referenceSnapshots] = await Promise.all([
+          Promise.all(countryIds.map((referenceCountryId) => (
+            transaction.get(db.doc(`countries/${referenceCountryId}`))
+          ))),
+          Promise.all(references.map((reference) => (
+            transaction.get(db.doc(`countries/${reference.countryId}/destinations/${reference.cityId}`))
+          ))),
+        ]);
+        const countriesById = new Map(countrySnapshots.map((snapshot, index) => (
+          [countryIds[index], snapshot.exists ? snapshot.data() || {} : null]
+        )));
+        if (referenceSnapshots.some((snapshot, index) => {
+          const reference = references[index];
+          return !snapshot.exists || countriesById.get(reference.countryId)?.status !== 'active' ||
+            !destinationAcceptsNewReferences(snapshot.data() || {}, reference.countryId);
+        })) return false;
+        transaction.update(entry.ref, {
+          status: 'active',
+          publicationGate: { destinationApprovalVerified: true },
+          moderation: admin.firestore.FieldValue.delete(),
+          updatedAt: timestamp,
+        });
+        if (type === 'recommendation') {
+          transaction.update(db.doc(`countries/${countryId}/destinations/${cityId}`), {
+            'stats.recommendationCount': admin.firestore.FieldValue.increment(1),
+            updatedAt: timestamp,
+          });
+        }
+        return true;
+      });
+      if (didRelease) released[`${type}s`] += 1;
+    }));
+  }
+
+  await operationRef.set({ step: 'effects_applied', released, effectsAppliedAt: timestamp, updatedAt: timestamp }, { merge: true });
+  await operationRef.set({ step: 'case_finalized', released, finalizedAt: timestamp, updatedAt: timestamp }, { merge: true });
+  return { operationId, released, replay: false };
+}
+
+async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
+  const boundedLimit = Math.max(1, Math.min(100, Number(limit) || 50));
+  const db = admin.firestore();
+  const snapshot = await db.collection('system/moderation/operations')
+    .where('type', '==', 'destination_approval_release')
+    .where('step', 'in', ['started', 'effects_applied'])
+    .limit(boundedLimit)
+    .get();
+  const pending = snapshot.docs;
+  const result = { scanned: snapshot.size, pending: pending.length, completed: 0, failed: 0 };
+  for (const entry of pending) {
+    const destination = entry.data()?.destination || {};
+    try {
+      const countryId = cleanId(destination.countryId, 'destination.countryId');
+      const cityId = cleanId(destination.cityId, 'destination.cityId');
+      await releaseDestinationPendingContent({ admin, countryId, cityId });
+      result.completed += 1;
+    } catch (error) {
+      result.failed += 1;
+      await entry.ref.set({
+        lastError: String(error?.details?.reason || error?.code || 'release_failed').slice(0, 120),
+        lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+  return result;
+}
+
+async function reconcileDestinationPublicationFences({ admin, limit = 50 }) {
+  const boundedLimit = Math.max(1, Math.min(100, Number(limit) || 50));
+  const db = admin.firestore();
+  const snapshot = await db.collectionGroup('destinations')
+    .where('publicationFence.state', '==', 'draining')
+    .limit(boundedLimit)
+    .get();
+  const result = { scanned: snapshot.size, quarantined: 0, deferred: 0, superseded: 0, failed: 0 };
+  for (const entry of snapshot.docs) {
+    const countryId = entry.ref.parent.parent?.id || '';
+    const cityId = entry.id;
+    const fence = entry.data()?.publicationFence || {};
+    if (!publicationFenceReadyForRecovery(fence)) {
+      result.deferred += 1;
+      continue;
+    }
+    try {
+      const held = await holdLinkedDestinationContent({
+        admin,
+        countryId: cleanId(countryId, 'countryId'),
+        cityId: cleanId(cityId, 'cityId'),
+        reason: String(fence.reason || 'destination_publication_fence').slice(0, 240),
+        actorUid: String(fence.actorUid || 'system').slice(0, 180),
+        holdReason: fence.reason === 'destination_inactive'
+          ? 'destination_inactive'
+          : 'destination_policy_review',
+      });
+      const quarantined = await quarantineDestinationPublicationFenceForManualRecovery({
+        admin,
+        countryId,
+        cityId,
+        destinationRef: entry.ref,
+        expectedFence: fence,
+        held: held.counts,
+      });
+      if (quarantined) result.quarantined += 1;
+      else result.superseded += 1;
+    } catch (error) {
+      result.failed += 1;
+      await entry.ref.update({
+        'publicationFence.lastError': String(error?.details?.reason || error?.code || 'fence_failed').slice(0, 120),
+        'publicationFence.lastFailedAt': admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
+  }
+  return result;
+}
+
 async function approveDestination({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'approveDestination');
   const countryId = cleanId(data?.countryId, 'countryId');
   const cityId = cleanId(data?.cityId, 'cityId');
   const reason = cleanReason(data?.reason);
   const bundle = await destinationBundle(admin, countryId, cityId);
-  const issues = qualityIssues(bundle.city, bundle.job, bundle.review).filter((issue) => issue.code !== 'new_destination');
+  const policyReady = bundle.city?.canonicalPolicy?.reviewState === 'policy_validated';
+  const issues = qualityIssues(bundle.city, bundle.job, bundle.review).filter((issue) => (
+    issue.code !== 'new_destination' &&
+    !(policyReady && issue.code === 'unapproved_canonical_destination')
+  ));
   if (issues.some((issue) => issue.severity === 'error')) fail('failed-precondition', 'Destination has blocking quality issues.', 'destination_blocked');
-  await reviewRef(admin.firestore(), countryId, cityId).set({
-    status: issues.length ? 'approved_with_warnings' : 'approved',
-    issues,
-    issueCodes: issues.map((issue) => issue.code),
-    approvedAt: admin.firestore.FieldValue.serverTimestamp(),
-    approvedBy: auth.uid,
-    approvalReason: reason,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-  await audit({ admin, auth, action: 'destination_approved', target: { countryId, cityId }, reason, metadata: { warningCount: issues.length } });
-  return { success: true };
+  if (!destinationCanEnterAdminApproval(bundle.city)) {
+    fail('failed-precondition', 'Destination policy must be validated before approval.', 'destination_policy_not_ready');
+  }
+  if (destinationApprovalHasConflictingFence(bundle.city)) {
+    fail('aborted', 'Destination publication changes are still in progress.', 'destination_fence_changed');
+  }
+
+  const db = admin.firestore();
+  const destinationReviewRef = reviewRef(db, countryId, cityId);
+  const registryId = bundle.city.canonicalPolicy.registryId;
+  const registryRef = db.doc(`${REGISTRY_PATH}/${registryId}`);
+  const countryRef = db.doc(`countries/${countryId}`);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  let approvedCity = null;
+  await db.runTransaction(async (transaction) => {
+    const [citySnapshot, countrySnapshot, registrySnapshot] = await Promise.all([
+      transaction.get(bundle.cityRef),
+      transaction.get(countryRef),
+      transaction.get(registryRef),
+    ]);
+    const currentCity = citySnapshot.data() || {};
+    const currentPolicy = currentCity.canonicalPolicy || {};
+    if (!citySnapshot.exists || countrySnapshot.data()?.status !== 'active' ||
+        currentCity.status !== 'active' || currentPolicy.registryId !== registryId ||
+        !destinationCanEnterAdminApproval(currentCity) ||
+        destinationApprovalHasConflictingFence(currentCity) || !registrySnapshot.exists) {
+      fail('failed-precondition', 'Destination identity changed before approval.', 'destination_changed');
+    }
+    const currentCountry = countrySnapshot.data() || {};
+    const prospectiveRegistry = {
+      id: registrySnapshot.id,
+      ...registrySnapshot.data(),
+      status: 'active',
+      approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
+    };
+    const registryValidation = validateRegistryEntry(prospectiveRegistry);
+    if (!registryValidation.valid) {
+      fail('failed-precondition', 'Destination policy does not satisfy registry requirements.', registryValidation.errors[0]);
+    }
+    if (registryValidation.entry.countryCode !== String(currentCountry.code || countryId).toUpperCase()) {
+      fail('failed-precondition', 'Destination registry country does not match.', 'destination_country_mismatch');
+    }
+    if (registrySnapshot.data()?.destinationPath && registrySnapshot.data().destinationPath !== bundle.cityRef.path) {
+      fail('failed-precondition', 'Destination registry is bound to another destination.', 'destination_registry_path_mismatch');
+    }
+    const bindingIssues = canonicalApprovalBindingIssues(currentCity, registryValidation.entry);
+    if (bindingIssues.length) {
+      fail('failed-precondition', 'Destination identity does not match the canonical registry.', bindingIssues[0]);
+    }
+    const approvalRevision = Math.max(1, Number(currentPolicy.approvalRevision || 1));
+    const approvedPolicy = buildApprovedCanonicalPolicy({
+      currentPolicy,
+      registryEntry: registryValidation.entry,
+      approvalRevision,
+      countryId,
+      actorUid: auth.uid,
+      timestamp,
+    });
+    approvedCity = { ...currentCity, canonicalPolicy: approvedPolicy };
+    transaction.update(bundle.cityRef, {
+      canonicalPolicy: approvedPolicy,
+      publicationFence: {
+        state: 'approved',
+        approvalRevision,
+        approvedAt: timestamp,
+        actorUid: auth.uid,
+      },
+      updatedAt: timestamp,
+    });
+    transaction.set(registryRef, {
+      status: 'active',
+      approval: { approvedByAdmin: true, reason, approvedBy: auth.uid },
+      approvalRevision,
+      destinationPath: bundle.cityRef.path,
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.set(destinationReviewRef, {
+      status: issues.length ? 'approved_with_warnings' : 'approved',
+      issues,
+      issueCodes: issues.map((issue) => issue.code),
+      approvedAt: timestamp,
+      approvedBy: auth.uid,
+      approvalReason: reason,
+      updatedAt: timestamp,
+    }, { merge: true });
+  });
+  clearRegistryCache();
+  if (!destinationIsPublicAndReferenceable(approvedCity, countryId)) {
+    fail('failed-precondition', 'Approved destination did not satisfy the public reference policy.', 'destination_policy_invalid');
+  }
+  await syncDestinationCatalog({ admin, countryId, cityId, city: approvedCity });
+  const release = await releaseDestinationPendingContent({ admin, countryId, cityId });
+  await audit({
+    admin,
+    auth,
+    action: 'destination_approved',
+    target: { countryId, cityId },
+    reason,
+    metadata: { warningCount: issues.length, releaseOperationId: release.operationId, released: release.released },
+  });
+  return { success: true, release };
 }
 
 async function getDestinationImageCandidates({ admin, auth, data, unsplashKey }) {
@@ -834,13 +1313,32 @@ function destinationContentType(document) {
   return null;
 }
 
-async function holdDestinationContentDocuments({ admin, documents, patch }) {
+async function holdDestinationContentDocuments({
+  admin,
+  documents,
+  patch,
+  fenceRef = null,
+  expectedFence = null,
+}) {
   const db = admin.firestore();
+  let changed = 0;
   for (let offset = 0; offset < documents.length; offset += 10) {
-    await Promise.all(documents.slice(offset, offset + 10).map(async (entry) => {
+    const results = await Promise.all(documents.slice(offset, offset + 10).map(async (entry) => {
       return db.runTransaction(async (transaction) => {
-        const currentSnapshot = await transaction.get(entry.ref);
+        const [currentSnapshot, fenceSnapshot] = await Promise.all([
+          transaction.get(entry.ref),
+          fenceRef ? transaction.get(fenceRef) : Promise.resolve(null),
+        ]);
         if (!currentSnapshot.exists || currentSnapshot.data()?.status !== 'active') return false;
+        if (fenceRef) {
+          const fence = fenceSnapshot?.data?.()?.publicationFence || {};
+          if (!fenceSnapshot?.exists || fence.state !== 'draining' ||
+              fence.reason !== expectedFence?.reason ||
+              fence.operationId !== expectedFence?.operationId ||
+              Number(fence.approvalRevision || 0) !== Number(expectedFence?.approvalRevision || 0)) {
+            return false;
+          }
+        }
 
         const content = currentSnapshot.data() || {};
         const type = destinationContentType(entry);
@@ -879,7 +1377,134 @@ async function holdDestinationContentDocuments({ admin, documents, patch }) {
         return true;
       });
     }));
+    changed += results.filter(Boolean).length;
   }
+  return changed;
+}
+
+async function activeLinkedDestinationContentInTransaction({
+  transaction,
+  db,
+  countryId,
+  cityId,
+}) {
+  const [recommendations, trips, routes] = await Promise.all([
+    transaction.get(db.collection('recommendations').where('destination.cityId', '==', cityId)),
+    transaction.get(db.collection('trips').where('destination.cityId', '==', cityId)),
+    transaction.get(db.collection('routes').where(
+      'destinationKeys', 'array-contains', destinationKey(countryId, cityId)
+    )),
+  ]);
+  return [
+    ...recommendations.docs.filter((entry) => (
+      entry.data()?.destination?.countryId === countryId && entry.data()?.status === 'active'
+    )),
+    ...trips.docs.filter((entry) => (
+      entry.data()?.destination?.countryId === countryId && entry.data()?.status === 'active'
+    )),
+    ...routes.docs.filter((entry) => entry.data()?.status === 'active'),
+  ];
+}
+
+async function holdLinkedDestinationContent({
+  admin,
+  countryId,
+  cityId,
+  reason,
+  actorUid,
+  holdReason,
+}) {
+  const db = admin.firestore();
+  const fenceRef = db.doc(`countries/${countryId}/destinations/${cityId}`);
+  const fenceSnapshot = await fenceRef.get();
+  const expectedFence = fenceSnapshot.data()?.publicationFence || {};
+  if (!fenceSnapshot.exists || expectedFence.state !== 'draining' ||
+      expectedFence.reason !== holdReason) {
+    fail('aborted', 'Destination publication fence changed.', 'destination_fence_changed');
+  }
+  const [recommendations, trips, routes] = await Promise.all([
+    db.collection('recommendations').where('destination.cityId', '==', cityId).get(),
+    db.collection('trips').where('destination.cityId', '==', cityId).get(),
+    db.collection('routes').where('destinationKeys', 'array-contains', destinationKey(countryId, cityId)).get(),
+  ]);
+  const matchingRecommendations = recommendations.docs.filter((entry) => (
+    entry.data()?.destination?.countryId === countryId && entry.data()?.status === 'active'
+  ));
+  const matchingTrips = trips.docs.filter((entry) => (
+    entry.data()?.destination?.countryId === countryId && entry.data()?.status === 'active'
+  ));
+  const activeRoutes = routes.docs.filter((entry) => entry.data()?.status === 'active');
+  const patch = {
+    status: 'moderation_hold',
+    publicationGate: { destinationApprovalVerified: false },
+    moderation: {
+      holdReason,
+      systemGate: 'destination_pending_approval',
+      destination: { countryId, cityId },
+      pendingDestinationKeys: [destinationKey(countryId, cityId)],
+      reason,
+      actorUid,
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  const changed = await holdDestinationContentDocuments({
+    admin,
+    documents: [...matchingRecommendations, ...matchingTrips, ...activeRoutes],
+    patch,
+    fenceRef,
+    expectedFence,
+  });
+  const counts = {
+    recommendations: matchingRecommendations.length,
+    trips: matchingTrips.length,
+    routes: activeRoutes.length,
+  };
+  return { counts, activeRoutes, changed };
+}
+
+async function quarantineDestinationPublicationFenceForManualRecovery({
+  admin,
+  countryId,
+  cityId,
+  destinationRef,
+  expectedFence,
+  held,
+}) {
+  const segments = String(destinationRef?.path || '').split('/');
+  const referenceMatches = segments.length === 4 && segments[0] === 'countries' &&
+    segments[2] === 'destinations' && segments[1] === countryId && segments[3] === cityId;
+  if (!referenceMatches) {
+    fail('failed-precondition', 'Destination recovery target does not match.', 'destination_reference_mismatch');
+  }
+  const db = admin.firestore();
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(destinationRef);
+    const destination = snapshot.data() || {};
+    const currentFence = snapshot.data()?.publicationFence || {};
+    if (!snapshot.exists || currentFence.state !== 'draining' ||
+        currentFence.reason !== expectedFence.reason ||
+        currentFence.operationId !== expectedFence.operationId ||
+        Number(currentFence.approvalRevision || 0) !== Number(expectedFence.approvalRevision || 0)) {
+      return false;
+    }
+    transaction.update(destinationRef, {
+      canonicalPolicy: {
+        ...(destination.canonicalPolicy || {}),
+        approved: false,
+        provisional: true,
+        reviewState: 'publication_recovery_required',
+      },
+      publicationFence: {
+        ...currentFence,
+        state: 'manual_review_required',
+        drainCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+        held,
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.delete(db.doc(`destinationCatalog/${catalogId(countryId, cityId)}`));
+    return true;
+  });
 }
 
 async function deactivateDestination({ admin, auth, data }) {
@@ -889,21 +1514,92 @@ async function deactivateDestination({ admin, auth, data }) {
   const reason = cleanReason(data?.reason);
   const db = admin.firestore();
   const bundle = await destinationBundle(admin, countryId, cityId);
-  const [recommendations, trips, routes] = await Promise.all([
-    db.collection('recommendations').where('destination.cityId', '==', cityId).get(),
-    db.collection('trips').where('destination.cityId', '==', cityId).get(),
-    db.collection('routes').where('destinationKeys', 'array-contains', destinationKey(countryId, cityId)).get(),
-  ]);
-  const matchingRecommendations = recommendations.docs.filter((entry) => entry.data()?.destination?.countryId === countryId && entry.data()?.status === 'active');
-  const matchingTrips = trips.docs.filter((entry) => entry.data()?.destination?.countryId === countryId && entry.data()?.status === 'active');
-  const activeRoutes = routes.docs.filter((entry) => entry.data()?.status === 'active');
-  const patch = {
-    status: 'moderation_hold',
-    moderation: { holdReason: 'destination_inactive', destination: { countryId, cityId }, reason, actorUid: auth.uid },
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-  const heldDocuments = [...matchingRecommendations, ...matchingTrips, ...activeRoutes];
-  await holdDestinationContentDocuments({ admin, documents: heldDocuments, patch });
+  const registryId = bundle.city?.canonicalPolicy?.registryId;
+  const registryRef = registryId ? db.doc(`${REGISTRY_PATH}/${registryId}`) : null;
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const drainOperationId = crypto.randomUUID();
+  let inactiveCity = null;
+  await db.runTransaction(async (transaction) => {
+    const citySnapshot = await transaction.get(bundle.cityRef);
+    if (!citySnapshot.exists) fail('not-found', 'Destination was not found.', 'destination_missing');
+    const currentCity = citySnapshot.data() || {};
+    if (currentCity.status !== 'active') {
+      fail('failed-precondition', 'Destination is no longer active.', 'destination_changed');
+    }
+    transaction.update(bundle.cityRef, {
+      publicationFence: {
+        state: 'draining',
+        reason: 'destination_inactive',
+        operationId: drainOperationId,
+        detail: reason,
+        actorUid: auth.uid,
+        fencedAt: timestamp,
+      },
+      updatedAt: timestamp,
+    });
+  });
+  const held = await holdLinkedDestinationContent({
+    admin,
+    countryId,
+    cityId,
+    reason,
+    actorUid: auth.uid,
+    holdReason: 'destination_inactive',
+  });
+  await db.runTransaction(async (transaction) => {
+    const [citySnapshot, registrySnapshot, activeLinkedContent] = await Promise.all([
+      transaction.get(bundle.cityRef),
+      registryRef ? transaction.get(registryRef) : Promise.resolve(null),
+      activeLinkedDestinationContentInTransaction({ transaction, db, countryId, cityId }),
+    ]);
+    if (!citySnapshot.exists) fail('not-found', 'Destination was not found.', 'destination_missing');
+    const currentCity = citySnapshot.data() || {};
+    const currentFence = currentCity.publicationFence || {};
+    if (currentCity.status !== 'active' || currentFence.state !== 'draining' ||
+        currentFence.reason !== 'destination_inactive' ||
+        currentFence.operationId !== drainOperationId) {
+      fail('aborted', 'Destination changed while linked content was being held.', 'destination_fence_changed');
+    }
+    if (activeLinkedContent.length) {
+      fail('aborted', 'Linked public content changed while the destination was being held.', 'destination_drain_incomplete');
+    }
+    inactiveCity = {
+      ...currentCity,
+      status: 'inactive',
+      canonicalPolicy: {
+        ...(currentCity.canonicalPolicy || {}),
+        approved: false,
+        provisional: true,
+        reviewState: 'inactive',
+      },
+    };
+    transaction.update(bundle.cityRef, {
+      status: 'inactive',
+      canonicalPolicy: inactiveCity.canonicalPolicy,
+      publicationFence: {
+        ...currentFence,
+        state: 'complete',
+        completedAt: timestamp,
+        held: held.counts,
+      },
+      updatedAt: timestamp,
+    });
+    if (registrySnapshot?.exists) {
+      transaction.set(registryRef, {
+        status: 'inactive',
+        approval: { approvedByAdmin: false, reason, deactivatedBy: auth.uid },
+        updatedAt: timestamp,
+      }, { merge: true });
+    }
+    transaction.set(reviewRef(db, countryId, cityId), {
+      status: 'inactive',
+      deactivatedAt: timestamp,
+      deactivatedBy: auth.uid,
+      updatedAt: timestamp,
+    }, { merge: true });
+  });
+  clearRegistryCache();
+  const activeRoutes = held.activeRoutes;
   for (let offset = 0; offset < activeRoutes.length; offset += 400) {
     const batch = db.batch();
     activeRoutes.slice(offset, offset + 400).forEach((route) => {
@@ -914,17 +1610,27 @@ async function deactivateDestination({ admin, auth, data }) {
     });
     await batch.commit();
   }
-  await bundle.cityRef.update({ status: 'inactive', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-  await syncDestinationCatalog({ admin, countryId, cityId, city: { ...bundle.city, status: 'inactive' } });
-  await reviewRef(db, countryId, cityId).set({ status: 'inactive', deactivatedAt: admin.firestore.FieldValue.serverTimestamp(), deactivatedBy: auth.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  await audit({ admin, auth, action: 'destination_deactivated', target: { countryId, cityId }, reason, metadata: { recommendations: matchingRecommendations.length, trips: matchingTrips.length, routes: activeRoutes.length } });
-  return { success: true, held: { recommendations: matchingRecommendations.length, trips: matchingTrips.length, routes: activeRoutes.length } };
+  await syncDestinationCatalog({ admin, countryId, cityId, city: inactiveCity });
+  await audit({
+    admin,
+    auth,
+    action: 'destination_deactivated',
+    target: { countryId, cityId },
+    reason,
+    metadata: held.counts,
+  });
+  return { success: true, held: held.counts };
 }
 
 module.exports = {
+  approvalReleaseOperationId,
   approveDestination,
+  buildApprovedCanonicalPolicy,
+  canonicalApprovalBindingIssues,
   deactivateDestination,
   destinationCoordinates,
+  destinationApprovalHasConflictingFence,
+  destinationCanEnterAdminApproval,
   evaluateAndPersistDestination,
   selectAirportByIataCode,
   getAirportCandidates,
@@ -936,7 +1642,12 @@ module.exports = {
   listDestinationReviews,
   notifyAdminsOfDestination,
   onDestinationCreated,
+  publicationFenceReadyForRecovery,
   qualityIssues,
+  quarantineDestinationPublicationFenceForManualRecovery,
+  reconcileDestinationApprovalReleases,
+  reconcileDestinationPublicationFences,
+  releaseDestinationPendingContent,
   recheckDestination,
   scanDestinationQuality,
   selectDestinationImageCandidate,

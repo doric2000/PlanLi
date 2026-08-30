@@ -2,8 +2,9 @@
 const admin = require('firebase-admin');
 const { setFileAvailability } = require('../mediaModeration');
 const { initializeAdmin } = require('./localCredentials');
+const { ACTIVE_MEDIA_BUCKET, assertActiveMediaBucket } = require('./storageTargetPolicy');
 
-const DEFAULT_BUCKET = 'planli-f0b12-media-eu';
+const DEFAULT_BUCKET = ACTIVE_MEDIA_BUCKET;
 const LEGACY_PREFIXES = new Set([
   'optimized',
   'profilePicture',
@@ -26,7 +27,7 @@ function parseArgs(argv) {
   return {
     all: argv.includes('--all'),
     apply: argv.includes('--apply'),
-    bucket: valueAfter(argv, '--bucket') || DEFAULT_BUCKET,
+    bucket: assertActiveMediaBucket(valueAfter(argv, '--bucket') || DEFAULT_BUCKET),
     limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100,
     pageToken: valueAfter(argv, '--page-token'),
     prefix,

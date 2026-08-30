@@ -49,6 +49,7 @@ async function getOrderedContent(collectionName, uid, resultLimit) {
     collection(db, collectionName),
     where('ownerId', '==', uid),
     where('status', '==', 'active'),
+    where('publicationGate.destinationApprovalVerified', '==', true),
   ];
   try {
     return await getDocs(query(...base, orderBy('createdAt', 'desc'), limit(resultLimit)));
@@ -91,7 +92,8 @@ async function loadProfileResource({ uid, user, isOwnProfile }) {
   const routeCountPromise = getCountFromServer(query(
     collection(db, 'routes'),
     where('ownerId', '==', uid),
-    where('status', '==', 'active')
+    where('status', '==', 'active'),
+    where('publicationGate.destinationApprovalVerified', '==', true)
   )).then((snapshot) => Number(snapshot.data()?.count || 0)).catch(() => null);
   const pendingPromise = isOwnProfile
     ? listMyPendingContent({ limit: 30 }).catch((error) => ({ items: [], nextCursor: null, error }))

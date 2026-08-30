@@ -1,21 +1,22 @@
 import React from 'react';
-import { View, TouchableOpacity, Linking } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { typography, colors, recommendationMetaStyles as styles } from '../styles';
 import { getPlaceCoordinates } from '../utils/distance';
 import { buildGoogleMapsUrl, buildWazeUrl } from '../utils/placeNavigation';
 import NavigationChevron from './NavigationChevron';
+import { openSafeExternalUrl } from '../utils/safeExternalUrl';
 
 export const RecommendationMeta = ({ item, navigation }) => {
   const destination = item?.destination || {};
   const openInGoogleMaps = () => {
     const url = buildGoogleMapsUrl({ place: item?.place, destination });
-    if (url) Linking.openURL(url).catch(() => {});
+    if (url) openSafeExternalUrl(url, 'googleMaps').catch(() => {});
   };
   const openInWaze = () => {
     const url = buildWazeUrl(item?.place);
-    if (url) Linking.openURL(url).catch(() => {});
+    if (url) openSafeExternalUrl(url, 'waze').catch(() => {});
   };
 
   return (

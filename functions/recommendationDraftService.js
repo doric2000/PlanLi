@@ -205,7 +205,9 @@ async function assertEditableSource({ admin, auth, sourceRecommendationId }) {
   const snapshot = await admin.firestore().doc(`recommendations/${sourceRecommendationId}`).get();
   assert(snapshot.exists, 'not-found', 'RECOMMENDATION_SOURCE_NOT_FOUND', 'Recommendation does not exist.');
   const recommendation = snapshot.data() || {};
-  const adminAccess = recommendation.ownerId === auth.uid ? false : await hasActiveAdminAccess({ admin, auth });
+  const adminAccess = recommendation.ownerId === auth.uid
+    ? false
+    : await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
   assert(recommendation.ownerId === auth.uid || adminAccess,
     'permission-denied', 'RECOMMENDATION_SOURCE_FORBIDDEN', 'Recommendation is unavailable.');
   assert(['active', 'moderation_hold'].includes(recommendation.status || 'active'),

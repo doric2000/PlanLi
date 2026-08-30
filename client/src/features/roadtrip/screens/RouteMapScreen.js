@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import AppText from '../../../components/AppText';
 import MapView, { Circle, Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import {
   hasValidStopLocation,
 } from '../utils/routeStops';
 import { colors, routeMapStyles as styles } from '../../../styles';
+import { openSafeExternalUrl } from '../../../utils/safeExternalUrl';
 
 const LOCATION_RETRY_STATUSES = new Set(['denied', 'timeout', 'error']);
 const ALL_DAYS = 'all';
@@ -78,7 +79,7 @@ export default function RouteMapScreen({ route, navigation }) {
   const openUrl = useCallback(async (url) => {
     if (!url) return;
     try {
-      await Linking.openURL(url);
+      await openSafeExternalUrl(url, 'googleMaps');
     } catch {
       Alert.alert('לא ניתן לפתוח את המפה', 'לא הצלחנו לפתוח את Google Maps. אפשר לנסות שוב.');
     }

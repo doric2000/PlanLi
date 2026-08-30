@@ -17,6 +17,32 @@ const {
 const source = { countryId: 'NI', cityId: 'rivas' };
 const target = { countryId: 'NI', cityId: 'ometepe', countryName: 'ניקרגואה', cityName: 'אומטפה' };
 
+function approvedDestination(countryId, cityId, extra = {}) {
+  const registryId = `${countryId.toLowerCase()}-${cityId}`;
+  const approvalRevision = 1;
+  const registryVersion = 1;
+  return {
+    countryId,
+    status: 'active',
+    canonicalPolicy: {
+      approved: true,
+      registryId,
+      kind: 'island',
+      groupingPolicy: 'self',
+      registryVersion,
+      approvalRevision,
+      registryAttestation: {
+        approved: true,
+        registryId,
+        registryVersion,
+        approvalRevision,
+        countryId,
+      },
+    },
+    ...extra,
+  };
+}
+
 test('preview hash is deterministic and changes with impact', () => {
   assert.deepEqual(STAGES, ['recommendations', 'routes', 'trips', 'favorites', 'finalize', 'complete']);
   const first = impactHash(source, target, { recommendations: 1, routes: 0, trips: 0 });
@@ -84,9 +110,9 @@ test('favorite migration moves the hashed destination favorite and refreshes its
     [sourceFavoritePath, {
       ownerId: 'u1', type: 'city', target: { type: 'city', path: sourcePath }, createdAt: 'OLD',
     }],
-    ['countries/NI/destinations/ometepe', {
-      status: 'active', name: 'אומטפה', countryName: 'ניקרגואה', createdAt: 'CITY_CREATED',
-    }],
+    ['countries/NI/destinations/ometepe', approvedDestination('NI', 'ometepe', {
+      name: 'אומטפה', countryName: 'ניקרגואה', createdAt: 'CITY_CREATED',
+    })],
     ['users/u1', {
       personalization: {
         destinations: [
@@ -216,7 +242,7 @@ test('starting reassignment freezes both destinations and duplicate starts do no
   const admin = inMemoryReassignmentAdmin({
     'countries/NI': { status: 'active', name: 'ניקרגואה' },
     'countries/NI/destinations/rivas': { status: 'active', name: 'ריבס' },
-    'countries/NI/destinations/ometepe': { status: 'active', name: 'אומטפה' },
+    'countries/NI/destinations/ometepe': approvedDestination('NI', 'ometepe', { name: 'אומטפה' }),
   });
   const targetRef = { countryId: target.countryId, cityId: target.cityId };
   const preview = await require('./destinationReassignmentService').previewDestinationReassignment({

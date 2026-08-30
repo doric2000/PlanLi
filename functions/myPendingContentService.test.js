@@ -80,14 +80,17 @@ test('owner pending content is merged, paginated, and never includes another own
       { id: 'route-mid', ownerId: 'owner', status: 'moderation_hold', title: 'מסלול', createdAt: timestamp(200) },
       { id: 'route-active', ownerId: 'owner', status: 'active', title: 'ציבורי', createdAt: timestamp(500) },
     ],
+    trips: [
+      { id: 'trip-new', ownerId: 'owner', status: 'moderation_hold', title: 'טיול', createdAt: timestamp(250) },
+    ],
   });
   const first = await listMyPendingContent({ admin, auth: { uid: 'owner' }, data: { limit: 2 } });
-  assert.deepEqual(first.items.map((item) => item.id), ['rec-new', 'route-mid']);
-  assert.deepEqual(first.nextCursor, { recommendationId: 'rec-new', routeId: 'route-mid' });
+  assert.deepEqual(first.items.map((item) => item.id), ['rec-new', 'trip-new']);
+  assert.deepEqual(first.nextCursor, { recommendationId: 'rec-new', routeId: null, tripId: 'trip-new' });
   const second = await listMyPendingContent({
     admin, auth: { uid: 'owner' }, data: { limit: 2, cursor: first.nextCursor },
   });
-  assert.deepEqual(second.items.map((item) => item.id), ['rec-old']);
+  assert.deepEqual(second.items.map((item) => item.id), ['route-mid', 'rec-old']);
   assert.equal(second.nextCursor, null);
 });
 
@@ -97,6 +100,7 @@ test('a cursor cannot reference another owner pending document', async () => {
       { id: 'foreign', ownerId: 'other', status: 'moderation_hold', createdAt: timestamp(1) },
     ],
     routes: [],
+    trips: [],
   });
   await assert.rejects(
     listMyPendingContent({
@@ -104,4 +108,16 @@ test('a cursor cannot reference another owner pending document', async () => {
     }),
     (error) => error?.details?.reason === 'invalid_cursor'
   );
+});
+
+test('pending cursors reject path, control, whitespace and unknown-field injection', () => {
+  const { cleanCursor } = require('./myPendingContentService');
+  for (const cursor of [
+    { recommendationId: '../foreign' },
+    { routeId: ' route-1' },
+    { tripId: 'trip\u0085break' },
+    { recommendationId: 'rec-1', prototypeId: 'polluted' },
+  ]) {
+    assert.throws(() => cleanCursor(cursor), (error) => error?.details?.reason === 'invalid_cursor');
+  }
 });

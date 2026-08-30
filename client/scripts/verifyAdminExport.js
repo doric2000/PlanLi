@@ -39,10 +39,13 @@ function extractReferences(sourceFile, text) {
 function verifyAdminExport(root = path.resolve(__dirname, '..', '..', 'hosting', 'admin')) {
   if (!fs.existsSync(path.join(root, 'index.html'))) throw new Error(`Admin export is missing index.html at ${root}`);
   const missing = [];
+  const forbiddenSourceMaps = [];
   const checked = new Set();
   for (const sourceFile of filesUnder(root)) {
+    if (path.extname(sourceFile).toLowerCase() === '.map') forbiddenSourceMaps.push(sourceFile);
     if (!TEXT_EXTENSIONS.has(path.extname(sourceFile).toLowerCase())) continue;
     const text = fs.readFileSync(sourceFile, 'utf8');
+    if (/sourceMappingURL\s*=/i.test(text)) forbiddenSourceMaps.push(sourceFile);
     for (const reference of extractReferences(sourceFile, text)) {
       const target = localPath(root, sourceFile, reference);
       if (!target || checked.has(target)) continue;
@@ -53,6 +56,13 @@ function verifyAdminExport(root = path.resolve(__dirname, '..', '..', 'hosting',
   if (missing.length) {
     const details = missing.slice(0, 20).map(({ sourceFile, reference }) => `${path.relative(root, sourceFile)} -> ${reference}`).join('\n');
     throw new Error(`Admin export contains ${missing.length} missing local asset reference(s):\n${details}`);
+  }
+  if (forbiddenSourceMaps.length) {
+    const details = [...new Set(forbiddenSourceMaps)]
+      .slice(0, 20)
+      .map((file) => path.relative(root, file))
+      .join('\n');
+    throw new Error(`Admin export contains source-map artifacts:\n${details}`);
   }
   console.log(`Admin export verified: ${checked.size} local references resolve to files.`);
   return { checked: checked.size };

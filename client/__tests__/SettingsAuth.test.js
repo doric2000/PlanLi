@@ -137,6 +137,13 @@ describe('Settings authentication behavior', () => {
     expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
   });
 
+  it('opens TOTP enrollment from account security settings', () => {
+    const mockNavigate = jest.fn();
+    const screen = render(<SettingsScreen navigation={{ navigate: mockNavigate, goBack: jest.fn() }} />);
+    fireEvent.press(screen.getByTestId('settings-totp-enrollment-button'));
+    expect(mockNavigate).toHaveBeenCalledWith('TotpEnrollment');
+  });
+
   it('renders the modern grouped settings sections', () => {
     const screen = render(<SettingsScreen navigation={{ navigate: jest.fn(), goBack: jest.fn() }} />);
 

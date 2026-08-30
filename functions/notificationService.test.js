@@ -508,7 +508,14 @@ test('single-item mutations infer channel and require active registry for admin 
   fixture.values.set('system/moderation/admins/admin-1', { active: true });
   const result = await setNotificationRead({
     admin: fixture.admin,
-    auth: { uid: 'admin-1', token: { admin: true } },
+    auth: {
+      uid: 'admin-1',
+      token: {
+        admin: true,
+        auth_time: Math.floor(Date.now() / 1000),
+        firebase: { sign_in_second_factor: 'totp' },
+      },
+    },
     data: { notificationId: 'admin-row', read: true },
   });
   assert.equal(result.changed, true);
@@ -528,7 +535,14 @@ test('bulk personal mutations never affect admin notifications', async () => {
     'users/admin-1/notificationState/state': { personalUnread: 2, adminUnread: 1 },
     'system/moderation/admins/admin-1': { active: true },
   });
-  const auth = { uid: 'admin-1', token: { admin: true } };
+  const auth = {
+    uid: 'admin-1',
+    token: {
+      admin: true,
+      auth_time: Math.floor(Date.now() / 1000),
+      firebase: { sign_in_second_factor: 'totp' },
+    },
+  };
   assert.deepEqual(await markAllNotificationsRead({
     admin: fixture.admin,
     auth,

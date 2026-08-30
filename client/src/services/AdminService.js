@@ -3,7 +3,6 @@ import { cloudFunctions } from '../config/firebase';
 
 const callables = new Map();
 export const ADMIN_CALLABLE_TIMEOUTS = Object.freeze({
-  moderateContent: 320000,
   resolveModerationCase: 320000,
   bulkUpdateModerationCases: 320000,
   updateAdminAttachedPlace: 200000,
@@ -46,7 +45,6 @@ export const deleteAdminSavedView = (id) => call('deleteAdminSavedView', { id })
 export const getModerationPolicy = () => call('getModerationPolicy');
 export const updateAdminAttachedPlace = (payload) => call('updateAdminAttachedPlace', payload);
 export const listHeldContent = () => call('listHeldContent');
-export const moderateContent = (payload) => call('moderateContent', payload);
 export const listAdminUsers = (payload = {}) => call('listAdminUsers', payload);
 export const getAdminUser = (identifier) => call('getAdminUser', { identifier });
 export const setUserSuspension = (identifier, suspended, reason, durationHours = undefined, operationId = '') => call('setUserSuspension', {

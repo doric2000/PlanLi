@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "projectId": "planli-f0b12",
+  "projectNumber": "633543026638",
+  "services": [
+    "cloudquotas.googleapis.com",
+    "firebaseappcheck.googleapis.com",
+    "geocoding-backend.googleapis.com",
+    "playintegrity.googleapis.com",
+    "recaptchaenterprise.googleapis.com"
+  ],
+  "serviceUsageGrant": {
+    "member": "serviceAccount:planli-core-functions@planli-f0b12.iam.gserviceaccount.com",
+    "role": "roles/serviceusage.serviceUsageConsumer"
+  },
+  "appCheckVerifierGrant": {
+    "member": "serviceAccount:planli-core-functions@planli-f0b12.iam.gserviceaccount.com",
+    "role": "roles/firebaseappcheck.tokenVerifier"
+  },
+  "mediaAppCheckVerifierGrant": {
+    "member": "serviceAccount:planli-media-functions@planli-f0b12.iam.gserviceaccount.com",
+    "role": "roles/firebaseappcheck.tokenVerifier"
+  },
+  "iosApp": {
+    "appId": "1:633543026638:ios:b13b28c424e4c9e846ad9f",
+    "bundleId": "com.planli.planlitravels",
+    "teamId": "C22ZFVA6M6"
+  }
+}

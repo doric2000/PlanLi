@@ -307,6 +307,13 @@ export default function SettingsScreen({ navigation }) {
             />
           ) : null}
           <SettingsRow
+            detail="הגנה באמצעות אפליקציית Authenticator"
+            icon="shield-checkmark-outline"
+            label="אימות דו־שלבי"
+            onPress={() => navigation.navigate('TotpEnrollment')}
+            testID="settings-totp-enrollment-button"
+          />
+          <SettingsRow
             detail="צפייה וניהול של רשימת החסימות"
             icon="person-remove-outline"
             label="משתמשים שחסמת"

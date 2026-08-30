@@ -2,10 +2,17 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  buildApprovedCanonicalPolicy,
+  canonicalApprovalBindingIssues,
+  destinationApprovalHasConflictingFence,
+  destinationCanEnterAdminApproval,
   qualityIssues,
   holdDestinationContentDocuments,
+  releaseDestinationPendingContent,
   listDestinationReviews,
   notifyAdminsOfDestination,
+  publicationFenceReadyForRecovery,
+  quarantineDestinationPublicationFenceForManualRecovery,
   destinationCoordinates,
   selectAirportByIataCode,
   syncDestinationAirport,
@@ -15,7 +22,14 @@ const { nearestScheduledAirports } = require('./airportFacts');
 function validDestination() {
   return {
     status: 'active',
-    canonicalPolicy: { approved: true, registryId: 'il-tel-aviv', kind: 'city_hub', groupingPolicy: 'self' },
+    canonicalPolicy: {
+      approved: true, registryId: 'il-tel-aviv', kind: 'city_hub', groupingPolicy: 'self',
+      registryVersion: 3, approvalRevision: 1,
+      registryAttestation: {
+        approved: true, registryId: 'il-tel-aviv', registryVersion: 3,
+        approvalRevision: 1, countryId: 'IL',
+      },
+    },
     providerRefs: { googlePlaceId: 'place-1' },
     googleCache: {
       names: { he: 'תל אביב', en: 'Tel Aviv' },
@@ -33,6 +47,179 @@ function validDestination() {
     travelFacts: { closestAirport: { iataCode: 'TLV' } },
   };
 }
+
+test('legacy approved destinations can enter admin approval only before an attestation exists', () => {
+  const legacy = validDestination();
+  delete legacy.canonicalPolicy.reviewState;
+  delete legacy.canonicalPolicy.approvalRevision;
+  delete legacy.canonicalPolicy.registryAttestation;
+  assert.equal(destinationCanEnterAdminApproval(legacy), true);
+
+  legacy.canonicalPolicy.reviewState = 'pending';
+  assert.equal(destinationCanEnterAdminApproval(legacy), false);
+  legacy.canonicalPolicy.reviewState = '';
+  legacy.canonicalPolicy.registryAttestation = { approved: false };
+  assert.equal(destinationCanEnterAdminApproval(legacy), false);
+});
+
+test('admin approval cannot overwrite an in-progress destination publication fence', () => {
+  assert.equal(destinationApprovalHasConflictingFence({
+    publicationFence: { state: 'draining', operationId: 'deactivate-1' },
+  }), true);
+  assert.equal(destinationApprovalHasConflictingFence({
+    publicationFence: { state: 'awaiting_admin_finalize', operationId: 'deactivate-1' },
+  }), true);
+  assert.equal(destinationApprovalHasConflictingFence({
+    publicationFence: { state: 'manual_review_required', operationId: 'deactivate-1' },
+  }), true);
+  assert.equal(destinationApprovalHasConflictingFence({
+    publicationFence: { state: 'complete', operationId: 'policy-1' },
+  }), false);
+  assert.equal(destinationApprovalHasConflictingFence({
+    publicationFence: { state: 'approved' },
+  }), false);
+});
+
+test('publication recovery ignores a live operation and only quarantines stale fences', () => {
+  const now = Date.parse('2026-08-30T12:00:00Z');
+  assert.equal(publicationFenceReadyForRecovery({
+    fencedAt: new Date(now - 9 * 60 * 1000),
+  }, now), false);
+  assert.equal(publicationFenceReadyForRecovery({
+    fencedAt: { toMillis: () => now - 10 * 60 * 1000 },
+  }, now), true);
+  assert.equal(publicationFenceReadyForRecovery({}, now), true);
+});
+
+test('destination approval release refuses a destination while its publication fence drains', async () => {
+  const destination = validDestination();
+  destination.publicationFence = { state: 'draining', reason: 'destination_inactive' };
+  const db = {
+    doc(path) {
+      return {
+        path,
+        get: async () => path === 'countries/IL'
+          ? { exists: true, data: () => ({ status: 'active' }) }
+          : { exists: true, data: () => destination },
+      };
+    },
+  };
+  await assert.rejects(
+    releaseDestinationPendingContent({ admin: { firestore: () => db }, countryId: 'IL', cityId: 'haifa' }),
+    (error) => error?.details?.reason === 'destination_not_public'
+  );
+});
+
+test('stale destination quarantine deapproves the source and deletes its public catalog atomically', async () => {
+  const updates = [];
+  const deletes = [];
+  const destinationRef = { path: 'countries/IL/destinations/haifa' };
+  const destination = {
+    status: 'active',
+    canonicalPolicy: { approved: true, reviewState: 'approved' },
+    publicationFence: {
+      state: 'draining',
+      reason: 'destination_inactive',
+      operationId: 'deactivate-1',
+      approvalRevision: 3,
+    },
+  };
+  const db = {
+    doc: (path) => ({ path }),
+    runTransaction: async (callback) => callback({
+      get: async (ref) => {
+        assert.equal(ref.path, destinationRef.path);
+        return { exists: true, data: () => destination };
+      },
+      update: (ref, patch) => updates.push({ path: ref.path, patch }),
+      delete: (ref) => deletes.push(ref.path),
+    }),
+  };
+  const firestore = () => db;
+  firestore.FieldValue = { serverTimestamp: () => 'server-time' };
+
+  const result = await quarantineDestinationPublicationFenceForManualRecovery({
+    admin: { firestore },
+    countryId: 'IL',
+    cityId: 'haifa',
+    destinationRef,
+    expectedFence: destination.publicationFence,
+    held: { recommendations: 2, trips: 0, routes: 1 },
+  });
+
+  assert.equal(result, true);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].patch.canonicalPolicy.approved, false);
+  assert.equal(updates[0].patch.publicationFence.state, 'manual_review_required');
+  assert.deepEqual(deletes, ['destinationCatalog/IL_haifa']);
+
+  await assert.rejects(
+    quarantineDestinationPublicationFenceForManualRecovery({
+      admin: { firestore },
+      countryId: 'FR',
+      cityId: 'paris',
+      destinationRef,
+      expectedFence: destination.publicationFence,
+      held: {},
+    }),
+    (error) => error?.details?.reason === 'destination_reference_mismatch'
+  );
+  assert.deepEqual(deletes, ['destinationCatalog/IL_haifa']);
+});
+
+test('admin approval fails closed when a legacy destination and registry bind different identities', () => {
+  const destination = validDestination();
+  const registry = {
+    id: 'il-tel-aviv',
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    parentId: null,
+    providerRefs: { googlePlaceId: 'place-1' },
+  };
+  assert.deepEqual(canonicalApprovalBindingIssues(destination, registry), []);
+  assert.deepEqual(
+    canonicalApprovalBindingIssues(destination, {
+      ...registry,
+      providerRefs: { googlePlaceId: 'other-place' },
+    }),
+    ['destination_registry_provider_mismatch']
+  );
+  assert.deepEqual(
+    canonicalApprovalBindingIssues(destination, { ...registry, kind: 'province' }),
+    ['destination_registry_kind_mismatch']
+  );
+});
+
+test('admin approval upgrades a matching legacy policy to an explicit registry attestation', () => {
+  const approved = buildApprovedCanonicalPolicy({
+    currentPolicy: {
+      approved: true,
+      registryId: 'il-tel-aviv',
+      kind: 'city_hub',
+      groupingPolicy: 'self',
+      registryVersion: 1,
+    },
+    registryEntry: {
+      id: 'il-tel-aviv',
+      countryCode: 'IL',
+      kind: 'city_hub',
+      groupingPolicy: 'self',
+      parentId: null,
+      aliases: ['Tel Aviv'],
+      registryVersion: 3,
+    },
+    approvalRevision: 1,
+    countryId: 'IL',
+    actorUid: 'admin-1',
+    timestamp: 'server-time',
+  });
+  assert.equal(approved.registryVersion, 3);
+  assert.equal(approved.reviewState, 'approved');
+  assert.equal(approved.registryAttestation.approved, true);
+  assert.equal(approved.registryAttestation.issuedBy, 'admin-1');
+  assert.equal(approved.registryAttestation.countryId, 'IL');
+  assert.deepEqual(approved.aliases, ['Tel Aviv']);
+});
 
 test('destination quality accepts complete reviewed data', () => {
   assert.deepEqual(qualityIssues(validDestination(), {}, { approvedAt: new Date() }, Date.parse('2029-01-01')), []);
@@ -169,6 +356,138 @@ test('holding destination content writes the status, notification, and unread co
     patch,
   });
   assert.equal(writes.length, writeCount, 'retry must skip content already placed on hold');
+});
+
+test('destination approval release is idempotent and fails closed while another route destination is pending', async () => {
+  const DELETE = Symbol('delete');
+  const documents = new Map(Object.entries({
+    'countries/IL': { status: 'active', code: 'IL' },
+    'countries/IL/destinations/new-city': {
+      status: 'active',
+      canonicalPolicy: {
+        approved: true, registryId: 'il-new-city', kind: 'city_hub',
+        groupingPolicy: 'self', registryVersion: 3, reviewState: 'approved', approvalRevision: 1,
+        registryAttestation: {
+          approved: true, registryId: 'il-new-city', registryVersion: 3,
+          approvalRevision: 1, countryId: 'IL',
+        },
+      },
+      stats: { recommendationCount: 0 },
+    },
+    'countries/IL/destinations/pending-city': {
+      status: 'active',
+      canonicalPolicy: {
+        approved: false, registryId: 'il-pending-city', kind: 'city_hub',
+        groupingPolicy: 'self', registryVersion: 3, reviewState: 'pending',
+      },
+    },
+    'recommendations/rec-release': {
+      ownerId: 'owner', status: 'moderation_hold', destination: { countryId: 'IL', cityId: 'new-city' },
+      moderation: {
+        holdReason: 'destination_pending_approval', systemGate: 'destination_pending_approval',
+        destination: { countryId: 'IL', cityId: 'new-city' },
+      },
+    },
+    'recommendations/rec-text-hold': {
+      ownerId: 'owner', status: 'moderation_hold', destination: { countryId: 'IL', cityId: 'new-city' },
+      moderation: { holdReason: 'unsafe_text' },
+    },
+    'routes/route-still-pending': {
+      ownerId: 'owner', status: 'moderation_hold',
+      destinations: [
+        { countryId: 'IL', cityId: 'new-city' },
+        { countryId: 'IL', cityId: 'pending-city' },
+      ],
+      destinationKeys: ['IL:new-city', 'IL:pending-city'],
+      moderation: {
+        holdReason: 'destination_pending_approval', systemGate: 'destination_pending_approval',
+        pendingDestinationKeys: ['IL:new-city', 'IL:pending-city'],
+      },
+    },
+  }));
+  const reference = (path) => {
+    const segments = path.split('/');
+    return {
+      id: segments.at(-1),
+      path,
+      parent: { id: segments.at(-2) },
+      get: async () => snapshot(path),
+      set: async (value, options) => applySet(path, value, options),
+    };
+  };
+  const snapshot = (path) => ({
+    id: path.split('/').at(-1),
+    exists: documents.has(path),
+    data: () => documents.get(path),
+    ref: reference(path),
+  });
+  const applyPatch = (path, patch) => {
+    const current = { ...(documents.get(path) || {}) };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === DELETE) delete current[key];
+      else if (value?.increment != null) {
+        const segments = key.split('.');
+        if (segments.length === 2) {
+          current[segments[0]] = { ...(current[segments[0]] || {}) };
+          current[segments[0]][segments[1]] = Number(current[segments[0]][segments[1]] || 0) + value.increment;
+        }
+      } else current[key] = value;
+    }
+    documents.set(path, current);
+  };
+  const applySet = (path, value, options) => {
+    documents.set(path, options?.merge ? { ...(documents.get(path) || {}), ...value } : { ...value });
+  };
+  const collection = (name) => {
+    const filters = [];
+    const query = {
+      where: (field, operation, expected) => {
+        filters.push([field, operation, expected]);
+        return query;
+      },
+      get: async () => ({
+        docs: [...documents.entries()]
+          .filter(([path]) => path.startsWith(`${name}/`) && path.split('/').length === 2)
+          .filter(([, value]) => filters.every(([field, operation, expected]) => {
+            const actual = field.split('.').reduce((current, part) => current?.[part], value);
+            return operation === 'array-contains' ? actual?.includes(expected) : actual === expected;
+          }))
+          .map(([path]) => snapshot(path)),
+      }),
+    };
+    return query;
+  };
+  const db = {
+    doc: reference,
+    collection,
+    runTransaction: async (callback) => callback({
+      get: async (ref) => snapshot(ref.path),
+      update: (ref, patch) => applyPatch(ref.path, patch),
+      set: (ref, value, options) => applySet(ref.path, value, options),
+    }),
+  };
+  const firestore = () => db;
+  firestore.FieldValue = {
+    delete: () => DELETE,
+    increment: (value) => ({ increment: value }),
+    serverTimestamp: () => 'server-time',
+  };
+  const admin = { firestore };
+
+  const first = await releaseDestinationPendingContent({ admin, countryId: 'IL', cityId: 'new-city' });
+  assert.deepEqual(first.released, { recommendations: 1, trips: 0, routes: 0 });
+  assert.equal(documents.get('recommendations/rec-release').status, 'active');
+  assert.deepEqual(documents.get('recommendations/rec-release').publicationGate, {
+    destinationApprovalVerified: true,
+  });
+  assert.equal(Object.hasOwn(documents.get('recommendations/rec-release'), 'moderation'), false);
+  assert.equal(documents.get('recommendations/rec-text-hold').status, 'moderation_hold');
+  assert.equal(documents.get('routes/route-still-pending').status, 'moderation_hold');
+  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 1);
+
+  const second = await releaseDestinationPendingContent({ admin, countryId: 'IL', cityId: 'new-city' });
+  assert.equal(second.replay, true);
+  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 1);
 });
 
 test('airport candidates are bounded, sorted and distance annotated', () => {

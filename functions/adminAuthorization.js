@@ -1,13 +1,35 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 
+const RECENT_ADMIN_AUTH_SECONDS = 10 * 60;
+
 function authorizationError(code, message, reason) {
   return new HttpsError(code, message, { reason });
 }
 
-async function hasActiveAdminAccess({ admin, auth }) {
+function assertRecentTotpAdminAuthentication(auth, nowMs = Date.now()) {
+  const authTime = Number(auth?.token?.auth_time || 0);
+  if (!authTime || nowMs / 1000 - authTime > RECENT_ADMIN_AUTH_SECONDS) {
+    throw authorizationError(
+      'failed-precondition',
+      'Recent sign-in is required.',
+      'recent_sign_in_required'
+    );
+  }
+  if (auth?.token?.firebase?.sign_in_second_factor !== 'totp') {
+    throw authorizationError(
+      'failed-precondition',
+      'TOTP multi-factor authentication is required.',
+      'totp_required'
+    );
+  }
+}
+
+async function hasActiveAdminAccess({ admin, auth, requireRecentTotp = false, nowMs }) {
   if (!auth?.uid || auth.token?.admin !== true) return false;
   const registry = await admin.firestore().doc(`system/moderation/admins/${auth.uid}`).get();
-  return registry.exists && registry.data()?.active === true;
+  const active = registry.exists && registry.data()?.active === true;
+  if (active && requireRecentTotp) assertRecentTotpAdminAuthentication(auth, nowMs);
+  return active;
 }
 
 async function deactivateAdminRegistryInTransaction({
@@ -95,7 +117,9 @@ async function deactivateAdminRegistry({ admin, uid, actorUid, requireActiveActo
 }
 
 module.exports = {
+  RECENT_ADMIN_AUTH_SECONDS,
   activateAdminRegistry,
+  assertRecentTotpAdminAuthentication,
   deactivateAdminRegistry,
   deactivateAdminRegistryInTransaction,
   hasActiveAdminAccess,

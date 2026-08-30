@@ -165,6 +165,38 @@ test('handles an unavailable external source without an unhandled rejection', as
   alert.mockRestore();
 });
 
+test('does not expose a stored source URL outside the source-specific allowlist', () => {
+  const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue();
+  mockUseDestinationData.mockReturnValue({
+    overview: {
+      ...overview,
+      sources: {
+        weather: {
+          ...overview.sources.weather,
+          url: 'https://openweathermap.org.evil.example/phishing',
+        },
+      },
+    },
+    recommendations,
+    loading: false,
+    error: null,
+  });
+  const screen = render(
+    <LandingPageScreen
+      navigation={{ goBack: jest.fn() }}
+      route={{ params: { countryId: 'gr', cityId: 'mykonos' } }}
+    />
+  );
+
+  fireEvent.press(screen.getByLabelText('מקורות ועדכון'));
+  const sourceRow = screen.getByLabelText('מזג אוויר: OpenWeather');
+  expect(sourceRow.props.accessibilityRole).toBeUndefined();
+  fireEvent.press(sourceRow);
+  expect(openUrl).not.toHaveBeenCalled();
+
+  openUrl.mockRestore();
+});
+
 test('back control uses the RTL-facing action on the leading edge', () => {
   const goBack = jest.fn();
   const screen = render(

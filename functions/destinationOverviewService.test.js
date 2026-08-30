@@ -142,6 +142,18 @@ test('destination overview exposes only supported automatic facts', async () => 
     'countries/gr/destinations/mykonos': {
       name: 'מיקונוס',
       status: 'active',
+      canonicalPolicy: {
+        approved: true,
+        registryId: 'gr-mykonos',
+        kind: 'island',
+        groupingPolicy: 'self',
+        registryVersion: 3,
+        approvalRevision: 1,
+        registryAttestation: {
+          approved: true, registryId: 'gr-mykonos', registryVersion: 3,
+          approvalRevision: 1, countryId: 'gr',
+        },
+      },
       travelers: 128,
       coordinates: { lat: 37.44, lng: 25.33 },
       travelFacts: {

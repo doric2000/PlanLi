@@ -28,14 +28,22 @@ test('recommendation deletion is dry-run by default and apply requires explicit 
 test('legacy cleanup accepts only the recommendation own Firebase Storage prefix', () => {
   const data = {
     images: [
-      'https://firebasestorage.googleapis.com/v0/b/old-bucket/o/recommendations%2Frec-1%2Fphoto.jpg?alt=media',
-      'https://firebasestorage.googleapis.com/v0/b/old-bucket/o/recommendations%2Fother%2Fphoto.jpg?alt=media',
+      'https://firebasestorage.googleapis.com/v0/b/planli-f0b12.firebasestorage.app/o/recommendations%2Frec-1%2Fphoto.jpg?alt=media',
+      'https://firebasestorage.googleapis.com/v0/b/planli-f0b12.firebasestorage.app/o/recommendations%2Fother%2Fphoto.jpg?alt=media',
+      'https://firebasestorage.googleapis.com/v0/b/attacker-bucket/o/recommendations%2Frec-1%2Fphoto.jpg?alt=media',
       'https://example.com/photo.jpg',
     ],
   };
   assert.deepEqual(collectLegacyRecommendationObjects(data, 'rec-1'), [{
-    bucket: 'old-bucket', objectPath: 'recommendations/rec-1/photo.jpg',
+    bucket: 'planli-f0b12.firebasestorage.app', objectPath: 'recommendations/rec-1/photo.jpg',
   }]);
+});
+
+test('recommendation deletion refuses an arbitrary media bucket', () => {
+  assert.throws(
+    () => parseArgs(['--media-bucket', 'attacker-controlled-bucket']),
+    /active PlanLi media bucket/
+  );
 });
 
 test('recommendation fingerprint changes with IDs or update times', () => {

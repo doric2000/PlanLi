@@ -1,0 +1,59 @@
+rules:
+  - id: planli.javascript-eval
+    message: Dynamic code execution is forbidden in PlanLi runtime code.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+
+  - id: planli.child-process-shell
+    message: Shell command execution must not be reachable from application input.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: require("child_process").exec(...)
+      - pattern: require("node:child_process").exec(...)
+      - pattern: require("child_process").execSync(...)
+      - pattern: require("node:child_process").execSync(...)
+
+  - id: planli.raw-linking-open-url
+    message: Use the shared purpose-specific HTTPS URL validator before opening external URLs.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: Linking.openURL(...)
+    paths:
+      exclude:
+        - /client/src/utils/safeExternalUrl.js
+
+  - id: planli.dangerous-html
+    message: Raw HTML rendering requires an explicit sanitizer and security review.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: $EL.innerHTML = $VALUE
+      - pattern: <$TAG dangerouslySetInnerHTML={...} />
+
+  - id: planli.forwarded-for-as-input
+    message: Do not use client-controlled forwarding headers as an abuse-prevention identity.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: $REQ.headers["x-forwarded-for"]
+      - pattern: $REQ.headers['x-forwarded-for']
+      - pattern: $REQ.get("x-forwarded-for")
+      - pattern: $REQ.get('x-forwarded-for')
+
+  - id: planli.default-storage-bucket
+    message: Every Admin SDK bucket access must name the canonical EU bucket explicitly.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern: $STORAGE.bucket()
+
+  - id: planli.dynamic-firestore-cursor-id
+    message: Firestore document cursors must pass cleanId rather than cleanText.
+    severity: ERROR
+    languages: [javascript, typescript]
+    pattern-either:
+      - pattern: $COLLECTION.doc(cleanText(...))
+      - pattern: $DB.doc(`...${cleanText(...)}...`)

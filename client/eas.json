@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 18.0.1",
+    "version": "22.6.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -8,6 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
+        "PLANLI_ENV": "development",
+        "EXPO_PUBLIC_USE_FIREBASE_EMULATORS": "true",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
@@ -19,9 +21,37 @@
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
-      "environment": "production",
+      "channel": "staging",
+      "environment": "preview",
+      "env": {
+        "PLANLI_ENV": "staging"
+      },
       "node": "22.23.1",
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      }
+    },
+    "staging": {
+      "distribution": "internal",
+      "channel": "staging",
+      "environment": "preview",
+      "env": {
+        "PLANLI_ENV": "staging"
+      },
+      "node": "22.23.1",
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      }
+    },
+    "release-candidate": {
+      "distribution": "store",
+      "channel": "production",
+      "environment": "production",
+      "env": {
+        "PLANLI_ENV": "release-candidate"
+      },
+      "node": "22.23.1",
+      "autoIncrement": true,
       "ios": {
         "image": "macos-sequoia-15.6-xcode-26.0"
       }
@@ -30,6 +60,9 @@
       "distribution": "store",
       "channel": "production",
       "environment": "production",
+      "env": {
+        "PLANLI_ENV": "production"
+      },
       "node": "22.23.1",
       "autoIncrement": true,
       "ios": {

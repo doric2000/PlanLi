@@ -11,6 +11,12 @@ const {
   normalizeBucketName,
 } = require('../mediaProcessor');
 const { initializeAdmin } = require('./localCredentials');
+const {
+  ACTIVE_MEDIA_BUCKET,
+  ROLLBACK_MEDIA_BUCKET,
+  assertStorageMigrationPair,
+  isApprovedPlanLiMediaBucket,
+} = require('./storageTargetPolicy');
 
 const PAGE_SIZE = 20;
 const DEFAULT_STATE_DIR = path.join(
@@ -170,7 +176,9 @@ async function resolveSource({
 }) {
   const candidates = [];
   const add = (bucket, objectPath, reason) => {
-    if (bucket && objectPath) candidates.push({ bucket, objectPath, reason });
+    if (bucket && objectPath && isApprovedPlanLiMediaBucket(bucket)) {
+      candidates.push({ bucket, objectPath, reason });
+    }
   };
 
   add(
@@ -182,6 +190,7 @@ async function resolveSource({
   for (const descriptor of [asset?.large, asset?.full, asset?.feed, asset?.display]) {
     if (!descriptor?.path) continue;
     const bucketName = descriptor.bucket || sourceBucket;
+    if (!isApprovedPlanLiMediaBucket(bucketName)) continue;
     if (await objectExists(bucketName, descriptor.path)) {
       const [metadata] = await admin
         .storage()
@@ -753,6 +762,12 @@ async function main() {
   if (options.sourceBucket === options.targetBucket) {
     throw new Error('Source and target media buckets must be different.');
   }
+  const expectedBuckets = assertStorageMigrationPair(
+    options.sourceBucket,
+    options.targetBucket
+  );
+  options.sourceBucket = expectedBuckets.source;
+  options.targetBucket = expectedBuckets.target;
 
   const state = options.resume
     ? readState(options.stateDir)
@@ -824,6 +839,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ACTIVE_MEDIA_BUCKET,
+  ROLLBACK_MEDIA_BUCKET,
   canonicalAssetComplete,
   deterministicAssetId,
   migrateRecommendation,

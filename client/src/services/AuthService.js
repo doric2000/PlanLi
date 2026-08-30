@@ -22,6 +22,7 @@ import {
 import { auth } from '../config/firebase';
 import { unregisterNotificationDeviceBeforeSignOut } from '../features/notifications/push/session';
 import { completeAccountSetup, registerUserDocument } from './ProfileService';
+import { captureTotpSignIn } from './MfaService';
 
 export const DEFAULT_DISPLAY_NAME = 'מטייל/ת PlanLi';
 
@@ -52,6 +53,10 @@ export const formatAuthError = (error) => {
   }
   if (code === 'auth/too-many-requests') return 'בוצעו יותר מדי ניסיונות. המתינו מעט ונסו שוב.';
   if (code === 'auth/requires-recent-login') return 'מטעמי אבטחה צריך להתחבר מחדש ולנסות שוב.';
+  if (code === 'auth/invalid-verification-code') return 'קוד האימות אינו תקין. הזינו את ששת הספרות שמופיעות באפליקציית האימות.';
+  if (code === 'auth/missing-multi-factor-session') return 'תהליך האימות פג. התחילו את ההתחברות מחדש.';
+  if (code === 'auth/unsupported-second-factor') return 'החשבון מוגדר עם אמצעי אימות שאינו נתמך. פנו למנהל המערכת.';
+  if (code === 'auth/second-factor-already-in-use') return 'אימות באמצעות אפליקציית אימות כבר פעיל בחשבון הזה.';
   if (code === 'auth/user-mismatch') return 'החשבון שנבחר אינו החשבון שמחובר כעת. נסו שוב עם החשבון המקורי.';
   if (
     code === 'DEVELOPER_ERROR'
@@ -152,13 +157,23 @@ async function applyFirstProviderName(user, displayName) {
 
 export async function signInWithGoogle() {
   const providerResult = await getGoogleCredential();
-  const userCredential = await signInWithCredential(auth, providerResult.credential);
+  let userCredential;
+  try {
+    userCredential = await signInWithCredential(auth, providerResult.credential);
+  } catch (error) {
+    throw captureTotpSignIn(error, { profile: providerResult.profile });
+  }
   await applyFirstProviderName(userCredential.user, providerResult.profile.displayName);
   return { user: userCredential.user, profile: providerResult.profile };
 }
 
 export async function signInWithEmail(email, password) {
-  const credential = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
+  let credential;
+  try {
+    credential = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
+  } catch (error) {
+    throw captureTotpSignIn(error);
+  }
   await ensureAuthenticatedUserProfile(credential.user);
   return credential.user;
 }
@@ -242,7 +257,12 @@ export async function revokeGoogleAccessForDeletion() {
 
 export async function signInWithApple() {
   const providerResult = await getAppleCredential();
-  const userCredential = await signInWithCredential(auth, providerResult.credential);
+  let userCredential;
+  try {
+    userCredential = await signInWithCredential(auth, providerResult.credential);
+  } catch (error) {
+    throw captureTotpSignIn(error, { profile: providerResult.profile });
+  }
   await applyFirstProviderName(userCredential.user, providerResult.profile.displayName);
   return { user: userCredential.user, profile: providerResult.profile };
 }

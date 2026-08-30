@@ -102,16 +102,26 @@ test.beforeEach(async () => {
       schemaVersion: 3,
       countryId: 'cty_il',
       status: 'active',
+      canonicalPolicy: {
+        approved: true, registryId: 'il-tel-aviv', kind: 'city_hub',
+        groupingPolicy: 'self', registryVersion: 3, approvalRevision: 1,
+        registryAttestation: {
+          approved: true, registryId: 'il-tel-aviv', registryVersion: 3,
+          approvalRevision: 1, countryId: 'cty_il',
+        },
+      },
       googleCache: { names: { he: 'Tel Aviv', en: 'Tel Aviv' }, expiresAt: new Date('2099-01-01') },
     });
     await setDoc(doc(db, 'recommendations', 'rec-active'), {
       ownerId: 'owner', title: 'Active', status: 'active',
+      publicationGate: { destinationApprovalVerified: true },
     });
     await setDoc(doc(db, 'recommendations', 'rec-deleting'), {
       ownerId: 'owner', title: 'Deleting', status: 'deleting',
     });
     await setDoc(doc(db, 'routes', 'route-active'), {
       ownerId: 'owner', title: 'Route', status: 'active', activeRevisionId: 'revision-active',
+      publicationGate: { destinationApprovalVerified: true },
     });
     await setDoc(doc(db, 'routes', 'route-active', 'days', 'day-1'), {
       position: 0, title: 'Day 1',
@@ -323,12 +333,19 @@ test('public collection queries require an active filter and bounded limit', {
   await assertSucceeds(getDocs(query(
     collection(db, 'recommendations'),
     where('status', '==', 'active'),
+    where('publicationGate.destinationApprovalVerified', '==', true),
+    limit(50)
+  )));
+  await assertFails(getDocs(query(
+    collection(db, 'recommendations'),
+    where('status', '==', 'active'),
     limit(50)
   )));
   await assertFails(getDocs(query(collection(db, 'recommendations'), limit(50))));
   await assertFails(getDocs(query(
     collection(db, 'recommendations'),
     where('status', '==', 'active'),
+    where('publicationGate.destinationApprovalVerified', '==', true),
     limit(51)
   )));
 });
@@ -360,11 +377,47 @@ test('destinations under inactive countries are not public', {
     await setDoc(doc(db, 'countries', 'cty_hidden', 'destinations', 'city_active_child'), {
       schemaVersion: 3,
       countryId: 'cty_hidden', status: 'active',
+      canonicalPolicy: {
+        approved: true, registryId: 'zz-hidden-city', kind: 'city_hub',
+        groupingPolicy: 'self', registryVersion: 3, approvalRevision: 1,
+        registryAttestation: {
+          approved: true, registryId: 'zz-hidden-city', registryVersion: 3,
+          approvalRevision: 1, countryId: 'cty_hidden',
+        },
+      },
       googleCache: { names: { he: 'Hidden', en: 'Hidden' }, expiresAt: new Date('2099-01-01') },
     });
   });
   const db = env.unauthenticatedContext().firestore();
   await assertFails(getDoc(doc(db, 'countries', 'cty_hidden', 'destinations', 'city_active_child')));
+});
+
+test('active-looking destinations and content stay private until the canonical publication gate is verified', {
+  skip: !hasEmulators,
+}, async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'countries', 'cty_il', 'destinations', 'city_pending'), {
+      schemaVersion: 3,
+      countryId: 'cty_il', status: 'active',
+      canonicalPolicy: {
+        approved: false, registryId: 'il-pending-city', kind: 'city_hub',
+        groupingPolicy: 'self', registryVersion: 3, provisional: true,
+      },
+      googleCache: { names: { he: 'Pending', en: 'Pending' }, expiresAt: new Date('2099-01-01') },
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-missing-gate'), {
+      ownerId: 'owner', title: 'Legacy active', status: 'active',
+    });
+    await setDoc(doc(db, 'recommendations', 'rec-false-gate'), {
+      ownerId: 'owner', title: 'Held', status: 'active',
+      publicationGate: { destinationApprovalVerified: false },
+    });
+  });
+  const db = env.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(db, 'countries', 'cty_il', 'destinations', 'city_pending')));
+  await assertFails(getDoc(doc(db, 'recommendations', 'rec-missing-gate')));
+  await assertFails(getDoc(doc(db, 'recommendations', 'rec-false-gate')));
 });
 
 test('business documents and interactions are server-only', {

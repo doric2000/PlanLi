@@ -128,7 +128,7 @@ test('registry collection validation rejects invalid graphs, duplicates and unre
   const base = {
     countryCode: 'ZZ', names: { he: 'יעד', en: 'Destination' }, aliases: ['Destination'],
     kind: 'city_hub', groupingPolicy: 'self', center: { lat: 1, lng: 1 }, radiusKm: 10,
-    providerRefs: { googlePlaceId: 'shared-place' }, status: 'active',
+    providerRefs: { googlePlaceId: 'shared-place' }, googleTypes: ['locality', 'political'], status: 'active',
   };
   const issues = registryCollectionIssues([
     { ...base, id: 'zz-first', parentId: 'zz-first' },
@@ -184,6 +184,35 @@ test('a POI provider identity never auto-matches a city destination', () => {
   }), false);
   assert.equal(providerIdentityPolicy('island', ['country', 'political']).compatible, true);
   assert.equal(providerIdentityPolicy('tourism_region', ['country', 'political']).compatible, false);
+});
+
+test('missing provider types are untrusted unless the identity is explicitly reviewed', () => {
+  const entry = {
+    id: 'zz-provider-city',
+    countryCode: 'ZZ',
+    names: { he: 'עיר', en: 'City' },
+    aliases: ['City'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    status: 'active',
+    center: { lat: 1, lng: 1 },
+    radiusKm: 20,
+    providerRefs: { googlePlaceId: 'place-without-types' },
+    approval: { approvedByAdmin: true },
+  };
+
+  assert.deepEqual(providerIdentityPolicy('city_hub', []), {
+    compatible: false,
+    source: 'provider_types_missing',
+  });
+  assert.equal(matchCanonicalEntry([entry], {
+    countryCode: 'ZZ',
+    providerPlaceId: 'place-without-types',
+    aliases: ['City'],
+    coordinates: { lat: 1, lng: 1 },
+  }), null);
+  assert.ok(validateRegistryEntry(entry).errors.includes('missing_google_place_types'));
+  assert.equal(providerIdentityPolicy('city_hub', [], { reviewedOverride: true }).compatible, true);
 });
 
 test('provider viewports remain eligible at small scales and receive a derived catchment', () => {

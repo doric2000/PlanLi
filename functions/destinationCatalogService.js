@@ -2,12 +2,25 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { hasUsableDestinationCache } = require('./destinationCacheService');
 const { destinationEnglishName, destinationHebrewName } = require('./destinationLocalizationService');
 const { cleanDiscoveryRegionId, discoveryRegionForCountry } = require('./discoveryRegions');
+const { destinationIsPublicAndReferenceable } = require('./destinationReferencePolicy');
 
 const COMBINING_MARKS = /[\u0300-\u036f\u0591-\u05C7]/g;
 const NON_ALPHANUMERIC = /[^a-z0-9\u05D0-\u05EA]+/gi;
 const HEBREW_FINAL_LETTERS = Object.freeze({ ך: 'כ', ם: 'מ', ן: 'נ', ף: 'פ', ץ: 'צ' });
 const MAX_CATALOG_PREFIXES = 160;
 const MAX_PREFIX_LENGTH = 16;
+
+function cleanCatalogCursor(value) {
+  if (value == null || value === '') return '';
+  if (typeof value !== 'string' || value !== value.trim()) {
+    throw new HttpsError('invalid-argument', 'cursor is invalid.');
+  }
+  const result = value;
+  if (result.length > 180 || result === '.' || result === '..' || /[/\u0000-\u001F\u007F-\u009F]/u.test(result)) {
+    throw new HttpsError('invalid-argument', 'cursor is invalid.');
+  }
+  return result;
+}
 
 function foldDestinationSearchText(value) {
   return String(value || '')
@@ -92,7 +105,8 @@ function catalogData({ countryId, cityId, city, country, timestamp }) {
     countryId,
     discoveryRegionId: country?.discoveryRegionId || discoveryRegionForCountry(countryId),
     cityId,
-    status: city?.status === 'active' && country?.status === 'active' ? 'active' : 'inactive',
+    status: destinationIsPublicAndReferenceable(city, countryId) && country?.status === 'active' ? 'active' : 'inactive',
+    canonicalApproved: destinationIsPublicAndReferenceable(city, countryId),
     destinationType: city?.destinationType || null,
     destinationClass: destinationClassFor(city),
     names,
@@ -117,7 +131,8 @@ async function syncDestinationCatalog({ admin, countryId, cityId, city }) {
   const country = (await db.doc(`countries/${countryId}`).get()).data() || {};
   const ref = db.doc(`destinationCatalog/${catalogId(countryId, cityId)}`);
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
-  if (!city || city.status !== 'active' || country.status !== 'active' || !hasUsableDestinationCache(city)) {
+  if (!city || !destinationIsPublicAndReferenceable(city, countryId) ||
+      country.status !== 'active' || !hasUsableDestinationCache(city)) {
     await ref.delete();
     return null;
   }
@@ -142,7 +157,8 @@ async function syncCountryDestinationCatalog({ admin, countryId, country, limit 
     snapshot.docs.forEach((cityDocument) => {
       const ref = db.doc(`destinationCatalog/${catalogId(countryId, cityDocument.id)}`);
       const city = cityDocument.data();
-      if (!country || country.status !== 'active' || city.status !== 'active' || !hasUsableDestinationCache(city)) {
+      if (!country || country.status !== 'active' || !destinationIsPublicAndReferenceable(city, countryId) ||
+          !hasUsableDestinationCache(city)) {
         batch.delete(ref);
       } else {
         batch.set(ref, catalogData({
@@ -205,7 +221,9 @@ async function searchDestinations({ admin, data }) {
   }
   const queryText = compactDestinationSearchText(data?.query);
   const prefix = queryText.slice(0, MAX_PREFIX_LENGTH);
-  let query = admin.firestore().collection('destinationCatalog').where('status', '==', 'active');
+  let query = admin.firestore().collection('destinationCatalog')
+    .where('status', '==', 'active')
+    .where('canonicalApproved', '==', true);
   if (countryId) query = query.where('countryId', '==', countryId);
   else if (discoveryRegionId) query = query.where('discoveryRegionId', '==', discoveryRegionId);
   if (prefix?.length >= 2) query = query.where('search.prefixes', 'array-contains', prefix);
@@ -213,7 +231,7 @@ async function searchDestinations({ admin, data }) {
   query = effectiveSort === 'popular'
     ? query.orderBy('recommendationCount', 'desc').orderBy('__name__', 'asc')
     : query.orderBy('names.he', 'asc').orderBy('__name__', 'asc');
-  const cursor = typeof data?.cursor === 'string' ? data.cursor : '';
+  const cursor = cleanCatalogCursor(data?.cursor);
   if (cursor) {
     const cursorSnapshot = await admin.firestore().doc(`destinationCatalog/${cursor}`).get();
     if (cursorSnapshot.exists) query = query.startAfter(cursorSnapshot);

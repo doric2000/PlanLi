@@ -7,15 +7,23 @@ const {
   NEW_SELECTION_DETAILS_FIELD_MASK,
   autocompletePlaces,
   fetchWithProviderPolicy,
+  fetchWithGoogleMapsOAuth,
   fetchNewBilingualPlace,
   fetchNewSelectionPlace,
   fetchLocalityPlaceId,
+  fetchReverseLocalityCandidates,
   localityAliases,
   newAutocomplete,
   parseNewLocalizedPlace,
   providerEndpointFor,
   providerRequestContext,
 } = require('./placesProviderAdapter');
+
+const oauth = {
+  projectId: 'planli-f0b12',
+  accessTokenProvider: async ({ forceRefresh = false } = {}) =>
+    (forceRefresh ? 'oauth-refresh' : 'oauth-token'),
+};
 
 test('Thai tambon prefixes normalize to the same locality alias as Google locality details', () => {
   assert.deepEqual(localityAliases('Tambon Wiang Chai'), ['wiang chai', 'tambon wiang chai']);
@@ -51,7 +59,7 @@ test('Places API New autocomplete uses a session token and a minimal field mask'
   let request;
   const predictions = await newAutocomplete({
     query: 'Paris',
-    newPlacesKey: 'new-key',
+    ...oauth,
     language: 'he',
     sessionToken: 'session-1',
     randomSelectionId: () => 'sel-1',
@@ -73,6 +81,9 @@ test('Places API New autocomplete uses a session token and a minimal field mask'
   });
   assert.equal(request.url, 'https://places.googleapis.com/v1/places:autocomplete');
   assert.equal(request.options.headers['X-Goog-FieldMask'], NEW_AUTOCOMPLETE_FIELD_MASK);
+  assert.equal(request.options.headers.Authorization, 'Bearer oauth-token');
+  assert.equal(request.options.headers['X-Goog-User-Project'], 'planli-f0b12');
+  assert.equal(request.options.headers['X-Goog-Api-Key'], undefined);
   assert.deepEqual(JSON.parse(request.options.body), {
     input: 'Paris', languageCode: 'he', sessionToken: 'session-1', includePureServiceAreaBusinesses: false,
   });
@@ -84,7 +95,7 @@ test('Places API New autocomplete uses a session token and a minimal field mask'
 test('Places API New autocomplete applies a circular location bias', async () => {
   let body;
   await newAutocomplete({
-    query: 'Virupaksha Temple', newPlacesKey: 'new-key',
+    query: 'Virupaksha Temple', ...oauth,
     coordinates: { lat: 15.335, lng: 76.46 }, randomSelectionId: () => 'sel-1',
     fetchImpl: async (_url, options) => {
       body = JSON.parse(options.body);
@@ -101,7 +112,7 @@ test('Places API New fetches matching Hebrew and English details exactly once', 
   const calls = [];
   const bilingual = await fetchNewBilingualPlace({
     placeId: 'place-paris',
-    newPlacesKey: 'new-key',
+    ...oauth,
     sessionToken: 'session-1',
     fetchImpl: async (url, options) => {
       const request = new URL(url);
@@ -124,7 +135,7 @@ test('Places API New fetches matching Hebrew and English details exactly once', 
 
 test('Places API New rejects conflicting bilingual identities and moved places', async () => {
   await assert.rejects(fetchNewBilingualPlace({
-    placeId: 'place-paris', newPlacesKey: 'new-key',
+    placeId: 'place-paris', ...oauth,
     fetchImpl: async (url) => {
       const value = details(new URL(url).searchParams.get('languageCode'));
       if (new URL(url).searchParams.get('languageCode') === 'en') value.id = 'different';
@@ -133,7 +144,7 @@ test('Places API New rejects conflicting bilingual identities and moved places',
   }), /inconsistent place details/);
 
   await assert.rejects(fetchNewBilingualPlace({
-    placeId: 'place-paris', newPlacesKey: 'new-key',
+    placeId: 'place-paris', ...oauth,
     fetchImpl: async (url) => ({
       ok: true, status: 200,
       json: async () => ({ ...details(new URL(url).searchParams.get('languageCode')), movedPlaceId: 'place-paris-new' }),
@@ -143,11 +154,11 @@ test('Places API New rejects conflicting bilingual identities and moved places',
 
 test('Places API New maps quota and provider errors to retryable callable codes', async () => {
   await assert.rejects(newAutocomplete({
-    query: 'Paris', newPlacesKey: 'new-key', randomSelectionId: () => 'sel',
+    query: 'Paris', ...oauth, randomSelectionId: () => 'sel',
     fetchImpl: async () => ({ ok: false, status: 429, json: async () => ({}) }),
   }), (error) => error.code === 'resource-exhausted');
   await assert.rejects(newAutocomplete({
-    query: 'Paris', newPlacesKey: 'new-key', randomSelectionId: () => 'sel',
+    query: 'Paris', ...oauth, randomSelectionId: () => 'sel',
     fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }),
   }), (error) => error.code === 'unavailable');
 });
@@ -159,7 +170,7 @@ test('locality resolution prefers a city over a same-name administrative area', 
     countryName: 'Peru',
     countryCode: 'PE',
     coordinates: { lat: -13.516, lng: -71.978 },
-    newPlacesKey: 'new-key',
+    ...oauth,
     fetchImpl: async (url) => {
       if (String(url).includes('places:autocomplete')) {
         return { ok: true, status: 200, json: async () => ({ suggestions: [
@@ -206,7 +217,7 @@ test('locality resolution falls back from a district to its containing city', as
     countryName: venue.countryName,
     countryCode: venue.countryCode,
     coordinates: venue.coordinates,
-    newPlacesKey: 'new-key',
+    ...oauth,
     fetchImpl: async (url, options) => {
       if (String(url).includes('places:autocomplete')) {
         const input = JSON.parse(options.body).input;
@@ -254,7 +265,7 @@ test('ordinary exact-place selection uses one Essentials details request', async
       text: 'One Budget Hotel Chiangrai Soi Sawan',
       types: ['lodging'],
     },
-    newPlacesKey: 'new-key',
+    ...oauth,
     sessionToken: 'session-1',
     fetchImpl: async (url, options) => {
       calls.push({ url: String(url), fieldMask: options.headers['X-Goog-FieldMask'] });
@@ -300,20 +311,18 @@ test('Chiang Rai district aliases resolve through one exact-coordinate reverse l
     countryName: venue.countryName,
     countryCode: venue.countryCode,
     coordinates: venue.coordinates,
-    mapsKey: 'maps-key',
-    newPlacesKey: 'new-key',
+    ...oauth,
     requestContext,
     fetchImpl: async (url) => {
       urls.push(String(url));
       return { ok: true, status: 200, json: async () => ({
-        status: 'OK',
         results: [{
-          place_id: 'chiang-rai-city',
+          placeId: 'chiang-rai-city',
           types: ['locality', 'political'],
-          address_components: [
-            { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+          addressComponents: [
+            { longText: 'Thailand', shortText: 'TH', types: ['country'] },
           ],
-          geometry: { location: { lat: 19.9105, lng: 99.8406 } },
+          location: { latitude: 19.9105, longitude: 99.8406 },
         }],
       }) };
     },
@@ -322,7 +331,7 @@ test('Chiang Rai district aliases resolve through one exact-coordinate reverse l
   assert.equal(placeId, 'chiang-rai-city');
   assert.equal(requestContext.count, 1);
   assert.equal(urls.length, 1);
-  assert.match(urls[0], /geocode\/json/);
+  assert.match(urls[0], /geocode\.googleapis\.com\/v4\/geocode\/location/);
 });
 
 test('Thailand reverse resolution prefers the province over a smaller locality', async () => {
@@ -337,29 +346,27 @@ test('Thailand reverse resolution prefers the province over a smaller locality',
     countryName: 'Thailand',
     countryCode: 'TH',
     coordinates: { lat: 19.9, lng: 99.9 },
-    mapsKey: 'maps-key',
-    newPlacesKey: 'new-key',
+    ...oauth,
     fetchImpl: async () => ({
       ok: true,
       status: 200,
       json: async () => ({
-        status: 'OK',
         results: [
           {
-            place_id: 'wiang-chai-town',
+            placeId: 'wiang-chai-town',
             types: ['locality', 'political'],
-            address_components: [
-              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            addressComponents: [
+              { longText: 'Thailand', shortText: 'TH', types: ['country'] },
             ],
-            geometry: { location: { lat: 19.88, lng: 99.92 } },
+            location: { latitude: 19.88, longitude: 99.92 },
           },
           {
-            place_id: 'chiang-rai-province',
+            placeId: 'chiang-rai-province',
             types: ['administrative_area_level_1', 'political'],
-            address_components: [
-              { long_name: 'Thailand', short_name: 'TH', types: ['country'] },
+            addressComponents: [
+              { longText: 'Thailand', shortText: 'TH', types: ['country'] },
             ],
-            geometry: { location: { lat: 19.91, lng: 99.84 } },
+            location: { latitude: 19.91, longitude: 99.84 },
           },
         ],
       }),
@@ -378,21 +385,19 @@ test('non-Thai locality search runs before accepting a reverse-geocoded county',
     countryName: 'Albania',
     countryCode: 'AL',
     coordinates: { lat: 40.4146, lng: 19.4812 },
-    mapsKey: 'maps-key',
-    newPlacesKey: 'new-key',
+    ...oauth,
     fetchImpl: async (url, options) => {
       const target = String(url);
       calls.push(target);
       if (target.includes('/geocode/')) {
         return { ok: true, status: 200, json: async () => ({
-          status: 'OK',
           results: [{
-            place_id: 'vlore-county',
+            placeId: 'vlore-county',
             types: ['administrative_area_level_2', 'political'],
-            address_components: [
-              { long_name: 'Albania', short_name: 'AL', types: ['country'] },
+            addressComponents: [
+              { longText: 'Albania', shortText: 'AL', types: ['country'] },
             ],
-            geometry: { location: { lat: 40.466, lng: 19.49 } },
+            location: { latitude: 40.466, longitude: 19.49 },
           }],
         }) };
       }
@@ -442,26 +447,50 @@ test('provider retry cannot exceed the ten-request ceiling', async () => {
   assert.equal(requestContext.count, 10);
 });
 
-test('legacy rollback requests use the same timeout, retry, and request counter', async () => {
-  const requestContext = providerRequestContext();
-  let calls = 0;
-  const predictions = await autocompletePlaces({
+test('legacy provider selection fails closed', async () => {
+  await assert.rejects(autocompletePlaces({
     provider: 'legacy',
-    requestContext,
-    fetchImpl: async () => {
-      calls += 1;
-      return { ok: true, status: 200 };
+    query: 'Paris',
+    ...oauth,
+  }), (error) => error.code === 'failed-precondition');
+});
+
+test('Geocoding quota exhaustion fails closed without starting a Places fallback', async () => {
+  const requests = [];
+  await assert.rejects(fetchReverseLocalityCandidates({
+    countryCode: 'FR',
+    coordinates: { lat: 48.8566, lng: 2.3522 },
+    ...oauth,
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      return { ok: false, status: 429, json: async () => ({}) };
     },
-    legacyAutocomplete: async ({ fetchImpl }) => {
-      const response = await fetchImpl('https://maps.googleapis.com/maps/api/place/autocomplete/json');
-      assert.equal(response.ok, true);
-      return [{ placeId: 'legacy-place' }];
+  }), (error) => error.code === 'resource-exhausted');
+  assert.ok(requests.length >= 1);
+  assert.ok(requests.every((url) => url.includes('geocode.googleapis.com')));
+});
+
+test('OAuth transport refreshes once after a 401 without exposing API keys', async () => {
+  const refreshes = [];
+  const requests = [];
+  const response = await fetchWithGoogleMapsOAuth('https://places.googleapis.com/v1/places:test', {}, {
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async ({ forceRefresh }) => {
+      refreshes.push(forceRefresh);
+      return forceRefresh ? 'fresh-token' : 'stale-token';
+    },
+    fetchImpl: async (_url, options) => {
+      requests.push(options.headers);
+      return { ok: requests.length === 2, status: requests.length === 1 ? 401 : 200 };
     },
   });
 
-  assert.deepEqual(predictions, [{ placeId: 'legacy-place' }]);
-  assert.equal(calls, 1);
-  assert.equal(requestContext.count, 1);
+  assert.equal(response.status, 200);
+  assert.deepEqual(refreshes, [false, true]);
+  assert.equal(requests[0].Authorization, 'Bearer stale-token');
+  assert.equal(requests[1].Authorization, 'Bearer fresh-token');
+  assert.equal(requests[1]['X-Goog-User-Project'], 'planli-f0b12');
+  assert.equal(requests[1]['X-Goog-Api-Key'], undefined);
 });
 
 test('provider endpoint diagnostics never include a Place ID or query', () => {
@@ -470,7 +499,7 @@ test('provider endpoint diagnostics never include a Place ID or query', () => {
     'places_details'
   );
   assert.equal(
-    providerEndpointFor('https://maps.googleapis.com/maps/api/geocode/json?latlng=1,2&key=secret'),
+    providerEndpointFor('https://geocode.googleapis.com/v4/geocode/location/1,2'),
     'geocode'
   );
 });

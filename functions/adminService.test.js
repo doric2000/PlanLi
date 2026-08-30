@@ -4,7 +4,11 @@ const {
   applyingSuspensionDisposition,
   applySuspensionEnforcement,
   assertAdmin,
+  assertModerationRetryOperation,
   assertRecentAuth,
+  assertTotpSecondFactor,
+  cleanId,
+  cleanOptionalId,
   directSuspensionEnforcementId,
   finalizeReinstatement,
   getAdminResource,
@@ -13,14 +17,17 @@ const {
   listModerationAudit,
   listModerationCases,
   moderationCaseAuditId,
+  moderationDeletionCanResumeFromOperation,
   moderationDecisionOptions,
   moderateContent,
+  moderationOperationDocumentId,
   bulkUpdateModerationCases,
   updateModerationCase,
   sensitiveAdminActions,
   publicModerationCase,
   publicModerationReport,
   recoverablePreviousCaseStatus,
+  reconcileStaleModerationDecisions,
   recoverApplyingSuspension,
   processExpiredModerationSuspensions,
   normalizeNoViolationContentAction,
@@ -33,6 +40,15 @@ const {
   updateAdminAttachedPlace,
 } = require('./adminService');
 const { ownerNotificationOutboxId } = require('./notificationService');
+
+function recentTotpAdminToken(extra = {}) {
+  return {
+    admin: true,
+    auth_time: Math.floor(Date.now() / 1000),
+    firebase: { sign_in_second_factor: 'totp' },
+    ...extra,
+  };
+}
 
 test('admin operations require an explicit admin claim', () => {
   assert.throws(() => assertAdmin({ uid: 'user', token: {} }), (error) => error.details?.reason === 'admin_required');
@@ -55,25 +71,48 @@ test('an admin claim is rejected when the server-owned registry is missing or in
   }
 });
 
-test('destructive admin operations require recent authentication', () => {
+test('state-changing admin operations require recent authentication and TOTP', () => {
   assert.doesNotThrow(() => assertRecentAuth({ token: { auth_time: Math.floor(Date.now() / 1000) } }));
   assert.throws(
     () => assertRecentAuth({ token: { auth_time: Math.floor(Date.now() / 1000) - 3600 } }),
     (error) => error.details?.reason === 'recent_sign_in_required'
   );
+  assert.doesNotThrow(() => assertTotpSecondFactor({ token: { firebase: { sign_in_second_factor: 'totp' } } }));
+  for (const secondFactor of [undefined, 'phone']) {
+    assert.throws(
+      () => assertTotpSecondFactor({ token: { firebase: { sign_in_second_factor: secondFactor } } }),
+      (error) => error.details?.reason === 'totp_required'
+    );
+  }
 });
 
-test('sensitive-admin action list is explicit and contains only high-impact admin operations', () => {
+test('sensitive-admin action list covers every state-changing admin operation', () => {
   const actions = sensitiveAdminActions();
-  assert.ok(actions.deactivateDestination?.recentSignIn);
-    assert.ok(actions.setDestinationHebrewName?.recentSignIn);
-    assert.ok(actions.updateDestinationPolicy?.recentSignIn);
-    assert.ok(actions.startDestinationReassignment?.recentSignIn);
-  assert.ok(actions.setUserAdmin?.recentSignIn);
-  assert.ok(actions.resolveModerationCase?.recentSignIn);
-  assert.ok(actions.updateAdminAttachedPlace?.recentSignIn);
+  for (const action of [
+    'updateModerationCase',
+    'saveAdminSavedView',
+    'deleteAdminSavedView',
+    'moderateContent',
+    'resolveModerationCase',
+    'bulkUpdateModerationCases',
+    'setUserSuspension',
+    'setUserEmailVerified',
+    'setUserAdmin',
+    'deleteUserAsAdmin',
+    'updateAdminAttachedPlace',
+    'recheckDestination',
+    'approveDestination',
+    'selectDestinationImageCandidate',
+    'setDestinationUploadedImage',
+    'setDestinationAirport',
+    'setDestinationHebrewName',
+    'updateDestinationPolicy',
+    'startDestinationReassignment',
+    'deactivateDestination',
+  ]) {
+    assert.ok(actions[action]?.recentSignIn, `${action} must require a recent sign-in`);
+  }
   assert.equal(typeof actions.deactivateDestination.reason, 'string');
-  assert.equal(actions.approveDestination, undefined);
 });
 
 test('non-sensitive destination/admin actions stay non-sensitive', () => {
@@ -88,13 +127,8 @@ test('non-sensitive destination/admin actions stay non-sensitive', () => {
     'listModerationAudit',
     'listDestinationReviews',
     'getDestinationReview',
-    'recheckDestination',
-    'approveDestination',
     'getDestinationImageCandidates',
-    'selectDestinationImageCandidate',
-    'setDestinationUploadedImage',
     'getAirportCandidates',
-    'setDestinationAirport',
   ]) {
     assert.equal(actions[action], undefined, `${action} must remain non-sensitive`);
   }
@@ -177,14 +211,17 @@ test('case updates reject stale revisions before writing an assignment', async (
   const admin = { firestore: () => db };
   await assert.rejects(updateModerationCase({
     admin,
-    auth: { uid: 'admin-1', token: { admin: true } },
+    auth: { uid: 'admin-1', token: recentTotpAdminToken() },
     data: { caseId: 'case-1', expectedRevision: 3, operation: 'claim' },
   }), (error) => error?.details?.reason === 'case_revision_conflict');
 });
 
-test('a report that changes a leased case prevents resolution finalization', async () => {
+test('a report recorded during a lease does not cancel resolution finalization', async () => {
   const deleted = Symbol('deleted');
   const target = { type: 'recommendation', id: 'rec-1' };
+  const operationId = 'operation-report-race-1';
+  const operationPath = `system/moderation/operations/${moderationOperationDocumentId('case-1', operationId)}`;
+  let operationValue = null;
   let caseValue = {
     caseId: 'case-1',
     target,
@@ -206,6 +243,7 @@ test('a report that changes a leased case prevents resolution finalization', asy
         return { path, get: async () => ({ exists: true, data: () => ({ active: true }) }) };
       }
       if (path === 'system/moderation/cases/case-1') return { path };
+      if (path === operationPath) return { path };
       if (path === 'recommendations/rec-1') {
         return { path, get: async () => ({ exists: true, data: () => ({ status: 'active', ownerId: 'owner-1' }) }) };
       }
@@ -223,11 +261,9 @@ test('a report that changes a leased case prevents resolution finalization', asy
       if (transactionNumber === 2) {
         caseValue = {
           ...caseValue,
-          status: 'open',
-          revision: 5,
           reportCount: 2,
+          reportRevision: 1,
         };
-        delete caseValue.decisionLease;
       }
       return handler({
         get: async (ref) => {
@@ -237,11 +273,15 @@ test('a report that changes a leased case prevents resolution finalization', asy
           if (ref.path.startsWith('system/moderation/audit/')) {
             return { exists: false, data: () => null };
           }
+          if (ref.path === operationPath) {
+            return { exists: Boolean(operationValue), data: () => operationValue };
+          }
           assert.equal(ref.path, 'system/moderation/cases/case-1');
           return { exists: true, data: () => caseValue };
         },
         set: (ref, value) => {
           if (ref.path === 'system/moderation/cases/case-1') applyMerge(value);
+          if (ref.path === operationPath) operationValue = { ...(operationValue || {}), ...value };
         },
       });
     },
@@ -250,11 +290,11 @@ test('a report that changes a leased case prevents resolution finalization', asy
     FieldValue: { delete: () => deleted, serverTimestamp: () => 'server-time' },
   });
 
-  await assert.rejects(resolveModerationCase({
+  const result = await resolveModerationCase({
     admin: { firestore },
     auth: {
       uid: 'admin-1',
-      token: { admin: true, auth_time: Math.floor(Date.now() / 1000), name: 'מנהלת' },
+      token: recentTotpAdminToken({ name: 'מנהלת' }),
     },
     data: {
       caseId: 'case-1',
@@ -262,12 +302,17 @@ test('a report that changes a leased case prevents resolution finalization', asy
       contentAction: 'dismiss',
       accountAction: { type: 'none' },
       reasonCode: 'no_violation',
+      operationId,
     },
-  }), (error) => error?.details?.reason === 'case_revision_conflict');
-  assert.equal(caseValue.status, 'open');
+  });
+  assert.equal(result.status, 'resolved_dismissed');
+  assert.equal(caseValue.status, 'resolved_dismissed');
   assert.equal(caseValue.revision, 5);
+  assert.equal(caseValue.decisionRevision, 5);
+  assert.equal(caseValue.reportRevision, 1);
   assert.equal(caseValue.reportCount, 2);
   assert.equal(caseValue.decisionLease, undefined);
+  assert.equal(operationValue.stage, 'case_finalized');
 });
 
 test('a completed case decision and its audit replay once after a lost response', async () => {
@@ -282,6 +327,9 @@ test('a completed case decision and its audit replay once after a lost response'
   let caseValue = { target, targetPreview: { available: true, title: 'חיפה' }, revision: 0, status: 'open' };
   const auditValues = new Map();
   let auditWrites = 0;
+  const operationId = 'operation-replay-1';
+  const operationPath = `system/moderation/operations/${moderationOperationDocumentId('case-1', operationId)}`;
+  let operationValue = null;
   let eventCounter = 0;
   const merge = (current, patch) => Object.fromEntries(Object.entries({ ...current, ...patch })
     .filter(([, value]) => value !== deleted));
@@ -314,6 +362,9 @@ test('a completed case decision and its audit replay once after a lost response'
             data: () => auditValues.get(ref.path),
           };
         }
+        if (ref.path === operationPath) {
+          return { exists: Boolean(operationValue), data: () => operationValue };
+        }
         throw new Error(`Unexpected transaction read: ${ref.path}`);
       },
       set: (ref, value) => {
@@ -322,6 +373,7 @@ test('a completed case decision and its audit replay once after a lost response'
           auditValues.set(ref.path, value);
           auditWrites += 1;
         }
+        else if (ref.path === operationPath) operationValue = merge(operationValue || {}, value);
       },
     }),
   };
@@ -332,7 +384,7 @@ test('a completed case decision and its audit replay once after a lost response'
     admin: { firestore },
     auth: {
       uid: 'admin-1',
-      token: { admin: true, auth_time: Math.floor(Date.now() / 1000), name: 'מנהלת' },
+      token: recentTotpAdminToken({ name: 'מנהלת' }),
     },
     data: {
       caseId: 'case-1',
@@ -340,7 +392,7 @@ test('a completed case decision and its audit replay once after a lost response'
       contentAction: 'dismiss',
       accountAction: { type: 'none' },
       reasonCode: 'no_violation',
-      operationId: 'operation-replay-1',
+      operationId,
     },
   };
 
@@ -351,6 +403,7 @@ test('a completed case decision and its audit replay once after a lost response'
   assert.equal(caseValue.revision, 2);
   assert.equal(auditWrites, 1);
   assert.equal(auditValues.size, 1);
+  assert.equal(operationValue.stage, 'case_finalized');
 });
 
 test('held no-violation decisions restore content for current and legacy clients', () => {
@@ -397,6 +450,7 @@ test('applying suspension recovery stops on mismatched history and classifies sa
     enforcementId: 'enforcement-1',
     enforcement: {
       type: 'suspension', status: 'applying', userUid: 'user-1', stage: 'auth_disabled',
+      authDisabledBefore: false, authDisableIntent: 'disable_for_suspension',
       authDisableStartedAt: 10, endsAt: 500,
     },
     userExists: true,
@@ -480,6 +534,8 @@ test('canceling a pre-profile applying suspension re-enables an account disabled
         userUid: 'user-1',
         sourceCaseId: 'case-replaced',
         stage: 'auth_disabled',
+        authDisabledBefore: false,
+        authDisableIntent: 'disable_for_suspension',
         authDisableStartedAt: 10,
       }),
       ref: { set: async (value) => writes.push(value) },
@@ -736,7 +792,7 @@ test('attached route place correction binds to the transactionally current revis
 
   await updateAdminAttachedPlace({
     admin: { firestore },
-    auth: { uid: 'admin-1', token: { admin: true, auth_time: Math.floor(Date.now() / 1000) } },
+    auth: { uid: 'admin-1', token: recentTotpAdminToken() },
     data: {
       target: {
         type: 'route',
@@ -764,7 +820,7 @@ test('bulk moderation rejects more than 25 cases and never reaches a mutation', 
   };
   await assert.rejects(bulkUpdateModerationCases({
     admin,
-    auth: { uid: 'admin-1', token: { admin: true } },
+    auth: { uid: 'admin-1', token: recentTotpAdminToken() },
     data: {
       operation: 'claim',
       cases: Array.from({ length: 26 }, (_, index) => ({ caseId: `case-${index}`, expectedRevision: 0 })),
@@ -930,6 +986,7 @@ test('reinstatement keeps enforcement retryable when media restoration fails', a
       uid: 'user-1',
       userData: { moderation: { status: 'suspended' } },
       enforcementId: 'enforcement-1',
+      enforcement: { authDisabledBefore: false, authDisableIntent: 'disable_for_suspension' },
     }),
     setMediaAvailabilityImpl: async ({ available }) => {
       assert.equal(available, true);
@@ -960,6 +1017,7 @@ test('reinstatement remains successful when transition cleanup fails after final
       uid: 'user-1',
       userData: { moderation: { status: 'suspended' } },
       enforcementId: 'enforcement-1',
+      enforcement: { authDisabledBefore: false, authDisableIntent: 'disable_for_suspension' },
     }),
     setMediaAvailabilityImpl: async ({ available }) => assert.equal(available, true),
     finalizeReinstatementImpl: async () => true,
@@ -971,8 +1029,127 @@ test('reinstatement remains successful when transition cleanup fails after final
     uid: 'user-1',
     reinstated: true,
     enforcementId: 'enforcement-1',
+    authPreservedDisabled: false,
   });
   assert.deepEqual(authStates, [false]);
+});
+
+test('a failed moderation decision can only resume with its recorded operation id', () => {
+  const retry = {
+    operationId: 'operation-original',
+    contentAction: 'delete',
+    accountAction: 'none',
+  };
+  assert.doesNotThrow(() => assertModerationRetryOperation(retry, 'operation-original'));
+  assert.throws(
+    () => assertModerationRetryOperation(retry, 'operation-conflicting'),
+    (error) => error?.details?.reason === 'decision_retry_conflict'
+  );
+});
+
+test('a deleted moderation target resumes only from the same proven delete operation', () => {
+  const target = { type: 'recommendation', id: 'rec-1', path: 'recommendations/rec-1' };
+  const operation = {
+    caseId: 'case-1',
+    operationId: 'operation-delete-1',
+    target,
+    requestedContentAction: 'delete',
+    contentAction: 'delete',
+    accountAction: 'none',
+    stage: 'effects_applied',
+  };
+  const input = {
+    caseId: 'case-1',
+    operationId: 'operation-delete-1',
+    target,
+    requestedContentAction: 'delete',
+    accountAction: 'none',
+  };
+  assert.equal(moderationDeletionCanResumeFromOperation(operation, input), true);
+  assert.equal(moderationDeletionCanResumeFromOperation(operation, {
+    ...input,
+    operationId: 'operation-conflicting',
+  }), false);
+  assert.equal(moderationDeletionCanResumeFromOperation({ ...operation, stage: 'started' }, input), false);
+  assert.equal(moderationDeletionCanResumeFromOperation(operation, {
+    ...input,
+    requestedContentAction: 'restore',
+  }), false);
+});
+
+test('scheduled reconciliation releases a stale moderation decision lease for retry', async () => {
+  const deleted = Symbol('deleted');
+  let caseValue = {
+    status: 'resolving',
+    revision: 7,
+    decisionRevision: 7,
+    decisionLease: { previousStatus: 'auto_held', startedAtMs: 1 },
+  };
+  const caseRef = { id: 'case-1', path: 'system/moderation/cases/case-1' };
+  const caseEntry = { id: 'case-1', ref: caseRef, data: () => caseValue };
+  const db = {
+    doc: (path) => ({ path }),
+    collection(path) {
+      if (path === 'system/moderation/cases') {
+        const query = {
+          where: () => query,
+          limit: () => query,
+          get: async () => ({ size: 1, docs: [caseEntry] }),
+        };
+        return query;
+      }
+      return { doc: () => ({ path: `${path}/event-1` }) };
+    },
+    runTransaction: async (handler) => handler({
+      get: async (ref) => ({ exists: true, data: () => caseValue, ref }),
+      set: (ref, patch) => {
+        if (ref.path !== caseRef.path) return;
+        caseValue = Object.fromEntries(Object.entries({ ...caseValue, ...patch })
+          .filter(([, value]) => value !== deleted));
+      },
+    }),
+  };
+  const firestore = Object.assign(() => db, {
+    FieldValue: { delete: () => deleted, serverTimestamp: () => 'server-time' },
+  });
+  const result = await reconcileStaleModerationDecisions({
+    admin: { firestore },
+    now: 1_000_000,
+  });
+  assert.deepEqual(result, { scanned: 1, recovered: 1, fresh: 0, invalid: 1 });
+  assert.equal(caseValue.status, 'auto_held');
+  assert.equal(caseValue.revision, 8);
+  assert.equal(caseValue.decisionRevision, 8);
+  assert.equal(caseValue.decisionLease, undefined);
+  assert.equal(caseValue.resolutionError, 'stale_decision_lease');
+});
+
+test('reinstatement preserves an Auth account that was disabled before PlanLi suspension', async () => {
+  const authStates = [];
+  const result = await reinstateUserAccount({
+    admin: {
+      auth: () => ({
+        updateUser: async (_uid, value) => authStates.push(value.disabled),
+        revokeRefreshTokens: async () => assert.fail('preserved disabled Auth state needs no token mutation'),
+      }),
+    },
+    uid: 'user-1',
+    mediaBucket: 'bucket',
+    acquireModerationTransitionImpl: async () => ({
+      acquired: true,
+      id: 'transition-1',
+      uid: 'user-1',
+      userData: { moderation: { status: 'suspended' } },
+      enforcementId: 'enforcement-1',
+      enforcement: { authDisabledBefore: true, authDisableIntent: 'preserve_disabled' },
+    }),
+    setMediaAvailabilityImpl: async ({ available }) => assert.equal(available, true),
+    finalizeReinstatementImpl: async () => true,
+    releaseModerationTransitionImpl: async () => {},
+  });
+  assert.equal(result.reinstated, true);
+  assert.equal(result.authPreservedDisabled, true);
+  assert.deepEqual(authStates, []);
 });
 
 test('reinstatement finalizes account, enforcement, profile, notification, and audit atomically', async () => {
@@ -1118,12 +1295,12 @@ test('concurrent cross-demotions preserve at least one active administrator', as
   const results = await Promise.allSettled([
     setUserAdmin({
       admin,
-      auth: { uid: 'admin-a', token: { admin: true, auth_time: recent } },
+      auth: { uid: 'admin-a', token: { ...recentTotpAdminToken(), auth_time: recent } },
       data: { identifier: 'admin-b', admin: false, reason: 'בדיקת הרשאות' },
     }),
     setUserAdmin({
       admin,
-      auth: { uid: 'admin-b', token: { admin: true, auth_time: recent } },
+      auth: { uid: 'admin-b', token: { ...recentTotpAdminToken(), auth_time: recent } },
       data: { identifier: 'admin-a', admin: false, reason: 'בדיקת הרשאות' },
     }),
   ]);
@@ -1179,7 +1356,7 @@ test('admin access cannot be granted to an account whose deletion has started', 
     admin,
     auth: {
       uid: 'admin-a',
-      token: { admin: true, auth_time: Math.floor(Date.now() / 1000) },
+      token: recentTotpAdminToken(),
     },
     data: { identifier: 'user-deleting', admin: true, reason: 'בדיקת הרשאות' },
   }), (error) => error.details?.reason === 'user_deleting');
@@ -1212,6 +1389,48 @@ test('report queue requests only unresolved cases by default', async () => {
   });
   assert.deepEqual(result, { items: [], nextCursor: null });
   assert.deepEqual(whereCalls, [['status', 'in', ['open', 'auto_held']]]);
+});
+
+test('admin Firestore pagination rejects cursors that change document paths', async () => {
+  const query = {
+    where() { return this; },
+    orderBy() { return this; },
+    limit() { return this; },
+  };
+  const db = {
+    doc(path) {
+      if (path === 'system/moderation/admins/admin-1') {
+        return { get: async () => ({ exists: true, data: () => ({ active: true }) }) };
+      }
+      throw new Error(`Unexpected Firestore path: ${path}`);
+    },
+    collection: () => query,
+  };
+  const invocation = { admin: { firestore: () => db }, auth: { uid: 'admin-1', token: { admin: true } } };
+
+  for (const operation of [listModerationCases, searchAdminResources, listModerationAudit]) {
+    await assert.rejects(
+      operation({ ...invocation, data: { cursor: 'parent/nested' } }),
+      (error) => error.details?.reason === 'invalid_input'
+    );
+  }
+});
+
+test('Firestore document IDs reject nested paths, dot segments, controls and excess length', () => {
+  for (const value of [
+    'parent/nested', '.', '..', `case\u0085id`, 'case-1\n', '\tcase-1', 'x'.repeat(181),
+  ]) {
+    assert.throws(
+      () => cleanId(value, 'caseId'),
+      (error) => error.details?.reason === 'invalid_input'
+    );
+    assert.throws(
+      () => cleanOptionalId(value, 'sourceCaseId'),
+      (error) => error.details?.reason === 'invalid_input'
+    );
+  }
+  assert.equal(cleanOptionalId(undefined, 'caseId'), '');
+  assert.equal(cleanId('case-1', 'caseId'), 'case-1');
 });
 
 test('filtered moderation pagination resumes after the last returned match', async () => {
@@ -1363,7 +1582,7 @@ test('dismissing a report resolves its case without rewriting published content'
 
   const result = await moderateContent({
     admin,
-    auth: { uid: 'admin-1', token: { admin: true, auth_time: Math.floor(Date.now() / 1000), name: 'מנהלת' } },
+    auth: { uid: 'admin-1', token: recentTotpAdminToken({ name: 'מנהלת' }) },
     data: { caseId: 'case-1', target, action: 'dismiss', reason: 'הדיווח נבדק והתוכן תקין' },
   });
   assert.equal(result.action, 'dismiss');
@@ -1390,7 +1609,7 @@ test('dismissing a report fails if the target became held after the row loaded',
   await assert.rejects(
     moderateContent({
       admin: { firestore: () => db },
-      auth: { uid: 'admin-1', token: { admin: true, auth_time: Math.floor(Date.now() / 1000) } },
+      auth: { uid: 'admin-1', token: recentTotpAdminToken() },
       data: { caseId: 'case-1', target, action: 'dismiss', reason: 'התוכן תקין' },
     }),
     (error) => error.details?.reason === 'content_not_active'
@@ -1452,7 +1671,7 @@ test('restoring held content stages the owner alert in the status transaction', 
     admin,
     auth: {
       uid: 'admin-1',
-      token: { admin: true, auth_time: Math.floor(Date.now() / 1000) },
+      token: recentTotpAdminToken(),
     },
     data: { target, action: 'restore', reason: 'Owner appeal approved after review' },
   });
@@ -1476,9 +1695,26 @@ test('restoring held content stages the owner alert in the status transaction', 
 test('a deleted target resumes its pending owner alert instead of failing content_missing', async () => {
   const target = { type: 'recommendation', id: 'rec-1' };
   const targetPath = 'recommendations/rec-1';
+  const caseId = 'case-1';
+  const operationId = 'operation-delete-retry-1';
+  const operationPath = `system/moderation/operations/${moderationOperationDocumentId(caseId, operationId)}`;
   const outboxId = ownerNotificationOutboxId('content_deleted', targetPath);
   const outboxPath = `system/moderation/ownerNotifications/${outboxId}`;
-  const values = new Map([[outboxPath, {
+  const values = new Map([[`system/moderation/cases/${caseId}`, {
+    target: { ...target, path: targetPath },
+    status: 'resolving',
+    revision: 1,
+    decisionRevision: 1,
+    decisionLease: { operationId },
+  }], [operationPath, {
+    caseId,
+    operationId,
+    target: { ...target, path: targetPath },
+    requestedContentAction: 'delete',
+    contentAction: 'delete',
+    accountAction: 'none',
+    stage: 'target_deleted',
+  }], [outboxPath, {
     schemaVersion: 1,
     state: 'pending',
     version: 1,
@@ -1534,9 +1770,15 @@ test('a deleted target resumes its pending owner alert instead of failing conten
     admin,
     auth: {
       uid: 'admin-1',
-      token: { admin: true, auth_time: Math.floor(Date.now() / 1000) },
+      token: recentTotpAdminToken(),
     },
-    data: { target, action: 'delete', reason: 'Confirmed policy violation' },
+    data: {
+      caseId,
+      operationId,
+      target,
+      action: 'delete',
+      reason: 'Confirmed policy violation',
+    },
   });
   assert.equal(result.recovered, true);
   assert.equal(values.get(outboxPath).state, 'ready');
@@ -1655,7 +1897,7 @@ test('email verification validates the audit reason before mutating Firebase Aut
   await assert.rejects(
     setUserEmailVerified({
       admin,
-      auth: { uid: 'admin-1', token: { admin: true, auth_time: Math.floor(Date.now() / 1000) } },
+      auth: { uid: 'admin-1', token: recentTotpAdminToken() },
       data: { identifier: 'user-1', verified: true, reason: '' },
     }),
     (error) => error.details?.reason === 'invalid_input'

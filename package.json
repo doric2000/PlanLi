@@ -1,13 +1,35 @@
 {
   "scripts": {
+    "security:preflight": "node scripts/securityLocalScan.js preflight",
+    "security:local": "node scripts/securityLocalScan.js full",
+    "security:diff": "node scripts/securityLocalScan.js diff",
+    "security:full": "node scripts/securityLocalScan.js full",
+    "security:inputs": "node scripts/securityLocalScan.js inputs",
+    "security:local-env:cleanup": "node scripts/sanitizeLocalEnvironment.js",
+    "security:local-artifacts:cleanup": "node scripts/sanitizeLocalMigrationArtifacts.js",
+    "security:monitoring": "node scripts/securityMonitoringPlan.js",
+    "security:cost-quotas": "node scripts/securityCostQuotaPlan.js",
+    "security:production-prerequisites": "node scripts/securityProductionPrerequisites.js",
+    "security:identity-platform": "node scripts/securityIdentityPlatformPlan.js",
+    "security:app-check-providers": "node scripts/securityAppCheckProviders.js",
+    "security:oauth-readiness": "node scripts/securityOauthReadiness.js",
+    "test:security-local": "node --test scripts/securityLocalScan.test.js",
     "sync:travel-taxonomy": "node scripts/syncTravelTaxonomy.js",
+    "sync:legal-policy": "node scripts/syncLegalPolicy.js",
+    "test:legal-policy": "node scripts/syncLegalPolicy.js --check",
     "test:travel-taxonomy": "node scripts/syncTravelTaxonomy.js --check",
-    "test:eas-production-preflight": "node --test scripts/easProductionPreflight.test.js",
+    "test:eas-production-preflight": "node --test scripts/easProductionPreflight.test.js scripts/easProductionUpdate.test.js",
     "test:validation-plan": "node --test scripts/validationPlan.test.js",
     "preflight:eas-production": "node scripts/easProductionPreflight.js",
+    "release:eas-production": "node scripts/easProductionUpdate.js",
     "validate:changed": "node scripts/validationPlan.js run"
   },
   "devDependencies": {
     "patch-package": "^8.0.1"
+  },
+  "overrides": {
+    "picomatch": "2.3.2",
+    "tmp": "0.2.7",
+    "yaml": "2.8.3"
   }
 }

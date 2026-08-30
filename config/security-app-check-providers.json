@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "projectId": "planli-f0b12",
+  "projectNumber": "633543026638",
+  "tokenTtl": "3600s",
+  "android": {
+    "appId": "1:633543026638:android:4f0dc56759f6923b46ad9f",
+    "packageName": "com.planli.planlitravels",
+    "sha256Certificates": [
+      "bac97a1a563bbcf55137c31e32f294b4a267b87bcce2f68b7d1f04141e2c195d",
+      "d8a890c5d94d922ccbf45dd7c9fe30af358a729b7bf2eabd3f66d96d99618d35"
+    ],
+    "playIntegrity": {
+      "allowUnrecognizedVersion": false,
+      "requireLicensed": true,
+      "minDeviceRecognitionLevel": "NO_INTEGRITY"
+    }
+  },
+  "ios": {
+    "appId": "1:633543026638:ios:b13b28c424e4c9e846ad9f",
+    "bundleId": "com.planli.planlitravels",
+    "teamId": "C22ZFVA6M6",
+    "requireDeviceCheckFallback": true
+  },
+  "web": {
+    "appId": "1:633543026638:web:b63d2a622f3d685646ad9f",
+    "recaptchaDisplayName": "PlanLi Web App Check",
+    "allowedDomains": [
+      "planli-f0b12.firebaseapp.com",
+      "planli-f0b12.web.app"
+    ],
+    "minValidScore": 0.5
+  }
+}

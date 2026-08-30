@@ -41,8 +41,9 @@ function fail(code, message, reason) {
 }
 
 function cleanId(value, field) {
-  const result = typeof value === 'string' ? value.trim() : '';
-  if (!result || result.length > 180 || result.includes('/')) {
+  const result = typeof value === 'string' ? value : '';
+  if (!result || result !== result.trim() || result.length > 180 ||
+      result === '.' || result === '..' || /[/\u0000-\u001F\u007F-\u009F]/u.test(result)) {
     fail('invalid-argument', `${field} is invalid.`, 'invalid_target');
   }
   return result;
@@ -122,12 +123,29 @@ function caseIdForTarget(target) {
 }
 
 function caseStatusForReport(previousStatus, held) {
+  if (previousStatus === 'resolving') return 'resolving';
   if (held) return 'auto_held';
   return ['open', 'auto_held'].includes(previousStatus) ? previousStatus : 'open';
 }
 
-function reportLeaseMutation(previousStatus, deleteField) {
-  return previousStatus === 'resolving' ? { decisionLease: deleteField } : {};
+function moderationDecisionRevision(value = {}) {
+  const revision = Number(value.decisionRevision ?? value.revision ?? 0);
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+}
+
+function moderationReportRevision(value = {}) {
+  const revision = Number(value.reportRevision ?? 0);
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+}
+
+function caseRevisionsForReport(previous = {}) {
+  const decisionRevision = moderationDecisionRevision(previous)
+    + (previous.status === 'resolving' ? 0 : 1);
+  return {
+    revision: decisionRevision,
+    decisionRevision,
+    reportRevision: moderationReportRevision(previous) + 1,
+  };
 }
 
 function normalizeReportInput(data) {
@@ -373,7 +391,7 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
 
     const previous = caseSnapshot.exists ? caseSnapshot.data() || {} : {};
     const previousStatus = previous.status || 'open';
-    const reopening = !['open', 'auto_held'].includes(previousStatus);
+    const reopening = !['open', 'auto_held', 'resolving'].includes(previousStatus);
     const urgentCategory = ['child_safety', 'violence_dangerous_illegal'].includes(category);
     const notificationPriority = urgentCategory ? 'urgent' : (previous.priority || 'normal');
     const urgentEscalated = urgentCategory && previous.priority !== 'urgent';
@@ -429,7 +447,7 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
       status: caseStatusForReport(previousStatus, held),
       priority: notificationPriority,
       source: previous.source || 'report',
-      revision: Math.max(0, Number(previous.revision || 0)) + 1,
+      ...caseRevisionsForReport(previous),
       assignmentUid: previous.assignmentUid || '',
       reportCount,
       uniqueCount24h,
@@ -444,7 +462,6 @@ async function submitReport({ admin, auth, data, mediaBucket, nowMs = Date.now()
       dueAtMs: nowMs + (['child_safety', 'violence_dangerous_illegal'].includes(category) ? 4 : 24) * 60 * 60 * 1000,
       ...(adminNotification ? { adminNotification } : {}),
       ...(mediaModeration ? { mediaModeration } : {}),
-      ...reportLeaseMutation(previousStatus, admin.firestore.FieldValue.delete()),
       ...(reopening ? {
         resolvedAt: admin.firestore.FieldValue.delete(),
         resolvedBy: admin.firestore.FieldValue.delete(),
@@ -604,8 +621,10 @@ module.exports = {
   REPORT_WINDOW_MS,
   caseIdForPath,
   caseIdForTarget,
+  caseRevisionsForReport,
   caseStatusForReport,
-  reportLeaseMutation,
+  moderationDecisionRevision,
+  moderationReportRevision,
   buildAdminNotificationProjection,
   buildHeldMediaProjection,
   evaluateTextSafety,

@@ -3,9 +3,10 @@ const admin = require('firebase-admin');
 const { setMediaAvailability } = require('../mediaModeration');
 const { collectCanonicalMediaAssets } = require('../mediaProcessor');
 const { initializeAdmin } = require('./localCredentials');
+const { ACTIVE_MEDIA_BUCKET, assertActiveMediaBucket } = require('./storageTargetPolicy');
 
 const COLLECTIONS = new Set(['recommendations', 'routes', 'trips', 'users']);
-const DEFAULT_BUCKET = 'planli-f0b12-media-eu';
+const DEFAULT_BUCKET = ACTIVE_MEDIA_BUCKET;
 
 function valueAfter(argv, flag) {
   const index = argv.indexOf(flag);
@@ -21,7 +22,7 @@ function parseArgs(argv) {
   return {
     apply: argv.includes('--apply'),
     after: valueAfter(argv, '--after'),
-    bucket: valueAfter(argv, '--bucket') || DEFAULT_BUCKET,
+    bucket: assertActiveMediaBucket(valueAfter(argv, '--bucket') || DEFAULT_BUCKET),
     collection,
     limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 100,
   };

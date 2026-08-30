@@ -4,10 +4,15 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { Storage } = require('@google-cloud/storage');
 const { googleAuthOptions, initializeAdmin } = require('./localCredentials');
+const {
+  ACTIVE_MEDIA_BUCKET,
+  ROLLBACK_MEDIA_BUCKET,
+  assertStorageMigrationPair,
+} = require('./storageTargetPolicy');
 
 const PROJECT_ID = 'planli-f0b12';
-const DEFAULT_SOURCE = 'planli-f0b12.firebasestorage.app';
-const DEFAULT_TARGET = 'planli-f0b12-media-eu';
+const DEFAULT_SOURCE = ROLLBACK_MEDIA_BUCKET;
+const DEFAULT_TARGET = ACTIVE_MEDIA_BUCKET;
 const STATE_DIR = path.join(__dirname, '..', '.storage-eu-migration');
 
 function valueAfter(argv, name) {
@@ -315,7 +320,9 @@ async function restoreRollbackSource({ options, sourceBucket, targetBucket }) {
 }
 
 async function run(options) {
-  if (options.source === options.target) throw new Error('Source and target buckets must differ.');
+  const expectedBuckets = assertStorageMigrationPair(options.source, options.target);
+  options.source = expectedBuckets.source;
+  options.target = expectedBuckets.target;
   ensureStateDirectory(options.stateDir);
   const storage = initialize();
   const sourceBucket = storage.bucket(options.source);

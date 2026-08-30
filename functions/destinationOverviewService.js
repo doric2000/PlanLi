@@ -1,6 +1,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { hasUsableDestinationCache } = require('./destinationCacheService');
 const { destinationHebrewName } = require('./destinationLocalizationService');
+const { destinationIsPublicInCountry } = require('./destinationReferencePolicy');
 
 const WEATHER_CACHE_MS = 30 * 60 * 1000;
 const CURRENCY_CACHE_MS = 24 * 60 * 60 * 1000;
@@ -260,7 +261,7 @@ async function getDestinationOverview({
 
   const city = citySnapshot.data() || {};
   const country = countrySnapshot.data() || {};
-  if (city.status !== 'active' || country.status !== 'active' || !hasUsableDestinationCache(city, nowMs)) {
+  if (!destinationIsPublicInCountry(city, country, countryId) || !hasUsableDestinationCache(city, nowMs)) {
     throw new HttpsError('not-found', 'Destination was not found.');
   }
   const coordinates = normalizeCoordinates(city.googleCache?.coordinates || city.identity?.coordinates || city.coordinates);

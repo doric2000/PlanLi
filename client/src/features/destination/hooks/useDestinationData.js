@@ -98,6 +98,7 @@ async function loadGenericRecommendations(countryId, cityId) {
     where('destination.countryId', '==', countryId),
     where('destination.cityId', '==', cityId),
     where('status', '==', 'active'),
+    where('publicationGate.destinationApprovalVerified', '==', true),
     limit(30)
   );
   const snapshot = await getDocs(destinationQuery);

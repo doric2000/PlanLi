@@ -36,7 +36,7 @@ async function resolveDestination(db, destination) {
   ]);
   assert(
     country.exists && country.data()?.status === 'active' &&
-      city.exists && destinationAcceptsNewReferences(city.data()),
+      city.exists && destinationAcceptsNewReferences(city.data(), countryId),
     'not-found',
     'Destination does not exist.'
   );
@@ -60,7 +60,9 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
   const description = cleanString(input.description, 'description', 5000);
   const textSafety = evaluateTextSafety([title, description]);
   const existing = await tripRef.get();
-  const isAdmin = tripId ? await hasActiveAdminAccess({ admin, auth }) : false;
+  const isAdmin = tripId
+    ? await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true })
+    : false;
   if (tripId) {
     assert(existing.exists, 'not-found', 'Trip does not exist.');
     assert(
@@ -108,7 +110,8 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
       countryName: destination.countryName,
       cityName: destinationHebrewName(city.data()) || destination.cityId,
     } : null;
-    assert(!destination || (city.exists && destinationAcceptsNewReferences(city.data()) && canonicalDestination.cityName),
+    assert(!destination || (city.exists &&
+      destinationAcceptsNewReferences(city.data(), destination.countryId) && canonicalDestination.cityName),
       'failed-precondition', 'Destination is no longer available.');
     transaction.set(tripRef, {
       ownerId: current.exists ? current.data().ownerId : auth.uid,
@@ -117,6 +120,7 @@ async function saveTrip({ admin, auth, data, mediaBucket }) {
       status: current.exists && current.data()?.status !== 'active'
         ? current.data().status
         : (textSafety.safe ? 'active' : 'moderation_hold'),
+      publicationGate: { destinationApprovalVerified: true },
       ...(!textSafety.safe ? { moderation: { holdReason: textSafety.reason } } : {}),
       destination: canonicalDestination,
       media,

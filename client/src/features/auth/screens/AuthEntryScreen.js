@@ -15,6 +15,7 @@ import {
   signInWithApple,
   signInWithGoogle,
 } from '../../../services/AuthService';
+import { isTotpChallengeRequired } from '../../../services/MfaService';
 import { openMainTab, resetToMain, resetToRootRoute } from '../../../navigation/authNavigation';
 import { useAuth } from '../AuthContext';
 
@@ -38,7 +39,8 @@ export default function AuthEntryScreen({ navigation }) {
         else resetToMain(navigation);
       }, provider === 'apple' ? 'sign_in_apple' : 'sign_in_google');
     } catch (socialError) {
-      if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
+      if (isTotpChallengeRequired(socialError)) navigation.navigate('TotpChallenge');
+      else if (!isProviderCancellation(socialError)) setError(formatAuthError(socialError));
     } finally {
       setLoadingProvider(null);
     }

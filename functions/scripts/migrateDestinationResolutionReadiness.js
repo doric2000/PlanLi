@@ -8,7 +8,6 @@ const {
   BUILTIN_POLICIES,
   REGISTRY_PATH,
   REGISTRY_VERSION,
-  REVIEWED_PROVIDER_IDENTITY_IDS,
   buildMatchProfile,
   prepareEntries,
   providerGeometryPolicy,
@@ -17,6 +16,12 @@ const {
 } = require('../canonicalDestinationRegistry');
 
 const DEFAULT_PROJECT_ID = 'planli-f0b12';
+const REVIEWED_PROVIDER_IDENTITY_IDS = new Set([
+  'it-amalfi-coast',
+  'gr-meteora',
+  'is-south-iceland',
+  'no-norwegian-fjords',
+]);
 
 function parseArguments(argv) {
   const projectIndex = argv.indexOf('--project');

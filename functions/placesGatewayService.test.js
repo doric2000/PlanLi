@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createResolvedPlaceToken,
-  legacyAutocomplete,
   renewResolvedPlaceTokenLeases,
   searchPlaces,
   verifyResolvedPlaceToken,
@@ -50,37 +49,6 @@ test('saving a private draft renews only the owner server binding without provid
   assert.ok(writes[0].value.expiresAt.getTime() > Date.now() + 20 * 24 * 60 * 60 * 1000);
 });
 
-test('legacy gateway autocomplete returns only bounded, client-safe prediction fields', async () => {
-  const results = await legacyAutocomplete({
-    query: 'Paris', mapsKey: 'key', mode: 'destinations',
-    fetchImpl: async (url) => {
-      const request = new URL(url);
-      assert.equal(request.searchParams.get('types'), '(cities)');
-      assert.equal(request.searchParams.get('language'), 'he');
-      return { ok: true, json: async () => ({ status: 'OK', predictions: [{
-        place_id: 'place-1', description: 'Paris, France', types: ['locality'],
-        structured_formatting: { main_text: 'Paris', secondary_text: 'France' },
-      }] }) };
-    },
-  });
-  assert.deepEqual(results, [{ selectionId: results[0].selectionId, placeId: 'place-1', text: 'Paris', secondaryText: 'France', types: ['locality'] }]);
-  assert.match(results[0].selectionId, /^sel_/);
-});
-
-test('legacy autocomplete applies a bounded location bias without restricting results', async () => {
-  await legacyAutocomplete({
-    query: 'Virupaksha Temple', mapsKey: 'key', mode: 'places',
-    coordinates: { lat: 15.335, lng: 76.46 },
-    fetchImpl: async (url) => {
-      const request = new URL(url);
-      assert.equal(request.searchParams.get('location'), '15.335,76.46');
-      assert.equal(request.searchParams.get('radius'), '50000');
-      assert.equal(request.searchParams.has('strictbounds'), false);
-      return { ok: true, json: async () => ({ status: 'ZERO_RESULTS' }) };
-    },
-  });
-});
-
 test('search callable returns the Place ID required by the selection contract', async () => {
   const writes = [];
   const admin = {
@@ -92,19 +60,21 @@ test('search callable returns the Place ID required by the selection contract', 
     admin,
     auth: { uid: 'user-1' },
     data: { query: 'Paris', mode: 'destinations' },
-    mapsKey: 'key',
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
     providerRateLimitKey: 'rate-key',
     consumeBudget: async () => {},
     fetchImpl: async () => ({
       ok: true,
       json: async () => ({
-        status: 'OK',
-        predictions: [{
-          place_id: 'place-paris',
-          description: 'Paris, France',
-          structured_formatting: { main_text: 'Paris', secondary_text: 'France' },
+        suggestions: [{ placePrediction: {
+          placeId: 'place-paris',
+          structuredFormat: {
+            mainText: { text: 'Paris' },
+            secondaryText: { text: 'France' },
+          },
           types: ['locality'],
-        }],
+        } }],
       }),
     }),
   });
@@ -118,7 +88,8 @@ test('search callable rejects invalid location bias before calling Google', asyn
     admin: { firestore: () => ({}) },
     auth: { uid: 'user-1' },
     data: { query: 'Hampi', mode: 'places', locationBias: { lat: 95, lng: 76 } },
-    mapsKey: 'key',
+    projectId: 'planli-f0b12',
+    accessTokenProvider: async () => 'oauth-token',
     providerRateLimitKey: 'rate-key',
     consumeBudget: async () => {},
     fetchImpl: async () => { providerCalled = true; },

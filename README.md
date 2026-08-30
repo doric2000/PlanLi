@@ -9,6 +9,272 @@ track; it has not been publicly released to the App Store, Google Play, or a
 public web domain. Native development is performed with an installed, signed EAS
 Development Build connected to Metro. Expo Go is not supported.
 
+### Rollback-bucket security containment
+
+At `2026-08-28T20:57:37Z`, the retired US bucket
+`planli-f0b12.firebasestorage.app` was contained under explicit production
+authorization. Firebase Storage rules target `rollback` now uses ruleset
+`dba2edd4-f50c-487e-9370-6d915f54ceec`, whose normalized SHA-256
+`1d282e40bdfd77623c0e1a0a088081e5e79d133ad75956db573142e836b97b92`
+matches the local deny-all source. Public Access Prevention is `enforced` and
+Uniform Bucket-Level Access is enabled. Independent read-back found 1,070
+objects and the unchanged inventory SHA-256
+`3a58aa5fd328603ea87e64c057b27af183fcb1df474058d5c690481832143173`;
+an anonymous object-read probe returned HTTP 403, and no object was deleted.
+The rules were deployed from the uncommitted security
+working tree on `codex/fix-security-launch-readiness`, based on commit
+`d1937d5217c1b615681942585b9a7473727ea82f`; this records infrastructure state,
+not a deployed application release.
+
+### Admin SDK key removal
+
+At `2026-08-28T22:28:12Z`, user-managed Admin SDK key
+`7a92aaaab2814bc03c1393ededa5bb8b53ef5452` was disabled under explicit
+production authorization. The older key
+`920c62f4eed89d24e0cd2037b3ea1b4819eac655` was already disabled. At that
+checkpoint both keys still existed and neither had been deleted. Live Functions use only
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com` and
+`planli-media-functions@planli-f0b12.iam.gserviceaccount.com`. Post-change smoke
+tests returned HTTP 200 from `searchDestinations` through the core account and
+the expected unauthenticated HTTP 401 from active `prepareMedia` through the
+media account, with no server error. A 20-minute Cloud Run error-log read found
+zero errors. At `2026-08-29T08:03:20Z`, after separate explicit irreversible
+authorization, both disabled keys were permanently deleted. Independent
+read-back reports zero user-managed keys for the Admin SDK service account;
+Google's four system-managed keys remain untouched. The same core/media smoke
+tests passed after deletion and the following 20-minute Cloud Run error window
+again contained zero errors. The deleted private keys cannot be recovered.
+
+### Secret IAM containment
+
+At `2026-08-29T08:10:15Z`, the stale default Compute Engine service account
+`633543026638-compute@developer.gserviceaccount.com` had
+`roles/secretmanager.secretAccessor` removed from `GOOGLE_MAPS_KEY` and
+`REST_COUNTRIES_KEY` under explicit production authorization. Independent IAM
+read-back confirms that each secret now has exactly one accessor:
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com`. A public core
+Function returned HTTP 200, the secret-bound `resolveRecommendationDestination`
+Function remained `ACTIVE` and returned its expected unauthenticated HTTP 401,
+and the following 20-minute Cloud Run error window contained zero errors. No
+secret value, version, or other IAM binding was changed.
+
+### Firestore and Auth protection
+
+At `2026-08-29T08:26:09Z`, under explicit production authorization, deletion
+protection was enabled on the Standard, Firestore Native `(default)` database in
+`eur3`; point-in-time recovery remained enabled. The Auth authorized-domain list
+was reduced from four entries to exactly `planli-f0b12.firebaseapp.com` and
+`planli-f0b12.web.app`. Only `localhost` and the expired
+`planli-f0b12--account-deletion-20260825-7zp3mzlh.web.app` preview domain were
+removed. Independent API read-back confirmed both controls, both retained Auth
+handler URLs returned HTTP 200, and the post-change Cloud Run error window
+contained zero errors. Three `onUserMediaCleanup` HTTP 500 entries at
+`2026-08-29T08:25:48Z` predated the Firestore update and were transient Storage
+metadata-precondition conflicts. Automatic retries for all three Firestore event
+IDs returned HTTP 204 by `2026-08-29T08:26:02Z`; no persistent cleanup failure
+was observed, and the errors were not caused by this configuration change.
+
+### Production media CORS containment
+
+At `2026-08-29T08:36:30Z`, under explicit production authorization, the CORS
+policy on `planli-f0b12-media-eu` was reduced from the two production origins
+plus four localhost/loopback origins to exactly
+`https://planli-f0b12.web.app` and
+`https://planli-f0b12.firebaseapp.com`. The approved methods remain `GET`,
+`HEAD`, `PUT`, `POST`, and `DELETE`; the existing response headers and
+3,600-second max age were preserved. Live preflight probes returned the expected
+CORS headers for both production origins and no CORS headers for
+`http://localhost:19006` or `http://127.0.0.1:8081`. Before/after inventory
+contained the same 1,583 object names with SHA-256
+`c58b1b76a4a5f96504c7ce996a47f4a7d132bfd1bf4b91d7b99231e14e8acb64`.
+Lifecycle, soft-delete, Uniform Bucket-Level Access and Public Access Prevention
+state were unchanged; the audit log contained no IAM mutation. An initial
+operator probe incorrectly used `GET` against a callable and produced the
+expected HTTP 400/`Invalid request` log at `2026-08-29T08:37:35Z`. The corrected
+callable `POST` returned HTTP 200 at `2026-08-29T08:38:17Z`, and the subsequent
+Cloud Run error window contained zero errors.
+
+### Production billing budget guard
+
+At `2026-08-29T08:47:18Z`, under explicit production authorization, the Cloud
+Billing Budget API was enabled for `planli-f0b12` and monthly budget
+`PlanLi production launch guard` was created for project number `633543026638`.
+The budget is ₪75, the rounded-up equivalent of the approved US$25 floor using
+the Bank of Israel representative USD/ILS rate of 2.9680 published on
+`2026-08-28`. Current-spend alerts are configured at 50%, 75%, 90%, and 100%.
+Default role-based notifications remain enabled; IAM read-back identifies
+`doric9@gmail.com` as the sole Billing Account Administrator and therefore the
+recipient. Existing budget `Firebase Project planli-f0b12` (₪3.50; thresholds
+50/90/100%) was preserved without modification. Budget ID
+`91fe404e-0c64-42ae-961b-f95bb67e088d` was independently read back with the
+exact amount, project scope, period, ownership scope, credit treatment, and four
+thresholds. Budgets alert only and do not cap or disable services. Alert delivery
+cannot be exercised safely without crossing a threshold and remains untested.
+
+### Production no-cost quota guardrails
+
+Between `2026-08-29T13:30:34Z` and `2026-08-29T13:32:34Z`, 22 production
+quota preferences were lowered under explicit authorization and independently
+read back from Cloud Quotas. A later adjustment on the same date lowered legacy
+Text Search and Identity Toolkit limits; the current reviewed manifest SHA-256 is
+`3feadf5a15a55175343956701aae2e81efc596ebb294445e3abfc6768645b337`.
+Places is capped at 300 autocomplete requests/day and 150 place-detail
+requests/day, with 30/minute burst ceilings; the manual canonical-registry Text
+Search command is currently blocked at zero unless a temporary administrative
+quota is separately approved. The unreleased security candidate limits its
+scheduled cache refresh to at most 20 place-detail requests/day so, after its
+deployment, it cannot consume the full interactive allowance; the live Function
+has not yet been changed.
+Unused Places photo, media, nearby and review endpoints are zero.
+Geocoding is capped at 300 reverse-geocoding requests/day and 30/minute, and its
+unused address/place/destination endpoints are zero. reCAPTCHA Enterprise
+assessment creation is capped at 300/day and 60 total API requests/minute.
+Identity Toolkit is capped at 60 general requests/minute. Custom-token sign-in
+and phone/SMS verification are zero because the current source has no
+custom-token flow and PlanLi uses TOTP rather than SMS MFA.
+
+These API quotas return HTTP 429 when exhausted; they do not silently buy more
+capacity. They can temporarily block new place selection, geocoding, Web App
+Check or login during an unusual spike. Play Integrity retains Google's 10,000
+requests/day standard allowance, Firebase App Check token exchange remains
+unchanged because the service itself is no-cost, and Firestore retains its
+existing 50,000 reads plus 20,000 writes/deletes per day. Storage, Identity
+Platform MAU and most Firebase resource charges do not expose a true monetary
+quota, so the preserved ₪3.50 and ₪75 budgets remain alerts rather than hard
+spending caps. `npm run security:cost-quotas` now reads all 22 controls as
+`reuse-quota-preference`.
+
+### Security monitoring and incident response
+
+At `2026-08-29`, production prerequisites were applied and read back under
+manifest `1cd991d764e338a2bab04a8a52b5815712dcec34d2c1f1072205000ddd21cfc7`:
+the five required APIs are enabled, the core runtime has Service Usage Consumer,
+the core/media runtimes have App Check Token Verifier, and the exact iOS Firebase
+app has Team ID `C22ZFVA6M6`. The verifier role is required because
+`issueGuestSession`, `deleteContent` and `requestAccountDeletion` consume
+limited-use tokens for replay protection.
+
+Cloud Monitoring manifest
+`5627e8d3aa0b69e1795391df18fc1170b3b9ec1e8709811065135e2293217731`
+is live with one same-email channel and four exact policies. Service Account key
+creation, sustained backend 5xx and Maps quota exhaustion are enabled. App Check
+rejection remains deliberately disabled until enforcement. The email channel is
+still `UNVERIFIED`; the owner must click Google's verification email and test
+delivery. No second email address is required. Follow the containment, evidence,
+rotation, recovery, and closure procedure in
+[the security incident-response runbook](docs/security-incident-response.md).
+
+Identity Platform/TOTP manifest
+`a13cb12d49c152bbec05255319103dca515705d943238f2f2267b47e3b7117bb`
+is live: the project subtype is `IDENTITY_PLATFORM`, MFA is enabled, TOTP is the
+only second factor, and SMS MFA is disabled. Two separate human administrators
+still need individual TOTP enrollment and a real admin-mutation test.
+
+App Check manifest
+`455b880ef5df37d583ebe1e8cc580f1cde64cd9af932685d3c7cc45364827b98`
+now reads back exact Play Integrity, App Attest, the production-only reCAPTCHA
+Enterprise key and the Web App Check configuration. DeviceCheck fallback is the
+only missing provider because Apple must issue its external `.p8` key. No App
+Check enforcement was changed, so there is currently no normal assessment
+traffic from a protected production build.
+Protected EAS builds require separate iOS and Android Google Services file
+variables. The config parser verifies each file's project number/ID, native App
+ID, bundle/package, and production-vs-staging boundary before assigning it to
+the native build. On `2026-08-30`, the exact Firebase Management API files were
+downloaded into ignored temporary storage, identity-checked, and uploaded to the
+EAS `production` environment as secret file variables
+`PLANLI_GOOGLE_SERVICES_IOS_FILE` and
+`PLANLI_GOOGLE_SERVICES_ANDROID_FILE`; the public
+`EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY` was added to that same environment.
+The respective EAS variable IDs are
+`680c4407-74e5-4c18-9dc6-b4efb99a6eca`,
+`9959690f-a65f-4770-bc30-a31a92d748be`, and
+`ad7ac563-1d58-4a89-89c2-29b951a606ac`. The downloaded Android and iOS files
+had SHA-256 values `123524be3427674b500c86e3f1e6008f4105cf12588e55cdf1498a946ddc30f6`
+and `5e9feeef38d9019927d2f99c8b46bef452e85871c048f2ee89ebd900959f26a1`.
+Read-back confirmed production-only association; the preview environment was
+unchanged. The protected config preflight passed, but no EAS build was started.
+Read-only EAS billing state showed account `doric2000` on the Free plan with
+3 Android and 13 iOS medium builds used in the current period. One security
+build per platform would remain within the no-overage Free limits, but still
+requires an exact build authorization and a clean committed source revision.
+The native-to-Firebase-JS bridge uses the normal cached App Check token. Only
+the three replay-protected callables request a consumable limited-use token;
+ordinary Firestore, Storage and callable traffic must never reuse a consumable
+token globally.
+The read-only `npm run security:oauth-readiness` audit has manifest SHA-256
+`b86cf1b50e07cc4c225638dbed4295b24feaa0d29b367334fcaadc3d411c61ed`.
+It confirms the local source is keyless, prerequisites are live, and all eight
+exact production targets run under the core service account. All eight deployed targets
+still bind both legacy Maps secrets, and both exact API-key deletion targets and
+Secret Manager resources still exist. Therefore deploy is blocked and key/secret
+deletion is explicitly unsafe. The live audit now fails launch while any such
+binding remains.
+
+### Credential scan and local rollback hygiene
+
+At `2026-08-29T10:22:21.612Z`, the read-only REST credential audit recursively
+scanned 2,149 production Firestore documents across 264 collection paths and
+found zero embedded GCP API keys, private keys, Firebase refresh tokens, GitHub
+tokens, AWS access keys, or OpenAI API keys. It returned only aggregate counts
+and never logged document IDs, field values, or access tokens. Run it with
+`cd functions; npm run audit-live-credentials`; it uses the signed-in `gcloud`
+account and does not require a local credential file.
+
+An ignored July Firestore rollback contained five copies of the still-live
+legacy Places key inside obsolete `countries/*/cities.imageUrl` values. They
+were redacted atomically under reviewed manifest SHA-256 `3b892679b7a02539439f758b5be9d731f4d3cbc8a4e200e75ba522ce2ac8a343`;
+all other rollback data was preserved. The key itself remains an explicit PL-16
+deletion target after the OAuth Functions rollout. `security:inputs` scan
+`inputs-2026-08-30T09-08-53-215Z-e6737a12-672b-4163-8197-334206fe42b8`
+then found zero input-rule findings and zero secrets in the 428 commits reported
+by Gitleaks, three ignored environment files, and the 939-file current working-tree
+inventory, with both scanner canaries detected.
+The subsequent full gate
+`full-2026-08-30T09-09-34-160Z-1dc9bd07-3f20-486a-9be7-490646be5df6`
+scanned 532 production JS/TS candidates in 11 non-empty batches and all three
+dependency trees. Both final scans used source snapshot SHA-256
+`b6c8ab19fc3755b83e7d423db2ca6b377146bc9dcb76473e24d8bc29e513a5b6`
+and completed with zero Semgrep findings, zero secret findings, zero blocking
+dependency advisories, and `gatePassed: true`.
+
+The same final pass also closed three defense-in-depth gaps found by manual
+source-to-sink review: every state-changing service-layer admin override now
+requires recent TOTP in addition to claim and registry checks; maintenance scripts
+pin Storage operations to the exact PlanLi active/rollback buckets and reject forged
+legacy URLs before object reads; and decoded JPEGs now have an independent 16,384
+pixel width/height ceiling in addition to byte and total-pixel limits. The complete
+Functions test command passed under Node 22; final focused evidence is 144/144
+authorization/service tests, 25/25 Storage-maintenance tests, and 11/11 media tests.
+After the final moderation, destination-fence, catalog and quota-boundary fixes,
+the complete Functions command passed 794 tests with 23 emulator-only skips and
+zero failures (817 total). The Rules emulator gate passed
+23/23, and the App Check token/session client suites passed 6/6. These results
+describe the local security candidate only; no Functions, Rules, migration or
+native build was deployed by this validation pass.
+
+Official Codex Security Diff Scan
+`cac587c8-0fc6-46cd-be44-bf91a63cfa21` completed on `2026-08-30` against the
+working-tree snapshot digest
+`codex-security-snapshot/v1:sha256:d6b162bdf8e5379031d2c4b227fa238e3d909b1e53d4f830ea74cbb6cc134ff8`.
+All 214 native review items were closed and no reportable finding survived.
+The report records partial coverage because the native inventory did not emit
+`firestore.rules`, `storage.rules`, or `storage.us-readonly.rules` as individual
+review items; those exact Rules are covered separately by the passing 23/23
+emulator suite. The scan also leaves live deployment, App Check enforcement,
+physical-device evidence, and two-human-admin TOTP enrollment as explicit
+release gates. The intentional Places Pro/`displayName` behavior and its existing
+field masks were reviewed and preserved; no paid provider request, deployment,
+migration, EAS build, or submission was performed by the scan.
+Immediately afterward, a focused release-order check found that
+`issueGuestSession` hard-coded App Check enforcement instead of honoring the
+documented `PLANLI_ENFORCE_APP_CHECK` rollout switch. The one-line binding was
+corrected without weakening the handler's own fresh limited-use App Check proof,
+and the focused static boundary suite passes 2/2. Because this edit postdates the
+sealed snapshot, the final committed revision still requires the local security
+gate and PR CodeQL before deployment; the sealed report is not misrepresented as
+covering the later line.
+
 The current Android internal release is `1.1.0 (6)`, EAS build
 `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
 `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` and completed at
@@ -631,14 +897,20 @@ cd C:\Users\doric\Documents\PlanLi\PlanLi
 npm run preflight:eas-production
 
 cd .\client
-eas update --channel preview --environment production --message '<summary>'
+eas update --channel staging --environment preview --message '<summary>'
 
-# Read back the preview group, then promote those exact bundles.
+# Read back the staging group, then dry-run the guarded promotion wrapper.
 cd ..
-npm run preflight:eas-production
-cd .\client
-eas update:republish --group '<preview-group-id>' --destination-channel production --message '<summary>'
+npm run release:eas-production -- --preview-group '<staging-group-id>' --message '<summary>'
+
+# Only after explicit production authorization, bind the confirmation to HEAD.
+npm run release:eas-production -- --preview-group '<staging-group-id>' --message '<summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
 ```
+
+The wrapper pins EAS CLI `22.6.0`, account `doric2000`, project, owner, runtime,
+channel and environment; requires a clean synchronized `main`; verifies that
+the selected staging group contains only the exact candidate commit and runtime;
+and appends the resulting production group, commit and timestamp to this file.
 
 An EAS Update is a release action and requires explicit authorization. Native
 dependency, plugin, entitlement, permission, or incompatible app-config changes
@@ -914,22 +1186,32 @@ files directly from the source:
 The UI keeps at most three image components mounted in each carousel. Feed
 lists render in bounded batches and remote images use memory/disk caching.
 
-The former US bucket `planli-f0b12.firebasestorage.app` is read-only and is
-kept only as a 30-day rollback snapshot. Do not remove it before 30 August
-2026 and before `npm run audit-live` reports zero US references.
+The former US bucket `planli-f0b12.firebasestorage.app` is client-inaccessible:
+its deployed Firebase Rules deny every read and write, Public Access Prevention
+is enforced, and Uniform Bucket-Level Access is enabled. It remains only as a
+30-day operator-controlled rollback snapshot. Do not remove it before 30 August
+2026 and before `npm run audit-live` reports zero US references. Deletion still
+requires separate explicit authorization.
 
 ## Local Admin authentication
 
-Maintenance scripts do not use a local Service Account JSON key. They use:
+Maintenance scripts do not use a local Service Account JSON key and never copy
+Firebase refresh tokens into `%TEMP%`. Firebase Admin and Google client
+libraries use standard Application Default Credentials (ADC) directly.
+Production-changing scripts still require their own dry-run, project, manifest,
+`--apply`, and typed-confirmation gates.
 
-1. `GOOGLE_APPLICATION_CREDENTIALS` when standard ADC is explicitly set; or
-2. the signed-in Firebase CLI user and a short-lived temporary ADC file that
-   is deleted when the process exits.
+The destination-publication dry-run is deliberately read-only and does not need
+ADC. It uses the account already signed in with `gcloud auth login`, obtains a
+short-lived token in memory, and reads seven pinned Firestore inventories through
+REST. The token is not printed or stored. Its `--apply` path still uses Firebase
+Admin/ADC and retains every production confirmation gate.
 
-Sign in once:
+Sign in once for local ADC (the browser sign-in is completed by the operator;
+never paste a token into a file or chat):
 
 ```powershell
-firebase login
+gcloud auth application-default login
 ```
 
 The Cloud Functions runtime uses two keyless, least-privilege accounts:
@@ -990,6 +1272,12 @@ These commands update the shared Firebase backend used by the local client.
 They do not publish the PlanLi client to users, an app store, TestFlight, or a
 website.
 
+The commands below are target examples, not a safe sequence for the current
+security candidate. In particular, do not deploy the new Firestore Rules before
+the destination publication migration, and do not deploy every Function with
+App Check enabled before the compatible native client is installed. Follow the
+staged order in "App Check before public launch" below.
+
 Run Firebase deployments from the repository root:
 
 ```powershell
@@ -1008,7 +1296,7 @@ custom claim; the server checks the claim again for every operation. Sensitive
 actions require a sign-in from the last ten minutes, a written reason, and are
 recorded in the append-only moderation audit log. Current sensitive actions are:
 
-- `moderateContent` (dismiss / hold / restore / delete report targets)
+- `resolveModerationCase` (idempotent dismiss / hold / restore / delete report decisions)
 - `setUserSuspension` (suspend / unsuspend a user)
 - `setUserEmailVerified` (force email verification state)
 - `setUserAdmin` (grant / remove admin access)
@@ -1083,20 +1371,21 @@ The Storage deployment applies the normal rules to the EU bucket and the
 read-only rollback rules to the US bucket. `storage.cors.json` restricts web
 origins, and `storage.lifecycle.json` removes abandoned staging objects.
 
-The server secrets are configured from the repository root:
+The non-Google provider secrets are configured from the repository root:
 
 ```powershell
-firebase functions:secrets:set GOOGLE_MAPS_KEY --project planli-f0b12
-firebase functions:secrets:set GOOGLE_PLACES_NEW_KEY --project planli-f0b12
 firebase functions:secrets:set REST_COUNTRIES_KEY --project planli-f0b12
 firebase functions:secrets:set OPENWEATHER_API_KEY --project planli-f0b12
 firebase functions:secrets:set UNSPLASH_ACCESS_KEY --project planli-f0b12
 ```
 
-`GOOGLE_PLACES_NEW_KEY` is the server-only key for Places API (New), selected by
-the `PLACES_PROVIDER=new` Functions parameter. `GOOGLE_MAPS_KEY` remains the
-server-only Geocoding/legacy rollback key. Restrict each key to its required
-Google API set; never expose either key to clients.
+Places API (New) and Geocoding API v4 use Application Default Credentials from
+the dedicated Functions runtime identities. The server requests only the
+reviewed Places and Geocoding OAuth scopes, sends `X-Goog-User-Project`, caches
+short-lived access tokens, and retries once after a 401. There is no legacy
+Places path or server Google Maps API-key fallback. The optional Web map embed
+uses only `EXPO_PUBLIC_GOOGLE_MAPS_EMBED_KEY`; if configured, that browser key
+must be restricted to the production Hosting origins and Maps Embed API.
 `OPENWEATHER_API_KEY` is used only by the server-side destination overview;
 the client does not call the weather provider directly.
 `UNSPLASH_ACCESS_KEY` is used by the asynchronous destination-image selector.
@@ -1113,9 +1402,8 @@ Firestore migration collections.
 cd C:\Users\doric\Documents\PlanLi\PlanLi\functions
 
 # Prepare and review the resumable destination-image manifest. These local
-# environment variables should contain the same provider credentials as the
-# deployed secrets.
-$env:GOOGLE_MAPS_KEY='<google-key>'
+# environment variables should contain the same non-Google provider credentials
+# as the deployed secrets. Google provider calls use ADC/impersonation.
 $env:UNSPLASH_ACCESS_KEY='<unsplash-access-key>'
 npm run backfill-destination-images
 npm run backfill-destination-images -- --apply
@@ -1163,19 +1451,53 @@ document does not delete its subcollections.
 ## App Check before public launch
 
 App Check enforcement remains intentionally disabled during the first private
-Development Build and preview validation. Before a public release, configure
-platform providers and private debug tokens for local/CI builds, then deploy
-Functions with:
+Development Build and preview validation. The security candidate must be rolled
+out in compatibility-safe stages; a single full Functions deploy is forbidden:
 
 ```powershell
+# 1. Add only the session issuer. Existing clients do not call it and remain compatible.
+$env:PLANLI_ENFORCE_APP_CHECK="false"
+firebase deploy --only functions:issueGuestSession --project planli-f0b12
+Remove-Item Env:PLANLI_ENFORCE_APP_CHECK
+
+# 2. After the App Check-enabled native client passes physical-device testing,
+# deploy only the compatible destination writers and reconcilers.
+firebase deploy --only functions:saveRecommendation,functions:publishRecommendationDraft,functions:saveRoute,functions:publishRouteDraft,functions:saveTrip,functions:approveDestination,functions:updateDestinationPolicy,functions:deactivateDestination,functions:reconcileDestinationApprovalReleasesScheduled --project planli-f0b12
+
+# 3. Produce a no-write manifest, review it, and apply only that exact manifest.
+cd functions
+npm run migrate-destination-publication-gate -- --project planli-f0b12
+npm run migrate-destination-publication-gate -- --project planli-f0b12 --apply --fingerprint <reviewed-fingerprint> --confirm APPLY_DESTINATION_PUBLICATION_GATE
+cd ..
+
+# 4. Only after the migration reports zero unresolved legacy documents may the
+# publication-gated indexes and Rules be deployed.
+firebase deploy --only firestore:indexes,firestore:rules --project planli-f0b12
+
+# 5. Only after the compatible client is installed, deploy the six public readers
+# that require the guest envelope. The exact target list prevents an accidental
+# all-Functions cutover.
 $env:PLANLI_ENFORCE_APP_CHECK="true"
-firebase deploy --only functions --project planli-f0b12
+firebase deploy --only functions:loadRouteDetails,functions:getPersonalizedRecommendations,functions:getMapRecommendations,functions:getPersonalizedRoutes,functions:getDestinationOverview,functions:searchDestinations --project planli-f0b12
 Remove-Item Env:PLANLI_ENFORCE_APP_CHECK
 ```
 
-Do not enable enforcement before every Web, Android and iOS build can attach a
-valid App Check token; otherwise all callable requests from that client are
-rejected.
+The 30 August read-only manifest `b1df32ab…` must not be applied: the legacy
+records do not yet carry the new approval proof, so it flags all 53 destinations,
+would remove all 35 catalog rows and hold all 29 content records. Complete real
+administrator attestation first, then generate and review a new fingerprint.
+The companion human-readable review `fe4683ab…` classifies those 53 records as
+20 exact identity/provider bindings needing protected admin attestation, 15 active
+records needing review, and 18 inactive records already absent from the catalog.
+Of the 15, thirteen are ordinary `locality/political` provider identities; Bastei
+and Humantay Lake are natural features and must not be approved as `city_hub`.
+
+Each stage requires its own inventory read-back, smoke test and error-log check.
+Do not continue when a stage fails. Product-level App Check enforcement for
+Firestore and Storage is enabled only after every Web, Android and iOS build can
+attach a valid token; otherwise requests from that client are rejected. The
+remaining Functions are deployed later in reviewed target batches, never by
+reusing the stage-five environment variable with `--only functions`.
 
 ## iOS gallery recovery OTA release
 

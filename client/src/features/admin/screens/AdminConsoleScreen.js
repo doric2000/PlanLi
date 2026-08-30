@@ -12,6 +12,7 @@ import { getModerationPolicy } from '../../../services/AdminService';
 import { adminStyles as styles, colors } from '../../../styles';
 import { safeAdminError } from '../adminErrors';
 import { ADMIN_SECTIONS } from '../adminLabels';
+import { openAuthFlow } from '../../../navigation/authNavigation';
 import AdminAuditSection from '../components/AdminAuditSection';
 import AdminDestinationsSection from '../components/AdminDestinationsSection';
 import AdminOverviewSection from '../components/AdminOverviewSection';
@@ -35,7 +36,12 @@ function requestedSection(params = {}) {
 }
 
 export default function AdminConsoleScreen({ navigation, route }) {
-  const { isAdmin, loading: adminLoading } = useAdminClaim();
+  const {
+    isAdmin,
+    hasTotpEnrollment,
+    signedInWithTotp,
+    loading: adminLoading,
+  } = useAdminClaim();
   const { width } = useWindowDimensions();
   const wide = width >= 980;
   const routeParams = route?.params || {};
@@ -118,6 +124,8 @@ export default function AdminConsoleScreen({ navigation, route }) {
 
   if (adminLoading) return <SafeAreaView style={styles.screen}><ActivityIndicator style={styles.loading} color={colors.primary} /></SafeAreaView>;
   if (!isAdmin) return <SafeAreaView style={styles.screen}><View style={styles.empty}><Ionicons name="lock-closed" size={42} color={colors.textSecondary} /><AppText style={styles.emptyText}>אין הרשאת מנהל פעילה לחשבון זה.</AppText></View></SafeAreaView>;
+  if (!hasTotpEnrollment) return <SafeAreaView style={styles.screen}><View style={styles.empty} testID="admin-totp-enrollment-required"><Ionicons name="shield-checkmark" size={42} color={colors.textSecondary} /><AppText style={styles.emptyText}>לפני כניסה לקונסולת הניהול חובה להפעיל אימות דו־שלבי באמצעות אפליקציית Authenticator.</AppText><Pressable style={styles.primaryButton} onPress={() => navigation.navigate('TotpEnrollment')} testID="admin-open-totp-enrollment"><AppText style={styles.primaryButtonText}>הפעלת אימות דו־שלבי</AppText></Pressable></View></SafeAreaView>;
+  if (!signedInWithTotp) return <SafeAreaView style={styles.screen}><View style={styles.empty} testID="admin-totp-signin-required"><Ionicons name="lock-closed" size={42} color={colors.textSecondary} /><AppText style={styles.emptyText}>כדי לבצע פעולות ניהול יש להתחבר מחדש ולאשר קוד מאפליקציית האימות.</AppText><Pressable style={styles.primaryButton} onPress={async () => { await signOut(auth); openAuthFlow(navigation, 'Login'); }} testID="admin-totp-signin"><AppText style={styles.primaryButtonText}>התנתקות והתחברות מאובטחת</AppText></Pressable></View></SafeAreaView>;
   if (compatibility.loading || !compatibility.policy) {
     return (
       <SafeAreaView style={styles.screen} testID="admin-panel-screen">

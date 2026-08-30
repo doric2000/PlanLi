@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { Linking, TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from '../../../components/AppText';
 import { community } from '../../../styles';
 import { buildGoogleMapsUrl } from '../../../utils/placeNavigation';
+import { openSafeExternalUrl } from '../../../utils/safeExternalUrl';
 
 function googleMapsUrl(item) {
   const place = item?.place || {};
@@ -51,7 +52,7 @@ export default function CommunityInlineMap({
             <TouchableOpacity
               onPress={(event) => {
                 event?.stopPropagation?.();
-                Linking.openURL(googleMapsUrl(item)).catch(() => {});
+                openSafeExternalUrl(googleMapsUrl(item), 'googleMaps').catch(() => {});
               }}
               disabled={!googleMapsUrl(item)}
             >
