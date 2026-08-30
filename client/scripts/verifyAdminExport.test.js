@@ -4,6 +4,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const {
+  CI_PR_RECAPTCHA_SITE_KEY,
+  resolveRecaptchaSiteKey,
+} = require('./exportAdminWeb');
 const { verifyAdminExport } = require('./verifyAdminExport');
 
 function fixture(files) {
@@ -79,4 +83,27 @@ test('admin export verifies that the configured App Check site key was embedded'
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('admin export permits a placeholder key only in unprivileged pull request validation', () => {
+  assert.equal(
+    resolveRecaptchaSiteKey({ EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY: ' configured-site-key ' }),
+    'configured-site-key',
+  );
+  assert.equal(
+    resolveRecaptchaSiteKey({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'pull_request' }),
+    CI_PR_RECAPTCHA_SITE_KEY,
+  );
+  assert.throws(
+    () => resolveRecaptchaSiteKey({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'push' }),
+    /requires EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY/,
+  );
+  assert.throws(
+    () => resolveRecaptchaSiteKey({ GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'pull_request_target' }),
+    /requires EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY/,
+  );
+  assert.throws(
+    () => resolveRecaptchaSiteKey({}),
+    /requires EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY/,
+  );
 });
