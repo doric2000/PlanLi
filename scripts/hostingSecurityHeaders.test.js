@@ -42,8 +42,16 @@ test('admin Hosting CSP permits only the reCAPTCHA resources required by App Che
     'https://www.google.com/recaptcha/',
     'https://recaptcha.google.com/recaptcha/',
   ]);
-  assert.ok(directives.get('connect-src').includes('https://www.google.com/recaptcha/'));
-  assert.equal(directives.get('frame-src').includes('https://www.google.com'), false);
+  assert.deepEqual(directives.get('connect-src'), [
+    "'self'",
+    'https://*.googleapis.com',
+    'https://*.firebaseio.com',
+    'wss://*.firebaseio.com',
+    'https://*.cloudfunctions.net',
+    'https://securetoken.googleapis.com',
+    'https://identitytoolkit.googleapis.com',
+    'https://www.google.com/recaptcha/',
+  ]);
 });
 
 test('account deletion page retains its isolated deny-by-default CSP', () => {
