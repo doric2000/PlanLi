@@ -7,11 +7,28 @@ const {
   failures,
   inspectValue,
   isAllowedRoot,
+  restDocumentSnapshot,
 } = require('./auditLiveState');
 
 function destinationDocument(path, data) {
   return { ref: { path }, data: () => data };
 }
+
+test('live audit decodes Firestore REST documents without storing credentials', () => {
+  const document = restDocumentSnapshot({
+    name: 'projects/planli-f0b12/databases/(default)/documents/countries/IL',
+    fields: {
+      code: { stringValue: 'IL' },
+      status: { stringValue: 'active' },
+      stats: { mapValue: { fields: { destinationCount: { integerValue: '3' } } } },
+    },
+  });
+  assert.equal(document.id, 'IL');
+  assert.equal(document.ref.path, 'countries/IL');
+  assert.deepEqual(document.data(), {
+    code: 'IL', status: 'active', stats: { destinationCount: 3 },
+  });
+});
 
 test('provider duplicates are allowed only for inactive sources merged into one active target', () => {
   const active = destinationDocument('countries/IN/destinations/munnar', { status: 'active' });
