@@ -26,6 +26,9 @@ hosting/admin/
 firebase-debug.log
 firestore-debug.log
 storage-debug.log
+**/firebase-debug*.log
+**/firestore-debug*.log
+**/storage-debug*.log
 .env
 .DS_Store
 __pycache__/

@@ -62,6 +62,10 @@ function replaceRuleBlock(source, block) {
   return `${source.slice(0, start)}${block}${source.slice(end + END.length)}`;
 }
 
+function normalizeNewlines(value) {
+  return String(value).replace(/\r\n?/g, '\n');
+}
+
 function synchronize({ check = false } = {}) {
   const expected = artifacts(loadPolicy());
   const currentRules = fs.readFileSync(storageRulesPath, 'utf8');
@@ -71,7 +75,9 @@ function synchronize({ check = false } = {}) {
     [functionsPath, expected.functions],
     [storageRulesPath, expectedRules],
   ];
-  const drift = outputs.filter(([file, content]) => fs.readFileSync(file, 'utf8') !== content);
+  const drift = outputs.filter(([file, content]) => (
+    normalizeNewlines(fs.readFileSync(file, 'utf8')) !== normalizeNewlines(content)
+  ));
   if (check && drift.length) {
     throw new Error(`Legal policy artifacts are stale: ${drift.map(([file]) => path.relative(root, file)).join(', ')}`);
   }
@@ -91,4 +97,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { artifacts, loadPolicy, replaceRuleBlock, synchronize };
+module.exports = { artifacts, loadPolicy, normalizeNewlines, replaceRuleBlock, synchronize };
