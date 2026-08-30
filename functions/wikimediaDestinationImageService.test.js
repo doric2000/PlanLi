@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   buildAttribution,
   candidateQualityScore,
+  decodeHtml,
   resolveWikimediaDestinationImage,
   usableCommonsCandidate,
   variantFromImageInfo,
@@ -47,6 +48,24 @@ function imageInfo({
     }],
   };
 }
+
+test('Wikimedia metadata decoding removes literal and encoded markup before publication', () => {
+  assert.equal(decodeHtml('<b>Traveler</b> &amp; Co'), 'Traveler & Co');
+  assert.equal(
+    decodeHtml('&lt;script&gt;alert(1)&lt;/script&gt;Safe'),
+    'alert(1) Safe',
+  );
+  assert.equal(
+    decodeHtml('&amp;lt;img src=x onerror=alert(1)&amp;gt;Safe'),
+    'Safe',
+  );
+  assert.equal(
+    decodeHtml('&#x3c;script&#x3e;alert(1)&#60;/script&#62;Safe'),
+    'alert(1) Safe',
+  );
+  assert.equal(decodeHtml('Bad: &#999999999999; Safe'), 'Bad: � Safe');
+  assert.equal(decodeHtml('Before&#0;After'), 'Before After');
+});
 
 test('Commons candidates must be licensed landscape photos that name the exact city', () => {
   assert.equal(usableCommonsCandidate(imageInfo(), ['Kfar Saba']), true);
