@@ -10,7 +10,7 @@ import {
   cancelTotpEnrollment,
   finishTotpEnrollment,
 } from '../../../services/MfaService';
-import { openAuthFlow } from '../../../navigation/authNavigation';
+import { leaveAuthFlow, resetToAuthFlow } from '../../../navigation/authNavigation';
 import { authStyles } from '../../../styles';
 import AuthLayout from '../components/AuthLayout';
 
@@ -18,13 +18,21 @@ export default function TotpEnrollmentScreen({ navigation }) {
   const [enrollment, setEnrollment] = useState(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [alreadyEnrolled, setAlreadyEnrolled] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     beginTotpEnrollment()
       .then((value) => active && setEnrollment(value))
-      .catch((enrollmentError) => active && setError(formatAuthError(enrollmentError)))
+      .catch((enrollmentError) => {
+        if (!active) return;
+        if (enrollmentError?.code === 'auth/second-factor-already-in-use') {
+          setAlreadyEnrolled(true);
+          return;
+        }
+        setError(formatAuthError(enrollmentError));
+      })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -42,7 +50,7 @@ export default function TotpEnrollmentScreen({ navigation }) {
         'מטעמי אבטחה יש להתחבר מחדש. מעכשיו פעולות ניהול יחייבו קוד מאפליקציית האימות.'
       );
       await signOutCentral();
-      openAuthFlow(navigation, 'Login');
+      resetToAuthFlow(navigation, 'Login');
     } catch (enrollmentError) {
       setError(formatAuthError(enrollmentError));
     } finally {
@@ -59,9 +67,13 @@ export default function TotpEnrollmentScreen({ navigation }) {
         navigation.goBack();
       }}
     >
-      <AppText style={authStyles.title}>הפעלת אימות דו־שלבי</AppText>
+      <AppText style={authStyles.title}>
+        {alreadyEnrolled ? 'אימות דו־שלבי כבר פעיל' : 'הפעלת אימות דו־שלבי'}
+      </AppText>
       <AppText style={authStyles.subtitle}>
-        סרקו את הקוד באפליקציית Authenticator. אל תשמרו צילום מסך ואל תשתפו את המפתח.
+        {alreadyEnrolled
+          ? 'החשבון כבר מוגן באמצעות אפליקציית Authenticator. אפשר לחזור לאפליקציה ולהמשיך.'
+          : 'סרקו את הקוד באפליקציית Authenticator. אל תשמרו צילום מסך ואל תשתפו את המפתח.'}
       </AppText>
       {loading && !enrollment ? <ActivityIndicator color="#1E3A5F" /> : null}
       {enrollment ? (
@@ -86,15 +98,27 @@ export default function TotpEnrollmentScreen({ navigation }) {
           />
         </>
       ) : null}
-      {error ? <AppText style={authStyles.error} testID="totp-enrollment-error">{error}</AppText> : null}
-      <TouchableOpacity
-        disabled={loading || !enrollment || code.length !== 6}
-        onPress={submit}
-        style={[authStyles.primaryButton, (loading || !enrollment || code.length !== 6) && authStyles.primaryButtonDisabled]}
-        testID="totp-enrollment-submit"
-      >
-        {loading && enrollment ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>הפעלת אימות</AppText>}
-      </TouchableOpacity>
+      {alreadyEnrolled ? (
+        <TouchableOpacity
+          onPress={() => leaveAuthFlow(navigation)}
+          style={authStyles.primaryButton}
+          testID="totp-enrollment-active-return"
+        >
+          <AppText style={authStyles.primaryButtonText}>חזרה לאפליקציה</AppText>
+        </TouchableOpacity>
+      ) : (
+        <>
+          {error ? <AppText style={authStyles.error} testID="totp-enrollment-error">{error}</AppText> : null}
+          <TouchableOpacity
+            disabled={loading || !enrollment || code.length !== 6}
+            onPress={submit}
+            style={[authStyles.primaryButton, (loading || !enrollment || code.length !== 6) && authStyles.primaryButtonDisabled]}
+            testID="totp-enrollment-submit"
+          >
+            {loading && enrollment ? <ActivityIndicator color="#FFFFFF" /> : <AppText style={authStyles.primaryButtonText}>הפעלת אימות</AppText>}
+          </TouchableOpacity>
+        </>
+      )}
     </AuthLayout>
   );
 }

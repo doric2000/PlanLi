@@ -60,3 +60,7 @@ export function resetToRootRoute(navigation, name, params) {
 export function resetToMain(navigation, params) {
   resetToRootRoute(navigation, 'Main', params);
 }
+
+export function resetToAuthFlow(navigation, screen = 'AuthEntry', screenParams) {
+  resetToMain(navigation, AUTH_FLOW_PATH(screen, screenParams));
+}
