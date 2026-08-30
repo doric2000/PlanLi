@@ -36,12 +36,16 @@ function extractReferences(sourceFile, text) {
   return references;
 }
 
-function verifyAdminExport(root = path.resolve(__dirname, '..', '..', 'hosting', 'admin')) {
+function verifyAdminExport(
+  root = path.resolve(__dirname, '..', '..', 'hosting', 'admin'),
+  { expectedRecaptchaSiteKey = '' } = {},
+) {
   if (!fs.existsSync(path.join(root, 'index.html'))) throw new Error(`Admin export is missing index.html at ${root}`);
   const missing = [];
   const forbiddenSourceMaps = [];
   const checked = new Set();
-  for (const sourceFile of filesUnder(root)) {
+  const sourceFiles = filesUnder(root);
+  for (const sourceFile of sourceFiles) {
     if (path.extname(sourceFile).toLowerCase() === '.map') forbiddenSourceMaps.push(sourceFile);
     if (!TEXT_EXTENSIONS.has(path.extname(sourceFile).toLowerCase())) continue;
     const text = fs.readFileSync(sourceFile, 'utf8');
@@ -63,6 +67,22 @@ function verifyAdminExport(root = path.resolve(__dirname, '..', '..', 'hosting',
       .map((file) => path.relative(root, file))
       .join('\n');
     throw new Error(`Admin export contains source-map artifacts:\n${details}`);
+  }
+  const webBundles = sourceFiles.filter((sourceFile) => (
+    path.extname(sourceFile).toLowerCase() === '.js'
+      && sourceFile.includes(`${path.sep}_expo${path.sep}static${path.sep}js${path.sep}web${path.sep}`)
+  ));
+  if (webBundles.length) {
+    const bundleText = webBundles.map((sourceFile) => fs.readFileSync(sourceFile, 'utf8')).join('\n');
+    for (const marker of ['admin-totp-enrollment-required', 'admin-totp-signin-required']) {
+      if (!bundleText.includes(marker)) throw new Error(`Admin export is missing required security marker: ${marker}.`);
+    }
+    if (bundleText.includes('ExpoMediaLibraryNext')) {
+      throw new Error('Admin export contains a native-only ExpoMediaLibraryNext dependency.');
+    }
+    if (expectedRecaptchaSiteKey && !bundleText.includes(expectedRecaptchaSiteKey)) {
+      throw new Error('Admin export does not contain the configured reCAPTCHA Enterprise site key.');
+    }
   }
   console.log(`Admin export verified: ${checked.size} local references resolve to files.`);
   return { checked: checked.size };

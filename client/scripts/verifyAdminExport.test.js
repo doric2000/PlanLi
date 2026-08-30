@@ -39,3 +39,44 @@ test('admin export accepts a complete build without source-map artifacts', () =>
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('admin export rejects missing TOTP controls and native-only media imports', () => {
+  const missingTotpRoot = fixture({
+    'index.html': '<script src="/admin/_expo/static/js/web/index.js"></script>',
+    '_expo/static/js/web/index.js': 'console.log("admin")',
+  });
+  try {
+    assert.throws(() => verifyAdminExport(missingTotpRoot), /missing required security marker/);
+  } finally {
+    fs.rmSync(missingTotpRoot, { recursive: true, force: true });
+  }
+
+  const nativeMediaRoot = fixture({
+    'index.html': '<script src="/admin/_expo/static/js/web/index.js"></script>',
+    '_expo/static/js/web/index.js': 'admin-totp-enrollment-required admin-totp-signin-required ExpoMediaLibraryNext',
+  });
+  try {
+    assert.throws(() => verifyAdminExport(nativeMediaRoot), /native-only ExpoMediaLibraryNext/);
+  } finally {
+    fs.rmSync(nativeMediaRoot, { recursive: true, force: true });
+  }
+});
+
+test('admin export verifies that the configured App Check site key was embedded', () => {
+  const root = fixture({
+    'index.html': '<script src="/admin/_expo/static/js/web/index.js"></script>',
+    '_expo/static/js/web/index.js': 'admin-totp-enrollment-required admin-totp-signin-required configured-site-key',
+  });
+  try {
+    assert.deepEqual(
+      verifyAdminExport(root, { expectedRecaptchaSiteKey: 'configured-site-key' }),
+      { checked: 1 },
+    );
+    assert.throws(
+      () => verifyAdminExport(root, { expectedRecaptchaSiteKey: 'different-site-key' }),
+      /does not contain the configured reCAPTCHA Enterprise site key/,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

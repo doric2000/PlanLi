@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { act, renderHook } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library';
+import * as MediaLibrary from 'expo-media-library/legacy';
 
 import useTravelMediaSource, {
   imagePickerAssetDescriptor,
@@ -12,7 +12,7 @@ jest.mock('expo-image-picker', () => ({
   MediaTypeOptions: { Images: 'Images' },
   launchImageLibraryAsync: jest.fn(),
 }));
-jest.mock('expo-media-library', () => ({
+jest.mock('expo-media-library/legacy', () => ({
   MediaType: { photo: 'photo' },
   SortBy: { creationTime: 'creationTime' },
   requestPermissionsAsync: jest.fn(),
