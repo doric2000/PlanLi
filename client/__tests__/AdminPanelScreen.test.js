@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Dimensions, ScrollView } from 'react-native';
+import { Alert, Dimensions, ScrollView, StyleSheet } from 'react-native';
 
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
@@ -426,6 +426,11 @@ describe('Admin console end-to-end surface', () => {
     fireEvent.press(await screen.findByTestId('admin-destination-destination-il-haifa'));
     expect(screen.getByText('IL/haifa')).toBeTruthy();
     expect(screen.getByText('natural_feature')).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId('admin-destination-policy-destination-il-haifa').props.style)).toMatchObject({
+      flexBasis: 'auto',
+      flexGrow: 0,
+      width: '100%',
+    });
   });
 
   it('opens the exact case user even when the user is outside the current page', async () => {
