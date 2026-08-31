@@ -628,7 +628,7 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
   const showingMobileDetail = !split && (details || heldResource || detailState.loading || detailState.error);
   return (
     <View style={styles.queueSection} testID="admin-queue-content">
-      {!showingMobileDetail ? <View style={[styles.queueListPane, split && styles.queueListPaneSplit]}>
+      {!showingMobileDetail ? <View testID="admin-queue-list-pane" style={[styles.queueListPane, split && styles.queueListPaneSplit]}>
         <View style={styles.sectionHeading}><AppText style={styles.sectionTitle}>תור בדיקה</AppText><AppText style={styles.sectionDescription}>כל הדיווחים והתוכן המוחזק, עם הקצאה והחלטה באותו מרחב עבודה.</AppText></View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.viewTabs}>{QUEUE_VIEWS.map((item) => <ToggleChip key={item.id} label={item.label} active={view === item.id} onPress={() => setView(item.id)} testID={`admin-queue-view-${item.id}`} />)}</ScrollView>
         {!heldView ? <View style={styles.searchBar}><Ionicons name="search-outline" size={20} color="#667085" /><AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))} placeholder="חיפוש בתוך התור" accessibilityLabel="חיפוש בתוך תור המודרציה" style={styles.searchInput} /><AdminAction compact label="מסננים" onPress={() => setFiltersOpen((current) => !current)} testID="admin-queue-filters-toggle" /></View> : null}

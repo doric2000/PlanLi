@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Dimensions, ScrollView, StyleSheet } from 'react-native';
+import { Alert, Dimensions, StyleSheet } from 'react-native';
 
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
@@ -163,9 +163,11 @@ describe('Admin console end-to-end surface', () => {
   it('keeps standard admin sections inside a vertical scroll container', async () => {
     const screen = render(<AdminPanelScreen navigation={navigation} />);
     await screen.findByTestId('admin-overview-content', {}, { timeout: 10000 });
-    expect(
-      screen.UNSAFE_queryAllByType(ScrollView).some((scrollView) => scrollView.props.horizontal !== true),
-    ).toBe(true);
+    const sectionScroll = screen.getByTestId('admin-section-scroll');
+    expect(StyleSheet.flatten(sectionScroll.props.style)).toEqual(expect.objectContaining({
+      flex: 1,
+      minHeight: 0,
+    }));
   }, 20000);
 
   it('opens each workload metric as its matching filtered queue', async () => {
@@ -201,6 +203,11 @@ describe('Admin console end-to-end surface', () => {
     AdminService.getModerationCase.mockResolvedValue(detailsFor(item));
     const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'queue' } }} />);
     try {
+      expect(StyleSheet.flatten((await screen.findByTestId('admin-queue-list-pane')).props.style)).toEqual(expect.objectContaining({
+        flexGrow: 0,
+        flexShrink: 0,
+        flexBasis: 425,
+      }));
       fireEvent.press(await screen.findByTestId('admin-case-wide'));
       expect(await screen.findByTestId('admin-case-decision-wide')).toBeTruthy();
       expect(screen.getByTestId('admin-case-wide')).toBeTruthy();
