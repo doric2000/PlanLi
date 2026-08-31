@@ -232,8 +232,19 @@ Cloud Run logging from `2026-08-30T12:55:00Z` returned zero `ERROR` entries for
 the seven deployed services. The read-only OAuth audit, manifest SHA-256
 `2ed68b04cd3f284ff2cb3fa51f80c07fbb31a696ce91a2999d39621f6e791165`,
 reports no missing services or Functions, no wrong service accounts, no legacy
-bindings, no deployed retired Function, and both readiness gates `true`. The two
-legacy API keys and Secret Manager resources still exist and were not deleted.
+bindings, no deployed retired Function, and both readiness gates `true` before
+credential retirement. Under separate explicit production authorization on
+2026-08-30, API keys `1c999850-18fb-4b03-984e-ce90ed6dd872` (`Places API`) and
+`9fea6ed1-d5d6-4c9b-8205-48dd0da9cefb`
+(`PlanLi Places API New server`) and Secret Manager resources
+`GOOGLE_MAPS_KEY` and `GOOGLE_PLACES_NEW_KEY` were deleted. Independent
+pre-delete inventory found 123 deployed v2 Functions and zero references to
+either secret. Post-delete read-back found zero active target keys, zero target
+secrets, no legacy bindings or resources, and zero `ERROR` log entries for the
+seven OAuth Functions from `2026-08-30T15:03:00Z` through the verification
+window. Google reports both API keys as soft-deleted and inactive; recovery
+metadata remains for 30 days and the keys must not be undeleted or reused. No
+credential value is retained in this repository or release record.
 
 On 2026-08-30 the project owner explicitly accepted the Google Maps contractual
 retention risk of keeping the existing stored place snapshot after its historical
@@ -309,6 +320,68 @@ and the focused static boundary suite passes 2/2. Because this edit postdates th
 sealed snapshot, the final committed revision still requires the local security
 gate and PR CodeQL before deployment; the sealed report is not misrepresented as
 covering the later line.
+
+On `2026-08-30`, after that correction passed the local security gate and PR
+CodeQL in merged `main` commit
+`3e2b166fde52bfc7847aa0443be301f5ebd2848b`, `issueGuestSession` was deployed
+alone to production. The first Firebase CLI attempt stopped during local source
+discovery at the default 10-second timeout and made no live change; the single
+documented retry with `FUNCTIONS_DISCOVERY_TIMEOUT=60000` created only the
+authorized Function. Independent read-back reports an active generation-2
+Node.js 22 Function in `europe-west1`, service account
+`planli-core-functions@planli-f0b12.iam.gserviceaccount.com`, 256 MiB memory,
+20-second timeout, zero minimum instances, one maximum instance, and only the
+`PUBLIC_RATE_LIMIT_KEY` secret binding. `PLANLI_ENFORCE_APP_CHECK` is unset, so
+product-wide enforcement remains off. The issuer still requires and consumes a
+fresh limited-use App Check token in its handler: an unauthenticated smoke
+request returned HTTP 401 `APP_CHECK_REQUIRED` before any Firestore write.
+Cloud Run revision `issueguestsession-00001-pab` receives 100% of traffic and
+the post-deploy error window contained zero errors. No other Function, Rules,
+Hosting, migration, native build or OTA was changed.
+
+The same merged `main` commit was then used for an explicitly authorized,
+security-only rollout of 26 moderation and admin targets. The rollout updated
+`submitReport`, the moderation dashboard/case callables, the three admin list
+paths whose cursors now use document-ID validation, the saved-view and held-
+content admin callables, all four user-administration mutations, the two
+moderation notification triggers, and the suspension expiry scheduler. It also
+created `reconcileStaleModerationDecisionsScheduled` for the first time. The
+new reconciler is enabled every 15 minutes in `Asia/Jerusalem`; it releases only
+stale, operation-bound moderation work so a retry cannot treat an unrelated
+missing target as a successful deletion. Independent read-back found all 26
+targets `ACTIVE`, generation 2, Node.js 22, `europe-west1`, zero minimum
+instances and maximum 20 instances, using only the existing core or media
+Functions service accounts. Their live update window is
+`2026-08-30T15:30:35.094450960Z` through
+`2026-08-30T15:31:27.918973750Z`.
+
+Before deployment, the focused callable-input, moderation, suspension, TOTP and
+admin-cursor suites passed 73/73. Live non-mutating smoke requests proved the
+shared input boundary with HTTP 400 `CALLABLE_INPUT_OBJECT_REQUIRED`, and proved
+the admin boundaries with HTTP 401 `SIGN_IN_REQUIRED`; Cloud Run returned zero
+`ERROR` entries for the 26 targets after the rollout. This makes the separated
+report/decision revisions, operation-scoped moderation retry, preservation of
+accounts that were disabled before a PlanLi suspension, and the three `cleanId`
+admin cursors live on their affected surfaces. No Rules, Hosting, indexes,
+migration, production data, IAM, secrets, native build or OTA was changed.
+
+To finish the same input-hardening gate without leaving older callable
+revisions behind, the remaining 52 callable Functions were then updated from
+that exact source. Independent inventory now reports all 86 locally declared
+callables `ACTIVE` on Node.js 22, with zero callables absent and zero callables
+predating the security source; every callable has zero minimum instances. The
+second live update window is `2026-08-30T15:37:04.462948980Z` through
+`2026-08-30T15:38:14.448697105Z`. Non-mutating invalid-object probes against a
+public read, account registration and media preparation each returned HTTP 400
+`CALLABLE_INPUT_OBJECT_REQUIRED`, proving the shared boundary runs before their
+business logic. Cloud Run returned zero `ERROR` entries for all 52 targets in
+the post-deploy window. This second batch also changed no Rules, Hosting,
+indexes, scheduler, data, IAM, secrets, build, or OTA state.
+Google Cloud reports six successful regional builds totaling 4.73 build-minutes
+for both rollouts. The existing `gcf-artifacts` repository is 586.916 MB and has
+an active Firebase cleanup policy that deletes artifacts older than 24 hours,
+so these builds do not accumulate indefinitely; billing reports can lag, so this
+is usage evidence rather than a promise of zero provider charge.
 
 The current Android internal release is `1.1.0 (6)`, EAS build
 `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
