@@ -78,6 +78,15 @@ function canonicalDestinationId(countryId, registryId) {
   return `dst_${digest.slice(0, 20)}`;
 }
 
+function legacyRegistryId(countryCode, countryId, cityId) {
+  const prefix = String(countryCode || countryId || '').trim().toLowerCase();
+  const digest = crypto.createHash('sha256')
+    .update(`${countryId}\n${cityId}`)
+    .digest('hex')
+    .slice(0, 16);
+  return `${prefix}-legacy-${digest}`;
+}
+
 function viewportDiagonalKm(viewport) {
   const southwest = viewport?.southwest;
   const northeast = viewport?.northeast;
@@ -597,6 +606,7 @@ module.exports = {
   MATCH_PROFILE_VERSION,
   buildMatchProfile,
   canonicalDestinationId,
+  legacyRegistryId,
   clearRegistryCache,
   destinationTypeForKind,
   entryContainsPoint,

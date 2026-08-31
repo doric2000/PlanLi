@@ -35,6 +35,7 @@ const {
   REGISTRY_VERSION,
   clearRegistryCache,
   destinationTypeForKind,
+  legacyRegistryId,
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
@@ -688,7 +689,7 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     const currentCity = citySnapshot.data() || {};
     const currentCountry = countrySnapshot.data() || {};
     const countryCode = String(currentCountry.code || countryId).toUpperCase();
-    const fallbackRegistryId = `${countryCode.toLowerCase()}-${cityId.toLowerCase()}`;
+    const fallbackRegistryId = legacyRegistryId(countryCode, countryId, cityId);
     const registryEntries = registrySnapshot.docs
       .map((document) => ({ id: document.id, ...document.data() }));
     const binding = selectDestinationPolicyRegistryBinding({

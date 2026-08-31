@@ -1,5 +1,4 @@
 /* eslint-disable no-console */
-const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { isDeepStrictEqual } = require('node:util');
 
@@ -9,6 +8,7 @@ const {
   REGISTRY_PATH,
   REGISTRY_VERSION,
   buildMatchProfile,
+  legacyRegistryId,
   prepareEntries,
   providerGeometryPolicy,
   providerIdentityNameMatches,
@@ -29,15 +29,6 @@ function parseArguments(argv) {
     projectId: projectIndex >= 0 ? String(argv[projectIndex + 1] || '').trim() : DEFAULT_PROJECT_ID,
     apply: argv.includes('--apply'),
   };
-}
-
-function legacyRegistryId(countryCode, countryId, cityId) {
-  const digest = crypto.createHash('sha256')
-    .update(`${countryId}\n${cityId}`)
-    .digest('base64url')
-    .slice(0, 16)
-    .toLowerCase();
-  return `${String(countryCode || countryId).toLowerCase()}-legacy-${digest}`;
 }
 
 function legacyPolicy({ countryCode, countryId, cityId, destination }) {
