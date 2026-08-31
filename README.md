@@ -491,14 +491,15 @@ Check, not key secrecy. The media bucket CORS contains only the two production
 origins, the default compute
 identity has no reviewed secret binding, Firestore deletion protection and PITR
 are enabled, and Auth authorized domains contain only the two production hosts.
-Identity Platform TOTP is enabled and the sole active admin is enrolled; a
-second independent human admin remains an operational release gate.
+Identity Platform TOTP is enabled and two independent human admins are enrolled;
+the second-admin operational release gate is closed.
 
 App Check providers are configured with one-hour tokens for Android Play
-Integrity, iOS App Attest with DeviceCheck fallback, and Web reCAPTCHA
-Enterprise. Firebase service enforcement and the Functions rollout switch remain
-off until a signed runtime `1.2.0` client is installed and tested; therefore
-PL-17 is still open. PL-06 and PL-10 are fixed in source—SDK 57, device-only
+Integrity, iOS App Attest and Web reCAPTCHA Enterprise. DeviceCheck fallback
+still requires an Apple Developer key and remains an explicit release gate.
+Firebase service enforcement and the Functions rollout switch remain off until
+a signed runtime `1.2.0` client is installed and tested; therefore PL-17 is
+still open. PL-06 and PL-10 are fixed in source—SDK 57, device-only
 SecureStore migration, Android backup disabled and reverse-DNS URL scheme—but
 are not live in the installed runtime `1.1.0` binaries. PL-05 remains the sole
 accepted risk: EAS OTA is intentionally unsigned and must be re-reviewed by
@@ -2743,3 +2744,36 @@ reusing the stage-five environment variable with `--only functions`.
   service action accompanied this Hosting release. The only production data
   mutation after deployment was the explicitly authorized second-admin claim
   and registry activation described above.
+
+## SDK 57 iOS release-candidate build recovery
+
+- PR [#290](https://github.com/doric2000/PlanLi/pull/290) configured the official
+  RNFirebase Expo plugin with `ios.disableSPM: true`, keeping Firebase App Check
+  on CocoaPods and adding a fail-closed release check. Focused config, App Check,
+  iOS export and affected validation passed; Codex Security covered both changed
+  files with zero findings. All CI and CodeQL checks passed and the PR merged as
+  `e40c0bb3d237ce349fa1c174fff245d85fef54b9`.
+- iOS release-candidate build `deb92a17-0ea7-47af-8bba-366ecaac284c`, marketing
+  version `1.1.0`, build number `18`, runtime `1.2.0`, proved that CocoaPods now
+  installs successfully. It then failed during Xcode archive because the pinned
+  Xcode 26.0 image cannot compile SDK 57's `expo-modules-jsi`; no IPA or store
+  submission was created.
+- Expo's SDK reference requires Xcode 26.4 or newer for SDK 57. PR
+  [#291](https://github.com/doric2000/PlanLi/pull/291) replaced the obsolete
+  image with the exact current SDK 57 image
+  `macos-tahoe-26.5-xcode-26.6` for preview, staging, release-candidate and
+  production, and made the release verifier enforce all four profiles. EAS
+  resolved the intended image, affected validation and every CI, CodeQL,
+  Semgrep, Gitleaks, dependency and invariant check passed; it merged as
+  `c56e4054ba1fe5f30583851adec2d9972748dac0`.
+- A build-number-19 request from that clean merged source was rejected before an
+  EAS build was created because the account's Free iOS monthly quota was
+  exhausted. The account has no active paid plan, no subscription was added and
+  no automatic charge is possible. The quota reports a reset on `2026-09-01`;
+  an attached one-time continuation will rerun the same release-candidate after
+  the reset with frozen credentials, no auto-submit and no OTA.
+- The organization-scoped Sentry `org:ci` build token already exists and the EAS
+  production secret was updated on `2026-08-30`. It still shows no use because
+  builds 17 and 18 failed before the source-map upload phase. No additional token
+  was created or revoked; the next successful archive must verify the existing
+  token before any rotation decision.
