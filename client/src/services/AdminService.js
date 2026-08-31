@@ -44,7 +44,7 @@ export const saveAdminSavedView = (payload) => call('saveAdminSavedView', payloa
 export const deleteAdminSavedView = (id) => call('deleteAdminSavedView', { id });
 export const getModerationPolicy = () => call('getModerationPolicy');
 export const updateAdminAttachedPlace = (payload) => call('updateAdminAttachedPlace', payload);
-export const listHeldContent = () => call('listHeldContent');
+export const listHeldContent = (payload = {}) => call('listHeldContent', payload);
 export const listAdminUsers = (payload = {}) => call('listAdminUsers', payload);
 export const getAdminUser = (identifier) => call('getAdminUser', { identifier });
 export const setUserSuspension = (identifier, suspended, reason, durationHours = undefined, operationId = '') => call('setUserSuspension', {

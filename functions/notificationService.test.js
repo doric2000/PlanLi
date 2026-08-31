@@ -248,6 +248,7 @@ test('new activity advances push version while read-only changes do not', async 
   await upsertNotification({ admin: fixture.admin, uid: 'owner', notificationId, notification });
   const path = `users/owner/notifications/${notificationId}`;
   assert.equal(fixture.values.get(path).push.version, 1);
+  assert.equal(fixture.values.get(path).createdAt, 'server-time');
   assert.equal(fixture.values.get('users/owner/notificationState/state').schemaVersion, 2);
   assert.equal(fixture.values.get('users/owner/notificationState/state').personalUnread, 1);
 

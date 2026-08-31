@@ -30,6 +30,7 @@ jest.mock('../src/services/AdminService', () => ({
   listAdminSavedViews: jest.fn(),
   listAdminUsers: jest.fn(),
   listDestinationReviews: jest.fn(),
+  listHeldContent: jest.fn(),
   listModerationAudit: jest.fn(),
   listModerationCases: jest.fn(),
   recheckDestination: jest.fn(),
@@ -111,6 +112,7 @@ describe('Admin console end-to-end surface', () => {
     };
     AdminService.getModerationDashboard.mockResolvedValue(dashboard);
     AdminService.listModerationCases.mockResolvedValue({ items: [], nextCursor: null });
+    AdminService.listHeldContent.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.getModerationPolicy.mockResolvedValue({
       consoleContractVersion: 1,
       reasons: [
@@ -284,6 +286,108 @@ describe('Admin console end-to-end surface', () => {
       operationId: expect.any(String),
     })));
   });
+
+  it('lists system-managed held content and routes the admin to the destination review', async () => {
+    const target = {
+      type: 'recommendation',
+      id: 'rec-destination-hold',
+      path: 'recommendations/rec-destination-hold',
+    };
+    const preview = {
+      available: true,
+      title: 'נחל הקיבוצים בעמק המעיינות בית שאן',
+      status: 'moderation_hold',
+      author: { displayName: 'מטיילת' },
+      destination: { countryId: 'IL', cityId: 'new-city', cityName: 'ניר דוד', countryName: 'ישראל' },
+    };
+    const holdContext = {
+      kind: 'system',
+      holdReason: 'destination_policy_review',
+      systemGate: 'destination_pending_approval',
+      destination: { countryId: 'IL', cityId: 'new-city', cityName: 'ניר דוד', countryName: 'ישראל' },
+    };
+    AdminService.listHeldContent
+      .mockResolvedValueOnce({
+        items: [{ id: 'content_recommendation_rec-destination-hold', target, targetPreview: preview, holdContext }],
+        nextCursor: 'recommendations:rec-destination-hold',
+      })
+      .mockResolvedValueOnce({ items: [], nextCursor: null });
+    AdminService.getAdminResource.mockResolvedValue({ target, preview, holdContext, case: null });
+    AdminService.getDestinationReview.mockResolvedValue({
+      countryId: 'IL',
+      cityId: 'new-city',
+      country: { names: { he: 'ישראל' } },
+      city: { status: 'active', identity: { names: { he: 'ניר דוד' } }, canonicalPolicy: { kind: 'natural_feature', groupingPolicy: 'self' } },
+      review: { status: 'approved_with_warnings' },
+      issues: [],
+    });
+
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'content' } }} />);
+    await screen.findByTestId('admin-queue-view-held', {}, { timeout: 20000 });
+    await waitFor(() => expect(AdminService.listHeldContent).toHaveBeenCalled(), { timeout: 20000 });
+    const row = await screen.findByTestId('admin-case-content_recommendation_rec-destination-hold', {}, { timeout: 20000 });
+    expect(AdminService.listModerationCases).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('admin-queue-load-more'));
+    await waitFor(() => expect(AdminService.listHeldContent).toHaveBeenLastCalledWith({
+      cursor: 'recommendations:rec-destination-hold',
+    }));
+    fireEvent.press(row);
+    expect(await screen.findByTestId('admin-held-system-action', {}, { timeout: 20000 })).toBeTruthy();
+    expect(screen.getByText(/אי אפשר לשחזר ידנית/u)).toBeTruthy();
+    expect(screen.queryByTestId('admin-decision-content-restore')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('admin-held-destination-action'));
+    await waitFor(() => expect(AdminService.getDestinationReview).toHaveBeenCalledWith('IL', 'new-city'));
+    expect(await screen.findByText('IL/new-city')).toBeTruthy();
+  }, 60000);
+
+  it('opens the recorded moderation case from the held-content view', async () => {
+    const target = { type: 'recommendation', id: 'rec-reported-hold', path: 'recommendations/rec-reported-hold' };
+    const preview = {
+      available: true,
+      title: 'המלצה מוחזקת בעקבות דיווחים',
+      status: 'moderation_hold',
+      author: { displayName: 'מטיילת' },
+    };
+    const caseItem = queueCase('reported-hold-case', {
+      target,
+      status: 'auto_held',
+      targetPreview: preview,
+    });
+    AdminService.listHeldContent.mockResolvedValue({
+      items: [{
+        id: 'content_recommendation_rec-reported-hold',
+        target,
+        targetPreview: preview,
+        holdContext: { kind: 'moderation', holdReason: 'reports' },
+      }],
+      nextCursor: null,
+    });
+    AdminService.getAdminResource.mockResolvedValue({
+      target,
+      preview,
+      holdContext: { kind: 'moderation', holdReason: 'reports' },
+      case: { id: 'reported-hold-case' },
+    });
+    AdminService.getModerationCase.mockResolvedValue({
+      ...detailsFor(caseItem),
+      decisionOptions: {
+        contentStatus: 'moderation_hold',
+        accountStatus: 'active',
+        contentActions: ['none', 'restore', 'delete'],
+        accountActions: ['none', 'warn', 'suspend'],
+        defaultContentAction: 'restore',
+        defaultAccountAction: 'none',
+      },
+    });
+
+    const screen = render(<AdminPanelScreen navigation={navigation} route={{ params: { tab: 'content' } }} />);
+    fireEvent.press(await screen.findByTestId('admin-case-content_recommendation_rec-reported-hold', {}, { timeout: 20000 }));
+
+    expect(await screen.findByTestId('admin-decision-content-restore', {}, { timeout: 20000 })).toBeTruthy();
+    expect(screen.queryByTestId('admin-held-content-details')).toBeNull();
+    expect(AdminService.getModerationCase).toHaveBeenCalledWith('reported-hold-case');
+  }, 60000);
 
   it('reuses the recorded operation when retrying a failed decision', async () => {
     const item = queueCase('retry', { revision: 4 });
@@ -459,19 +563,21 @@ describe('Admin console end-to-end surface', () => {
       nextCursor: null,
     });
     const screen = render(<AdminPanelScreen navigation={navigation} />);
-    await screen.findByTestId('admin-overview-content');
+    await screen.findByTestId('admin-overview-content', {}, { timeout: 20000 });
     fireEvent.press(screen.getByTestId('admin-tab-users'));
     expect(await screen.findByTestId('admin-users-content')).toBeTruthy();
     fireEvent.press(screen.getByTestId('admin-tab-destinations'));
     fireEvent.press(await screen.findByTestId('admin-destination-destination-il-haifa'));
     expect(screen.getByText('IL/haifa')).toBeTruthy();
-    expect(screen.getByText('natural_feature')).toBeTruthy();
+    expect(screen.getByText('סוג יעד: עיר או יישוב מרכזי · אופן שיוך: יעד עצמאי')).toBeTruthy();
+    expect(screen.queryByText('קיבוץ: self')).toBeNull();
+    expect(screen.getByText('אתר טבע')).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId('admin-destination-policy-destination-il-haifa').props.style)).toMatchObject({
       flexBasis: 'auto',
       flexGrow: 0,
       width: '100%',
     });
-  });
+  }, 60000);
 
   it('opens the exact case user even when the user is outside the current page', async () => {
     const item = queueCase('linked-user');

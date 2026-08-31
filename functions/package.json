@@ -20,6 +20,8 @@
     "delete-non-admin-users": "node scripts/deleteNonAdminUsers.js",
     "repair-beta-owner": "node scripts/repairBetaOwnerAccount.js",
     "repair-applying-moderation": "node scripts/repairApplyingModerationEnforcements.js",
+    "repair-destination-approval-release": "node scripts/repairDestinationApprovalRelease.js",
+    "repair-notification-created-at": "node scripts/repairNotificationCreatedAt.js",
     "repair-taxonomy-other": "node scripts/repairTaxonomyOtherRecommendations.js",
     "set-email-verified": "node scripts/setEmailVerified.js",
     "migrate-media": "node scripts/migrateCanonicalMedia.js",

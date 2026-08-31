@@ -602,6 +602,7 @@ test('holding destination content writes the status, notification, and unread co
     ownerId: 'owner-1',
     status: 'active',
     title: 'A recommendation',
+    destination: { countryId: 'IL', cityId: 'new-city', cityName: 'ניר דוד' },
     media: [{ url: 'https://example.com/photo.jpg' }],
   };
   const contentRef = {
@@ -640,7 +641,15 @@ test('holding destination content writes the status, notification, and unread co
     increment: (value) => ({ increment: value }),
     serverTimestamp: () => 'server-time',
   };
-  const patch = { status: 'moderation_hold', updatedAt: 'server-time' };
+  const patch = {
+    status: 'moderation_hold',
+    moderation: {
+      holdReason: 'destination_policy_review',
+      systemGate: 'destination_pending_approval',
+      destination: { countryId: 'IL', cityId: 'new-city' },
+    },
+    updatedAt: 'server-time',
+  };
 
   await holdDestinationContentDocuments({
     admin: { firestore },
@@ -653,6 +662,8 @@ test('holding destination content writes the status, notification, and unread co
   const notificationWrite = writes.find((write) => write.path.startsWith('users/owner-1/notifications/'));
   assert.equal(notificationWrite.value.schemaVersion, 2);
   assert.equal(notificationWrite.value.subtype, 'content_held');
+  assert.match(notificationWrite.value.message, /ניר דוד/u);
+  assert.equal(notificationWrite.value.createdAt, 'server-time');
   assert.equal(notificationWrite.value.target.id, 'post-1');
   assert.deepEqual(notificationWrite.value.target.thumbUrls, ['https://example.com/photo.jpg']);
   const stateWrite = writes.find((write) => write.path === 'users/owner-1/notificationState/state');
@@ -670,6 +681,7 @@ test('holding destination content writes the status, notification, and unread co
 test('destination approval release is idempotent and fails closed while another route destination is pending', async () => {
   const DELETE = Symbol('delete');
   const documents = new Map(Object.entries({
+    'users/owner': {},
     'countries/IL': { status: 'active', code: 'IL' },
     'countries/IL/destinations/new-city': {
       status: 'active',
@@ -691,9 +703,16 @@ test('destination approval release is idempotent and fails closed while another 
       },
     },
     'recommendations/rec-release': {
-      ownerId: 'owner', status: 'moderation_hold', destination: { countryId: 'IL', cityId: 'new-city' },
+      ownerId: 'owner', status: 'moderation_hold', destination: { countryId: 'IL', cityId: 'new-city', cityName: 'ניר דוד' },
       moderation: {
         holdReason: 'destination_pending_approval', systemGate: 'destination_pending_approval',
+        destination: { countryId: 'IL', cityId: 'new-city' },
+      },
+    },
+    'recommendations/rec-policy-review': {
+      ownerId: 'owner', status: 'moderation_hold', destination: { countryId: 'IL', cityId: 'new-city', cityName: 'ניר דוד' },
+      moderation: {
+        holdReason: 'destination_policy_review', systemGate: 'destination_pending_approval',
         destination: { countryId: 'IL', cityId: 'new-city' },
       },
     },
@@ -784,19 +803,38 @@ test('destination approval release is idempotent and fails closed while another 
   const admin = { firestore };
 
   const first = await releaseDestinationPendingContent({ admin, countryId: 'IL', cityId: 'new-city' });
-  assert.deepEqual(first.released, { recommendations: 1, trips: 0, routes: 0 });
+  assert.deepEqual(first.released, { recommendations: 2, trips: 0, routes: 0 });
   assert.equal(documents.get('recommendations/rec-release').status, 'active');
+  assert.equal(documents.get('recommendations/rec-policy-review').status, 'active');
   assert.deepEqual(documents.get('recommendations/rec-release').publicationGate, {
     destinationApprovalVerified: true,
   });
   assert.equal(Object.hasOwn(documents.get('recommendations/rec-release'), 'moderation'), false);
   assert.equal(documents.get('recommendations/rec-text-hold').status, 'moderation_hold');
   assert.equal(documents.get('routes/route-still-pending').status, 'moderation_hold');
-  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 1);
+  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 2);
+  const restoredNotifications = [...documents.entries()]
+    .filter(([path, value]) => path.startsWith('users/owner/notifications/') && value.subtype === 'content_restored');
+  assert.equal(restoredNotifications.length, 2);
+  assert.match(restoredNotifications[0][1].message, /ניר דוד/u);
+  assert.equal(restoredNotifications[0][1].createdAt, 'server-time');
 
+  documents.set('recommendations/rec-late-policy-review', {
+    ownerId: 'owner', status: 'moderation_hold', destination: { countryId: 'IL', cityId: 'new-city', cityName: 'ניר דוד' },
+    moderation: {
+      holdReason: 'destination_policy_review', systemGate: 'destination_pending_approval',
+      destination: { countryId: 'IL', cityId: 'new-city' },
+    },
+  });
   const second = await releaseDestinationPendingContent({ admin, countryId: 'IL', cityId: 'new-city' });
-  assert.equal(second.replay, true);
-  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 1);
+  assert.equal(second.reconciled, true);
+  assert.deepEqual(second.newlyReleased, { recommendations: 1, trips: 0, routes: 0 });
+  assert.equal(documents.get('recommendations/rec-late-policy-review').status, 'active');
+  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 3);
+
+  const third = await releaseDestinationPendingContent({ admin, countryId: 'IL', cityId: 'new-city' });
+  assert.equal(third.replay, true);
+  assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 3);
 });
 
 test('airport candidates are bounded, sorted and distance annotated', () => {

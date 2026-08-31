@@ -443,11 +443,17 @@ function stageNotificationActivity({
   const pushVersion = activityVersion == null
     ? nextPushVersion(existingSnapshot)
     : cleanActivityVersion(activityVersion);
+  const createdAt = notification?.createdAt || admin.firestore.FieldValue.serverTimestamp();
   const document = buildNotificationDocument({
     ...notification,
-    createdAt: notification?.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: undefined,
     pushVersion,
   });
+  // FieldValue transforms do not expose enumerable properties. Passing one
+  // through compactObject() turns it into {}, which makes notification ordering
+  // and push delivery unreliable. Attach the timestamp after sanitization so
+  // Firestore receives the original Timestamp or server transform.
+  document.createdAt = createdAt;
   transaction.set(notificationRef, document);
   adjustUnreadCounter({
     transaction,
