@@ -132,3 +132,35 @@ test('release-candidate builds require production crash reporting', () => {
     assert.throws(() => configureApp({ config: {} }), /crash-reporting configuration/);
   });
 });
+
+test('native Maps keys use the SDK 57 react-native-maps config plugin only', () => {
+  withEnvironment(productionEnvironment({
+    GOOGLE_MAPS_IOS_KEY: 'ios-public-key',
+    GOOGLE_MAPS_ANDROID_KEY: 'android-public-key',
+    EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
+    SENTRY_ORG: 'planli',
+    SENTRY_PROJECT: 'mobile',
+    SENTRY_AUTH_TOKEN: 'build-token',
+  }), () => {
+    const resolved = configureApp({
+      config: {
+        plugins: ['expo-font', 'react-native-maps'],
+        ios: {},
+        android: {},
+      },
+    });
+    const mapsPlugins = resolved.plugins.filter((plugin) => (
+      (Array.isArray(plugin) ? plugin[0] : plugin) === 'react-native-maps'
+    ));
+
+    assert.deepEqual(mapsPlugins, [[
+      'react-native-maps',
+      {
+        iosGoogleMapsApiKey: 'ios-public-key',
+        androidGoogleMapsApiKey: 'android-public-key',
+      },
+    ]]);
+    assert.equal(resolved.ios.config?.googleMapsApiKey, undefined);
+    assert.equal(resolved.android.config?.googleMaps, undefined);
+  });
+});

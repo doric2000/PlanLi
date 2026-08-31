@@ -160,8 +160,23 @@ function configureApp({ config }) {
     }
   }
 
+  const plugins = (config.plugins || []).filter((plugin) => {
+    const name = Array.isArray(plugin) ? plugin[0] : plugin;
+    return name !== 'react-native-maps';
+  });
+
   return {
     ...config,
+    plugins: [
+      ...plugins,
+      [
+        'react-native-maps',
+        {
+          ...(iosKey ? { iosGoogleMapsApiKey: iosKey } : {}),
+          ...(androidKey ? { androidGoogleMapsApiKey: androidKey } : {}),
+        },
+      ],
+    ],
     experiments: {
       ...(config.experiments || {}),
       ...(process.env.PLANLI_ADMIN_WEB === 'true' ? { baseUrl: '/admin' } : {}),
@@ -169,14 +184,10 @@ function configureApp({ config }) {
     ios: {
       ...config.ios,
       ...(protectedNativeFiles ? { googleServicesFile: protectedNativeFiles.iosPath } : {}),
-      ...(iosKey ? { config: { ...(config.ios?.config || {}), googleMapsApiKey: iosKey } } : {}),
     },
     android: {
       ...config.android,
       ...(protectedNativeFiles ? { googleServicesFile: protectedNativeFiles.androidPath } : {}),
-      ...(androidKey
-        ? { config: { ...(config.android?.config || {}), googleMaps: { apiKey: androidKey } } }
-        : {}),
     },
   };
 }
