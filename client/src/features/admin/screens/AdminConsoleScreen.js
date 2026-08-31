@@ -168,7 +168,7 @@ export default function AdminConsoleScreen({ navigation, route }) {
         <View style={styles.main}>
           <View style={styles.topbar}><View><AppText style={styles.title}>{active.label}</AppText><AppText style={styles.subtitle}>ניהול הקהילה, התוכן והמקומות בעברית ובמקום אחד</AppText></View><View style={styles.secureBadge}><Ionicons name="shield-checkmark-outline" size={17} color="#027A48" /><AppText style={styles.secureBadgeText}>גישה מאובטחת</AppText></View></View>
           {!wide ? <View style={styles.mobileNavScroll} accessibilityRole="tablist"><View style={styles.mobileNav}>{ADMIN_SECTIONS.map((item) => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: section === item.id }} accessibilityLabel={`פתיחת ${item.label}`} testID={`admin-tab-${item.id}`} style={({ pressed }) => [styles.mobileNavItem, section === item.id && styles.mobileNavItemActive, pressed && styles.cardPressed]} onPress={() => navigate(item.id)}><Ionicons name={item.icon} size={18} color={section === item.id ? '#FFFFFF' : '#475467'} /><AppText numberOfLines={1} style={[styles.mobileNavText, section === item.id && styles.mobileNavTextActive]}>{item.label}</AppText></Pressable>)}</View></View> : null}
-          {section === 'queue' ? <View style={styles.mainBodyQueue}>{body}</View> : <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainBody} keyboardShouldPersistTaps="handled">{body}</ScrollView>}
+          {section === 'queue' ? <View style={styles.mainBodyQueue}>{body}</View> : <ScrollView testID="admin-section-scroll" style={styles.mainScroll} contentContainerStyle={styles.mainBody} keyboardShouldPersistTaps="handled">{body}</ScrollView>}
         </View>
       </View>
     </SafeAreaView>
