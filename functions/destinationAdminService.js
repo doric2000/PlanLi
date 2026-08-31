@@ -35,6 +35,7 @@ const {
   REGISTRY_VERSION,
   clearRegistryCache,
   destinationTypeForKind,
+  isValidRegistryId,
   legacyRegistryId,
   registryCollectionIssues,
   validateRegistryEntry,
@@ -520,9 +521,10 @@ function selectDestinationPolicyRegistryBinding({
   registryEntries,
 }) {
   const providerPlaceId = destinationProviderPlaceId(currentCity);
-  const preferredRegistryId = String(
-    currentCity?.canonicalPolicy?.registryId || fallbackRegistryId || ''
-  ).trim();
+  const previousRegistryId = String(currentCity?.canonicalPolicy?.registryId || '').trim();
+  const preferredRegistryId = isValidRegistryId(previousRegistryId)
+    ? previousRegistryId
+    : String(fallbackRegistryId || '').trim();
   const normalizedCountryCode = String(countryCode || '').trim().toUpperCase();
   const entries = Array.isArray(registryEntries) ? registryEntries : [];
   const byId = new Map(entries.map((entry) => [String(entry?.id || '').trim(), entry]));
@@ -566,7 +568,7 @@ function selectDestinationPolicyRegistryBinding({
     registryId,
     existingEntry: selectedEntry,
     adoptedExistingProvider: Boolean(primaryOwner && primaryOwner.id !== preferredRegistryId),
-    previousRegistryId: preferredRegistryId || null,
+    previousRegistryId: previousRegistryId || null,
     fingerprint: JSON.stringify({
       registryId,
       providerPlaceId,

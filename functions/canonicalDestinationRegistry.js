@@ -87,6 +87,10 @@ function legacyRegistryId(countryCode, countryId, cityId) {
   return `${prefix}-legacy-${digest}`;
 }
 
+function isValidRegistryId(value) {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(String(value || ''));
+}
+
 function viewportDiagonalKm(viewport) {
   const southwest = viewport?.southwest;
   const northeast = viewport?.northeast;
@@ -286,7 +290,7 @@ function validateRegistryEntry(entry, {
 } = {}) {
   const normalized = normalizeEntry(entry);
   const errors = [];
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(String(normalized.id || ''))) errors.push('invalid_id');
+  if (!isValidRegistryId(normalized.id)) errors.push('invalid_id');
   if (!/^[A-Z]{2}$/.test(normalized.countryCode)) errors.push('invalid_country_code');
   if (!normalized.names?.he || !/[\u0590-\u05ff]/.test(normalized.names.he)) errors.push('invalid_hebrew_name');
   if (!normalized.names?.en) errors.push('missing_english_name');
@@ -610,6 +614,7 @@ module.exports = {
   clearRegistryCache,
   destinationTypeForKind,
   entryContainsPoint,
+  isValidRegistryId,
   matchCanonicalEntry,
   normalizeEntry,
   providerIdentityNameMatches,

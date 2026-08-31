@@ -396,6 +396,19 @@ test('destination policy keeps new provider behavior when no canonical owner exi
   assert.deepEqual(plan.writeData.googleTypes, ['locality', 'political']);
 });
 
+test('destination policy replaces an invalid unowned provisional registry ID with the valid fallback', () => {
+  const fixture = policyBindingFixture({
+    countryCode: 'AL',
+    fallbackRegistryId: 'al-legacy-0123456789abcdef',
+    currentCity: { canonicalPolicy: { registryId: 'al-legacy-bad_id' } },
+  });
+  const binding = selectDestinationPolicyRegistryBinding(fixture);
+  assert.equal(binding.issue, undefined);
+  assert.equal(binding.registryId, 'al-legacy-0123456789abcdef');
+  assert.equal(binding.previousRegistryId, 'al-legacy-bad_id');
+  assert.equal(binding.existingEntry, null);
+});
+
 test('destination policy aborts when an adopted provider owner disappears during the hold window', () => {
   const owner = researchedRegistryEntry();
   const fixture = policyBindingFixture({ registryEntries: [owner] });
