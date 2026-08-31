@@ -9,6 +9,31 @@ track; it has not been publicly released to the App Store, Google Play, or a
 public web domain. Native development is performed with an installed, signed EAS
 Development Build connected to Metro. Expo Go is not supported.
 
+### Destination-held recommendation recovery
+
+At `2026-08-31T19:42:41Z`, the destination-review recovery from merged PR
+[#293](https://github.com/doric2000/PlanLi/pull/293) was deployed to production
+from source commit `e32e3082b44cd3454b5abe5dd849867053275c09`. The targeted Functions
+release updated `getAdminResource`, `listHeldContent`, `resolveModerationCase`,
+and `approveDestination` in `europe-west1`; Firebase Hosting then released the
+matching admin export at `https://planli-f0b12.web.app/admin/`. Independent
+read-back found all four Functions `ACTIVE` with the expected core/media service
+accounts, all four unauthenticated callable probes were rejected with HTTP 401
+before mutation, and the post-deploy Cloud Run error query returned zero entries.
+The live admin URL returned HTTP 200, its `index.html` SHA-256 matched the local
+export (`96833d17abde1ebf5b16ad6feebabcc6e345b66944fc3dac5e51493f7ed6a8f1`),
+and a browser smoke test rendered the Hebrew login screen with no runtime errors.
+
+The production repair tools were exercised in dry-run mode only. The destination
+release manifest found exactly one eligible held record,
+`recommendations/rec_eXIfDUNwRW6F5vuQdngL`, linked to active approved destination
+`IL/dst_Wd15YlgNlJoLR_fqIwxX`; the notification manifest scanned 41 rows and
+found 37 legacy schema-v2 rows with malformed `createdAt`, with no truncation.
+No production data repair was applied because deployment authorization does not
+authorize a migration. The recommendation therefore remains on
+`moderation_hold` until the reviewed fingerprint-bound repair receives separate
+explicit apply authorization.
+
 ### Rollback-bucket security containment
 
 At `2026-08-28T20:57:37Z`, the retired US bucket
