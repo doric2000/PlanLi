@@ -24,15 +24,20 @@ The live admin URL returned HTTP 200, its `index.html` SHA-256 matched the local
 export (`96833d17abde1ebf5b16ad6feebabcc6e345b66944fc3dac5e51493f7ed6a8f1`),
 and a browser smoke test rendered the Hebrew login screen with no runtime errors.
 
-The production repair tools were exercised in dry-run mode only. The destination
+The production repair tools were first exercised in dry-run mode. The destination
 release manifest found exactly one eligible held record,
 `recommendations/rec_eXIfDUNwRW6F5vuQdngL`, linked to active approved destination
 `IL/dst_Wd15YlgNlJoLR_fqIwxX`; the notification manifest scanned 41 rows and
 found 37 legacy schema-v2 rows with malformed `createdAt`, with no truncation.
-No production data repair was applied because deployment authorization does not
-authorize a migration. The recommendation therefore remains on
-`moderation_hold` until the reviewed fingerprint-bound repair receives separate
-explicit apply authorization.
+Under separate explicit production apply authorization on `2026-08-31`, the
+fingerprint-bound notification repair updated and verified all 37 rows. The
+destination repair then reconciled operation
+`SAbDRmK1XVsINS9H7isQWyDG79VZPJscphJcaosOfsI`, released only the one expected
+recommendation at `2026-08-31T19:53:02.635Z`, removed its moderation hold, set
+`publicationGate.destinationApprovalVerified` to `true`, and created a
+`content_restored` owner notification with a real Firestore Timestamp. Independent
+read-back confirmed the recommendation is `active`; repeated dry-runs returned
+zero eligible held records and zero malformed notification timestamps.
 
 ### Rollback-bucket security containment
 
