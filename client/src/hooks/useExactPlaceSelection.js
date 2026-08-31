@@ -162,7 +162,27 @@ export default function useExactPlaceSelection({
     if (hadConfirmedSelection) onChange?.(null);
   }, [onChange, selectedCity, selectedCountry, selectedPlace]);
 
-  const handleSelectGooglePlace = useCallback(async (selection) => {
+  const commitResolvedLocation = useCallback((nextValue, fallbackQuery = '') => {
+    if (!nextValue) return null;
+    const country = countryForValue(nextValue);
+    const city = cityForValue(nextValue);
+    const place = nextValue.place || null;
+    if (!country?.id || !city?.id || !place?.placeId) return null;
+    setSelectedCountry(country);
+    setSelectedCity(city);
+    setSelectedPlace(place);
+    setPendingLocation(null);
+    setDestinationChoice(null);
+    setLastSelection(null);
+    setLocationResolveError(null);
+    setLocationResolveRetryable(false);
+    setLocationQuery(place.name || place.address || city.name || fallbackQuery);
+    const confirmed = buildExactPlaceValue(country, city, place);
+    onChange?.(confirmed);
+    return confirmed;
+  }, [onChange]);
+
+  const handleSelectGooglePlace = useCallback(async (selection, { autoConfirm = false } = {}) => {
     const generation = ++resolutionGenerationRef.current;
     setLastSelection(selection);
     setResolvingLocation(true);
@@ -191,9 +211,12 @@ export default function useExactPlaceSelection({
               preferredResult.destination.city,
               preferredResult.place
             );
-            setPendingLocation(preferredValue);
-            setDestinationChoice(null);
-            setLocationQuery(preferredResult.place?.name || preferredResult.place?.address || locationQuery);
+            if (autoConfirm) commitResolvedLocation(preferredValue, locationQuery);
+            else {
+              setPendingLocation(preferredValue);
+              setDestinationChoice(null);
+              setLocationQuery(preferredResult.place?.name || preferredResult.place?.address || locationQuery);
+            }
             return preferredValue;
           } catch {
             // The preferred route destination is only a quiet shortcut. Country
@@ -210,9 +233,12 @@ export default function useExactPlaceSelection({
         result.destination.city,
         result.place
       );
-      setPendingLocation(nextValue);
-      setDestinationChoice(null);
-      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      if (autoConfirm) commitResolvedLocation(nextValue, locationQuery);
+      else {
+        setPendingLocation(nextValue);
+        setDestinationChoice(null);
+        setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      }
       return nextValue;
     } catch (error) {
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
@@ -229,25 +255,12 @@ export default function useExactPlaceSelection({
         setResolvingLocation(false);
       }
     }
-  }, [locale, locationQuery, preferredDestination]);
+  }, [commitResolvedLocation, locale, locationQuery, preferredDestination]);
 
   const confirmPendingLocation = useCallback(() => {
     if (!pendingLocation) return null;
-    const country = countryForValue(pendingLocation);
-    const city = cityForValue(pendingLocation);
-    const place = pendingLocation.place || null;
-    setSelectedCountry(country);
-    setSelectedCity(city);
-    setSelectedPlace(place);
-    setPendingLocation(null);
-    setLastSelection(null);
-    setLocationResolveError(null);
-    setLocationResolveRetryable(false);
-    setLocationQuery(place?.name || place?.address || city?.name || locationQuery);
-    const confirmed = buildExactPlaceValue(country, city, place);
-    onChange?.(confirmed);
-    return confirmed;
-  }, [locationQuery, onChange, pendingLocation]);
+    return commitResolvedLocation(pendingLocation, locationQuery);
+  }, [commitResolvedLocation, locationQuery, pendingLocation]);
 
   const chooseAnotherLocation = useCallback(() => {
     resolutionGenerationRef.current += 1;
@@ -259,7 +272,7 @@ export default function useExactPlaceSelection({
     setResolvingLocation(false);
   }, []);
 
-  const chooseDestination = useCallback(async (destinationChoiceId) => {
+  const chooseDestination = useCallback(async (destinationChoiceId, { autoConfirm = false } = {}) => {
     if (!destinationChoice?.resolutionId || !destinationChoiceId) return null;
     const generation = ++resolutionGenerationRef.current;
     setResolvingLocation(true);
@@ -300,9 +313,12 @@ export default function useExactPlaceSelection({
         result.destination.city,
         result.place
       );
-      setPendingLocation(nextValue);
-      setDestinationChoice(null);
-      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      if (autoConfirm) commitResolvedLocation(nextValue, locationQuery);
+      else {
+        setPendingLocation(nextValue);
+        setDestinationChoice(null);
+        setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      }
       return nextValue;
     } catch (error) {
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
@@ -317,9 +333,9 @@ export default function useExactPlaceSelection({
         setResolvingLocation(false);
       }
     }
-  }, [destinationChoice, lastSelection, locale, locationQuery]);
+  }, [commitResolvedLocation, destinationChoice, lastSelection, locale, locationQuery]);
 
-  const chooseFallbackDestination = useCallback(async (destination) => {
+  const chooseFallbackDestination = useCallback(async (destination, { autoConfirm = false } = {}) => {
     if (!destinationChoice?.resolutionId || !destination?.countryId || !destination?.cityId) return null;
     const generation = ++resolutionGenerationRef.current;
     setResolvingLocation(true);
@@ -358,9 +374,12 @@ export default function useExactPlaceSelection({
         result.destination.city,
         result.place
       );
-      setPendingLocation(nextValue);
-      setDestinationChoice(null);
-      setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      if (autoConfirm) commitResolvedLocation(nextValue, locationQuery);
+      else {
+        setPendingLocation(nextValue);
+        setDestinationChoice(null);
+        setLocationQuery(result.place?.name || result.place?.address || locationQuery);
+      }
       return nextValue;
     } catch (error) {
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
@@ -375,11 +394,11 @@ export default function useExactPlaceSelection({
         setResolvingLocation(false);
       }
     }
-  }, [destinationChoice, lastSelection, locale, locationQuery]);
+  }, [commitResolvedLocation, destinationChoice, lastSelection, locale, locationQuery]);
 
-  const retryLocationResolution = useCallback(() => {
+  const retryLocationResolution = useCallback((options) => {
     if (!lastSelection) return Promise.resolve(null);
-    return handleSelectGooglePlace(lastSelection);
+    return handleSelectGooglePlace(lastSelection, options);
   }, [handleSelectGooglePlace, lastSelection]);
 
   const googleSearchFn = useCallback(

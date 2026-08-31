@@ -52,6 +52,7 @@ export default function GooglePlacesInput({
   error = false,
   returnSelection = false,
   locale = 'he',
+  showSearchErrors = true,
 }) {
   const copy = locationCopy(locale);
   const formVariant = variant === 'form';
@@ -73,23 +74,18 @@ export default function GooglePlacesInput({
 
   const [settledQuery, setSettledQuery] = useState('');
 
-  // In local-first mode, we only hit Google if:
-  // - user stopped typing for googleFallbackDelayMs
-  // - query is long enough
-  // - no local matches
-  const googleFallbackTimerRef = useRef(null);
+  // In local-first mode, Google is triggered only for a long-enough query
+  // with no local matches. The request effect below owns the only debounce.
   const [googleTriggerQuery, setGoogleTriggerQuery] = useState('');
   const [googleSearchGeneration, setGoogleSearchGeneration] = useState(0);
   const latestSearchGenerationRef = useRef(0);
 
   // Aggressive call reduction:
   // - Debounce (wait for user to pause typing)
-  // - Cooldown (hard limit max request rate)
   // - Cache (reuse results for repeated queries)
   // - Abort in-flight requests when query changes
   const debounceTimer = useRef(null);
   const lastRequestedQuery = useRef('');
-  const lastRequestAt = useRef(0);
   const cacheRef = useRef(new Map());
   const abortRef = useRef(null);
   const blurTimerRef = useRef(null);
@@ -98,8 +94,6 @@ export default function GooglePlacesInput({
   const [dropdownAnchor, setDropdownAnchor] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
   const MIN_QUERY_LENGTH = 3;
-  const DEBOUNCE_MS = 650;
-  const COOLDOWN_MS = 1200;
   const LOCAL_MIN_QUERY_LENGTH = 2;
 
   const resolvedGoogleSearchFn = typeof googleSearchFn === 'function' ? googleSearchFn : searchCities;
@@ -141,17 +135,17 @@ export default function GooglePlacesInput({
 
   const handleTextChange = (text) => {
     setSearchError(null);
+    // Keep typing responsive even when the parent is controlled and needs a
+    // render to clear an earlier place selection. The external value remains
+    // authoritative for later hydration, but it must not lag behind a keypress.
+    setQuery(text);
     if (explicitSearch) {
       latestSearchGenerationRef.current += 1;
       setHasSearched(false);
       setPredictions([]);
       setGoogleTriggerQuery('');
     }
-    if (isControlled) {
-      onChangeValue(text);
-    } else {
-      setQuery(text);
-    }
+    if (isControlled) onChangeValue(text);
     setShowList(true);
   };
 
@@ -174,10 +168,6 @@ export default function GooglePlacesInput({
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
-    }
-    if (googleFallbackTimerRef.current) {
-      clearTimeout(googleFallbackTimerRef.current);
-      googleFallbackTimerRef.current = null;
     }
     if (abortRef.current) {
       abortRef.current.abort();
@@ -221,17 +211,11 @@ export default function GooglePlacesInput({
     };
   }, [isGoogleMode, query]);
 
-  // Local-first: automatically enable Google fallback only after user stops typing for a while
-  // and there are no local matches.
+  // Local-first: arm the single Google debounce only when local search has no match.
   useEffect(() => {
     if (explicitSearch) return undefined;
     const text = query.trim();
     const searchKey = compactDestinationText(text);
-
-    if (googleFallbackTimerRef.current) {
-      clearTimeout(googleFallbackTimerRef.current);
-      googleFallbackTimerRef.current = null;
-    }
 
     setGoogleTriggerQuery('');
     if (abortRef.current) abortRef.current.abort();
@@ -244,20 +228,12 @@ export default function GooglePlacesInput({
     if (normalizedLocalResults.length > 0) return;
     if (typeof onSelect !== 'function') return;
 
-    googleFallbackTimerRef.current = setTimeout(() => {
-      const generation = latestSearchGenerationRef.current + 1;
-      latestSearchGenerationRef.current = generation;
-      setGoogleTriggerQuery(text);
-      setGoogleSearchGeneration(generation);
-    }, googleFallbackDelayMs);
-
-    return () => {
-      if (googleFallbackTimerRef.current) {
-        clearTimeout(googleFallbackTimerRef.current);
-        googleFallbackTimerRef.current = null;
-      }
-    };
-  }, [explicitSearch, query, showList, normalizedLocalResults.length, localResultsLoading, googleFallbackDelayMs, onSelect]);
+    const generation = latestSearchGenerationRef.current + 1;
+    latestSearchGenerationRef.current = generation;
+    setGoogleTriggerQuery(text);
+    setGoogleSearchGeneration(generation);
+    return undefined;
+  }, [explicitSearch, query, showList, normalizedLocalResults.length, localResultsLoading, onSelect]);
 
   useEffect(() => {
     if (!isGoogleMode) {
@@ -295,11 +271,9 @@ export default function GooglePlacesInput({
 
     setLoading(true);
 
-    const now = Date.now();
-    const timeSinceLast = now - lastRequestAt.current;
     const delay = explicitSearch
       ? 0
-      : Math.max(DEBOUNCE_MS, timeSinceLast < COOLDOWN_MS ? COOLDOWN_MS - timeSinceLast : 0);
+      : Math.max(0, Number(googleFallbackDelayMs) || 0);
 
     debounceTimer.current = setTimeout(async () => {
       const requestGeneration = googleSearchGeneration;
@@ -307,7 +281,6 @@ export default function GooglePlacesInput({
         if (abortRef.current) abortRef.current.abort();
         abortRef.current = new AbortController();
 
-        lastRequestAt.current = Date.now();
         lastRequestedQuery.current = text;
 
         const results = await resolvedGoogleSearchFn(text, { signal: abortRef.current.signal });
@@ -329,7 +302,9 @@ export default function GooglePlacesInput({
         if (requestGeneration === latestSearchGenerationRef.current) setLoading(false);
       }
     }, delay);
-  }, [explicitSearch, googleSearchGeneration, isGoogleMode, googleTriggerQuery, locale, showList]);
+  }, [explicitSearch, googleFallbackDelayMs, googleSearchGeneration, isGoogleMode, googleTriggerQuery, locale, showList]);
+
+  const visibleSearchError = showSearchErrors ? searchError : null;
 
   const showIdleLocalResults =
     showList &&
@@ -340,7 +315,7 @@ export default function GooglePlacesInput({
   const normalizedQueryLength = compactDestinationText(query).length;
 
   const shouldShowAnyDropdown = explicitSearch
-    ? showList && (loading || !!searchError || predictions.length > 0 || hasSearched)
+    ? showList && (loading || !!visibleSearchError || predictions.length > 0 || hasSearched)
     : showIdleLocalResults || (
     showList &&
     normalizedQueryLength >= (
@@ -378,11 +353,8 @@ export default function GooglePlacesInput({
 
   const handleSelect = (place) => {
     settleSearchAfterSelection();
-    if (isControlled) {
-      onChangeValue(place.description);
-    } else {
-      setQuery(place.description);
-    }
+    setQuery(place.description);
+    if (isControlled) onChangeValue(place.description);
     setInputFocused(false);
     setShowList(false);
     onSelect(returnSelection ? place : place.place_id);
@@ -391,11 +363,8 @@ export default function GooglePlacesInput({
   const handleSelectLocal = (city) => {
     settleSearchAfterSelection();
     const label = city?.name || city?.description || '';
-    if (isControlled) {
-      onChangeValue(label);
-    } else {
-      setQuery(label);
-    }
+    setQuery(label);
+    if (isControlled) onChangeValue(label);
     setInputFocused(false);
     setShowList(false);
     if (typeof onSelectLocal === 'function') {
@@ -425,7 +394,7 @@ export default function GooglePlacesInput({
           explicitSearch && googlePlacesInput.explicitInputWrapper,
           formVariant && googlePlacesInput.formInputWrapper,
           formVariant && inputFocused && googlePlacesInput.formInputWrapperFocused,
-          formVariant && (error || searchError) && googlePlacesInput.formInputWrapperError,
+          formVariant && (error || visibleSearchError) && googlePlacesInput.formInputWrapperError,
           inputWrapperStyle,
         ]}
       >
@@ -581,10 +550,10 @@ export default function GooglePlacesInput({
               <ActivityIndicator size="small" color={colors.primary} />
               <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
             </View>
-          ) : searchError ? (
+          ) : visibleSearchError ? (
             <View style={googlePlacesInput.dropdownStatusRow}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.error || '#991B1B'} />
-              <AppText style={googlePlacesInput.dropdownStatusText}>{searchError}</AppText>
+              <AppText style={googlePlacesInput.dropdownStatusText}>{visibleSearchError}</AppText>
             </View>
           ) : predictions.length > 0 ? (
             <ScrollView keyboardShouldPersistTaps="handled">
@@ -697,10 +666,10 @@ export default function GooglePlacesInput({
                 <ActivityIndicator size="small" color={colors.primary} />
                 <AppText style={googlePlacesInput.dropdownStatusText}>{copy.loading}</AppText>
               </View>
-            ) : searchError ? (
+            ) : visibleSearchError ? (
               <View style={googlePlacesInput.dropdownStatusRow}>
                 <Ionicons name="alert-circle-outline" size={16} color={colors.error || '#991B1B'} />
-                <AppText style={googlePlacesInput.dropdownStatusText}>{searchError}</AppText>
+                <AppText style={googlePlacesInput.dropdownStatusText}>{visibleSearchError}</AppText>
               </View>
             ) : predictions.length > 0 ? (
               <ScrollView keyboardShouldPersistTaps="handled">

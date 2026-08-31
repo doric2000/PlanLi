@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { FlatList, Linking } from 'react-native';
+import { FlatList, Linking, StyleSheet } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 import TravelMediaComposer, { isTravelMediaSwipe } from '../src/components/TravelMediaComposer';
@@ -55,6 +55,22 @@ jest.mock('react-native-reanimated', () => {
     useSharedValue: (value) => ReactModule.useRef({ value }).current,
   };
 });
+jest.mock('react-native-draggable-flatlist', () => {
+  const ReactModule = require('react');
+  const { View } = require('react-native');
+  return {
+    NestableDraggableFlatList: ({ data, keyExtractor, renderItem, onDragEnd, testID, horizontal, inverted }) => (
+      <View testID={testID} onDragEnd={onDragEnd} horizontal={horizontal} inverted={inverted}>
+        {data.map((item, index) => (
+          <ReactModule.Fragment key={keyExtractor(item, index)}>
+            {renderItem({ item, getIndex: () => index, drag: jest.fn(), isActive: false })}
+          </ReactModule.Fragment>
+        ))}
+      </View>
+    ),
+    ScaleDecorator: ({ children }) => <>{children}</>,
+  };
+});
 
 const sourceAdapter = {
   kind: 'system-picker',
@@ -78,10 +94,71 @@ const sourceAdapter = {
 };
 
 beforeEach(() => {
+  jest.clearAllMocks();
   global.__travelMediaGestures = [];
 });
 
 const latestGesture = (type) => global.__travelMediaGestures.filter((gesture) => gesture.type === type).at(-1);
+
+test('embedded TravelMediaComposer opens the system gallery in one tap and updates inline', async () => {
+  const onChange = jest.fn();
+  const screen = render(
+    <TravelMediaComposer
+      embedded
+      visible
+      value={[]}
+      maxItems={5}
+      aspect={[1, 1]}
+      onChange={onChange}
+      sourceAdapter={sourceAdapter}
+    />
+  );
+
+  fireEvent.press(screen.getByTestId('travel-media-embedded-add'));
+
+  await waitFor(() => expect(sourceAdapter.pickMore).toHaveBeenCalledWith(5));
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith([
+    expect.objectContaining({ sourceId: 'picker-1' }),
+  ]));
+  expect(screen.getByTestId('travel-media-toggle-crop')).toBeTruthy();
+  expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('horizontal', true);
+  expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('inverted', true);
+  expect(StyleSheet.flatten(screen.getByTestId('travel-media-toggle-crop').props.style).minHeight).toBe(44);
+});
+
+test('embedded TravelMediaComposer commits long-press drag order without another save tap', () => {
+  const onChange = jest.fn();
+  const values = [1, 2, 3].map((index) => ({
+    id: `order-${index}`,
+    sourceId: `order-${index}`,
+    uri: `file:///order-${index}.jpg`,
+    previewUri: `file:///order-${index}.jpg`,
+    width: 1200,
+    height: 900,
+    persistence: 'ready',
+  }));
+  const screen = render(
+    <TravelMediaComposer
+      embedded
+      visible
+      value={values}
+      maxItems={5}
+      aspect={[1, 1]}
+      onChange={onChange}
+      sourceAdapter={sourceAdapter}
+    />
+  );
+
+  act(() => screen.getByTestId('travel-media-reorder-list').props.onDragEnd({
+    data: [values[2], values[0], values[1]],
+  }));
+
+  expect(onChange).toHaveBeenCalledWith([
+    expect.objectContaining({ sourceId: 'order-3' }),
+    expect.objectContaining({ sourceId: 'order-1' }),
+    expect.objectContaining({ sourceId: 'order-2' }),
+  ]);
+});
 
 test('TravelMediaComposer confirms the whole selection without manipulating an image', async () => {
   const onChange = jest.fn();

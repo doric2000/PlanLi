@@ -3,7 +3,7 @@ import { randomUUID } from 'expo-crypto';
 import {
   ActivityIndicator,
   Alert,
-  Image,
+  AppState,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -13,13 +13,14 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { NestableScrollContainer } from 'react-native-draggable-flatlist';
 
 import AppText from '../../../components/AppText';
 import { FormInput } from '../../../components/FormInput';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
 import GooglePlacesInput from '../../../components/GooglePlacesInput';
 import ExactLocationConfirmation from '../../../components/ExactLocationConfirmation';
-import { ImagePickerBox } from '../../../components/ImagePickerBox';
+import ExactLocationMapPreview from '../../../components/ExactLocationMapPreview';
 import TravelMediaComposer from '../../../components/TravelMediaComposer';
 import {
   RECOMMENDATION_CATEGORIES,
@@ -48,6 +49,7 @@ import {
   createTravelMediaDescriptor,
   queueMediaFromDescriptor,
   removedTravelMediaItems,
+  travelMediaIdentity,
   travelMediaUri,
 } from '../../../utils/travelMedia';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
@@ -62,19 +64,18 @@ import SingleDestinationPicker from '../components/SingleDestinationPicker';
 import { NoyaTourTarget, useNoyaTour } from '../../noya/NoyaTourContext';
 import { NOYA_CREATOR_TARGETS } from '../../noya/NoyaTourDefinitions';
 
-const STEP_COUNT = 4;
-const SAVE_DELAY_MS = 900;
+const SAVE_DELAY_MS = 2500;
 const LOCATION_MODES = {
   exact: 'exact',
   destination: 'destination',
   pin: 'pin',
 };
 const OPTIONAL_FIELDS = [
-  { id: 'contactName', label: 'איש קשר', placeholder: 'למשל: דנה מהקבלה', maxLength: 80 },
-  { id: 'phone', label: 'טלפון', placeholder: 'למשל: +36 20 123 4567', keyboardType: 'phone-pad', maxLength: 40 },
-  { id: 'externalUrl', label: 'קישור', placeholder: 'למשל: https://example.com', keyboardType: 'url', maxLength: 500 },
-  { id: 'priceNote', label: 'מחיר', placeholder: 'למשל: כ־45 ש״ח לאדם', maxLength: 120 },
-  { id: 'accessibilityNote', label: 'נגישות', placeholder: 'למשל: כניסה נגישה ומעלית', multiline: true, maxLength: 500 },
+  { id: 'contactName', label: 'איש קשר', placeholder: 'למשל: דנה מהקבלה או Alex 24/7', maxLength: 80, contentDirection: 'auto' },
+  { id: 'phone', label: 'טלפון', placeholder: 'למשל: +36 20 123 4567', keyboardType: 'phone-pad', maxLength: 40, contentDirection: 'ltr' },
+  { id: 'externalUrl', label: 'קישור', placeholder: 'למשל: https://example.com', keyboardType: 'url', maxLength: 500, contentDirection: 'ltr' },
+  { id: 'priceNote', label: 'מחיר', placeholder: 'למשל: כ־45 ש״ח לאדם', maxLength: 120, contentDirection: 'rtl' },
+  { id: 'accessibilityNote', label: 'נגישות', placeholder: 'למשל: כניסה נגישה ומעלית', multiline: true, maxLength: 500, contentDirection: 'rtl' },
 ];
 
 const categoryById = Object.fromEntries(RECOMMENDATION_CATEGORIES.map((item) => [item.id, item]));
@@ -140,6 +141,26 @@ export function recommendationDraftResumeStep(draft, mediaItems = []) {
     customSubcategoryLabel: draft?.customSubcategoryLabel || '',
   })) return 3;
   return 4;
+}
+
+export function mergeRecommendationDraftMedia(remoteItems = [], localItems = [], order = []) {
+  const allItems = [...remoteItems, ...localItems].filter(Boolean);
+  const itemsByIdentity = new Map(allItems.map((item) => [travelMediaIdentity(item), item]));
+  const merged = [];
+  const seen = new Set();
+  (order || []).forEach((identity) => {
+    const item = itemsByIdentity.get(String(identity));
+    if (!item || seen.has(String(identity))) return;
+    seen.add(String(identity));
+    merged.push(item);
+  });
+  allItems.forEach((item) => {
+    const identity = travelMediaIdentity(item);
+    if (!identity || seen.has(identity)) return;
+    seen.add(identity);
+    merged.push(item);
+  });
+  return merged.slice(0, 5);
 }
 
 function classificationSummary(categoryId, subcategoryIds) {
@@ -222,7 +243,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     restoreDraft: restoreDraftMedia,
     waitForMedia: waitForDraftMedia,
   } = useRecommendationDraftMedia();
-  const { requestCreatorStep, setTourSuspended } = useNoyaTour();
+  const { requestCreatorStep } = useNoyaTour();
 
   const [mode, setMode] = useState('loading');
   const [loadError, setLoadError] = useState('');
@@ -251,14 +272,20 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [activeOptionalField, setActiveOptionalField] = useState('');
   const [eventSchedule, setEventSchedule] = useState('');
   const [editableMedia, setEditableMedia] = useState([]);
-  const [mediaComposerVisible, setMediaComposerVisible] = useState(false);
+  const [showAlternativeLocations, setShowAlternativeLocations] = useState(false);
   const [validationMessage, setValidationMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const hydratedEditIdRef = useRef(null);
   const scrollViewRef = useRef(null);
+  const sectionOffsetsRef = useRef({});
   const focusedInputTargetRef = useRef(null);
+  const titleEditedByUserRef = useRef(false);
+  const classificationEditedByUserRef = useRef(false);
+  const lastAutofilledTitleRef = useRef('');
+  const adjustedExactLocationRef = useRef(null);
+  const dirtyRef = useRef(false);
   const draftIdRef = useRef('');
   const versionRef = useRef(0);
   const sourceRecommendationIdRef = useRef(requestedEditPostId || '');
@@ -277,36 +304,14 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const editPostId = sourceRecommendationId || null;
 
   useEffect(() => {
-    const reason = 'recommendation-media-composer';
-    setTourSuspended(reason, mediaComposerVisible);
-    return () => setTourSuspended(reason, false);
-  }, [mediaComposerVisible, setTourSuspended]);
-
-  useEffect(() => {
     if (mode !== 'editor' || isEdit || publishJobId) return;
-    const guideStepIndex = Math.max(0, Math.min(3, step - 1));
-    requestCreatorStep('recommendation', guideStepIndex, {
-      ...(guideStepIndex === 0 ? {
-        primaryAction: () => setMediaComposerVisible(true),
-        primaryLabel: 'בחירת תמונות',
-        suspendReason: 'recommendation-media-composer',
-      } : {}),
-    });
-  }, [isEdit, mode, publishJobId, requestCreatorStep, step]);
-
-  useEffect(() => {
-    if (mode !== 'editor') return undefined;
-    const timer = setTimeout(() => {
-      scrollViewRef.current?.scrollTo?.({ y: 0, animated: false });
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [mode, step]);
+    requestCreatorStep('recommendation', 0);
+  }, [isEdit, mode, publishJobId, requestCreatorStep]);
 
   const {
     chooseAnotherLocation,
     chooseDestination,
     chooseFallbackDestination,
-    confirmPendingLocation,
     destinationChoice,
     googleSearchFn,
     handleSelectGooglePlace,
@@ -324,27 +329,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     selectedPlace,
   } = useExactPlaceSelection();
 
-  const confirmExactLocationAndAdvance = useCallback(() => {
-    const confirmed = confirmPendingLocation();
-    if (!confirmed) return;
-    Keyboard.dismiss();
-    setValidationMessage('');
-    setStep((current) => current === 2 ? 3 : current);
-  }, [confirmPendingLocation]);
-
   const selectedCategory = categoryById[categoryId] || null;
   const selectedOther = subcategoryIds.some((id) => subcategoryById[id]?.isOther);
-  const locationDestination = generalDestination || (
-    selectedCountry?.id && selectedCity?.id
-      ? {
-          countryId: selectedCountry.id,
-          cityId: selectedCity.id,
-          countryName: selectedCountry.name,
-          name: selectedCity.name,
-        }
-      : null
-  );
-
   const classificationSuggestions = useMemo(() => {
     if (locationMode !== LOCATION_MODES.exact || dismissedSuggestion || !selectedPlace?.placeId) return [];
     return suggestClassificationFromGoogleTypes({
@@ -355,6 +341,71 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, [dismissedSuggestion, locationMode, selectedPlace]);
 
   const primarySuggestion = classificationSuggestions[0] || null;
+  const applyPlaceAutofill = useCallback((resolvedLocation) => {
+    const place = resolvedLocation?.place;
+    if (!place) return;
+    const placeTitle = String(place.name || '').trim();
+    if (placeTitle && !titleEditedByUserRef.current && (
+      !title.trim() || title === lastAutofilledTitleRef.current
+    )) {
+      setTitle(placeTitle);
+      lastAutofilledTitleRef.current = placeTitle;
+    }
+    if (!classificationEditedByUserRef.current) {
+      const [suggestion] = suggestClassificationFromGoogleTypes({
+        placeId: place.placeId,
+        primaryType: place.primaryType || place.primary_type || '',
+        types: place.types || [],
+      });
+      if (suggestion) {
+        setCategoryId(suggestion.categoryId);
+        setSubcategoryIds(suggestion.subcategoryIds);
+        setCustomSubcategoryLabel('');
+        setDismissedSuggestion(true);
+      }
+    }
+  }, [title]);
+
+  const selectExactPlace = useCallback(async (selection) => {
+    const resolved = await handleSelectGooglePlace(selection, { autoConfirm: true });
+    if (resolved) {
+      applyPlaceAutofill(resolved);
+      setShowAlternativeLocations(false);
+      setValidationMessage('');
+      adjustedExactLocationRef.current = null;
+    }
+    return resolved;
+  }, [applyPlaceAutofill, handleSelectGooglePlace]);
+
+  const selectResolvedDestination = useCallback(async (choiceId) => {
+    const resolved = await chooseDestination(choiceId, { autoConfirm: true });
+    if (resolved) {
+      applyPlaceAutofill(resolved);
+      setShowAlternativeLocations(false);
+      setValidationMessage('');
+    }
+    return resolved;
+  }, [applyPlaceAutofill, chooseDestination]);
+
+  const selectFallbackDestination = useCallback(async (destination) => {
+    const resolved = await chooseFallbackDestination(destination, { autoConfirm: true });
+    if (resolved) {
+      applyPlaceAutofill(resolved);
+      setShowAlternativeLocations(false);
+      setValidationMessage('');
+    }
+    return resolved;
+  }, [applyPlaceAutofill, chooseFallbackDestination]);
+
+  const retryExactLocation = useCallback(async () => {
+    const resolved = await retryLocationResolution({ autoConfirm: true });
+    if (resolved) {
+      applyPlaceAutofill(resolved);
+      setShowAlternativeLocations(false);
+      setValidationMessage('');
+    }
+    return resolved;
+  }, [applyPlaceAutofill, retryLocationResolution]);
   const popularSubcategories = useMemo(() => (
     (selectedCategory?.popularSubcategoryIds || [])
       .map((id) => subcategoryById[id])
@@ -370,12 +421,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, [allCategorySubcategories, categoryId, popularSubcategories, showAllSubcategories, subcategorySearch]);
 
   const editableImageUris = useMemo(() => editableMedia.map(travelMediaUri).filter(Boolean), [editableMedia]);
-  const previewUris = useMemo(() => editableMedia.map((item) => {
-    if (item.asset) return getMediaVariantUrl(item.asset, 'feed', travelMediaUri(item));
-    const uri = travelMediaUri(item);
-    const asset = findMediaAssetByUrl(sourceMedia, uri);
-    return asset ? getMediaVariantUrl(asset, 'feed', uri) : uri;
-  }), [editableMedia, sourceMedia]);
 
   const formComparable = useMemo(() => catalogFormComparable({
     locationMode,
@@ -421,6 +466,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const dirty = isEdit
     ? Boolean(editSnapshotBaseline && editSnapshotBaseline !== formComparable)
     : createDirty;
+  dirtyRef.current = dirty;
   const serverMedia = useMemo(() => editableImageUris
     .map((uri) => findMediaAssetByUrl(sourceMedia, uri))
     .filter(Boolean), [editableImageUris, sourceMedia]);
@@ -450,6 +496,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   ]);
   latestDraftRef.current = draftPayload;
   latestComparableRef.current = draftComparable;
+  const compatibilityStep = recommendationDraftResumeStep(draftPayload, editableMedia);
+
+  useEffect(() => {
+    setStep((current) => current === compatibilityStep ? current : compatibilityStep);
+  }, [compatibilityStep]);
 
   const persistSnapshot = useCallback((snapshot, comparable, {
     force = false,
@@ -693,6 +744,16 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     return () => clearTimeout(timer);
   }, [dirty, draftComparable, draftId, draftPayload, mode, persistSnapshot]);
 
+  useEffect(() => {
+    if (mode !== 'editor') return undefined;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (!['inactive', 'background'].includes(nextState)) return;
+      if (pauseAutosaveRef.current || (!draftIdRef.current && !dirtyRef.current)) return;
+      persistSnapshot(latestDraftRef.current, latestComparableRef.current).catch(() => {});
+    });
+    return () => subscription.remove();
+  }, [mode, persistSnapshot]);
+
   useEffect(() => () => {
     mountedRef.current = false;
     if (publishJobId && !publishHandoffRef.current && typeof endReview === 'function') {
@@ -742,6 +803,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setSubcategoryIds(Array.isArray(editItem.subcategoryIds) ? editItem.subcategoryIds : []);
     setCustomSubcategoryLabel(editItem.customSubcategoryLabel || '');
     setTitle(editItem.title || '');
+    classificationEditedByUserRef.current = Boolean(editItem.categoryId);
+    titleEditedByUserRef.current = Boolean(editItem.title);
+    lastAutofilledTitleRef.current = '';
     setDescription(editItem.description || '');
     setBudget(editItem.budget || '');
     setDetails(cleanDetails(initialDetails));
@@ -786,9 +850,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       place: prefill.place,
       query: prefill.place.name || prefill.destination.city?.name || '',
     });
-  }, [hydrateSelection, isEdit, route?.params?.prefillLocation]);
+    applyPlaceAutofill({ place: prefill.place });
+  }, [applyPlaceAutofill, hydrateSelection, isEdit, route?.params?.prefillLocation]);
 
-  const hydrateServerDraft = useCallback(async (draft, { localItems = null } = {}) => {
+  const hydrateServerDraft = useCallback(async (draft, { orderedItems = null } = {}) => {
     const remoteMedia = Array.isArray(draft.media) ? draft.media : [];
     const remoteItems = remoteMedia.map((asset) => createTravelMediaDescriptor({
       asset,
@@ -796,10 +861,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       sourceId: asset.assetId,
       uri: getMediaVariantUrl(asset, 'feed'),
     })).filter(Boolean);
-    const restored = localItems == null
+    const restored = orderedItems == null
       ? await restoreDraftMedia(draft.id, draft.localMediaCount)
-      : { items: localItems, missingCount: 0 };
-    const mediaItems = [...remoteItems, ...(restored.items || [])].slice(0, 5);
+      : { items: orderedItems, order: orderedItems.map(travelMediaIdentity), missingCount: 0 };
+    const mediaItems = orderedItems == null
+      ? mergeRecommendationDraftMedia(remoteItems, restored.items || [], restored.order || [])
+      : orderedItems.slice(0, 5);
     const imageUris = mediaItems.map(travelMediaUri);
     const nextSourceId = draft.sourceRecommendationId || '';
     draftIdRef.current = draft.id || '';
@@ -818,6 +885,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setSubcategoryIds(Array.isArray(draft.subcategoryIds) ? draft.subcategoryIds : []);
     setCustomSubcategoryLabel(draft.customSubcategoryLabel || '');
     setTitle(draft.title || '');
+    classificationEditedByUserRef.current = Boolean(draft.categoryId);
+    titleEditedByUserRef.current = Boolean(draft.title);
+    lastAutofilledTitleRef.current = '';
     setDescription(draft.description || '');
     setBudget(draft.budget || '');
     setDetails(cleanDetails(draft.details));
@@ -873,8 +943,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             version: job.payload.expectedVersion,
             sourceRecommendationId: job.payload.sourceRecommendationId || job.draft.sourceRecommendationId || null,
           }, {
-            localItems: (job.materializedMedia || [])
-              .filter((entry) => entry.type !== 'remote')
+            orderedItems: (job.materializedMedia || [])
               .map((entry) => createTravelMediaDescriptor(entry))
               .filter(Boolean),
           });
@@ -942,6 +1011,43 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     if (nextMode !== LOCATION_MODES.pin) setManualCoordinate(null);
   }, [generalDestination, hydrateSelection, locationMode]);
 
+  const adjustExactLocation = useCallback(() => {
+    const coordinate = normalizeManualCoordinate(selectedPlace?.coordinates || selectedPlace?.geometry?.location);
+    if (!coordinate || !selectedCountry?.id || !selectedCity?.id) return;
+    adjustedExactLocationRef.current = {
+      country: selectedCountry,
+      city: selectedCity,
+      place: selectedPlace,
+      query: locationQuery,
+    };
+    const destination = {
+      key: `city:${selectedCountry.id}:${selectedCity.id}`,
+      kind: 'city',
+      countryId: selectedCountry.id,
+      cityId: selectedCity.id,
+      countryName: selectedCountry.name,
+      name: selectedCity.name,
+      coordinates: { latitude: coordinate.lat, longitude: coordinate.lng },
+    };
+    setGeneralDestination(destination);
+    setManualCoordinate({ latitude: coordinate.lat, longitude: coordinate.lng });
+    setLocationMode(LOCATION_MODES.pin);
+    setShowAlternativeLocations(true);
+    hydrateSelection({ country: selectedCountry, city: selectedCity, place: null, query: selectedCity.name || '' });
+    setValidationMessage('');
+  }, [hydrateSelection, locationQuery, selectedCity, selectedCountry, selectedPlace]);
+
+  const restoreExactLocation = useCallback(() => {
+    const previous = adjustedExactLocationRef.current;
+    if (!previous) return;
+    setLocationMode(LOCATION_MODES.exact);
+    setGeneralDestination(null);
+    setManualCoordinate(null);
+    hydrateSelection(previous);
+    setShowAlternativeLocations(false);
+    setValidationMessage('');
+  }, [hydrateSelection]);
+
   const chooseGeneralDestination = useCallback((destination) => {
     setGeneralDestination(destination);
     setManualCoordinate(null);
@@ -956,6 +1062,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, [hydrateSelection]);
 
   const selectCategory = (nextCategoryId) => {
+    classificationEditedByUserRef.current = true;
     setCategoryId(nextCategoryId);
     setSubcategoryIds([]);
     setCustomSubcategoryLabel('');
@@ -965,6 +1072,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   };
 
   const toggleSubcategory = (subcategoryId) => {
+    classificationEditedByUserRef.current = true;
     setSubcategoryIds((current) => {
       const next = current.includes(subcategoryId)
         ? current.filter((id) => id !== subcategoryId)
@@ -979,13 +1087,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const applySuggestion = () => {
     if (!primarySuggestion) return;
+    classificationEditedByUserRef.current = true;
     setCategoryId(primarySuggestion.categoryId);
     setSubcategoryIds(primarySuggestion.subcategoryIds);
     setCustomSubcategoryLabel('');
     setDismissedSuggestion(true);
   };
-
-  const handleAddImages = () => setMediaComposerVisible(true);
 
   const completeMediaSelection = (items) => {
     const nextItems = (items || []).slice(0, 5);
@@ -993,9 +1100,9 @@ export default function CreateRecommendationScreen({ navigation, route }) {
       .filter((item) => !item.asset)
       .forEach((item) => forgetDurableImage(item).catch(() => {}));
     setEditableMedia(nextItems);
-    setMediaComposerVisible(false);
     setValidationMessage('');
-    persistDraftMedia(nextItems.filter((item) => !item.asset)).catch(() => {
+    setSaveError('');
+    persistDraftMedia(nextItems).catch(() => {
       setSaveError('לא הצלחנו לשמור תמונה אחת במכשיר. אפשר לבחור אותה מחדש.');
     });
   };
@@ -1024,8 +1131,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     }
     if (targetStep === 4) {
       if (!title.trim()) return 'כדאי להוסיף שם קצר וברור.';
-      if (!description.trim()) return 'כדאי לכתוב במשפט או שניים למה ההמלצה שווה.';
-      if (!budget) return 'כדאי לבחור את רמת המחיר.';
+      if (!description.trim()) return 'כדאי להוסיף תיאור קצר עם הפרטים החשובים.';
+      if (!budget) return 'כדאי לבחור מחיר.';
       if (!isValidExternalUrl(details.externalUrl)) {
         return 'כדאי להזין קישור מלא שמתחיל ב־http:// או https://.';
       }
@@ -1054,23 +1161,40 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     editableMedia.length,
   ]);
 
-  const goNext = () => {
-    Keyboard.dismiss();
-    const message = validateStep(step);
-    setValidationMessage(message);
-    if (message) return;
-    if (step < STEP_COUNT) {
-      setStep((current) => current + 1);
-      return;
+  const firstValidationIssue = useCallback(() => {
+    const photoMessage = validateStep(1);
+    if (photoMessage) return { message: photoMessage, section: 'photos' };
+    const locationMessage = validateStep(2);
+    if (locationMessage) return { message: locationMessage, section: 'location' };
+    if (!title.trim()) return { message: 'כדאי להוסיף שם קצר וברור.', section: 'story' };
+    if (!description.trim()) return { message: 'כדאי להוסיף תיאור קצר עם הפרטים החשובים.', section: 'story' };
+    const taxonomyMessage = validateStep(3);
+    if (taxonomyMessage) return { message: taxonomyMessage, section: 'taxonomy' };
+    if (!budget) return { message: 'כדאי לבחור מחיר.', section: 'taxonomy' };
+    if (!isValidExternalUrl(details.externalUrl)) {
+      return { message: 'כדאי להזין קישור מלא שמתחיל ב־http:// או https://.', section: 'optional' };
     }
-    handleSubmit();
-  };
+    if (categoryId === 'events' && !eventSchedule.trim()) {
+      return { message: 'באירוע כדאי לציין מתי הוא מתקיים.', section: 'optional' };
+    }
+    return null;
+  }, [budget, categoryId, description, details.externalUrl, eventSchedule, title, validateStep]);
+
+  const scrollToSection = useCallback((section) => {
+    const y = sectionOffsetsRef.current[section];
+    if (!Number.isFinite(y)) return;
+    requestAnimationFrame(() => scrollViewRef.current?.scrollTo?.({ y: Math.max(0, y - spacing.md), animated: true }));
+  }, []);
 
   const handleSubmit = async () => {
     Keyboard.dismiss();
-    const message = validateStep(4) || validateStep(3) || validateStep(2) || validateStep(1);
-    setValidationMessage(message);
-    if (message || submitting) return;
+    const issue = firstValidationIssue();
+    setValidationMessage(issue?.message || '');
+    if (issue) {
+      scrollToSection(issue.section);
+      return;
+    }
+    if (submitting) return;
     setSubmitting(true);
     publishHandoffRef.current = true;
     pauseAutosaveRef.current = true;
@@ -1156,18 +1280,19 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const renderPhotoStep = () => (
     <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationPhotos}>
       <View style={styles.fieldStack}>
-        <AppText style={styles.fieldLabel}>תמונות (חובה)</AppText>
         <AppText style={[styles.fieldHint, styles.photoHint]}>
-          בוחרים בין תמונה אחת לחמש. אפשר לעבור בין התמונות ולשמור חיתוך נפרד לכל אחת.
+          אפשר להוסיף עד חמש תמונות. החלקה עוברת ביניהן; לחיצה ארוכה וגרירה משנה את הסדר.
         </AppText>
-        <ImagePickerBox
-          imageUris={previewUris}
-          onPress={handleAddImages}
-          maxImages={5}
-          placeholderText="בחירת תמונות"
-          imageFit="cover"
-          previewAspectRatio={1}
-          testID="recommendation-image-picker"
+        <TravelMediaComposer
+          embedded
+          visible
+          value={editableMedia}
+          maxItems={5}
+          aspect={[1, 1]}
+          maxLongEdge={RECOMMENDATION_IMAGE_LONG_EDGE}
+          compress={TRAVEL_IMAGE_COMPRESSION}
+          addButtonTestID="recommendation-image-picker"
+          onChange={completeMediaSelection}
         />
       </View>
     </NoyaTourTarget>
@@ -1175,28 +1300,30 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const renderLocationStep = () => (
     <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationLocation}>
-      <View style={styles.modeActions}>
-        {[
-          { id: LOCATION_MODES.exact, label: 'מקום מדויק', icon: 'location-outline' },
-          { id: LOCATION_MODES.destination, label: 'עיר או אזור', icon: 'map-outline' },
-          { id: LOCATION_MODES.pin, label: 'נקודה במפה', icon: 'pin-outline' },
-        ].map((mode) => {
-          const selected = locationMode === mode.id;
-          return (
-            <TouchableOpacity
-              key={mode.id}
-              style={[styles.modeButton, selected && styles.modeButtonSelected]}
-              onPress={() => switchLocationMode(mode.id)}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-              testID={`recommendation-location-mode-${mode.id}`}
-            >
-              <Ionicons name={mode.icon} size={18} color={colors.primary} />
-              <AppText style={styles.modeButtonText}>{mode.label}</AppText>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {(showAlternativeLocations || locationMode !== LOCATION_MODES.exact) ? (
+        <View style={styles.modeActions}>
+          {[
+            { id: LOCATION_MODES.exact, label: 'מקום מדויק', icon: 'location-outline' },
+            { id: LOCATION_MODES.destination, label: 'עיר או אזור', icon: 'map-outline' },
+            { id: LOCATION_MODES.pin, label: 'נקודה במפה', icon: 'pin-outline' },
+          ].map((mode) => {
+            const selected = locationMode === mode.id;
+            return (
+              <TouchableOpacity
+                key={mode.id}
+                style={[styles.modeButton, selected && styles.modeButtonSelected]}
+                onPress={() => switchLocationMode(mode.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                testID={`recommendation-location-mode-${mode.id}`}
+              >
+                <Ionicons name={mode.icon} size={18} color={colors.primary} />
+                <AppText style={styles.modeButtonText}>{mode.label}</AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
 
       <View style={styles.locationPanel}>
         {locationMode === LOCATION_MODES.exact ? (
@@ -1206,9 +1333,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               mode="google"
               value={locationQuery}
               onChangeValue={onChangeLocationQuery}
-              onSelect={(selection) => handleSelectGooglePlace(selection).catch(() => {})}
+              onSelect={(selection) => selectExactPlace(selection).catch(() => {})}
               googleSearchFn={googleSearchFn}
-              explicitSearch
+              googleFallbackDelayMs={3000}
+              showSearchErrors={false}
               variant="form"
               error={Boolean(locationResolveError)}
               returnSelection
@@ -1216,26 +1344,51 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               placeholder="למשל: Café Central, וינה"
               inputTestID="recommendation-exact-location-search"
             />
-            <ExactLocationConfirmation
-              pendingLocation={pendingLocation}
-              destinationChoice={destinationChoice}
-              resolving={resolvingLocation}
-              resolvingPreview={resolvingPreview}
-              onChooseDestination={(choiceId) => chooseDestination(choiceId).catch(() => {})}
-              onChooseFallbackDestination={chooseFallbackDestination}
-              onConfirm={confirmExactLocationAndAdvance}
-              onChooseAnother={chooseAnotherLocation}
-            />
+            {selectedPlace?.placeId ? (
+              <View style={styles.confirmedLocation} testID="recommendation-confirmed-location">
+                <View style={styles.confirmedLocationCopy}>
+                  <View style={styles.confirmedLocationTitleRow}>
+                    <Ionicons name="checkmark-circle" size={21} color={colors.success} />
+                    <AppText style={styles.confirmedLocationTitle}>{selectedPlace.name || selectedPlace.address}</AppText>
+                  </View>
+                  {selectedPlace.address ? <AppText style={styles.confirmedLocationAddress}>{selectedPlace.address}</AppText> : null}
+                </View>
+                <ExactLocationMapPreview place={selectedPlace} title="המיקום שנבחר" locale="he" />
+                {normalizeManualCoordinate(selectedPlace.coordinates || selectedPlace.geometry?.location) ? (
+                  <TouchableOpacity style={styles.locationAdjustButton} onPress={adjustExactLocation} testID="recommendation-adjust-location">
+                    <Ionicons name="pin-outline" size={17} color={colors.primary} />
+                    <AppText style={styles.moreText}>לא מדויק? הזזת נקודה במפה</AppText>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
+            {destinationChoice ? (
+              <ExactLocationConfirmation
+                pendingLocation={pendingLocation}
+                destinationChoice={destinationChoice}
+                resolving={resolvingLocation}
+                resolvingPreview={resolvingPreview}
+                onChooseDestination={(choiceId) => selectResolvedDestination(choiceId).catch(() => {})}
+                onChooseFallbackDestination={(destination) => selectFallbackDestination(destination).catch(() => {})}
+                onChooseAnother={chooseAnotherLocation}
+              />
+            ) : null}
             {resolvingLocation ? <AppText style={styles.fieldHint}>בודקים את המיקום...</AppText> : null}
             {locationResolveError ? (
               <View>
                 <AppText style={styles.fieldError} testID="recommendation-location-error">{locationResolveError}</AppText>
                 {locationResolveRetryable ? (
-                  <TouchableOpacity style={styles.moreButton} onPress={() => retryLocationResolution().catch(() => {})}>
+                  <TouchableOpacity style={styles.moreButton} onPress={() => retryExactLocation().catch(() => {})}>
                     <AppText style={styles.moreText}>ניסיון נוסף</AppText>
                   </TouchableOpacity>
                 ) : null}
               </View>
+            ) : null}
+            {!showAlternativeLocations ? (
+              <TouchableOpacity style={styles.moreButton} onPress={() => setShowAlternativeLocations(true)} testID="recommendation-show-location-alternatives">
+                <Ionicons name="options-outline" size={17} color={colors.primary} />
+                <AppText style={styles.moreText}>לא מצאתי מקום מדויק</AppText>
+              </TouchableOpacity>
             ) : null}
           </>
         ) : (
@@ -1256,6 +1409,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
                   value={manualCoordinate}
                   onChange={setManualCoordinate}
                 />
+                {adjustedExactLocationRef.current ? (
+                  <TouchableOpacity style={styles.moreButton} onPress={restoreExactLocation} testID="recommendation-restore-exact-location">
+                    <Ionicons name="arrow-undo-outline" size={17} color={colors.primary} />
+                    <AppText style={styles.moreText}>חזרה למיקום המקורי</AppText>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
           </>
@@ -1341,7 +1500,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               <FocusClearingFormInput
                 label="איך לקרוא לאפשרות?"
                 value={customSubcategoryLabel}
-                onChangeText={setCustomSubcategoryLabel}
+                onChangeText={(value) => {
+                  classificationEditedByUserRef.current = true;
+                  setCustomSubcategoryLabel(value);
+                }}
                 placeholder="למשל: סיור צילום לילי"
                 maxLength={40}
                 onFocus={handleComposerInputFocus}
@@ -1373,10 +1535,13 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationStory}>
       <View style={styles.fieldStack}>
         <FocusClearingFormInput
-          label="איך קוראים למקום או להמלצה?"
+          label="שם ההמלצה"
           required
           value={title}
-          onChangeText={setTitle}
+          onChangeText={(value) => {
+            titleEditedByUserRef.current = true;
+            setTitle(value);
+          }}
           placeholder="למשל: בית קפה קטן ושקט במרכז"
           maxLength={120}
           onFocus={handleComposerInputFocus}
@@ -1384,46 +1549,28 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           testID="recommendation-title-input"
         />
         <FocusClearingFormInput
-          label="למה שווה?"
+          label="תיאור"
           required
           value={description}
           onChangeText={setDescription}
-          placeholder="למשל: קפה מצוין, מאפים טריים ושירות חם. כדאי להגיע מוקדם."
+          placeholder="מה חשוב לדעת? מה אהבתם, למי מתאים ומתי כדאי להגיע"
           multiline
           maxLength={5000}
           onFocus={handleComposerInputFocus}
           rtl
           testID="recommendation-description-input"
         />
-        {renderReviewStep()}
       </View>
     </NoyaTourTarget>
   );
 
   const renderReviewStep = () => {
-    const destinationLabel = [selectedCity?.name, selectedCountry?.name].filter(Boolean).join(', ');
     const optionalField = OPTIONAL_FIELDS.find((field) => field.id === activeOptionalField);
     return (
       <>
-        <View style={styles.preview}>
-          {previewUris[0] ? (
-            <Image source={{ uri: previewUris[0] }} style={styles.previewImage} resizeMode="cover" />
-          ) : (
-            <View style={styles.previewPlaceholder}>
-              <Ionicons name="image-outline" size={34} color={colors.white} />
-            </View>
-          )}
-          <View style={styles.previewCopy}>
-            <AppText style={styles.previewTitle}>{title}</AppText>
-            <AppText style={styles.previewMeta}>
-              {[classificationSummary(categoryId, subcategoryIds), destinationLabel].filter(Boolean).join(' · ')}
-            </AppText>
-          </View>
-        </View>
-
         <RtlChoiceGroup
-          label="רמת מחיר (חובה)"
-          helper="הסכום המדויק יכול להשתנות. כאן מספיק לבחור הערכה כללית."
+          label="מחיר (חובה)"
+          helper="מספיק לבחור הערכה כללית; אפשר להוסיף סכום מדויק בפרטים הנוספים."
           options={POST_BUDGETS}
           selectedIds={[budget]}
           selectionMode="single"
@@ -1486,7 +1633,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               autoCapitalize={optionalField.id === 'externalUrl' ? 'none' : undefined}
               autoCorrect={optionalField.id !== 'externalUrl'}
               onFocus={handleComposerInputFocus}
-              rtl
+              rtl={optionalField.contentDirection === 'rtl'}
+              style={optionalField.contentDirection === 'ltr'
+                ? styles.ltrInput
+                : optionalField.contentDirection === 'auto' ? styles.autoDirectionInput : undefined}
               testID={`recommendation-optional-input-${optionalField.id}`}
             />
           </View>
@@ -1537,17 +1687,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     <View style={styles.screen}>
       <NoyaTourTarget targetId={NOYA_CREATOR_TARGETS.recommendationFallback}>
       <View style={styles.header} testID="recommendation-composer-header">
-        <View style={styles.progressCopy}>
-          <AppText style={styles.progressText}>{`שלב ${step} מתוך ${STEP_COUNT}`}</AppText>
-          <AppText style={styles.progressText}>{isEdit ? 'עריכת המלצה' : 'פחות משתי דקות'}</AppText>
-        </View>
-        <View
-          style={styles.progressTrack}
-          accessibilityRole="progressbar"
-          accessibilityValue={{ min: 1, max: STEP_COUNT, now: step }}
-        >
-          <View style={[styles.progressFill, { width: `${(step / STEP_COUNT) * 100}%` }]} />
-        </View>
+        <AppText style={styles.headerTitle}>{isEdit ? 'עריכת המלצה' : 'המלצה חדשה'}</AppText>
+        <AppText style={styles.headerSubtitle}>הכול בעמוד אחד. אפשר להתחיל מכל חלק ולפרסם כשמוכנים.</AppText>
         <View style={styles.saveStatusRow} accessibilityLiveRegion="polite">
           {['saving', 'discarding'].includes(saveStatus) ? <ActivityIndicator size="small" color={colors.white} /> : null}
           <AppText style={styles.saveStatusText}>{saveStatus === 'discarding' ? 'מוותרים על השינויים…' : saveStatus === 'saving' ? 'שומר…' : saveStatus === 'error' ? 'לא הצלחנו לשמור' : draftId ? 'נשמר' : ''}</AppText>
@@ -1565,7 +1706,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         testID="recommendation-keyboard-avoiding"
       >
-        <ScrollView
+        <NestableScrollContainer
           ref={scrollViewRef}
           style={styles.scroll}
           contentContainerStyle={styles.content}
@@ -1578,10 +1719,44 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               <AppText style={styles.missingMediaText}>חלק מהתמונות נשמרו רק במכשיר שבו נבחרו ולא זמינות כאן. אפשר לבחור אותן שוב לפני הפרסום.</AppText>
             </View>
           ) : null}
-          {step === 1 ? renderPhotoStep() : null}
-          {step === 2 ? renderLocationStep() : null}
-          {step === 3 ? renderTaxonomyStep() : null}
-          {step === 4 ? renderDetailsStep() : null}
+          <View style={styles.sectionCard} onLayout={(event) => { sectionOffsetsRef.current.photos = event.nativeEvent.layout.y; }}>
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>תמונות</AppText>
+              <AppText style={styles.sectionRequired}>חובה</AppText>
+            </View>
+            {renderPhotoStep()}
+          </View>
+          <View style={styles.sectionCard} onLayout={(event) => { sectionOffsetsRef.current.location = event.nativeEvent.layout.y; }}>
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>איפה המקום?</AppText>
+              <AppText style={styles.sectionRequired}>חובה</AppText>
+            </View>
+            {renderLocationStep()}
+          </View>
+          <View style={styles.sectionCard} onLayout={(event) => { sectionOffsetsRef.current.story = event.nativeEvent.layout.y; }}>
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>שם ותיאור</AppText>
+              <AppText style={styles.sectionRequired}>חובה</AppText>
+            </View>
+            {renderDetailsStep()}
+          </View>
+          <View style={styles.sectionCard} onLayout={(event) => {
+            sectionOffsetsRef.current.taxonomy = event.nativeEvent.layout.y;
+            sectionOffsetsRef.current.optional = event.nativeEvent.layout.y;
+          }}>
+            <View style={styles.sectionHeader}>
+              <AppText style={styles.sectionTitle}>קטגוריה ומחיר</AppText>
+              <AppText style={styles.sectionRequired}>חובה</AppText>
+            </View>
+            {renderTaxonomyStep()}
+            <View style={styles.sectionDivider} />
+            {renderReviewStep()}
+          </View>
+          {saveError ? (
+            <AppText style={styles.fieldError} accessibilityRole="alert" testID="recommendation-media-save-error">
+              {saveError}
+            </AppText>
+          ) : null}
           {validationMessage ? (
             <AppText
               style={styles.fieldError}
@@ -1592,7 +1767,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               {validationMessage}
             </AppText>
           ) : null}
-        </ScrollView>
+        </NestableScrollContainer>
 
         <SafeAreaInsetsContext.Consumer>
           {(insets) => (
@@ -1605,29 +1780,15 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               <View style={styles.footerInner}>
                 <TouchableOpacity
                   style={[styles.primaryButton, (submitting || resolvingLocation) && styles.primaryButtonDisabled]}
-                  onPress={goNext}
+                  onPress={handleSubmit}
                   disabled={submitting || resolvingLocation}
                   accessibilityRole="button"
                   testID="recommendation-next"
                 >
                   {submitting
                     ? <ActivityIndicator color={colors.white} />
-                    : <AppText style={styles.primaryButtonText}>{step === STEP_COUNT ? (isEdit ? 'שמירת השינויים' : 'פרסום ההמלצה') : 'המשך'}</AppText>}
+                    : <AppText style={styles.primaryButtonText}>{isEdit ? 'שמירת השינויים' : 'פרסום ההמלצה'}</AppText>}
                 </TouchableOpacity>
-                {step > 1 ? (
-                  <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setValidationMessage('');
-                      setStep((current) => Math.max(1, current - 1));
-                    }}
-                    accessibilityRole="button"
-                    testID="recommendation-back"
-                  >
-                    <AppText style={styles.backButtonText}>חזרה</AppText>
-                  </TouchableOpacity>
-                ) : null}
                 {keyboardVisible ? (
                   <TouchableOpacity
                     style={styles.keyboardDismissButton}
@@ -1644,17 +1805,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           )}
         </SafeAreaInsetsContext.Consumer>
       </KeyboardAvoidingView>
-
-      <TravelMediaComposer
-        visible={mediaComposerVisible}
-        value={editableMedia}
-        maxItems={5}
-        aspect={[1, 1]}
-        maxLongEdge={RECOMMENDATION_IMAGE_LONG_EDGE}
-        compress={TRAVEL_IMAGE_COMPRESSION}
-        onCancel={() => setMediaComposerVisible(false)}
-        onChange={completeMediaSelection}
-      />
     </View>
   );
 }

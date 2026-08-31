@@ -39,7 +39,11 @@ describe('shared RTL horizontal navigation', () => {
 
   it('keeps every horizontal content surface on a shared RTL implementation', () => {
     const srcRoot = path.resolve(__dirname, '../src');
-    const excluded = new Set(['RtlHorizontalScrollView.js', 'RtlPagedFlatList.js']);
+    const excluded = new Set([
+      'RtlHorizontalDraggableFlatList.js',
+      'RtlHorizontalScrollView.js',
+      'RtlPagedFlatList.js',
+    ]);
     const pending = [srcRoot];
     const offenders = [];
 

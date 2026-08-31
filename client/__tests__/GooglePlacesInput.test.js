@@ -223,6 +223,59 @@ describe('GooglePlacesInput recent destinations', () => {
     });
   });
 
+  it('keeps controlled typing local while the parent clears an earlier selection', () => {
+    const onChangeValue = jest.fn();
+    const screen = render(
+      <GooglePlacesInput
+        mode="google"
+        value=""
+        onChangeValue={onChangeValue}
+        inputTestID="places-input"
+      />
+    );
+
+    fireEvent.changeText(screen.getByTestId('places-input'), 'Café');
+
+    expect(onChangeValue).toHaveBeenCalledWith('Café');
+    expect(screen.getByTestId('places-input').props.value).toBe('Café');
+  });
+
+  it('uses one configured debounce window and can suppress provider errors', async () => {
+    jest.useFakeTimers();
+    const googleSearchFn = jest.fn(async () => {
+      throw Object.assign(new Error('quota'), { code: 'functions/resource-exhausted' });
+    });
+    try {
+      const screen = render(
+        <ControlledInput
+          googleFallbackDelayMs={3000}
+          googleSearchFn={googleSearchFn}
+          onSelect={jest.fn()}
+          showSearchErrors={false}
+        />
+      );
+
+      fireEvent(screen.getByTestId('places-input'), 'focus');
+      fireEvent.changeText(screen.getByTestId('places-input'), 'Tel');
+      act(() => jest.advanceTimersByTime(1500));
+      fireEvent.changeText(screen.getByTestId('places-input'), 'Tel Aviv');
+      act(() => jest.advanceTimersByTime(2999));
+      expect(googleSearchFn).not.toHaveBeenCalled();
+
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(googleSearchFn).toHaveBeenCalledTimes(1);
+      expect(googleSearchFn).toHaveBeenCalledWith('Tel Aviv', expect.any(Object));
+      expect(screen.queryByTestId('icon-alert-circle-outline')).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('allows Home autocomplete to use the exact shared tab-header field geometry', () => {
     const screen = render(
       <ControlledInput

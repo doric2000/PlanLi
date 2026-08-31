@@ -50,6 +50,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.19",
     "firebase": "^12.6.0",
+    "maplibre-gl": "5.24.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",

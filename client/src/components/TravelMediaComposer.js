@@ -15,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { ScaleDecorator } from 'react-native-draggable-flatlist';
 
 import AppText from './AppText';
 import CachedImage from './CachedImage';
 import RtlHorizontalScrollView from './RtlHorizontalScrollView';
+import RtlHorizontalDraggableFlatList from './RtlHorizontalDraggableFlatList';
 import {
   boundCropTranslation,
   calculateCropRect,
@@ -64,7 +66,7 @@ function MediaImage({ uri, contentFit = 'cover', ...props }) {
   return <CachedImage {...props} source={{ uri }} contentFit={contentFit} />;
 }
 
-function CropPage({ item, aspect, onCropChange, onSwipe }) {
+function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
   const uri = travelMediaUri(item);
   const [sourceSize, setSourceSize] = useState(() => item.width && item.height
     ? { width: item.width, height: item.height }
@@ -84,7 +86,8 @@ function CropPage({ item, aspect, onCropChange, onSwipe }) {
   const isAdjusting = useSharedValue(0);
   const initialCropApplied = useRef(false);
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
-  const canCrop = item.type !== 'remote' && Boolean(item.transform);
+  const hasEditableCrop = item.type !== 'remote' && Boolean(item.transform);
+  const canCrop = cropEnabled && hasEditableCrop;
 
   useEffect(() => {
     let active = true;
@@ -114,7 +117,7 @@ function CropPage({ item, aspect, onCropChange, onSwipe }) {
   }, [displayHeight, displaySize, displayWidth, viewport, viewportHeight, viewportWidth]);
 
   useEffect(() => {
-    if (initialCropApplied.current || !sourceSize || !viewport || !canCrop) return;
+    if (initialCropApplied.current || !sourceSize || !viewport || !hasEditableCrop) return;
     const initial = cropRectToViewportTransform({
       sourceWidth: sourceSize.width,
       sourceHeight: sourceSize.height,
@@ -130,7 +133,7 @@ function CropPage({ item, aspect, onCropChange, onSwipe }) {
     startY.value = initial.translateY;
     initialCropApplied.current = true;
   }, [
-    canCrop, item.transform?.crop, sourceSize, startX, startY, startZoom, translateX,
+    hasEditableCrop, item.transform?.crop, sourceSize, startX, startY, startZoom, translateX,
     translateY, viewport, zoom,
   ]);
 
@@ -233,7 +236,7 @@ function CropPage({ item, aspect, onCropChange, onSwipe }) {
   }));
   const cropGridStyle = useAnimatedStyle(() => ({ opacity: isAdjusting.value ? 1 : 0 }));
 
-  if (!canCrop) {
+  if (!hasEditableCrop) {
     return (
       <GestureDetector gesture={pan}>
         <Animated.View style={styles.uncroppedPage} testID="travel-media-existing-preview">
@@ -304,6 +307,8 @@ export default function TravelMediaComposer({
   onChange,
   onCancel,
   contained = false,
+  embedded = false,
+  addButtonTestID,
   sourceAdapter: suppliedSourceAdapter,
   sourceAdapters,
 }) {
@@ -314,6 +319,7 @@ export default function TravelMediaComposer({
   const [activeIndex, setActiveIndex] = useState(0);
   const [composerError, setComposerError] = useState('');
   const [composerSession, setComposerSession] = useState(0);
+  const [cropEditing, setCropEditing] = useState(false);
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
   const options = useMemo(() => ({ aspect, maxItems, maxLongEdge, compress }), [
     aspect, compress, maxItems, maxLongEdge,
@@ -324,9 +330,15 @@ export default function TravelMediaComposer({
     setWorking(mergeTravelMediaSelection([], value, options));
     setActiveIndex(0);
     setComposerError('');
+    setCropEditing(false);
     setComposerSession((current) => current + 1);
     sourceAdapter.kind === 'inline-library' && sourceAdapter.loadInitial().catch(() => {});
   }, [visible]); // The draft is intentionally captured only when the composer opens.
+
+  useEffect(() => {
+    if (!embedded || !visible) return;
+    setWorking(mergeTravelMediaSelection([], value, options));
+  }, [embedded, options, value, visible]);
 
   useEffect(() => {
     setActiveIndex((current) => Math.max(0, Math.min(current, Math.max(0, working.length - 1))));
@@ -334,34 +346,47 @@ export default function TravelMediaComposer({
 
   const materializeSelection = useCallback(async (descriptor) => {
     if (descriptor.persistence === 'ready' || descriptor.type === 'remote') return descriptor;
-    setWorking((current) => current.map((item) => travelMediaIdentity(item) === travelMediaIdentity(descriptor)
-      ? { ...item, persistence: 'materializing' }
-      : item));
+    setWorking((current) => {
+      const next = current.map((item) => travelMediaIdentity(item) === travelMediaIdentity(descriptor)
+        ? { ...item, persistence: 'materializing' }
+        : item);
+      if (embedded) Promise.resolve().then(() => onChange?.(next));
+      return next;
+    });
     try {
       const materialized = await sourceAdapter.materialize(descriptor);
       const normalized = createTravelMediaDescriptor(materialized, { ...options, newSource: true });
-      setWorking((current) => current.map((item) => travelMediaIdentity(item) === travelMediaIdentity(descriptor)
-        ? normalized
-        : item));
+      setWorking((current) => {
+        const next = current.map((item) => travelMediaIdentity(item) === travelMediaIdentity(descriptor)
+          ? normalized
+          : item);
+        if (embedded) Promise.resolve().then(() => onChange?.(next));
+        return next;
+      });
       return normalized;
     } catch (error) {
-      setWorking((current) => current.map((item) => travelMediaIdentity(item) === travelMediaIdentity(descriptor)
-        ? { ...item, persistence: 'failed' }
-        : item));
+      setWorking((current) => {
+        const next = current.map((item) => travelMediaIdentity(item) === travelMediaIdentity(descriptor)
+          ? { ...item, persistence: 'failed' }
+          : item);
+        if (embedded) Promise.resolve().then(() => onChange?.(next));
+        return next;
+      });
       setComposerError('לא הצלחנו להוריד את התמונה. אפשר לנסות שוב או לבחור תמונה אחרת.');
       throw error;
     }
-  }, [options, sourceAdapter]);
+  }, [embedded, onChange, options, sourceAdapter]);
 
   const addDescriptors = useCallback((additions) => {
     const next = mergeTravelMediaSelection(working, additions, { ...options, newSource: true });
     const currentIds = new Set(working.map(travelMediaIdentity));
     const added = next.filter((item) => !currentIds.has(travelMediaIdentity(item)));
     setWorking(next);
+    if (embedded) onChange?.(next);
     if (added.length) setActiveIndex(next.findIndex((item) => travelMediaIdentity(item) === travelMediaIdentity(added[0])));
     setComposerError('');
     Promise.resolve().then(() => added.forEach((item) => materializeSelection(item).catch(() => {})));
-  }, [materializeSelection, options, working]);
+  }, [embedded, materializeSelection, onChange, options, working]);
 
   const selectAsset = useCallback((asset) => {
     const identity = travelMediaIdentity(asset);
@@ -382,10 +407,11 @@ export default function TravelMediaComposer({
       if (!current.length) return current;
       const next = current.filter((_, index) => index !== activeIndex);
       setActiveIndex((index) => Math.max(0, Math.min(index, Math.max(0, next.length - 1))));
+      if (embedded) Promise.resolve().then(() => onChange?.(next));
       return next;
     });
     setComposerError('');
-  }, [activeIndex]);
+  }, [activeIndex, embedded, onChange]);
 
   const navigateBySwipe = useCallback((delta) => {
     setActiveIndex((current) => Math.max(0, Math.min(current + delta, Math.max(0, working.length - 1))));
@@ -395,6 +421,7 @@ export default function TravelMediaComposer({
     if (working.length >= maxItems) return;
     try {
       const additions = await sourceAdapter.pickMore(maxItems - working.length);
+      if (!additions?.length) return;
       addDescriptors(additions);
     } catch {
       setComposerError('לא הצלחנו לפתוח את בחירת התמונות. אפשר לנסות שוב.');
@@ -402,10 +429,29 @@ export default function TravelMediaComposer({
   }, [addDescriptors, maxItems, sourceAdapter, working.length]);
 
   const updateCrop = useCallback((identity, crop) => {
-    setWorking((current) => current.map((item) => travelMediaIdentity(item) === identity
-      ? updateTravelMediaCrop(item, crop)
-      : item));
-  }, []);
+    setWorking((current) => {
+      const next = current.map((item) => travelMediaIdentity(item) === identity
+        ? updateTravelMediaCrop(item, crop)
+        : item);
+      if (embedded) Promise.resolve().then(() => onChange?.(next));
+      return next;
+    });
+  }, [embedded, onChange]);
+
+  const commitReorder = useCallback((next) => {
+    const activeIdentity = travelMediaIdentity(working[activeIndex]);
+    setWorking(next);
+    setActiveIndex(Math.max(0, next.findIndex((item) => travelMediaIdentity(item) === activeIdentity)));
+    if (embedded) onChange?.(next);
+  }, [activeIndex, embedded, onChange, working]);
+
+  const moveForAccessibility = useCallback((fromIndex, toIndex) => {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= working.length || toIndex >= working.length) return;
+    const next = [...working];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    commitReorder(next);
+  }, [commitReorder, working]);
 
   const retryFailed = useCallback(() => {
     setComposerError('');
@@ -433,6 +479,127 @@ export default function TravelMediaComposer({
     });
     return () => subscription.remove();
   }, [permissionBlocked, sourceAdapter, visible]);
+
+  if (embedded) {
+    if (!visible) return null;
+    const activeItem = working[activeIndex];
+    return (
+      <GestureHandlerRootView style={styles.embeddedRoot} testID="travel-media-composer">
+        {!working.length ? (
+          <Pressable
+            style={[styles.embeddedEmpty, { aspectRatio: ratio }]}
+            onPress={pickMore}
+            accessibilityRole="button"
+            accessibilityLabel="הוספת תמונות מהגלריה"
+            testID={addButtonTestID || 'travel-media-embedded-add'}
+          >
+            <View style={styles.embeddedAddIcon}><Ionicons name="add" size={28} color={colors.white} /></View>
+            <AppText style={styles.embeddedEmptyTitle}>הוספת תמונות</AppText>
+            <AppText style={styles.embeddedEmptyText}>לחיצה אחת פותחת את הגלריה</AppText>
+          </Pressable>
+        ) : (
+          <>
+            <View style={[styles.previewWrap, styles.embeddedPreview, { aspectRatio: ratio }]}>
+              <CropPage
+                key={`${composerSession}:${travelMediaIdentity(activeItem)}`}
+                item={activeItem}
+                aspect={aspect}
+                cropEnabled={cropEditing}
+                onCropChange={(crop) => updateCrop(travelMediaIdentity(activeItem), crop)}
+                onSwipe={navigateBySwipe}
+              />
+              <View style={styles.previewTools} pointerEvents="box-none">
+                <View style={styles.activeBadge} pointerEvents="none">
+                  <AppText style={styles.activeBadgeText}>{activeIndex + 1}/{working.length}</AppText>
+                </View>
+              </View>
+              <AppText style={styles.cropHint}>
+                {cropEditing && activeItem?.transform
+                  ? 'גרירה וצביטה מתאימות את החיתוך · החלקה מהירה עוברת תמונה'
+                  : 'החליקו ימינה או שמאלה כדי לעבור בין התמונות'}
+              </AppText>
+            </View>
+            <View style={styles.embeddedActions}>
+              <Pressable
+                style={[styles.embeddedAction, cropEditing && styles.embeddedActionActive]}
+                onPress={() => setCropEditing((current) => !current)}
+                disabled={!activeItem?.transform}
+                testID="travel-media-toggle-crop"
+              >
+                <Ionicons name="crop-outline" size={20} color={colors.primary} />
+                <AppText style={styles.embeddedActionText}>{cropEditing ? 'סיום חיתוך' : 'חיתוך'}</AppText>
+              </Pressable>
+              {working.length < maxItems ? (
+                <Pressable style={styles.embeddedAction} onPress={pickMore} testID="travel-media-pick-more">
+                  <Ionicons name="images-outline" size={20} color={colors.primary} />
+                  <AppText style={styles.embeddedActionText}>הוספה</AppText>
+                </Pressable>
+              ) : null}
+              <Pressable style={styles.embeddedAction} onPress={removeActive} testID="travel-media-delete-active">
+                <Ionicons name="trash-outline" size={20} color={colors.error} />
+                <AppText style={[styles.embeddedActionText, styles.embeddedDeleteText]}>מחיקה</AppText>
+              </Pressable>
+            </View>
+            <AppText style={styles.embeddedReorderHint}>לחיצה ארוכה וגרירה משנה את סדר התמונות</AppText>
+            <RtlHorizontalDraggableFlatList
+              data={working}
+              keyExtractor={travelMediaIdentity}
+              activationDistance={8}
+              onDragEnd={({ data }) => commitReorder(data)}
+              contentContainerStyle={styles.embeddedStrip}
+              style={styles.embeddedStripList}
+              testID="travel-media-reorder-list"
+              renderItem={({ item, getIndex, drag, isActive }) => {
+                const reportedIndex = getIndex?.();
+                const index = Number.isInteger(reportedIndex)
+                  ? reportedIndex
+                  : working.findIndex((entry) => travelMediaIdentity(entry) === travelMediaIdentity(item));
+                const selected = index === activeIndex;
+                const identity = travelMediaIdentity(item);
+                return (
+                  <ScaleDecorator activeScale={1.04}>
+                    <Pressable
+                      style={[
+                        styles.selectedThumb,
+                        styles.embeddedThumb,
+                        selected && styles.selectedThumbActive,
+                        isActive && styles.embeddedThumbDragging,
+                      ]}
+                      onPress={() => setActiveIndex(index)}
+                      onLongPress={drag}
+                      delayLongPress={180}
+                      accessibilityRole="button"
+                      accessibilityLabel={`תמונה ${index + 1}; לחיצה ארוכה וגרירה לשינוי סדר`}
+                      accessibilityState={{ selected }}
+                      accessibilityActions={[
+                        ...(index > 0 ? [{ name: 'moveUp', label: 'העברה אחורה' }] : []),
+                        ...(index < working.length - 1 ? [{ name: 'moveDown', label: 'העברה קדימה' }] : []),
+                      ]}
+                      onAccessibilityAction={({ nativeEvent }) => {
+                        if (nativeEvent.actionName === 'moveUp') moveForAccessibility(index, index - 1);
+                        if (nativeEvent.actionName === 'moveDown') moveForAccessibility(index, index + 1);
+                      }}
+                      testID={`travel-media-selected-${identity}`}
+                    >
+                      <MediaImage uri={travelMediaUri(item)} style={styles.selectedThumbImage} contentFit="cover" />
+                      <SelectionBadge number={index + 1} />
+                    </Pressable>
+                  </ScaleDecorator>
+                );
+              }}
+            />
+          </>
+        )}
+        {pending ? <ActivityIndicator style={styles.embeddedStatus} color={colors.primary} /> : null}
+        {(composerError || sourceAdapter.error) ? (
+          <View style={styles.errorRow} testID="travel-media-error">
+            <AppText style={styles.errorText}>{composerError || sourceAdapter.error}</AppText>
+            {failed ? <Pressable onPress={retryFailed}><AppText style={styles.retryText}>ניסיון נוסף</AppText></Pressable> : null}
+          </View>
+        ) : null}
+      </GestureHandlerRootView>
+    );
+  }
 
   const content = (
     <GestureHandlerRootView style={styles.screen}>
@@ -647,6 +814,23 @@ export default function TravelMediaComposer({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   contained: { ...StyleSheet.absoluteFillObject, zIndex: 120, backgroundColor: colors.background },
+  embeddedRoot: { width: '100%', backgroundColor: colors.white },
+  embeddedEmpty: { width: '100%', minHeight: 210, borderRadius: spacing.radiusLarge, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.accentLight, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  embeddedAddIcon: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
+  embeddedEmptyTitle: { color: colors.textPrimary, fontSize: 17 },
+  embeddedEmptyText: { color: colors.textSecondary, fontSize: 13, marginTop: spacing.xs },
+  embeddedPreview: { borderRadius: spacing.radiusLarge },
+  embeddedActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.md },
+  embeddedAction: { minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: spacing.radiusFull, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, paddingHorizontal: spacing.md },
+  embeddedActionActive: { borderColor: colors.primary, backgroundColor: colors.accentLight },
+  embeddedActionText: { color: colors.primary, fontSize: 13 },
+  embeddedDeleteText: { color: colors.error },
+  embeddedReorderHint: { color: colors.textSecondary, fontSize: 12, textAlign: 'right', writingDirection: 'rtl', marginTop: spacing.md, marginBottom: spacing.xs },
+  embeddedStripList: { height: 84 },
+  embeddedStrip: { gap: spacing.sm, paddingVertical: spacing.xs },
+  embeddedThumb: { width: 76, height: 76 },
+  embeddedThumbDragging: { opacity: 0.86 },
+  embeddedStatus: { marginTop: spacing.sm },
   header: { height: 58, paddingHorizontal: spacing.lg, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
   headerCopy: { alignItems: 'center' },
   title: { fontSize: 17, color: colors.textPrimary },

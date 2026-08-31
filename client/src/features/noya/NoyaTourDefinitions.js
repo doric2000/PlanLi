@@ -169,23 +169,8 @@ export const CREATOR_GUIDE_STEPS = Object.freeze({
   [NOYA_TOUR_IDS.recommendation]: [
     {
       targetId: NOYA_CREATOR_TARGETS.recommendationPhotos,
-      title: 'מתחילים מהתמונות',
-      message: 'בוחרים בין תמונה אחת לחמש. אפשר לעבור בין התמונות, להזיז, לקרב ולחתוך כל אחת בנפרד. צריך לפחות תמונה אחת כדי להמשיך.',
-    },
-    {
-      targetId: NOYA_CREATOR_TARGETS.recommendationLocation,
-      title: 'ממשיכים למיקום',
-      message: 'אפשר לבחור מקום מדויק, נקודה במפה, או עיר ואזור.',
-    },
-    {
-      targetId: NOYA_CREATOR_TARGETS.recommendationTaxonomy,
-      title: 'עוזרים למצוא את ההמלצה',
-      message: 'קטגוריה ועוד עד שלוש אפשרויות יעזרו למצוא את ההמלצה בלי להעמיס בתגיות.',
-    },
-    {
-      targetId: NOYA_CREATOR_TARGETS.recommendationStory,
-      title: 'מספרים למה כדאי להגיע',
-      message: 'מוסיפים כותרת קצרה, תיאור ורמת מחיר, בודקים את התצוגה המקדימה ומשלימים רק פרטים נוספים שרלוונטיים. הכנת התמונות לפרסום ממשיכה ברקע.',
+      title: 'הכול בעמוד אחד',
+      message: 'אפשר להתחיל מתמונות, ממיקום או מהתיאור. הטיוטה נשמרת ברקע, ובפרסום נציג רק מה עוד חסר.',
     },
   ],
   [NOYA_TOUR_IDS.route]: [
