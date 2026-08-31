@@ -9,6 +9,38 @@ track; it has not been publicly released to the App Store, Google Play, or a
 public web domain. Native development is performed with an installed, signed EAS
 Development Build connected to Metro. Expo Go is not supported.
 
+### Admin console layout and scrolling Hosting release
+
+Implementation commit `4be4b93b4530a474a953723852ebb68e11271abe` passed
+[PR #296](https://github.com/doric2000/PlanLi/pull/296) and merged to clean
+`main` as `891601123c679a50d486a7b46b6d5806ae75e522`. The Admin console now
+lets every standard section scroll vertically inside the Web navigation layout,
+and its wide moderation queue keeps a fixed 425px list pane instead of collapsing
+the Hebrew text into a one-character column under React Native Web's `flex: 0`
+shorthand.
+
+The focused Admin suite passed 25/25 tests, the production Admin Web export
+resolved all 30 local references, and every applicable PR validation, CodeQL,
+Semgrep, Gitleaks, dependency, history and security-invariant check passed. The
+merged export was built with the production reCAPTCHA Enterprise App Check
+configuration and deployed only to Firebase Hosting for `planli-f0b12` at
+`2026-08-31T20:43:09.766Z`. Firebase released Hosting version
+`sites/planli-f0b12/versions/eb7b98e0e197a234` after finding 43 files and
+uploading two new files.
+
+Independent CDN read-back returned HTTP 200 for the Admin entry and bundle. The
+live `index.html` SHA-256
+`d74bac96766d4b2ea7cb85bab34560982af71a00cd8a246e1648c1b12a026d9c` and
+bundle SHA-256
+`4356d6a5be9c07ea0b651d2b529be9daf05e9b4c773696bb4e0a69173e323cf6`
+matched the local merged export exactly. CSP, `X-Frame-Options`,
+`X-Content-Type-Options`, Referrer Policy, Permissions Policy and
+Cross-Origin Opener Policy remained present. A browser smoke test at 1832x1005
+rendered the live Hebrew login page with no root horizontal overflow; the
+authenticated console remains unverified in that browser because it had no
+active admin session. No Functions, Rules, indexes, Storage, IAM, production
+data, EAS build/update or store action accompanied this Hosting release.
+
 ### Destination-held recommendation recovery
 
 At `2026-08-31T19:42:41Z`, the destination-review recovery from merged PR
