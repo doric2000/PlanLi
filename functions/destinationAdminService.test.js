@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 
 const {
   buildApprovedCanonicalPolicy,
+  buildDestinationPolicyRegistryPlan,
   canonicalApprovalBindingIssues,
+  destinationPolicyRegistryBindingIssue,
   destinationApprovalHasConflictingFence,
   destinationCanEnterAdminApproval,
   qualityIssues,
@@ -15,9 +17,11 @@ const {
   quarantineDestinationPublicationFenceForManualRecovery,
   destinationCoordinates,
   selectAirportByIataCode,
+  selectDestinationPolicyRegistryBinding,
   syncDestinationAirport,
 } = require('./destinationAdminService');
 const { nearestScheduledAirports } = require('./airportFacts');
+const { validateRegistryEntry } = require('./canonicalDestinationRegistry');
 
 function validDestination() {
   return {
@@ -219,6 +223,263 @@ test('admin approval upgrades a matching legacy policy to an explicit registry a
   assert.equal(approved.registryAttestation.issuedBy, 'admin-1');
   assert.equal(approved.registryAttestation.countryId, 'IL');
   assert.deepEqual(approved.aliases, ['Tel Aviv']);
+});
+
+function policyBindingFixture(overrides = {}) {
+  const currentCity = {
+    providerRefs: { googlePlaceId: 'place-1' },
+    googleCache: {
+      placeId: 'place-1',
+      names: { he: 'רחובות', en: 'Rehovot' },
+      coordinates: { lat: 31.89, lng: 34.81 },
+      viewport: {
+        southwest: { lat: 31.8, lng: 34.7 },
+        northeast: { lat: 32, lng: 34.9 },
+      },
+      types: ['locality', 'political'],
+    },
+    canonicalPolicy: { registryId: 'il-provisional-old' },
+    ...overrides.currentCity,
+  };
+  return {
+    currentCity,
+    countryCode: overrides.countryCode || 'IL',
+    destinationPath: overrides.destinationPath || 'countries/IL/destinations/rehovot',
+    fallbackRegistryId: overrides.fallbackRegistryId || 'il-rehovot-fallback',
+    registryEntries: overrides.registryEntries || [],
+  };
+}
+
+function researchedRegistryEntry(overrides = {}) {
+  return {
+    id: 'il-rehovot',
+    countryCode: 'IL',
+    names: { he: 'רחובות', en: 'Rehovot' },
+    aliases: ['Rehovot'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    providerRefs: { googlePlaceId: 'place-1', googlePlaceIds: ['legacy-place'] },
+    providerDisplayName: 'Rehovot, Israel',
+    providerAddress: 'Rehovot, Israel',
+    center: { lat: 31.89, lng: 34.81 },
+    radiusKm: 18,
+    googleTypes: ['locality', 'political'],
+    providerIdentity: { reviewedOverride: false, source: 'seed-review' },
+    geometryPolicy: { autoMatchEligible: true, source: 'planli_reviewed', version: 3 },
+    researchSources: [{ url: 'https://example.test/source-1' }, { url: 'https://example.test/source-2' }],
+    status: 'active',
+    registryVersion: 3,
+    ...overrides,
+  };
+}
+
+test('destination policy adopts one exact unbound provider owner and preserves researched metadata', () => {
+  const owner = researchedRegistryEntry();
+  const binding = selectDestinationPolicyRegistryBinding(policyBindingFixture({ registryEntries: [owner] }));
+  assert.equal(binding.issue, undefined);
+  assert.equal(binding.registryId, 'il-rehovot');
+  assert.equal(binding.adoptedExistingProvider, true);
+
+  const plan = buildDestinationPolicyRegistryPlan({
+    binding,
+    currentCity: policyBindingFixture().currentCity,
+    countryCode: 'IL',
+    cityId: 'rehovot',
+    aliases: ['Rehovot'],
+    kind: 'city_hub',
+    parentId: null,
+    groupingPolicy: 'self',
+    reason: 'reviewed destination policy',
+    actorUid: 'admin-1',
+  });
+  assert.deepEqual(plan.validationEntry.providerRefs, owner.providerRefs);
+  assert.deepEqual(plan.validationEntry.providerIdentity, owner.providerIdentity);
+  assert.deepEqual(plan.validationEntry.researchSources, owner.researchSources);
+  assert.equal(Object.hasOwn(plan.writeData, 'providerRefs'), false);
+  assert.equal(Object.hasOwn(plan.writeData, 'providerIdentity'), false);
+  assert.equal(Object.hasOwn(plan.writeData, 'researchSources'), false);
+  assert.equal(plan.writeData.status, 'pending_review');
+});
+
+test('destination policy accepts an exact owner already bound to the same destination', () => {
+  const owner = researchedRegistryEntry({ destinationPath: 'countries/IL/destinations/rehovot' });
+  const fixture = policyBindingFixture({
+    registryEntries: [owner],
+    currentCity: { canonicalPolicy: { registryId: owner.id } },
+  });
+  const binding = selectDestinationPolicyRegistryBinding(fixture);
+  assert.equal(binding.issue, undefined);
+  assert.equal(binding.registryId, owner.id);
+  const plan = buildDestinationPolicyRegistryPlan({
+    binding,
+    currentCity: fixture.currentCity,
+    countryCode: 'IL',
+    cityId: 'rehovot',
+    aliases: ['Rehovot'],
+    kind: 'city_hub',
+    parentId: null,
+    groupingPolicy: 'self',
+    reason: 'reviewed destination policy',
+    actorUid: 'admin-1',
+  });
+  assert.deepEqual(plan.validationEntry.providerRefs, owner.providerRefs);
+  assert.deepEqual(plan.validationEntry.geometryPolicy, owner.geometryPolicy);
+  assert.equal(Object.hasOwn(plan.writeData, 'providerRefs'), false);
+  assert.equal(Object.hasOwn(plan.writeData, 'geometryPolicy'), false);
+});
+
+test('destination policy fails closed for ambiguous, cross-country, conflicting, or alias-only owners', () => {
+  const owner = researchedRegistryEntry();
+  const scenarios = [
+    {
+      entries: [owner, researchedRegistryEntry({ id: 'il-rehovot-copy' })],
+      reason: 'duplicate_google_place_id',
+    },
+    {
+      entries: [researchedRegistryEntry({ countryCode: 'US' })],
+      reason: 'destination_country_mismatch',
+    },
+    {
+      entries: [researchedRegistryEntry({ destinationPath: 'countries/IL/destinations/other' })],
+      reason: 'destination_registry_path_mismatch',
+    },
+    {
+      entries: [researchedRegistryEntry({
+        providerRefs: { googlePlaceId: 'primary-place', googlePlaceIds: ['place-1'] },
+      })],
+      reason: 'destination_registry_provider_mismatch',
+    },
+  ];
+  scenarios.forEach(({ entries, reason }) => {
+    const binding = selectDestinationPolicyRegistryBinding(policyBindingFixture({ registryEntries: entries }));
+    assert.equal(binding.issue, reason);
+  });
+});
+
+test('destination policy keeps new provider behavior when no canonical owner exists', () => {
+  const fixture = policyBindingFixture({
+    countryCode: 'US',
+    destinationPath: 'countries/US/destinations/miami',
+    fallbackRegistryId: 'us-miami',
+    currentCity: {
+      canonicalPolicy: {},
+      providerRefs: { googlePlaceId: 'new-place' },
+      googleCache: {
+        placeId: 'new-place',
+        names: { he: 'מיאמי', en: 'Miami' },
+        coordinates: { lat: 25.76, lng: -80.19 },
+        viewport: {
+          southwest: { lat: 25.6, lng: -80.4 },
+          northeast: { lat: 25.9, lng: -80 },
+        },
+        types: ['locality', 'political'],
+      },
+    },
+  });
+  const binding = selectDestinationPolicyRegistryBinding(fixture);
+  assert.equal(binding.issue, undefined);
+  assert.equal(binding.registryId, 'us-miami');
+  assert.equal(binding.existingEntry, null);
+  const plan = buildDestinationPolicyRegistryPlan({
+    binding,
+    currentCity: fixture.currentCity,
+    countryCode: 'US',
+    cityId: 'miami',
+    aliases: ['Miami'],
+    kind: 'city_hub',
+    parentId: null,
+    groupingPolicy: 'self',
+    reason: 'reviewed destination policy',
+    actorUid: 'admin-1',
+  });
+  assert.equal(plan.writeData.providerRefs.googlePlaceId, 'new-place');
+  assert.deepEqual(plan.writeData.googleTypes, ['locality', 'political']);
+});
+
+test('destination policy aborts when an adopted provider owner disappears during the hold window', () => {
+  const owner = researchedRegistryEntry();
+  const fixture = policyBindingFixture({ registryEntries: [owner] });
+  const first = selectDestinationPolicyRegistryBinding(fixture);
+  const expected = {
+    registryId: first.registryId,
+    expectedExistingOwner: true,
+    fingerprint: first.fingerprint,
+  };
+  const second = selectDestinationPolicyRegistryBinding({
+    ...fixture,
+    registryEntries: [],
+  });
+  assert.equal(destinationPolicyRegistryBindingIssue(expected, second), 'destination_registry_changed');
+});
+
+test('destination policy aborts when provider identity changes under the same registry ID', () => {
+  const firstOwner = researchedRegistryEntry();
+  const firstFixture = policyBindingFixture({
+    registryEntries: [firstOwner],
+    currentCity: { canonicalPolicy: { registryId: firstOwner.id } },
+  });
+  const first = selectDestinationPolicyRegistryBinding(firstFixture);
+  const expected = {
+    registryId: first.registryId,
+    expectedExistingOwner: true,
+    fingerprint: first.fingerprint,
+  };
+  const secondOwner = researchedRegistryEntry({
+    providerRefs: { googlePlaceId: 'place-2' },
+  });
+  const second = selectDestinationPolicyRegistryBinding({
+    ...firstFixture,
+    currentCity: {
+      ...firstFixture.currentCity,
+      providerRefs: { googlePlaceId: 'place-2' },
+      googleCache: { ...firstFixture.currentCity.googleCache, placeId: 'place-2' },
+    },
+    registryEntries: [secondOwner],
+  });
+  assert.equal(second.registryId, first.registryId);
+  assert.equal(destinationPolicyRegistryBindingIssue(expected, second), 'destination_registry_changed');
+});
+
+test('destination policy preserves compatible natural identity and does not invent an override', () => {
+  const owner = researchedRegistryEntry({
+    id: 'pe-humantay-lake',
+    countryCode: 'PE',
+    names: { he: 'אגם הומאנטאי', en: 'Humantay Lake' },
+    aliases: ['Humantay Lake'],
+    kind: 'natural_feature',
+    providerRefs: { googlePlaceId: 'place-1' },
+    googleTypes: ['natural_feature'],
+    providerIdentity: { source: 'seed-review' },
+  });
+  const binding = selectDestinationPolicyRegistryBinding(policyBindingFixture({
+    countryCode: 'PE',
+    destinationPath: 'countries/PE/destinations/humantay-lake',
+    registryEntries: [owner],
+    currentCity: { canonicalPolicy: { registryId: 'pe-provisional-old' } },
+  }));
+  const plan = buildDestinationPolicyRegistryPlan({
+    binding,
+    currentCity: policyBindingFixture().currentCity,
+    countryCode: 'PE',
+    cityId: 'humantay-lake',
+    aliases: ['Humantay Lake'],
+    kind: 'natural_feature',
+    parentId: null,
+    groupingPolicy: 'self',
+    reason: 'reviewed natural destination policy',
+    actorUid: 'admin-1',
+  });
+  assert.equal(plan.validationEntry.providerIdentity.reviewedOverride, undefined);
+  assert.equal(validateRegistryEntry(plan.validationEntry, { requireResearchSources: false }).valid, true);
+
+  const incompatible = {
+    ...plan.validationEntry,
+    googleTypes: ['locality', 'political'],
+  };
+  assert.deepEqual(
+    validateRegistryEntry(incompatible, { requireResearchSources: false }).errors,
+    ['incompatible_google_place_type']
+  );
 });
 
 test('destination quality accepts complete reviewed data', () => {

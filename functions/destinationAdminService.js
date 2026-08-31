@@ -496,6 +496,164 @@ function cleanPolicyAliases(value) {
   return aliases;
 }
 
+function destinationProviderPlaceId(destination) {
+  return String(
+    destination?.providerRefs?.googlePlaceId || destination?.googleCache?.placeId || ''
+  ).trim();
+}
+
+function registryProviderPlaceIds(entry) {
+  return Array.from(new Set([
+    entry?.providerRefs?.googlePlaceId,
+    ...(Array.isArray(entry?.providerRefs?.googlePlaceIds)
+      ? entry.providerRefs.googlePlaceIds
+      : []),
+  ].map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+function selectDestinationPolicyRegistryBinding({
+  currentCity,
+  countryCode,
+  destinationPath,
+  fallbackRegistryId,
+  registryEntries,
+}) {
+  const providerPlaceId = destinationProviderPlaceId(currentCity);
+  const preferredRegistryId = String(
+    currentCity?.canonicalPolicy?.registryId || fallbackRegistryId || ''
+  ).trim();
+  const normalizedCountryCode = String(countryCode || '').trim().toUpperCase();
+  const entries = Array.isArray(registryEntries) ? registryEntries : [];
+  const byId = new Map(entries.map((entry) => [String(entry?.id || '').trim(), entry]));
+  const providerOwners = providerPlaceId
+    ? entries.filter((entry) => registryProviderPlaceIds(entry).includes(providerPlaceId))
+    : [];
+  if (providerOwners.length > 1) {
+    return { issue: 'duplicate_google_place_id' };
+  }
+
+  const primaryOwner = providerOwners.find((entry) =>
+    String(entry?.providerRefs?.googlePlaceId || '').trim() === providerPlaceId
+  );
+  if (providerOwners.length === 1 && !primaryOwner) {
+    return { issue: 'destination_registry_provider_mismatch' };
+  }
+
+  const selectedEntry = primaryOwner || byId.get(preferredRegistryId) || null;
+  if (selectedEntry) {
+    if (String(selectedEntry.countryCode || '').trim().toUpperCase() !== normalizedCountryCode) {
+      return { issue: 'destination_country_mismatch' };
+    }
+    const boundPath = String(selectedEntry.destinationPath || '').trim();
+    if (boundPath && boundPath !== destinationPath) {
+      return { issue: 'destination_registry_path_mismatch' };
+    }
+    const selectedPrimaryProvider = String(selectedEntry?.providerRefs?.googlePlaceId || '').trim();
+    if (!providerPlaceId || selectedPrimaryProvider !== providerPlaceId) {
+      return { issue: 'destination_registry_provider_mismatch' };
+    }
+  }
+
+  if (primaryOwner && preferredRegistryId && byId.has(preferredRegistryId) &&
+      primaryOwner.id !== preferredRegistryId) {
+    return { issue: 'destination_registry_provider_mismatch' };
+  }
+
+  const registryId = String(primaryOwner?.id || preferredRegistryId).trim();
+  if (!registryId) return { issue: 'destination_registry_provider_mismatch' };
+  return {
+    registryId,
+    existingEntry: selectedEntry,
+    adoptedExistingProvider: Boolean(primaryOwner && primaryOwner.id !== preferredRegistryId),
+    previousRegistryId: preferredRegistryId || null,
+    fingerprint: JSON.stringify({
+      registryId,
+      providerPlaceId,
+      countryCode: normalizedCountryCode,
+      destinationPath,
+      ownerProviderPlaceId: selectedEntry
+        ? String(selectedEntry?.providerRefs?.googlePlaceId || '').trim()
+        : null,
+      ownerCountryCode: selectedEntry
+        ? String(selectedEntry.countryCode || '').trim().toUpperCase()
+        : null,
+      ownerDestinationPath: selectedEntry
+        ? String(selectedEntry.destinationPath || '').trim()
+        : null,
+    }),
+  };
+}
+
+function buildDestinationPolicyRegistryPlan({
+  binding,
+  currentCity,
+  countryCode,
+  cityId,
+  aliases,
+  kind,
+  parentId,
+  groupingPolicy,
+  reason,
+  actorUid,
+}) {
+  const policyPatch = {
+    aliases,
+    kind,
+    parentId,
+    groupingPolicy,
+    approval: { approvedByAdmin: false, reason, policyValidatedBy: actorUid },
+    status: 'pending_review',
+    registryVersion: REGISTRY_VERSION,
+  };
+  if (binding.existingEntry) {
+    return {
+      validationEntry: {
+        ...binding.existingEntry,
+        id: binding.registryId,
+        ...policyPatch,
+      },
+      writeData: policyPatch,
+    };
+  }
+
+  const registryEntry = {
+    id: binding.registryId,
+    countryCode: String(countryCode || '').toUpperCase(),
+    names: {
+      he: destinationHebrewName(currentCity) || cityId,
+      en: currentCity.googleCache?.names?.en || currentCity.identity?.names?.en || cityId,
+    },
+    ...policyPatch,
+    providerRefs: currentCity.providerRefs || {},
+    center: destinationCoordinates(currentCity),
+    viewport: currentCity.googleCache?.viewport || currentCity.identity?.viewport || null,
+    googleTypes: currentCity.googleCache?.types || currentCity.identity?.types || [],
+    geometryPolicy: {
+      autoMatchEligible: false,
+      aliasAutoMatchEligible: true,
+      source: 'admin_approved_aliases',
+      version: MATCH_PROFILE_VERSION,
+    },
+  };
+  const writeData = { ...registryEntry };
+  delete writeData.id;
+  return { validationEntry: registryEntry, writeData };
+}
+
+function destinationPolicyRegistryBindingIssue(expectedBinding, currentBinding) {
+  if (currentBinding?.issue) return currentBinding.issue;
+  if (!expectedBinding || currentBinding?.registryId !== expectedBinding.registryId) {
+    return 'destination_registry_changed';
+  }
+  if (!expectedBinding.fingerprint || currentBinding?.fingerprint !== expectedBinding.fingerprint) {
+    return 'destination_registry_changed';
+  }
+  if (expectedBinding.expectedExistingOwner && !currentBinding?.existingEntry) {
+    return 'destination_registry_changed';
+  }
+  return null;
+}
+
 async function updateDestinationPolicy({ admin, auth, data }) {
   await prepareAdminAction(admin, auth, 'updateDestinationPolicy');
   const countryId = cleanId(data?.countryId, 'countryId');
@@ -508,27 +666,16 @@ async function updateDestinationPolicy({ admin, auth, data }) {
   const parentId = data?.parentId ? cleanId(data.parentId, 'parentId') : null;
   const aliases = cleanPolicyAliases(data?.aliases || []);
   const bundle = await destinationBundle(admin, countryId, cityId);
-  const registryId = bundle.city?.canonicalPolicy?.registryId || `${String(bundle.country?.code || countryId).toLowerCase()}-${cityId.toLowerCase()}`;
-  let policy = {
-    approved: false,
-    registryId,
-    kind,
-    parentId,
-    groupingPolicy,
-    aliases,
-    registryVersion: REGISTRY_VERSION,
-    provisional: true,
-    reviewState: 'policy_validated',
-    policyValidatedBy: auth.uid,
-  };
   const db = admin.firestore();
   const countryRef = db.doc(`countries/${countryId}`);
-  const registryRef = db.doc(`${REGISTRY_PATH}/${registryId}`);
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
   const drainOperationId = crypto.randomUUID();
+  let registryId = '';
+  let registryRef = null;
+  let registryBinding = null;
+  let policy = null;
   let syncedCity = null;
   let destinationType = '';
-  let registryData = null;
   await db.runTransaction(async (transaction) => {
     const [citySnapshot, countrySnapshot, registrySnapshot] = await Promise.all([
       transaction.get(bundle.cityRef),
@@ -540,43 +687,61 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     }
     const currentCity = citySnapshot.data() || {};
     const currentCountry = countrySnapshot.data() || {};
+    const countryCode = String(currentCountry.code || countryId).toUpperCase();
+    const fallbackRegistryId = `${countryCode.toLowerCase()}-${cityId.toLowerCase()}`;
+    const registryEntries = registrySnapshot.docs
+      .map((document) => ({ id: document.id, ...document.data() }));
+    const binding = selectDestinationPolicyRegistryBinding({
+      currentCity,
+      countryCode,
+      destinationPath: bundle.cityRef.path,
+      fallbackRegistryId,
+      registryEntries,
+    });
+    if (binding.issue) {
+      fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', binding.issue);
+    }
+    registryId = binding.registryId;
+    registryBinding = {
+      registryId,
+      previousRegistryId: binding.previousRegistryId,
+      adoptedExistingProvider: binding.adoptedExistingProvider,
+      expectedExistingOwner: Boolean(binding.existingEntry),
+      fingerprint: binding.fingerprint,
+    };
     policy = {
-      ...policy,
+      approved: false,
+      registryId,
+      kind,
+      parentId,
+      groupingPolicy,
+      aliases,
+      registryVersion: REGISTRY_VERSION,
+      provisional: true,
+      reviewState: 'policy_validated',
+      policyValidatedBy: auth.uid,
       approvalRevision: Math.max(0, Number(currentCity.canonicalPolicy?.approvalRevision || 0)) + 1,
     };
-    const registryEntry = {
-      id: registryId,
-      countryCode: String(currentCountry.code || countryId).toUpperCase(),
-      names: {
-        he: destinationHebrewName(currentCity) || cityId,
-        en: currentCity.googleCache?.names?.en || currentCity.identity?.names?.en || cityId,
-      },
+    const registryPlan = buildDestinationPolicyRegistryPlan({
+      binding,
+      currentCity,
+      countryCode,
+      cityId,
       aliases,
       kind,
       parentId,
       groupingPolicy,
-      providerRefs: currentCity.providerRefs || {},
-      center: destinationCoordinates(currentCity),
-      viewport: currentCity.googleCache?.viewport || currentCity.identity?.viewport || null,
-      googleTypes: currentCity.googleCache?.types || currentCity.identity?.types || [],
-      geometryPolicy: {
-        autoMatchEligible: false,
-        aliasAutoMatchEligible: true,
-        source: 'admin_approved_aliases',
-        version: MATCH_PROFILE_VERSION,
-      },
-      approval: { approvedByAdmin: false, reason, policyValidatedBy: auth.uid },
-      status: 'pending_review',
-      registryVersion: REGISTRY_VERSION,
-    };
-    const entryValidation = validateRegistryEntry(registryEntry, { requireResearchSources: false });
+      reason,
+      actorUid: auth.uid,
+    });
+    const entryValidation = validateRegistryEntry(registryPlan.validationEntry, { requireResearchSources: false });
     if (!entryValidation.valid) {
       fail('failed-precondition', 'Destination policy does not satisfy registry requirements.', entryValidation.errors[0]);
     }
     const entries = registrySnapshot.docs
       .filter((document) => document.id !== registryId)
       .map((document) => ({ id: document.id, ...document.data() }));
-    const collectionIssues = registryCollectionIssues([...entries, registryEntry]);
+    const collectionIssues = registryCollectionIssues([...entries, registryPlan.validationEntry]);
     if (collectionIssues.length) {
       fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
     }
@@ -592,9 +757,8 @@ async function updateDestinationPolicy({ admin, auth, data }) {
       },
       updatedAt: timestamp,
     });
-    registryData = { ...registryEntry };
-    delete registryData.id;
   });
+  registryRef = db.doc(`${REGISTRY_PATH}/${registryId}`);
   const held = await holdLinkedDestinationContent({
     admin,
     countryId,
@@ -622,11 +786,41 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     if (activeLinkedContent.length) {
       fail('aborted', 'Linked public content changed while the destination was being held.', 'destination_drain_incomplete');
     }
-    const pendingRegistryEntry = { id: registryId, ...registryData };
-    const entries = registrySnapshot.docs
-      .filter((document) => document.id !== registryId)
+    const currentCountry = countrySnapshot.data() || {};
+    const countryCode = String(currentCountry.code || countryId).toUpperCase();
+    const registryEntries = registrySnapshot.docs
       .map((document) => ({ id: document.id, ...document.data() }));
-    const collectionIssues = registryCollectionIssues([...entries, pendingRegistryEntry]);
+    const binding = selectDestinationPolicyRegistryBinding({
+      currentCity,
+      countryCode,
+      destinationPath: bundle.cityRef.path,
+      fallbackRegistryId: registryId,
+      registryEntries,
+    });
+    const bindingIssue = destinationPolicyRegistryBindingIssue(registryBinding, binding);
+    if (bindingIssue) {
+      fail('aborted', 'Destination registry identity changed while policy was being updated.',
+        bindingIssue);
+    }
+    const registryPlan = buildDestinationPolicyRegistryPlan({
+      binding,
+      currentCity,
+      countryCode,
+      cityId,
+      aliases,
+      kind,
+      parentId,
+      groupingPolicy,
+      reason,
+      actorUid: auth.uid,
+    });
+    const entryValidation = validateRegistryEntry(registryPlan.validationEntry, { requireResearchSources: false });
+    if (!entryValidation.valid) {
+      fail('failed-precondition', 'Destination policy does not satisfy registry requirements.', entryValidation.errors[0]);
+    }
+    const entries = registryEntries
+      .filter((document) => document.id !== registryId);
+    const collectionIssues = registryCollectionIssues([...entries, registryPlan.validationEntry]);
     if (collectionIssues.length) {
       fail('failed-precondition', 'Destination policy conflicts with the canonical registry.', collectionIssues[0].code);
     }
@@ -642,7 +836,7 @@ async function updateDestinationPolicy({ admin, auth, data }) {
       },
       updatedAt: timestamp,
     });
-    transaction.set(registryRef, { ...registryData, updatedAt: timestamp }, { merge: true });
+    transaction.set(registryRef, { ...registryPlan.writeData, updatedAt: timestamp }, { merge: true });
     transaction.set(reviewRef(db, countryId, cityId), {
       status: 'ready',
       approvedAt: admin.firestore.FieldValue.delete(),
@@ -660,7 +854,15 @@ async function updateDestinationPolicy({ admin, auth, data }) {
     action: 'destination_policy_updated',
     target: { countryId, cityId },
     reason,
-    metadata: { policy, held: held.counts },
+    metadata: {
+      policy,
+      held: held.counts,
+      registryBinding: {
+        registryId,
+        previousRegistryId: registryBinding.previousRegistryId,
+        adoptedExistingProvider: registryBinding.adoptedExistingProvider,
+      },
+    },
   });
   return { success: true, policy, held: held.counts };
 }
@@ -1628,13 +1830,16 @@ module.exports = {
   approvalReleaseOperationId,
   approveDestination,
   buildApprovedCanonicalPolicy,
+  buildDestinationPolicyRegistryPlan,
   canonicalApprovalBindingIssues,
   deactivateDestination,
   destinationCoordinates,
+  destinationPolicyRegistryBindingIssue,
   destinationApprovalHasConflictingFence,
   destinationCanEnterAdminApproval,
   evaluateAndPersistDestination,
   selectAirportByIataCode,
+  selectDestinationPolicyRegistryBinding,
   getAirportCandidates,
   getDestinationImageCandidates,
   getDestinationRenameJob,
