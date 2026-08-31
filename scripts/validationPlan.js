@@ -91,6 +91,10 @@ function isClientPresentationOnly(file) {
     || /(?:Style|Styles|Presentation)\.js$/i.test(file);
 }
 
+function isClientNodeTest(file) {
+  return file.startsWith('client/scripts/') && TEST_FILE_RE.test(file);
+}
+
 function hasUnsupportedDynamicRelativeLoad(source) {
   const withoutLiteralLoads = source
     .replace(/require(?:\.resolve)?\(\s*['"][^'"]+['"]\s*\)/g, '')
@@ -250,6 +254,7 @@ function createPlan(files, repoRoot = REPO_ROOT) {
   const plan = {
     ...classifyChanges(files),
     clientTests: [],
+    clientNodeTests: [],
     clientSources: [],
     functionsTests: [],
     warnings: [],
@@ -257,8 +262,15 @@ function createPlan(files, repoRoot = REPO_ROOT) {
   };
 
   const clientFiles = plan.changedFiles.filter((file) => file.startsWith('client/'));
-  plan.clientTests = clientFiles.filter((file) => TEST_FILE_RE.test(file));
+  plan.clientTests = clientFiles.filter((file) => TEST_FILE_RE.test(file) && !isClientNodeTest(file));
+  plan.clientNodeTests = clientFiles.filter(isClientNodeTest);
   plan.clientSources = clientFiles.filter((file) => CLIENT_CODE_RE.test(file) && !TEST_FILE_RE.test(file));
+  if (plan.clientSources.length) {
+    const graph = buildClientDependencyGraph(repoRoot);
+    plan.clientNodeTests.push(
+      ...selectDependentTests(graph, plan.clientSources).filter(isClientNodeTest)
+    );
+  }
   if (plan.taxonomy) {
     plan.clientTests.push(
       'client/__tests__/travelTaxonomy.test.js',
@@ -266,6 +278,9 @@ function createPlan(files, repoRoot = REPO_ROOT) {
     );
   }
   plan.clientTests = unique(plan.clientTests.filter((file) => fs.existsSync(path.join(repoRoot, file))));
+  plan.clientNodeTests = unique(
+    plan.clientNodeTests.filter((file) => fs.existsSync(path.join(repoRoot, file)))
+  );
 
   if (!plan.functions) return plan;
 
@@ -429,6 +444,7 @@ function printablePlan(plan) {
     selection: {
       clientFull: plan.clientFull,
       clientTests: plan.clientTests,
+      clientNodeTests: plan.clientNodeTests,
       functionsFull: plan.functionsFull,
       functionsTests: plan.functionsTests,
     },
@@ -449,6 +465,7 @@ function compactPlan(plan) {
     `checks=${checks.length ? checks.join(',') : 'none'}`,
     `toolingChecks=${toolingChecks.length ? toolingChecks.join(',') : 'none'}`,
     `clientTests=${plan.clientFull ? 'full' : plan.clientTests.length}`,
+    `clientNodeTests=${plan.clientNodeTests.length}`,
     `functionsTests=${plan.functionsFull ? 'full' : plan.functionsTests.length}`,
     `exports=${[plan.adminExport && 'admin', plan.nativeExport && 'ios'].filter(Boolean).join(',') || 'none'}`,
     `audits=${[plan.clientAudit && 'client', plan.functionsAudit && 'functions'].filter(Boolean).join(',') || 'none'}`,
@@ -493,7 +510,7 @@ function selectClientTestsWithJest(plan, repoRoot = REPO_ROOT) {
     return unique([...selected].map((file) => path.resolve(repoRoot, file)));
   }
   const sources = plan.clientSources.filter((file) => fs.existsSync(path.join(repoRoot, file)));
-  const tests = [...graph.keys()].filter((file) => TEST_FILE_RE.test(file));
+  const tests = [...graph.keys()].filter((file) => TEST_FILE_RE.test(file) && !isClientNodeTest(file));
   for (const source of sources) {
     const sourceBase = path.basename(source).replace(/\.[^.]+$/, '').toLowerCase();
     const sameName = tests.find((testFile) =>
@@ -501,7 +518,7 @@ function selectClientTestsWithJest(plan, repoRoot = REPO_ROOT) {
     );
     if (sameName) selected.add(sameName);
   }
-  const isCovered = (source) => [...selected].some((testFile) =>
+  const isCovered = (source) => [...selected, ...plan.clientNodeTests].some((testFile) =>
     testFile === source || transitiveDependencies(graph, testFile).has(source)
   );
   const unresolved = sources.filter((source) => !isClientPresentationOnly(source) && !isCovered(source));
@@ -536,6 +553,11 @@ function runClient(plan, repoRoot = REPO_ROOT) {
   if (!plan.client) return;
   const clientRoot = path.join(repoRoot, 'client');
   const jest = jestExecutable(clientRoot);
+  if (plan.clientNodeTests.length) {
+    const tests = plan.clientNodeTests.map((file) => path.resolve(repoRoot, file));
+    runCommand(`client-node-tests-${tests.length}`, process.execPath,
+      ['--test', '--test-reporter=spec', ...tests], clientRoot, repoRoot);
+  }
   if (plan.clientFull) {
     runCommand('client-full-tests', process.execPath,
       [jest, '--ci', '--runInBand', '--silent'], clientRoot, repoRoot);

@@ -182,6 +182,24 @@ test('an untested maintenance script falls back only to the script test group', 
   assert.match(plan.fallbackReasons.join('\n'), /script test group/);
 });
 
+test('client script tests run with Node and cover their changed dependencies', (t) => {
+  const root = fixtureRepo({
+    'client/app.config.js': 'module.exports = {};',
+    'client/scripts/appConfigSecurity.test.js': "require('node:test'); require('../app.config');",
+    'client/__tests__/screen.test.js': "require('../src/screen');",
+    'client/src/screen.js': 'module.exports = {};',
+  });
+  t.after(() => removeFixture(root));
+
+  const plan = createPlan([
+    'client/app.config.js',
+    'client/scripts/appConfigSecurity.test.js',
+  ], root);
+
+  assert.deepEqual(plan.clientNodeTests, ['client/scripts/appConfigSecurity.test.js']);
+  assert.deepEqual(plan.clientTests, []);
+});
+
 test('CLI defaults include the worktree and explicit heads use exact commits', () => {
   assert.deepEqual(parseArgs([]), {
     command: 'run',

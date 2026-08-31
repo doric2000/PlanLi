@@ -65,6 +65,7 @@ const productionSubmit = eas.submit?.production?.ios || {};
 const requiredPlugins = [
   'expo-apple-authentication',
   '@react-native-google-signin/google-signin',
+  'react-native-maps',
   'expo-image-picker',
   'expo-notifications',
   '@sentry/react-native',
