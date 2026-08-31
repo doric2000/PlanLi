@@ -383,6 +383,97 @@ an active Firebase cleanup policy that deletes artifacts older than 24 hours,
 so these builds do not accumulate indefinitely; billing reports can lag, so this
 is usage evidence rather than a promise of zero provider charge.
 
+On `2026-08-31`, the canonical destination provider-rebind fix passed all
+required checks in PR [#274](https://github.com/doric2000/PlanLi/pull/274) and
+was squash-merged as `0f7df66cb95a6121bda51a55588c37a008337463`. The
+README-only security evidence in PR
+[#275](https://github.com/doric2000/PlanLi/pull/275) merged as
+`44aeb3b81006e12a0f2d015f33c782beb234eeb9`, and the exact five-file native
+release-runtime isolation in PR
+[#276](https://github.com/doric2000/PlanLi/pull/276) merged as clean `main`
+commit `f97a0c447a16ca1900da76854a168d1a2aa3701b`. The source continues to use
+marketing version `1.1.0`; its next security binary is isolated on OTA runtime
+`1.2.0`. No EAS build or Update was created, so installed binaries and the live
+production OTA group remain unchanged.
+
+After a fresh Firebase CLI login, only `updateDestinationPolicy` was deployed
+from that exact clean `main` commit. Independent Firebase and Cloud Run
+read-back reported an active generation-2 Node.js 22 Function in
+`europe-west1`, ready revision `updatedestinationpolicy-00007-xud`, update time
+`2026-08-31T10:38:20.506108391Z`, 300-second timeout, zero configured minimum
+instances and maximum 20 instances. An empty unauthenticated callable request
+failed closed with HTTP 401 `UNAUTHENTICATED`, and the recent post-deploy error
+log count was zero. No other Function, Rules, Hosting, migration, production
+data, IAM, secret, EAS build or OTA was changed.
+
+A subsequent read-only production destination review inspected 53 destination
+records, 34 catalog records, 29 content records and 254 registry records. It
+found 22 active destinations already carrying non-legacy policy state, 13
+active destinations still missing a registry binding, and 18 inactive records.
+The review fingerprint is
+`e33cc3bb51b666031b276bb07e696377fd9768f1e8f36b5e93bcf53d6eee6b6f`.
+The separate fail-closed publication migration dry-run fingerprint is
+`fdec6615eeaf3c5f6a94b4b395ebb8f467c8fb8905a5d813c0f86a054ddd7484`; before
+the remaining approvals it proposes 47 actions: 12 catalog removals, six
+content holds, six recommendation-count corrections and 23 content-gate
+verifications. These results are evidence only. No destination approval or
+Firestore write was performed; a fresh protected-admin login with TOTP and a
+separate exact production data-write authorization remain required.
+
+Later on `2026-08-31`, live discovery logs identified a separate availability
+failure: the secure recommendation and route fallback queries required composite
+indexes combining the destination-approval gate with popularity ordering. PR
+[#277](https://github.com/doric2000/PlanLi/pull/277) added only those two exact
+indexes and their regression assertions, passed CI and CodeQL, and was
+squash-merged as `d75f397d0f99f64b0e9d08d6a46ac673625140af`. Only
+`firestore:indexes` was deployed from the matching merged index blob
+`ca713de755631e342613ccba5456195ade178384`; all five previously undeployed
+publication-gate indexes reached `READY`. Read-only production queries then
+executed successfully for both recommendations and routes, but returned zero
+public documents because the reviewed destination/content approval migration had
+not yet been applied. No Function, Rules, Hosting, EAS, OTA, IAM, secret or data
+write was part of this index deployment.
+
+The protected destination rollout then completed from six additional reviewed
+PRs. PRs [#278](https://github.com/doric2000/PlanLi/pull/278),
+[#279](https://github.com/doric2000/PlanLi/pull/279) and
+[#280](https://github.com/doric2000/PlanLi/pull/280) generated valid canonical
+fallback IDs, repaired invalid provisional registry IDs and allowed an existing
+kind-specific bounded radius only when a provider supplied a verified center but
+no usable viewport. The final focused `updateDestinationPolicy` deployment is
+Cloud Run revision `updatedestinationpolicy-00010-tuk`. A fingerprint-locked,
+one-time approval run approved all 13 remaining active reviewed destinations;
+the post-apply read-back found zero active unapproved destinations and zero
+active destinations missing a registry binding. All 18 inactive records stayed
+inactive and were neither approved nor reactivated.
+
+PRs [#281](https://github.com/doric2000/PlanLi/pull/281) and
+[#282](https://github.com/doric2000/PlanLi/pull/282) made the publication-gate
+migration fingerprint lossless at Firestore nanosecond precision and corrected
+the private receipt path. The signed production migration fingerprint was
+`94427fcc8a1c65c30aa1dbae855fccdf215aa471498f43a6570a58af72a75274`.
+It completed 29 writes: six recommendation-count corrections, 21 recommendation
+gate verifications and two route gate verifications. A fresh dry run reported
+zero remaining actions, zero held content and zero catalog removals. The applied
+receipt was independently read back from
+`system/migrations/destinationPublicationGate/94427fcc8a1c65c30aa1dbae855fccdf215aa471498f43a6570a58af72a75274`;
+the 18 inactive destinations remain visible only to the review workflow.
+
+Finally, PR [#283](https://github.com/doric2000/PlanLi/pull/283) added the two
+missing chronological publication-gated feed indexes and merged as
+`fc4dc2fe6405adcb36bf5b6be00890404bffd6a9` after affected validation, CodeQL,
+Semgrep, Gitleaks, dependency review and locked audits passed. Only
+`firestore:indexes` was deployed; both new indexes reached `READY`. Direct
+production-data service smoke tests returned 21 recommendations and two routes
+in normal `generic` mode with no `candidate-query-failed` fallback. The last
+production callable error entries for these feeds were at `2026-08-31T06:44Z`,
+before this repair; no later `ERROR` entry was present at verification time.
+Firebase CLI credentials used earlier in the session were revoked, and the
+final read-only verification used ADC restricted to Cloud data access. No Cloud
+SQL scope, new paid service, Function, Rules, Hosting, EAS build, OTA, IAM,
+secret deletion or additional production-content mutation accompanied this
+final index repair.
+
 The current Android internal release is `1.1.0 (6)`, EAS build
 `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
 `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` and completed at
