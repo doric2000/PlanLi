@@ -168,7 +168,9 @@ Identity Platform/TOTP manifest
 `a13cb12d49c152bbec05255319103dca515705d943238f2f2267b47e3b7117bb`
 is live: the project subtype is `IDENTITY_PLATFORM`, MFA is enabled, TOTP is the
 only second factor, and SMS MFA is disabled. Two separate human administrators
-still need individual TOTP enrollment and a real admin-mutation test.
+now have individual TOTP enrollment, an active admin claim and an active private
+registry entry. A real second-admin mutation through the live console remains a
+manual release test after that browser session refreshes its ID token.
 
 App Check manifest
 `455b880ef5df37d583ebe1e8cc580f1cde64cd9af932685d3c7cc45364827b98`
@@ -2705,3 +2707,39 @@ reusing the stage-five environment variable with `--only functions`.
   `1.1.0` and the latest production OTA group remains unchanged. No native EAS
   build, TestFlight/App Store or Google Play submission, Hosting, Firestore
   Rules/index, Storage, IAM or dependency change accompanied this release.
+
+## Admin preauthorization TOTP enrollment Hosting release
+
+- Source and Git: implementation commit `d92fe8c415fe667a3953197ed83e4ab4e057b081`
+  passed PR [#288](https://github.com/doric2000/PlanLi/pull/288) and merged to
+  clean `main` as `a69e613f0bc3ab0160113a0dc0b527db24868385` at
+  `2026-08-31T16:17:06Z`.
+- Scope: an authenticated user without an admin role can now reach only their
+  own Firebase TOTP enrollment screen. Enrollment does not grant an admin
+  claim, does not load admin policy data, and a TOTP-enrolled non-admin remains
+  denied until a separate trusted bootstrap grants the role.
+- Validation: the focused Admin suite passed 23/23 tests, the isolated Admin Web
+  export resolved all 30 local references, and a complete Codex Security diff
+  scan reported zero findings. All 11 applicable CI and CodeQL checks on PR
+  #288 passed with zero failures and no merge conflict.
+- Hosting: the Admin Web bundle was exported from the exact merged source with
+  the production reCAPTCHA Enterprise site key and deployed only to Firebase
+  Hosting for `planli-f0b12` at `2026-08-31T16:26Z`. Firebase uploaded two new
+  files within the 43-file Hosting release and reported `release complete`.
+  The live Admin route and its JavaScript returned HTTP 200, contained both new
+  TOTP enrollment guards, and exposed no source maps. Root and unknown
+  non-Admin routes returned HTTP 404.
+- Live verification: an existing TOTP-authenticated admin session loaded the
+  complete Hebrew console without browser warnings or errors. Live responses
+  retained CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  Referrer Policy, Permissions Policy and Cross-Origin Opener Policy. The
+  `doric9@gmail.com` enrollment was completed without sharing a password or
+  TOTP code. Production bootstrap manifest
+  `d415d9229067289b59425d5206a10f9f014d25139d4c3e5c02f6f9b2853a8062`
+  then granted only `admin: true` and activated the matching private registry
+  entry. A fresh read-back found one TOTP factor, both controls active and
+  `changed: false`; the browser must sign out and back in to refresh its token.
+- No Functions, Rules, IAM, secrets, EAS build, EAS Update, store submit or paid
+  service action accompanied this Hosting release. The only production data
+  mutation after deployment was the explicitly authorized second-admin claim
+  and registry activation described above.
