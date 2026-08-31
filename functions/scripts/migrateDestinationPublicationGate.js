@@ -105,6 +105,12 @@ function normalizedUpdateTime(value) {
   throw new Error('Firestore returned an invalid document update time.');
 }
 
+function migrationReceiptPath(fingerprint) {
+  const value = String(fingerprint || '').trim();
+  if (!/^[a-f0-9]{64}$/.test(value)) throw new Error('Migration fingerprint is invalid.');
+  return `system/migrations/destinationPublicationGate/${value}`;
+}
+
 function buildPublicationManifest({ countries, destinations, catalog, contents, registry = [] }) {
   const countryStatus = new Map(countries.map((entry) => [entry.id, entry.data?.status]));
   const registryById = new Map(registry.map((entry) => [entry.id, entry]));
@@ -531,12 +537,13 @@ async function run({ adminApi = admin, options }) {
     throw new Error('The live manifest changed. Run dry-run again and pass its fingerprint.');
   }
   for (const action of manifest.actions) await applyAction(adminApi, action);
-  await adminApi.firestore().doc(`system/migrations/destinationPublicationGate_${manifest.fingerprint}`).set({
-    status: 'applied', fingerprint: manifest.fingerprint, counts: manifest.counts,
-    appliedAt: adminApi.firestore.FieldValue.serverTimestamp(),
-  });
   const verification = await buildLiveManifest(adminApi);
   if (verification.actions.length) throw new Error('Post-apply verification found remaining publication-gate actions.');
+  await adminApi.firestore().doc(migrationReceiptPath(manifest.fingerprint)).set({
+    status: 'applied', fingerprint: manifest.fingerprint, counts: manifest.counts,
+    verificationCounts: verification.counts,
+    appliedAt: adminApi.firestore.FieldValue.serverTimestamp(),
+  });
   return { mode: 'apply', fingerprint: manifest.fingerprint, applied: manifest.actions.length, verification };
 }
 
@@ -569,6 +576,7 @@ module.exports = {
   decodeFirestoreValue,
   loadLiveRecordsRest,
   manifestFingerprint,
+  migrationReceiptPath,
   normalizedUpdateTime,
   parseArgs,
   run,

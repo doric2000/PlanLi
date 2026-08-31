@@ -5,6 +5,7 @@ const {
   buildPublicationManifest,
   decodeFirestoreValue,
   loadLiveRecordsRest,
+  migrationReceiptPath,
   normalizedUpdateTime,
   parseArgs,
 } = require('./migrateDestinationPublicationGate');
@@ -118,6 +119,16 @@ test('migration arguments are dry-run by default and require explicit apply fiel
     expectedFingerprint: 'abc',
     confirmation: 'APPLY_DESTINATION_PUBLICATION_GATE',
   });
+});
+
+test('migration receipts use a private valid document path bound to the manifest fingerprint', () => {
+  const fingerprint = 'a'.repeat(64);
+  assert.equal(
+    migrationReceiptPath(fingerprint),
+    `system/migrations/destinationPublicationGate/${fingerprint}`
+  );
+  assert.equal(migrationReceiptPath(fingerprint).split('/').length % 2, 0);
+  assert.throws(() => migrationReceiptPath('not-a-fingerprint'), /fingerprint is invalid/);
 });
 
 test('read-only REST inventory uses the existing gcloud token and decodes fixed collections', async () => {
