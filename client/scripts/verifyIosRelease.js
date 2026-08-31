@@ -91,6 +91,13 @@ requiredPlugins.forEach((name) => {
 });
 const imagePickerPlugin = (app.plugins || []).find((plugin) => pluginName(plugin) === 'expo-image-picker');
 const imagePickerOptions = Array.isArray(imagePickerPlugin) ? imagePickerPlugin[1] : null;
+const rnFirebaseAppPlugin = (app.plugins || []).find(
+  (plugin) => pluginName(plugin) === '@react-native-firebase/app',
+);
+const rnFirebaseAppOptions = Array.isArray(rnFirebaseAppPlugin) ? rnFirebaseAppPlugin[1] : null;
+if (rnFirebaseAppOptions?.ios?.disableSPM !== true) {
+  fail('RNFirebase must use CocoaPods on iOS; set ios.disableSPM to true.');
+}
 if (!String(imagePickerOptions?.photosPermission || '').trim()) {
   fail('The iOS photo-library usage description is missing.');
 }
