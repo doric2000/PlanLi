@@ -4,6 +4,7 @@ const {
   applyingSuspensionDisposition,
   applySuspensionEnforcement,
   assertAdmin,
+  assertManualContentRestoreAllowed,
   assertModerationRetryOperation,
   assertRecentAuth,
   assertTotpSecondFactor,
@@ -14,6 +15,7 @@ const {
   getAdminResource,
   getModerationDashboard,
   listAdminUsers,
+  listHeldContent,
   listModerationAudit,
   listModerationCases,
   moderationCaseAuditId,
@@ -26,6 +28,7 @@ const {
   sensitiveAdminActions,
   publicModerationCase,
   publicModerationReport,
+  publicHoldContext,
   recoverablePreviousCaseStatus,
   reconcileStaleModerationDecisions,
   recoverApplyingSuspension,
@@ -149,6 +152,44 @@ test('sensitive admin actions still enforce recent sign-in before mutation', asy
   );
 });
 
+test('system-managed destination holds expose safe context and cannot be restored manually', () => {
+  const content = {
+    status: 'moderation_hold',
+    moderation: {
+      holdReason: 'destination_policy_review',
+      systemGate: 'destination_pending_approval',
+      destination: {
+        countryId: 'IL',
+        cityId: 'new-city',
+        cityName: 'ניר דוד',
+        countryName: 'ישראל',
+        privateProviderPayload: 'must-not-leak',
+      },
+      actorUid: 'private-admin',
+    },
+  };
+
+  assert.deepEqual(publicHoldContext(content), {
+    kind: 'system',
+    holdReason: 'destination_policy_review',
+    systemGate: 'destination_pending_approval',
+    destination: {
+      countryId: 'IL',
+      cityId: 'new-city',
+      cityName: 'ניר דוד',
+      countryName: 'ישראל',
+    },
+  });
+  assert.throws(
+    () => assertManualContentRestoreAllowed(content),
+    (error) => error?.details?.reason === 'system_managed_hold'
+  );
+  assert.doesNotThrow(() => assertManualContentRestoreAllowed({
+    status: 'moderation_hold',
+    moderation: { holdReason: 'unsafe_text' },
+  }));
+});
+
 test('dashboard uses Firestore counters without requesting Firebase Auth access', async () => {
   const counts = {
     'system/moderation/cases': [7, 2, 1, 3, 4],
@@ -191,6 +232,73 @@ test('dashboard uses Firestore counters without requesting Firebase Auth access'
     pendingDestinations: 6,
     failedJobs: 8,
   });
+});
+
+test('held content pagination reaches every supported collection without duplicates', async () => {
+  const records = {
+    recommendations: Array.from({ length: 31 }, (_, index) => ({
+      id: `rec-${String(index + 1).padStart(2, '0')}`,
+      data: { status: 'moderation_hold', title: `Recommendation ${index + 1}` },
+    })),
+    routes: [
+      { id: 'route-01', data: { status: 'moderation_hold', title: 'Route 1' } },
+      { id: 'route-02', data: { status: 'moderation_hold', title: 'Route 2' } },
+    ],
+    trips: [{ id: 'trip-01', data: { status: 'moderation_hold', title: 'Trip 1' } }],
+  };
+  const db = {
+    doc: () => ({ get: async () => ({ exists: true, data: () => ({ active: true }) }) }),
+    collection(collectionName) {
+      let after = '';
+      let maximum = 30;
+      const query = {
+        where: () => query,
+        orderBy: (field) => {
+          assert.equal(field, '__name__');
+          return query;
+        },
+        startAfter: (id) => {
+          after = id;
+          return query;
+        },
+        limit: (value) => {
+          maximum = value;
+          return query;
+        },
+        get: async () => ({
+          docs: (records[collectionName] || [])
+            .filter((record) => record.id > after)
+            .slice(0, maximum)
+            .map((record) => ({
+              id: record.id,
+              ref: { path: `${collectionName}/${record.id}` },
+              data: () => record.data,
+            })),
+        }),
+      };
+      return query;
+    },
+  };
+  const firestore = () => db;
+  firestore.FieldPath = { documentId: () => '__name__' };
+  const admin = { firestore };
+  const auth = { uid: 'admin-1', token: { admin: true } };
+
+  const first = await listHeldContent({ admin, auth, data: {} });
+  assert.equal(first.items.length, 30);
+  assert.equal(first.items[0].target.path, 'recommendations/rec-01');
+  assert.equal(first.items.at(-1).target.path, 'recommendations/rec-30');
+  assert.equal(first.nextCursor, 'recommendations:rec-30');
+
+  const second = await listHeldContent({ admin, auth, data: { cursor: first.nextCursor } });
+  assert.deepEqual(second.items.map((item) => item.target.path), [
+    'recommendations/rec-31',
+    'routes/route-01',
+    'routes/route-02',
+    'trips/trip-01',
+  ]);
+  assert.equal(second.nextCursor, null);
+  assert.equal(new Set([...first.items, ...second.items].map((item) => item.target.path)).size, 34);
 });
 
 test('case updates reject stale revisions before writing an assignment', async () => {

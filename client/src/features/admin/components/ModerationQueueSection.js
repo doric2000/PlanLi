@@ -8,7 +8,9 @@ import AppTextInput from '../../../components/AppTextInput';
 import {
   bulkUpdateModerationCases,
   deleteAdminSavedView,
+  getAdminResource,
   getModerationCase,
+  listHeldContent,
   listAdminSavedViews,
   listModerationCases,
   resolveModerationCase,
@@ -71,7 +73,13 @@ function ToggleChip({ label, active, onPress, testID, danger = false }) {
   );
 }
 
-function CaseRow({ item, active, selected, onOpen, onToggleSelected }) {
+function holdReasonLabel(item) {
+  if (item?.holdContext?.systemGate === 'destination_pending_approval') return 'ממתין לאישור יעד';
+  if (item?.holdContext?.holdReason === 'unsafe_text') return 'בדיקת בטיחות תוכן';
+  return 'תוכן מוחזק לבדיקה';
+}
+
+function CaseRow({ item, active, selected, onOpen, onToggleSelected, held = false }) {
   const categories = Object.entries(item.categoryCounts || {})
     .filter(([, count]) => Number(count) > 0)
     .sort((left, right) => right[1] - left[1])
@@ -80,12 +88,12 @@ function CaseRow({ item, active, selected, onOpen, onToggleSelected }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`פתיחת תיק ${item.targetPreview?.title || TARGET_LABELS[item.target?.type] || 'תוכן'}`}
+      accessibilityLabel={`${held ? 'פתיחת תוכן מוחזק' : 'פתיחת תיק'} ${item.targetPreview?.title || TARGET_LABELS[item.target?.type] || 'תוכן'}`}
       testID={`admin-case-${item.id}`}
       style={({ pressed }) => [styles.queueRow, active && styles.queueRowActive, pressed && styles.cardPressed]}
       onPress={onOpen}
     >
-      <Pressable
+      {!held ? <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{ checked: selected }}
         accessibilityLabel="בחירת תיק לפעולה מרובה"
@@ -94,18 +102,20 @@ function CaseRow({ item, active, selected, onOpen, onToggleSelected }) {
         onPress={(event) => { event?.stopPropagation?.(); onToggleSelected(); }}
       >
         {selected ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
-      </Pressable>
+      </Pressable> : null}
       <View style={styles.queueRowContent}>
         <View style={styles.row}>
           <AppText numberOfLines={1} style={styles.queueTitle}>{item.targetPreview?.title || 'תוכן ללא כותרת'}</AppText>
           {item.priority === 'urgent' ? <View style={[styles.badge, styles.badgeUrgent]}><AppText style={[styles.badgeText, styles.badgeUrgentText]}>דחוף</AppText></View> : null}
         </View>
-        <AppText style={styles.queueMeta}>{TARGET_LABELS[item.target?.type] || 'תוכן'} · {item.targetPreview?.author?.displayName || 'ללא בעלים'} · {item.reportCount || 0} דיווחים</AppText>
-        <AppText numberOfLines={1} style={styles.queueReasons}>{categories.join(' · ') || 'תיק שנפתח על ידי המערכת'}</AppText>
+        <AppText style={styles.queueMeta}>{TARGET_LABELS[item.target?.type] || 'תוכן'} · {item.targetPreview?.author?.displayName || 'ללא בעלים'}{held ? '' : ` · ${item.reportCount || 0} דיווחים`}</AppText>
+        <AppText numberOfLines={1} style={styles.queueReasons}>{held ? holdReasonLabel(item) : categories.join(' · ') || 'תיק שנפתח על ידי המערכת'}</AppText>
         <View style={styles.queueFoot}>
           <AppText style={styles.queueFootText}>{formatRelativeAge(item.lastActivityAt || item.updatedAt)}</AppText>
-          <AppText style={[styles.queueFootText, Number(item.dueAtMs) < Date.now() && styles.overdueText]}>{formatSla(item.dueAtMs)}</AppText>
-          <AppText style={styles.queueFootText}>{item.assignment?.displayName || (item.assignmentUid ? 'מנהל מוקצה' : 'לא מוקצה')}</AppText>
+          {held ? <AppText style={styles.queueFootText}>מוחזק לבדיקה</AppText> : <>
+            <AppText style={[styles.queueFootText, Number(item.dueAtMs) < Date.now() && styles.overdueText]}>{formatSla(item.dueAtMs)}</AppText>
+            <AppText style={styles.queueFootText}>{item.assignment?.displayName || (item.assignmentUid ? 'מנהל מוקצה' : 'לא מוקצה')}</AppText>
+          </>}
         </View>
       </View>
     </Pressable>
@@ -251,6 +261,67 @@ export function DecisionPanel({ details, policy, busy, error, success, onResolve
   );
 }
 
+function HeldContentDetails({
+  resource,
+  loading,
+  error,
+  policy,
+  decisionState,
+  onBack,
+  onReload,
+  onResolve,
+  onOpenDestination,
+}) {
+  if (loading || error || !resource) {
+    return <View style={styles.caseDetailPane}><AdminAsyncState loading={loading} error={error} empty={!loading && !error && !resource} onRetry={onReload} testID="admin-held-details" emptyText="בחרו תוכן מוחזק כדי לראות מדוע אינו מפורסם." /></View>;
+  }
+  const preview = resource.preview || {};
+  const holdContext = resource.holdContext || {};
+  const destination = holdContext.destination || preview.destination || null;
+  const systemManaged = holdContext.systemGate === 'destination_pending_approval';
+  return (
+    <ScrollView style={styles.caseDetailPane} contentContainerStyle={styles.caseDetailContent} keyboardShouldPersistTaps="handled" testID="admin-held-content-details">
+      {onBack ? <AdminAction compact label="חזרה לתור" onPress={onBack} testID="admin-held-back" /> : null}
+      <View style={styles.row}>
+        <View style={styles.detailTitleBlock}>
+          <AppText style={styles.sectionTitle}>{preview.title || TARGET_LABELS[resource.target?.type] || 'תוכן מוחזק'}</AppText>
+          <AppText style={styles.queueMeta}>מוחזק לבדיקה · {TARGET_LABELS[resource.target?.type] || 'תוכן'}</AppText>
+        </View>
+      </View>
+      <ModerationTargetPreview preview={preview} />
+      <View style={styles.contextCard} testID="admin-held-reason">
+        <AppText style={styles.subsectionTitle}>למה התוכן מוחזק?</AppText>
+        <AppText style={styles.body}>{systemManaged
+          ? 'היעד המקושר נמצא בבקרת מנהל. לאחר אישור תקין התוכן ישוחרר אוטומטית.'
+          : 'התוכן מוחזק במסגרת בדיקת מודרציה וניתן לקבל החלטה מתועדת.'}</AppText>
+      </View>
+      {destination?.countryId && destination?.cityId ? <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`פתיחת בקרת המקום ${destination.cityName || ''}`}
+        style={({ pressed }) => [styles.contextCard, styles.contextLinkCard, pressed && styles.cardPressed]}
+        onPress={() => onOpenDestination?.(destination, resource.case?.id || '')}
+        testID="admin-held-open-destination"
+      >
+        <AppText style={styles.subsectionTitle}>היעד המקושר</AppText>
+        <AppText style={styles.contextStrong}>{destination.cityName || destination.cityId}</AppText>
+        <AppText style={styles.body}>{destination.countryName || destination.countryId}</AppText>
+        <AppText style={styles.contextLinkText}>פתיחת בקרת המקום ←</AppText>
+      </Pressable> : null}
+      {systemManaged ? <View style={styles.contextCard} testID="admin-held-system-action">
+        <AppText style={styles.helpText}>אי אפשר לשחזר ידנית תוכן שמוגן בשער אישור יעד. יש להשלים את בקרת המקום.</AppText>
+        {destination?.countryId && destination?.cityId ? <AdminAction label="מעבר לבקרת המקום" primary onPress={() => onOpenDestination?.(destination, resource.case?.id || '')} testID="admin-held-destination-action" /> : null}
+      </View> : <DecisionPanel
+        details={{ target: resource.target, targetPreview: preview, revision: 0 }}
+        policy={policy}
+        busy={decisionState.busy}
+        error={decisionState.error}
+        success={decisionState.success}
+        onResolve={onResolve}
+      />}
+    </ScrollView>
+  );
+}
+
 function CaseDetails({ details, loading, error, policy, supportState, actionState, onBack, onUpdate, onResolve, onReload, onReloadSupport, onOpenUser, onOpenDestination }) {
   if (loading || error || !details) {
     return <View style={styles.caseDetailPane}><AdminAsyncState loading={loading} error={error} empty={!loading && !error && !details} onRetry={onReload} testID="admin-case-details" emptyText="בחרו תיק כדי לראות את ההקשר ולקבל החלטה." /></View>;
@@ -336,10 +407,13 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
   const [savedViewName, setSavedViewName] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [details, setDetails] = useState(null);
+  const [heldResource, setHeldResource] = useState(null);
   const [detailState, setDetailState] = useState({ loading: false, error: '' });
   const [supportState, setSupportState] = useState({ loading: true, policyError: '', viewsError: '' });
   const [actionState, setActionState] = useState({ busy: '', error: '', decisionError: '', success: '', note: '' });
+  const [heldDecisionState, setHeldDecisionState] = useState({ busy: false, error: '', success: '' });
   const requestId = useRef(0);
+  const heldView = view === 'held';
 
   useEffect(() => { setView(initialView); }, [initialView]);
 
@@ -360,16 +434,19 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
     const id = ++requestId.current;
     setList((current) => ({ ...current, loading: !append, loadingMore: append, error: '' }));
     try {
-      const result = await listModerationCases({ ...payload, ...(append && list.nextCursor ? { cursor: list.nextCursor } : {}) });
+      const result = heldView
+        ? await listHeldContent(append && list.nextCursor ? { cursor: list.nextCursor } : {})
+        : await listModerationCases({ ...payload, ...(append && list.nextCursor ? { cursor: list.nextCursor } : {}) });
       if (id !== requestId.current) return;
       setList((current) => ({ loading: false, loadingMore: false, error: '', items: append ? [...current.items, ...(result.items || [])] : (result.items || []), nextCursor: result.nextCursor || null }));
       if (!append) setSelectedIds([]);
     } catch (error) {
       if (id === requestId.current) setList((current) => ({ ...current, loading: false, loadingMore: false, error: safeAdminError(error) }));
     }
-  }, [list.nextCursor, payload]);
+  }, [heldView, list.nextCursor, payload]);
 
   const openCase = useCallback(async (caseId) => {
+    setHeldResource(null);
     setDetailState({ loading: true, error: '' });
     setActionState({ busy: '', error: '', decisionError: '', success: '', note: '' });
     try {
@@ -384,6 +461,39 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
     }
   }, []);
 
+  const openHeldContent = useCallback(async (item) => {
+    setDetails(null);
+    setHeldResource({ target: item.target, preview: item.targetPreview, holdContext: item.holdContext });
+    setDetailState({ loading: true, error: '' });
+    setHeldDecisionState({ busy: false, error: '', success: '' });
+    try {
+      const resource = await getAdminResource(item.target);
+      if (resource?.holdContext?.systemGate !== 'destination_pending_approval' && resource?.case?.id) {
+        setHeldResource(null);
+        return openCase(resource.case.id);
+      }
+      setHeldResource(resource);
+      setDetailState({ loading: false, error: '' });
+      return resource;
+    } catch (openError) {
+      setDetailState({ loading: false, error: safeAdminError(openError) });
+      return null;
+    }
+  }, [openCase]);
+
+  const resolveHeldContent = async (decision) => {
+    setHeldDecisionState({ busy: true, error: '', success: '' });
+    try {
+      await resolveModerationCase(decision);
+      setHeldDecisionState({ busy: false, error: '', success: 'ההחלטה נשמרה בתיק מתועד.' });
+      setHeldResource(null);
+      setDetailState({ loading: false, error: '' });
+      await load();
+    } catch (decisionError) {
+      setHeldDecisionState({ busy: false, error: safeAdminError(decisionError, { operationMayContinue: true }), success: '' });
+    }
+  };
+
   const loadSupportData = useCallback(async () => {
     setSupportState((current) => ({ ...current, loading: true, policyError: '', viewsError: '' }));
     const viewsResult = await Promise.resolve()
@@ -396,7 +506,12 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
     setSupportState({ loading: false, policyError: '', viewsError });
   }, []);
 
-  useEffect(() => { load(); }, [payload]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setDetails(null);
+    setHeldResource(null);
+    setDetailState({ loading: false, error: '' });
+    load();
+  }, [payload]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadSupportData(); }, [loadSupportData]);
   useEffect(() => {
     if (!focusCaseId) return;
@@ -510,14 +625,14 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
   };
   const toggleArrayFilter = (key, value) => setFilters((current) => ({ ...current, [key]: current[key].includes(value) ? current[key].filter((entry) => entry !== value) : [...current[key], value] }));
 
-  const showingMobileDetail = !split && (details || detailState.loading || detailState.error);
+  const showingMobileDetail = !split && (details || heldResource || detailState.loading || detailState.error);
   return (
     <View style={styles.queueSection} testID="admin-queue-content">
       {!showingMobileDetail ? <View style={[styles.queueListPane, split && styles.queueListPaneSplit]}>
         <View style={styles.sectionHeading}><AppText style={styles.sectionTitle}>תור בדיקה</AppText><AppText style={styles.sectionDescription}>כל הדיווחים והתוכן המוחזק, עם הקצאה והחלטה באותו מרחב עבודה.</AppText></View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.viewTabs}>{QUEUE_VIEWS.map((item) => <ToggleChip key={item.id} label={item.label} active={view === item.id} onPress={() => setView(item.id)} testID={`admin-queue-view-${item.id}`} />)}</ScrollView>
-        <View style={styles.searchBar}><Ionicons name="search-outline" size={20} color="#667085" /><AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))} placeholder="חיפוש בתוך התור" accessibilityLabel="חיפוש בתוך תור המודרציה" style={styles.searchInput} /><AdminAction compact label="מסננים" onPress={() => setFiltersOpen((current) => !current)} testID="admin-queue-filters-toggle" /></View>
-        {filtersOpen ? <View style={styles.filtersPanel} testID="admin-queue-filters">
+        {!heldView ? <View style={styles.searchBar}><Ionicons name="search-outline" size={20} color="#667085" /><AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))} placeholder="חיפוש בתוך התור" accessibilityLabel="חיפוש בתוך תור המודרציה" style={styles.searchInput} /><AdminAction compact label="מסננים" onPress={() => setFiltersOpen((current) => !current)} testID="admin-queue-filters-toggle" /></View> : null}
+        {!heldView && filtersOpen ? <View style={styles.filtersPanel} testID="admin-queue-filters">
           <AppText style={styles.fieldLabel}>סוג יעד</AppText><View style={styles.chipRow}>{TARGET_FILTERS.map((type) => <ToggleChip key={type} label={TARGET_LABELS[type]} active={filters.targetTypes.includes(type)} onPress={() => toggleArrayFilter('targetTypes', type)} />)}</View>
           <AppText style={styles.fieldLabel}>קטגוריה</AppText><View style={styles.chipRow}>{Object.entries(CATEGORY_LABELS).map(([id, label]) => <ToggleChip key={id} label={label} active={filters.categories.includes(id)} onPress={() => toggleArrayFilter('categories', id)} />)}</View>
           <AppText style={styles.fieldLabel}>עדיפות</AppText><View style={styles.chipRow}>{['normal', 'urgent'].map((priority) => <ToggleChip key={priority} label={priority === 'urgent' ? 'דחוף' : 'רגיל'} active={filters.priorities.includes(priority)} onPress={() => toggleArrayFilter('priorities', priority)} />)}</View>
@@ -532,14 +647,14 @@ export default function ModerationQueueSection({ policy, initialView = 'needs_ac
           <View style={styles.savedViewEditor}><AppTextInput value={savedViewName} onChangeText={setSavedViewName} placeholder="שם לתצוגה השמורה" accessibilityLabel="שם לתצוגה שמורה" style={styles.savedViewInput} /><AdminAction compact label="שמירה" disabled={!savedViewName.trim()} onPress={saveView} testID="admin-saved-view-save" /></View>
           <View style={styles.chipRow}>{savedViews.map((saved) => <View key={saved.id} style={styles.savedView}><Pressable accessibilityRole="button" onPress={() => applySavedView(saved)}><AppText style={styles.savedViewText}>{saved.name}</AppText></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`מחיקת התצוגה ${saved.name}`} onPress={() => removeView(saved.id)}><Ionicons name="close" size={18} color="#667085" /></Pressable></View>)}</View>
         </View> : null}
-        {selectedIds.length ? <View style={styles.bulkBar} testID="admin-bulk-bar"><AppText style={styles.contextStrong}>{selectedIds.length} תיקים נבחרו (עד 25)</AppText><View style={styles.actions}><AdminAction compact label="הקצאה אליי" busy={actionState.busy === 'bulk:claim'} disabled={Boolean(actionState.busy)} onPress={() => bulk('claim')} testID="admin-bulk-claim" /><AdminAction compact label="סימון דחוף" busy={actionState.busy === 'bulk:set_priority'} disabled={Boolean(actionState.busy)} onPress={() => bulk('set_priority', { priority: 'urgent' })} testID="admin-bulk-priority" /><AdminAction compact label="סגירה ללא הפרה" busy={actionState.busy === 'bulk:dismiss'} disabled={Boolean(actionState.busy)} onPress={() => bulk('dismiss')} testID="admin-bulk-dismiss" /></View></View> : null}
+        {!heldView && selectedIds.length ? <View style={styles.bulkBar} testID="admin-bulk-bar"><AppText style={styles.contextStrong}>{selectedIds.length} תיקים נבחרו (עד 25)</AppText><View style={styles.actions}><AdminAction compact label="הקצאה אליי" busy={actionState.busy === 'bulk:claim'} disabled={Boolean(actionState.busy)} onPress={() => bulk('claim')} testID="admin-bulk-claim" /><AdminAction compact label="סימון דחוף" busy={actionState.busy === 'bulk:set_priority'} disabled={Boolean(actionState.busy)} onPress={() => bulk('set_priority', { priority: 'urgent' })} testID="admin-bulk-priority" /><AdminAction compact label="סגירה ללא הפרה" busy={actionState.busy === 'bulk:dismiss'} disabled={Boolean(actionState.busy)} onPress={() => bulk('dismiss')} testID="admin-bulk-dismiss" /></View></View> : null}
         {actionState.error ? <AppText style={styles.inlineError}>{actionState.error}</AppText> : null}
         {actionState.success ? <AppText style={styles.inlineSuccess}>{actionState.success}</AppText> : null}
         {supportState.policyError || supportState.viewsError ? <View style={styles.error} testID="admin-queue-support-error"><AppText style={styles.errorText}>{[supportState.policyError, supportState.viewsError].filter(Boolean).join(' ')}</AppText><AdminAction compact label="טעינה מחדש" busy={supportState.loading} onPress={loadSupportData} testID="admin-queue-support-retry" /></View> : null}
         <AdminAsyncState loading={list.loading} error={list.error} empty={!list.loading && !list.error && !list.items.length} onRetry={() => load()} testID="admin-queue" emptyText="התור הזה נקי כרגע." />
-        {!list.loading && !list.error ? <ScrollView style={styles.queueRows} contentContainerStyle={styles.queueRowsContent}>{list.items.map((item) => <CaseRow key={item.id} item={item} active={details?.id === item.id} selected={selectedIds.includes(item.id)} onOpen={() => openCase(item.id)} onToggleSelected={() => toggleSelected(item.id)} />)}{list.nextCursor ? <AdminAction label="טעינת תיקים נוספים" busy={list.loadingMore} onPress={() => load({ append: true })} testID="admin-queue-load-more" /> : null}</ScrollView> : null}
+        {!list.loading && !list.error ? <ScrollView style={styles.queueRows} contentContainerStyle={styles.queueRowsContent}>{list.items.map((item) => <CaseRow key={item.id} item={item} held={heldView} active={details?.id === item.id || details?.target?.path === item.target?.path || heldResource?.target?.path === item.target?.path} selected={selectedIds.includes(item.id)} onOpen={() => heldView ? openHeldContent(item) : openCase(item.id)} onToggleSelected={() => toggleSelected(item.id)} />)}{list.nextCursor ? <AdminAction label="טעינת תיקים נוספים" busy={list.loadingMore} onPress={() => load({ append: true })} testID="admin-queue-load-more" /> : null}</ScrollView> : null}
       </View> : null}
-      {(split || showingMobileDetail) ? <CaseDetails details={details} loading={detailState.loading} error={detailState.error} policy={policy} supportState={supportState} actionState={{ ...actionState, setNote: (note) => setActionState((current) => ({ ...current, note })) }} onBack={!split ? () => { setDetails(null); setDetailState({ loading: false, error: '' }); } : null} onUpdate={updateCase} onResolve={resolveCase} onReload={() => details?.id && openCase(details.id)} onReloadSupport={loadSupportData} onOpenUser={onOpenUser} onOpenDestination={onOpenDestination} /> : null}
+      {(split || showingMobileDetail) ? heldView && !details ? <HeldContentDetails resource={heldResource} loading={detailState.loading} error={detailState.error} policy={policy} decisionState={heldDecisionState} onBack={!split ? () => { setHeldResource(null); setDetailState({ loading: false, error: '' }); } : null} onReload={() => heldResource?.target && openHeldContent({ target: heldResource.target, targetPreview: heldResource.preview, holdContext: heldResource.holdContext })} onResolve={resolveHeldContent} onOpenDestination={onOpenDestination} /> : <CaseDetails details={details} loading={detailState.loading} error={detailState.error} policy={policy} supportState={supportState} actionState={{ ...actionState, setNote: (note) => setActionState((current) => ({ ...current, note })) }} onBack={!split ? () => { setDetails(null); setDetailState({ loading: false, error: '' }); } : null} onUpdate={updateCase} onResolve={resolveCase} onReload={() => details?.id && openCase(details.id)} onReloadSupport={loadSupportData} onOpenUser={onOpenUser} onOpenDestination={onOpenDestination} /> : null}
     </View>
   );
 }

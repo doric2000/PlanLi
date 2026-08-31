@@ -65,6 +65,10 @@ const PAGE_SIZE = 30;
 const IMAGE_VARIANTS = ['large', 'feed', 'thumb'];
 const IMAGE_VALIDATION_VERSION = 1;
 const DESTINATION_PUBLICATION_FENCE_RECOVERY_MS = 10 * 60 * 1000;
+const RELEASABLE_DESTINATION_HOLD_REASONS = new Set([
+  'destination_pending_approval',
+  'destination_policy_review',
+]);
 
 function fail(code, message, reason) {
   throw new HttpsError(code, message, { reason });
@@ -1043,11 +1047,27 @@ function contentDestinationReferences(content, type) {
 function heldForPendingDestination(content, countryId, cityId) {
   if (content?.status !== 'moderation_hold' ||
       content?.moderation?.systemGate !== 'destination_pending_approval' ||
-      content?.moderation?.holdReason !== 'destination_pending_approval') return false;
+      !RELEASABLE_DESTINATION_HOLD_REASONS.has(content?.moderation?.holdReason)) return false;
   const heldDestination = content.moderation.destination;
   if (heldDestination?.countryId === countryId && heldDestination?.cityId === cityId) return true;
   return Array.isArray(content.moderation.pendingDestinationKeys) &&
     content.moderation.pendingDestinationKeys.includes(destinationKey(countryId, cityId));
+}
+
+function destinationReviewMessage(content, { restored = false } = {}) {
+  const destination = content?.destination ||
+    (Array.isArray(content?.destinations) ? content.destinations[0] : null) || {};
+  const destinationName = typeof destination.cityName === 'string'
+    ? destination.cityName.trim().slice(0, 120)
+    : '';
+  if (restored) {
+    return destinationName
+      ? `הבדיקה של ${destinationName} הושלמה והתוכן שלך חזר להיות זמין.`
+      : 'בדיקת היעד הושלמה והתוכן שלך חזר להיות זמין.';
+  }
+  return destinationName
+    ? `היעד ${destinationName} נמצא בבקרת מנהל. התוכן יחזור אוטומטית לאחר השלמת האישור.`
+    : 'היעד שנבחר נמצא בבקרת מנהל. התוכן יחזור אוטומטית לאחר השלמת האישור.';
 }
 
 async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
@@ -1072,14 +1092,28 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
   );
   const operationRef = db.doc(`system/moderation/operations/${operationId}`);
   const existingOperation = await operationRef.get();
-  if (existingOperation.exists && existingOperation.data()?.step === 'case_finalized') {
-    return { operationId, released: existingOperation.data()?.released || {}, replay: true };
-  }
+  const existingOperationData = existingOperation.data() || {};
+  const replayingFinalizedOperation = existingOperation.exists &&
+    existingOperationData.step === 'case_finalized';
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
   if (existingOperation.exists && existingOperation.data()?.step === 'effects_applied') {
     const released = existingOperation.data()?.released || {};
     await operationRef.set({ step: 'case_finalized', finalizedAt: timestamp, updatedAt: timestamp }, { merge: true });
     return { operationId, released, replay: true };
+  }
+
+  const [recommendations, trips, routes] = await Promise.all([
+    db.collection('recommendations').where('destination.cityId', '==', cityId).get(),
+    db.collection('trips').where('destination.cityId', '==', cityId).get(),
+    db.collection('routes').where('destinationKeys', 'array-contains', destinationKey(countryId, cityId)).get(),
+  ]);
+  const candidates = [
+    ...recommendations.docs.map((entry) => ({ type: 'recommendation', entry })),
+    ...trips.docs.map((entry) => ({ type: 'trip', entry })),
+    ...routes.docs.map((entry) => ({ type: 'route', entry })),
+  ].filter(({ entry }) => heldForPendingDestination(entry.data() || {}, countryId, cityId));
+  if (replayingFinalizedOperation && candidates.length === 0) {
+    return { operationId, released: existingOperationData.released || {}, replay: true };
   }
   await operationRef.set(existingOperation.exists ? {
     retryCount: admin.firestore.FieldValue.increment(1),
@@ -1096,18 +1130,7 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
     startedAt: timestamp,
     updatedAt: timestamp,
   }, { merge: true });
-
-  const [recommendations, trips, routes] = await Promise.all([
-    db.collection('recommendations').where('destination.cityId', '==', cityId).get(),
-    db.collection('trips').where('destination.cityId', '==', cityId).get(),
-    db.collection('routes').where('destinationKeys', 'array-contains', destinationKey(countryId, cityId)).get(),
-  ]);
-  const candidates = [
-    ...recommendations.docs.map((entry) => ({ type: 'recommendation', entry })),
-    ...trips.docs.map((entry) => ({ type: 'trip', entry })),
-    ...routes.docs.map((entry) => ({ type: 'route', entry })),
-  ].filter(({ entry }) => heldForPendingDestination(entry.data() || {}, countryId, cityId));
-  const released = { recommendations: 0, trips: 0, routes: 0 };
+  const newlyReleased = { recommendations: 0, trips: 0, routes: 0 };
 
   for (let offset = 0; offset < candidates.length; offset += 10) {
     await Promise.all(candidates.slice(offset, offset + 10).map(async ({ type, entry }) => {
@@ -1134,6 +1157,17 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
           return !snapshot.exists || countriesById.get(reference.countryId)?.status !== 'active' ||
             !destinationAcceptsNewReferences(snapshot.data() || {}, reference.countryId);
         })) return false;
+        const ownerId = typeof current.ownerId === 'string' ? current.ownerId.trim() : '';
+        const target = ownerId ? { type, id: entry.id } : null;
+        const notificationRef = ownerId && target
+          ? db.doc(`users/${ownerId}/notifications/${systemNotificationId('content_restored', entry.ref.path)}`)
+          : null;
+        const [existingNotification, ownerSnapshot] = notificationRef
+          ? await Promise.all([
+              transaction.get(notificationRef),
+              transaction.get(db.doc(`users/${ownerId}`)),
+            ])
+          : [null, null];
         transaction.update(entry.ref, {
           status: 'active',
           publicationGate: { destinationApprovalVerified: true },
@@ -1146,15 +1180,50 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
             updatedAt: timestamp,
           });
         }
+        if (notificationRef && notificationRecipientEligible(ownerSnapshot)) {
+          stageNotificationActivity({
+            transaction,
+            admin,
+            db,
+            uid: ownerId,
+            notificationRef,
+            existingSnapshot: existingNotification,
+            notification: {
+              channel: 'personal',
+              type: 'system',
+              subtype: 'content_restored',
+              priority: 'normal',
+              count: 1,
+              message: destinationReviewMessage(current, { restored: true }),
+              target: buildNotificationTarget({ target, data: current }),
+              navigation: navigationForTarget(target),
+            },
+          });
+        }
         return true;
       });
-      if (didRelease) released[`${type}s`] += 1;
+      if (didRelease) newlyReleased[`${type}s`] += 1;
     }));
   }
 
+  const previousReleased = existingOperationData.released || {};
+  const released = Object.fromEntries(
+    Object.keys(newlyReleased).map((key) => [
+      key,
+      Math.max(0, Number(previousReleased[key]) || 0) + newlyReleased[key],
+    ])
+  );
+  const changed = Object.values(newlyReleased).some((count) => count > 0);
+
   await operationRef.set({ step: 'effects_applied', released, effectsAppliedAt: timestamp, updatedAt: timestamp }, { merge: true });
   await operationRef.set({ step: 'case_finalized', released, finalizedAt: timestamp, updatedAt: timestamp }, { merge: true });
-  return { operationId, released, replay: false };
+  return {
+    operationId,
+    released,
+    newlyReleased,
+    replay: replayingFinalizedOperation && !changed,
+    reconciled: replayingFinalizedOperation && changed,
+  };
 }
 
 async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
@@ -1584,6 +1653,9 @@ async function holdDestinationContentDocuments({
               subtype: 'content_held',
               priority: 'normal',
               count: 1,
+              ...(patch?.moderation?.systemGate === 'destination_pending_approval'
+                ? { message: destinationReviewMessage(content) }
+                : {}),
               target: buildNotificationTarget({ target, data: content }),
               navigation: navigationForTarget(target),
             },
@@ -1856,6 +1928,7 @@ module.exports = {
   getDestinationRenameJob,
   getDestinationReassignmentJob,
   getDestinationReview,
+  heldForPendingDestination,
   holdDestinationContentDocuments,
   listDestinationReviews,
   notifyAdminsOfDestination,

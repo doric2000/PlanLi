@@ -313,10 +313,10 @@ export function formatNotificationMessage(notification) {
   }
   if (notification.type === NotificationType.SYSTEM) {
     if (notification.subtype === 'content_held') {
-      return 'התוכן שלך הועבר זמנית לבדיקה';
+      return notification.message || 'התוכן שלך הועבר זמנית לבדיקה';
     }
     if (notification.subtype === 'content_restored') {
-      return 'התוכן שלך חזר להיות זמין';
+      return notification.message || 'התוכן שלך חזר להיות זמין';
     }
     if (notification.subtype === 'content_deleted') {
       return 'התוכן שלך הוסר';

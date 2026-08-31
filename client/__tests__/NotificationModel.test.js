@@ -36,6 +36,19 @@ describe('NotificationModel schema v2', () => {
     });
   });
 
+  it('uses the contextual destination-review message supplied by the server', () => {
+    expect(getNotificationPresentation({
+      type: 'system',
+      subtype: 'content_held',
+      message: 'היעד ניר דוד נמצא בבקרת מנהל. התוכן יחזור אוטומטית לאחר השלמת האישור.',
+    }).message).toContain('ניר דוד');
+    expect(getNotificationPresentation({
+      type: 'system',
+      subtype: 'content_restored',
+      message: 'הבדיקה של ניר דוד הושלמה והתוכן שלך חזר להיות זמין.',
+    }).message).toContain('חזר להיות זמין');
+  });
+
   it.each([
     ['moderation_warning', 'נשלחה אליך אזהרה מצוות הקהילה'],
     ['account_suspended', 'החשבון שלך הושעה בעקבות החלטת מודרציה'],

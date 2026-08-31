@@ -267,6 +267,46 @@ function moderationDecisionOptions({ target, targetPreview, subjectUser } = {}) 
   };
 }
 
+function publicHoldContext(content) {
+  if (content?.status !== 'moderation_hold' || !content?.moderation ||
+      typeof content.moderation !== 'object') return null;
+  const moderation = content.moderation;
+  const destination = moderation.destination && typeof moderation.destination === 'object'
+    ? moderation.destination
+    : content.destination && typeof content.destination === 'object'
+      ? content.destination
+      : null;
+  const holdReason = cleanOptionalText(moderation.holdReason, 80);
+  const systemGate = cleanOptionalText(moderation.systemGate, 80);
+  const countryId = cleanOptionalText(destination?.countryId, 180);
+  const cityId = cleanOptionalText(destination?.cityId, 180);
+  const cityName = cleanOptionalText(destination?.cityName || content.destination?.cityName, 120);
+  const countryName = cleanOptionalText(destination?.countryName || content.destination?.countryName, 120);
+  return {
+    kind: systemGate ? 'system' : 'moderation',
+    ...(holdReason ? { holdReason } : {}),
+    ...(systemGate ? { systemGate } : {}),
+    ...(countryId || cityId || cityName || countryName ? {
+      destination: {
+        ...(countryId ? { countryId } : {}),
+        ...(cityId ? { cityId } : {}),
+        ...(cityName ? { cityName } : {}),
+        ...(countryName ? { countryName } : {}),
+      },
+    } : {}),
+  };
+}
+
+function assertManualContentRestoreAllowed(content) {
+  if (content?.moderation?.systemGate === 'destination_pending_approval') {
+    fail(
+      'failed-precondition',
+      'System-held destination content must be released through destination approval.',
+      'system_managed_hold'
+    );
+  }
+}
+
 function suspensionReplayDisposition(status) {
   if (status === 'active') return 'replay';
   if (status === 'applying') return 'resume';
@@ -874,6 +914,7 @@ async function getAdminResource({ admin, auth, data }) {
       parentData: parentSnapshot?.exists ? parentSnapshot.data() : null,
       ownerProfile: ownerProfile?.exists ? ownerProfile.data() : null,
     }),
+    holdContext: publicHoldContext(sourceData),
     case: caseSnapshot.exists ? publicModerationCase({ id: caseId, ...caseSnapshot.data() }) : null,
   });
 }
@@ -1112,29 +1153,73 @@ async function updateAdminAttachedPlace({ admin, auth, data, providerRateLimitKe
   return serialize({ success: true, action, caseId: caseId || null, revision: nextRevision, place: nextPlace });
 }
 
-async function listHeldContent({ admin, auth }) {
-  await prepareAdminAction(admin, auth, 'listHeldContent');
-  const db = admin.firestore();
-  const groups = await Promise.all([
-    ['recommendation', db.collection('recommendations').where('status', '==', 'moderation_hold').limit(PAGE_SIZE).get()],
-    ['route', db.collection('routes').where('status', '==', 'moderation_hold').limit(PAGE_SIZE).get()],
-    ['trip', db.collection('trips').where('status', '==', 'moderation_hold').limit(PAGE_SIZE).get()],
-  ].map(async ([type, promise]) => [type, await promise]));
-  const items = groups.flatMap(([type, snapshot]) => snapshot.docs.map((entry) => ({
+const HELD_CONTENT_GROUPS = Object.freeze([
+  { type: 'recommendation', collectionName: 'recommendations' },
+  { type: 'route', collectionName: 'routes' },
+  { type: 'trip', collectionName: 'trips' },
+]);
+
+function parseHeldContentCursor(value) {
+  const raw = cleanOptionalText(value, 240);
+  if (!raw) return null;
+  const separator = raw.indexOf(':');
+  const collectionName = separator > 0 ? raw.slice(0, separator) : '';
+  const groupIndex = HELD_CONTENT_GROUPS.findIndex((group) => group.collectionName === collectionName);
+  if (groupIndex < 0 || separator === raw.length - 1) {
+    fail('invalid-argument', 'cursor is invalid.', 'invalid_input');
+  }
+  return {
+    groupIndex,
+    id: cleanId(raw.slice(separator + 1), 'cursor'),
+  };
+}
+
+function heldContentItem(type, entry) {
+  const data = entry.data() || {};
+  return {
     id: `content_${type}_${entry.id}`,
     target: { type, id: entry.id, path: entry.ref.path },
-    targetOwnerId: entry.data()?.ownerId || null,
-    title: entry.data()?.title || '',
-    status: entry.data()?.status,
+    targetOwnerId: data.ownerId || null,
+    title: data.title || '',
+    status: data.status,
     priority: 'normal',
-    updatedAt: entry.data()?.updatedAt || null,
+    updatedAt: data.updatedAt || null,
+    holdContext: publicHoldContext(data),
     targetPreview: buildModerationPreview({
       target: { type, id: entry.id, path: entry.ref.path },
-      data: entry.data(),
+      data,
     }),
-  })));
-  items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  return { items: items.slice(0, PAGE_SIZE).map(serialize), nextCursor: null };
+  };
+}
+
+async function listHeldContent({ admin, auth, data }) {
+  await prepareAdminAction(admin, auth, 'listHeldContent');
+  const db = admin.firestore();
+  const cursor = parseHeldContentCursor(data?.cursor);
+  const items = [];
+  let nextCursor = null;
+
+  for (let index = cursor?.groupIndex || 0; index < HELD_CONTENT_GROUPS.length; index += 1) {
+    const group = HELD_CONTENT_GROUPS[index];
+    const remaining = PAGE_SIZE - items.length;
+    let query = db.collection(group.collectionName)
+      .where('status', '==', 'moderation_hold')
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(remaining + 1);
+    if (cursor?.groupIndex === index) query = query.startAfter(cursor.id);
+    const snapshot = await query.get();
+    const pageDocs = snapshot.docs.slice(0, remaining);
+    items.push(...pageDocs.map((entry) => heldContentItem(group.type, entry)));
+
+    if (snapshot.docs.length > remaining || (items.length === PAGE_SIZE && index < HELD_CONTENT_GROUPS.length - 1)) {
+      const last = pageDocs.at(-1);
+      nextCursor = last ? `${group.collectionName}:${last.id}` : null;
+      break;
+    }
+    if (items.length === PAGE_SIZE) break;
+  }
+
+  return { items: items.map(serialize), nextCursor };
 }
 
 async function syncRootReplyModeration({ admin, parentRef, rootId, rootPath, action, reason, actorUid }) {
@@ -1319,6 +1404,7 @@ async function moderateContent({ admin, auth, data, mediaBucket }) {
     fail('failed-precondition', 'Only published content can remain published.', 'content_not_active');
   }
   if (action === 'restore') {
+    assertManualContentRestoreAllowed(targetData);
     const allowSuspendedRestore = data?.allowSuspendedRestore === true;
     const restoredRetry = targetData.status === 'active'
       && targetData.moderation?.lastAction === 'restore';
@@ -3360,6 +3446,7 @@ module.exports = {
   applyingSuspensionStillIntended,
   audit,
   assertAdmin,
+  assertManualContentRestoreAllowed,
   assertModerationRetryOperation,
   assertRecentAuth,
   applySuspensionEnforcement,
@@ -3388,6 +3475,7 @@ module.exports = {
   normalizeNoViolationContentAction,
   moderateContent,
   prepareAdmin,
+  publicHoldContext,
   publicModerationCase,
   publicModerationReport,
   recoverablePreviousCaseStatus,
