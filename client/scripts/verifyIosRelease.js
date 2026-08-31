@@ -62,6 +62,7 @@ const staging = eas.build?.staging || {};
 const releaseCandidate = eas.build?.['release-candidate'] || {};
 const production = eas.build?.production || {};
 const productionSubmit = eas.submit?.production?.ios || {};
+const sdk57IosImage = 'macos-tahoe-26.5-xcode-26.6';
 const requiredPlugins = [
   'expo-apple-authentication',
   '@react-native-google-signin/google-signin',
@@ -113,8 +114,8 @@ if (preview.channel !== 'staging') fail('The preview profile must use the stagin
 if (preview.environment === 'production') fail('The preview profile must not consume the production EAS environment.');
 if (preview.env?.PLANLI_ENV !== 'staging') fail('The preview profile must identify itself as staging.');
 if (!String(preview.node || '').startsWith('22.')) fail('The preview EAS build must use Node 22.');
-if (preview.ios?.image !== 'macos-sequoia-15.6-xcode-26.0') {
-  fail('The SDK 57 preview build must use the pinned Xcode 26.0 image.');
+if (preview.ios?.image !== sdk57IosImage) {
+  fail(`The SDK 57 preview build must use the pinned ${sdk57IosImage} image.`);
 }
 if (staging.distribution !== 'internal' || staging.channel !== 'staging') {
   fail('The staging profile must use internal distribution and the staging channel.');
@@ -122,19 +123,25 @@ if (staging.distribution !== 'internal' || staging.channel !== 'staging') {
 if (staging.environment === 'production' || staging.env?.PLANLI_ENV !== 'staging') {
   fail('The staging profile must use only the staging EAS environment.');
 }
+if (staging.ios?.image !== sdk57IosImage) {
+  fail(`The SDK 57 staging build must use the pinned ${sdk57IosImage} image.`);
+}
 if (releaseCandidate.distribution !== 'store' || releaseCandidate.channel !== 'production') {
   fail('The release-candidate profile must produce a store build on the production channel.');
 }
 if (releaseCandidate.environment !== 'production' || releaseCandidate.env?.PLANLI_ENV !== 'release-candidate') {
   fail('The release-candidate profile must explicitly target production for internal store testing.');
 }
+if (releaseCandidate.ios?.image !== sdk57IosImage) {
+  fail(`The SDK 57 release-candidate build must use the pinned ${sdk57IosImage} image.`);
+}
 if (production.distribution !== 'store') fail('The production profile must use store distribution.');
 if (production.channel !== 'production') fail('The production profile must use the production EAS Update channel.');
 if (production.environment !== 'production') fail('The production profile must use the EAS production environment.');
 if (production.autoIncrement !== true) fail('The production profile must auto-increment build numbers.');
 if (!String(production.node || '').startsWith('22.')) fail('The EAS production build must use Node 22.');
-if (production.ios?.image !== 'macos-sequoia-15.6-xcode-26.0') {
-  fail('The SDK 57 production build must use the pinned Xcode 26.0 image.');
+if (production.ios?.image !== sdk57IosImage) {
+  fail(`The SDK 57 production build must use the pinned ${sdk57IosImage} image.`);
 }
 if (productionSubmit.ascAppId !== '6801453067') {
   fail('The production submit profile must target the PlanLi App Store Connect app.');
