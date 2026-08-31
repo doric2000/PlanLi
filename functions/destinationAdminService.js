@@ -34,11 +34,13 @@ const {
   REGISTRY_PATH,
   REGISTRY_VERSION,
   clearRegistryCache,
+  derivedRadiusKm,
   destinationTypeForKind,
   isValidRegistryId,
   legacyRegistryId,
   registryCollectionIssues,
   validateRegistryEntry,
+  viewportDiagonalKm,
 } = require('./canonicalDestinationRegistry');
 const {
   getDestinationRenameJobRef,
@@ -619,6 +621,9 @@ function buildDestinationPolicyRegistryPlan({
     };
   }
 
+  const center = destinationCoordinates(currentCity);
+  const viewport = currentCity.googleCache?.viewport || currentCity.identity?.viewport || null;
+  const googleTypes = currentCity.googleCache?.types || currentCity.identity?.types || [];
   const registryEntry = {
     id: binding.registryId,
     countryCode: String(countryCode || '').toUpperCase(),
@@ -628,9 +633,12 @@ function buildDestinationPolicyRegistryPlan({
     },
     ...policyPatch,
     providerRefs: currentCity.providerRefs || {},
-    center: destinationCoordinates(currentCity),
-    viewport: currentCity.googleCache?.viewport || currentCity.identity?.viewport || null,
-    googleTypes: currentCity.googleCache?.types || currentCity.identity?.types || [],
+    center,
+    viewport,
+    googleTypes,
+    ...(center && viewportDiagonalKm(viewport) === null
+      ? { radiusKm: derivedRadiusKm({ kind, googleTypes }) }
+      : {}),
     geometryPolicy: {
       autoMatchEligible: false,
       aliasAutoMatchEligible: true,

@@ -612,6 +612,7 @@ module.exports = {
   canonicalDestinationId,
   legacyRegistryId,
   clearRegistryCache,
+  derivedRadiusKm,
   destinationTypeForKind,
   entryContainsPoint,
   isValidRegistryId,

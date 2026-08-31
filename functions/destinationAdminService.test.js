@@ -396,6 +396,41 @@ test('destination policy keeps new provider behavior when no canonical owner exi
   assert.deepEqual(plan.writeData.googleTypes, ['locality', 'political']);
 });
 
+test('destination policy bounds verified provider centers when a viewport is unavailable', () => {
+  const fixture = policyBindingFixture({
+    countryCode: 'IL',
+    destinationPath: 'countries/IL/destinations/ariel',
+    fallbackRegistryId: 'il-ariel',
+    currentCity: {
+      canonicalPolicy: {},
+      providerRefs: { googlePlaceId: 'ariel-place' },
+      googleCache: {
+        placeId: 'ariel-place',
+        names: { he: 'אריאל', en: "Ari'el" },
+        coordinates: { lat: 32.1046376, lng: 35.1745145 },
+        types: ['locality', 'political'],
+      },
+    },
+  });
+  const binding = selectDestinationPolicyRegistryBinding(fixture);
+  const plan = buildDestinationPolicyRegistryPlan({
+    binding,
+    currentCity: fixture.currentCity,
+    countryCode: 'IL',
+    cityId: 'ariel',
+    aliases: ["Ari'el"],
+    kind: 'city_hub',
+    parentId: null,
+    groupingPolicy: 'self',
+    reason: 'reviewed destination policy',
+    actorUid: 'admin-1',
+  });
+
+  assert.equal(plan.writeData.radiusKm, 35);
+  assert.equal(plan.writeData.geometryPolicy.autoMatchEligible, false);
+  assert.equal(validateRegistryEntry(plan.validationEntry, { requireResearchSources: false }).valid, true);
+});
+
 test('destination policy replaces an invalid unowned provisional registry ID with the valid fallback', () => {
   const fixture = policyBindingFixture({
     countryCode: 'AL',
