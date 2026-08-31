@@ -141,11 +141,11 @@ if (!String(packageJson.dependencies?.['expo-updates'] || '').trim()) {
 if (packageJson.dependencies?.['expo-notifications'] !== '~57.0.15') {
   fail('expo-notifications must stay on the SDK 57 compatible ~57.0.15 release.');
 }
-if (app.version !== '1.2.0') {
-  fail('The security release marketing version and EAS runtime must remain fixed at 1.2.0.');
+if (app.version !== '1.1.0') {
+  fail('The beta marketing version must remain fixed at 1.1.0.');
 }
-if (app.runtimeVersion?.policy !== 'appVersion') {
-  fail('The EAS Update runtime version must use the appVersion policy.');
+if (app.runtimeVersion !== '1.2.0') {
+  fail('The SDK 57 security release must remain isolated on EAS runtime 1.2.0.');
 }
 const expectedUpdatesUrl = `https://u.expo.dev/${app.extra?.eas?.projectId || ''}`;
 if (app.updates?.url !== expectedUpdatesUrl) {
