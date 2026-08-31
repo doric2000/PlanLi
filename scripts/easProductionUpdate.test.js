@@ -25,8 +25,8 @@ function configuration() {
   return {
     app: {
       owner: 'doric2000',
-      version: '1.2.0',
-      runtimeVersion: { policy: 'appVersion' },
+      version: '1.1.0',
+      runtimeVersion: '1.2.0',
       updates: { url: 'https://u.expo.dev/04731493-708f-4c82-b417-6ea815ea912e' },
       extra: { eas: { projectId: '04731493-708f-4c82-b417-6ea815ea912e' } },
     },

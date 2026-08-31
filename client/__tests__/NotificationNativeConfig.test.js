@@ -9,9 +9,9 @@ describe('native notification release configuration', () => {
     expect((app.plugins || []).map(pluginName)).toContain('expo-notifications');
   });
 
-  it('uses a new app-version runtime for the native push binary', () => {
-    expect(app.version).toBe('1.2.0');
-    expect(app.runtimeVersion).toEqual({ policy: 'appVersion' });
+  it('keeps the beta marketing version while isolating the SDK 57 runtime', () => {
+    expect(app.version).toBe('1.1.0');
+    expect(app.runtimeVersion).toBe('1.2.0');
     expect(app.extra.eas.projectId).toBe('04731493-708f-4c82-b417-6ea815ea912e');
   });
 });
