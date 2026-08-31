@@ -51,6 +51,8 @@ export default function useRecommendationDraftMedia() {
   const draftIdRef = useRef('');
   const entriesByIdentityRef = useRef(new Map());
   const pendingByIdentityRef = useRef(new Map());
+  const latestDescriptorByIdentityRef = useRef(new Map());
+  const mediaOrderRef = useRef([]);
   const forgottenRef = useRef(new Set());
   const manifestQueueRef = useRef(Promise.resolve());
 
@@ -69,10 +71,11 @@ export default function useRecommendationDraftMedia() {
         transform: entry.transform || null,
       }));
       return AsyncStorage.setItem(storageKey(uid), JSON.stringify({
-        version: 2,
+        version: 3,
         draftId: draftIdRef.current,
         jobId: jobIdRef.current,
         entries,
+        order: [...mediaOrderRef.current],
         updatedAt: Date.now(),
       }));
     });
@@ -88,6 +91,7 @@ export default function useRecommendationDraftMedia() {
     const descriptor = descriptorForInput(item);
     if (!descriptor || descriptor.type === 'remote') return Promise.resolve(descriptor);
     const identity = storedIdentity(entriesByIdentityRef.current, descriptor);
+    latestDescriptorByIdentityRef.current.set(identity, { ...descriptor, sourceId: identity });
     const existing = entriesByIdentityRef.current.get(identity);
     if (existing) {
       const updated = { ...existing, ...descriptor, localReference: existing.localReference, persistence: 'ready' };
@@ -107,11 +111,19 @@ export default function useRecommendationDraftMedia() {
         mediaId,
         uri: descriptor.sourceUri || descriptor.uri,
       });
-      const entry = { ...descriptor, sourceId: identity, mediaId, localReference, persistence: 'ready' };
       if (forgottenRef.current.has(identity)) {
         await deleteContentPublishMedia(localReference);
         return null;
       }
+      const latestDescriptor = latestDescriptorByIdentityRef.current.get(identity) || descriptor;
+      const entry = {
+        ...descriptor,
+        ...latestDescriptor,
+        sourceId: identity,
+        mediaId,
+        localReference,
+        persistence: 'ready',
+      };
       entriesByIdentityRef.current.set(identity, entry);
       await persistManifest();
       return entry;
@@ -122,6 +134,7 @@ export default function useRecommendationDraftMedia() {
 
   const persistMedia = useCallback(async (items) => {
     const list = (Array.isArray(items) ? items : []).filter(Boolean);
+    mediaOrderRef.current = list.map(descriptorForInput).map(travelMediaIdentity).filter(Boolean);
     const results = new Array(list.length);
     let cursor = 0;
     const worker = async () => {
@@ -131,8 +144,9 @@ export default function useRecommendationDraftMedia() {
       }
     };
     await Promise.all(Array.from({ length: Math.min(2, list.length) }, worker));
+    await persistManifest();
     return results.filter(Boolean);
-  }, [persistOne]);
+  }, [persistManifest, persistOne]);
 
   const persistUris = useCallback(async (uris) => {
     await persistMedia(uris);
@@ -159,6 +173,8 @@ export default function useRecommendationDraftMedia() {
     if (pending) await pending.catch(() => {});
     const entry = entriesByIdentityRef.current.get(identity);
     entriesByIdentityRef.current.delete(identity);
+    latestDescriptorByIdentityRef.current.delete(identity);
+    mediaOrderRef.current = mediaOrderRef.current.filter((entryIdentity) => entryIdentity !== identity);
     if (entry?.localReference) await deleteContentPublishMedia(entry.localReference);
     await persistManifest();
   }, [persistManifest]);
@@ -176,16 +192,19 @@ export default function useRecommendationDraftMedia() {
   const restoreDraft = useCallback(async (draftId, expectedCount = 0) => {
     const uid = auth.currentUser?.uid;
     draftIdRef.current = draftId || '';
-    if (!uid || !draftId) return { uris: [], items: [], missingCount: Number(expectedCount || 0) };
+    if (!uid || !draftId) return { uris: [], items: [], order: [], missingCount: Number(expectedCount || 0) };
     const manifest = await readManifest(uid);
     if (!manifest || manifest.draftId !== draftId) {
       if (manifest) {
         await deleteManifestFiles(manifest);
         await AsyncStorage.removeItem(storageKey(uid));
       }
-      return { uris: [], items: [], missingCount: Number(expectedCount || 0) };
+      return { uris: [], items: [], order: [], missingCount: Number(expectedCount || 0) };
     }
     jobIdRef.current = manifest.jobId || jobIdRef.current;
+    mediaOrderRef.current = Array.isArray(manifest.order)
+      ? manifest.order.map(String).filter(Boolean)
+      : manifest.entries.map((entry) => String(entry.sourceId || entry.mediaId || '')).filter(Boolean);
     const items = [];
     for (const entry of manifest.entries) {
       try {
@@ -209,6 +228,7 @@ export default function useRecommendationDraftMedia() {
     return {
       items,
       uris: items.map(travelMediaUri),
+      order: [...mediaOrderRef.current],
       missingCount: Math.max(0, Number(expectedCount || 0) - items.length),
     };
   }, []);
@@ -230,6 +250,8 @@ export default function useRecommendationDraftMedia() {
       .map((entry) => entry.mediaId));
     entriesByIdentityRef.current.clear();
     pendingByIdentityRef.current.clear();
+    latestDescriptorByIdentityRef.current.clear();
+    mediaOrderRef.current = [];
     draftIdRef.current = '';
     const references = entries
       .filter((entry) => deleteFiles || !keptMediaIds.has(entry.mediaId))

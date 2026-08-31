@@ -57,7 +57,9 @@ export const recommendationComposerStyles = StyleSheet.create({
     fontSize: 20,
     fontFamily: fontFamilies.semiBold,
     writingDirection: 'rtl',
+    textAlign: 'right',
   },
+  headerSubtitle: { color: '#DCE8F6', fontSize: 13, lineHeight: 19, marginTop: spacing.xs, textAlign: 'right', writingDirection: 'rtl' },
   closeButton: {
     width: 44,
     height: 44,
@@ -99,7 +101,19 @@ export const recommendationComposerStyles = StyleSheet.create({
     alignSelf: 'center',
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+    gap: spacing.md,
   },
+  sectionCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: spacing.radiusLarge,
+    padding: spacing.lg,
+    ...shadows.small,
+  },
+  sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  sectionTitle: { color: colors.textPrimary, fontSize: 18, fontFamily: fontFamilies.semiBold, textAlign: 'right', writingDirection: 'rtl' },
+  sectionRequired: { color: colors.primary, fontSize: 12, fontFamily: fontFamilies.medium, backgroundColor: colors.accentLight, borderRadius: spacing.radiusFull, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  sectionDivider: { height: 1, backgroundColor: colors.borderLight, marginVertical: spacing.xl },
   noyaRow: {
     flexDirection: 'row-reverse',
     alignItems: 'flex-start',
@@ -204,6 +218,12 @@ export const recommendationComposerStyles = StyleSheet.create({
   locationPanel: {
     marginTop: spacing.lg,
   },
+  confirmedLocation: { marginTop: spacing.md, borderWidth: 1, borderColor: colors.success, borderRadius: spacing.radiusLarge, overflow: 'hidden', backgroundColor: colors.white },
+  confirmedLocationCopy: { padding: spacing.md, alignItems: 'flex-end' },
+  confirmedLocationTitleRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.xs },
+  confirmedLocationTitle: { flex: 1, color: colors.textPrimary, fontSize: 15, fontFamily: fontFamilies.semiBold, textAlign: 'right', writingDirection: 'auto' },
+  confirmedLocationAddress: { color: colors.textSecondary, fontSize: 12, marginTop: spacing.xs, textAlign: 'right', writingDirection: 'auto' },
+  locationAdjustButton: { minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderTopWidth: 1, borderTopColor: colors.borderLight, backgroundColor: colors.accentLight },
   selectedDestination: {
     minHeight: 68,
     flexDirection: 'row-reverse',
@@ -285,6 +305,15 @@ export const recommendationComposerStyles = StyleSheet.create({
     height: 260,
     borderRadius: spacing.radiusLarge,
     overflow: 'hidden',
+    backgroundColor: colors.surfaceSubtle,
+  },
+  webMapPickerShell: { position: 'relative', width: '100%' },
+  webMapLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: spacing.radiusLarge,
   },
   coordinateFields: {
     flexDirection: 'row-reverse',
@@ -412,6 +441,8 @@ export const recommendationComposerStyles = StyleSheet.create({
     textAlign: 'right',
   },
   optionalField: { marginTop: spacing.md },
+  ltrInput: { textAlign: 'left', writingDirection: 'ltr' },
+  autoDirectionInput: { textAlign: 'right', writingDirection: 'auto' },
   footer: {
     backgroundColor: colors.white,
     borderTopWidth: 1,

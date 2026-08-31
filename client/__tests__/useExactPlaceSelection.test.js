@@ -58,6 +58,19 @@ describe('useExactPlaceSelection', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ cityId: 'chiang-mai' }));
   });
 
+  it('can auto-confirm an unambiguous place for the single-page composer', async () => {
+    mockResolve.mockResolvedValue(resolved);
+    const onChange = jest.fn();
+    const { result } = renderHook(() => useExactPlaceSelection({ onChange }));
+
+    await act(async () => result.current.handleSelectGooglePlace('wat-doi-kham', { autoConfirm: true }));
+
+    expect(result.current.pendingLocation).toBeNull();
+    expect(result.current.selectedCity?.id).toBe('chiang-mai');
+    expect(result.current.selectedPlace?.placeId).toBe('wat-doi-kham');
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ cityId: 'chiang-mai' }));
+  });
+
   it('clears a confirmed selection while the user searches for a replacement', async () => {
     mockResolve.mockResolvedValue(resolved);
     const onChange = jest.fn();

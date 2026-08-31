@@ -204,20 +204,14 @@ describe('NoyaTourProvider', () => {
     __resetNoyaProductTourStorageForTests();
   });
 
-  it('defines the recommendation guide in the new four-stage order with the approved copy', () => {
+  it('defines one concise recommendation composer guide for the single-page flow', () => {
     const guide = CREATOR_GUIDE_STEPS[NOYA_TOUR_IDS.recommendation];
-    expect(guide).toHaveLength(4);
-    expect(guide.map((step) => step.targetId)).toEqual([
-      NOYA_CREATOR_TARGETS.recommendationPhotos,
-      NOYA_CREATOR_TARGETS.recommendationLocation,
-      NOYA_CREATOR_TARGETS.recommendationTaxonomy,
-      NOYA_CREATOR_TARGETS.recommendationStory,
-    ]);
-    expect(guide[0]).toEqual(expect.objectContaining({ title: 'מתחילים מהתמונות' }));
-    expect(guide[0].message).toContain('תמונה אחת לחמש');
-    expect(guide[1]).toEqual(expect.objectContaining({ title: 'ממשיכים למיקום' }));
-    expect(guide[3].message).toContain('רמת מחיר');
-    expect(guide[3].message).toContain('התצוגה המקדימה');
+    expect(guide).toHaveLength(1);
+    expect(guide[0]).toEqual(expect.objectContaining({
+      targetId: NOYA_CREATOR_TARGETS.recommendationPhotos,
+      title: 'הכול בעמוד אחד',
+    }));
+    expect(guide[0].message).toContain('הטיוטה נשמרת ברקע');
   });
 
   it('defines the complete 11-step overview with tab and exact-control targets', () => {
@@ -343,7 +337,7 @@ describe('NoyaTourProvider', () => {
         </NoyaTourProvider>
       </TourFrame>,
     );
-    await waitFor(() => expect(screen.getByText('מתחילים מהתמונות')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('הכול בעמוד אחד')).toBeTruthy());
     screen.rerender(
       <TourFrame>
         <NoyaTourProvider navigationReady>
@@ -359,7 +353,7 @@ describe('NoyaTourProvider', () => {
         </NoyaTourProvider>
       </TourFrame>,
     );
-    await waitFor(() => expect(screen.getByText('מתחילים מהתמונות')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('הכול בעמוד אחד')).toBeTruthy());
     await act(async () => {});
   });
 
@@ -399,13 +393,13 @@ describe('NoyaTourProvider', () => {
         </NoyaTourProvider>
       </TourFrame>,
     );
-    await waitFor(() => expect(screen.getByText('מתחילים מהתמונות')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('הכול בעמוד אחד')).toBeTruthy());
     expect(screen.getByText('בחירת תמונות')).toBeTruthy();
     fireEvent.press(screen.getByTestId('noya-tour-next'));
     await waitFor(() => expect(screen.getByText('קומפוזר פתוח')).toBeTruthy());
     expect(screen.queryByTestId('noya-tour-bubble')).toBeNull();
     fireEvent.press(screen.getByTestId('test-close-media'));
-    await waitFor(() => expect(screen.getByText('מתחילים מהתמונות')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('הכול בעמוד אחד')).toBeTruthy());
     expect(screen.queryByText('בחירת תמונות')).toBeNull();
     expect(screen.getByText('הבנתי')).toBeTruthy();
     expect(screen.getByTestId('noya-tour-next').props.accessibilityRole).toBe('button');
