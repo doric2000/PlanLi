@@ -5,6 +5,13 @@ import { Alert, Dimensions, ScrollView, StyleSheet } from 'react-native';
 import AdminPanelScreen from '../src/features/admin/screens/AdminPanelScreen';
 import * as AdminService from '../src/services/AdminService';
 
+let mockAdminClaim = {
+  isAdmin: true,
+  hasTotpEnrollment: true,
+  signedInWithTotp: true,
+  loading: false,
+};
+
 jest.mock('../src/services/AdminService', () => ({
   approveDestination: jest.fn(),
   bulkUpdateModerationCases: jest.fn(),
@@ -44,12 +51,7 @@ jest.mock('../src/services/LocationService', () => ({
   resolveDestinationForPlacePreview: jest.fn(),
 }));
 jest.mock('../src/hooks/useAdminClaim', () => ({
-  useAdminClaim: () => ({
-    isAdmin: true,
-    hasTotpEnrollment: true,
-    signedInWithTotp: true,
-    loading: false,
-  }),
+  useAdminClaim: () => mockAdminClaim,
 }));
 jest.mock('../src/hooks/useBackButton', () => ({ useBackButton: jest.fn() }));
 jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
@@ -65,7 +67,7 @@ jest.mock('@expo/vector-icons', () => ({
   },
 }));
 
-const navigation = { setOptions: jest.fn(), setParams: jest.fn(), goBack: jest.fn() };
+const navigation = { setOptions: jest.fn(), setParams: jest.fn(), goBack: jest.fn(), navigate: jest.fn() };
 const dashboard = {
   openCases: 8,
   urgentCases: 2,
@@ -101,6 +103,12 @@ const detailsFor = (item) => ({
 describe('Admin console end-to-end surface', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAdminClaim = {
+      isAdmin: true,
+      hasTotpEnrollment: true,
+      signedInWithTotp: true,
+      loading: false,
+    };
     AdminService.getModerationDashboard.mockResolvedValue(dashboard);
     AdminService.listModerationCases.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.getModerationPolicy.mockResolvedValue({
@@ -116,6 +124,38 @@ describe('Admin console end-to-end surface', () => {
     AdminService.listModerationAudit.mockResolvedValue({ items: [], nextCursor: null });
     AdminService.bulkUpdateModerationCases.mockResolvedValue({ results: [] });
     AdminService.resolveModerationCase.mockResolvedValue({ success: true });
+  });
+
+  it('allows an authenticated non-admin to enroll TOTP without loading admin data', () => {
+    mockAdminClaim = {
+      isAdmin: false,
+      hasTotpEnrollment: false,
+      signedInWithTotp: false,
+      loading: false,
+    };
+
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+
+    expect(screen.getByTestId('admin-totp-enrollment-required')).toBeTruthy();
+    expect(screen.getByText(/אינה מעניקה הרשאת מנהל/)).toBeTruthy();
+    expect(AdminService.getModerationPolicy).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('admin-open-totp-enrollment'));
+    expect(navigation.navigate).toHaveBeenCalledWith('TotpEnrollment');
+  });
+
+  it('keeps a TOTP-enrolled non-admin outside the console', () => {
+    mockAdminClaim = {
+      isAdmin: false,
+      hasTotpEnrollment: true,
+      signedInWithTotp: true,
+      loading: false,
+    };
+
+    const screen = render(<AdminPanelScreen navigation={navigation} />);
+
+    expect(screen.getByText('אין הרשאת מנהל פעילה לחשבון זה.')).toBeTruthy();
+    expect(screen.queryByTestId('admin-panel-screen')).toBeNull();
+    expect(AdminService.getModerationPolicy).not.toHaveBeenCalled();
   });
 
   it('keeps standard admin sections inside a vertical scroll container', async () => {
