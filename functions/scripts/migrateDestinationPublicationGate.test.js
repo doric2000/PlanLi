@@ -5,6 +5,7 @@ const {
   buildPublicationManifest,
   decodeFirestoreValue,
   loadLiveRecordsRest,
+  normalizedUpdateTime,
   parseArgs,
 } = require('./migrateDestinationPublicationGate');
 const { catalogId } = require('../destinationCatalogService');
@@ -124,7 +125,7 @@ test('read-only REST inventory uses the existing gcloud token and decodes fixed 
   const document = (path, fields = {}) => ({
     name: `projects/planli-f0b12/databases/(default)/documents/${path}`,
     fields,
-    updateTime: '2026-08-30T00:00:00Z',
+    updateTime: '2026-08-30T00:00:00.123456789Z',
   });
   const fetchImpl = async (url, options) => {
     calls.push({ url: String(url), options });
@@ -152,7 +153,7 @@ test('read-only REST inventory uses the existing gcloud token and decodes fixed 
     path: 'countries/IL/destinations/tel-aviv',
     id: 'tel-aviv',
     data: { status: 'active' },
-    updateTime: '2026-08-30T00:00:00Z',
+    updateTime: '2026-08-30T00:00:00.123Z',
     countryId: 'IL',
     cityId: 'tel-aviv',
   });
@@ -162,6 +163,18 @@ test('read-only REST inventory uses the existing gcloud token and decodes fixed 
   assert.ok(calls.every((call) => call.options.headers.Authorization === 'Bearer not-logged-or-written'));
   assert.ok(calls.every((call) => !Object.hasOwn(call.options, 'body') ||
     call.options.body.includes('"allDescendants":true')));
+});
+
+test('REST and Admin update times share one millisecond fingerprint representation', () => {
+  assert.equal(
+    normalizedUpdateTime('2026-08-30T00:00:00.123456789Z'),
+    '2026-08-30T00:00:00.123Z'
+  );
+  assert.equal(
+    normalizedUpdateTime({ toDate: () => new Date('2026-08-30T00:00:00.123Z') }),
+    '2026-08-30T00:00:00.123Z'
+  );
+  assert.throws(() => normalizedUpdateTime('not-a-time'), /invalid document update time/);
 });
 
 test('Firestore REST value decoder handles nested input without evaluating it', () => {

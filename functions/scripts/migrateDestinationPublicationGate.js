@@ -76,6 +76,15 @@ function manifestFingerprint(actions) {
   }))));
 }
 
+function normalizedUpdateTime(value) {
+  if (!value) return null;
+  const date = value?.toDate?.() || new Date(value);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    throw new Error('Firestore returned an invalid document update time.');
+  }
+  return date.toISOString();
+}
+
 function buildPublicationManifest({ countries, destinations, catalog, contents, registry = [] }) {
   const countryStatus = new Map(countries.map((entry) => [entry.id, entry.data?.status]));
   const registryById = new Map(registry.map((entry) => [entry.id, entry]));
@@ -235,7 +244,7 @@ function snapshotRecord(snapshot, extra = {}) {
     path: snapshot.ref.path,
     id: snapshot.id,
     data: snapshot.data() || {},
-    updateTime: snapshot.updateTime?.toDate?.().toISOString() || null,
+    updateTime: normalizedUpdateTime(snapshot.updateTime),
     ...extra,
   };
 }
@@ -272,7 +281,7 @@ function restDocumentRecord(document, extra = {}) {
     id: segments.at(-1),
     data: Object.fromEntries(Object.entries(document.fields || {})
       .map(([key, value]) => [key, decodeFirestoreValue(value)])),
-    updateTime: document.updateTime || null,
+    updateTime: normalizedUpdateTime(document.updateTime),
     ...extra,
   };
 }
@@ -418,7 +427,7 @@ async function applyAction(adminApi, action) {
   const ref = db.doc(action.path);
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
-    const actualUpdateTime = snapshot.updateTime?.toDate?.().toISOString() || null;
+    const actualUpdateTime = normalizedUpdateTime(snapshot.updateTime);
     if (!snapshot.exists || actualUpdateTime !== action.updateTime) {
       throw new Error(`Document changed after dry-run: ${action.path}`);
     }
@@ -426,7 +435,7 @@ async function applyAction(adminApi, action) {
     if (action.type === 'attest_destination_registry') {
       const registryRef = db.doc(action.registryPath);
       const registrySnapshot = await transaction.get(registryRef);
-      const registryUpdateTime = registrySnapshot.updateTime?.toDate?.().toISOString() || null;
+      const registryUpdateTime = normalizedUpdateTime(registrySnapshot.updateTime);
       if (!registrySnapshot.exists || registryUpdateTime !== action.registryUpdateTime) {
         throw new Error(`Registry changed after dry-run: ${action.registryPath}`);
       }
@@ -540,6 +549,7 @@ module.exports = {
   decodeFirestoreValue,
   loadLiveRecordsRest,
   manifestFingerprint,
+  normalizedUpdateTime,
   parseArgs,
   run,
 };
