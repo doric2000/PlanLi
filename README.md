@@ -474,6 +474,54 @@ SQL scope, new paid service, Function, Rules, Hosting, EAS build, OTA, IAM,
 secret deletion or additional production-content mutation accompanied this
 final index repair.
 
+The `2026-08-31` post-remediation audit rechecked all 22 original findings
+against source and live state. Eighteen are fixed and live: PL-01..04, PL-07..09,
+PL-11..16 and PL-18..22, excluding the separately listed PL-05, PL-06, PL-10
+and PL-17. The rollback bucket now has Public Access Prevention and uniform
+bucket-level access enabled, its Rules deny all access, and an anonymous object
+probe returned HTTP 401. The privileged Firebase Admin service account has zero
+user-managed keys. The legacy Google server secrets and API keys are absent;
+the only API keys are restricted Android, iOS and Firebase browser keys. The
+media bucket CORS contains only the two production origins, the default compute
+identity has no reviewed secret binding, Firestore deletion protection and PITR
+are enabled, and Auth authorized domains contain only the two production hosts.
+Identity Platform TOTP is enabled and the sole active admin is enrolled; a
+second independent human admin remains an operational release gate.
+
+App Check providers are configured with one-hour tokens for Android Play
+Integrity, iOS App Attest with DeviceCheck fallback, and Web reCAPTCHA
+Enterprise. Firebase service enforcement and the Functions rollout switch remain
+off until a signed runtime `1.2.0` client is installed and tested; therefore
+PL-17 is still open. PL-06 and PL-10 are fixed in source—SDK 57, device-only
+SecureStore migration, Android backup disabled and reverse-DNS URL scheme—but
+are not live in the installed runtime `1.1.0` binaries. PL-05 remains the sole
+accepted risk: EAS OTA is intentionally unsigned and must be re-reviewed by
+`2026-11-30`, at 1,000 MAU or after a suspicious event, whichever occurs first.
+
+The current billing controls include project budgets of ILS 3 and ILS 75 and
+hard API quota preferences. reCAPTCHA is capped at 300 assessments/day and
+60/minute, keeping this project's theoretical 31-day maximum below its 10,000
+assessment no-cost allowance. Identity Toolkit is capped at 60 broad requests
+per minute and SMS/custom-token paths are disabled. The Places launch caps are
+30/minute, 300 autocomplete requests/day and 150 details requests/day; these
+last two protect the 10,000 Essentials and 5,000 Pro monthly free caps but are
+too low for a 200-user availability target. They must not be raised until a
+separate monthly server-owned Essentials/Pro budget or explicit paid-overage
+policy is approved. The unused Places Legacy API remains enabled but has no key,
+secret or code consumer; disabling the service is still awaiting an explicit
+service-removal decision.
+
+The unchanged merged source then passed the full no-cost release validation:
+994/994 client tests across 178 suites, 818/818 Functions tests with 23 intended
+skips, and 23/23 Firestore/Storage Rules emulator tests. Admin Web exported and
+resolved all 30 local references; live Hosting serves the complete CSP, no
+`sourceMappingURL`, no JSON source map, and HTTP 404 for non-admin application
+routes. iOS release configuration retained marketing version `1.1.0` and runtime
+`1.2.0`, and a local iOS Expo export completed without EAS or upload. All three
+npm workspaces currently report zero audit vulnerabilities. These checks do not
+replace a signed TestFlight/Play Internal build, physical-device App Check and
+SecureStore tests, or gradual enforcement verification.
+
 The current Android internal release is `1.1.0 (6)`, EAS build
 `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
 `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` and completed at
