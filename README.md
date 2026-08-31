@@ -480,9 +480,13 @@ PL-11..16 and PL-18..22, excluding the separately listed PL-05, PL-06, PL-10
 and PL-17. The rollback bucket now has Public Access Prevention and uniform
 bucket-level access enabled, its Rules deny all access, and an anonymous object
 probe returned HTTP 401. The privileged Firebase Admin service account has zero
-user-managed keys. The legacy Google server secrets and API keys are absent;
-the only API keys are restricted Android, iOS and Firebase browser keys. The
-media bucket CORS contains only the two production origins, the default compute
+user-managed keys. The legacy Google server secrets and API keys are absent.
+The remaining Maps keys are application- and API-restricted for Android and
+iOS. The public Firebase client key is restricted to Firebase-related API
+targets but intentionally has no referrer restriction because the native
+Firebase JS client shares it; its authorization boundary is Rules plus App
+Check, not key secrecy. The media bucket CORS contains only the two production
+origins, the default compute
 identity has no reviewed secret binding, Firestore deletion protection and PITR
 are enabled, and Auth authorized domains contain only the two production hosts.
 Identity Platform TOTP is enabled and the sole active admin is enrolled; a
