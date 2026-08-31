@@ -76,6 +76,9 @@ test('personalized recommendation candidate queries have global and destination 
     'publicationGate.destinationApprovalVerified:ASCENDING|status:ASCENDING|stats.likeCount:DESCENDING'
   ));
   assert.ok(recommendationIndexes.includes(
+    'publicationGate.destinationApprovalVerified:ASCENDING|status:ASCENDING|createdAt:DESCENDING'
+  ));
+  assert.ok(recommendationIndexes.includes(
     'destination.countryId:ASCENDING|destination.cityId:ASCENDING|status:ASCENDING|search.prefixes:CONTAINS'
   ));
 });
@@ -89,6 +92,7 @@ test('route discovery candidate queries have search, facet, quality and destinat
   for (const signature of [
     'status:ASCENDING|stats.likeCount:DESCENDING',
     'publicationGate.destinationApprovalVerified:ASCENDING|status:ASCENDING|stats.likeCount:DESCENDING',
+    'publicationGate.destinationApprovalVerified:ASCENDING|status:ASCENDING|createdAt:DESCENDING',
     'status:ASCENDING|search.prefixes:CONTAINS',
     'status:ASCENDING|facets.interests:CONTAINS',
     'status:ASCENDING|destinationKeys:CONTAINS|createdAt:DESCENDING',
