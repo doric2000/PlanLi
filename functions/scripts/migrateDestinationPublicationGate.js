@@ -78,11 +78,31 @@ function manifestFingerprint(actions) {
 
 function normalizedUpdateTime(value) {
   if (!value) return null;
-  const date = value?.toDate?.() || new Date(value);
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    throw new Error('Firestore returned an invalid document update time.');
+  if (typeof value === 'object' && value.seconds !== undefined && value.nanoseconds !== undefined) {
+    const seconds = Number(value.seconds);
+    const nanoseconds = Number(value.nanoseconds);
+    if (Number.isSafeInteger(seconds) && Number.isInteger(nanoseconds) &&
+        nanoseconds >= 0 && nanoseconds <= 999999999) {
+      const wholeSecond = new Date(seconds * 1000);
+      if (!Number.isNaN(wholeSecond.getTime())) {
+        return `${wholeSecond.toISOString().slice(0, 19)}.${String(nanoseconds).padStart(9, '0')}Z`;
+      }
+    }
   }
-  return date.toISOString();
+  if (typeof value === 'string') {
+    const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/.exec(value);
+    if (match) {
+      const wholeSecond = new Date(`${match[1]}Z`);
+      if (!Number.isNaN(wholeSecond.getTime()) && wholeSecond.toISOString().slice(0, 19) === match[1]) {
+        return `${match[1]}.${String(match[2] || '').padEnd(9, '0')}Z`;
+      }
+    }
+  }
+  const date = value instanceof Date ? value : value?.toDate?.();
+  if (date instanceof Date && !Number.isNaN(date.getTime())) {
+    return `${date.toISOString().slice(0, -1)}000000Z`;
+  }
+  throw new Error('Firestore returned an invalid document update time.');
 }
 
 function buildPublicationManifest({ countries, destinations, catalog, contents, registry = [] }) {

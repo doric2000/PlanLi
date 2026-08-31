@@ -153,7 +153,7 @@ test('read-only REST inventory uses the existing gcloud token and decodes fixed 
     path: 'countries/IL/destinations/tel-aviv',
     id: 'tel-aviv',
     data: { status: 'active' },
-    updateTime: '2026-08-30T00:00:00.123Z',
+    updateTime: '2026-08-30T00:00:00.123456789Z',
     countryId: 'IL',
     cityId: 'tel-aviv',
   });
@@ -165,14 +165,20 @@ test('read-only REST inventory uses the existing gcloud token and decodes fixed 
     call.options.body.includes('"allDescendants":true')));
 });
 
-test('REST and Admin update times share one millisecond fingerprint representation', () => {
+test('REST and Admin update times share one lossless nanosecond fingerprint representation', () => {
   assert.equal(
     normalizedUpdateTime('2026-08-30T00:00:00.123456789Z'),
-    '2026-08-30T00:00:00.123Z'
+    '2026-08-30T00:00:00.123456789Z'
   );
   assert.equal(
-    normalizedUpdateTime({ toDate: () => new Date('2026-08-30T00:00:00.123Z') }),
-    '2026-08-30T00:00:00.123Z'
+    normalizedUpdateTime({ seconds: 1788048000, nanoseconds: 123456789 }),
+    '2026-08-30T00:00:00.123456789Z'
+  );
+  assert.equal(normalizedUpdateTime(new Date('2026-08-30T00:00:00.123Z')),
+    '2026-08-30T00:00:00.123000000Z');
+  assert.notEqual(
+    normalizedUpdateTime('2026-08-30T00:00:00.123000001Z'),
+    normalizedUpdateTime('2026-08-30T00:00:00.123999999Z')
   );
   assert.throws(() => normalizedUpdateTime('not-a-time'), /invalid document update time/);
 });
