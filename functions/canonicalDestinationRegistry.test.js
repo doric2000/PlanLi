@@ -7,6 +7,7 @@ const {
   buildMatchProfile,
   canonicalDestinationId,
   destinationTypeForKind,
+  legacyRegistryId,
   matchCanonicalEntry,
   normalizeEntry,
   providerGeometryPolicy,
@@ -15,6 +16,21 @@ const {
   registryCollectionIssues,
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
+
+test('legacy registry IDs are deterministic and valid for hashed destination IDs', () => {
+  const id = legacyRegistryId('AL', 'AL', 'dst_-oAZiNxHI7tlOOgVATG6');
+  assert.equal(id, legacyRegistryId('AL', 'AL', 'dst_-oAZiNxHI7tlOOgVATG6'));
+  assert.match(id, /^al-legacy-[a-f0-9]{16}$/);
+  const validation = validateRegistryEntry({
+    id,
+    countryCode: 'AL',
+    names: { he: 'שקודרה', en: 'Shkodër' },
+    aliases: ['Shkodër'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+  }, { requireProviderIdentity: false, requireResearchSources: false });
+  assert.deepEqual(validation.errors, []);
+});
 
 test('researched catalog stays within the approved size and regional allocation', () => {
   assert.equal(CANDIDATES.length, 252);

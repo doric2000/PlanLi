@@ -22,7 +22,7 @@ test('legacy active destination policy is provisional and exact-selection only',
   assert.equal(policy.provisional, true);
   assert.equal(policy.reviewState, 'pending');
   assert.equal(policy.kind, 'city_hub');
-  assert.match(policy.registryId, /^il-legacy-/);
+  assert.match(policy.registryId, /^il-legacy-[a-f0-9]{16}$/);
 });
 
 test('legacy natural destinations keep a distinct review kind', () => {
