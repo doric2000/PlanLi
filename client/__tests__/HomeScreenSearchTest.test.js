@@ -842,7 +842,7 @@ describe('HomeScreenSearchTest', () => {
     await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
     const header = screen.getByTestId('home-tab-header');
     const scroll = screen.getByTestId('home-scroll');
-    expect(header.props.overlapNext).toBe(true);
+    expect(header.props.overlapNext).toBeUndefined();
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
     expect(screen.getByTestId('home-search-tour-target').props.onLayout).toEqual(expect.any(Function));
@@ -879,7 +879,11 @@ describe('HomeScreenSearchTest', () => {
       height: 44,
     });
     expect(within(scroll).queryByTestId('home-tab-header')).toBeNull();
-    expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toMatchObject({ paddingTop: 28 });
+    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#F4F5F9');
+    expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toMatchObject({
+      paddingTop: 28,
+      backgroundColor: '#F4F5F9',
+    });
   });
 
   it('does not refresh or displace Home when entering it from another tab', async () => {
@@ -930,7 +934,7 @@ describe('HomeScreenSearchTest', () => {
     expect(scroll.props.contentInset).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     expect(scroll.props.scrollIndicatorInsets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     expect(scroll.props.contentOffset).toEqual({ x: 0, y: 0 });
-    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#28486D');
+    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#F4F5F9');
   });
 
   it('keeps the Home header and replaces discovery content while refresh is pending', async () => {

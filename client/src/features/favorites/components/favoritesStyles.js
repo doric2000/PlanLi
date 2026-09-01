@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 import { colors, layout, spacing } from '../../../styles';
 
 export const favoritesStyles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.heroBlueGradient[1] },
+  screen: { flex: 1, backgroundColor: colors.appSurface },
   headerTabs: { marginTop: spacing.xs },
   list: { flex: 1, backgroundColor: colors.heroBlueGradient[1] },
   listContent: {

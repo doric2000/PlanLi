@@ -24,7 +24,6 @@ import {
   routesScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
   tabHeroStyles,
-  TAB_HERO_OVERLAP,
   TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
 import FabButton from '../../../components/FabButton';
@@ -269,7 +268,6 @@ export default function RoutesScreen({ navigation }) {
     <PageHeader
       variant="hero"
       title={text.title}
-      overlapNext
       style={tabHeroStyles.fixedHeader}
       testID="routes-tab-header"
       renderTitleAccessory={() => (
@@ -327,7 +325,7 @@ export default function RoutesScreen({ navigation }) {
   );
 
   const renderActiveFilters = () => (
-    <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
+    <View style={tabHeroStyles.bodyContentInset}>
       <ActiveRouteFiltersList filters={filters}
         onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
         onClear={() => setFilters(createEmptyDiscoveryFilters())} />
@@ -345,11 +343,10 @@ export default function RoutesScreen({ navigation }) {
             { paddingBottom: getTabSceneListPaddingBottom(insets) },
           ]}
           initialNumToRender={3} maxToRenderPerBatch={3} windowSize={5} onScroll={onScroll} scrollEventThrottle={16}
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             <RouteCard item={item} onPress={() => openRoute(item)} isOwner={currentUser && item.ownerId === currentUser.uid}
               onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)}
-              onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed"
-              topContentInset={!isFiltered && index === 0 ? TAB_HERO_OVERLAP : 0} />
+              onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed" />
           )}
           refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
           ListHeaderComponent={renderActiveFilters()}

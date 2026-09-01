@@ -182,5 +182,6 @@ export const tabHeroStyles = StyleSheet.create({
   },
   bodyContentInset: {
     paddingTop: TAB_HERO_OVERLAP,
+    backgroundColor: colors.appSurface,
   },
 });

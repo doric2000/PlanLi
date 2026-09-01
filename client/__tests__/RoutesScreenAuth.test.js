@@ -265,11 +265,11 @@ describe('RoutesScreen authentication state', () => {
     const emptyStyle = StyleSheet.flatten(screen.getByTestId('routes-empty-state').props.style);
 
     expect(contentStyle).toMatchObject({ flexGrow: 1 });
-    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#F4F5F9');
     expect(list.props.ListHeaderComponent).toBeTruthy();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
     const header = screen.getByTestId('routes-tab-header');
-    expect(header.props.overlapNext).toBe(true);
+    expect(header.props.overlapNext).toBeUndefined();
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
     expect(screen.getByTestId('routes-search-tour-target').props.onLayout).toEqual(expect.any(Function));
@@ -277,12 +277,15 @@ describe('RoutesScreen authentication state', () => {
     expect(screen.getByTestId('routes-sort-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('routes-add-button').props.onLayout).toEqual(expect.any(Function));
     expect(within(list).queryByTestId('routes-tab-header')).toBeNull();
+    expect(StyleSheet.flatten(list.props.ListHeaderComponent.props.style)).toMatchObject({
+      paddingTop: 28,
+      backgroundColor: '#F4F5F9',
+    });
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
   });
 
   it('matches the Community labeled-action geometry', () => {
     const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
-    expect(StyleSheet.flatten(routesScreenStyles.filtersAfterOverlappingHeader).paddingTop).toBe(36);
     expect(StyleSheet.flatten(screen.getByTestId('routes-sort-button').props.style)).toMatchObject({
       width: 80,
       height: 44,
@@ -336,6 +339,7 @@ describe('RoutesScreen authentication state', () => {
       await refreshPromise;
     });
     expect(screen.getByTestId('route-route-2')).toBeTruthy();
-    expect(screen.getByTestId('route-route-2').props.topContentInset).toBe(28);
+    expect(screen.getByTestId('route-route-2').props.topContentInset).toBeUndefined();
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent.props.style).paddingTop).toBe(28);
   });
 });

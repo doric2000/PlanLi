@@ -229,11 +229,11 @@ describe('CommunityScreen map mode', () => {
     const emptyStyle = StyleSheet.flatten(screen.getByTestId('community-empty-state').props.style);
 
     expect(contentStyle).toMatchObject({ flexGrow: 1 });
-    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#F4F5F9');
     expect(list.props.ListHeaderComponent).toBeTruthy();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
     const header = screen.getByTestId('community-tab-header');
-    expect(header.props.overlapNext).toBe(true);
+    expect(header.props.overlapNext).toBeUndefined();
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
     expect(screen.getByTestId('community-search-tour-target').props.onLayout).toEqual(expect.any(Function));
@@ -242,12 +242,15 @@ describe('CommunityScreen map mode', () => {
     expect(screen.getByTestId('community-map-toggle').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-add-button').props.onLayout).toEqual(expect.any(Function));
     expect(within(list).queryByTestId('community-tab-header')).toBeNull();
+    expect(StyleSheet.flatten(list.props.ListHeaderComponent.props.style)).toMatchObject({
+      paddingTop: 28,
+      backgroundColor: '#F4F5F9',
+    });
     expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
   });
 
   it('uses the shared hero action geometry', () => {
     const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
-    expect(StyleSheet.flatten(communityScreenStyles.filtersAfterOverlappingHeader).paddingTop).toBe(36);
     expect(StyleSheet.flatten(screen.getByTestId('community-sort-button').props.style)).toMatchObject({
       width: 80,
       height: 44,
@@ -290,10 +293,11 @@ describe('CommunityScreen map mode', () => {
     expect(screen.queryByTestId('community-empty-state')).toBeNull();
   });
 
-  it('restores the curved-header content inset after refresh remounts the first card', () => {
+  it('keeps feed cards below the curved header after refresh remounts the first card', () => {
     mockFilteredData = [{ id: 'cached-recommendation' }];
     const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
-    expect(screen.getByTestId('recommendation-cached-recommendation').props.topContentInset).toBe(28);
+    expect(screen.getByTestId('recommendation-cached-recommendation').props.topContentInset).toBeUndefined();
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent.props.style).paddingTop).toBe(28);
 
     mockRecommendationState.refreshing = true;
     screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
@@ -302,7 +306,8 @@ describe('CommunityScreen map mode', () => {
     mockFilteredData = [{ id: 'refreshed-recommendation' }];
     mockRecommendationState.refreshing = false;
     screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
-    expect(screen.getByTestId('recommendation-refreshed-recommendation').props.topContentInset).toBe(28);
+    expect(screen.getByTestId('recommendation-refreshed-recommendation').props.topContentInset).toBeUndefined();
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent.props.style).paddingTop).toBe(28);
   });
 
   it('consumes a focused-map command and keeps the canonical target ahead of filtered results', async () => {
