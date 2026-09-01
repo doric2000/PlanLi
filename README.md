@@ -65,6 +65,21 @@ headers. The `/admin` export and named public routes remained available. No
 Functions, Rules, indexes, Storage, Auth, IAM, app build, store submission or
 OTA action accompanied this Hosting-only release.
 
+The iPhone safe-area and full-height landing fix from
+[PR #317](https://github.com/doric2000/PlanLi/pull/317), merge commit
+`2e9328ec9623dc09f2095beffb8e08667a9666e7`, was deployed as the only Firebase
+target at `2026-09-01T20:26:25.036Z`. Release
+`sites/planli-f0b12/releases/1788294385036000` finalized Hosting version
+`sites/planli-f0b12/versions/a83bcf8dcdd462ed` with 54 files. Direct TLS
+read-back of `planli.cc` against Firebase's expected `199.36.158.100` endpoint
+returned HTTP 200; the live landing HTML, stylesheet and Admin HTML matched the
+merged source byte-for-byte, and the reviewed security headers remained
+present. A 390-by-844 browser smoke check against the Firebase-owned fallback
+host loaded every image without console warnings, errors or horizontal
+overflow, and the background remained continuous through the document bottom.
+No Functions, Rules, indexes, Storage, Auth, IAM, app build/update, store
+submission or production-data action accompanied this Hosting-only release.
+
 Cloudflare now serves proxied `www` addresses and returns a permanent 301 to the
 apex while preserving the original path and query string. The authoritative
 zone contains DMARC policy `v=DMARC1; p=none; adkim=r; aspf=r; pct=100`, and both
