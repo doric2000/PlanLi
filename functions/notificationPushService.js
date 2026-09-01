@@ -400,7 +400,15 @@ async function updateNotificationPreferences({ admin, auth, data }) {
   return { preferences };
 }
 
-function buildExpoMessage({ token, notificationId, channel, category, version, subtype = null }) {
+function buildExpoMessage({
+  token,
+  notificationId,
+  channel,
+  category,
+  version,
+  subtype = null,
+  milestone = null,
+}) {
   cleanToken(token);
   cleanId(notificationId, 'notificationId');
   cleanDispatchVersion(version);
@@ -415,10 +423,16 @@ function buildExpoMessage({ token, notificationId, channel, category, version, s
   }
   const config = CHANNEL_CONFIG[pushCategory];
   const reply = pushCategory === PUSH_CATEGORIES.COMMENTS && subtype === 'new_reply';
+  const likeMilestone = pushCategory === PUSH_CATEGORIES.LIKES && subtype === 'like_milestone';
+  const safeMilestone = Math.max(1, Math.trunc(Number(milestone) || 1));
   return {
     to: token,
-    title: reply ? 'תשובה חדשה ב-PlanLi' : config.title,
-    body: reply ? 'מישהו השיב לתגובה שלך.' : config.body,
+    title: likeMilestone
+      ? 'אבן דרך חדשה ב-PlanLi'
+      : (reply ? 'תשובה חדשה ב-PlanLi' : config.title),
+    body: likeMilestone
+      ? `התוכן שלך הגיע ל-${safeMilestone} לייקים.`
+      : (reply ? 'מישהו השיב לתגובה שלך.' : config.body),
     sound: 'default',
     priority: 'high',
     channelId: config.androidChannelId,
@@ -1000,6 +1014,7 @@ async function dispatchExpectedNotificationVersion({
       category: expectedCategory,
       version: expectedVersion,
       subtype: authoritative.subtype,
+      milestone: authoritative.milestone,
     }));
     const tickets = await sendMessagesWithRetry(client, messages, { sleep });
     providerAccepted = true;
@@ -1291,6 +1306,7 @@ async function processRetrySendJob({
     category: job.category,
     version: job.version,
     subtype: notification.subtype,
+    milestone: notification.milestone,
   });
   let ticket;
   try {

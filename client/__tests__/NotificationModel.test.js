@@ -211,6 +211,27 @@ describe('NotificationModel schema v2', () => {
     expect(getNotificationLikeMessageParts({ type: 'comment' })).toBeNull();
   });
 
+  it('normalizes and presents like milestones as total-like achievements', () => {
+    const notification = normalizeNotification('milestone-1', {
+      schemaVersion: 2,
+      channel: 'personal',
+      type: 'like',
+      subtype: 'like_milestone',
+      count: 100,
+      milestone: 100,
+      target: { type: 'recommendation', title: 'הרמון' },
+    });
+
+    expect(notification.milestone).toBe(100);
+    expect(getNotificationPresentation(notification)).toMatchObject({
+      message: 'התוכן שלך הגיע ל־100 לייקים',
+      likeMessageParts: {
+        actionLabel: '100 לייקים',
+        remainder: 'על “הרמון” — אבן דרך חדשה!',
+      },
+    });
+  });
+
   it('derives liker-list targets only from allowlisted typed notification actions', () => {
     expect(buildNotificationLikesTarget({
       type: 'like',

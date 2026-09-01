@@ -5,8 +5,10 @@ import {
 } from '../createNotificationPushCoordinator';
 import {
   ANDROID_NOTIFICATION_CHANNELS,
+  PUSH_PERMISSION_ONBOARDING_STATES,
   PUSH_SCHEMA_VERSION,
   STORED_EXPO_PUSH_TOKEN_KEY,
+  STORED_PUSH_PERMISSION_ONBOARDING_KEY,
 } from '../constants';
 
 const token = (value) => `ExpoPushToken[${value}]`;
@@ -184,6 +186,90 @@ describe('notification push coordinator', () => {
     expect(callables.registerDevice).not.toHaveBeenCalled();
   });
 
+  it('requests first-launch permission once for a guest and defers account enrollment', async () => {
+    const notifications = makeNotifications({
+      getPermissionsAsync: jest.fn(async () => ({ granted: false })),
+      requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
+    });
+    const { coordinator, storage, callables } = makeCoordinator({ notifications });
+
+    await expect(coordinator.requestInitialPermission({ enableForCurrentUser: false }))
+      .resolves.toEqual({ status: 'permission_granted_pending' });
+    expect(notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_PENDING);
+    expect(callables.registerDevice).not.toHaveBeenCalled();
+
+    await coordinator.requestInitialPermission({ enableForCurrentUser: false });
+    expect(notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('consumes a guest permission grant after authentication and never re-enrolls it', async () => {
+    const storage = makeStorage({
+      [STORED_PUSH_PERMISSION_ONBOARDING_KEY]: PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_PENDING,
+    });
+    const { coordinator, notifications, callables } = makeCoordinator({ storage });
+
+    await expect(coordinator.requestInitialPermission({ enableForCurrentUser: true }))
+      .resolves.toMatchObject({ status: 'enabled' });
+    expect(callables.registerDevice).toHaveBeenCalledTimes(1);
+    expect(callables.setPreferences).toHaveBeenCalledWith({ pushEnabled: true });
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED);
+
+    await coordinator.requestInitialPermission({ enableForCurrentUser: true });
+    expect(callables.registerDevice).toHaveBeenCalledTimes(1);
+    expect(notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('records a denied first-launch decision without requesting again', async () => {
+    const notifications = makeNotifications({
+      getPermissionsAsync: jest.fn(async () => ({ granted: false })),
+      requestPermissionsAsync: jest.fn(async () => ({ granted: false })),
+    });
+    const { coordinator, storage } = makeCoordinator({ notifications });
+
+    await expect(coordinator.requestInitialPermission({ enableForCurrentUser: false }))
+      .resolves.toEqual({ status: 'permission_denied', reason: 'PERMISSION_DENIED' });
+    await coordinator.requestInitialPermission({ enableForCurrentUser: false });
+    expect(notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.DENIED);
+  });
+
+  it('preserves an existing explicit account opt-out during first-launch onboarding', async () => {
+    const notifications = makeNotifications({
+      getPermissionsAsync: jest.fn(async () => ({ granted: false })),
+    });
+    const callables = makeCallables({
+      getPreferences: jest.fn(async () => ({ pushEnabled: false, configured: true })),
+    });
+    const { coordinator, storage } = makeCoordinator({ notifications, callables });
+
+    await expect(coordinator.requestInitialPermission({ enableForCurrentUser: true }))
+      .resolves.toMatchObject({ status: 'already_configured' });
+    expect(notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(callables.registerDevice).not.toHaveBeenCalled();
+    expect(callables.setPreferences).not.toHaveBeenCalled();
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED);
+  });
+
+  it('aborts authenticated onboarding when existing preferences cannot be verified', async () => {
+    const preferenceError = new Error('offline');
+    const callables = makeCallables({
+      getPreferences: jest.fn(async () => { throw preferenceError; }),
+    });
+    const { coordinator, notifications } = makeCoordinator({ callables });
+
+    await expect(coordinator.requestInitialPermission({ enableForCurrentUser: true }))
+      .resolves.toEqual({ status: 'error', reason: 'PREFERENCES_FAILED' });
+    expect(notifications.getPermissionsAsync).not.toHaveBeenCalled();
+    expect(notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(callables.registerDevice).not.toHaveBeenCalled();
+    expect(callables.setPreferences).not.toHaveBeenCalled();
+  });
+
   it('reclaims and removes a remembered token when the authenticated account has push disabled', async () => {
     const rememberedToken = token('previous-account');
     const storage = makeStorage({ [STORED_EXPO_PUSH_TOKEN_KEY]: rememberedToken });
@@ -256,18 +342,23 @@ describe('notification push coordinator', () => {
 
     await expect(coordinator.enablePush()).resolves.toMatchObject({ status: 'enabled' });
     expect(events).toEqual(['register', 'unregister', 'preference:true']);
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED);
 
     events.length = 0;
+    storage.values.delete(STORED_PUSH_PERMISSION_ONBOARDING_KEY);
     await expect(coordinator.disablePush()).resolves.toMatchObject({ status: 'disabled' });
     expect(events).toEqual(['preference:false', 'unregister']);
     expect(storage.values.has(STORED_EXPO_PUSH_TOKEN_KEY)).toBe(false);
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED);
   });
 
   it('uses the safe preference path to register only on a new global opt-in', async () => {
     const callables = makeCallables({
       getPreferences: jest.fn(async () => ({ pushEnabled: false })),
     });
-    const { coordinator, notifications } = makeCoordinator({ callables });
+    const { coordinator, notifications, storage } = makeCoordinator({ callables });
 
     await expect(coordinator.setPreferences({ pushEnabled: true, comments: false }))
       .resolves.toMatchObject({ pushEnabled: true, comments: false });
@@ -276,6 +367,8 @@ describe('notification push coordinator', () => {
       pushEnabled: true,
       comments: false,
     });
+    expect(storage.values.get(STORED_PUSH_PERMISSION_ONBOARDING_KEY))
+      .toBe(PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED);
 
     notifications.getExpoPushTokenAsync.mockClear();
     callables.getPreferences.mockResolvedValue({ pushEnabled: true });

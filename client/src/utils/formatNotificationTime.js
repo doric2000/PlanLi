@@ -2,18 +2,17 @@
  * formatNotificationTime.js
  *
  * Utility to format timestamps for notification display.
- * Shows time in HH:MM format if within 24 hours, otherwise shows Hebrew relative days.
+ * Shows a local date label together with HH:MM for every notification.
  */
 
 /**
  * Format notification timestamp according to requirements:
- * - Within 24 hours: HH:MM
- * - More than 24 hours: "אתמול", "לפני 2 ימים", etc.
- * 
+ *
  * @param {object|number|Date} timestamp - Firestore Timestamp, JS Date, or ms
+ * @param {Date} now - Current local time; injectable for deterministic tests
  * @returns {string} Formatted time string
  */
-export function formatNotificationTime(timestamp) {
+export function formatNotificationTime(timestamp, now = new Date()) {
   if (!timestamp) return '';
 
   let date;
@@ -27,24 +26,23 @@ export function formatNotificationTime(timestamp) {
     date = new Date(timestamp);
   }
 
-  const now = new Date();
-  const diffMs = now - date;
-  const diffHours = diffMs / (1000 * 60 * 60);
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) return '';
 
-  // Within 24 hours: show HH:MM
-  if (diffHours < 24) {
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  }
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const time = `${hours}:${minutes}`;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const notificationDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
 
-  // More than 24 hours: show days
-  if (diffDays === 1) {
-    return 'אתמול';
-  }
+  if (notificationDay.getTime() === today.getTime()) return `היום, ${time}`;
+  if (notificationDay.getTime() === yesterday.getTime()) return `אתמול, ${time}`;
 
-  return `לפני ${diffDays} ימים`;
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear() === now.getFullYear() ? '' : `.${date.getFullYear()}`;
+  return `${day}.${month}${year}, ${time}`;
 }
 
 /**

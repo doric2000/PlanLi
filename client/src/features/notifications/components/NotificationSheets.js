@@ -133,21 +133,23 @@ export function NotificationChannelMenu({
 }
 
 export function NotificationStatusSheet({ action, visible, onClose, onRetry }) {
+  const primaryAction = action?.onAction || (action?.retryable ? onRetry : null);
+  const primaryLabel = action?.actionLabel || (action?.retryable ? 'ניסיון נוסף' : '');
   return (
     <SheetFrame visible={visible} onClose={onClose} accessibilityLabel={action?.title || 'מצב ההתראה'}>
       <AppText style={styles.sheetTitle}>{action?.title || 'לא ניתן לפתוח את ההתראה'}</AppText>
       <AppText style={styles.sheetMessage}>
         {action?.message || 'אפשר לחזור להתראות ולנסות שוב מאוחר יותר.'}
       </AppText>
-      {action?.retryable && onRetry ? (
+      {primaryAction && primaryLabel ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="ניסיון נוסף"
-          onPress={onRetry}
+          accessibilityLabel={primaryLabel}
+          onPress={primaryAction}
           style={({ pressed }) => [styles.primaryButton, pressed && styles.rowPressed]}
-          testID="notification-status-retry"
+          testID={action?.actionTestID || 'notification-status-retry'}
         >
-          <AppText style={styles.primaryButtonText}>ניסיון נוסף</AppText>
+          <AppText style={styles.primaryButtonText}>{primaryLabel}</AppText>
         </Pressable>
       ) : null}
       <Pressable

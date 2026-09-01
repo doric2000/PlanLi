@@ -6,12 +6,58 @@ import NotificationScreen from '../src/features/notifications/screens/Notificati
 
 const mockNavigation = { goBack: jest.fn(), navigate: jest.fn() };
 let mockCenter;
-const mockUser = { uid: 'owner', displayName: 'דנה', photoURL: null };
+const mockGetIdTokenResult = jest.fn();
+const mockSignOutCentral = jest.fn(async () => {});
+const mockOpenAuthFlow = jest.fn();
+const mockUser = {
+  uid: 'owner',
+  displayName: 'דנה',
+  photoURL: null,
+  getIdTokenResult: (...args) => mockGetIdTokenResult(...args),
+};
 const mockResolveTargetAvailability = jest.fn();
+
+jest.mock('../src/services/AuthService', () => ({
+  signOutCentral: (...args) => mockSignOutCentral(...args),
+}));
+jest.mock('../src/navigation/authNavigation', () => ({
+  openAuthFlow: (...args) => mockOpenAuthFlow(...args),
+}));
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
+  useFocusEffect: (callback) => {
+    const ReactRuntime = require('react');
+    ReactRuntime.useEffect(callback, [callback]);
+  },
 }));
+
+jest.mock('react-native-gesture-handler', () => {
+  const ReactRuntime = require('react');
+  const { View } = require('react-native');
+  return {
+    GestureHandlerRootView: ({ children, ...props }) => ReactRuntime.createElement(View, props, children),
+  };
+});
+
+jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
+  const ReactRuntime = require('react');
+  const { View } = require('react-native');
+  return ReactRuntime.forwardRef(function MockSwipeable({
+    children,
+    renderRightActions,
+    onSwipeableOpen,
+    ...props
+  }, ref) {
+    ReactRuntime.useImperativeHandle(ref, () => ({ close: jest.fn() }), []);
+    return ReactRuntime.createElement(
+      View,
+      { ...props, onSwipeableOpen },
+      children,
+      renderRightActions?.()
+    );
+  });
+});
 
 jest.mock('@expo/vector-icons', () => {
   const ReactRuntime = require('react');
@@ -131,6 +177,12 @@ describe('NotificationScreen interactions', () => {
     jest.clearAllMocks();
     mockCenter = createCenter();
     mockResolveTargetAvailability.mockResolvedValue({ available: true, reason: 'active' });
+    mockGetIdTokenResult.mockResolvedValue({
+      claims: {
+        auth_time: Math.floor(Date.now() / 1000),
+        firebase: { sign_in_second_factor: 'totp' },
+      },
+    });
   });
 
   it('keeps RTL header controls and gates the admin channel by the active claim', () => {
@@ -149,31 +201,58 @@ describe('NotificationScreen interactions', () => {
     expect(screen.getByText(/ניהול/)).toBeTruthy();
   });
 
-  it('filters rows without discarding the loaded channel data', () => {
+  it('always renders the full channel without filter or unread controls', () => {
     const screen = render(<NotificationScreen />);
     expect(screen.getByTestId('notification-row-like-1')).toBeTruthy();
     expect(screen.getByTestId('notification-row-comment-1')).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId('notification-filter-likes'));
-    expect(mockCenter.setActiveFilter).toHaveBeenCalledWith('personal', 'likes');
-    mockCenter.activeFilters.personal = 'likes';
-    mockCenter.channels.personal = channelState([personalLike]);
-    screen.rerender(<NotificationScreen />);
-    expect(screen.getByTestId('notification-row-like-1')).toBeTruthy();
-    expect(screen.queryByTestId('notification-row-comment-1')).toBeNull();
+    expect(screen.queryByTestId('notification-filter-chips')).toBeNull();
+    expect(screen.queryByTestId('notification-channel-menu')).toBeNull();
+    expect(screen.queryByText(/לא נקראו|הכול נקרא/u)).toBeNull();
   });
 
-  it('marks an unread row once and emits the allowlisted root route action once', async () => {
+  it('marks admin notifications only when the admin channel is entered', async () => {
+    mockCenter = createCenter({ isAdmin: true });
+    render(<NotificationScreen initialChannel="admin" />);
+
+    await waitFor(() => {
+      expect(mockCenter.markChannelRead).toHaveBeenCalledWith('personal');
+      expect(mockCenter.markChannelRead).toHaveBeenCalledWith('admin');
+    });
+  });
+
+  it('requires a recent TOTP session before auto-reading admin notifications', async () => {
+    mockCenter = createCenter({ isAdmin: true });
+    mockGetIdTokenResult.mockResolvedValue({
+      claims: {
+        auth_time: Math.floor(Date.now() / 1000) - (11 * 60),
+        firebase: { sign_in_second_factor: 'totp' },
+      },
+    });
+    const screen = render(<NotificationScreen initialChannel="admin" />);
+
+    await waitFor(() => expect(screen.getByText('נדרשת התחברות מחדש')).toBeTruthy());
+    expect(mockCenter.markChannelRead).toHaveBeenCalledWith('personal');
+    expect(mockCenter.markChannelRead).not.toHaveBeenCalledWith('admin');
+
+    fireEvent.press(screen.getByTestId('notification-admin-reauthenticate'));
+    await waitFor(() => expect(mockSignOutCentral).toHaveBeenCalledWith());
+    await waitFor(() => expect(mockOpenAuthFlow).toHaveBeenCalledWith(
+      mockNavigation,
+      'Login'
+    ));
+  });
+
+  it('marks the personal channel on entry and opens a row without a per-item read write', async () => {
     const onOpenAction = jest.fn();
     const screen = render(<NotificationScreen onOpenAction={onOpenAction} />);
+    await waitFor(() => expect(mockCenter.markChannelRead).toHaveBeenCalledWith('personal'));
     const row = screen.getByTestId('notification-row-like-1');
 
     fireEvent.press(row);
     fireEvent.press(row);
 
     await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
-    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
-    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
     expect(onOpenAction).toHaveBeenCalledWith(
       { type: 'navigate', routeName: 'RecommendationDetail', params: { postId: 'post-1' } },
       personalLike
@@ -193,7 +272,7 @@ describe('NotificationScreen interactions', () => {
 
     await waitFor(() => expect(screen.getByText(title)).toBeTruthy());
     expect(onOpenAction).not.toHaveBeenCalled();
-    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
   });
 
   it('keeps a transient target lookup unread and retries before navigating', async () => {
@@ -213,7 +292,7 @@ describe('NotificationScreen interactions', () => {
 
     fireEvent.press(screen.getByTestId('notification-status-retry'));
     await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
-    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
   });
 
   it('rechecks restored system content before opening it', async () => {
@@ -235,25 +314,32 @@ describe('NotificationScreen interactions', () => {
     fireEvent.press(screen.getByTestId('notification-row-restored-1'));
     await waitFor(() => expect(mockResolveTargetAvailability).toHaveBeenCalledWith(restored));
     expect(onOpenAction).not.toHaveBeenCalled();
-    expect(mockCenter.setRead).toHaveBeenCalledWith(restored, true);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
   });
 
-  it('offers read toggling and confirmed per-row deletion from a 44px menu target', async () => {
+  it('offers confirmed per-row deletion from the left-swipe action', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const screen = render(<NotificationScreen />);
 
-    const menuStyle = StyleSheet.flatten(screen.getByTestId('notification-menu-like-1').props.style);
-    expect(menuStyle).toMatchObject({ width: 44, height: 44 });
-    fireEvent.press(screen.getByTestId('notification-menu-like-1'));
-    fireEvent.press(screen.getByTestId('notification-toggle-read'));
-    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
-
-    fireEvent.press(screen.getByTestId('notification-menu-like-1'));
-    fireEvent.press(screen.getByTestId('notification-delete'));
+    fireEvent(screen.getByTestId('notification-swipe-like-1'), 'swipeableOpen');
+    fireEvent.press(screen.getByTestId('notification-delete-like-1'));
     expect(alertSpy).toHaveBeenCalledTimes(1);
     const destructive = alertSpy.mock.calls[0][2].find((button) => button.style === 'destructive');
     destructive.onPress();
     await waitFor(() => expect(mockCenter.deleteOne).toHaveBeenCalledWith(personalLike));
+    alertSpy.mockRestore();
+  });
+
+  it('disables swipe deletion while the channel read mutation is pending', () => {
+    mockCenter.pendingActions = { 'channel:personal:read': true };
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const screen = render(<NotificationScreen />);
+    const deleteAction = screen.getByTestId('notification-delete-like-1');
+
+    expect(deleteAction.props.accessibilityState).toMatchObject({ disabled: true, busy: true });
+    fireEvent.press(deleteAction);
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockCenter.deleteOne).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
@@ -280,8 +366,7 @@ describe('NotificationScreen interactions', () => {
       'UserProfile',
       { uid: 'actor-0' }
     ));
-    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
-    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
     expect(onOpenAction).not.toHaveBeenCalled();
   });
 
@@ -316,8 +401,7 @@ describe('NotificationScreen interactions', () => {
       itemId: 'post-1',
     });
     expect(screen.getByTestId('likes-modal').props).not.toHaveProperty('likeCount');
-    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
-    expect(mockCenter.setRead).toHaveBeenCalledWith(personalLike, true);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
     expect(onOpenAction).not.toHaveBeenCalled();
   });
 
@@ -346,7 +430,7 @@ describe('NotificationScreen interactions', () => {
 
     await waitFor(() => expect(screen.getByText('התוכן נמצא בבדיקה')).toBeTruthy());
     expect(screen.queryByTestId('likes-modal')).toBeNull();
-    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
   });
 
   it('opens a route like from its main thumbnail with the exact route id', async () => {
@@ -386,7 +470,7 @@ describe('NotificationScreen interactions', () => {
     }, personalComment));
   });
 
-  it('resolves a push id once, marks it read, and ignores duplicate route params', async () => {
+  it('resolves a push id once and ignores duplicate route params without an item read write', async () => {
     mockCenter.resolveNotification.mockResolvedValue(personalLike);
     const onOpenAction = jest.fn();
     const route = { params: { notificationId: 'like-1', channel: 'personal' } };
@@ -395,7 +479,7 @@ describe('NotificationScreen interactions', () => {
     await waitFor(() => expect(onOpenAction).toHaveBeenCalledTimes(1));
     expect(mockCenter.resolveNotification).toHaveBeenCalledTimes(1);
     expect(mockCenter.resolveNotification).toHaveBeenCalledWith('like-1', 'personal');
-    expect(mockCenter.setRead).toHaveBeenCalledTimes(1);
+    expect(mockCenter.setRead).not.toHaveBeenCalled();
 
     screen.rerender(<NotificationScreen route={route} onOpenAction={onOpenAction} />);
     await waitFor(() => expect(mockCenter.resolveNotification).toHaveBeenCalledTimes(1));

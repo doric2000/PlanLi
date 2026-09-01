@@ -15,7 +15,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AppText from '../../../components/AppText';
@@ -23,12 +24,11 @@ import { Avatar } from '../../../components/Avatar';
 import LikesModal from '../../../components/LikesModal';
 import SegmentedTabs from '../../../components/SegmentedTabs';
 import { useAuthUser } from '../../../hooks/useAuthUser';
+import { openAuthFlow } from '../../../navigation/authNavigation';
+import { signOutCentral } from '../../../services/AuthService';
 import { colors } from '../../../styles';
 import {
   NotificationCard,
-  NotificationChannelMenu,
-  NotificationFilterChips,
-  NotificationOverflowMenu,
   NotificationStatusSheet,
 } from '../components';
 import { useNotificationCenter } from '../context/NotificationCenterContext';
@@ -36,24 +36,34 @@ import {
   buildNotificationRouteAction,
   buildNotificationLikesTarget,
   buildStatusActionForError,
-  getNotificationFilterOptions,
   notificationRequiresAvailabilityCheck,
   NotificationChannel,
-  NotificationFilter,
 } from '../models/NotificationModel';
 import { resolveNotificationTargetAvailability } from '../services/NotificationService';
 import { notificationCenterStyles as styles } from '../styles/notificationCenterStyles';
-
-const CHANNEL_COPY = {
-  [NotificationChannel.PERSONAL]: 'ההתראות שלי',
-  [NotificationChannel.ADMIN]: 'התראות מנהלים',
-};
 
 const safeRouteId = (value) => (
   typeof value === 'string' && value.length > 0 && value.length <= 180 && !value.includes('/')
     ? value
     : ''
 );
+
+const RECENT_ADMIN_AUTH_SECONDS = 10 * 60;
+
+export function hasRecentTotpAdminAuthentication(tokenResult, nowMs = Date.now()) {
+  const authTime = Number(tokenResult?.claims?.auth_time || 0);
+  const secondFactor = tokenResult?.claims?.firebase?.sign_in_second_factor;
+  return authTime > 0
+    && nowMs / 1000 - authTime <= RECENT_ADMIN_AUTH_SECONDS
+    && secondFactor === 'totp';
+}
+
+function requiresRecentAdminAuthentication(error) {
+  const reason = String(
+    error?.details?.reason || error?.customData?.details?.reason || ''
+  ).toLowerCase();
+  return reason === 'recent_sign_in_required' || reason === 'totp_required';
+}
 
 function confirmDestructive(title, message, confirmLabel, onConfirm) {
   if (
@@ -142,14 +152,13 @@ export default function NotificationScreen({
   const navigation = navigationProp || navigationHook;
   const { user } = useAuthUser();
   const center = useNotificationCenter();
-  const { resolveNotification, setRead } = center;
+  const { markChannelRead, resolveNotification } = center;
   const [channel, setChannel] = useState(
     initialChannel === NotificationChannel.ADMIN
       ? NotificationChannel.ADMIN
       : NotificationChannel.PERSONAL
   );
-  const [notificationMenuTarget, setNotificationMenuTarget] = useState(null);
-  const [channelMenuVisible, setChannelMenuVisible] = useState(false);
+  const [openSwipeId, setOpenSwipeId] = useState(null);
   const [statusAction, setStatusAction] = useState(null);
   const [likesTarget, setLikesTarget] = useState(null);
   const [resolvingPush, setResolvingPush] = useState(false);
@@ -159,23 +168,11 @@ export default function NotificationScreen({
   const pushRequestRef = useRef(0);
 
   const channelState = center.channels[channel];
-  const unreadCount = center.unreadCounts[channel] || 0;
+  const visibleNotifications = channelState.items;
   const channelMutationBusy = Boolean(
     center.pendingActions[`channel:${channel}:read`]
     || center.pendingActions[`channel:${channel}:delete`]
   );
-  const activeFilter = center.activeFilters?.[channel] || NotificationFilter.ALL;
-  const filterOptions = useMemo(
-    () => getNotificationFilterOptions(channel, unreadCount),
-    [channel, unreadCount]
-  );
-  const visibleNotifications = channelState.items;
-  const selectedNotification = useMemo(() => {
-    if (!notificationMenuTarget) return null;
-    return center.channels[notificationMenuTarget.channel]?.items.find(
-      (item) => item.id === notificationMenuTarget.id
-    ) || null;
-  }, [center.channels, notificationMenuTarget]);
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -189,26 +186,81 @@ export default function NotificationScreen({
   }, [center.adminLoading, center.isAdmin, channel]);
 
   useEffect(() => {
-    setNotificationMenuTarget(null);
-    setChannelMenuVisible(false);
+    setOpenSwipeId(null);
     setLikesTarget(null);
   }, [channel]);
 
-  useEffect(() => {
-    if (notificationMenuTarget && !selectedNotification) setNotificationMenuTarget(null);
-  }, [notificationMenuTarget, selectedNotification]);
+  const showAdminReauthentication = useCallback(() => {
+    setStatusAction({
+      type: 'status',
+      reason: 'admin_reauthentication_required',
+      title: 'נדרשת התחברות מחדש',
+      message: 'כדי לסמן את התראות הניהול כנקראו, יש להתחבר מחדש ולאשר קוד מאפליקציית האימות.',
+      actionLabel: 'התחברות מחדש',
+      actionTestID: 'notification-admin-reauthenticate',
+      onAction: () => {
+        setStatusAction(null);
+        Promise.resolve(signOutCentral())
+          .then(() => openAuthFlow(navigation, 'Login'))
+          .catch(() => {
+            if (mountedRef.current) {
+              setStatusAction({
+                type: 'status',
+                reason: 'admin_reauthentication_failed',
+                title: 'לא הצלחנו להתחבר מחדש',
+                message: 'אפשר לנסות שוב בעוד כמה רגעים.',
+              });
+            }
+          });
+      },
+    });
+  }, [navigation]);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    markChannelRead(NotificationChannel.PERSONAL).catch(() => {});
+    if (
+      channel === NotificationChannel.ADMIN
+      && !center.adminLoading
+      && center.isAdmin
+    ) {
+      Promise.resolve(user?.getIdTokenResult?.())
+        .then((tokenResult) => {
+          if (!active) return;
+          if (!hasRecentTotpAdminAuthentication(tokenResult)) {
+            showAdminReauthentication();
+            return;
+          }
+          markChannelRead(NotificationChannel.ADMIN).catch((error) => {
+            if (active && requiresRecentAdminAuthentication(error)) {
+              showAdminReauthentication();
+            }
+          });
+        })
+        .catch(() => {
+          if (active) showAdminReauthentication();
+        });
+    }
+    return () => {
+      active = false;
+      setOpenSwipeId(null);
+    };
+  }, [
+    center.adminLoading,
+    center.isAdmin,
+    channel,
+    markChannelRead,
+    showAdminReauthentication,
+    user,
+  ]));
 
   const openNotification = useCallback(async (notification, pushRequestId = null) => {
     if (!notification?.id || openingRef.current.has(notification.id)) return;
     openingRef.current.add(notification.id);
     try {
-      const markRead = () => (!notification.isRead
-        ? setRead(notification, true).catch(() => false)
-        : Promise.resolve(false));
       if (!mountedRef.current) return;
       const action = buildNotificationRouteAction(notification);
       if (action.type === 'status') {
-        await markRead();
         setStatusAction(action);
         return;
       }
@@ -236,7 +288,6 @@ export default function NotificationScreen({
           || (pushRequestId !== null && pushRequestRef.current !== pushRequestId)
         ) return;
         if (availability?.available !== true) {
-          await markRead();
           setStatusAction(buildStatusActionForError({
             reason: availability?.reason || 'unavailable',
           }));
@@ -247,30 +298,24 @@ export default function NotificationScreen({
         !mountedRef.current
         || (pushRequestId !== null && pushRequestRef.current !== pushRequestId)
       ) return;
-      const readPromise = markRead();
       if (onOpenAction) {
         await onOpenAction(action, notification);
       } else {
         navigation.navigate(action.routeName, action.params);
       }
-      await readPromise;
     } catch (error) {
       if (mountedRef.current) setStatusAction(buildStatusActionForError(error));
     } finally {
       openingRef.current.delete(notification.id);
     }
-  }, [navigation, onOpenAction, resolveTargetAvailability, setRead]);
+  }, [navigation, onOpenAction, resolveTargetAvailability]);
 
   const openNotificationLikes = useCallback(async (notification) => {
     if (!notification?.id || openingRef.current.has(notification.id)) return;
     openingRef.current.add(notification.id);
-    const markRead = () => (!notification.isRead
-      ? setRead(notification, true).catch(() => false)
-      : Promise.resolve(false));
     try {
       const target = buildNotificationLikesTarget(notification);
       if (!target) {
-        await markRead();
         if (mountedRef.current) setStatusAction(buildStatusActionForError({ reason: 'unsupported' }));
         return;
       }
@@ -292,7 +337,6 @@ export default function NotificationScreen({
       }
       if (!mountedRef.current) return;
       if (availability?.available !== true) {
-        await markRead();
         setStatusAction(buildStatusActionForError({
           reason: availability?.reason || 'unavailable',
         }));
@@ -300,26 +344,21 @@ export default function NotificationScreen({
       }
 
       setLikesTarget(target);
-      await markRead();
     } finally {
       openingRef.current.delete(notification.id);
     }
-  }, [resolveTargetAvailability, setRead]);
+  }, [resolveTargetAvailability]);
 
   const openActorProfile = useCallback(async (notification, actor) => {
     const actorId = safeRouteId(actor?.id);
     if (!notification?.id || !actorId || openingRef.current.has(notification.id)) return;
     openingRef.current.add(notification.id);
     try {
-      const readPromise = !notification.isRead
-        ? setRead(notification, true).catch(() => false)
-        : Promise.resolve(false);
       navigation.navigate('UserProfile', { uid: actorId });
-      await readPromise;
     } finally {
       openingRef.current.delete(notification.id);
     }
-  }, [navigation, setRead]);
+  }, [navigation]);
 
   useEffect(() => {
     const notificationId = safeRouteId(route?.params?.notificationId);
@@ -382,54 +421,29 @@ export default function NotificationScreen({
     route?.params?.notificationId,
   ]);
 
-  const toggleSelectedRead = useCallback(() => {
-    if (!selectedNotification) return;
-    setNotificationMenuTarget(null);
-    center.setRead(selectedNotification, !selectedNotification.isRead).catch(() => {});
-  }, [center, selectedNotification]);
-
-  const deleteSelected = useCallback(() => {
-    if (!selectedNotification) return;
-    const notification = selectedNotification;
-    setNotificationMenuTarget(null);
+  const deleteNotification = useCallback((notification) => {
+    if (!notification?.id) return;
+    setOpenSwipeId(null);
     confirmDestructive(
       'מחיקת ההתראה',
       'ההתראה תימחק לצמיתות ולא ניתן יהיה לשחזר אותה.',
       'מחיקה',
       () => center.deleteOne(notification).catch(() => {})
     );
-  }, [center, selectedNotification]);
-
-  const markAllRead = useCallback(() => {
-    setChannelMenuVisible(false);
-    center.markChannelRead(channel).catch(() => {});
-  }, [center, channel]);
-
-  const clearChannel = useCallback(() => {
-    setChannelMenuVisible(false);
-    const channelLabel = CHANNEL_COPY[channel];
-    confirmDestructive(
-      `מחיקת ${channelLabel}`,
-      'כל ההתראות בערוץ הזה יימחקו לצמיתות. ערוץ ההתראות השני לא יושפע.',
-      'מחיקת הכול',
-      () => center.clearChannel(channel).catch(() => {})
-    );
-  }, [center, channel]);
+  }, [center]);
 
   const tabs = useMemo(() => [
     {
       key: NotificationChannel.PERSONAL,
       label: 'אישי',
       icon: 'person',
-      count: center.unreadCounts.personal || undefined,
     },
     {
       key: NotificationChannel.ADMIN,
       label: 'ניהול',
       icon: 'admin-panel-settings',
-      count: center.unreadCounts.admin || undefined,
     },
-  ], [center.unreadCounts.admin, center.unreadCounts.personal]);
+  ], []);
 
   const renderHeader = () => (
     <>
@@ -467,8 +481,8 @@ export default function NotificationScreen({
           </Pressable>
         </View>
       </View>
-      <View style={styles.controls}>
-        {center.isAdmin ? (
+      {center.isAdmin ? (
+        <View style={styles.controls}>
           <SegmentedTabs
             tabs={tabs}
             value={channel}
@@ -476,27 +490,8 @@ export default function NotificationScreen({
             style={styles.channelTabs}
             testID="notification-channel-tabs"
           />
-        ) : null}
-        <NotificationFilterChips
-          options={filterOptions}
-          value={activeFilter}
-          onChange={(nextFilter) => center.setActiveFilter(channel, nextFilter)}
-        />
-        <View style={styles.summaryRow}>
-          <AppText style={styles.summaryText}>
-            {unreadCount > 0 ? `${unreadCount} לא נקראו` : 'הכול נקרא'}
-          </AppText>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`ניהול ${CHANNEL_COPY[channel]}`}
-            onPress={() => setChannelMenuVisible(true)}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.rowPressed]}
-            testID="notification-channel-menu"
-          >
-            <Ionicons name="ellipsis-horizontal-circle-outline" size={24} color={colors.brand} />
-          </Pressable>
         </View>
-      </View>
+      ) : null}
     </>
   );
 
@@ -510,18 +505,6 @@ export default function NotificationScreen({
           actionLabel="ניסיון נוסף"
           onAction={() => center.retry(channel)}
           testID="notifications-error-state"
-        />
-      );
-    }
-    if (activeFilter !== NotificationFilter.ALL) {
-      return (
-        <CenterState
-          icon="filter-outline"
-          title="אין התאמות למסנן הזה"
-          message="אפשר לבחור מסנן אחר כדי לראות התראות נוספות."
-          actionLabel="הצגת הכול"
-          onAction={() => center.setActiveFilter(channel, NotificationFilter.ALL)}
-          testID="notifications-filter-empty-state"
         />
       );
     }
@@ -547,106 +530,89 @@ export default function NotificationScreen({
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.content}>
-        {renderHeader()}
-        {resolvingPush ? (
-          <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={styles.inlineBanner}>
-            <ActivityIndicator size="small" color={colors.brand} />
-            <AppText style={styles.inlineBannerText}>פותחים את ההתראה שבחרת…</AppText>
-          </View>
-        ) : null}
-        <ErrorBanner
-          message={center.mutationError}
-          onDismiss={center.clearMutationError}
-          testID="notifications-mutation-error"
-        />
-        {channelState.error && channelState.items.length ? (
+    <GestureHandlerRootView style={styles.screen}>
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.content}>
+          {renderHeader()}
+          {resolvingPush ? (
+            <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={styles.inlineBanner}>
+              <ActivityIndicator size="small" color={colors.brand} />
+              <AppText style={styles.inlineBannerText}>פותחים את ההתראה שבחרת…</AppText>
+            </View>
+          ) : null}
           <ErrorBanner
-            message={channelState.error}
-            onRetry={() => center.retry(channel)}
-            testID="notifications-list-error"
+            message={center.mutationError}
+            onDismiss={center.clearMutationError}
+            testID="notifications-mutation-error"
           />
-        ) : null}
+          {channelState.error && channelState.items.length ? (
+            <ErrorBanner
+              message={channelState.error}
+              onRetry={() => center.retry(channel)}
+              testID="notifications-list-error"
+            />
+          ) : null}
 
-        {channelState.loading && !channelState.loaded ? (
-          <CenterState
-            loading
-            title="טוענים את ההתראות"
-            message="עוד רגע הכול יהיה מוכן."
-            testID="notifications-loading-state"
-          />
-        ) : (
-          <FlatList
-            data={visibleNotifications}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <NotificationCard
-                notification={item}
-                busy={channelMutationBusy || Boolean(center.pendingActions[`item:${item.id}`])}
-                onTargetPress={openNotification}
-                onLikesPress={openNotificationLikes}
-                onActorPress={openActorProfile}
-                onMenuPress={(notification) => setNotificationMenuTarget({
-                  id: notification.id,
-                  channel: notification.channel,
-                })}
-              />
-            )}
-            contentContainerStyle={[
-              styles.listContent,
-              !visibleNotifications.length && styles.listContentEmpty,
-            ]}
-            ListEmptyComponent={renderEmpty}
-            ListFooterComponent={renderFooter}
-            refreshControl={(
-              <RefreshControl
-                refreshing={channelState.refreshing}
-                onRefresh={() => center.refresh(channel)}
-                colors={[colors.brand]}
-                tintColor={colors.brand}
-              />
-            )}
-            onEndReached={() => center.loadMore(channel)}
-            onEndReachedThreshold={0.35}
-            showsVerticalScrollIndicator={false}
-            testID="notifications-list"
-          />
-        )}
-      </View>
+          {channelState.loading && !channelState.loaded ? (
+            <CenterState
+              loading
+              title="טוענים את ההתראות"
+              message="עוד רגע הכול יהיה מוכן."
+              testID="notifications-loading-state"
+            />
+          ) : (
+            <FlatList
+              data={visibleNotifications}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <NotificationCard
+                  notification={item}
+                  busy={channelMutationBusy || Boolean(center.pendingActions[`item:${item.id}`])}
+                  onTargetPress={openNotification}
+                  onLikesPress={openNotificationLikes}
+                  onActorPress={openActorProfile}
+                  onDeletePress={deleteNotification}
+                  isSwipeOpen={openSwipeId === item.id}
+                  onSwipeOpen={() => setOpenSwipeId(item.id)}
+                />
+              )}
+              contentContainerStyle={[
+                styles.listContent,
+                !visibleNotifications.length && styles.listContentEmpty,
+              ]}
+              ListEmptyComponent={renderEmpty}
+              ListFooterComponent={renderFooter}
+              refreshControl={(
+                <RefreshControl
+                  refreshing={channelState.refreshing}
+                  onRefresh={() => center.refresh(channel)}
+                  colors={[colors.brand]}
+                  tintColor={colors.brand}
+                />
+              )}
+              onEndReached={() => center.loadMore(channel)}
+              onEndReachedThreshold={0.35}
+              onScrollBeginDrag={() => setOpenSwipeId(null)}
+              showsVerticalScrollIndicator={false}
+              testID="notifications-list"
+            />
+          )}
+        </View>
 
-      <LikesModal
-        visible={Boolean(likesTarget)}
-        onClose={() => setLikesTarget(null)}
-        collectionName={likesTarget?.collectionName}
-        itemId={likesTarget?.itemId}
-      />
+        <LikesModal
+          visible={Boolean(likesTarget)}
+          onClose={() => setLikesTarget(null)}
+          collectionName={likesTarget?.collectionName}
+          itemId={likesTarget?.itemId}
+        />
 
-      <NotificationOverflowMenu
-        notification={selectedNotification}
-        visible={Boolean(selectedNotification)}
-        busy={Boolean(selectedNotification && center.pendingActions[`item:${selectedNotification.id}`])}
-        onClose={() => setNotificationMenuTarget(null)}
-        onToggleRead={toggleSelectedRead}
-        onDelete={deleteSelected}
-      />
-      <NotificationChannelMenu
-        channelLabel={CHANNEL_COPY[channel]}
-        visible={channelMenuVisible}
-        unreadCount={unreadCount}
-        itemCount={channelState.items.length}
-        readBusy={Boolean(center.pendingActions[`channel:${channel}:read`])}
-        deleteBusy={Boolean(center.pendingActions[`channel:${channel}:delete`])}
-        onClose={() => setChannelMenuVisible(false)}
-        onMarkAllRead={markAllRead}
-        onClear={clearChannel}
-      />
-      <NotificationStatusSheet
-        action={statusAction}
-        visible={Boolean(statusAction)}
-        onClose={() => setStatusAction(null)}
-        onRetry={statusAction?.onRetry}
-      />
-    </SafeAreaView>
+        <NotificationStatusSheet
+          action={statusAction}
+          visible={Boolean(statusAction)}
+          onClose={() => setStatusAction(null)}
+          onRetry={statusAction?.onRetry}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }

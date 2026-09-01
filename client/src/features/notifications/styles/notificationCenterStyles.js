@@ -119,6 +119,27 @@ export const notificationCenterStyles = StyleSheet.create({
   listContentEmpty: {
     flexGrow: 1,
   },
+  swipeContainer: {
+    backgroundColor: colors.error,
+    overflow: 'hidden',
+  },
+  swipeDeleteAction: {
+    width: 92,
+    minHeight: '100%',
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  swipeDeletePressed: {
+    opacity: 0.82,
+  },
+  swipeDeleteText: {
+    color: colors.white,
+    fontFamily: fontFamilies.semiBold,
+    fontSize: 13,
+    writingDirection: 'rtl',
+  },
   row: {
     marginHorizontal: 0,
     marginVertical: 0,

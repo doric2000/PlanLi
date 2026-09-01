@@ -27,6 +27,10 @@ export function createNotificationPushRuntime({
       const preferences = await callables.setPreferences({ pushEnabled: false });
       return { status: 'disabled', preferences: normalizePushPreferences(preferences) };
     },
+    requestInitialPermission: async () => ({
+      status: 'unsupported',
+      reason: PUSH_RESULT_REASONS.UNSUPPORTED,
+    }),
     registerForPushNotifications: async () => ({
       status: 'unsupported',
       reason: PUSH_RESULT_REASONS.UNSUPPORTED,

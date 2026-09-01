@@ -9,12 +9,14 @@ const {
   commentNotificationId,
   deleteNotification,
   groupedLikeNotificationId,
+  likeMilestoneNotificationId,
   markAllNotificationsRead,
   navigationForTarget,
   notificationCleanupJobRef,
   notificationRecipientEligible,
   prepareGroupedLikeActivity,
   prepareGroupedLikeRemoval,
+  prepareLikeMilestoneActivity,
   processNotificationCleanupJob,
   purgeNotificationsForTarget,
   sanitizeActorPreview,
@@ -325,6 +327,16 @@ async function setReaction({ admin, auth, data }) {
 
     const ownerId = targetData.ownerId;
     const shouldNotifyOwner = ownerId && ownerId !== auth.uid && liked !== wasLiked;
+    const notificationTarget = buildNotificationTarget({ target, data: targetData });
+    const milestoneActivity = liked && !wasLiked && shouldNotifyOwner
+      ? prepareLikeMilestoneActivity({
+        currentCount,
+        nextCount,
+        notifiedMilestone: targetData?.stats?.notifiedLikeMilestone,
+        target: notificationTarget,
+        navigation: navigationForTarget(target),
+      })
+      : null;
     const actor = liked && !wasLiked
       ? await loadAuthorProfile(transaction, db, auth.uid)
       : null;
@@ -338,16 +350,24 @@ async function setReaction({ admin, auth, data }) {
     const notificationRef = shouldNotifyOwner && notificationId
       ? db.doc(`users/${ownerId}/notifications/${notificationId}`)
       : null;
-    const [notificationSnapshot, ownerSnapshot, blockedSnapshot] = notificationRef
+    const milestoneRef = shouldNotifyOwner && milestoneActivity
+      ? db.doc(`users/${ownerId}/notifications/${
+        likeMilestoneNotificationId(target.path, milestoneActivity.milestone)
+      }`)
+      : null;
+    const shouldReadRecipient = Boolean(notificationRef || milestoneRef);
+    const [notificationSnapshot, milestoneSnapshot, ownerSnapshot, blockedSnapshot] = shouldReadRecipient
       ? await Promise.all([
-        transaction.get(notificationRef),
+        notificationRef ? transaction.get(notificationRef) : Promise.resolve(null),
+        milestoneRef ? transaction.get(milestoneRef) : Promise.resolve(null),
         transaction.get(db.doc(`users/${ownerId}`)),
         transaction.get(db.doc(`users/${ownerId}/blockedUsers/${auth.uid}`)),
       ])
-      : [null, null, null];
-    const canNotifyOwner = notificationRef
+      : [null, null, null, null];
+    const canNotifyOwner = shouldReadRecipient
       && notificationRecipientEligible(ownerSnapshot)
       && !blockedSnapshot?.exists;
+    let deliveredMilestone = null;
 
     if (liked !== wasLiked) {
       await applyAffinitySignalInTransaction({
@@ -373,7 +393,7 @@ async function setReaction({ admin, auth, data }) {
         preparedNotification = prepareGroupedLikeActivity({
           existingSnapshot: notificationSnapshot,
           actorPreview,
-          target: buildNotificationTarget({ target, data: targetData }),
+          target: notificationTarget,
           navigation: navigationForTarget(target),
         });
         stageNotificationActivity({
@@ -385,6 +405,20 @@ async function setReaction({ admin, auth, data }) {
           existingSnapshot: notificationSnapshot,
           notification: preparedNotification.notification,
         });
+      }
+      if (canNotifyOwner && milestoneRef && milestoneSnapshot && milestoneActivity) {
+        if (!milestoneSnapshot.exists) {
+          stageNotificationActivity({
+            transaction,
+            admin,
+            db,
+            uid: ownerId,
+            notificationRef: milestoneRef,
+            existingSnapshot: milestoneSnapshot,
+            notification: milestoneActivity.notification,
+          });
+        }
+        deliveredMilestone = milestoneActivity.milestone;
       }
       transaction.create(likeRef, {
         userId: auth.uid,
@@ -424,6 +458,7 @@ async function setReaction({ admin, auth, data }) {
     if (liked !== wasLiked) {
       transaction.update(targetRef, {
         'stats.likeCount': nextCount,
+        ...(deliveredMilestone ? { 'stats.notifiedLikeMilestone': deliveredMilestone } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }

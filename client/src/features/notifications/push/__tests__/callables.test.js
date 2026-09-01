@@ -31,6 +31,7 @@ describe('notification push callable client', () => {
       pushEnabled: true,
       likes: true,
       comments: false,
+      configured: true,
     });
     expect(makeDoc).toHaveBeenCalledWith(
       expect.anything(),
@@ -52,6 +53,7 @@ describe('notification push callable client', () => {
       pushEnabled: false,
       likes: true,
       comments: true,
+      configured: false,
     });
   });
 });

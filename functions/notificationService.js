@@ -8,8 +8,9 @@ const NOTIFICATION_CLEANUP_JOB_SCHEMA_VERSION = 1;
 const NOTIFICATION_CHANNELS = Object.freeze(['personal', 'admin']);
 const NOTIFICATION_TYPES = Object.freeze(['like', 'comment', 'system', 'moderation']);
 const NOTIFICATION_PRIORITIES = Object.freeze(['normal', 'urgent']);
+const LIKE_MILESTONE_STEPS = Object.freeze([50, 100, 200, 500, 1000]);
 const NOTIFICATION_SUBTYPES = Object.freeze({
-  like: Object.freeze(['grouped_likes']),
+  like: Object.freeze(['grouped_likes', 'like_milestone']),
   comment: Object.freeze(['new_comment', 'new_reply']),
   system: Object.freeze([
     'content_held',
@@ -96,6 +97,10 @@ function hashId(prefix, ...parts) {
 
 function groupedLikeNotificationId(targetPath) {
   return hashId('like', targetPath);
+}
+
+function likeMilestoneNotificationId(targetPath, milestone) {
+  return hashId('like_milestone', targetPath, String(cleanLikeMilestone(milestone)));
 }
 
 function commentNotificationId(targetPath, commentId) {
@@ -296,6 +301,14 @@ function validateSubtype(type, subtype) {
   }
 }
 
+function cleanLikeMilestone(value) {
+  const milestone = Number(value);
+  if (!Number.isSafeInteger(milestone) || milestone < 1 || milestone > Number.MAX_SAFE_INTEGER) {
+    fail('invalid-argument', 'Like milestone is invalid.', 'invalid_notification_input');
+  }
+  return milestone;
+}
+
 function buildNotificationDocument({
   channel,
   type,
@@ -310,6 +323,7 @@ function buildNotificationDocument({
   commentExcerpt,
   message,
   generation,
+  milestone,
   createdAt,
   pushVersion = 1,
 }) {
@@ -352,6 +366,7 @@ function buildNotificationDocument({
       : {}),
     ...(message !== undefined ? { message: cleanText(message, 240) } : {}),
     ...(generation ? { generation: cleanId(generation, 'generation') } : {}),
+    ...(subtype === 'like_milestone' ? { milestone: cleanLikeMilestone(milestone) } : {}),
     push: { version: Math.max(1, Math.trunc(Number(pushVersion) || 1)) },
   });
 }
@@ -543,6 +558,40 @@ function prepareGroupedLikeRemoval({ existingSnapshot, actorId, generation }) {
       count: nextCount,
       actorPreviews: actors,
       actorPreview: actors[0] || null,
+    },
+  };
+}
+
+function likeMilestoneAtOrBelow(value) {
+  const count = Math.max(0, Math.trunc(Number(value) || 0));
+  if (count >= 1000) return Math.floor(count / 1000) * 1000;
+  return [...LIKE_MILESTONE_STEPS].reverse().find((milestone) => count >= milestone) || 0;
+}
+
+function prepareLikeMilestoneActivity({
+  currentCount,
+  nextCount,
+  notifiedMilestone,
+  target,
+  navigation,
+}) {
+  const storedMilestone = Number(notifiedMilestone);
+  const previousMilestone = Number.isSafeInteger(storedMilestone) && storedMilestone >= 0
+    ? storedMilestone
+    : likeMilestoneAtOrBelow(currentCount);
+  const milestone = likeMilestoneAtOrBelow(nextCount);
+  if (!milestone || milestone <= previousMilestone) return null;
+  return {
+    milestone,
+    notification: {
+      channel: 'personal',
+      type: 'like',
+      subtype: 'like_milestone',
+      priority: 'normal',
+      count: milestone,
+      milestone,
+      target,
+      navigation,
     },
   };
 }
@@ -1250,6 +1299,7 @@ function notificationDeliveryDescriptor({ userId, notificationId, before, after 
 module.exports = {
   BULK_DELETE_LIMIT,
   BULK_READ_LIMIT,
+  LIKE_MILESTONE_STEPS,
   MAX_ACTOR_PREVIEWS,
   MAX_COMMENT_EXCERPT,
   MAX_TARGET_THUMB_URLS,
@@ -1274,6 +1324,8 @@ module.exports = {
   detachBlockedActorLikeContributions,
   fanoutAdminNotification,
   groupedLikeNotificationId,
+  likeMilestoneAtOrBelow,
+  likeMilestoneNotificationId,
   handleOwnerNotificationOutboxWrite,
   handleNotificationCleanupJobWrite,
   markAllNotificationsRead,
@@ -1288,6 +1340,7 @@ module.exports = {
   ownerNotificationOutboxId,
   prepareGroupedLikeActivity,
   prepareGroupedLikeRemoval,
+  prepareLikeMilestoneActivity,
   prepareOwnerNotificationOutbox,
   processNotificationCleanupJob,
   purgeAdminNotificationsForUser,
