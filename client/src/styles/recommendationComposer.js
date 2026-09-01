@@ -442,7 +442,7 @@ export const recommendationComposerStyles = StyleSheet.create({
   },
   optionalField: { marginTop: spacing.md },
   ltrInput: { textAlign: 'left', writingDirection: 'ltr' },
-  autoDirectionInput: { textAlign: 'right', writingDirection: 'auto' },
+  footerKeyboardAvoiding: { width: '100%' },
   footer: {
     backgroundColor: colors.white,
     borderTopWidth: 1,

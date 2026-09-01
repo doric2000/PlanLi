@@ -3,7 +3,12 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, Linking, StyleSheet } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
-import TravelMediaComposer, { isTravelMediaSwipe } from '../src/components/TravelMediaComposer';
+import TravelMediaComposer, {
+  isTravelMediaSwipe,
+  reorderTravelMediaItems,
+  TRAVEL_MEDIA_REORDER_LONG_PRESS_MS,
+  travelMediaReorderTargetIndex,
+} from '../src/components/TravelMediaComposer';
 
 jest.mock('expo-image-manipulator', () => ({ manipulateAsync: jest.fn() }));
 jest.mock('expo-media-library/legacy', () => ({
@@ -23,10 +28,21 @@ jest.mock('react-native-gesture-handler', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
   const chain = (type) => {
-    const gesture = { callbacks: {}, type };
-    ['enabled', 'minDistance', 'maxPointers', 'shouldCancelWhenOutside', 'onStart', 'onUpdate', 'onEnd', 'onFinalize'].forEach((name) => {
+    const gesture = { callbacks: {}, config: {}, type };
+    [
+      'enabled',
+      'minDistance',
+      'maxPointers',
+      'shouldCancelWhenOutside',
+      'activateAfterLongPress',
+      'onStart',
+      'onUpdate',
+      'onEnd',
+      'onFinalize',
+    ].forEach((name) => {
       gesture[name] = (value) => {
         if (typeof value === 'function') gesture.callbacks[name] = value;
+        else gesture.config[name] = value;
         return gesture;
       };
     });
@@ -36,7 +52,7 @@ jest.mock('react-native-gesture-handler', () => {
   };
   return {
     GestureHandlerRootView: ({ children, ...props }) => <View {...props}>{children}</View>,
-    GestureDetector: ({ children }) => <>{children}</>,
+    GestureDetector: ({ children, gesture }) => ReactModule.cloneElement(children, { testGesture: gesture }),
     Gesture: {
       Pan: () => chain('pan'),
       Pinch: () => chain('pinch'),
@@ -53,6 +69,7 @@ jest.mock('react-native-reanimated', () => {
     runOnJS: (fn) => fn,
     useAnimatedStyle: (factory) => factory(),
     useSharedValue: (value) => ReactModule.useRef({ value }).current,
+    withSpring: (value) => value,
   };
 });
 jest.mock('react-native-draggable-flatlist', () => {
@@ -163,9 +180,9 @@ test('embedded TravelMediaComposer opens the system gallery in one tap and updat
     expect.objectContaining({ sourceId: 'picker-1' }),
   ]));
   expect(screen.getByTestId('travel-media-toggle-crop')).toBeTruthy();
-  expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('horizontal', true);
-  expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('inverted', true);
-  expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('dragItemOverflow', true);
+  expect(StyleSheet.flatten(screen.getByTestId('travel-media-reorder-list').props.style).flexDirection)
+    .toBe('row-reverse');
+  expect(screen.getByTestId('travel-media-drag-surface-picker-1')).toBeTruthy();
   expect(StyleSheet.flatten(screen.getByTestId('travel-media-toggle-crop').props.style).minHeight).toBe(44);
 });
 
@@ -194,24 +211,25 @@ test('embedded TravelMediaComposer visibly selects a held photo and reports the 
     />
   );
 
-  fireEvent(screen.getByTestId('travel-media-selected-order-2'), 'longPress');
+  const dragSurface = screen.getByTestId('travel-media-drag-surface-order-2');
+  const dragGesture = dragSurface.props.testGesture;
+  act(() => dragGesture.callbacks.onStart());
   expect(onReorderInteractionChange).toHaveBeenLastCalledWith(true);
+  expect(screen.getByTestId('travel-media-drag-surface-order-2').props.testGesture).toBe(dragGesture);
   expect(screen.getByTestId('travel-media-selected-order-2').props.accessibilityState.selected).toBe(true);
   expect(StyleSheet.flatten(screen.getByTestId('travel-media-selected-order-2').props.style).borderWidth).toBe(3);
-  expect(screen.getByTestId('travel-media-placeholder-1')).toBeTruthy();
+  expect(dragGesture.config.activateAfterLongPress).toBe(TRAVEL_MEDIA_REORDER_LONG_PRESS_MS);
 
-  act(() => screen.getByTestId('travel-media-reorder-list').props.onRelease(1));
-  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
-
-  fireEvent(screen.getByTestId('travel-media-selected-order-3'), 'longPress');
-  act(() => screen.getByTestId('travel-media-reorder-list').props.onDragEnd({
-    data: [values[2], values[0], values[1]],
-  }));
+  act(() => {
+    dragGesture.callbacks.onUpdate({ translationX: -60 });
+    dragGesture.callbacks.onEnd();
+    dragGesture.callbacks.onFinalize();
+  });
 
   expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
   expect(onChange).toHaveBeenCalledWith([
-    expect.objectContaining({ sourceId: 'order-3' }),
     expect.objectContaining({ sourceId: 'order-1' }),
+    expect.objectContaining({ sourceId: 'order-3' }),
     expect.objectContaining({ sourceId: 'order-2' }),
   ]);
 });
@@ -240,16 +258,34 @@ test('embedded TravelMediaComposer releases the outer scroll lock when a reorder
     />
   );
 
-  fireEvent(screen.getByTestId('travel-media-selected-cancel-1'), 'longPress');
+  const firstGesture = screen.getByTestId('travel-media-drag-surface-cancel-1').props.testGesture;
+  act(() => firstGesture.callbacks.onStart());
   expect(onReorderInteractionChange).toHaveBeenLastCalledWith(true);
 
-  fireEvent(screen.getByTestId('travel-media-composer'), 'touchCancelCapture');
+  act(() => firstGesture.callbacks.onFinalize());
   expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
 
-  fireEvent(screen.getByTestId('travel-media-selected-cancel-2'), 'longPress');
+  const secondGesture = screen.getByTestId('travel-media-drag-surface-cancel-2').props.testGesture;
+  act(() => secondGesture.callbacks.onStart());
   expect(onReorderInteractionChange).toHaveBeenLastCalledWith(true);
   screen.unmount();
   expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
+});
+
+test('embedded TravelMediaComposer maps an RTL finger drag to a bounded reorder', () => {
+  expect(travelMediaReorderTargetIndex({
+    fromIndex: 1,
+    translationX: -60,
+    itemCount: 4,
+    itemStride: 56,
+  })).toBe(2);
+  expect(travelMediaReorderTargetIndex({
+    fromIndex: 1,
+    translationX: 500,
+    itemCount: 4,
+    itemStride: 56,
+  })).toBe(0);
+  expect(reorderTravelMediaItems(['a', 'b', 'c'], 1, 2)).toEqual(['a', 'c', 'b']);
 });
 
 test('TravelMediaComposer confirms the whole selection without manipulating an image', async () => {
