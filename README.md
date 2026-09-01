@@ -3018,3 +3018,42 @@ reusing the stage-five environment variable with `--only functions`.
   review and input bound. This invalidates the current source-to-sink path without
   a risky dependency override; upgrade once React Navigation publishes a compatible
   patched chain.
+
+## iOS 1.1.0 build 28 TestFlight submission
+
+- Apple rejected build `1.1.0 (26)` with `ITMS-90683` because its embedded
+  `Info.plist` did not contain `NSMotionUsageDescription`. Build
+  `4f265cac-d9d0-4dfb-bcc5-e007fe235eee` (`1.1.0 (27)`) completed, but direct
+  inspection of its IPA found the same missing key, so it was deliberately not
+  submitted. The root cause was the `expo-location` plugin value
+  `motionUsagePermission: false`, which removed a manually declared plist value
+  during native prebuild.
+- PR [#309](https://github.com/doric2000/PlanLi/pull/309) moved the reviewed Hebrew
+  purpose string into the owning Expo plugin and added a release guard that checks
+  Expo's final introspected iOS configuration. It passed CI and CodeQL and merged to
+  `main` as `8057bad53ac4331469ce6b23099e31d80f361324`.
+- Immediately before the replacement build, local `main` was clean and exactly
+  matched `origin/main`. The production lineage and EAS environment preflights
+  passed; the iOS configuration tests passed 11/11, Expo Doctor passed 21/21,
+  dependencies were aligned, and the complete client suite passed 181/181 suites
+  and 1,025/1,025 tests.
+- Production EAS build `9404f671-6dba-4e11-8ee8-3031269b1b1c`, marketing version
+  `1.1.0`, build number `28`, runtime `1.2.0`, production channel and store
+  distribution, completed at `2026-09-01T16:44:48.603Z` from exact source commit
+  `8057bad53ac4331469ce6b23099e31d80f361324`. The IPA is
+  `https://expo.dev/artifacts/eas/NharL90MHWLipaLbWD7y9D3WkMdnL8ZNSTuRwbdlIuM.ipa`.
+- The downloaded 42,974,277-byte IPA has SHA-256
+  `2FD1089273688EE39CD99B3F08F7413B3869B13B0610C502EEEEA9C59DAFFA14`.
+  Inspection of the embedded binary plist verified bundle identifier
+  `com.planli.planlitravels`, version/build `1.1.0 (28)`, the exact reviewed Motion,
+  foreground-location, camera and photo-library purpose strings, and
+  `ITSAppUsesNonExemptEncryption: false`. Face ID, always/background location and
+  microphone purpose strings are absent. Provisioning profile
+  `f5023bd4-a2ca-47a8-8f37-26e87e7c1ff4` contains the production App Attest
+  environment and expires on `2027-08-21`.
+- EAS submission `ae569cd6-d1a1-4765-8b56-2bb436ebdf4f` finished at
+  `2026-09-01T16:47:43.268Z` and uploaded exactly build 28 to App Store Connect app
+  `6801453067`. Apple processing, TestFlight visibility, installation and
+  physical-device behavior remain unverified. No OTA, Firebase deployment, Rules,
+  IAM, secret, migration or production-data change accompanied this build and
+  submission.
