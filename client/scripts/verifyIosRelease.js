@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const clientRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(clientRoot, '..');
@@ -50,6 +51,27 @@ function walkFiles(directory) {
   });
 }
 
+function readIntrospectedIosInfoPlist() {
+  try {
+    const expoCli = require.resolve('expo/bin/cli');
+    const output = execFileSync(
+      process.execPath,
+      [expoCli, 'config', '--type', 'introspect', '--json'],
+      {
+        cwd: clientRoot,
+        encoding: 'utf8',
+        env: process.env,
+        maxBuffer: 16 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    return JSON.parse(output).ios?.infoPlist || {};
+  } catch (error) {
+    fail(`Expo could not generate the final iOS Info.plist: ${error.message}`);
+    return {};
+  }
+}
+
 if (!configOnly && Number(process.versions.node.split('.')[0]) !== 22) {
   fail(`Node 22 is required; found ${process.version}.`);
 }
@@ -77,6 +99,7 @@ const requiredPlugins = [
   'expo-location',
 ];
 const configuredPlugins = (app.plugins || []).map(pluginName);
+const introspectedIosInfoPlist = readIntrospectedIosInfoPlist();
 
 if (app.ios?.bundleIdentifier !== 'com.planli.planlitravels') {
   fail('The iOS bundle identifier must be com.planli.planlitravels.');
@@ -98,6 +121,26 @@ if (!String(app.ios?.infoPlist?.NSLocationWhenInUseUsageDescription || '').trim(
 if (!String(app.ios?.infoPlist?.NSMotionUsageDescription || '').trim()) {
   fail('The iOS motion usage description required by the linked location module is missing.');
 }
+[
+  'NSLocationWhenInUseUsageDescription',
+  'NSMotionUsageDescription',
+  'NSPhotoLibraryUsageDescription',
+  'NSCameraUsageDescription',
+].forEach((key) => {
+  if (!String(introspectedIosInfoPlist[key] || '').trim()) {
+    fail(`The final Expo-generated iOS Info.plist is missing ${key}.`);
+  }
+});
+[
+  'NSFaceIDUsageDescription',
+  'NSLocationAlwaysUsageDescription',
+  'NSLocationAlwaysAndWhenInUseUsageDescription',
+  'NSMicrophoneUsageDescription',
+].forEach((key) => {
+  if (Object.prototype.hasOwnProperty.call(introspectedIosInfoPlist, key)) {
+    fail(`The final Expo-generated iOS Info.plist contains unused permission ${key}.`);
+  }
+});
 requiredPlugins.forEach((name) => {
   if (!configuredPlugins.includes(name)) fail(`Missing Expo config plugin: ${name}.`);
 });
@@ -138,10 +181,27 @@ if (secureStoreOptions?.configureAndroidBackup !== false) {
 if (!String(locationOptions?.locationWhenInUsePermission || '').trim()) {
   fail('The foreground location permission must remain configured.');
 }
+if (
+  !String(locationOptions?.motionUsagePermission || '').trim()
+  || locationOptions.motionUsagePermission !== app.ios.infoPlist.NSMotionUsageDescription
+) {
+  fail('The expo-location motion purpose string must match the final iOS Info.plist value.');
+}
+if (
+  introspectedIosInfoPlist.NSMotionUsageDescription !== locationOptions.motionUsagePermission
+  || introspectedIosInfoPlist.NSLocationWhenInUseUsageDescription !== locationOptions.locationWhenInUsePermission
+) {
+  fail('The final Expo-generated iOS location purpose strings do not match the reviewed configuration.');
+}
+if (
+  introspectedIosInfoPlist.NSPhotoLibraryUsageDescription !== imagePickerOptions.photosPermission
+  || introspectedIosInfoPlist.NSCameraUsageDescription !== imagePickerOptions.cameraPermission
+) {
+  fail('The final Expo-generated iOS media purpose strings do not match the reviewed configuration.');
+}
 [
   'locationAlwaysAndWhenInUsePermission',
   'locationAlwaysPermission',
-  'motionUsagePermission',
   'isIosBackgroundLocationEnabled',
   'isAndroidBackgroundLocationEnabled',
   'isAndroidMotionActivityEnabled',

@@ -180,10 +180,10 @@ test('native privacy config declares required iOS strings while optional capabil
   assert.equal(secureStore.faceIDPermission, false);
   assert.match(location.locationWhenInUsePermission, /PlanLi/u);
   assert.match(appJson.ios.infoPlist.NSMotionUsageDescription, /PlanLi/u);
+  assert.equal(location.motionUsagePermission, appJson.ios.infoPlist.NSMotionUsageDescription);
   [
     'locationAlwaysAndWhenInUsePermission',
     'locationAlwaysPermission',
-    'motionUsagePermission',
     'isIosBackgroundLocationEnabled',
     'isAndroidBackgroundLocationEnabled',
     'isAndroidMotionActivityEnabled',

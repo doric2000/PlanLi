@@ -73,7 +73,7 @@
           "locationWhenInUsePermission": "PlanLi משתמשת במיקום שלך כדי למיין המלצות ויעדים לפי הקרבה אליך.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false,
+          "motionUsagePermission": "PlanLi משתמשת בנתוני התנועה של המכשיר כחלק משירותי המיקום, כדי לשפר את דיוק המיקום ולהציג יעדים והמלצות רלוונטיים בקרבתך.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidMotionActivityEnabled": false
