@@ -149,13 +149,19 @@ test('records a release once and leaves physical verification explicitly pending
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'planli-ota-record-'));
   const readme = path.join(directory, 'README.md');
   const metadata = extractReleaseMetadata([update(productionGroup)], { head });
+  const artifact = {
+    bytes: 12345,
+    sha256: 'A'.repeat(64),
+    updateId: '01a05f00-0000-7000-8000-000000000000',
+  };
   try {
     fs.writeFileSync(readme, '# PlanLi\n', 'utf8');
-    appendReleaseRecord(readme, metadata, 'Security release');
+    appendReleaseRecord(readme, metadata, 'Security release', artifact);
     const result = fs.readFileSync(readme, 'utf8');
     assert.match(result, new RegExp(productionGroup));
+    assert.match(result, new RegExp(artifact.sha256));
     assert.match(result, /security smoke tests: pending/);
-    assert.throws(() => appendReleaseRecord(readme, metadata, 'Security release'), /already records/);
+    assert.throws(() => appendReleaseRecord(readme, metadata, 'Security release', artifact), /already records/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

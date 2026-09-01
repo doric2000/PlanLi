@@ -5,6 +5,7 @@ const {
   easExecutable,
   easExecOptions,
   parseArgs,
+  resolveProductionLineage,
   validateDeployedCommit,
   validateRepositoryState,
   validateRootConfigFiles,
@@ -48,6 +49,20 @@ test('requires the currently deployed commit to be an ancestor', () => {
   assert.throws(() => validateDeployedCommit({
     deployedCommit: 'a'.repeat(40), head: 'b'.repeat(40), isAncestor: false,
   }), /Refusing to replace production/);
+});
+
+test('walks past a rollback-to-embedded group to the last code-bearing production update', () => {
+  const rollbackGroup = '11111111-2222-4333-8444-555555555555';
+  const codeGroup = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const commit = 'a'.repeat(40);
+  const result = resolveProductionLineage([
+    { group: rollbackGroup, isRollBackToEmbedded: true },
+    { group: codeGroup, isRollBackToEmbedded: false },
+  ], (groupId) => groupId === rollbackGroup ? [{ group: groupId }] : [{
+    group: groupId,
+    gitCommitHash: commit,
+  }]);
+  assert.deepEqual(result, { deployedCommit: commit, groupId: codeGroup });
 });
 
 test('accepts only the explicit deployed-commit argument', () => {

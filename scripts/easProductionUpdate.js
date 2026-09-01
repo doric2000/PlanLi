@@ -7,6 +7,7 @@ const {
   easExecutable,
   runPreflight,
 } = require('./easProductionPreflight');
+const { verifyProductionUpdateArtifact } = require('./easUpdateArtifact');
 
 const EXPECTED_ACCOUNT = 'doric2000';
 const EXPECTED_OWNER = 'doric2000';
@@ -192,7 +193,7 @@ function extractReleaseMetadata(value, fallback = {}) {
   };
 }
 
-function formatReleaseRecord(metadata, message) {
+function formatReleaseRecord(metadata, message, artifact) {
   return [
     '',
     '## Security production OTA release',
@@ -200,6 +201,7 @@ function formatReleaseRecord(metadata, message) {
     `- Source commit: \`${metadata.commit}\`.`,
     `- EAS Update group: \`${metadata.groupId}\`; channel \`${metadata.channel}\`; runtime \`${metadata.runtime}\`.`,
     `- EAS environment: \`${metadata.environment}\`; published at \`${metadata.createdAt}\`.`,
+    `- Immutable iOS launch bundle: update \`${artifact.updateId}\`; ${artifact.bytes} bytes; SHA-256 \`${artifact.sha256}\`.`,
     `- Message: ${message}`,
     '- Device application and post-update security smoke tests: pending.',
     '- Rollback: republish the immediately preceding verified production group; never change the runtime URL or channel in-app.',
@@ -207,10 +209,10 @@ function formatReleaseRecord(metadata, message) {
   ].join('\n');
 }
 
-function appendReleaseRecord(readmePath, metadata, message) {
+function appendReleaseRecord(readmePath, metadata, message, artifact) {
   const current = fs.readFileSync(readmePath, 'utf8');
   if (current.includes(metadata.groupId)) fail(`README already records update group ${metadata.groupId}.`);
-  fs.appendFileSync(readmePath, formatReleaseRecord(metadata, message), 'utf8');
+  fs.appendFileSync(readmePath, formatReleaseRecord(metadata, message, artifact), 'utf8');
 }
 
 function eas(clientRoot, args) {
@@ -220,7 +222,7 @@ function eas(clientRoot, args) {
   });
 }
 
-function runRelease({ repoRoot, args }) {
+async function runRelease({ repoRoot, args }) {
   validateMessage(args.message);
   validatePreviewGroupId(args.previewGroup);
   validateReleaseConfiguration(readReleaseConfiguration(repoRoot));
@@ -232,6 +234,7 @@ function runRelease({ repoRoot, args }) {
   validateEasIdentity(eas(clientRoot, ['whoami']));
   const preview = JSON.parse(eas(clientRoot, ['update:view', args.previewGroup, '--json']));
   validatePreviewUpdates({ value: preview, groupId: args.previewGroup, head: preflight.head });
+  const previewArtifact = await verifyProductionUpdateArtifact(preview, args.previewGroup);
 
   const command = [
     'update:republish',
@@ -242,28 +245,45 @@ function runRelease({ repoRoot, args }) {
     '--non-interactive',
   ];
   if (!args.apply) {
-    return { apply: false, command, preflight, previewGroup: args.previewGroup };
+    return { apply: false, command, preflight, previewArtifact, previewGroup: args.previewGroup };
   }
 
   const published = JSON.parse(eas(clientRoot, command));
   const metadata = extractReleaseMetadata(published, { head: preflight.head });
-  appendReleaseRecord(path.join(repoRoot, 'README.md'), metadata, args.message);
-  return { apply: true, command, metadata, preflight, previewGroup: args.previewGroup };
+  const productionArtifact = await verifyProductionUpdateArtifact(published, metadata.groupId);
+  if (productionArtifact.sha256 !== previewArtifact.sha256) {
+    fail('Production republish changed the verified preview launch bundle.');
+  }
+  appendReleaseRecord(
+    path.join(repoRoot, 'README.md'),
+    metadata,
+    args.message,
+    productionArtifact
+  );
+  return {
+    apply: true,
+    command,
+    metadata,
+    preflight,
+    previewArtifact,
+    productionArtifact,
+    previewGroup: args.previewGroup,
+  };
 }
 
 if (require.main === module) {
-  try {
+  (async () => {
     const args = parseArgs(process.argv.slice(2));
-    const result = runRelease({ repoRoot: path.resolve(__dirname, '..'), args });
+    const result = await runRelease({ repoRoot: path.resolve(__dirname, '..'), args });
     if (result.apply) {
       process.stdout.write(`Published production group ${result.metadata.groupId} and recorded it in README.md.\n`);
     } else {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\nDRY RUN ONLY: no EAS update was published.\n`);
     }
-  } catch (error) {
+  })().catch((error) => {
     process.stderr.write(`EAS production update failed: ${error.message}\n`);
     process.exitCode = 1;
-  }
+  });
 }
 
 module.exports = {
