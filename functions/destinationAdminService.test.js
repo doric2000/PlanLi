@@ -557,6 +557,15 @@ test('approved destination review status never falls back to open or ready', () 
   }]), 'open');
 });
 
+test('approved flag without a valid canonical attestation remains blocked', () => {
+  const destination = validDestination();
+  destination.countryId = 'IL';
+  destination.canonicalPolicy.registryAttestation.approvalRevision = 2;
+  const issues = qualityIssues(destination, {}, {}, Date.parse('2029-01-01'));
+  assert.ok(issues.some((issue) => issue.code === 'unapproved_canonical_destination'));
+  assert.equal(destinationReviewStatus(destination, issues), 'blocked');
+});
+
 test('destination quality reports identity, image, airport and job problems', () => {
   const issues = qualityIssues({ googleCache: { names: { he: 'עיר' }, countryCode: 'IL' }, identity: { countryCode: 'US' } }, {
     imageSync: { state: 'failed' }, identitySync: { state: 'needs_review' },

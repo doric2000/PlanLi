@@ -71,14 +71,28 @@ test('production rollout manifest dynamically includes IL upgrade, Rotem reassig
       },
     },
   }, 12);
+  const invalidApproved = snapshot('countries/FR/destinations/invalid-approved', {
+    ...locality('FR', 'invalid-approved-place',
+      { he: 'יעד לא מאומת', en: 'Invalid Approved Destination' },
+      { lat: 48.8566, lng: 2.3522 }),
+    canonicalPolicy: {
+      approved: true,
+      registryId: 'fr-invalid-approved',
+      kind: 'city_hub',
+      groupingPolicy: 'self',
+      registryVersion: 3,
+      approvalRevision: 1,
+    },
+  }, 13);
   const nazcaReviewPath = 'system/moderation/destinationReviews/nazca-review';
   const state = {
     countries: [
       { id: 'IL', data: { code: 'IL', status: 'active' } },
       { id: 'PS', data: { code: 'PS', status: 'active' } },
       { id: 'PE', data: { code: 'PE', status: 'active' } },
+      { id: 'FR', data: { code: 'FR', status: 'active' } },
     ],
-    destinations: [kfar, rotem, nazca],
+    destinations: [kfar, rotem, nazca, invalidApproved],
     reviews: new Map([[nazcaReviewPath, snapshot(nazcaReviewPath, { status: 'open' }, 20)]]),
     jobs: new Map(),
     registries: new Map(),
@@ -102,6 +116,15 @@ test('production rollout manifest dynamically includes IL upgrade, Rotem reassig
           destination: { countryId: 'PS', cityId: 'rotem-ps' },
         },
       }, 31),
+      snapshot('recommendations/invalid-approved-rec', {
+        status: 'moderation_hold',
+        destination: { countryId: 'FR', cityId: 'invalid-approved' },
+        moderation: {
+          holdReason: 'destination_pending_approval',
+          systemGate: 'destination_pending_approval',
+          destination: { countryId: 'FR', cityId: 'invalid-approved' },
+        },
+      }, 32),
     ],
   };
 
@@ -113,6 +136,10 @@ test('production rollout manifest dynamically includes IL upgrade, Rotem reassig
     'recommendations/nazca-rec',
     'recommendations/rotem-rec',
   ]);
+  assert.ok(manifest.reviewRepairs.some((entry) =>
+    entry.destinationPath === 'countries/FR/destinations/invalid-approved' &&
+    entry.desiredStatus === 'blocked'
+  ));
   assert.ok(manifest.reviewRepairs.some((entry) =>
     entry.destinationPath === 'countries/PE/destinations/nazca' &&
     ['approved', 'approved_with_warnings'].includes(entry.desiredStatus)

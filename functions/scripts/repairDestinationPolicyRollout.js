@@ -36,6 +36,7 @@ const {
 } = require('../destinationReassignmentService');
 const { provisionalRegistryId } = require('../destinationResolutionPolicy');
 const { destinationClaimId } = require('../destinationV3Service');
+const { destinationAcceptsNewReferences } = require('../destinationReferencePolicy');
 const { initializeAdmin } = require('./localCredentials');
 
 const PROJECT_ID = 'planli-f0b12';
@@ -380,9 +381,10 @@ function buildRolloutPlan(state) {
   }
 
   const futureApprovedPaths = new Set(provisionalPlans.map((plan) => plan.target.path));
-  const approvedPaths = new Set(state.destinations.filter((snapshot) =>
-    snapshot.data()?.status === 'active' && snapshot.data()?.canonicalPolicy?.approved === true
-  ).map((snapshot) => snapshot.ref.path));
+  const approvedPaths = new Set(state.destinations.filter((snapshot) => {
+    const match = snapshot.ref.path.match(DESTINATION_PATH);
+    return match && destinationAcceptsNewReferences(snapshot.data() || {}, match[1]);
+  }).map((snapshot) => snapshot.ref.path));
   futureApprovedPaths.forEach((path) => approvedPaths.add(path));
 
   const holds = [];
@@ -424,12 +426,13 @@ function buildRolloutPlan(state) {
     const reviewPath = `system/moderation/destinationReviews/${reviewId(countryId, cityId)}`;
     const reviewSnapshot = state.reviews.get(reviewPath);
     const jobSnapshot = state.jobs.get(`system/runtime/destinationJobs/${countryId}_${cityId}`);
+    const destination = { ...(destinationSnapshot.data() || {}), countryId };
     const issues = qualityIssues(
-      destinationSnapshot.data() || {},
+      destination,
       jobSnapshot?.data() || {},
       reviewSnapshot?.data() || {}
     );
-    const desiredStatus = destinationReviewStatus(destinationSnapshot.data() || {}, issues);
+    const desiredStatus = destinationReviewStatus(destination, issues);
     if (reviewSnapshot?.data()?.status !== desiredStatus) {
       reviewRepairs.push({
         destinationPath: destinationSnapshot.ref.path,
