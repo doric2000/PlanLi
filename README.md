@@ -607,6 +607,30 @@ completed at `2026-08-26T15:00:19.672Z`. EAS submission
 `6801453067`. App Store Connect reports build 15 as in beta testing for internal
 and external TestFlight. Installation and physical Hebrew/Arabic RTL verification
 remain unverified.
+
+The `2026-09-01` iOS security-release candidate is `1.1.0 (26)`, EAS build
+`06a32a0f-1725-4dcb-b65a-04af34f466fc`, completed at
+`2026-09-01T14:01:41.447Z` from clean `main` commit
+`720c3983acc80bcf237729fad6726c98b65003fe`, runtime `1.2.0`, production
+profile/channel and App Store distribution. Before the successful build,
+builds `f5c150f0-7602-4c65-83f8-3c17c1292cf5` (24) and
+`27c37a13-9fb5-40e6-a3cc-b8100604e4bf` (25) failed because their App Store
+provisioning profiles did not contain App Attest. App Attest was then enabled
+for Apple App ID `com.planli.planlitravels`, and EAS generated replacement
+profile `NGZ4V8B72H`. Inspection of the resulting IPA verified marketing
+version `1.1.0`, build `26`, the exact bundle identifier, a signed production
+App Attest entitlement, and the absence of unused Face ID, always/background
+location and motion usage descriptions; foreground location, camera and photo
+library permissions remain. EAS logs confirm successful Sentry source-map and
+dSYM upload. The focused production Functions rollout from the same commit
+updated only `saveRecommendation` and `publishRecommendationDraft`; Cloud Run
+revisions `saverecommendation-00050-yel` and
+`publishrecommendationdraft-00016-gob` are ready with 100% traffic, no new
+error logs were found, and unauthenticated smoke requests returned HTTP 401.
+Build 26 has not been submitted, installed or tested on a physical iPhone, and
+no EAS Update was published. App Check service enforcement therefore remains
+off pending physical-device validation.
+
 The latest compatible Android and iOS production EAS Update is region-selector
 polish group `b363be1d-63b2-4ea9-86e2-67bf3923b01c`, Android update
 `01a04728-4cd2-7278-bf57-8d555e2e1c2d` and iOS update
