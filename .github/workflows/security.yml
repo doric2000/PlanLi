@@ -166,34 +166,17 @@ jobs:
       - name: Resolve root development dependency metadata
         run: npm install --package-lock-only --ignore-scripts
 
+      - name: Test dependency audit policy
+        run: node --test scripts/verifyDependencyAudit.test.js
+
       - name: Audit root dependency tree
-        id: root_audit
-        continue-on-error: true
-        run: npm audit --audit-level=moderate
+        run: node scripts/verifyDependencyAudit.js --workspace .
 
       - name: Audit client lockfile
-        id: client_audit
-        continue-on-error: true
-        working-directory: client
-        run: npm audit --audit-level=moderate
+        run: node scripts/verifyDependencyAudit.js --workspace client
 
       - name: Audit Functions lockfile
-        id: functions_audit
-        continue-on-error: true
-        working-directory: functions
-        run: npm audit --audit-level=moderate
+        run: node scripts/verifyDependencyAudit.js --workspace functions
 
       - name: Verify generated legal policy artifacts
         run: npm run test:legal-policy
-
-      - name: Require both dependency audits to pass
-        if: always()
-        env:
-          ROOT_AUDIT: ${{ steps.root_audit.outcome }}
-          CLIENT_AUDIT: ${{ steps.client_audit.outcome }}
-          FUNCTIONS_AUDIT: ${{ steps.functions_audit.outcome }}
-        run: |
-          if [ "$ROOT_AUDIT" != "success" ] || [ "$CLIENT_AUDIT" != "success" ] || [ "$FUNCTIONS_AUDIT" != "success" ]; then
-            echo "Dependency audit failed: root=$ROOT_AUDIT client=$CLIENT_AUDIT functions=$FUNCTIONS_AUDIT"
-            exit 1
-          fi
