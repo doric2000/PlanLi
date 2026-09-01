@@ -6,6 +6,7 @@ const {
   buildRolloutPlan,
   manifestFingerprint,
   parseOptions,
+  reassignmentRef,
 } = require('./repairDestinationPolicyRollout');
 
 function snapshot(path, data, version = 1) {
@@ -138,4 +139,15 @@ test('rollout apply requires the exact live fingerprint, project, and active-adm
     fingerprint: '0'.repeat(64),
     requestedBy: 'admin-uid',
   }, manifest, fingerprint), /fingerprint/u);
+});
+
+test('rollout reassignment preview uses the same normalized identity as the worker', () => {
+  assert.deepEqual(reassignmentRef({
+    countryId: ' PS ',
+    cityId: 'rotem-ps',
+    path: 'countries/PS/destinations/rotem-ps',
+  }), {
+    countryId: 'PS',
+    cityId: 'rotem-ps',
+  });
 });

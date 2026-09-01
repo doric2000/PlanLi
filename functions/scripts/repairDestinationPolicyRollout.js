@@ -85,6 +85,13 @@ function snapshotVersion(snapshot) {
   return snapshot?.exists ? timestampMillis(snapshot.updateTime) : 0;
 }
 
+function reassignmentRef(value) {
+  return {
+    countryId: String(value?.countryId || '').trim(),
+    cityId: String(value?.cityId || '').trim(),
+  };
+}
+
 function reviewId(countryId, cityId) {
   return crypto.createHash('sha256').update(`${countryId}\n${cityId}`).digest('base64url');
 }
@@ -565,15 +572,17 @@ async function finishReassignment({ adminImpl, plan, requestedBy, reason }) {
   if (sourceSnapshot.data()?.status === 'inactive' &&
       sourceSnapshot.data()?.mergedInto?.countryId === plan.target.countryId &&
       sourceSnapshot.data()?.mergedInto?.cityId === plan.target.cityId) return;
+  const source = reassignmentRef(plan.source);
+  const target = reassignmentRef(plan.target);
   const preview = await previewDestinationReassignment({
     db,
-    source: plan.source,
-    target: plan.target,
+    source,
+    target,
   });
   const queued = await startDestinationReassignment({
     admin: adminImpl,
-    source: plan.source,
-    target: plan.target,
+    source,
+    target,
     expectedImpactHash: preview.impactHash,
     reason,
     requestedBy,
@@ -697,6 +706,7 @@ module.exports = {
   localityEntryFromDestination,
   manifestFingerprint,
   parseOptions,
+  reassignmentRef,
   registryCompatible,
   runRolloutRepair,
 };
