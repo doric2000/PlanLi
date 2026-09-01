@@ -8,6 +8,7 @@ const {
   destinationPolicyRegistryBindingIssue,
   destinationApprovalHasConflictingFence,
   destinationCanEnterAdminApproval,
+  destinationReviewStatus,
   qualityIssues,
   holdDestinationContentDocuments,
   releaseDestinationPendingContent,
@@ -532,6 +533,28 @@ test('destination policy preserves compatible natural identity and does not inve
 
 test('destination quality accepts complete reviewed data', () => {
   assert.deepEqual(qualityIssues(validDestination(), {}, { approvedAt: new Date() }, Date.parse('2029-01-01')), []);
+});
+
+test('approved destination review status never falls back to open or ready', () => {
+  const destination = validDestination();
+  assert.equal(destinationReviewStatus(destination, []), 'approved');
+  assert.equal(destinationReviewStatus(destination, [{
+    code: 'missing_image', severity: 'warning', label: 'missing image',
+  }]), 'approved_with_warnings');
+  assert.equal(destinationReviewStatus(destination, [{
+    code: 'country_conflict', severity: 'error', label: 'identity conflict',
+  }]), 'blocked');
+  assert.equal(
+    qualityIssues(destination, {}, {}, Date.parse('2029-01-01'))
+      .some((issue) => issue.code === 'new_destination'),
+    false
+  );
+
+  const provisional = { status: 'active', canonicalPolicy: { approved: false } };
+  assert.equal(destinationReviewStatus(provisional, []), 'ready');
+  assert.equal(destinationReviewStatus(provisional, [{
+    code: 'new_destination', severity: 'info', label: 'new',
+  }]), 'open');
 });
 
 test('destination quality reports identity, image, airport and job problems', () => {

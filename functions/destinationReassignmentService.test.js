@@ -7,6 +7,7 @@ const {
   migrateFavoritePage,
   migratedRecommendationCount,
   recommendationPatch,
+  reassignedDestinationModeration,
   reassignDestinationPersonalization,
   reassignmentJobId,
   residualReferenceStage,
@@ -53,10 +54,49 @@ test('preview hash is deterministic and changes with impact', () => {
 
 test('final recommendation stats use the frozen preview when worker counters race', () => {
   assert.equal(migratedRecommendationCount({
+    preview: { activeRecommendationCount: 1, counts: { recommendations: 3 } },
+    updatedCounts: { recommendations: 3 },
+  }), 1);
+  assert.equal(migratedRecommendationCount({
     preview: { counts: { recommendations: 3 } },
     updatedCounts: { recommendations: 1 },
   }), 3);
   assert.equal(migratedRecommendationCount({ updatedCounts: { recommendations: 2 } }), 2);
+});
+
+test('cross-country reassignment retargets only system destination holds', () => {
+  const ilTarget = {
+    countryId: 'IL', cityId: 'rotem-il', countryName: 'ישראל', cityName: 'רותם',
+  };
+  const psSource = { countryId: 'PS', cityId: 'rotem-ps' };
+  const held = {
+    status: 'moderation_hold',
+    moderation: {
+      holdReason: 'destination_pending_approval',
+      systemGate: 'destination_pending_approval',
+      destination: psSource,
+    },
+  };
+  assert.deepEqual(
+    reassignedDestinationModeration(held, psSource, ilTarget).destination,
+    { countryId: 'IL', cityId: 'rotem-il' }
+  );
+  assert.equal(reassignedDestinationModeration({
+    status: 'moderation_hold',
+    moderation: { holdReason: 'unsafe_text', systemGate: 'safety' },
+  }, psSource, ilTarget), null);
+
+  const route = routePatch({
+    ...held,
+    title: 'מסלול',
+    destinations: [psSource],
+    destinationKeys: ['PS:*', 'PS:rotem-ps'],
+    moderation: {
+      ...held.moderation,
+      pendingDestinationKeys: ['PS:rotem-ps', 'JO:amman'],
+    },
+  }, psSource, ilTarget);
+  assert.deepEqual(route.moderation.pendingDestinationKeys, ['IL:rotem-il', 'JO:amman']);
 });
 
 test('recommendation reassignment rebuilds search destination data', () => {

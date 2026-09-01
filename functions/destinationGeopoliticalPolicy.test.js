@@ -13,13 +13,10 @@ test('independent policy registry assigns Ariel without using coordinates', () =
   );
 });
 
-test('Palestinian cities and Gaza are explicitly kept separate from Israel', () => {
+test('Gaza remains separate while Ramallah is left to the coordinate policy gate', () => {
   assert.deepEqual(
     resolveDestinationCountryPolicy({ names: { en: 'Gaza' } }),
     { countryCode: 'PS', resolutionSource: 'independent-policy-registry' }
   );
-  assert.deepEqual(
-    resolveDestinationCountryPolicy({ names: { en: 'Ramallah' } }),
-    { countryCode: 'PS', resolutionSource: 'independent-policy-registry' }
-  );
+  assert.equal(resolveDestinationCountryPolicy({ names: { en: 'Ramallah' } }), null);
 });

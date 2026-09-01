@@ -2,6 +2,7 @@ const crypto = require('crypto');
 
 const { compactDestinationSearchText } = require('./destinationCatalogService');
 const { distanceKm } = require('./destinationIdentityService');
+const { hasVerifiedIlLocalityApproval } = require('./destinationApprovalPolicy');
 
 const REGISTRY_PATH = 'system/destinationRegistry/entries';
 const REGISTRY_VERSION = 3;
@@ -318,6 +319,7 @@ function validateRegistryEntry(entry, {
   if (requireProviderIdentity && !validViewport && !validRadius) errors.push('missing_geometry');
   const sources = Array.isArray(normalized.researchSources) ? normalized.researchSources : [];
   if (requireResearchSources && normalized.approval?.approvedByAdmin !== true &&
+      !hasVerifiedIlLocalityApproval(normalized) &&
       new Set(sources.map((source) => source?.url).filter(Boolean)).size < 2) {
     errors.push('insufficient_research_sources');
   }
@@ -494,6 +496,7 @@ function matchCanonicalEntry(entries, {
   if (providerPlaceId) {
     const exactCandidates = activeEntries.filter((entry) =>
       entry.matchProfile?.trust === 'trusted' ||
+      hasVerifiedIlLocalityApproval(entry) ||
       (blockedExact.has(entry.kind) &&
         !['incompatible_provider_identity', 'provider_types_missing']
           .includes(entry.matchProfile?.identitySource))

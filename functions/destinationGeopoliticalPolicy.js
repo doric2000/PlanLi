@@ -24,11 +24,9 @@ const ISRAEL_OVERRIDES = Object.freeze({
 
 const PALESTINIAN_DESTINATIONS = Object.freeze({
   placeIds: new Set([
-    'ChIJ0Vgt2kzVAhURdiyLzBdNbb8', // Ramallah
     'ChIJZydUTgV__RQRkmMEE8mN-X8', // Gaza
   ]),
   names: new Set([
-    'ramallah', 'رام الله', 'רמאללה',
     'gaza', 'غزة', 'עזה',
   ].map(normalize)),
 });
