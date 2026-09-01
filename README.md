@@ -1142,7 +1142,8 @@ commit; normal changes use `npm run validate:changed` from the repository root.
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi\client
 npm.cmd ci
-npm.cmd run verify:ios-release
+npm.cmd run verify:ios-build-readiness
+eas.cmd env:exec production "npm.cmd run verify:eas-production-env" --non-interactive
 npm.cmd test -- --runInBand
 npx.cmd expo export --platform ios --output-dir .expo-validation\ios-release
 
@@ -1153,9 +1154,16 @@ npm.cmd run test:rules:emulator
 npm.cmd run audit-live
 ```
 
-`verify:ios-release` checks the bundle ID, Firebase plist, app icon,
-permissions, native plugins, EAS profile, Sentry privacy controls and known
-debug markers. `audit-live` and the Rules emulator are read-only validation;
+`verify:ios-build-readiness` checks the bundle ID, Firebase plist, the dedicated
+React Native Firebase configuration, app icon, permissions, native plugins, EAS
+profile, SDK package alignment, Expo Doctor, Sentry privacy controls and known
+debug markers. The environment check then uses the production EAS environment
+without printing secret values and verifies the readable Firebase, App Check and
+Sentry values plus the Sentry build token. Secret Maps keys and EAS file variables
+are intentionally not readable through `env:exec`; verify their names through
+`eas env:list production` and retain the last successful EAS config-stage proof for
+their values and file contents.
+`audit-live` and the Rules emulator are read-only validation;
 they require the correct Firebase identity/project and do not authorize a
 deployment. Complete one release review against `main` after these checks.
 
@@ -1183,8 +1191,9 @@ After approval, enable the external group and public link. Record the branch,
 commit, EAS build ID, iOS build number, review status and processing result. Do
 not use auto-submit for the first beta.
 
-The installed `1.1.0` production build can receive compatible EAS Updates. It
-uses the `production` channel and derives runtime `1.1.0` from the app version.
+The installed `1.1.0` production build can receive only EAS Updates compiled for
+its runtime. The SDK 57 security release uses the `production` channel and the
+explicitly isolated runtime `1.2.0`.
 Until the beta is explicitly closed, the Expo marketing version is locked to
 `1.1.0`; `verify:ios-release` rejects an accidental version change. This lock
 does not apply to the iOS build string: every newly uploaded binary must still
@@ -2809,6 +2818,21 @@ reusing the stage-five environment variable with `--only functions`.
 
 ## SDK 57 iOS release-candidate build recovery
 
+- The complete EAS iOS history inspected on `2026-09-01` contains 24 remote jobs:
+  11 finished and 13 failed. Eight older failures fall into dependency/prebuild,
+  early Sentry configuration and development provisioning categories; later builds
+  in each of those lines succeeded. The five consecutive SDK 57 release failures
+  are the current recovery chain below.
+- The repeated failures were serial blockers, not seven repetitions of one
+  unexplained error. Build `16` failed before compilation because the Maps
+  plugin requested the removed `react-native-google-maps` pod. Build `17`
+  reached CocoaPods and exposed RNFirebase's unsupported SPM/static-library
+  combination. Build `18` passed Pods and exposed the obsolete Xcode 26.0
+  image. The rejected build-number-19 request did not create a remote build.
+  Production builds `20` and `21` then reached the Xcode archive and exposed,
+  respectively, the Sentry credential visibility and RNFirebase JSON parsing
+  boundaries described below. Each prior blocker prevented the later build
+  phase from running, which is why the errors appeared one after another.
 - PR [#290](https://github.com/doric2000/PlanLi/pull/290) configured the official
   RNFirebase Expo plugin with `ios.disableSPM: true`, keeping Firebase App Check
   on CocoaPods and adding a fail-closed release check. Focused config, App Check,
@@ -2834,8 +2858,48 @@ reusing the stage-five environment variable with `--only functions`.
   no automatic charge is possible. The quota reports a reset on `2026-09-01`;
   an attached one-time continuation will rerun the same release-candidate after
   the reset with frozen credentials, no auto-submit and no OTA.
-- The organization-scoped Sentry `org:ci` build token already exists and the EAS
-  production secret was updated on `2026-08-30`. It still shows no use because
-  builds 17 and 18 failed before the source-map upload phase. No additional token
-  was created or revoked; the next successful archive must verify the existing
-  token before any rotation decision.
+- Production build `f470ff50-bced-4349-9532-949b4b818330` (`1.1.0 (20)`, source
+  `f9e0a1abe6b19c7bde27af5dd6f53faa2f4e459a`) used Xcode 26.6, passed dependency
+  installation and reached the Xcode source-map phase, where Sentry returned HTTP
+  401. The token had been stored with server-only visibility. The
+  replacement organization token is limited to `org:ci`, the EAS production
+  variable now has readable-at-build `sensitive` visibility, and a production
+  `sentry-cli info` check resolves only organization `planli-t2` and project
+  `planli-mobile` without printing the token. Build 21 passed that former failure
+  point, proving the replacement credential reached the Xcode job. The old Sentry
+  token still requires account-side revocation after its exact identity is confirmed.
+- Production build `df7319b3-2556-4c10-bf93-67abf8f64a33` (`1.1.0 (21)`, same
+  source) then failed in RNFirebase's Xcode configuration phase. The repository
+  root `firebase.json` is valid Firebase infrastructure JSON, but its CSP strings
+  contain apostrophes. RNFirebase embeds the discovered file inside a single-quoted
+  Ruby JSON string, so its upward fallback search parsed the wrong file and reported
+  a misleading JSON syntax failure. The pending fix adds a dedicated
+  `client/firebase.json` containing only the React Native Firebase App Check setting;
+  both Node parsing and RNFirebase's exact lookup now select that file first.
+- The pending branch also removes three SDK 57 configuration/dependency remnants
+  reported by Expo Doctor (`newArchEnabled`, `edgeToEdgeEnabled`, the legacy splash
+  field, and direct use of Expo internal packages) while preserving the approved
+  splash image through the `expo-splash-screen` plugin. A new release gate runs the
+  release verifier, the native environment tests, pinned Expo Doctor and SDK package
+  alignment before a build. It separately checks readable production EAS values and
+  validates the Sentry token; secret Maps/file variables remain inventoried by name.
+- No further EAS build was started after build 21. The current no-quota evidence is:
+  locked Linux `npm ci`, real Linux iOS prebuild, RNFirebase/Maps autolinking, the
+  generated CocoaPods flags, a 979-file / 36 MB EAS archive with no `node_modules`,
+  Expo Doctor 21/21, `expo install --check`, iOS configuration checks, all ten
+  native environment tests, and all 179 client suites / 1,007 tests. The iOS
+  Hermes export completed with no source-map file or `sourceMappingURL`; bundle
+  SHA-256 is `3764092b2e2ee024d4bea4d05c15257ff5f018352fdcc0d96915f3dbb57259c1`.
+  The next remote build remains blocked until the pending diff is merged from a
+  clean `main`.
+- `npm audit` currently expands one indirect Moderate advisory into eight package
+  rows: React Navigation 7 depends on CommonJS `query-string@7`, which depends on
+  vulnerable `decode-uri-component@0.2.2`. The patched decoder `0.5.0` is ESM-only
+  and cannot be forced under the CommonJS caller safely, and the latest published
+  React Navigation packages retain the affected dependency. PlanLi does not pass a
+  `linking` configuration to either NavigationContainer and does not call
+  `getStateFromPath`, so untrusted URL/query input cannot reach the decoder in the
+  current app. The release verifier now rejects adding either path without a new
+  review and input bound. This invalidates the current source-to-sink path without
+  a risky dependency override; upgrade once React Navigation publishes a compatible
+  patched chain.

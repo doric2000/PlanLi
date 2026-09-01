@@ -21,6 +21,10 @@ jest.mock('../src/features/auth/AuthContext', () => ({
   }),
 }));
 
+jest.mock('../src/features/region/regionDefinitions', () => ({
+  isRegionDiscoveryEnabled: () => false,
+}));
+
 describe('PreferenceSetupGate auth state routing', () => {
   beforeEach(() => {
     mockStatus = AUTH_STATES.READY;

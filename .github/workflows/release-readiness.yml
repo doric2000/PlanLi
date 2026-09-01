@@ -61,8 +61,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Verify iOS release configuration
-        run: npm run verify:ios-release
+      - name: Verify iOS native build readiness
+        run: npm run verify:ios-build-readiness
 
       - name: Run client tests
         run: npm test -- --runInBand
