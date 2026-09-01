@@ -1466,7 +1466,7 @@ cd C:\Users\doric\Documents\PlanLi\PlanLi
 npm run preflight:eas-production
 
 cd .\client
-eas update --channel staging --environment preview --message '<summary>'
+eas update --channel staging --environment production --platform ios --message '<summary>'
 
 # Read back the staging group, then dry-run the guarded promotion wrapper.
 cd ..
@@ -1476,10 +1476,16 @@ npm run release:eas-production -- --preview-group '<staging-group-id>' --message
 npm run release:eas-production -- --preview-group '<staging-group-id>' --message '<summary>' --apply --confirm 'PUBLISH PRODUCTION <12-char-HEAD>'
 ```
 
-The wrapper pins EAS CLI `22.6.0`, account `doric2000`, project, owner, runtime,
-channel and environment; requires a clean synchronized `main`; verifies that
-the selected staging group contains only the exact candidate commit and runtime;
-and appends the resulting production group, commit and timestamp to this file.
+The staging channel is a production-candidate lane, so it must use the same
+`production` EAS environment as the production channel. Never promote an
+artifact built with the empty `preview` environment or with staging Firebase
+values. The wrapper pins EAS CLI `22.6.0`, account `doric2000`, project, owner,
+runtime, channel and environment; requires a clean synchronized `main`; verifies
+that the selected staging group contains only the exact candidate commit and
+runtime; downloads the immutable iOS Hermes launch asset; rejects dummy or
+missing Firebase production markers; verifies the manifest hash; repeats the
+same verification after promotion; and appends the resulting production group,
+commit, timestamp and bundle SHA-256 to this file.
 
 An EAS Update is a release action and requires explicit authorization. Native
 dependency, plugin, entitlement, permission, or incompatible app-config changes
