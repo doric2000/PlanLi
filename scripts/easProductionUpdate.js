@@ -222,6 +222,18 @@ function eas(clientRoot, args) {
   });
 }
 
+function buildRepublishCommand({ previewGroup, message }) {
+  return [
+    'update:republish',
+    '--group', previewGroup,
+    '--destination-channel', EXPECTED_CHANNEL,
+    '--platform', 'ios',
+    '--message', message,
+    '--json',
+    '--non-interactive',
+  ];
+}
+
 async function runRelease({ repoRoot, args }) {
   validateMessage(args.message);
   validatePreviewGroupId(args.previewGroup);
@@ -236,14 +248,10 @@ async function runRelease({ repoRoot, args }) {
   validatePreviewUpdates({ value: preview, groupId: args.previewGroup, head: preflight.head });
   const previewArtifact = await verifyProductionUpdateArtifact(preview, args.previewGroup);
 
-  const command = [
-    'update:republish',
-    '--group', args.previewGroup,
-    '--destination-channel', EXPECTED_CHANNEL,
-    '--message', args.message,
-    '--json',
-    '--non-interactive',
-  ];
+  const command = buildRepublishCommand({
+    previewGroup: args.previewGroup,
+    message: args.message,
+  });
   if (!args.apply) {
     return { apply: false, command, preflight, previewArtifact, previewGroup: args.previewGroup };
   }
@@ -288,6 +296,7 @@ if (require.main === module) {
 
 module.exports = {
   appendReleaseRecord,
+  buildRepublishCommand,
   extractReleaseMetadata,
   formatReleaseRecord,
   normalizeUpdates,
