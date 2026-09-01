@@ -3190,3 +3190,35 @@ reusing the stage-five environment variable with `--only functions`.
   has not been submitted. Installation and physical-device behavior remain
   unverified. No OTA, Firebase deployment, Rules, IAM, secret, migration or
   production-data change accompanied this build and submission.
+
+## iOS tab-header production OTA
+
+- PR [#315](https://github.com/doric2000/PlanLi/pull/315) restored the fixed,
+  safe-area-aware hero-header height so page content no longer overlaps the top
+  menu and the menu again keeps its lower side margins and rounded corners. The
+  release-tool identity compatibility fix in PR
+  [#319](https://github.com/doric2000/PlanLi/pull/319) also merged before release.
+- The release source was clean, synchronized `main` commit
+  `dfb525a19ee00ac15d651a2d1db35f07379556af`. Focused header validation passed,
+  the final review reported no findings, the production-lineage preflight passed,
+  and all 13 release-tool tests plus every PR #319 CI and security check passed.
+- The final iOS preview update is group
+  `9e9ef200-7a9e-4bb6-8b3f-bf627299c7db`, update
+  `01a05eba-b488-70e0-a6ca-450be53151ad`, runtime `1.2.0`, published at
+  `2026-09-01T20:48:09.352Z` from the exact source commit above. Its export
+  processed 2,734 modules and 66 iOS assets with no new asset upload.
+- The exact iOS artifact was republished to production as group
+  `38be89a6-b9de-48ae-ade5-b91ca8c71ffe`, update
+  `01a05ebd-f047-79cf-89c1-59b49eca8aff`, runtime `1.2.0`, at
+  `2026-09-01T20:51:41.255Z` (`2026-09-01 23:51:41` Israel time). Independent
+  EAS readback confirms the `production` branch, iOS platform, source commit and
+  update ID. The immutable manifest is
+  `https://u.expo.dev/update/01a05ebd-f047-79cf-89c1-59b49eca8aff`.
+- TestFlight build 28 is compatible with this runtime. Physical iPhone download,
+  application and visual verification remain pending; force-close and reopen the
+  installed app up to twice before checking the header. Because this is the first
+  production OTA on runtime `1.2.0`, rollback must publish a rollback-to-embedded
+  update for iOS runtime `1.2.0`, not republish the older runtime `1.1.0` group.
+- No Android update, native build, TestFlight/App Store submission, Firebase
+  deployment, Rules, IAM, migration or production-data mutation accompanied this
+  OTA.
