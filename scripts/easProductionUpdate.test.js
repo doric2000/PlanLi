@@ -85,7 +85,9 @@ test('rejects multiline messages, invalid group IDs, account drift, and CLI drif
   assert.doesNotThrow(() => validatePreviewGroupId(previewGroup));
   assert.throws(() => validatePreviewGroupId('latest'), /valid explicit preview/);
   assert.doesNotThrow(() => validateEasIdentity('doric2000\n'));
+  assert.doesNotThrow(() => validateEasIdentity('doric2000\ndoric9@gmail.com\n'));
   assert.throws(() => validateEasIdentity('another-account'), /authenticated as doric2000/);
+  assert.throws(() => validateEasIdentity('doric2000\nunexpected output'), /authenticated as doric2000/);
   assert.doesNotThrow(() => validateEasVersion('eas-cli/22.6.0 win32-x64 node-v22.23.1'));
   assert.throws(() => validateEasVersion('eas-cli/23.0.0'), /must be 22.6.0/);
 });

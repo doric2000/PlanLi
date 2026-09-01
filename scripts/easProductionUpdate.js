@@ -79,8 +79,15 @@ function validateConfirmation({ apply, confirmation, head }) {
 }
 
 function validateEasIdentity(output) {
-  const account = String(output || '').trim();
-  if (account !== EXPECTED_ACCOUNT) {
+  const lines = String(output || '')
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const account = lines[0] || '';
+  const supplementalIdentity = lines.slice(1);
+  const validSupplementalIdentity = supplementalIdentity.length <= 1
+    && supplementalIdentity.every((line) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(line));
+  if (account !== EXPECTED_ACCOUNT || !validSupplementalIdentity) {
     fail(`EAS must be authenticated as ${EXPECTED_ACCOUNT}; found ${account || 'no account'}.`);
   }
 }
