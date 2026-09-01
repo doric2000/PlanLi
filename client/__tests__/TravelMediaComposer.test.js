@@ -58,17 +58,59 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('react-native-draggable-flatlist', () => {
   const ReactModule = require('react');
   const { View } = require('react-native');
-  return {
-    NestableDraggableFlatList: ({ data, keyExtractor, renderItem, onDragEnd, testID, horizontal, inverted }) => (
-      <View testID={testID} onDragEnd={onDragEnd} horizontal={horizontal} inverted={inverted}>
+  const MockDraggableFlatList = ({
+    data,
+    keyExtractor,
+    renderItem,
+    renderPlaceholder,
+    onDragBegin,
+    onRelease,
+    onDragEnd,
+    testID,
+    horizontal,
+    inverted,
+    dragItemOverflow,
+    containerStyle,
+  }) => {
+    const [activeIndex, setActiveIndex] = ReactModule.useState(-1);
+    return (
+      <View
+        testID={testID}
+        onDragEnd={(params) => {
+          setActiveIndex(-1);
+          onDragEnd?.(params);
+        }}
+        onRelease={(index) => {
+          setActiveIndex(-1);
+          onRelease?.(index);
+        }}
+        horizontal={horizontal}
+        inverted={inverted}
+        dragItemOverflow={dragItemOverflow}
+        containerStyle={containerStyle}
+      >
+        {activeIndex >= 0 ? renderPlaceholder?.({ item: data[activeIndex], index: activeIndex }) : null}
         {data.map((item, index) => (
           <ReactModule.Fragment key={keyExtractor(item, index)}>
-            {renderItem({ item, getIndex: () => index, drag: jest.fn(), isActive: false })}
+            {renderItem({
+              item,
+              getIndex: () => index,
+              drag: () => {
+                setActiveIndex(index);
+                onDragBegin?.(index);
+              },
+              isActive: activeIndex === index,
+            })}
           </ReactModule.Fragment>
         ))}
       </View>
-    ),
+    );
+  };
+  return {
+    __esModule: true,
+    default: MockDraggableFlatList,
     ScaleDecorator: ({ children }) => <>{children}</>,
+    ShadowDecorator: ({ children }) => <>{children}</>,
   };
 });
 
@@ -123,11 +165,13 @@ test('embedded TravelMediaComposer opens the system gallery in one tap and updat
   expect(screen.getByTestId('travel-media-toggle-crop')).toBeTruthy();
   expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('horizontal', true);
   expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('inverted', true);
+  expect(screen.getByTestId('travel-media-reorder-list')).toHaveProp('dragItemOverflow', true);
   expect(StyleSheet.flatten(screen.getByTestId('travel-media-toggle-crop').props.style).minHeight).toBe(44);
 });
 
-test('embedded TravelMediaComposer commits long-press drag order without another save tap', () => {
+test('embedded TravelMediaComposer visibly selects a held photo and reports the full reorder interaction', () => {
   const onChange = jest.fn();
+  const onReorderInteractionChange = jest.fn();
   const values = [1, 2, 3].map((index) => ({
     id: `order-${index}`,
     sourceId: `order-${index}`,
@@ -145,19 +189,67 @@ test('embedded TravelMediaComposer commits long-press drag order without another
       maxItems={5}
       aspect={[1, 1]}
       onChange={onChange}
+      onReorderInteractionChange={onReorderInteractionChange}
       sourceAdapter={sourceAdapter}
     />
   );
 
+  fireEvent(screen.getByTestId('travel-media-selected-order-2'), 'longPress');
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(true);
+  expect(screen.getByTestId('travel-media-selected-order-2').props.accessibilityState.selected).toBe(true);
+  expect(StyleSheet.flatten(screen.getByTestId('travel-media-selected-order-2').props.style).borderWidth).toBe(3);
+  expect(screen.getByTestId('travel-media-placeholder-1')).toBeTruthy();
+
+  act(() => screen.getByTestId('travel-media-reorder-list').props.onRelease(1));
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
+
+  fireEvent(screen.getByTestId('travel-media-selected-order-3'), 'longPress');
   act(() => screen.getByTestId('travel-media-reorder-list').props.onDragEnd({
     data: [values[2], values[0], values[1]],
   }));
 
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
   expect(onChange).toHaveBeenCalledWith([
     expect.objectContaining({ sourceId: 'order-3' }),
     expect.objectContaining({ sourceId: 'order-1' }),
     expect.objectContaining({ sourceId: 'order-2' }),
   ]);
+});
+
+test('embedded TravelMediaComposer releases the outer scroll lock when a reorder is cancelled or unmounted', () => {
+  const onReorderInteractionChange = jest.fn();
+  const values = [1, 2].map((index) => ({
+    id: `cancel-${index}`,
+    sourceId: `cancel-${index}`,
+    uri: `file:///cancel-${index}.jpg`,
+    previewUri: `file:///cancel-${index}.jpg`,
+    width: 1200,
+    height: 900,
+    persistence: 'ready',
+  }));
+  const screen = render(
+    <TravelMediaComposer
+      embedded
+      visible
+      value={values}
+      maxItems={5}
+      aspect={[1, 1]}
+      onChange={jest.fn()}
+      onReorderInteractionChange={onReorderInteractionChange}
+      sourceAdapter={sourceAdapter}
+    />
+  );
+
+  fireEvent(screen.getByTestId('travel-media-selected-cancel-1'), 'longPress');
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(true);
+
+  fireEvent(screen.getByTestId('travel-media-composer'), 'touchCancelCapture');
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
+
+  fireEvent(screen.getByTestId('travel-media-selected-cancel-2'), 'longPress');
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(true);
+  screen.unmount();
+  expect(onReorderInteractionChange).toHaveBeenLastCalledWith(false);
 });
 
 test('TravelMediaComposer confirms the whole selection without manipulating an image', async () => {

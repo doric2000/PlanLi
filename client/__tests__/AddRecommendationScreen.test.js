@@ -3,6 +3,7 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
 import {
   mergeRecommendationDraftMedia,
+  recommendationInputScrollTarget,
   recommendationDraftResumeStep,
   scrollFocusedRecommendationInputIntoView,
 } from '../src/features/community/screens/CreateRecommendationScreen';
@@ -142,8 +143,15 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
 }));
 jest.mock('../src/components/TravelMediaComposer', () => {
   const React = require('react');
-  const { Pressable, Text } = require('react-native');
-  return function MockTravelMediaComposer({ embedded, visible, value = [], onChange, addButtonTestID }) {
+  const { Pressable, Text, View } = require('react-native');
+  return function MockTravelMediaComposer({
+    embedded,
+    visible,
+    value = [],
+    onChange,
+    addButtonTestID,
+    onReorderInteractionChange,
+  }) {
     React.useEffect(() => {
       if (!visible || embedded) return;
       mockPickImages().then((uris) => onChange?.([
@@ -153,24 +161,23 @@ jest.mock('../src/components/TravelMediaComposer', () => {
     }, [embedded, visible]);
     if (!visible) return null;
     if (embedded) return (
-      <Pressable
-        testID={addButtonTestID || 'travel-media-embedded-add'}
-        onPress={() => mockPickImages().then((uris) => onChange?.([
-          ...value,
-          ...uris.map((uri) => ({ uri, previewUri: uri, sourceId: uri, type: 'local' })),
-        ]))}
-      ><Text>הוספת תמונות</Text></Pressable>
+      <View>
+        <Pressable
+          testID={addButtonTestID || 'travel-media-embedded-add'}
+          onPress={() => mockPickImages().then((uris) => onChange?.([
+            ...value,
+            ...uris.map((uri) => ({ uri, previewUri: uri, sourceId: uri, type: 'local' })),
+          ]))}
+        ><Text>הוספת תמונות</Text></Pressable>
+        <Pressable testID="mock-reorder-begin" onPress={() => onReorderInteractionChange?.(true)}>
+          <Text>התחלת גרירה</Text>
+        </Pressable>
+        <Pressable testID="mock-reorder-end" onPress={() => onReorderInteractionChange?.(false)}>
+          <Text>סיום גרירה</Text>
+        </Pressable>
+      </View>
     );
     return null;
-  };
-});
-jest.mock('react-native-draggable-flatlist', () => {
-  const React = require('react');
-  const { ScrollView } = require('react-native');
-  return {
-    NestableScrollContainer: React.forwardRef(({ children, ...props }, ref) => (
-      <ScrollView {...props} ref={ref}>{children}</ScrollView>
-    )),
   };
 });
 jest.mock('../src/hooks/useDurableDraftMedia', () => ({
@@ -324,15 +331,80 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => expect(screen.getByTestId('recommendation-exact-location-search')).toBeTruthy());
   };
 
-  it('scrolls a focused native input above the keyboard with composer clearance', () => {
-    const scrollResponderScrollNativeHandleToKeyboard = jest.fn();
-    const responder = { scrollResponderScrollNativeHandleToKeyboard };
+  it('calculates only the minimum scroll needed to keep the focused input visible', () => {
+    expect(recommendationInputScrollTarget({
+      currentOffset: 120,
+      inputY: 220,
+      inputHeight: 48,
+      viewportY: 100,
+      viewportHeight: 500,
+      clearance: 12,
+    })).toBe(120);
+    expect(recommendationInputScrollTarget({
+      currentOffset: 120,
+      inputY: 560,
+      inputHeight: 60,
+      viewportY: 100,
+      viewportHeight: 500,
+      clearance: 12,
+    })).toBe(152);
+    expect(recommendationInputScrollTarget({
+      currentOffset: 120,
+      inputY: 80,
+      inputHeight: 48,
+      viewportY: 100,
+      viewportHeight: 500,
+      clearance: 12,
+    })).toBe(88);
+    expect(recommendationInputScrollTarget({
+      currentOffset: 10,
+      inputY: 0,
+      inputHeight: 48,
+      viewportY: 100,
+      viewportHeight: 500,
+      clearance: 12,
+    })).toBe(0);
+  });
 
-    expect(scrollFocusedRecommendationInputIntoView({
-      getScrollResponder: () => responder,
-    }, 42)).toBe(true);
-    expect(scrollResponderScrollNativeHandleToKeyboard).toHaveBeenCalledWith(42, 16, true);
-    expect(scrollFocusedRecommendationInputIntoView(null, 42)).toBe(false);
+  it('measures the actual viewport and avoids scrolling an already visible input', () => {
+    const scrollTo = jest.fn();
+    const scrollView = {
+      measureInWindow: (callback) => callback(0, 100, 320, 400),
+      scrollTo,
+    };
+    const hiddenInput = {
+      measureInWindow: (callback) => callback(0, 460, 300, 60),
+    };
+    const visibleInput = {
+      measureInWindow: (callback) => callback(0, 220, 300, 48),
+    };
+
+    expect(scrollFocusedRecommendationInputIntoView(scrollView, hiddenInput, 200, 12)).toBe(true);
+    expect(scrollTo).toHaveBeenCalledWith({ x: 0, y: 232, animated: true });
+
+    scrollTo.mockClear();
+    expect(scrollFocusedRecommendationInputIntoView(scrollView, visibleInput, 200, 12)).toBe(true);
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(scrollFocusedRecommendationInputIntoView(null, hiddenInput)).toBe(false);
+  });
+
+  it('freezes only the outer vertical scroll while a photo reorder is active', async () => {
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen navigation={navigationMock} route={{ params: {} }} />
+    );
+
+    await screen.findByTestId('recommendation-image-picker');
+    expect(screen.getByTestId('recommendation-composer-scroll').props.scrollEnabled).toBe(true);
+
+    fireEvent.press(screen.getByTestId('mock-reorder-begin'));
+    expect(screen.getByTestId('recommendation-composer-scroll').props.scrollEnabled).toBe(false);
+
+    fireEvent.press(screen.getByTestId('mock-reorder-end'));
+    expect(screen.getByTestId('recommendation-composer-scroll').props.scrollEnabled).toBe(true);
   });
 
   it('shows the whole composer while final publish points to the first missing section', async () => {
