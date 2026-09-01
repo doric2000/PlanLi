@@ -3228,3 +3228,45 @@ reusing the stage-five environment variable with `--only functions`.
 - No Android update, native build, TestFlight/App Store submission, Firebase
   deployment, Rules, IAM, migration or production-data mutation accompanied this
   OTA.
+
+## Firebase authentication recovery production OTA
+
+- The iOS tab-header OTA group `38be89a6-b9de-48ae-ade5-b91ca8c71ffe`
+  was built from the empty EAS `preview` environment. Its immutable
+  8,450,540-byte Hermes bundle contained the repository's former dummy Firebase
+  fallback values, so email/password, Google and Apple sign-in could not reach
+  the production Firebase project. The native binary remained valid, which is why
+  users who bypassed the OTA could still sign in.
+- An emergency rollback-to-embedded update was published for iOS runtime `1.2.0`
+  as group `2203a244-97de-436b-803a-030835134553`, update
+  `01a05efb-e78e-7923-ae47-14d0c3386d36`, at
+  `2026-09-01T21:59:22.254Z`. EAS readback confirmed it became the latest
+  production update before the corrected release.
+- PR [#324](https://github.com/doric2000/PlanLi/pull/324) removed every silent
+  Firebase fallback, made runtime configuration fail closed, kept `planli.cc`
+  only for Web Auth while native uses `planli-f0b12.firebaseapp.com`, and added
+  immutable EAS bundle verification before and after promotion. PR
+  [#325](https://github.com/doric2000/PlanLi/pull/325) bound republishing to iOS.
+  Both PR validation and security workflows passed.
+- The corrected production-candidate group
+  `0deb2cd2-a634-4a4a-ad1d-a70822fb8e4b`, update
+  `01a05f2a-324b-7129-8b40-e093434ee212`, was built with the EAS
+  `production` environment from clean synchronized `main` commit
+  `67f9cb8beb44572c605027cbea305224e6d18a18`. The export processed 2,734
+  modules and 65 source assets.
+- The exact candidate was republished to the `production` branch as group
+  `0729537b-294a-4190-a57f-2380097e6b22`, update
+  `01a05f2c-a70f-7fc8-981c-1368f7e84121`, runtime `1.2.0`, iOS, at
+  `2026-09-01T22:52:37.007Z` (`2026-09-02 01:52:37` Israel time).
+  Independent EAS readback confirms this is the latest production group and that
+  its Git commit, runtime, platform and update ID match the intended release.
+- The immutable production launch bundle is 8,418,692 bytes with SHA-256
+  `268535042D9243829AE60E4F2461B0CFB8C73F312B79867A2D5F44C319E66074`.
+  The verifier confirmed the EAS manifest hash, required production Firebase and
+  Google markers, absence of every former dummy fallback, and byte equality with
+  the staging candidate.
+- TestFlight build 28 is compatible with runtime `1.2.0`. Physical-device
+  Google, Apple and email/password sign-in after the corrected OTA remain pending;
+  force-close and reopen the installed app up to twice before testing. No Android
+  update, native build, Firebase deployment, Rules, IAM, migration or
+  production-data mutation accompanied this recovery OTA.

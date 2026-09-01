@@ -9,6 +9,7 @@ const {
   buildRepublishCommand,
   extractReleaseMetadata,
   parseArgs,
+  parseRepublishedGroupId,
   validateConfirmation,
   validateEasIdentity,
   validateEasVersion,
@@ -80,9 +81,15 @@ test('republishes the verified candidate for iOS only', () => {
     '--destination-channel', 'production',
     '--platform', 'ios',
     '--message', 'Security release',
-    '--json',
     '--non-interactive',
   ]);
+});
+
+test('reads the production group from successful EAS text output', () => {
+  assert.equal(parseRepublishedGroupId(
+    'Platform         ios\nUpdate group ID  aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\n'
+  ), 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee');
+  assert.throws(() => parseRepublishedGroupId('Republish failed'), /valid explicit preview/);
 });
 
 test('requires an exact commit-bound confirmation only for apply', () => {

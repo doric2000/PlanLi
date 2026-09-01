@@ -229,9 +229,16 @@ function buildRepublishCommand({ previewGroup, message }) {
     '--destination-channel', EXPECTED_CHANNEL,
     '--platform', 'ios',
     '--message', message,
-    '--json',
     '--non-interactive',
   ];
+}
+
+function parseRepublishedGroupId(output) {
+  const groupId = String(output || '').match(
+    /Update group ID\s+([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/iu
+  )?.[1] || '';
+  validatePreviewGroupId(groupId);
+  return groupId;
 }
 
 async function runRelease({ repoRoot, args }) {
@@ -256,7 +263,8 @@ async function runRelease({ repoRoot, args }) {
     return { apply: false, command, preflight, previewArtifact, previewGroup: args.previewGroup };
   }
 
-  const published = JSON.parse(eas(clientRoot, command));
+  const productionGroup = parseRepublishedGroupId(eas(clientRoot, command));
+  const published = JSON.parse(eas(clientRoot, ['update:view', productionGroup, '--json']));
   const metadata = extractReleaseMetadata(published, { head: preflight.head });
   const productionArtifact = await verifyProductionUpdateArtifact(published, metadata.groupId);
   if (productionArtifact.sha256 !== previewArtifact.sha256) {
@@ -301,6 +309,7 @@ module.exports = {
   formatReleaseRecord,
   normalizeUpdates,
   parseArgs,
+  parseRepublishedGroupId,
   validateConfirmation,
   validateEasIdentity,
   validateEasVersion,
