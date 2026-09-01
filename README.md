@@ -3053,7 +3053,11 @@ reusing the stage-five environment variable with `--only functions`.
   environment and expires on `2027-08-21`.
 - EAS submission `ae569cd6-d1a1-4765-8b56-2bb436ebdf4f` finished at
   `2026-09-01T16:47:43.268Z` and uploaded exactly build 28 to App Store Connect app
-  `6801453067`. Apple processing, TestFlight visibility, installation and
-  physical-device behavior remain unverified. No OTA, Firebase deployment, Rules,
-  IAM, secret, migration or production-data change accompanied this build and
-  submission.
+  `6801453067`. App Store Connect completed processing at `2026-09-01T19:47+03:00`:
+  the upload is `Complete`, and TestFlight lists build 28 as `Ready to Submit`,
+  expiring in 90 days. It is assigned to the `Internal friends` and `Team (Expo)`
+  internal groups with 15 invited testers and no recorded installs yet. It is not
+  assigned to the external `Friends Of PlanLi` group, and external Beta App Review
+  has not been submitted. Installation and physical-device behavior remain
+  unverified. No OTA, Firebase deployment, Rules, IAM, secret, migration or
+  production-data change accompanied this build and submission.
