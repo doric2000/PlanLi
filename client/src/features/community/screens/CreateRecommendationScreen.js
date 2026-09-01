@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -70,7 +69,7 @@ const LOCATION_MODES = {
   pin: 'pin',
 };
 const OPTIONAL_FIELDS = [
-  { id: 'contactName', label: 'איש קשר', placeholder: 'למשל: דנה מהקבלה או Alex 24/7', maxLength: 80, contentDirection: 'auto' },
+  { id: 'contactName', label: 'איש קשר', placeholder: 'למשל: דנה מהקבלה או Alex 24/7', maxLength: 80, contentDirection: 'rtl' },
   { id: 'phone', label: 'טלפון', placeholder: 'למשל: +36 20 123 4567', keyboardType: 'phone-pad', maxLength: 40, contentDirection: 'ltr' },
   { id: 'externalUrl', label: 'קישור', placeholder: 'למשל: https://example.com', keyboardType: 'url', maxLength: 500, contentDirection: 'ltr' },
   { id: 'priceNote', label: 'מחיר', placeholder: 'למשל: כ־45 ש״ח לאדם', maxLength: 120, contentDirection: 'rtl' },
@@ -80,51 +79,11 @@ const OPTIONAL_FIELDS = [
 const categoryById = Object.fromEntries(RECOMMENDATION_CATEGORIES.map((item) => [item.id, item]));
 const subcategoryById = Object.fromEntries(RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item]));
 
-export function recommendationInputScrollTarget({
-  currentOffset = 0,
-  inputY,
-  inputHeight,
-  viewportY,
-  viewportHeight,
-  clearance = spacing.md,
-}) {
-  const values = [currentOffset, inputY, inputHeight, viewportY, viewportHeight, clearance];
-  if (!values.every(Number.isFinite) || inputHeight < 0 || viewportHeight <= 0) return null;
-  const visibleTop = viewportY + clearance;
-  const visibleBottom = viewportY + viewportHeight - clearance;
-  const inputBottom = inputY + inputHeight;
-  if (inputBottom > visibleBottom) return Math.max(0, currentOffset + inputBottom - visibleBottom);
-  if (inputY < visibleTop) return Math.max(0, currentOffset + inputY - visibleTop);
-  return Math.max(0, currentOffset);
-}
-
-export function scrollFocusedRecommendationInputIntoView(
-  scrollView,
-  inputTarget,
-  currentOffset = 0,
-  clearance = spacing.md
-) {
-  if (
-    !scrollView || !inputTarget ||
-    typeof scrollView.measureInWindow !== 'function' ||
-    typeof inputTarget.measureInWindow !== 'function' ||
-    typeof scrollView.scrollTo !== 'function'
-  ) return false;
-  scrollView.measureInWindow((_viewportX, viewportY, _viewportWidth, viewportHeight) => {
-    inputTarget.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
-      const nextOffset = recommendationInputScrollTarget({
-        currentOffset,
-        inputY,
-        inputHeight,
-        viewportY,
-        viewportHeight,
-        clearance,
-      });
-      if (nextOffset == null || Math.abs(nextOffset - currentOffset) < 1) return;
-      scrollView.scrollTo({ x: 0, y: nextOffset, animated: true });
-    });
-  });
-  return true;
+export function recommendationContactInputDirection(value = '') {
+  const normalized = String(value).trimStart();
+  if (/[0-9]/.test(normalized)) return 'ltr';
+  if (/^[A-Za-z]/.test(normalized)) return 'ltr';
+  return 'rtl';
 }
 
 function FocusClearingFormInput({ placeholder, onFocus, onBlur, ...props }) {
@@ -317,9 +276,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const hydratedEditIdRef = useRef(null);
   const scrollViewRef = useRef(null);
-  const scrollOffsetRef = useRef(0);
   const sectionOffsetsRef = useRef({});
-  const focusedInputTargetRef = useRef(null);
   const titleEditedByUserRef = useRef(false);
   const classificationEditedByUserRef = useRef(false);
   const lastAutofilledTitleRef = useRef('');
@@ -610,26 +567,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     return saveQueueRef.current;
   }, [bindDraft]);
 
-  const scrollFocusedInputIntoView = useCallback(() => {
-    requestAnimationFrame(() => {
-      const inputTarget = TextInput.State.currentlyFocusedInput?.() || focusedInputTargetRef.current;
-      if (!inputTarget) return;
-      focusedInputTargetRef.current = inputTarget;
-      scrollFocusedRecommendationInputIntoView(
-        scrollViewRef.current,
-        inputTarget,
-        scrollOffsetRef.current
-      );
-    });
-  }, []);
-
-  const handleComposerInputFocus = useCallback(() => {
-    requestAnimationFrame(() => {
-      focusedInputTargetRef.current = TextInput.State.currentlyFocusedInput?.() || null;
-      if (keyboardVisible) scrollFocusedInputIntoView();
-    });
-  }, [keyboardVisible, scrollFocusedInputIntoView]);
-
   const handleMediaReorderInteractionChange = useCallback((active) => {
     setMediaReorderActive(Boolean(active));
   }, []);
@@ -637,17 +574,15 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
       setKeyboardVisible(true);
-      scrollFocusedInputIntoView();
     });
     const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardVisible(false);
-      focusedInputTargetRef.current = null;
     });
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, [scrollFocusedInputIntoView]);
+  }, []);
 
   const finishLeave = useCallback((action = null) => {
     leavePromptOpenRef.current = false;
@@ -1613,6 +1548,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const renderReviewStep = () => {
     const optionalField = OPTIONAL_FIELDS.find((field) => field.id === activeOptionalField);
+    const optionalValue = optionalField ? details[optionalField.id] || '' : '';
+    const optionalContentDirection = optionalField?.id === 'contactName'
+      ? recommendationContactInputDirection(optionalValue)
+      : optionalField?.contentDirection;
     return (
       <>
         <RtlChoiceGroup
@@ -1665,12 +1604,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           <View style={styles.optionalField}>
             <FocusClearingFormInput
               label={optionalField.label}
-              value={details[optionalField.id] || ''}
-              onChangeText={(value) => setDetails((current) => ({
+              value={optionalValue}
+              onChangeText={(nextValue) => setDetails((current) => ({
                 ...current,
                 [optionalField.id]: optionalField.id === 'externalUrl'
-                  ? normalizeExternalUrl(value)
-                  : value,
+                  ? normalizeExternalUrl(nextValue)
+                  : nextValue,
               }))}
               placeholder={optionalField.placeholder}
               keyboardType={optionalField.keyboardType}
@@ -1678,10 +1617,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               maxLength={optionalField.maxLength}
               autoCapitalize={optionalField.id === 'externalUrl' ? 'none' : undefined}
               autoCorrect={optionalField.id !== 'externalUrl'}
-              rtl={optionalField.contentDirection === 'rtl'}
-              style={optionalField.contentDirection === 'ltr'
-                ? styles.ltrInput
-                : optionalField.contentDirection === 'auto' ? styles.autoDirectionInput : undefined}
+              rtl={optionalContentDirection === 'rtl'}
+              style={optionalContentDirection === 'ltr' ? styles.ltrInput : undefined}
               testID={`recommendation-optional-input-${optionalField.id}`}
             />
           </View>
@@ -1748,7 +1685,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
       <KeyboardAvoidingView
         style={styles.keyboardAvoiding}
-        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        behavior={Platform.OS === 'android' ? 'height' : undefined}
+        enabled={Platform.OS === 'android'}
         testID="recommendation-keyboard-avoiding"
       >
         <ScrollView
@@ -1756,11 +1694,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           style={styles.scroll}
           contentContainerStyle={styles.content}
           scrollEnabled={!mediaReorderActive}
-          onFocusCapture={handleComposerInputFocus}
-          onScroll={(event) => {
-            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
-          }}
-          scrollEventThrottle={16}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           testID="recommendation-composer-scroll"
@@ -1820,41 +1754,48 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           ) : null}
         </ScrollView>
 
-        <SafeAreaInsetsContext.Consumer>
-          {(insets) => (
-            <View
-              style={[
-                styles.footer,
-                { paddingBottom: Math.max(keyboardVisible ? 0 : insets?.bottom || 0, 12) },
-              ]}
-            >
-              <View style={styles.footerInner}>
-                <TouchableOpacity
-                  style={[styles.primaryButton, (submitting || resolvingLocation) && styles.primaryButtonDisabled]}
-                  onPress={handleSubmit}
-                  disabled={submitting || resolvingLocation}
-                  accessibilityRole="button"
-                  testID="recommendation-next"
-                >
-                  {submitting
-                    ? <ActivityIndicator color={colors.white} />
-                    : <AppText style={styles.primaryButtonText}>{isEdit ? 'שמירת השינויים' : 'פרסום ההמלצה'}</AppText>}
-                </TouchableOpacity>
-                {keyboardVisible ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'position' : undefined}
+          enabled={Platform.OS === 'ios'}
+          style={styles.footerKeyboardAvoiding}
+          testID="recommendation-footer-keyboard-avoiding"
+        >
+          <SafeAreaInsetsContext.Consumer>
+            {(insets) => (
+              <View
+                style={[
+                  styles.footer,
+                  { paddingBottom: Math.max(keyboardVisible ? 0 : insets?.bottom || 0, 12) },
+                ]}
+              >
+                <View style={styles.footerInner}>
                   <TouchableOpacity
-                    style={styles.keyboardDismissButton}
-                    onPress={Keyboard.dismiss}
+                    style={[styles.primaryButton, (submitting || resolvingLocation) && styles.primaryButtonDisabled]}
+                    onPress={handleSubmit}
+                    disabled={submitting || resolvingLocation}
                     accessibilityRole="button"
-                    accessibilityLabel="סגירת המקלדת"
-                    testID="recommendation-keyboard-dismiss"
+                    testID="recommendation-next"
                   >
-                    <Ionicons name="chevron-down" size={24} color={colors.primary} />
+                    {submitting
+                      ? <ActivityIndicator color={colors.white} />
+                      : <AppText style={styles.primaryButtonText}>{isEdit ? 'שמירת השינויים' : 'פרסום ההמלצה'}</AppText>}
                   </TouchableOpacity>
-                ) : null}
+                  {keyboardVisible ? (
+                    <TouchableOpacity
+                      style={styles.keyboardDismissButton}
+                      onPress={Keyboard.dismiss}
+                      accessibilityRole="button"
+                      accessibilityLabel="סגירת המקלדת"
+                      testID="recommendation-keyboard-dismiss"
+                    >
+                      <Ionicons name="chevron-down" size={24} color={colors.primary} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          )}
-        </SafeAreaInsetsContext.Consumer>
+            )}
+          </SafeAreaInsetsContext.Consumer>
+        </KeyboardAvoidingView>
       </KeyboardAvoidingView>
     </View>
   );

@@ -14,13 +14,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { ScaleDecorator, ShadowDecorator } from 'react-native-draggable-flatlist';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
 import AppText from './AppText';
 import CachedImage from './CachedImage';
 import RtlHorizontalScrollView from './RtlHorizontalScrollView';
-import RtlHorizontalDraggableFlatList from './RtlHorizontalDraggableFlatList';
 import {
   boundCropTranslation,
   calculateCropRect,
@@ -42,6 +45,9 @@ const ZERO_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 export const TRAVEL_MEDIA_SWIPE_DISTANCE = 48;
 export const TRAVEL_MEDIA_SWIPE_VELOCITY = 500;
 export const TRAVEL_MEDIA_SWIPE_DOMINANCE = 1.25;
+export const TRAVEL_MEDIA_REORDER_LONG_PRESS_MS = 220;
+const TRAVEL_MEDIA_REORDER_MAX_THUMB_SIZE = 76;
+const TRAVEL_MEDIA_REORDER_MIN_THUMB_SIZE = 48;
 
 export function isTravelMediaSwipe({ translationX = 0, translationY = 0, velocityX = 0 } = {}) {
   'worklet';
@@ -49,6 +55,35 @@ export function isTravelMediaSwipe({ translationX = 0, translationY = 0, velocit
   return horizontalDistance >= TRAVEL_MEDIA_SWIPE_DISTANCE
     && Math.abs(velocityX) >= TRAVEL_MEDIA_SWIPE_VELOCITY
     && horizontalDistance >= Math.abs(translationY) * TRAVEL_MEDIA_SWIPE_DOMINANCE;
+}
+
+export function travelMediaReorderTargetIndex({
+  fromIndex,
+  translationX = 0,
+  itemCount,
+  itemStride,
+} = {}) {
+  'worklet';
+  if (
+    !Number.isInteger(fromIndex) || !Number.isInteger(itemCount) || itemCount <= 0 ||
+    !Number.isFinite(translationX) || !Number.isFinite(itemStride) || itemStride <= 0
+  ) return fromIndex;
+  return Math.max(0, Math.min(
+    itemCount - 1,
+    fromIndex + Math.round(-translationX / itemStride)
+  ));
+}
+
+export function reorderTravelMediaItems(items, fromIndex, toIndex) {
+  if (
+    !Array.isArray(items) || !Number.isInteger(fromIndex) || !Number.isInteger(toIndex) ||
+    fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length ||
+    fromIndex === toIndex
+  ) return items;
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
 }
 
 function MediaImage({ uri, contentFit = 'cover', ...props }) {
@@ -297,6 +332,134 @@ function SelectionBadge({ number }) {
   return <View style={styles.badge}><AppText style={styles.badgeText}>{number}</AppText></View>;
 }
 
+function ReorderableMediaThumb({
+  item,
+  index,
+  itemCount,
+  itemStride,
+  thumbnailSize,
+  selected,
+  activeDragIndex,
+  targetDragIndex,
+  dragTranslationX,
+  onPress,
+  onBegin,
+  onDrop,
+  onRelease,
+  onAccessibilityMove,
+}) {
+  const identity = travelMediaIdentity(item);
+  const gesture = useMemo(() => Gesture.Pan()
+    .activateAfterLongPress(TRAVEL_MEDIA_REORDER_LONG_PRESS_MS)
+    .maxPointers(1)
+    .shouldCancelWhenOutside(false)
+    .onStart(() => {
+      activeDragIndex.value = index;
+      targetDragIndex.value = index;
+      dragTranslationX.value = 0;
+      runOnJS(onBegin)(index);
+    })
+    .onUpdate((event) => {
+      const minTranslation = -(itemCount - 1 - index) * itemStride;
+      const maxTranslation = index * itemStride;
+      const translationX = Math.max(minTranslation, Math.min(maxTranslation, event.translationX));
+      dragTranslationX.value = translationX;
+      targetDragIndex.value = travelMediaReorderTargetIndex({
+        fromIndex: index,
+        translationX,
+        itemCount,
+        itemStride,
+      });
+    })
+    .onEnd(() => {
+      runOnJS(onDrop)(index, targetDragIndex.value);
+    })
+    .onFinalize(() => {
+      activeDragIndex.value = -1;
+      targetDragIndex.value = -1;
+      dragTranslationX.value = 0;
+      runOnJS(onRelease)();
+    }), [
+    activeDragIndex,
+    dragTranslationX,
+    index,
+    itemCount,
+    itemStride,
+    onBegin,
+    onDrop,
+    onRelease,
+    targetDragIndex,
+  ]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const activeIndex = activeDragIndex.value;
+    const targetIndex = targetDragIndex.value;
+    if (activeIndex === index) {
+      return {
+        zIndex: 20,
+        elevation: 12,
+        shadowOpacity: 0.28,
+        transform: [
+          { translateX: dragTranslationX.value },
+          { scale: 1.1 },
+        ],
+      };
+    }
+
+    let translateX = 0;
+    if (activeIndex >= 0 && activeIndex < targetIndex && index > activeIndex && index <= targetIndex) {
+      translateX = itemStride;
+    } else if (
+      activeIndex >= 0 && activeIndex > targetIndex && index >= targetIndex && index < activeIndex
+    ) {
+      translateX = -itemStride;
+    }
+    return {
+      zIndex: 1,
+      elevation: 0,
+      shadowOpacity: 0,
+      transform: [
+        { translateX: withSpring(translateX, { damping: 20, stiffness: 260 }) },
+        { scale: withSpring(1, { damping: 18, stiffness: 240 }) },
+      ],
+    };
+  }, [index, itemStride]);
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View
+        style={[styles.embeddedThumbSurface, { width: thumbnailSize, height: thumbnailSize }, animatedStyle]}
+        testID={`travel-media-drag-surface-${identity}`}
+      >
+        <Pressable
+          style={[
+            styles.selectedThumb,
+            styles.embeddedThumb,
+            { width: thumbnailSize, height: thumbnailSize },
+            selected && styles.selectedThumbActive,
+          ]}
+          onPress={() => onPress(index)}
+          accessibilityRole="button"
+          accessibilityLabel={`תמונה ${index + 1}; לחיצה ארוכה וגרירה לשינוי סדר`}
+          accessibilityState={{ selected }}
+          accessibilityActions={[
+            ...(index > 0 ? [{ name: 'moveUp', label: 'העברה אחורה' }] : []),
+            ...(index < itemCount - 1 ? [{ name: 'moveDown', label: 'העברה קדימה' }] : []),
+          ]}
+          onAccessibilityAction={({ nativeEvent }) => {
+            if (nativeEvent.actionName === 'moveUp') onAccessibilityMove(index, index - 1);
+            if (nativeEvent.actionName === 'moveDown') onAccessibilityMove(index, index + 1);
+          }}
+          testID={`travel-media-selected-${identity}`}
+        >
+          <MediaImage uri={travelMediaUri(item)} style={styles.selectedThumbImage} contentFit="cover" />
+          <SelectionBadge number={index + 1} />
+        </Pressable>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
 export default function TravelMediaComposer({
   visible,
   value = [],
@@ -321,6 +484,14 @@ export default function TravelMediaComposer({
   const [composerError, setComposerError] = useState('');
   const [composerSession, setComposerSession] = useState(0);
   const [cropEditing, setCropEditing] = useState(false);
+  const [reorderTrackWidth, setReorderTrackWidth] = useState(0);
+  const activeDragIndex = useSharedValue(-1);
+  const targetDragIndex = useSharedValue(-1);
+  const dragTranslationX = useSharedValue(0);
+  const workingRef = useRef(working);
+  workingRef.current = working;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const reorderInteractionActiveRef = useRef(false);
   const reorderInteractionCallbackRef = useRef(onReorderInteractionChange);
   reorderInteractionCallbackRef.current = onReorderInteractionChange;
@@ -442,13 +613,6 @@ export default function TravelMediaComposer({
     });
   }, [embedded, onChange]);
 
-  const commitReorder = useCallback((next) => {
-    const activeIdentity = travelMediaIdentity(working[activeIndex]);
-    setWorking(next);
-    setActiveIndex(Math.max(0, next.findIndex((item) => travelMediaIdentity(item) === activeIdentity)));
-    if (embedded) onChange?.(next);
-  }, [activeIndex, embedded, onChange, working]);
-
   const setReorderInteractionActive = useCallback((active) => {
     const nextActive = Boolean(active);
     if (reorderInteractionActiveRef.current === nextActive) return;
@@ -465,13 +629,15 @@ export default function TravelMediaComposer({
     setReorderInteractionActive(false);
   }, [setReorderInteractionActive]);
 
-  const finishReorder = useCallback(({ data }) => {
-    try {
-      commitReorder(data);
-    } finally {
-      setReorderInteractionActive(false);
-    }
-  }, [commitReorder, setReorderInteractionActive]);
+  const finishReorder = useCallback((fromIndex, toIndex) => {
+    const current = workingRef.current;
+    const next = reorderTravelMediaItems(current, fromIndex, toIndex);
+    if (next === current) return;
+    workingRef.current = next;
+    setWorking(next);
+    setActiveIndex(toIndex);
+    if (embedded) onChangeRef.current?.(next);
+  }, [embedded]);
 
   useEffect(() => () => {
     if (!reorderInteractionActiveRef.current) return;
@@ -484,12 +650,8 @@ export default function TravelMediaComposer({
   }, [setReorderInteractionActive, visible]);
 
   const moveForAccessibility = useCallback((fromIndex, toIndex) => {
-    if (fromIndex < 0 || toIndex < 0 || fromIndex >= working.length || toIndex >= working.length) return;
-    const next = [...working];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    commitReorder(next);
-  }, [commitReorder, working]);
+    finishReorder(fromIndex, toIndex);
+  }, [finishReorder]);
 
   const retryFailed = useCallback(() => {
     setComposerError('');
@@ -521,6 +683,15 @@ export default function TravelMediaComposer({
   if (embedded) {
     if (!visible) return null;
     const activeItem = working[activeIndex];
+    const reorderGap = spacing.sm;
+    const availableThumbnailWidth = reorderTrackWidth > 0
+      ? (reorderTrackWidth - Math.max(0, working.length - 1) * reorderGap) / Math.max(1, working.length)
+      : TRAVEL_MEDIA_REORDER_MIN_THUMB_SIZE;
+    const reorderThumbnailSize = Math.max(
+      TRAVEL_MEDIA_REORDER_MIN_THUMB_SIZE,
+      Math.min(TRAVEL_MEDIA_REORDER_MAX_THUMB_SIZE, Math.floor(availableThumbnailWidth))
+    );
+    const reorderItemStride = reorderThumbnailSize + reorderGap;
     return (
       <GestureHandlerRootView
         style={styles.embeddedRoot}
@@ -583,68 +754,31 @@ export default function TravelMediaComposer({
               </Pressable>
             </View>
             <AppText style={styles.embeddedReorderHint}>לחיצה ארוכה וגרירה משנה את סדר התמונות</AppText>
-            <RtlHorizontalDraggableFlatList
-              data={working}
-              keyExtractor={travelMediaIdentity}
-              activationDistance={8}
-              dragItemOverflow
-              autoscrollThreshold={32}
-              autoscrollSpeed={80}
-              onDragBegin={beginReorder}
-              onRelease={releaseReorder}
-              onDragEnd={finishReorder}
-              renderPlaceholder={({ index }) => (
-                <View
-                  style={[styles.embeddedThumb, styles.embeddedPlaceholder]}
-                  testID={`travel-media-placeholder-${index}`}
-                />
-              )}
-              containerStyle={styles.embeddedStripContainer}
-              contentContainerStyle={styles.embeddedStrip}
-              style={styles.embeddedStripList}
+            <View
+              style={styles.embeddedReorderTrack}
+              onLayout={(event) => setReorderTrackWidth(Math.max(0, event.nativeEvent.layout.width))}
               testID="travel-media-reorder-list"
-              renderItem={({ item, getIndex, drag, isActive }) => {
-                const reportedIndex = getIndex?.();
-                const index = Number.isInteger(reportedIndex)
-                  ? reportedIndex
-                  : working.findIndex((entry) => travelMediaIdentity(entry) === travelMediaIdentity(item));
-                const selected = index === activeIndex;
-                const identity = travelMediaIdentity(item);
-                return (
-                  <ScaleDecorator activeScale={1.1}>
-                    <ShadowDecorator elevation={12} radius={8} opacity={0.28}>
-                      <Pressable
-                        style={[
-                          styles.selectedThumb,
-                          styles.embeddedThumb,
-                          selected && styles.selectedThumbActive,
-                          isActive && styles.embeddedThumbDragging,
-                        ]}
-                        onPress={() => setActiveIndex(index)}
-                        onLongPress={drag}
-                        delayLongPress={180}
-                        disabled={isActive}
-                        accessibilityRole="button"
-                        accessibilityLabel={`תמונה ${index + 1}; לחיצה ארוכה וגרירה לשינוי סדר`}
-                        accessibilityState={{ selected }}
-                        accessibilityActions={[
-                          ...(index > 0 ? [{ name: 'moveUp', label: 'העברה אחורה' }] : []),
-                          ...(index < working.length - 1 ? [{ name: 'moveDown', label: 'העברה קדימה' }] : []),
-                        ]}
-                        onAccessibilityAction={({ nativeEvent }) => {
-                          if (nativeEvent.actionName === 'moveUp') moveForAccessibility(index, index - 1);
-                          if (nativeEvent.actionName === 'moveDown') moveForAccessibility(index, index + 1);
-                        }}
-                        testID={`travel-media-selected-${identity}`}
-                      >
-                        <MediaImage uri={travelMediaUri(item)} style={styles.selectedThumbImage} contentFit="cover" />
-                        <SelectionBadge number={index + 1} />
-                      </Pressable>
-                    </ShadowDecorator>
-                  </ScaleDecorator>
-                );
-              }}
-            />
+            >
+              {working.map((item, index) => (
+                <ReorderableMediaThumb
+                  key={travelMediaIdentity(item)}
+                  item={item}
+                  index={index}
+                  itemCount={working.length}
+                  itemStride={reorderItemStride}
+                  thumbnailSize={reorderThumbnailSize}
+                  selected={index === activeIndex}
+                  activeDragIndex={activeDragIndex}
+                  targetDragIndex={targetDragIndex}
+                  dragTranslationX={dragTranslationX}
+                  onPress={setActiveIndex}
+                  onBegin={beginReorder}
+                  onDrop={finishReorder}
+                  onRelease={releaseReorder}
+                  onAccessibilityMove={moveForAccessibility}
+                />
+              ))}
+            </View>
           </>
         )}
         {pending ? <ActivityIndicator style={styles.embeddedStatus} color={colors.primary} /> : null}
@@ -883,12 +1017,9 @@ const styles = StyleSheet.create({
   embeddedActionText: { color: colors.primary, fontSize: 13 },
   embeddedDeleteText: { color: colors.error },
   embeddedReorderHint: { color: colors.textSecondary, fontSize: 12, textAlign: 'right', writingDirection: 'rtl', marginTop: spacing.md, marginBottom: spacing.xs },
-  embeddedStripList: { height: 96, overflow: 'visible' },
-  embeddedStripContainer: { overflow: 'visible' },
-  embeddedStrip: { gap: spacing.sm, paddingVertical: 10 },
+  embeddedReorderTrack: { width: '100%', minHeight: 96, overflow: 'visible', direction: 'ltr', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingVertical: 10 },
+  embeddedThumbSurface: { overflow: 'visible', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowRadius: 8 },
   embeddedThumb: { width: 76, height: 76 },
-  embeddedThumbDragging: { borderColor: colors.primary, borderWidth: 3, backgroundColor: colors.accentLight },
-  embeddedPlaceholder: { borderRadius: spacing.radiusSmall, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.accentLight },
   embeddedStatus: { marginTop: spacing.sm },
   header: { height: 58, paddingHorizontal: spacing.lg, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
   headerCopy: { alignItems: 'center' },

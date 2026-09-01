@@ -3,9 +3,8 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AddRecommendationScreen from '../src/features/community/screens/AddRecommendationScreen';
 import {
   mergeRecommendationDraftMedia,
-  recommendationInputScrollTarget,
+  recommendationContactInputDirection,
   recommendationDraftResumeStep,
-  scrollFocusedRecommendationInputIntoView,
 } from '../src/features/community/screens/CreateRecommendationScreen';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { ENVIRONMENTS, VIBES } from '../src/constants/travelTaxonomy';
@@ -331,61 +330,11 @@ describe('AddRecommendationScreen Integration Test', () => {
     await waitFor(() => expect(screen.getByTestId('recommendation-exact-location-search')).toBeTruthy());
   };
 
-  it('calculates only the minimum scroll needed to keep the focused input visible', () => {
-    expect(recommendationInputScrollTarget({
-      currentOffset: 120,
-      inputY: 220,
-      inputHeight: 48,
-      viewportY: 100,
-      viewportHeight: 500,
-      clearance: 12,
-    })).toBe(120);
-    expect(recommendationInputScrollTarget({
-      currentOffset: 120,
-      inputY: 560,
-      inputHeight: 60,
-      viewportY: 100,
-      viewportHeight: 500,
-      clearance: 12,
-    })).toBe(152);
-    expect(recommendationInputScrollTarget({
-      currentOffset: 120,
-      inputY: 80,
-      inputHeight: 48,
-      viewportY: 100,
-      viewportHeight: 500,
-      clearance: 12,
-    })).toBe(88);
-    expect(recommendationInputScrollTarget({
-      currentOffset: 10,
-      inputY: 0,
-      inputHeight: 48,
-      viewportY: 100,
-      viewportHeight: 500,
-      clearance: 12,
-    })).toBe(0);
-  });
-
-  it('measures the actual viewport and avoids scrolling an already visible input', () => {
-    const scrollTo = jest.fn();
-    const scrollView = {
-      measureInWindow: (callback) => callback(0, 100, 320, 400),
-      scrollTo,
-    };
-    const hiddenInput = {
-      measureInWindow: (callback) => callback(0, 460, 300, 60),
-    };
-    const visibleInput = {
-      measureInWindow: (callback) => callback(0, 220, 300, 48),
-    };
-
-    expect(scrollFocusedRecommendationInputIntoView(scrollView, hiddenInput, 200, 12)).toBe(true);
-    expect(scrollTo).toHaveBeenCalledWith({ x: 0, y: 232, animated: true });
-
-    scrollTo.mockClear();
-    expect(scrollFocusedRecommendationInputIntoView(scrollView, visibleInput, 200, 12)).toBe(true);
-    expect(scrollTo).not.toHaveBeenCalled();
-    expect(scrollFocusedRecommendationInputIntoView(null, hiddenInput)).toBe(false);
+  it('keeps numeric and Latin contact details LTR while Hebrew-only contacts stay RTL', () => {
+    expect(recommendationContactInputDirection('+972 50 123 4567')).toBe('ltr');
+    expect(recommendationContactInputDirection('דנה 24/7')).toBe('ltr');
+    expect(recommendationContactInputDirection('Alex')).toBe('ltr');
+    expect(recommendationContactInputDirection('דנה מהקבלה')).toBe('rtl');
   });
 
   it('freezes only the outer vertical scroll while a photo reorder is active', async () => {
@@ -791,10 +740,23 @@ describe('AddRecommendationScreen Integration Test', () => {
         keyboardListeners.keyboardDidShow?.();
       });
 
-      expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.behavior).toBe(
-        Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined
+      const keyboardAvoiders = screen.UNSAFE_getAllByType(KeyboardAvoidingView);
+      const composerKeyboardAvoider = keyboardAvoiders.find(
+        (node) => node.props.testID === 'recommendation-keyboard-avoiding'
       );
-      expect(screen.getByTestId('recommendation-composer-scroll').props.keyboardDismissMode).toBe(
+      const footerKeyboardAvoider = keyboardAvoiders.find(
+        (node) => node.props.testID === 'recommendation-footer-keyboard-avoiding'
+      );
+      expect(composerKeyboardAvoider.props.behavior).toBe(
+        Platform.OS === 'android' ? 'height' : undefined
+      );
+      expect(footerKeyboardAvoider.props.behavior).toBe(
+        Platform.OS === 'ios' ? 'position' : undefined
+      );
+      const composerScroll = screen.getByTestId('recommendation-composer-scroll');
+      expect(composerScroll.props.automaticallyAdjustKeyboardInsets).toBe(Platform.OS === 'ios');
+      expect(composerScroll.props.onFocusCapture).toBeUndefined();
+      expect(composerScroll.props.keyboardDismissMode).toBe(
         Platform.OS === 'ios' ? 'interactive' : 'on-drag'
       );
       fireEvent.changeText(input, 'כניסה נגישה ומעלית');
@@ -870,7 +832,9 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(StyleSheet.flatten(getByTestId('recommendation-optional-input-phone').props.style).writingDirection).toBe('ltr');
     fireEvent.changeText(getByTestId('recommendation-optional-input-phone'), '+972 50 123 4567');
     fireEvent.press(getByTestId('recommendation-optional-contactName'));
-    expect(StyleSheet.flatten(getByTestId('recommendation-optional-input-contactName').props.style).writingDirection).toBe('auto');
+    expect(StyleSheet.flatten(getByTestId('recommendation-optional-input-contactName').props.style).writingDirection).toBe('rtl');
+    fireEvent.changeText(getByTestId('recommendation-optional-input-contactName'), 'דנה 24/7');
+    expect(StyleSheet.flatten(getByTestId('recommendation-optional-input-contactName').props.style).writingDirection).toBe('ltr');
     fireEvent.press(getByTestId('recommendation-optional-externalUrl'));
     fireEvent.changeText(
       getByTestId('recommendation-optional-input-externalUrl'),
@@ -907,6 +871,7 @@ describe('AddRecommendationScreen Integration Test', () => {
         subcategoryIds: ['restaurant'],
         budget: 'balanced',
         details: {
+          contactName: 'דנה 24/7',
           phone: '+972 50 123 4567',
           externalUrl: 'https://example.com/place',
         },
