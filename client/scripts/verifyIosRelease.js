@@ -95,6 +95,9 @@ if (app.ios?.infoPlist?.ITSAppUsesNonExemptEncryption !== false) {
 if (!String(app.ios?.infoPlist?.NSLocationWhenInUseUsageDescription || '').trim()) {
   fail('The iOS location usage description is missing.');
 }
+if (!String(app.ios?.infoPlist?.NSMotionUsageDescription || '').trim()) {
+  fail('The iOS motion usage description required by the linked location module is missing.');
+}
 requiredPlugins.forEach((name) => {
   if (!configuredPlugins.includes(name)) fail(`Missing Expo config plugin: ${name}.`);
 });

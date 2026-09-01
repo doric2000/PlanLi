@@ -166,7 +166,7 @@ test('native Maps keys use the SDK 57 react-native-maps config plugin only', () 
   });
 });
 
-test('native privacy plugins expose only foreground location and used capabilities', () => {
+test('native privacy config declares required iOS strings while optional capabilities stay disabled', () => {
   const pluginOptions = (name) => {
     const plugin = appJson.plugins.find((entry) => (
       (Array.isArray(entry) ? entry[0] : entry) === name
@@ -179,6 +179,7 @@ test('native privacy plugins expose only foreground location and used capabiliti
   assert.equal(secureStore.configureAndroidBackup, false);
   assert.equal(secureStore.faceIDPermission, false);
   assert.match(location.locationWhenInUsePermission, /PlanLi/u);
+  assert.match(appJson.ios.infoPlist.NSMotionUsageDescription, /PlanLi/u);
   [
     'locationAlwaysAndWhenInUsePermission',
     'locationAlwaysPermission',
