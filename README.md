@@ -9,6 +9,97 @@ track; it has not been publicly released to the App Store, Google Play, or a
 public web domain. Native development is performed with an installed, signed EAS
 Development Build connected to Metro. Expo Go is not supported.
 
+### Destination policy, automatic locality approval, and production repair
+
+On `2026-09-01`, the destination-policy rollout from
+[PR #303](https://github.com/doric2000/PlanLi/pull/303) was squash-merged as
+`9ea660b7e64b8def7fb2f91be5e4f97a8aacd924`. It preserves the current
+recommendation composer, draft/publish receipts, destination identity claims,
+notifications, canonical registry, publication fence, and reassignment flow.
+The new policy maps verified Israeli localities, including Judea and Samaria,
+East Jerusalem and the Golan Heights, to `IL`; Gaza remains `PS`. A new Israeli
+locality is auto-approved only from an exact Google Place ID with locality type,
+Hebrew and English names, valid geometry, and no registry or identity-claim
+conflict. The system attestation is `verified-il-locality-v1` and explicitly
+records policy approval rather than administrator approval.
+
+The first production Functions rollout ran from `9ea660b7...` between
+`2026-09-01T14:59:10Z` and `2026-09-01T14:59:44Z`. The initial source-discovery
+attempt timed out locally before any live change; the documented
+`FUNCTIONS_DISCOVERY_TIMEOUT=60000` retry completed. The exact 20 targets were
+`saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `resolvePlaceSelection`, `saveRoute`,
+`publishRouteDraft`, `recheckDestination`, `approveDestination`,
+`selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`setDestinationAirport`, `updateDestinationPolicy`,
+`previewDestinationReassignment`, `startDestinationReassignment`,
+`onDestinationImageCreated`, `auditDestinationQualityScheduled`,
+`reconcileDestinationApprovalReleasesScheduled`, `onDestinationCatalogSync`,
+`onDestinationRenameJobWritten`, and `onDestinationReassignmentJobWritten`.
+Independent inventory read-back found 20/20 `ACTIVE` on Node.js 22 in
+`europe-west1`; unauthenticated callable probes returned HTTP 401.
+
+The live dry-run fingerprint
+`e478566cc9612d17a4a6ade9fd1eac01313b38e79ce19cae24b4b9a4f90d1e3a`
+found two protected locality upgrades, one cross-country reassignment, eight
+apparent release candidates, 39 stale review statuses, and no blockers. The
+fingerprint checks correctly rejected stale apply attempts. Those attempts also
+exposed two rollout defects without deleting a claim or releasing unapproved
+content: the reassignment preview included a manifest-only `path` field, and a
+new French destination had an `approved` flag without a valid registry
+attestation. The preview normalization was merged in
+[PR #304](https://github.com/doric2000/PlanLi/pull/304) as `4f32795acc80c5dac4515d26aa3b504ed4dd1834`;
+it changed only the local repair tool and required no deployment. Full-attestation
+review status and release eligibility were merged in
+[PR #305](https://github.com/doric2000/PlanLi/pull/305) as
+`4d65c0e77517dfa6b01197518be770d3ceb21c75`. Its ten affected destination
+review/quality Functions—`getDestinationReview`, `recheckDestination`,
+`approveDestination`, `updateDestinationPolicy`,
+`selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`setDestinationAirport`, `onDestinationImageCreated`,
+`auditDestinationQualityScheduled`, and `onDestinationRenameJobWritten`—were
+deployed between `2026-09-01T15:29:10Z` and `2026-09-01T15:29:18Z`, and read
+back 10/10 `ACTIVE` on Node.js 22.
+
+The final signed production apply used fingerprint
+`87a6eb3412db803df0dc39564657a0cd74d37d92459fd6351b288a385317b941`.
+Earlier idempotent stages had already completed both locality upgrades, the
+Rotem reassignment, and one valid release; the final manifest therefore applied
+the six remaining eligible releases and all 39 review-status repairs. Its
+built-in post-apply read-back returned zero eligible holds, provisional
+upgrades, review repairs, or blockers. Independent read-back confirmed seven
+repaired recommendations/routes are `active` with
+`publicationGate.destinationApprovalVerified: true`. Three destination-held
+recommendations remain, and all three reference destinations that fail the
+canonical attestation gate; no approved/referenceable destination remains held.
+No approved destination review remains `open` or `ready`.
+
+Kfar Tavor retained destination ID `dst_LPDnYOyMlAl0POvm8HEN` and Google Place
+ID `ChIJhxwIMMRFHBUR23jEjc5-JJA`; its registry and identity claim are unique and
+policy-attested. Rotem is now active at
+`IL/dst_PmRcewZPb4aIeQ63nw3z` with Place ID
+`ChIJbbnU5J7zHBURtvRb15h6nvc`. The former
+`PS/dst__ZTW4zAJUElr7Mw1vdTs` destination is inactive and redirects to the IL
+target. Its original PS claim
+`dstclaim_dj2K0NzaZbra7uiUZQfBGvyUOKHr` remains bound only to the inactive
+source, while the new IL claim `dstclaim_mr6PekrcRpiwTxhM8P0E1l99GuF3`
+belongs only to the IL target. The completed reassignment job reports one
+recommendation updated and no errors.
+
+The first scheduled reconciliation after rollout exposed a missing
+collection-group index for `publicationFence.state`. Rather than add an
+infrastructure index, [PR #307](https://github.com/doric2000/PlanLi/pull/307)
+changed the bounded fence scan to use each country's destination subcollection
+and merged as `7f93b6e498827a95ac746005590f4c20753d3dc2`.
+Only `reconcileDestinationApprovalReleasesScheduled` was redeployed, completing
+at `2026-09-01T15:40:45Z`. A manual run of the existing Scheduler job returned
+HTTP 200 at `2026-09-01T15:41:25Z`; its release and fence results both reported
+zero failures. The final production dry-run fingerprint
+`c9c6fe3600cea33c60386c65cf7501cf302a0cdca271821206628cab51ddcb8c`
+reports zero remaining rollout work and no blockers. No Hosting, EAS, client,
+App Check, iOS configuration, Rules, indexes, Storage, or IAM deployment was
+performed for this rollout.
+
 ### Admin console layout and scrolling Hosting release
 
 Implementation commit `4be4b93b4530a474a953723852ebb68e11271abe` passed
