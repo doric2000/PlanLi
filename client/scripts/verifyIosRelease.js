@@ -57,6 +57,7 @@ if (!configOnly && Number(process.versions.node.split('.')[0]) !== 22) {
 const app = readJson('app.json').expo;
 const eas = readJson('eas.json');
 const packageJson = readJson('package.json');
+const reactNativeFirebase = readJson('firebase.json')['react-native'];
 const preview = eas.build?.preview || {};
 const staging = eas.build?.staging || {};
 const releaseCandidate = eas.build?.['release-candidate'] || {};
@@ -92,6 +93,8 @@ requiredPlugins.forEach((name) => {
 });
 const imagePickerPlugin = (app.plugins || []).find((plugin) => pluginName(plugin) === 'expo-image-picker');
 const imagePickerOptions = Array.isArray(imagePickerPlugin) ? imagePickerPlugin[1] : null;
+const splashPlugin = (app.plugins || []).find((plugin) => pluginName(plugin) === 'expo-splash-screen');
+const splashOptions = Array.isArray(splashPlugin) ? splashPlugin[1] : null;
 const rnFirebaseAppPlugin = (app.plugins || []).find(
   (plugin) => pluginName(plugin) === '@react-native-firebase/app',
 );
@@ -107,6 +110,22 @@ if (!String(imagePickerOptions?.cameraPermission || '').trim()) {
 }
 if (imagePickerOptions?.microphonePermission !== false) {
   fail('The unused microphone permission must remain disabled.');
+}
+if (Object.prototype.hasOwnProperty.call(app, 'newArchEnabled')) {
+  fail('SDK 57 always uses the New Architecture; remove the obsolete newArchEnabled field.');
+}
+if (Object.prototype.hasOwnProperty.call(app, 'splash')) {
+  fail('The legacy splash field must not be used; configure expo-splash-screen instead.');
+}
+if (Object.prototype.hasOwnProperty.call(app.android || {}, 'edgeToEdgeEnabled')) {
+  fail('SDK 57 always enables Android edge-to-edge; remove the obsolete field.');
+}
+if (
+  splashOptions?.image !== './assets/brand-splash.png'
+  || splashOptions?.resizeMode !== 'contain'
+  || splashOptions?.backgroundColor !== '#ffffff'
+) {
+  fail('The Expo splash-screen plugin must preserve the approved PlanLi splash configuration.');
 }
 
 if (preview.distribution !== 'internal') fail('The preview profile must use internal distribution.');
@@ -153,6 +172,12 @@ if (!String(packageJson.dependencies?.['@sentry/react-native'] || '').trim()) {
 if (!String(packageJson.dependencies?.['expo-updates'] || '').trim()) {
   fail('expo-updates is missing from dependencies.');
 }
+if (packageJson.dependencies?.['expo-modules-core']) {
+  fail('expo-modules-core must be consumed through expo, not installed directly.');
+}
+if (packageJson.dependencies?.['@expo/config-plugins']) {
+  fail('@expo/config-plugins must be consumed through expo/config-plugins, not installed directly.');
+}
 if (packageJson.dependencies?.['expo-notifications'] !== '~57.0.15') {
   fail('expo-notifications must stay on the SDK 57 compatible ~57.0.15 release.');
 }
@@ -161,6 +186,9 @@ if (app.version !== '1.1.0') {
 }
 if (app.runtimeVersion !== '1.2.0') {
   fail('The SDK 57 security release must remain isolated on EAS runtime 1.2.0.');
+}
+if (reactNativeFirebase?.app_check_token_auto_refresh !== true) {
+  fail('The client firebase.json must keep native App Check token refresh enabled.');
 }
 const expectedUpdatesUrl = `https://u.expo.dev/${app.extra?.eas?.projectId || ''}`;
 if (app.updates?.url !== expectedUpdatesUrl) {
@@ -201,12 +229,23 @@ verifyPng('assets/brand-app-icon.png', 1024, 1024);
 verifyPng('assets/brand-splash.png', 1024, 1024, true);
 
 const sourceFiles = walkFiles(path.join(clientRoot, 'src')).filter((file) => /\.(js|jsx|ts|tsx)$/.test(file));
+const navigationEntrypoints = ['App.js', 'AdminWebApp.js']
+  .map((file) => fs.readFileSync(path.join(clientRoot, file), 'utf8'))
+  .join('\n');
+if (/\blinking\s*=/u.test(navigationEntrypoints)) {
+  fail(
+    'React Navigation deep linking requires a reviewed malformed-URL input bound before release.'
+  );
+}
 const debugPatterns = [
   { pattern: /Alert\.alert\s*\(\s*['"]DEBUG['"]/, label: 'visible DEBUG alert' },
   { pattern: /DELETE CLICKED/, label: 'deletion debug log' },
 ];
 sourceFiles.forEach((file) => {
   const source = fs.readFileSync(file, 'utf8');
+  if (/\bgetStateFromPath\b/u.test(source) || /from\s+['"]query-string['"]/u.test(source)) {
+    fail(`${path.relative(repoRoot, file)} adds an unreviewed URL parsing path.`);
+  }
   debugPatterns.forEach(({ pattern, label }) => {
     if (pattern.test(source)) fail(`${path.relative(repoRoot, file)} contains a ${label}.`);
   });
