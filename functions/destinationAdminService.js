@@ -1329,15 +1329,28 @@ async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
   return result;
 }
 
+async function listDrainingDestinationSnapshots(db, limit) {
+  const boundedLimit = Math.max(1, Math.min(100, Number(limit) || 50));
+  const countries = await db.collection('countries').get();
+  const documents = [];
+  for (const country of [...countries.docs].sort((left, right) => left.id.localeCompare(right.id))) {
+    const remaining = boundedLimit - documents.length;
+    if (remaining <= 0) break;
+    const snapshot = await country.ref.collection('destinations')
+      .where('publicationFence.state', '==', 'draining')
+      .limit(remaining)
+      .get();
+    documents.push(...snapshot.docs);
+  }
+  return documents;
+}
+
 async function reconcileDestinationPublicationFences({ admin, limit = 50 }) {
   const boundedLimit = Math.max(1, Math.min(100, Number(limit) || 50));
   const db = admin.firestore();
-  const snapshot = await db.collectionGroup('destinations')
-    .where('publicationFence.state', '==', 'draining')
-    .limit(boundedLimit)
-    .get();
-  const result = { scanned: snapshot.size, quarantined: 0, deferred: 0, superseded: 0, failed: 0 };
-  for (const entry of snapshot.docs) {
+  const destinations = await listDrainingDestinationSnapshots(db, boundedLimit);
+  const result = { scanned: destinations.length, quarantined: 0, deferred: 0, superseded: 0, failed: 0 };
+  for (const entry of destinations) {
     const countryId = entry.ref.parent.parent?.id || '';
     const cityId = entry.id;
     const fence = entry.data()?.publicationFence || {};
@@ -2006,6 +2019,7 @@ module.exports = {
   heldForPendingDestination,
   holdDestinationContentDocuments,
   listDestinationReviews,
+  listDrainingDestinationSnapshots,
   notifyAdminsOfDestination,
   onDestinationCreated,
   publicationFenceReadyForRecovery,

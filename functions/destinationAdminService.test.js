@@ -13,6 +13,7 @@ const {
   holdDestinationContentDocuments,
   releaseDestinationPendingContent,
   listDestinationReviews,
+  listDrainingDestinationSnapshots,
   notifyAdminsOfDestination,
   publicationFenceReadyForRecovery,
   quarantineDestinationPublicationFenceForManualRecovery,
@@ -867,6 +868,47 @@ test('destination approval release is idempotent and fails closed while another 
   const third = await releaseDestinationPendingContent({ admin, countryId: 'IL', cityId: 'new-city' });
   assert.equal(third.replay, true);
   assert.equal(documents.get('countries/IL/destinations/new-city').stats.recommendationCount, 3);
+});
+
+test('publication fence reconciliation scans bounded country subcollections without a collection-group index', async () => {
+  const requested = [];
+  const destination = (id) => ({ id });
+  const country = (id, documents) => ({
+    id,
+    ref: {
+      collection: (name) => {
+        assert.equal(name, 'destinations');
+        return {
+          where: (field, operator, value) => {
+            assert.deepEqual([field, operator, value], ['publicationFence.state', '==', 'draining']);
+            return {
+              limit: (limit) => ({
+                get: async () => {
+                  requested.push({ id, limit });
+                  return { docs: documents.slice(0, limit) };
+                },
+              }),
+            };
+          },
+        };
+      },
+    },
+  });
+  const db = {
+    collection: (name) => {
+      assert.equal(name, 'countries');
+      return {
+        get: async () => ({
+          docs: [country('B', [destination('b1')]), country('A', [destination('a1')])],
+        }),
+      };
+    },
+    collectionGroup: () => assert.fail('collectionGroup must not be used'),
+  };
+
+  const result = await listDrainingDestinationSnapshots(db, 2);
+  assert.deepEqual(result.map((entry) => entry.id), ['a1', 'b1']);
+  assert.deepEqual(requested, [{ id: 'A', limit: 2 }, { id: 'B', limit: 1 }]);
 });
 
 test('airport candidates are bounded, sorted and distance annotated', () => {
