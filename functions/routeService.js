@@ -23,6 +23,11 @@ const {
   destinationAcceptsNewReferences,
   isDestinationReassigning,
 } = require('./destinationReferencePolicy');
+const {
+  canUpgradeVerifiedIlLocality,
+  verifiedIlRegistryEntryMatches,
+} = require('./destinationApprovalPolicy');
+const { validateRegistryEntry } = require('./canonicalDestinationRegistry');
 const { normalizeRouteTime } = require('./routeTime');
 const {
   buildTravelContentFacets,
@@ -1098,7 +1103,7 @@ async function saveRoute({
   const days = routeLegs.days;
 
   const writeCount = days.length + days.reduce((sum, day) => sum + day.stops.length, 0) +
-    resolved.catalogDestinations.length * 3 + 1;
+    resolved.catalogDestinations.length * 4 + 1;
   assert(writeCount <= 500, 'failed-precondition', 'Route is too large to save atomically.');
 
   const summaryPlaces = Array.from(new Set(days.flatMap((day) =>
@@ -1116,6 +1121,7 @@ async function saveRoute({
   const revisionRef = routeRef.collection('revisions').doc(revisionId);
   const destinationDocuments = new Map();
   const destinationClaims = new Map();
+  const destinationRegistries = new Map();
   for (const destination of resolved.catalogDestinations) {
     destinationDocuments.set(destination.countryRef.path, {
       ref: destination.countryRef,
@@ -1147,6 +1153,21 @@ async function saveRoute({
             ...(destination.claimData.entries || {}),
           },
         },
+      });
+    }
+    if (destination.registryRef && destination.registryData) {
+      const validation = validateRegistryEntry(destination.registryData);
+      assert(validation.valid, 'failed-precondition',
+        `The verified locality registry plan is invalid: ${validation.errors[0] || 'unknown'}.`);
+      const existingPlan = destinationRegistries.get(destination.registryRef.path);
+      assert(
+        !existingPlan || verifiedIlRegistryEntryMatches(existingPlan.data, destination.registryData),
+        'failed-precondition',
+        'Two route stops resolved to conflicting locality registry identities.'
+      );
+      destinationRegistries.set(destination.registryRef.path, {
+        ref: destination.registryRef,
+        data: destination.registryData,
       });
     }
   }
@@ -1219,13 +1240,15 @@ async function saveRoute({
       : null;
     const destinationEntries = Array.from(destinationDocuments.values());
     const claimEntries = Array.from(destinationClaims.values());
+    const registryEntries = Array.from(destinationRegistries.values());
     const previousDestinationRefs = (currentRoute?.destinations || [])
       .filter((entry) => entry?.countryId && entry?.cityId)
       .map((entry) => db.doc(`countries/${entry.countryId}/destinations/${entry.cityId}`))
       .filter((ref) => !destinationDocuments.has(ref.path));
-    const [destinationSnapshots, claimSnapshots, previousDestinationSnapshots] = await Promise.all([
+    const [destinationSnapshots, claimSnapshots, registrySnapshots, previousDestinationSnapshots] = await Promise.all([
       Promise.all(destinationEntries.map((entry) => transaction.get(entry.ref))),
       Promise.all(claimEntries.map((entry) => transaction.get(entry.ref))),
+      Promise.all(registryEntries.map((entry) => transaction.get(entry.ref))),
       Promise.all(previousDestinationRefs.map((ref) => transaction.get(ref))),
     ]);
     assert(
@@ -1260,26 +1283,58 @@ async function saveRoute({
         }
         return;
       }
+      const countryId = entry.ref.path.split('/')[1];
+      const upgradesVerifiedIlLocality = entry.kind === 'destination' &&
+        canUpgradeVerifiedIlLocality(snapshot.data(), entry.data, countryId);
+      const effectiveData = upgradesVerifiedIlLocality ? entry.data : snapshot.data();
       assert(
         snapshot.data()?.status === 'active' &&
           (entry.kind !== 'destination' || destinationAcceptsNewReferences(
-            snapshot.data(), entry.ref.path.split('/')[1]
+            effectiveData, countryId
           )),
         'failed-precondition',
         `The selected ${entry.kind} is no longer active.`
       );
       if (entry.kind === 'destination') {
-        const countryId = entry.ref.path.split('/')[1];
-        const canonical = normalizeDestinationHebrewData(snapshot.data(), { countryCode: countryId });
+        const canonical = normalizeDestinationHebrewData(effectiveData, { countryCode: countryId });
         assert(hasHebrewName(canonical.name), 'failed-precondition',
           'The destination has no trustworthy Hebrew name.');
         canonicalDestinationNames.set(entry.ref.path, canonical.name);
-        if (canonical.changed) {
+        if (upgradesVerifiedIlLocality) {
+          transaction.update(entry.ref, {
+            countryId,
+            destinationType: entry.data.destinationType,
+            providerRefs: entry.data.providerRefs,
+            googleCache: entry.data.googleCache,
+            canonicalPolicy: entry.data.canonicalPolicy,
+            publicationFence: entry.data.publicationFence,
+            ...destinationHebrewWritePatch(canonical.destination),
+            updatedAt: now,
+          });
+        } else if (canonical.changed) {
           transaction.update(entry.ref, {
             ...destinationHebrewWritePatch(canonical.destination),
             updatedAt: now,
           });
         }
+      }
+    });
+
+    registryEntries.forEach((entry, index) => {
+      const snapshot = registrySnapshots[index];
+      assert(
+        !snapshot.exists || verifiedIlRegistryEntryMatches(
+          { id: snapshot.id, ...snapshot.data() }, entry.data
+        ),
+        'failed-precondition',
+        'A verified locality registry identity changed while saving. Search again.'
+      );
+      if (!snapshot.exists) {
+        transaction.create(entry.ref, {
+          ...entry.data,
+          createdAt: now,
+          updatedAt: now,
+        });
       }
     });
 

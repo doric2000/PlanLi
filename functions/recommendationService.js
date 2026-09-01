@@ -8,6 +8,7 @@ const { discoveryRegionForCountry } = require('./discoveryRegions');
 const {
   getHebrewCountryName,
   normalizeCoordinates,
+  resolveIsraelPolicy,
   resolveLocalCountry,
 } = require('./countryGeography');
 const { resolveDestinationCountryPolicy } = require('./destinationGeopoliticalPolicy');
@@ -45,10 +46,19 @@ const {
 } = require('./destinationReferencePolicy');
 const {
   canonicalDestinationId,
+  derivedRadiusKm,
   destinationTypeForKind,
   matchCanonicalEntry,
+  REGISTRY_PATH,
+  REGISTRY_VERSION,
   registryEntriesForCountry,
+  validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
+const {
+  buildVerifiedIlLocalityApproval,
+  canUpgradeVerifiedIlLocality,
+  verifiedIlRegistryEntryMatches,
+} = require('./destinationApprovalPolicy');
 const {
   DESTINATION_NAMING_POLICY_VERSION,
   destinationHebrewName,
@@ -153,12 +163,18 @@ function normalizeDestinationForUse(destination, countryCode) {
 
 function destinationMatchesResolvedPolicy(current, resolved, countryId = '') {
   if (destinationAcceptsNewReferences(current, countryId)) return true;
+  if (canUpgradeVerifiedIlLocality(current, resolved, countryId)) return true;
   return destinationIsOperational(current) &&
     resolved?.canonicalPolicy?.approved !== true &&
     resolved?.canonicalPolicy?.provisional === true &&
     current?.canonicalPolicy?.approved !== true &&
     current?.canonicalPolicy?.provisional === true &&
     current?.canonicalPolicy?.registryId === resolved?.canonicalPolicy?.registryId;
+}
+
+function destinationOwnsResolvedRegistryEntry(destination, registryId) {
+  return destination?.canonicalPolicy?.registryId === registryId ||
+    destination?.canonicalPolicy?.provisionalRegistryId === registryId;
 }
 
 function destinationHebrewWritePatch(cityData) {
@@ -632,6 +648,9 @@ async function resolvePlaceCountry({
     };
   }
 
+  const israelPolicy = resolveIsraelPolicy(coordinates);
+  if (israelPolicy) return israelPolicy;
+
   const placeCountry = countryFromParsedPlace(
     parsedPlace,
     'place-details'
@@ -641,19 +660,14 @@ async function resolvePlaceCountry({
   const cityCountry = countryFromParsedPlace(parsedCity, 'city-place');
   if (cityCountry) return cityCountry;
 
-  const localCountry = resolveLocalCountry(coordinates);
-  if (localCountry?.countryCode && localCountry.resolutionSource === 'local-boundary') {
-    return localCountry;
-  }
-
   const reverseCountry = await fetchGoogleReverseCountry(coordinates, {
     requestContext,
     accessTokenProvider,
     projectId,
   });
-  if (reverseCountry && !(reverseCountry.countryCode === 'IL' && localCountry?.countryCode === 'PS')) {
-    return reverseCountry;
-  }
+  if (reverseCountry) return reverseCountry;
+
+  const localCountry = resolveLocalCountry(coordinates);
   assert(
     localCountry?.countryCode,
     'failed-precondition',
@@ -1856,7 +1870,7 @@ async function resolveGoogleDestination({
       destinationIsOperational(cityData) &&
         (cityData?.canonicalPolicy?.approved === true ||
           (provisionalDestination && cityData?.canonicalPolicy?.provisional === true)) &&
-        cityData?.canonicalPolicy?.registryId === canonicalEntry.id,
+        destinationOwnsResolvedRegistryEntry(cityData, canonicalEntry.id),
       'failed-precondition',
       'The canonical destination identity is not active.'
     );
@@ -1872,7 +1886,7 @@ async function resolveGoogleDestination({
       return destinationIsOperational(data) &&
         (data.canonicalPolicy?.approved === true ||
           (provisionalDestination && data.canonicalPolicy?.provisional === true)) &&
-        data.canonicalPolicy?.registryId === canonicalEntry.id;
+        destinationOwnsResolvedRegistryEntry(data, canonicalEntry.id);
     });
     if (approvedMatch) {
       cityId = approvedMatch.id;
@@ -1902,7 +1916,7 @@ async function resolveGoogleDestination({
         if (claimedCity && destinationIsOperational(claimedCity) &&
             (claimedCity.canonicalPolicy?.approved === true ||
               (provisionalDestination && claimedCity.canonicalPolicy?.provisional === true)) &&
-            claimedCity.canonicalPolicy?.registryId === canonicalEntry.id) {
+            destinationOwnsResolvedRegistryEntry(claimedCity, canonicalEntry.id)) {
           cityId = claimedDestinationId;
           cityData = claimedCity;
         }
@@ -1931,6 +1945,49 @@ async function resolveGoogleDestination({
     cityData = builtDestination.data;
   }
 
+  let registryRef = null;
+  let registryData = null;
+  if (provisionalDestination) {
+    const approval = buildVerifiedIlLocalityApproval({
+      entry: {
+        ...canonicalEntry,
+        ...(!canonicalEntry.viewport && !canonicalEntry.radiusKm ? {
+          radiusKm: derivedRadiusKm(canonicalEntry),
+        } : {}),
+      },
+      countryId,
+      destinationPath: `countries/${countryId}/destinations/${cityId}`,
+      approvalRevision: Number(cityData?.canonicalPolicy?.approvalRevision || 0) + 1,
+      registryVersion: REGISTRY_VERSION,
+    });
+    if (approval) {
+      const validation = validateRegistryEntry(approval.registryEntry);
+      assert(validation.valid, 'failed-precondition',
+        `The verified locality policy is invalid: ${validation.errors[0] || 'unknown'}.`);
+      registryRef = db.doc(`${REGISTRY_PATH}/${approval.registryEntry.id}`);
+      registryData = approval.registryEntry;
+      cityData = {
+        ...cityData,
+        countryId,
+        destinationType: 'city',
+        providerRefs: { googlePlaceId: canonicalPlaceId },
+        googleCache: {
+          ...(cityData.googleCache || {}),
+          ...builtDestination.data.googleCache,
+          countryCode: 'IL',
+        },
+        canonicalPolicy: approval.canonicalPolicy,
+        publicationFence: {
+          state: 'complete',
+          reason: 'verified_il_locality',
+          approvalRevision: approval.canonicalPolicy.approvalRevision,
+          completedAt: approval.canonicalPolicy.approvedAt,
+        },
+        status: 'active',
+      };
+    }
+  }
+
   const destination = normalizeDestinationForUse({
     countryRef: db.doc(`countries/${countryId}`),
     cityRef: db.doc(`countries/${countryId}/destinations/${cityId}`),
@@ -1944,6 +2001,8 @@ async function resolveGoogleDestination({
       ...claimData,
       entries: { [cityId]: { providerPlaceId: canonicalPlaceId } },
     } : null,
+    registryRef,
+    registryData,
     createCountry: !(await db.doc(`countries/${countryId}`).get()).exists,
     createCity: !(await db.doc(`countries/${countryId}/destinations/${cityId}`).get()).exists,
     place: exactPlaceFromBilingual(
@@ -1981,6 +2040,8 @@ function serializeDestinationResolution(destination) {
     cityData: normalized.cityData,
     claimId: normalized.claimId || null,
     claimData: normalized.claimData || null,
+    registryId: normalized.registryRef?.id || normalized.registryData?.id || null,
+    registryData: normalized.registryData || null,
     createCountry: normalized.createCountry === true,
     createCity: normalized.createCity === true,
     place: normalized.place || null,
@@ -2178,6 +2239,9 @@ async function materializeDestinationResolution(db, stored) {
   const claimRef = stored.claimId
     ? db.doc(`system/runtime/destinationClaims/${stored.claimId}`)
     : null;
+  const registryRef = stored.registryId
+    ? db.doc(`${REGISTRY_PATH}/${stored.registryId}`)
+    : null;
   const [countrySnapshot, citySnapshot, claimSnapshot] = await Promise.all([
     countryRef.get(),
     cityRef.get(),
@@ -2194,7 +2258,10 @@ async function materializeDestinationResolution(db, stored) {
     'The resolved destination changed. Search again.'
   );
   const countryData = countrySnapshot.exists ? countrySnapshot.data() : stored.countryData;
-  const cityData = citySnapshot.exists ? citySnapshot.data() : stored.cityData;
+  const currentCityData = citySnapshot.exists ? citySnapshot.data() : null;
+  const cityData = currentCityData && !canUpgradeVerifiedIlLocality(
+    currentCityData, stored.cityData, stored.countryId
+  ) ? currentCityData : stored.cityData;
   assert(countryData && cityData, 'failed-precondition', 'The resolved destination is invalid. Search again.');
   if (citySnapshot.exists && isDestinationReassigning(cityData)) {
     throw new HttpsError(
@@ -2237,6 +2304,8 @@ async function materializeDestinationResolution(db, stored) {
     claimId: stored.claimId || null,
     claimRef,
     claimData: stored.claimData || null,
+    registryRef,
+    registryData: stored.registryData || null,
     createCountry: !countrySnapshot.exists,
     createCity: !citySnapshot.exists,
     place: stored.place || null,
@@ -2905,7 +2974,7 @@ async function saveRecommendation({
       : null;
     const destinationChanged =
       !currentData || previousCityRef?.path !== destination.cityRef.path;
-    const [countrySnapshot, citySnapshot, previousCitySnapshot, claimSnapshot] = await Promise.all([
+    const [countrySnapshot, citySnapshot, previousCitySnapshot, claimSnapshot, registrySnapshot] = await Promise.all([
       transaction.get(destination.countryRef),
       transaction.get(destination.cityRef),
       previousCityRef && previousCityRef.path !== destination.cityRef.path
@@ -2913,6 +2982,9 @@ async function saveRecommendation({
         : Promise.resolve(null),
       destination.claimRef
         ? transaction.get(destination.claimRef)
+        : Promise.resolve(null),
+      destination.registryRef
+        ? transaction.get(destination.registryRef)
         : Promise.resolve(null),
     ]);
     const claimed = claimSnapshot?.exists ? claimSnapshot.data() || {} : null;
@@ -2925,8 +2997,14 @@ async function saveRecommendation({
     const conflictingClaimSnapshot = claimedDestinationId && claimedDestinationId !== destination.cityId
       ? await transaction.get(db.doc(`countries/${destination.countryId}/destinations/${claimedDestinationId}`))
       : null;
+    const upgradesVerifiedIlLocality = citySnapshot.exists && canUpgradeVerifiedIlLocality(
+      citySnapshot.data(), destination.cityData, destination.countryId
+    );
+    const effectiveCityData = upgradesVerifiedIlLocality
+      ? destination.cityData
+      : citySnapshot.exists ? citySnapshot.data() : destination.cityData;
     const canonicalCity = citySnapshot.exists
-      ? normalizeDestinationHebrewData(citySnapshot.data(), {
+      ? normalizeDestinationHebrewData(effectiveCityData, {
         countryCode: countrySnapshot.data()?.code || destination.countryId,
       })
       : {
@@ -2936,6 +3014,21 @@ async function saveRecommendation({
       };
     assert(hasHebrewName(canonicalCity.name), 'failed-precondition',
       'The destination has no trustworthy Hebrew name.');
+    if (destination.registryRef || destination.registryData) {
+      assert(destination.registryRef && destination.registryData,
+        'failed-precondition', 'The verified locality registry plan is incomplete.');
+      const registryValidation = validateRegistryEntry(destination.registryData);
+      assert(registryValidation.valid, 'failed-precondition',
+        `The verified locality registry plan is invalid: ${registryValidation.errors[0] || 'unknown'}.`);
+      assert(
+        !registrySnapshot?.exists || verifiedIlRegistryEntryMatches(
+          { id: registrySnapshot.id, ...registrySnapshot.data() },
+          destination.registryData
+        ),
+        'failed-precondition',
+        'The verified locality registry identity changed while saving. Search again.'
+      );
+    }
     const transactionDestination = {
       ...payload.destination,
       cityName: canonicalCity.name,
@@ -3046,12 +3139,30 @@ async function saveRecommendation({
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
-      if (canonicalCity.changed) {
+      if (upgradesVerifiedIlLocality) {
+        transaction.update(destination.cityRef, {
+          countryId: destination.countryId,
+          destinationType: destination.cityData.destinationType,
+          providerRefs: destination.cityData.providerRefs,
+          googleCache: destination.cityData.googleCache,
+          canonicalPolicy: destination.cityData.canonicalPolicy,
+          publicationFence: destination.cityData.publicationFence,
+          ...destinationHebrewWritePatch(canonicalCity.destination),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else if (canonicalCity.changed) {
         transaction.update(destination.cityRef, {
           ...destinationHebrewWritePatch(canonicalCity.destination),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
+    }
+    if (destination.registryRef && !registrySnapshot?.exists) {
+      transaction.create(destination.registryRef, {
+        ...destination.registryData,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
     if (destination.claimRef) {
       if (claimSnapshot?.exists) {

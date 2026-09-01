@@ -239,8 +239,19 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
   if (destinationCoordinates(destination) && !destination?.travelFacts?.closestAirport) add('missing_airport', 'warning', 'לא נמצא שדה תעופה קרוב');
   if (['failed', 'retry'].includes(job?.imageSync?.state)) add('image_job_failed', 'warning', 'בדיקת התמונה נכשלה או ממתינה לניסיון נוסף');
   if (['failed', 'needs_review'].includes(job?.identitySync?.state)) add('identity_job_failed', 'warning', 'זיהוי העיר דורש בדיקה');
-  if (!review?.approvedAt) add('new_destination', 'info', 'העיר טרם אושרה ידנית');
+  if (!review?.approvedAt && destination?.canonicalPolicy?.approved !== true) {
+    add('new_destination', 'info', 'העיר טרם אושרה ידנית');
+  }
   return issues;
+}
+
+function destinationReviewStatus(destination, issues = []) {
+  if (destination?.status === 'inactive') return 'inactive';
+  if (issues.some((issue) => issue?.severity === 'error')) return 'blocked';
+  if (destination?.canonicalPolicy?.approved === true) {
+    return issues.length ? 'approved_with_warnings' : 'approved';
+  }
+  return issues.length ? 'open' : 'ready';
 }
 
 function reviewId(countryId, cityId) {
@@ -273,8 +284,7 @@ async function destinationBundle(admin, countryId, cityId) {
 async function evaluateAndPersistDestination({ admin, countryId, cityId, created = false }) {
   const bundle = await destinationBundle(admin, countryId, cityId);
   const issues = qualityIssues(bundle.city, bundle.job, created ? {} : bundle.review);
-  const blocking = issues.filter((issue) => issue.severity === 'error').length;
-  const status = bundle.city.status === 'inactive' ? 'inactive' : blocking ? 'blocked' : issues.length ? 'open' : 'ready';
+  const status = destinationReviewStatus(bundle.city, issues);
   const storedNames = bundle.city.googleCache?.names || bundle.city.identity?.names || {};
   const payload = {
     countryId,
@@ -333,7 +343,9 @@ async function notifyAdminsOfDestination({
 
 async function onDestinationCreated({ admin, countryId, cityId }) {
   const initial = await evaluateAndPersistDestination({ admin, countryId, cityId, created: true });
-  await notifyAdminsOfDestination({ admin, countryId, cityId, destination: initial });
+  if (!['approved', 'approved_with_warnings'].includes(initial.status)) {
+    await notifyAdminsOfDestination({ admin, countryId, cityId, destination: initial });
+  }
   await syncDestinationAirport({
     admin,
     countryId,
@@ -1070,7 +1082,12 @@ function destinationReviewMessage(content, { restored = false } = {}) {
     : 'היעד שנבחר נמצא בבקרת מנהל. התוכן יחזור אוטומטית לאחר השלמת האישור.';
 }
 
-async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
+async function releaseDestinationPendingContent({
+  admin,
+  countryId,
+  cityId,
+  reconciliationPass = false,
+}) {
   const db = admin.firestore();
   const [countrySnapshot, destinationSnapshot] = await Promise.all([
     db.doc(`countries/${countryId}`).get(),
@@ -1098,7 +1115,16 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
   if (existingOperation.exists && existingOperation.data()?.step === 'effects_applied') {
     const released = existingOperation.data()?.released || {};
-    await operationRef.set({ step: 'case_finalized', finalizedAt: timestamp, updatedAt: timestamp }, { merge: true });
+    await operationRef.set({
+      step: 'case_finalized',
+      finalizedAt: timestamp,
+      reconciliationState: reconciliationPass ? 'complete' : 'pending',
+      ...(reconciliationPass ? {
+        reconciledAt: timestamp,
+        reconciliationAttempts: admin.firestore.FieldValue.increment(1),
+      } : {}),
+      updatedAt: timestamp,
+    }, { merge: true });
     return { operationId, released, replay: true };
   }
 
@@ -1113,6 +1139,14 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
     ...routes.docs.map((entry) => ({ type: 'route', entry })),
   ].filter(({ entry }) => heldForPendingDestination(entry.data() || {}, countryId, cityId));
   if (replayingFinalizedOperation && candidates.length === 0) {
+    if (reconciliationPass) {
+      await operationRef.set({
+        reconciliationState: 'complete',
+        reconciledAt: timestamp,
+        reconciliationAttempts: admin.firestore.FieldValue.increment(1),
+        updatedAt: timestamp,
+      }, { merge: true });
+    }
     return { operationId, released: existingOperationData.released || {}, replay: true };
   }
   await operationRef.set(existingOperation.exists ? {
@@ -1216,7 +1250,17 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
   const changed = Object.values(newlyReleased).some((count) => count > 0);
 
   await operationRef.set({ step: 'effects_applied', released, effectsAppliedAt: timestamp, updatedAt: timestamp }, { merge: true });
-  await operationRef.set({ step: 'case_finalized', released, finalizedAt: timestamp, updatedAt: timestamp }, { merge: true });
+  await operationRef.set({
+    step: 'case_finalized',
+    released,
+    finalizedAt: timestamp,
+    reconciliationState: reconciliationPass ? 'complete' : 'pending',
+    ...(reconciliationPass ? {
+      reconciledAt: timestamp,
+      reconciliationAttempts: admin.firestore.FieldValue.increment(1),
+    } : {}),
+    updatedAt: timestamp,
+  }, { merge: true });
   return {
     operationId,
     released,
@@ -1229,19 +1273,37 @@ async function releaseDestinationPendingContent({ admin, countryId, cityId }) {
 async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
   const boundedLimit = Math.max(1, Math.min(100, Number(limit) || 50));
   const db = admin.firestore();
-  const snapshot = await db.collection('system/moderation/operations')
+  const unfinishedSnapshot = await db.collection('system/moderation/operations')
     .where('type', '==', 'destination_approval_release')
     .where('step', 'in', ['started', 'effects_applied'])
     .limit(boundedLimit)
     .get();
-  const pending = snapshot.docs;
-  const result = { scanned: snapshot.size, pending: pending.length, completed: 0, failed: 0 };
+  const lateSnapshot = await db.collection('system/moderation/operations')
+    .where('reconciliationState', '==', 'pending')
+    .limit(boundedLimit)
+    .get();
+  const pendingByPath = new Map([
+    ...unfinishedSnapshot.docs,
+    ...lateSnapshot.docs,
+  ].map((entry) => [entry.ref.path, entry]));
+  const pending = Array.from(pendingByPath.values()).slice(0, boundedLimit);
+  const result = {
+    scanned: unfinishedSnapshot.size + lateSnapshot.size,
+    pending: pending.length,
+    completed: 0,
+    failed: 0,
+  };
   for (const entry of pending) {
     const destination = entry.data()?.destination || {};
     try {
       const countryId = cleanId(destination.countryId, 'destination.countryId');
       const cityId = cleanId(destination.cityId, 'destination.cityId');
-      await releaseDestinationPendingContent({ admin, countryId, cityId });
+      await releaseDestinationPendingContent({
+        admin,
+        countryId,
+        cityId,
+        reconciliationPass: true,
+      });
       result.completed += 1;
     } catch (error) {
       result.failed += 1;
@@ -1917,6 +1979,7 @@ module.exports = {
   canonicalApprovalBindingIssues,
   deactivateDestination,
   destinationCoordinates,
+  destinationReviewStatus,
   destinationPolicyRegistryBindingIssue,
   destinationApprovalHasConflictingFence,
   destinationCanEnterAdminApproval,

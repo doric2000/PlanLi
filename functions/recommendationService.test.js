@@ -623,6 +623,44 @@ test('Ariel and selected Israel policy areas resolve to Israel before providers'
   assert.equal(result.resolutionSource, 'independent-policy-registry');
 });
 
+test('the Israel policy gate classifies Rotem, Ramallah, and the West Bank as IL', async () => {
+  const cases = [
+    { cityName: 'Rotem', coordinates: { lat: 32.3375655, lng: 35.5180307 } },
+    { cityName: 'Ramallah', coordinates: { lat: 31.9038, lng: 35.2034 } },
+    { cityName: 'West Bank', coordinates: { lat: 31.95, lng: 35.25 } },
+  ];
+  for (const entry of cases) {
+    const result = await resolvePlaceCountry({
+      parsedPlace: { ...entry, countryName: 'Palestine', countryCode: 'PS' },
+      parsedCity: null,
+    });
+    assert.equal(result.countryCode, 'IL');
+    assert.equal(result.resolutionSource, 'israel-policy');
+  }
+});
+
+test('Gaza remains PS and neighboring provider countries keep their country', async () => {
+  const gaza = await resolvePlaceCountry({
+    parsedPlace: {
+      cityName: 'Gaza', countryName: 'Palestine', countryCode: 'PS',
+      coordinates: { lat: 31.5, lng: 34.45 },
+    },
+    parsedCity: null,
+  });
+  assert.equal(gaza.countryCode, 'PS');
+  assert.equal(gaza.resolutionSource, 'independent-policy-registry');
+
+  const amman = await resolvePlaceCountry({
+    parsedPlace: {
+      cityName: 'Amman', countryName: 'Jordan', countryCode: 'JO',
+      coordinates: { lat: 31.9539, lng: 35.9106 },
+    },
+    parsedCity: null,
+  });
+  assert.equal(amman.countryCode, 'JO');
+  assert.equal(amman.resolutionSource, 'place-details');
+});
+
 test('country resolution uses city details when venue details omit country', async () => {
   const result = await resolvePlaceCountry({
     parsedPlace: {
@@ -638,7 +676,7 @@ test('country resolution uses city details when venue details omit country', asy
   assert.equal(result.resolutionSource, 'city-place');
 });
 
-test('country resolution prefers local boundaries before Google reverse', async () => {
+test('country resolution preserves provider then reverse then local fallback order', async () => {
   const originalFetch = global.fetch;
   global.fetch = async (urlValue, options = {}) => {
     const url = new URL(String(urlValue));
@@ -1469,7 +1507,7 @@ test('a reviewed Vlorë alias outranks ambiguous provider locality candidates', 
   }
 });
 
-test('a reliable Google Hebrew destination becomes provisional without manual confirmation', async () => {
+test('a reliable Google Hebrew IL locality receives protected policy approval', async () => {
   const admin = createFakeAdmin({
     'countries/IL': {
       name: 'ישראל', names: { he: 'ישראל', en: 'Israel' }, code: 'IL',
@@ -1493,9 +1531,9 @@ test('a reliable Google Hebrew destination becomes provisional without manual co
   const destination = await resolveGoogleDestination({
     admin, selectionIntent: 'destination', placesProvider: 'new', resolvedPlace,
   });
-  assert.equal(destination.cityData.canonicalPolicy.approved, false);
-  assert.equal(destination.cityData.canonicalPolicy.provisional, true);
-  assert.equal(destination.cityData.canonicalPolicy.selectionSource, 'user_confirmed_destination');
+  assert.equal(destination.cityData.canonicalPolicy.approved, true);
+  assert.equal(destination.cityData.canonicalPolicy.provisional, false);
+  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
   assert.equal(destination.cityData.googleCache.names.he, 'נס ציונה');
   assert.equal(destination.createCity, true);
 });
@@ -1637,7 +1675,7 @@ test('a cached natural feature requires a destination-search-bound token', async
     /destination search/u.test(error.message));
 });
 
-test('Hod Hasharon selected directly is accepted as a stable provisional locality', async () => {
+test('Hod Hasharon selected directly is accepted as a stable approved locality', async () => {
   const admin = createFakeAdmin({
     'countries/IL': {
       name: 'ישראל', names: { he: 'ישראל', en: 'Israel' }, code: 'IL',
@@ -1666,6 +1704,8 @@ test('Hod Hasharon selected directly is accepted as a stable provisional localit
   assert.equal(destination.createCity, true);
   assert.equal(destination.cityData.googleCache.names.he, 'הוד השרון');
   assert.equal(destination.cityData.providerRefs.googlePlaceId, 'google-hod-hasharon');
+  assert.equal(destination.cityData.canonicalPolicy.approved, true);
+  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
   assert.equal(destination.place.placeId, 'google-hod-hasharon');
   assert.equal(
     [...admin.documents.keys()].some((path) => path.startsWith('system/runtime/providerUsage/')),
@@ -2964,7 +3004,7 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
   }
 });
 
-test('a verified containing locality reuses the existing country and creates a provisional destination', async () => {
+test('a verified IL containing locality reuses the existing country and auto-approves atomically', async () => {
   const admin = createFakeAdmin({
     'countries/ישראל': {
       name: 'ישראל',
@@ -3031,12 +3071,21 @@ test('a verified containing locality reuses the existing country and creates a p
       admin.documents.get(`countries/ישראל/destinations/${cityId}`).providerRefs.googlePlaceId,
       'jerusalem-place-id'
     );
+    const city = admin.documents.get(`countries/ישראל/destinations/${cityId}`);
+    assert.equal(city.canonicalPolicy.approved, true);
+    assert.equal(city.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
+    assert.equal(admin.documents.get(`recommendations/${result.recommendationId}`).status, 'active');
+    assert.equal(
+      admin.documents.get(`system/destinationRegistry/entries/${city.canonicalPolicy.registryId}`)
+        .geometryPolicy.autoMatchEligible,
+      false
+    );
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('country policy and a verified locality create one stable provisional destination', async () => {
+test('country policy and a verified locality create one stable approved IL destination', async () => {
   const admin = createFakeAdmin({
     'countries/ישראל': {
       name: 'ישראל',
@@ -3129,6 +3178,10 @@ test('country policy and a verified locality create one stable provisional desti
     assert.equal(saved.country.id, preview.destination.country.id);
     assert.equal(saved.city.id, preview.destination.city.id);
     assert.equal(saved.resolutionSource, preview.resolutionSource);
+    const city = admin.documents.get(`countries/ישראל/destinations/${saved.city.id}`);
+    assert.equal(city.canonicalPolicy.approved, true);
+    assert.equal(city.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
+    assert.equal(admin.documents.get(`recommendations/${saved.recommendationId}`).status, 'active');
   } finally {
     global.fetch = originalFetch;
   }

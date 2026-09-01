@@ -11,6 +11,10 @@ const { discoveryRegionForCountry, routeRegionFields } = require('./discoveryReg
 const PAGE_SIZE = 25;
 const MAX_DESTINATION_AFFINITY = 20;
 const MAX_PERSONALIZED_DESTINATIONS = 20;
+const RELEASABLE_DESTINATION_HOLD_REASONS = new Set([
+  'destination_pending_approval',
+  'destination_policy_review',
+]);
 const STAGES = Object.freeze(['recommendations', 'routes', 'trips', 'favorites', 'finalize', 'complete']);
 
 function fail(code, message, reason = 'invalid_input') {
@@ -65,6 +69,8 @@ function impactHash(source, target, counts) {
 }
 
 function migratedRecommendationCount(job) {
+  const activeCount = Number(job?.preview?.activeRecommendationCount);
+  if (Number.isFinite(activeCount) && activeCount >= 0) return activeCount;
   const frozenCount = Number(job?.preview?.counts?.recommendations);
   if (Number.isFinite(frozenCount) && frozenCount >= 0) return frozenCount;
   return Math.max(0, Number(job?.updatedCounts?.recommendations || 0));
@@ -116,15 +122,38 @@ async function previewDestinationReassignment({ db, source, target }) {
     source,
     target: targetSummary(target, pair.targetCountry, pair.targetCity),
     counts,
+    activeRecommendationCount: recommendations.docs.filter((document) =>
+      document.data()?.status === 'active'
+    ).length,
     totalTopLevelDocuments: counts.recommendations + counts.routes + counts.trips + counts.favorites,
     impactHash: impactHash(source, target, counts),
   };
 }
 
-function recommendationPatch(data, target) {
+function reassignedDestinationModeration(data, source, target) {
+  const moderation = data?.moderation;
+  if (data?.status !== 'moderation_hold' ||
+      moderation?.systemGate !== 'destination_pending_approval' ||
+      !RELEASABLE_DESTINATION_HOLD_REASONS.has(moderation?.holdReason)) return null;
+  const oldKey = destinationKey(source.countryId, source.cityId);
+  const newKey = destinationKey(target.countryId, target.cityId);
+  const pendingDestinationKeys = Array.from(new Set(
+    (Array.isArray(moderation.pendingDestinationKeys) ? moderation.pendingDestinationKeys : [])
+      .map((key) => key === oldKey ? newKey : key)
+  ));
+  return {
+    ...moderation,
+    destination: { countryId: target.countryId, cityId: target.cityId },
+    ...(pendingDestinationKeys.length ? { pendingDestinationKeys } : {}),
+  };
+}
+
+function recommendationPatch(data, target, source = data?.destination || {}) {
   const destination = { ...(data.destination || {}), ...target };
+  const moderation = reassignedDestinationModeration(data, source, target);
   return {
     destination,
+    ...(moderation ? { moderation } : {}),
     discoveryRegionId: discoveryRegionForCountry(target.countryId),
     search: buildSearchIndex({
       title: data.title, description: data.description, destination, place: data.place,
@@ -148,10 +177,12 @@ function routePatch(data, source, target) {
   });
   const destinationKeys = Array.from(new Set((data.destinationKeys || [])
     .map((key) => key === oldKey ? newKey : key)));
+  const moderation = reassignedDestinationModeration(data, source, target);
   return {
     destinations,
     destinationKeys,
     ...routeRegionFields(destinations.map((entry) => entry?.countryId).filter(Boolean)),
+    ...(moderation ? { moderation } : {}),
     search: buildSearchIndex({
       title: data.title,
       description: `${data.description || ''} ${(data.summaryPlaces || []).join(' ')}`,
@@ -319,7 +350,10 @@ async function processPage({ db, job, timestamp, pageSize }) {
       .where('destination.countryId', '==', source.countryId)
       .where('destination.cityId', '==', source.cityId), job.cursor, pageSize);
     const updates = page.documents
-      .map((document) => ({ ref: document.ref, patch: { ...recommendationPatch(document.data() || {}, target), updatedAt: timestamp } }));
+      .map((document) => ({
+        ref: document.ref,
+        patch: { ...recommendationPatch(document.data() || {}, target, source), updatedAt: timestamp },
+      }));
     await commitUpdates(db, updates);
     return { ...page, updated: updates.length };
   }
@@ -338,8 +372,18 @@ async function processPage({ db, job, timestamp, pageSize }) {
     const page = await pagedQuery(db.collection('trips')
       .where('destination.countryId', '==', source.countryId)
       .where('destination.cityId', '==', source.cityId), job.cursor, pageSize);
-    const updates = page.documents
-      .map((document) => ({ ref: document.ref, patch: { destination: { ...(document.data()?.destination || {}), ...target }, updatedAt: timestamp } }));
+    const updates = page.documents.map((document) => {
+      const data = document.data() || {};
+      const moderation = reassignedDestinationModeration(data, source, target);
+      return {
+        ref: document.ref,
+        patch: {
+          destination: { ...(data.destination || {}), ...target },
+          ...(moderation ? { moderation } : {}),
+          updatedAt: timestamp,
+        },
+      };
+    });
     await commitUpdates(db, updates);
     return { ...page, updated: updates.length };
   }
@@ -633,6 +677,7 @@ module.exports = {
   previewDestinationReassignment,
   processDestinationReassignmentJob,
   recommendationPatch,
+  reassignedDestinationModeration,
   reassignDestinationPersonalization,
   reassignmentJobId,
   residualReferenceStage,
