@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { ScaleDecorator, ShadowDecorator } from 'react-native-draggable-flatlist';
 
 import AppText from './AppText';
 import CachedImage from './CachedImage';
@@ -309,6 +309,7 @@ export default function TravelMediaComposer({
   contained = false,
   embedded = false,
   addButtonTestID,
+  onReorderInteractionChange,
   sourceAdapter: suppliedSourceAdapter,
   sourceAdapters,
 }) {
@@ -320,6 +321,9 @@ export default function TravelMediaComposer({
   const [composerError, setComposerError] = useState('');
   const [composerSession, setComposerSession] = useState(0);
   const [cropEditing, setCropEditing] = useState(false);
+  const reorderInteractionActiveRef = useRef(false);
+  const reorderInteractionCallbackRef = useRef(onReorderInteractionChange);
+  reorderInteractionCallbackRef.current = onReorderInteractionChange;
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
   const options = useMemo(() => ({ aspect, maxItems, maxLongEdge, compress }), [
     aspect, compress, maxItems, maxLongEdge,
@@ -445,6 +449,40 @@ export default function TravelMediaComposer({
     if (embedded) onChange?.(next);
   }, [activeIndex, embedded, onChange, working]);
 
+  const setReorderInteractionActive = useCallback((active) => {
+    const nextActive = Boolean(active);
+    if (reorderInteractionActiveRef.current === nextActive) return;
+    reorderInteractionActiveRef.current = nextActive;
+    reorderInteractionCallbackRef.current?.(nextActive);
+  }, []);
+
+  const beginReorder = useCallback((index) => {
+    setActiveIndex(index);
+    setReorderInteractionActive(true);
+  }, [setReorderInteractionActive]);
+
+  const releaseReorder = useCallback(() => {
+    setReorderInteractionActive(false);
+  }, [setReorderInteractionActive]);
+
+  const finishReorder = useCallback(({ data }) => {
+    try {
+      commitReorder(data);
+    } finally {
+      setReorderInteractionActive(false);
+    }
+  }, [commitReorder, setReorderInteractionActive]);
+
+  useEffect(() => () => {
+    if (!reorderInteractionActiveRef.current) return;
+    reorderInteractionActiveRef.current = false;
+    reorderInteractionCallbackRef.current?.(false);
+  }, []);
+
+  useEffect(() => {
+    if (!visible) setReorderInteractionActive(false);
+  }, [setReorderInteractionActive, visible]);
+
   const moveForAccessibility = useCallback((fromIndex, toIndex) => {
     if (fromIndex < 0 || toIndex < 0 || fromIndex >= working.length || toIndex >= working.length) return;
     const next = [...working];
@@ -484,7 +522,11 @@ export default function TravelMediaComposer({
     if (!visible) return null;
     const activeItem = working[activeIndex];
     return (
-      <GestureHandlerRootView style={styles.embeddedRoot} testID="travel-media-composer">
+      <GestureHandlerRootView
+        style={styles.embeddedRoot}
+        onTouchCancelCapture={releaseReorder}
+        testID="travel-media-composer"
+      >
         {!working.length ? (
           <Pressable
             style={[styles.embeddedEmpty, { aspectRatio: ratio }]}
@@ -545,7 +587,19 @@ export default function TravelMediaComposer({
               data={working}
               keyExtractor={travelMediaIdentity}
               activationDistance={8}
-              onDragEnd={({ data }) => commitReorder(data)}
+              dragItemOverflow
+              autoscrollThreshold={32}
+              autoscrollSpeed={80}
+              onDragBegin={beginReorder}
+              onRelease={releaseReorder}
+              onDragEnd={finishReorder}
+              renderPlaceholder={({ index }) => (
+                <View
+                  style={[styles.embeddedThumb, styles.embeddedPlaceholder]}
+                  testID={`travel-media-placeholder-${index}`}
+                />
+              )}
+              containerStyle={styles.embeddedStripContainer}
               contentContainerStyle={styles.embeddedStrip}
               style={styles.embeddedStripList}
               testID="travel-media-reorder-list"
@@ -557,33 +611,36 @@ export default function TravelMediaComposer({
                 const selected = index === activeIndex;
                 const identity = travelMediaIdentity(item);
                 return (
-                  <ScaleDecorator activeScale={1.04}>
-                    <Pressable
-                      style={[
-                        styles.selectedThumb,
-                        styles.embeddedThumb,
-                        selected && styles.selectedThumbActive,
-                        isActive && styles.embeddedThumbDragging,
-                      ]}
-                      onPress={() => setActiveIndex(index)}
-                      onLongPress={drag}
-                      delayLongPress={180}
-                      accessibilityRole="button"
-                      accessibilityLabel={`תמונה ${index + 1}; לחיצה ארוכה וגרירה לשינוי סדר`}
-                      accessibilityState={{ selected }}
-                      accessibilityActions={[
-                        ...(index > 0 ? [{ name: 'moveUp', label: 'העברה אחורה' }] : []),
-                        ...(index < working.length - 1 ? [{ name: 'moveDown', label: 'העברה קדימה' }] : []),
-                      ]}
-                      onAccessibilityAction={({ nativeEvent }) => {
-                        if (nativeEvent.actionName === 'moveUp') moveForAccessibility(index, index - 1);
-                        if (nativeEvent.actionName === 'moveDown') moveForAccessibility(index, index + 1);
-                      }}
-                      testID={`travel-media-selected-${identity}`}
-                    >
-                      <MediaImage uri={travelMediaUri(item)} style={styles.selectedThumbImage} contentFit="cover" />
-                      <SelectionBadge number={index + 1} />
-                    </Pressable>
+                  <ScaleDecorator activeScale={1.1}>
+                    <ShadowDecorator elevation={12} radius={8} opacity={0.28}>
+                      <Pressable
+                        style={[
+                          styles.selectedThumb,
+                          styles.embeddedThumb,
+                          selected && styles.selectedThumbActive,
+                          isActive && styles.embeddedThumbDragging,
+                        ]}
+                        onPress={() => setActiveIndex(index)}
+                        onLongPress={drag}
+                        delayLongPress={180}
+                        disabled={isActive}
+                        accessibilityRole="button"
+                        accessibilityLabel={`תמונה ${index + 1}; לחיצה ארוכה וגרירה לשינוי סדר`}
+                        accessibilityState={{ selected }}
+                        accessibilityActions={[
+                          ...(index > 0 ? [{ name: 'moveUp', label: 'העברה אחורה' }] : []),
+                          ...(index < working.length - 1 ? [{ name: 'moveDown', label: 'העברה קדימה' }] : []),
+                        ]}
+                        onAccessibilityAction={({ nativeEvent }) => {
+                          if (nativeEvent.actionName === 'moveUp') moveForAccessibility(index, index - 1);
+                          if (nativeEvent.actionName === 'moveDown') moveForAccessibility(index, index + 1);
+                        }}
+                        testID={`travel-media-selected-${identity}`}
+                      >
+                        <MediaImage uri={travelMediaUri(item)} style={styles.selectedThumbImage} contentFit="cover" />
+                        <SelectionBadge number={index + 1} />
+                      </Pressable>
+                    </ShadowDecorator>
                   </ScaleDecorator>
                 );
               }}
@@ -826,10 +883,12 @@ const styles = StyleSheet.create({
   embeddedActionText: { color: colors.primary, fontSize: 13 },
   embeddedDeleteText: { color: colors.error },
   embeddedReorderHint: { color: colors.textSecondary, fontSize: 12, textAlign: 'right', writingDirection: 'rtl', marginTop: spacing.md, marginBottom: spacing.xs },
-  embeddedStripList: { height: 84 },
-  embeddedStrip: { gap: spacing.sm, paddingVertical: spacing.xs },
+  embeddedStripList: { height: 96, overflow: 'visible' },
+  embeddedStripContainer: { overflow: 'visible' },
+  embeddedStrip: { gap: spacing.sm, paddingVertical: 10 },
   embeddedThumb: { width: 76, height: 76 },
-  embeddedThumbDragging: { opacity: 0.86 },
+  embeddedThumbDragging: { borderColor: colors.primary, borderWidth: 3, backgroundColor: colors.accentLight },
+  embeddedPlaceholder: { borderRadius: spacing.radiusSmall, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.accentLight },
   embeddedStatus: { marginTop: spacing.sm },
   header: { height: 58, paddingHorizontal: spacing.lg, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
   headerCopy: { alignItems: 'center' },
@@ -868,7 +927,7 @@ const styles = StyleSheet.create({
   selectionHint: { flexShrink: 1, color: colors.textSecondary, fontSize: 12, textAlign: 'left' },
   selectedStrip: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm },
   selectedThumb: { width: 74, height: 74, borderRadius: spacing.radiusSmall, overflow: 'hidden', borderWidth: 2, borderColor: colors.border, backgroundColor: colors.borderLight },
-  selectedThumbActive: { borderColor: colors.primary },
+  selectedThumbActive: { borderColor: colors.primary, borderWidth: 3 },
   selectedThumbImage: { width: '100%', height: '100%' },
   addThumb: { width: 74, height: 74, borderRadius: spacing.radiusSmall, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentLight },
   addThumbText: { color: colors.primary, fontSize: 12, marginTop: 2 },

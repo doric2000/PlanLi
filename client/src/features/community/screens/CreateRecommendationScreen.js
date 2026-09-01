@@ -8,13 +8,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import { NestableScrollContainer } from 'react-native-draggable-flatlist';
-
 import AppText from '../../../components/AppText';
 import { FormInput } from '../../../components/FormInput';
 import RtlChoiceGroup from '../../../components/RtlChoiceGroup';
@@ -81,12 +80,50 @@ const OPTIONAL_FIELDS = [
 const categoryById = Object.fromEntries(RECOMMENDATION_CATEGORIES.map((item) => [item.id, item]));
 const subcategoryById = Object.fromEntries(RECOMMENDATION_SUBCATEGORIES.map((item) => [item.id, item]));
 
-export function scrollFocusedRecommendationInputIntoView(scrollView, inputTarget) {
-  if (!scrollView || inputTarget == null) return false;
-  const responder = scrollView.getScrollResponder?.() || scrollView;
-  const scrollToKeyboard = responder?.scrollResponderScrollNativeHandleToKeyboard;
-  if (typeof scrollToKeyboard !== 'function') return false;
-  scrollToKeyboard.call(responder, inputTarget, spacing.lg, true);
+export function recommendationInputScrollTarget({
+  currentOffset = 0,
+  inputY,
+  inputHeight,
+  viewportY,
+  viewportHeight,
+  clearance = spacing.md,
+}) {
+  const values = [currentOffset, inputY, inputHeight, viewportY, viewportHeight, clearance];
+  if (!values.every(Number.isFinite) || inputHeight < 0 || viewportHeight <= 0) return null;
+  const visibleTop = viewportY + clearance;
+  const visibleBottom = viewportY + viewportHeight - clearance;
+  const inputBottom = inputY + inputHeight;
+  if (inputBottom > visibleBottom) return Math.max(0, currentOffset + inputBottom - visibleBottom);
+  if (inputY < visibleTop) return Math.max(0, currentOffset + inputY - visibleTop);
+  return Math.max(0, currentOffset);
+}
+
+export function scrollFocusedRecommendationInputIntoView(
+  scrollView,
+  inputTarget,
+  currentOffset = 0,
+  clearance = spacing.md
+) {
+  if (
+    !scrollView || !inputTarget ||
+    typeof scrollView.measureInWindow !== 'function' ||
+    typeof inputTarget.measureInWindow !== 'function' ||
+    typeof scrollView.scrollTo !== 'function'
+  ) return false;
+  scrollView.measureInWindow((_viewportX, viewportY, _viewportWidth, viewportHeight) => {
+    inputTarget.measureInWindow((_inputX, inputY, _inputWidth, inputHeight) => {
+      const nextOffset = recommendationInputScrollTarget({
+        currentOffset,
+        inputY,
+        inputHeight,
+        viewportY,
+        viewportHeight,
+        clearance,
+      });
+      if (nextOffset == null || Math.abs(nextOffset - currentOffset) < 1) return;
+      scrollView.scrollTo({ x: 0, y: nextOffset, animated: true });
+    });
+  });
   return true;
 }
 
@@ -276,9 +313,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const [validationMessage, setValidationMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [mediaReorderActive, setMediaReorderActive] = useState(false);
   const [editSnapshotBaseline, setEditSnapshotBaseline] = useState(null);
   const hydratedEditIdRef = useRef(null);
   const scrollViewRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
   const sectionOffsetsRef = useRef({});
   const focusedInputTargetRef = useRef(null);
   const titleEditedByUserRef = useRef(false);
@@ -572,17 +611,28 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   }, [bindDraft]);
 
   const scrollFocusedInputIntoView = useCallback(() => {
-    const inputTarget = focusedInputTargetRef.current;
-    if (inputTarget == null) return;
     requestAnimationFrame(() => {
-      scrollFocusedRecommendationInputIntoView(scrollViewRef.current, inputTarget);
+      const inputTarget = TextInput.State.currentlyFocusedInput?.() || focusedInputTargetRef.current;
+      if (!inputTarget) return;
+      focusedInputTargetRef.current = inputTarget;
+      scrollFocusedRecommendationInputIntoView(
+        scrollViewRef.current,
+        inputTarget,
+        scrollOffsetRef.current
+      );
     });
   }, []);
 
-  const handleComposerInputFocus = useCallback((event) => {
-    focusedInputTargetRef.current = event?.nativeEvent?.target ?? event?.target ?? null;
-    if (keyboardVisible) scrollFocusedInputIntoView();
+  const handleComposerInputFocus = useCallback(() => {
+    requestAnimationFrame(() => {
+      focusedInputTargetRef.current = TextInput.State.currentlyFocusedInput?.() || null;
+      if (keyboardVisible) scrollFocusedInputIntoView();
+    });
   }, [keyboardVisible, scrollFocusedInputIntoView]);
+
+  const handleMediaReorderInteractionChange = useCallback((active) => {
+    setMediaReorderActive(Boolean(active));
+  }, []);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
@@ -1292,6 +1342,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           maxLongEdge={RECOMMENDATION_IMAGE_LONG_EDGE}
           compress={TRAVEL_IMAGE_COMPRESSION}
           addButtonTestID="recommendation-image-picker"
+          onReorderInteractionChange={handleMediaReorderInteractionChange}
           onChange={completeMediaSelection}
         />
       </View>
@@ -1471,7 +1522,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               value={subcategorySearch}
               onChangeText={setSubcategorySearch}
               placeholder="למשל: גלידה, קרוז או פוניקולר"
-              onFocus={handleComposerInputFocus}
               rtl
               testID="recommendation-subcategory-search"
             />
@@ -1506,7 +1556,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
                 }}
                 placeholder="למשל: סיור צילום לילי"
                 maxLength={40}
-                onFocus={handleComposerInputFocus}
                 rtl
                 testID="recommendation-custom-subcategory"
               />
@@ -1544,7 +1593,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           }}
           placeholder="למשל: בית קפה קטן ושקט במרכז"
           maxLength={120}
-          onFocus={handleComposerInputFocus}
           rtl
           testID="recommendation-title-input"
         />
@@ -1556,7 +1604,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           placeholder="מה חשוב לדעת? מה אהבתם, למי מתאים ומתי כדאי להגיע"
           multiline
           maxLength={5000}
-          onFocus={handleComposerInputFocus}
           rtl
           testID="recommendation-description-input"
         />
@@ -1591,7 +1638,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               onChangeText={setEventSchedule}
               placeholder="למשל: 12 בספטמבר 2026 בשעה 20:00"
               maxLength={160}
-              onFocus={handleComposerInputFocus}
               rtl
               testID="recommendation-event-schedule"
             />
@@ -1632,7 +1678,6 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               maxLength={optionalField.maxLength}
               autoCapitalize={optionalField.id === 'externalUrl' ? 'none' : undefined}
               autoCorrect={optionalField.id !== 'externalUrl'}
-              onFocus={handleComposerInputFocus}
               rtl={optionalField.contentDirection === 'rtl'}
               style={optionalField.contentDirection === 'ltr'
                 ? styles.ltrInput
@@ -1706,10 +1751,16 @@ export default function CreateRecommendationScreen({ navigation, route }) {
         behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         testID="recommendation-keyboard-avoiding"
       >
-        <NestableScrollContainer
+        <ScrollView
           ref={scrollViewRef}
           style={styles.scroll}
           contentContainerStyle={styles.content}
+          scrollEnabled={!mediaReorderActive}
+          onFocusCapture={handleComposerInputFocus}
+          onScroll={(event) => {
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           testID="recommendation-composer-scroll"
@@ -1767,7 +1818,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
               {validationMessage}
             </AppText>
           ) : null}
-        </NestableScrollContainer>
+        </ScrollView>
 
         <SafeAreaInsetsContext.Consumer>
           {(insets) => (

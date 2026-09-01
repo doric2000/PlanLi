@@ -1,12 +1,12 @@
 import React, { forwardRef } from 'react';
-import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import DraggableFlatList from 'react-native-draggable-flatlist';
 
 const RtlHorizontalDraggableFlatList = forwardRef(function RtlHorizontalDraggableFlatList(
   props,
   ref
 ) {
   return (
-    <NestableDraggableFlatList
+    <DraggableFlatList
       {...props}
       ref={ref}
       horizontal
