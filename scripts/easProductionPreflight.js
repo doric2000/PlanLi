@@ -69,18 +69,28 @@ function runEas(clientRoot, args) {
   });
 }
 
+function resolveProductionLineage(entries, readGroup) {
+  for (const entry of entries) {
+    const groupId = String(entry?.group || '').trim();
+    if (!groupId) continue;
+    const updates = readGroup(groupId);
+    const commits = [...new Set((Array.isArray(updates) ? updates : [])
+      .map((update) => String(update?.gitCommitHash || '').trim())
+      .filter(Boolean))];
+    if (commits.length > 1) fail(`Production group ${groupId} maps to multiple Git commits.`);
+    if (commits.length === 1) return { deployedCommit: commits[0], groupId };
+  }
+  fail('No production update group with one Git commit was found behind the current rollback.');
+}
+
 function currentProductionCommit(clientRoot) {
   const branch = JSON.parse(runEas(clientRoot, [
-    'update:list', '--branch', 'production', '--limit', '1', '--json', '--non-interactive',
+    'update:list', '--branch', 'production', '--runtime-version', '1.2.0',
+    '--platform', 'ios', '--limit', '10', '--json', '--non-interactive',
   ]));
-  const groupId = branch?.currentPage?.[0]?.group;
-  if (!groupId) fail('No current production update group was found.');
-  const updates = JSON.parse(runEas(clientRoot, ['update:view', groupId, '--json']));
-  const commits = [...new Set((Array.isArray(updates) ? updates : [])
-    .map((update) => String(update?.gitCommitHash || '').trim())
-    .filter(Boolean))];
-  if (commits.length !== 1) fail(`Production group ${groupId} does not map to one Git commit.`);
-  return { deployedCommit: commits[0], groupId };
+  return resolveProductionLineage(branch?.currentPage || [], (groupId) => (
+    JSON.parse(runEas(clientRoot, ['update:view', groupId, '--json']))
+  ));
 }
 
 function runPreflight({ repoRoot, deployedCommit = '' }) {
@@ -127,6 +137,7 @@ module.exports = {
   easExecutable,
   easExecOptions,
   parseArgs,
+  resolveProductionLineage,
   runPreflight,
   validateDeployedCommit,
   validateRepositoryState,
