@@ -1,9 +1,11 @@
 import {
   ANDROID_NOTIFICATION_CHANNELS,
   NOTIFICATION_INBOX_CHANNEL_VALUES,
+  PUSH_PERMISSION_ONBOARDING_STATES,
   PUSH_RESULT_REASONS,
   PUSH_SCHEMA_VERSION,
   STORED_EXPO_PUSH_TOKEN_KEY,
+  STORED_PUSH_PERMISSION_ONBOARDING_KEY,
 } from './constants';
 import {
   normalizePushPreferences,
@@ -114,6 +116,17 @@ export function createNotificationPushCoordinator({
 
   const reportError = (stage, error) => {
     onError({ stage, error });
+  };
+
+  const rememberPermissionOnboardingHandled = async () => {
+    try {
+      await storage.setItem(
+        STORED_PUSH_PERMISSION_ONBOARDING_KEY,
+        PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED
+      );
+    } catch (error) {
+      reportError('remember_permission_onboarding', error);
+    }
   };
 
   const clearLastResponse = async () => {
@@ -269,10 +282,65 @@ export function createNotificationPushCoordinator({
     if (registration.status !== 'registered') return registration;
     try {
       const preferences = await callables.setPreferences({ pushEnabled: true });
+      await rememberPermissionOnboardingHandled();
       return { status: 'enabled', preferences: normalizePushPreferences(preferences) };
     } catch (error) {
       reportError('enable_preferences', error);
       return { status: 'error', reason: PUSH_RESULT_REASONS.PREFERENCES_FAILED };
+    }
+  };
+
+  const requestInitialPermissionNow = async ({ enableForCurrentUser = false } = {}) => {
+    try {
+      const storedState = await storage.getItem(STORED_PUSH_PERMISSION_ONBOARDING_KEY);
+      if (storedState === PUSH_PERMISSION_ONBOARDING_STATES.DENIED) {
+        return { status: 'permission_denied', reason: PUSH_RESULT_REASONS.PERMISSION_DENIED };
+      }
+      if (storedState === PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_ENROLLED) {
+        return { status: 'already_enrolled' };
+      }
+
+      if (enableForCurrentUser) {
+        try {
+          const currentPreferences = await callables.getPreferences();
+          if (currentPreferences?.configured === true && currentPreferences.pushEnabled !== true) {
+            await rememberPermissionOnboardingHandled();
+            return {
+              status: 'already_configured',
+              preferences: normalizePushPreferences(currentPreferences),
+            };
+          }
+        } catch (error) {
+          reportError('read_existing_preferences', error);
+          return { status: 'error', reason: PUSH_RESULT_REASONS.PREFERENCES_FAILED };
+        }
+      }
+
+      let permissionState = storedState;
+      if (permissionState !== PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_PENDING) {
+        await configureAndroidChannels(notifications, platform);
+        let permission = await notifications.getPermissionsAsync();
+        if (!isNotificationPermissionGranted(permission, notifications, platform)) {
+          permission = await notifications.requestPermissionsAsync({
+            ios: { allowAlert: true, allowBadge: true, allowSound: true },
+          });
+        }
+        if (!isNotificationPermissionGranted(permission, notifications, platform)) {
+          await storage.setItem(
+            STORED_PUSH_PERMISSION_ONBOARDING_KEY,
+            PUSH_PERMISSION_ONBOARDING_STATES.DENIED
+          );
+          return { status: 'permission_denied', reason: PUSH_RESULT_REASONS.PERMISSION_DENIED };
+        }
+        permissionState = PUSH_PERMISSION_ONBOARDING_STATES.GRANTED_PENDING;
+        await storage.setItem(STORED_PUSH_PERMISSION_ONBOARDING_KEY, permissionState);
+      }
+
+      if (!enableForCurrentUser) return { status: 'permission_granted_pending' };
+      return enablePushNow();
+    } catch (error) {
+      reportError('initial_permission', error);
+      return { status: 'error', reason: PUSH_RESULT_REASONS.REGISTRATION_FAILED };
     }
   };
 
@@ -289,6 +357,7 @@ export function createNotificationPushCoordinator({
     if (preferenceError) {
       return { status: 'error', reason: PUSH_RESULT_REASONS.PREFERENCES_FAILED };
     }
+    await rememberPermissionOnboardingHandled();
     return {
       status: 'disabled',
       preferences: normalizePushPreferences(preferences),
@@ -309,11 +378,14 @@ export function createNotificationPushCoordinator({
           throw error;
         }
       }
-      return normalizePushPreferences(await callables.setPreferences(patch));
+      const updated = normalizePushPreferences(await callables.setPreferences(patch));
+      await rememberPermissionOnboardingHandled();
+      return updated;
     }
     if (patch.pushEnabled === false) {
       const updated = normalizePushPreferences(await callables.setPreferences(patch));
       await unregisterStoredToken();
+      await rememberPermissionOnboardingHandled();
       return updated;
     }
     return normalizePushPreferences(await callables.setPreferences(patch));
@@ -321,6 +393,9 @@ export function createNotificationPushCoordinator({
 
   const handlePushTokenRollover = (devicePushToken) => runRegistrationTransition(
     () => handlePushTokenRolloverNow(devicePushToken)
+  );
+  const requestInitialPermission = (options) => runRegistrationTransition(
+    () => requestInitialPermissionNow(options)
   );
   const enablePush = () => runRegistrationTransition(enablePushNow);
   const disablePush = () => runRegistrationTransition(disablePushNow);
@@ -395,6 +470,7 @@ export function createNotificationPushCoordinator({
     stop,
     enablePush,
     disablePush,
+    requestInitialPermission,
     registerForPushNotifications,
     handlePushTokenRollover,
     unregisterCurrentDevice: () => runRegistrationTransition(unregisterStoredToken),

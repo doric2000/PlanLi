@@ -25,13 +25,27 @@ export function buildNotificationCenterPath(intent) {
 }
 
 export default function NotificationPushBridge({ navigationRef, navigationReady }) {
-  const { user } = useAuthUser();
+  const { user, loading: authLoading } = useAuthUser();
   const uid = user?.uid || null;
   const runtime = useMemo(() => getNotificationPushRuntime(), []);
 
   useEffect(() => setNotificationDeviceUnregisterHandler(
     () => runtime.unregisterCurrentDevice()
   ), [runtime]);
+
+  useEffect(() => {
+    if (authLoading) return undefined;
+    let active = true;
+    Promise.resolve(runtime.requestInitialPermission?.({ enableForCurrentUser: Boolean(uid) }))
+      .catch((error) => {
+        if (!active) return;
+        captureDiagnosticException(error, {
+          operation: 'notification_push',
+          code: 'initial_permission',
+        });
+    });
+    return () => { active = false; };
+  }, [authLoading, runtime, uid]);
 
   useEffect(() => {
     if (!uid || !navigationReady || !navigationRef?.isReady?.()) {

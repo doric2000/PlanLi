@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import AppText from '../../../components/AppText';
 import { Avatar } from '../../../components/Avatar';
@@ -147,15 +148,10 @@ function ActorStrip({ notification, onActorPress, busy }) {
   );
 }
 
-function Meta({ notification, time }) {
+function Meta({ time }) {
   return (
     <View style={styles.rowMeta}>
       <AppText style={styles.rowTime}>{time}</AppText>
-      {!notification.isRead ? (
-        <View style={styles.unreadPill}>
-          <AppText style={styles.unreadPillText}>חדש</AppText>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -165,18 +161,24 @@ export function NotificationCard({
   onTargetPress,
   onLikesPress,
   onActorPress,
-  onMenuPress,
+  onDeletePress,
+  onSwipeOpen,
+  isSwipeOpen = false,
   busy = false,
 }) {
+  const swipeableRef = useRef(null);
   const presentation = getNotificationPresentation(notification);
   const time = formatNotificationTime(notification.createdAt);
   const accessibilityLabel = [
     presentation.message,
     presentation.detail,
     time,
-    notification.isRead ? 'נקראה' : 'לא נקראה',
   ].filter(Boolean).join('. ');
   const isLike = notification.type === NotificationType.LIKE;
+
+  useEffect(() => {
+    if (!isSwipeOpen) swipeableRef.current?.close?.();
+  }, [isSwipeOpen]);
 
   const targetPressProps = {
     accessibilityRole: 'button',
@@ -187,90 +189,104 @@ export function NotificationCard({
     onPress: () => onTargetPress?.(notification),
   };
 
-  return (
-    <View style={[styles.row, !notification.isRead && styles.rowUnread]}>
-      <LeadingPreview
-        notification={notification}
-        presentation={presentation}
-        onPress={onTargetPress}
-        busy={busy}
-      />
+  const deleteAction = () => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="מחיקת ההתראה"
+      accessibilityState={{ busy, disabled: busy }}
+      disabled={busy}
+      onPress={() => onDeletePress?.(notification)}
+      style={({ pressed }) => [styles.swipeDeleteAction, pressed && styles.swipeDeletePressed]}
+      testID={`notification-delete-${notification.id}`}
+    >
+      {busy ? (
+        <ActivityIndicator size="small" color={colors.white} />
+      ) : (
+        <Ionicons name="trash-outline" size={23} color={colors.white} />
+      )}
+      <AppText style={styles.swipeDeleteText}>מחיקה</AppText>
+    </Pressable>
+  );
 
-      <View style={styles.rowBody}>
-        {isLike && presentation.likeMessageParts ? (
-          <View
-            style={styles.likeMessageRow}
-            testID={`notification-like-message-${notification.id}`}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${presentation.likeMessageParts.actionLabel}, הצגת כל האנשים שאהבו`}
-              accessibilityHint="פתיחת רשימת הלייקים"
-              accessibilityState={{ busy, disabled: busy }}
-              disabled={busy}
-              onPress={() => onLikesPress?.(notification)}
-              style={({ pressed }) => [styles.likeCountAction, pressed && styles.rowPressed]}
-              testID={`notification-likes-${notification.id}`}
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      enabled={!busy}
+      friction={2}
+      rightThreshold={36}
+      overshootRight={false}
+      renderRightActions={deleteAction}
+      onSwipeableOpen={() => onSwipeOpen?.(notification)}
+      containerStyle={styles.swipeContainer}
+      testID={`notification-swipe-${notification.id}`}
+    >
+      <View style={styles.row}>
+        <LeadingPreview
+          notification={notification}
+          presentation={presentation}
+          onPress={onTargetPress}
+          busy={busy}
+        />
+
+        <View style={styles.rowBody}>
+          {isLike && presentation.likeMessageParts ? (
+            <View
+              style={styles.likeMessageRow}
+              testID={`notification-like-message-${notification.id}`}
             >
-              <AppText style={styles.likeCountActionText}>
-                {presentation.likeMessageParts.actionLabel}
-              </AppText>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${presentation.likeMessageParts.actionLabel}, הצגת כל האנשים שאהבו`}
+                accessibilityHint="פתיחת רשימת הלייקים"
+                accessibilityState={{ busy, disabled: busy }}
+                disabled={busy}
+                onPress={() => onLikesPress?.(notification)}
+                style={({ pressed }) => [styles.likeCountAction, pressed && styles.rowPressed]}
+                testID={`notification-likes-${notification.id}`}
+              >
+                <AppText style={styles.likeCountActionText}>
+                  {presentation.likeMessageParts.actionLabel}
+                </AppText>
+              </Pressable>
+              <Pressable
+                {...targetPressProps}
+                style={({ pressed }) => [styles.likeMessageRemainder, pressed && styles.rowPressed]}
+                testID={`notification-row-${notification.id}`}
+              >
+                <AppText style={styles.rowMessage} numberOfLines={3}>
+                  {presentation.likeMessageParts.remainder}
+                </AppText>
+              </Pressable>
+            </View>
+          ) : (
             <Pressable
               {...targetPressProps}
-              style={({ pressed }) => [styles.likeMessageRemainder, pressed && styles.rowPressed]}
+              style={({ pressed }) => [styles.rowBodyTarget, pressed && styles.rowPressed]}
               testID={`notification-row-${notification.id}`}
             >
               <AppText style={styles.rowMessage} numberOfLines={3}>
-                {presentation.likeMessageParts.remainder}
+                {presentation.message}
               </AppText>
+              {presentation.detail ? (
+                <AppText style={styles.rowDetail} numberOfLines={3}>
+                  {presentation.detail}
+                </AppText>
+              ) : null}
             </Pressable>
-          </View>
-        ) : (
-          <Pressable
-            {...targetPressProps}
-            style={({ pressed }) => [styles.rowBodyTarget, pressed && styles.rowPressed]}
-            testID={`notification-row-${notification.id}`}
-          >
-            <AppText style={styles.rowMessage} numberOfLines={3}>
-              {presentation.message}
-            </AppText>
-            {presentation.detail ? (
-              <AppText style={styles.rowDetail} numberOfLines={3}>
-                {presentation.detail}
-              </AppText>
+          )}
+
+          {(notification.type === NotificationType.LIKE
+            || notification.type === NotificationType.COMMENT) ? (
+              <ActorStrip
+                notification={notification}
+                onActorPress={onActorPress}
+                busy={busy}
+              />
             ) : null}
-          </Pressable>
-        )}
-
-        {(notification.type === NotificationType.LIKE
-          || notification.type === NotificationType.COMMENT) ? (
-            <ActorStrip
-              notification={notification}
-              onActorPress={onActorPress}
-              busy={busy}
-            />
-          ) : null}
-        <Meta notification={notification} time={time} />
+          <Meta time={time} />
+        </View>
       </View>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="אפשרויות להתראה"
-        accessibilityState={{ busy, disabled: busy }}
-        disabled={busy}
-        hitSlop={4}
-        onPress={() => onMenuPress?.(notification)}
-        style={({ pressed }) => [styles.rowMenu, pressed && styles.rowPressed]}
-        testID={`notification-menu-${notification.id}`}
-      >
-        {busy ? (
-          <ActivityIndicator size="small" color={colors.brand} />
-        ) : (
-          <Ionicons name="ellipsis-horizontal" size={22} color={colors.textSecondary} />
-        )}
-      </Pressable>
-    </View>
+    </Swipeable>
   );
 }
 

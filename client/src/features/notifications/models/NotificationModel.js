@@ -85,7 +85,10 @@ const cleanUrl = (value) => {
     : '';
 };
 
-const cleanCount = (value) => Math.min(999999, Math.max(1, Number(value) || 1));
+const cleanCount = (value) => Math.min(
+  Number.MAX_SAFE_INTEGER,
+  Math.max(1, Math.trunc(Number(value) || 1))
+);
 
 export function timestampToDate(value) {
   if (!value) return null;
@@ -183,6 +186,7 @@ export function normalizeNotification(id, value = {}) {
     readAt: timestampToDate(value.readAt),
     createdAt: timestampToDate(value.createdAt || value.timestamp),
     count: cleanCount(value.count),
+    milestone: value.subtype === 'like_milestone' ? cleanCount(value.milestone) : null,
     actorId: cleanId(value.actorId || directActor?.id),
     actorPreview: directActor || actorPreviews[0] || null,
     actorPreviews,
@@ -253,6 +257,13 @@ function targetLabel(notification) {
 
 export function getNotificationLikeMessageParts(notification) {
   if (notification?.type !== NotificationType.LIKE) return null;
+  if (notification.subtype === 'like_milestone') {
+    const milestone = cleanCount(notification.milestone || notification.count);
+    return {
+      actionLabel: `${milestone} לייקים`,
+      remainder: `על ${targetLabel(notification)} — אבן דרך חדשה!`,
+    };
+  }
   const count = cleanCount(notification.count);
   const actor = notification.actorPreview?.displayName || notification.actorPreviews?.[0]?.displayName;
   const actionLabel = count === 1 ? '1 לייק' : `${count} לייקים`;
@@ -286,6 +297,10 @@ export function formatNotificationMessage(notification) {
   const actor = notification.actorPreview?.displayName || notification.actorPreviews?.[0]?.displayName;
   const count = cleanCount(notification.count);
   if (notification.type === NotificationType.LIKE) {
+    if (notification.subtype === 'like_milestone') {
+      const milestone = cleanCount(notification.milestone || count);
+      return `התוכן שלך הגיע ל־${milestone} לייקים`;
+    }
     if (count > 1) return `${count} לייקים חדשים על ${targetLabel(notification)}`;
     return actor
       ? `לייק חדש מ${actor} על ${targetLabel(notification)}`

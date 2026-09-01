@@ -37,6 +37,21 @@ test('reply pushes use direct-reply copy on the existing comments channel', () =
   assert.equal(message.body, 'מישהו השיב לתגובה שלך.');
 });
 
+test('like milestone pushes use milestone copy without expanding routing data', () => {
+  const message = buildExpoMessage({
+    token: TOKEN,
+    notificationId: 'milestone-1',
+    channel: 'personal',
+    category: 'likes',
+    version: 1,
+    subtype: 'like_milestone',
+    milestone: 100,
+  });
+  assert.match(message.title, /אבן דרך/u);
+  assert.match(message.body, /100 לייקים/u);
+  assert.deepEqual(message.data, { notificationId: 'milestone-1', channel: 'personal' });
+});
+
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }

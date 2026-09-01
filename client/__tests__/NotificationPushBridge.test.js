@@ -2,15 +2,17 @@ import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
 
 let mockInstalledHandlers;
+let mockAuthValue;
 const mockRuntime = {
   start: jest.fn(async () => ({ status: 'started' })),
   stop: jest.fn(),
   flushPendingResponse: jest.fn(async () => false),
+  requestInitialPermission: jest.fn(async () => ({ status: 'already_enrolled' })),
   unregisterCurrentDevice: jest.fn(async () => ({ status: 'unregistered' })),
 };
 
 jest.mock('../src/hooks/useAuthUser', () => ({
-  useAuthUser: () => ({ user: { uid: 'user-1' } }),
+  useAuthUser: () => mockAuthValue,
 }));
 
 jest.mock('../src/features/notifications/push/runtimeManager', () => ({
@@ -44,6 +46,26 @@ describe('NotificationPushBridge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockInstalledHandlers = null;
+    mockAuthValue = { user: { uid: 'user-1' }, loading: false };
+  });
+
+  it('waits for auth hydration before starting first-launch onboarding', async () => {
+    mockAuthValue = { user: null, loading: true };
+    const navigationRef = { isReady: jest.fn(() => true), navigate: jest.fn() };
+    const screen = render(
+      <NotificationPushBridge navigationRef={navigationRef} navigationReady />
+    );
+
+    await act(async () => { await Promise.resolve(); });
+    expect(mockRuntime.requestInitialPermission).not.toHaveBeenCalled();
+
+    mockAuthValue = { user: null, loading: false };
+    screen.rerender(
+      <NotificationPushBridge navigationRef={navigationRef} navigationReady />
+    );
+    await waitFor(() => expect(mockRuntime.requestInitialPermission).toHaveBeenCalledWith({
+      enableForCurrentUser: false,
+    }));
   });
 
   it('routes a validated push intent through the authenticated notification tab', async () => {
@@ -53,6 +75,9 @@ describe('NotificationPushBridge', () => {
     };
     render(<NotificationPushBridge navigationRef={navigationRef} navigationReady />);
 
+    await waitFor(() => expect(mockRuntime.requestInitialPermission).toHaveBeenCalledWith({
+      enableForCurrentUser: true,
+    }));
     await waitFor(() => expect(mockRuntime.start).toHaveBeenCalledWith({ syncRegistration: true }));
     await act(async () => {
       await mockInstalledHandlers.onIntent({ notificationId: 'notice-1', channel: 'admin' });

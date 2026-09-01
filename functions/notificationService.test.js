@@ -9,11 +9,15 @@ const {
   deleteNotification,
   fanoutAdminNotification,
   handleOwnerNotificationOutboxWrite,
+  LIKE_MILESTONE_STEPS,
+  likeMilestoneAtOrBelow,
+  likeMilestoneNotificationId,
   markAllNotificationsRead,
   navigationForTarget,
   notificationDeliveryDescriptor,
   prepareGroupedLikeActivity,
   prepareGroupedLikeRemoval,
+  prepareLikeMilestoneActivity,
   prepareOwnerNotificationOutbox,
   purgeAdminNotificationsForUser,
   purgeNotificationsForActor,
@@ -231,6 +235,74 @@ test('grouped likes retain one generation and stale unlikes cannot change a recr
     actorId: 'actor-1',
     generation: 'generation-one',
   }).action, 'delete');
+});
+
+test('like milestones advance at fixed thresholds and every thousand without backfill or repeats', () => {
+  const target = buildNotificationTarget({
+    target: { type: 'recommendation', id: 'rec-1' },
+    data: { title: 'Post' },
+  });
+  const navigation = navigationForTarget(target);
+  assert.deepEqual(LIKE_MILESTONE_STEPS, [50, 100, 200, 500, 1000]);
+  assert.equal(likeMilestoneAtOrBelow(49), 0);
+  assert.equal(likeMilestoneAtOrBelow(50), 50);
+  assert.equal(likeMilestoneAtOrBelow(1999), 1000);
+  assert.equal(likeMilestoneAtOrBelow(2000), 2000);
+
+  for (const [currentCount, nextCount, previous, expected] of [
+    [49, 50, 0, 50],
+    [99, 100, 50, 100],
+    [199, 200, 100, 200],
+    [499, 500, 200, 500],
+    [999, 1000, 500, 1000],
+    [1999, 2000, 1000, 2000],
+  ]) {
+    const activity = prepareLikeMilestoneActivity({
+      currentCount,
+      nextCount,
+      notifiedMilestone: previous,
+      target,
+      navigation,
+    });
+    assert.equal(activity.milestone, expected);
+    assert.equal(activity.notification.subtype, 'like_milestone');
+    assert.equal(activity.notification.count, expected);
+    const document = buildNotificationDocument({
+      ...activity.notification,
+      createdAt: 'time',
+    });
+    assert.equal(document.milestone, expected);
+  }
+
+  assert.equal(prepareLikeMilestoneActivity({
+    currentCount: 50,
+    nextCount: 51,
+    notifiedMilestone: 50,
+    target,
+    navigation,
+  }), null);
+  assert.equal(prepareLikeMilestoneActivity({
+    currentCount: 49,
+    nextCount: 50,
+    notifiedMilestone: 50,
+    target,
+    navigation,
+  }), null);
+  assert.equal(prepareLikeMilestoneActivity({
+    currentCount: 437,
+    nextCount: 438,
+    notifiedMilestone: undefined,
+    target,
+    navigation,
+  }), null);
+  assert.equal(
+    likeMilestoneNotificationId('recommendations/rec-1', 50),
+    likeMilestoneNotificationId('recommendations/rec-1', 50)
+  );
+  assert.notEqual(
+    likeMilestoneNotificationId('recommendations/rec-1', 50),
+    likeMilestoneNotificationId('recommendations/rec-1', 100)
+  );
 });
 
 test('new activity advances push version while read-only changes do not', async () => {

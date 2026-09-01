@@ -38,13 +38,17 @@ export function createNotificationPushCallableClient({
 
     async getPreferences() {
       const uid = firebaseAuth.currentUser?.uid;
-      if (!uid) return normalizePushPreferences(null);
+      if (!uid) return { ...normalizePushPreferences(null), configured: false };
       const snapshot = await readDoc(
         makeDoc(firestore, 'users', uid, 'notificationState', 'state')
       );
-      return normalizePushPreferences(
-        snapshot.exists() ? snapshot.data()?.pushPreferences : null
-      );
+      const storedPreferences = snapshot.exists() ? snapshot.data()?.pushPreferences : null;
+      return {
+        ...normalizePushPreferences(storedPreferences),
+        configured: Boolean(
+          storedPreferences && typeof storedPreferences.pushEnabled === 'boolean'
+        ),
+      };
     },
 
     async setPreferences(preferences) {

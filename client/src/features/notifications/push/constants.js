@@ -43,6 +43,13 @@ export const ANDROID_NOTIFICATION_CHANNELS = Object.freeze({
 });
 
 export const STORED_EXPO_PUSH_TOKEN_KEY = '@planli/notifications/expoPushToken';
+export const STORED_PUSH_PERMISSION_ONBOARDING_KEY = '@planli/notifications/permissionOnboardingV1';
+
+export const PUSH_PERMISSION_ONBOARDING_STATES = Object.freeze({
+  DENIED: 'denied',
+  GRANTED_PENDING: 'granted_pending',
+  GRANTED_ENROLLED: 'granted_enrolled',
+});
 
 export const PUSH_RESULT_REASONS = Object.freeze({
   PERMISSION_REQUIRED: 'PERMISSION_REQUIRED',
