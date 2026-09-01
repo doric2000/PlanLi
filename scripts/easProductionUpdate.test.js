@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const {
   appendReleaseRecord,
+  buildRepublishCommand,
   extractReleaseMetadata,
   parseArgs,
   validateConfirmation,
@@ -67,6 +68,21 @@ test('parses only explicit release arguments and remains dry-run by default', ()
     previewGroup,
   });
   assert.throws(() => parseArgs(['--force']), /Unknown argument/);
+});
+
+test('republishes the verified candidate for iOS only', () => {
+  assert.deepEqual(buildRepublishCommand({
+    previewGroup,
+    message: 'Security release',
+  }), [
+    'update:republish',
+    '--group', previewGroup,
+    '--destination-channel', 'production',
+    '--platform', 'ios',
+    '--message', 'Security release',
+    '--json',
+    '--non-interactive',
+  ]);
 });
 
 test('requires an exact commit-bound confirmation only for apply', () => {
