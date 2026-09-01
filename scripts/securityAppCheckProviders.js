@@ -54,7 +54,7 @@ function validatePlan(plan) {
   if (plan.web?.appId !== '1:633543026638:web:b63d2a622f3d685646ad9f' ||
       plan.web?.recaptchaDisplayName !== 'PlanLi Web App Check' ||
       JSON.stringify(plan.web?.allowedDomains) !== JSON.stringify([
-        'planli-f0b12.firebaseapp.com', 'planli-f0b12.web.app',
+        'planli.cc', 'planli-f0b12.firebaseapp.com', 'planli-f0b12.web.app',
       ]) || plan.web?.minValidScore !== 0.5) {
     throw new Error('Web App Check identity or domain policy differs from the reviewed scope.');
   }

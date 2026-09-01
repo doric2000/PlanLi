@@ -119,7 +119,7 @@ function assertProtectedFirebaseEnvironment(env = process.env) {
 
   if (
     projectId !== PRODUCTION_PROJECT_ID
-    || authDomain !== 'planli-f0b12.firebaseapp.com'
+    || authDomain !== 'planli.cc'
     || mediaBucket !== 'planli-f0b12-media-eu'
     || messagingSenderId !== PRODUCTION_MESSAGING_SENDER_ID
     || appId !== PRODUCTION_FIREBASE_APP_ID

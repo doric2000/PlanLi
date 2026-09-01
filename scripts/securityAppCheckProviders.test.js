@@ -32,7 +32,7 @@ test('App Check manifest pins exact apps, certificates, domains and secure provi
   assert.equal(plan.android.playIntegrity.minDeviceRecognitionLevel, 'NO_INTEGRITY');
   assert.equal(plan.ios.requireDeviceCheckFallback, true);
   assert.deepEqual(plan.web.allowedDomains, [
-    'planli-f0b12.firebaseapp.com', 'planli-f0b12.web.app',
+    'planli.cc', 'planli-f0b12.firebaseapp.com', 'planli-f0b12.web.app',
   ]);
 });
 
