@@ -25,6 +25,7 @@ const { destinationKey } = require('./discoverySearch');
 const {
   destinationAcceptsNewReferences,
   destinationIsPublicAndReferenceable,
+  hasValidApprovedCanonicalPolicy,
 } = require('./destinationReferencePolicy');
 const { destinationHebrewName, hasHebrewName } = require('./destinationLocalizationService');
 const {
@@ -206,6 +207,16 @@ function destinationCoordinates(destination) {
   return null;
 }
 
+function destinationApprovedForReview(destination) {
+  const expectedCountryId = String(
+    destination?.countryId ||
+    destination?.googleCache?.countryCode ||
+    destination?.identity?.countryCode ||
+    ''
+  ).trim().toUpperCase();
+  return hasValidApprovedCanonicalPolicy(destination, expectedCountryId);
+}
+
 function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
   const issues = [];
   const add = (code, severity, label) => issues.push({ code, severity, label });
@@ -223,7 +234,8 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
   if (destination?.googleCache?.nameSources?.he === 'transliteration_fallback') {
     add('fallback_hebrew_name', 'warning', 'שם היעד תועתק אוטומטית וממתין לבדיקה');
   }
-  if (destination?.canonicalPolicy?.approved !== true) {
+  const approvedCanonicalDestination = destinationApprovedForReview(destination);
+  if (!approvedCanonicalDestination) {
     add('unapproved_canonical_destination', 'error', 'היעד אינו מאושר במאגר היעדים הקנוני');
   }
   if (!names.en) add('missing_english_name', 'error', 'חסר שם באנגלית');
@@ -239,7 +251,7 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
   if (destinationCoordinates(destination) && !destination?.travelFacts?.closestAirport) add('missing_airport', 'warning', 'לא נמצא שדה תעופה קרוב');
   if (['failed', 'retry'].includes(job?.imageSync?.state)) add('image_job_failed', 'warning', 'בדיקת התמונה נכשלה או ממתינה לניסיון נוסף');
   if (['failed', 'needs_review'].includes(job?.identitySync?.state)) add('identity_job_failed', 'warning', 'זיהוי העיר דורש בדיקה');
-  if (!review?.approvedAt && destination?.canonicalPolicy?.approved !== true) {
+  if (!review?.approvedAt && !approvedCanonicalDestination) {
     add('new_destination', 'info', 'העיר טרם אושרה ידנית');
   }
   return issues;
@@ -248,7 +260,7 @@ function qualityIssues(destination, job = {}, review = {}, now = Date.now()) {
 function destinationReviewStatus(destination, issues = []) {
   if (destination?.status === 'inactive') return 'inactive';
   if (issues.some((issue) => issue?.severity === 'error')) return 'blocked';
-  if (destination?.canonicalPolicy?.approved === true) {
+  if (destinationApprovedForReview(destination)) {
     return issues.length ? 'approved_with_warnings' : 'approved';
   }
   return issues.length ? 'open' : 'ready';
