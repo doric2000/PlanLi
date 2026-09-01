@@ -26,16 +26,24 @@
 
 html {
   min-width: 320px;
-  background: var(--paper);
+  min-height: 100%;
+  background: var(--navy-deep);
+  overscroll-behavior-y: none;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   overflow-x: hidden;
+  background:
+    linear-gradient(90deg, rgba(5,21,37,0.1) 0%, rgba(5,21,37,0.28) 44%, rgba(5,21,37,0.62) 100%),
+    url("assets/images/mountain-hero-1120.webp") center / cover no-repeat;
   color: var(--ink);
   font-family: "Assistant", system-ui, -apple-system, "Segoe UI", sans-serif;
+  overscroll-behavior-y: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -65,8 +73,11 @@ img {
 .hero {
   position: relative;
   isolation: isolate;
+  min-height: 100vh;
   min-height: 100svh;
+  min-height: 100dvh;
   overflow: hidden;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .topbar {
@@ -466,9 +477,7 @@ img {
 /* 06 — Stay in the Journey */
 .concept-stay {
   color: #fff;
-  background:
-    linear-gradient(90deg, rgba(5,21,37,0.1) 0%, rgba(5,21,37,0.28) 44%, rgba(5,21,37,0.62) 100%),
-    url("assets/images/mountain-hero-1120.webp") center / cover no-repeat;
+  background: transparent;
 }
 
 .concept-stay::after {
@@ -692,6 +701,12 @@ img {
 }
 
 @media (max-width: 640px) {
+  body {
+    background:
+      linear-gradient(180deg, rgba(4,18,32,.54), rgba(4,18,32,.12) 50%, rgba(4,18,32,.4)),
+      url("assets/images/mountain-hero-720.webp") center / cover no-repeat;
+  }
+
   .topbar {
     width: calc(100% - 28px);
     height: 74px;
@@ -716,7 +731,7 @@ img {
     width: calc(100% - 28px);
     min-height: auto;
     gap: 10px;
-    padding: 18px 0 36px;
+    padding: 18px 0 calc(118px + env(safe-area-inset-bottom, 0px));
   }
 
   .hero-copy h1,
@@ -848,9 +863,7 @@ img {
   }
 
   .concept-stay {
-    background:
-      linear-gradient(180deg, rgba(4,18,32,.54), rgba(4,18,32,.12) 50%, rgba(4,18,32,.4)),
-      url("assets/images/mountain-hero-720.webp") center / cover no-repeat;
+    background: transparent;
   }
 
   .concept-stay .copy-panel {
