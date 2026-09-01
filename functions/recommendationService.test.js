@@ -1507,7 +1507,7 @@ test('a reviewed Vlorë alias outranks ambiguous provider locality candidates', 
   }
 });
 
-test('a reliable Google Hebrew IL locality receives protected policy approval', async () => {
+test('a reliable Google Hebrew locality receives protected provider policy approval', async () => {
   const admin = createFakeAdmin({
     'countries/IL': {
       name: 'ישראל', names: { he: 'ישראל', en: 'Israel' }, code: 'IL',
@@ -1533,12 +1533,53 @@ test('a reliable Google Hebrew IL locality receives protected policy approval', 
   });
   assert.equal(destination.cityData.canonicalPolicy.approved, true);
   assert.equal(destination.cityData.canonicalPolicy.provisional, false);
-  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
+  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.policyId, 'verified-provider-destination-v1');
   assert.equal(destination.cityData.googleCache.names.he, 'נס ציונה');
   assert.equal(destination.createCity, true);
 });
 
-test('an explicitly selected natural feature remains a distinct provisional destination', async () => {
+test('a verified foreign locality is auto-approved instead of entering the admin queue', async () => {
+  const admin = createFakeAdmin({
+    'countries/AL': {
+      name: 'אלבניה', names: { he: 'אלבניה', en: 'Albania' }, code: 'AL',
+      region: 'Europe', currencyCode: 'ALL', status: 'active',
+    },
+  });
+  const coordinates = { lat: 41.3275, lng: 19.8187 };
+  const viewport = {
+    southwest: { lat: 41.25, lng: 19.72 },
+    northeast: { lat: 41.4, lng: 19.92 },
+  };
+  const destination = await resolveGoogleDestination({
+    admin,
+    selectionIntent: 'destination',
+    placesProvider: 'new',
+    resolvedPlace: {
+      fetchedAt: new Date(),
+      he: {
+        placeId: 'tirana-place', displayName: 'טירנה', localityName: 'טירנה',
+        countryName: 'אלבניה', countryCode: 'AL', localityCandidates: ['טירנה'],
+        coordinates, viewport, types: ['locality', 'political'],
+      },
+      en: {
+        placeId: 'tirana-place', displayName: 'Tirana', localityName: 'Tirana',
+        countryName: 'Albania', countryCode: 'AL', localityCandidates: ['Tirana'],
+        coordinates, viewport, types: ['locality', 'political'],
+      },
+    },
+  });
+
+  assert.equal(destination.countryId, 'AL');
+  assert.equal(destination.cityData.canonicalPolicy.approved, true);
+  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.countryCode, 'AL');
+  assert.equal(
+    destination.cityData.canonicalPolicy.registryAttestation.policyId,
+    'verified-provider-destination-v1'
+  );
+  assert.equal(destination.registryData.geometryPolicy.autoMatchEligible, false);
+});
+
+test('an explicitly selected verified natural feature is approved as a distinct destination', async () => {
   const admin = createFakeAdmin({
     'countries/PE': {
       name: 'פרו', names: { he: 'פרו', en: 'Peru' }, code: 'PE',
@@ -1572,7 +1613,12 @@ test('an explicitly selected natural feature remains a distinct provisional dest
   assert.equal(destination.cityData.canonicalPolicy.kind, 'natural_feature');
   assert.equal(destination.cityData.destinationType, 'natural_feature');
   assert.deepEqual(destination.cityData.googleCache.viewport, viewport);
-  assert.equal(destination.cityData.canonicalPolicy.approved, false);
+  assert.equal(destination.cityData.canonicalPolicy.approved, true);
+  assert.equal(destination.cityData.canonicalPolicy.provisional, false);
+  assert.equal(
+    destination.cityData.canonicalPolicy.registryAttestation.policyId,
+    'verified-provider-destination-v1'
+  );
   assert.equal(destination.createCity, true);
 });
 
@@ -1588,6 +1634,12 @@ test('mixed natural and administrative provider types require verified destinati
     selectionIntent: 'destination', destinationIntentVerified: true,
   }), {
     explicitlySelectedNaturalDestination: true,
+    selectedIsDestination: true,
+  });
+  assert.deepEqual(selectedDestinationTypePolicy(['colloquial_area', 'political'], {
+    selectionIntent: 'destination', destinationIntentVerified: true,
+  }), {
+    explicitlySelectedNaturalDestination: false,
     selectedIsDestination: true,
   });
 });
@@ -1705,7 +1757,7 @@ test('Hod Hasharon selected directly is accepted as a stable approved locality',
   assert.equal(destination.cityData.googleCache.names.he, 'הוד השרון');
   assert.equal(destination.cityData.providerRefs.googlePlaceId, 'google-hod-hasharon');
   assert.equal(destination.cityData.canonicalPolicy.approved, true);
-  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
+  assert.equal(destination.cityData.canonicalPolicy.registryAttestation.policyId, 'verified-provider-destination-v1');
   assert.equal(destination.place.placeId, 'google-hod-hasharon');
   assert.equal(
     [...admin.documents.keys()].some((path) => path.startsWith('system/runtime/providerUsage/')),
@@ -3073,7 +3125,7 @@ test('a verified IL containing locality reuses the existing country and auto-app
     );
     const city = admin.documents.get(`countries/ישראל/destinations/${cityId}`);
     assert.equal(city.canonicalPolicy.approved, true);
-    assert.equal(city.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
+    assert.equal(city.canonicalPolicy.registryAttestation.policyId, 'verified-provider-destination-v1');
     assert.equal(admin.documents.get(`recommendations/${result.recommendationId}`).status, 'active');
     assert.equal(
       admin.documents.get(`system/destinationRegistry/entries/${city.canonicalPolicy.registryId}`)
@@ -3180,7 +3232,7 @@ test('country policy and a verified locality create one stable approved IL desti
     assert.equal(saved.resolutionSource, preview.resolutionSource);
     const city = admin.documents.get(`countries/ישראל/destinations/${saved.city.id}`);
     assert.equal(city.canonicalPolicy.approved, true);
-    assert.equal(city.canonicalPolicy.registryAttestation.policyId, 'verified-il-locality-v1');
+    assert.equal(city.canonicalPolicy.registryAttestation.policyId, 'verified-provider-destination-v1');
     assert.equal(admin.documents.get(`recommendations/${saved.recommendationId}`).status, 'active');
   } finally {
     global.fetch = originalFetch;

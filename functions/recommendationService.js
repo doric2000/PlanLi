@@ -55,9 +55,9 @@ const {
   validateRegistryEntry,
 } = require('./canonicalDestinationRegistry');
 const {
-  buildVerifiedIlLocalityApproval,
-  canUpgradeVerifiedIlLocality,
-  verifiedIlRegistryEntryMatches,
+  buildVerifiedProviderDestinationApproval,
+  canUpgradeVerifiedProviderDestination,
+  verifiedProviderRegistryEntryMatches,
 } = require('./destinationApprovalPolicy');
 const {
   DESTINATION_NAMING_POLICY_VERSION,
@@ -163,7 +163,7 @@ function normalizeDestinationForUse(destination, countryCode) {
 
 function destinationMatchesResolvedPolicy(current, resolved, countryId = '') {
   if (destinationAcceptsNewReferences(current, countryId)) return true;
-  if (canUpgradeVerifiedIlLocality(current, resolved, countryId)) return true;
+  if (canUpgradeVerifiedProviderDestination(current, resolved, countryId)) return true;
   return destinationIsOperational(current) &&
     resolved?.canonicalPolicy?.approved !== true &&
     resolved?.canonicalPolicy?.provisional === true &&
@@ -1948,7 +1948,7 @@ async function resolveGoogleDestination({
   let registryRef = null;
   let registryData = null;
   if (provisionalDestination) {
-    const approval = buildVerifiedIlLocalityApproval({
+    const approval = buildVerifiedProviderDestinationApproval({
       entry: {
         ...canonicalEntry,
         ...(!canonicalEntry.viewport && !canonicalEntry.radiusKm ? {
@@ -1963,23 +1963,23 @@ async function resolveGoogleDestination({
     if (approval) {
       const validation = validateRegistryEntry(approval.registryEntry);
       assert(validation.valid, 'failed-precondition',
-        `The verified locality policy is invalid: ${validation.errors[0] || 'unknown'}.`);
+        `The verified destination policy is invalid: ${validation.errors[0] || 'unknown'}.`);
       registryRef = db.doc(`${REGISTRY_PATH}/${approval.registryEntry.id}`);
       registryData = approval.registryEntry;
       cityData = {
         ...cityData,
         countryId,
-        destinationType: 'city',
+        destinationType: canonicalType,
         providerRefs: { googlePlaceId: canonicalPlaceId },
         googleCache: {
           ...(cityData.googleCache || {}),
           ...builtDestination.data.googleCache,
-          countryCode: 'IL',
+          countryCode: resolvedCountry.countryCode,
         },
         canonicalPolicy: approval.canonicalPolicy,
         publicationFence: {
           state: 'complete',
-          reason: 'verified_il_locality',
+          reason: 'verified_provider_destination',
           approvalRevision: approval.canonicalPolicy.approvalRevision,
           completedAt: approval.canonicalPolicy.approvedAt,
         },
@@ -2259,7 +2259,7 @@ async function materializeDestinationResolution(db, stored) {
   );
   const countryData = countrySnapshot.exists ? countrySnapshot.data() : stored.countryData;
   const currentCityData = citySnapshot.exists ? citySnapshot.data() : null;
-  const cityData = currentCityData && !canUpgradeVerifiedIlLocality(
+  const cityData = currentCityData && !canUpgradeVerifiedProviderDestination(
     currentCityData, stored.cityData, stored.countryId
   ) ? currentCityData : stored.cityData;
   assert(countryData && cityData, 'failed-precondition', 'The resolved destination is invalid. Search again.');
@@ -2997,10 +2997,10 @@ async function saveRecommendation({
     const conflictingClaimSnapshot = claimedDestinationId && claimedDestinationId !== destination.cityId
       ? await transaction.get(db.doc(`countries/${destination.countryId}/destinations/${claimedDestinationId}`))
       : null;
-    const upgradesVerifiedIlLocality = citySnapshot.exists && canUpgradeVerifiedIlLocality(
+    const upgradesVerifiedProviderDestination = citySnapshot.exists && canUpgradeVerifiedProviderDestination(
       citySnapshot.data(), destination.cityData, destination.countryId
     );
-    const effectiveCityData = upgradesVerifiedIlLocality
+    const effectiveCityData = upgradesVerifiedProviderDestination
       ? destination.cityData
       : citySnapshot.exists ? citySnapshot.data() : destination.cityData;
     const canonicalCity = citySnapshot.exists
@@ -3016,17 +3016,17 @@ async function saveRecommendation({
       'The destination has no trustworthy Hebrew name.');
     if (destination.registryRef || destination.registryData) {
       assert(destination.registryRef && destination.registryData,
-        'failed-precondition', 'The verified locality registry plan is incomplete.');
+        'failed-precondition', 'The verified destination registry plan is incomplete.');
       const registryValidation = validateRegistryEntry(destination.registryData);
       assert(registryValidation.valid, 'failed-precondition',
-        `The verified locality registry plan is invalid: ${registryValidation.errors[0] || 'unknown'}.`);
+        `The verified destination registry plan is invalid: ${registryValidation.errors[0] || 'unknown'}.`);
       assert(
-        !registrySnapshot?.exists || verifiedIlRegistryEntryMatches(
+        !registrySnapshot?.exists || verifiedProviderRegistryEntryMatches(
           { id: registrySnapshot.id, ...registrySnapshot.data() },
           destination.registryData
         ),
         'failed-precondition',
-        'The verified locality registry identity changed while saving. Search again.'
+        'The verified destination registry identity changed while saving. Search again.'
       );
     }
     const transactionDestination = {
@@ -3139,7 +3139,7 @@ async function saveRecommendation({
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
-      if (upgradesVerifiedIlLocality) {
+      if (upgradesVerifiedProviderDestination) {
         transaction.update(destination.cityRef, {
           countryId: destination.countryId,
           destinationType: destination.cityData.destinationType,

@@ -304,6 +304,38 @@ test('missing provider types are untrusted unless the identity is explicitly rev
   assert.equal(providerIdentityPolicy('city_hub', [], { reviewedOverride: true }).compatible, true);
 });
 
+test('an admin-approved exact-only registry entry still matches its exact Place ID', () => {
+  const entry = {
+    id: 'fr-paris',
+    countryCode: 'FR',
+    names: { he: 'פריז', en: 'Paris' },
+    aliases: ['פריז', 'Paris'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    status: 'active',
+    center: { lat: 48.8566, lng: 2.3522 },
+    radiusKm: 20,
+    providerRefs: { googlePlaceId: 'paris-place' },
+    googleTypes: ['locality', 'political'],
+    geometryPolicy: {
+      autoMatchEligible: false,
+      aliasAutoMatchEligible: false,
+      source: 'admin_exact_only',
+      version: 3,
+    },
+    approval: { approvedByAdmin: true, approvedBy: 'admin-uid' },
+  };
+
+  const exact = matchCanonicalEntry([entry], {
+    countryCode: 'FR', providerPlaceId: 'paris-place',
+  });
+  assert.equal(exact?.entry?.id, 'fr-paris');
+  assert.equal(exact?.source, 'canonical_google_place_id');
+  assert.equal(matchCanonicalEntry([entry], {
+    countryCode: 'FR', aliases: ['Paris'], coordinates: entry.center,
+  }), null);
+});
+
 test('provider viewports remain eligible at small scales except exact-only natural features', () => {
   const cityViewport = {
     southwest: { lat: 31.7, lng: 34.7 },

@@ -7,15 +7,15 @@ const {
   clearRegistryCache,
   canonicalDestinationId,
   derivedRadiusKm,
+  destinationTypeForKind,
   REGISTRY_PATH,
   REGISTRY_VERSION,
   validateRegistryEntry,
 } = require('../canonicalDestinationRegistry');
 const {
   approvedRegistryId,
-  buildVerifiedIlLocalityApproval,
-  canUpgradeVerifiedIlLocality,
-  verifiedIlRegistryEntryMatches,
+  buildVerifiedProviderDestinationApproval,
+  verifiedProviderRegistryEntryMatches,
 } = require('../destinationApprovalPolicy');
 const {
   destinationCoordinates,
@@ -34,7 +34,7 @@ const {
   processDestinationReassignmentJob,
   startDestinationReassignment,
 } = require('../destinationReassignmentService');
-const { provisionalRegistryId } = require('../destinationResolutionPolicy');
+const { provisionalDestinationKind, provisionalRegistryId } = require('../destinationResolutionPolicy');
 const { destinationClaimId } = require('../destinationV3Service');
 const { destinationAcceptsNewReferences } = require('../destinationReferencePolicy');
 const { initializeAdmin } = require('./localCredentials');
@@ -71,7 +71,7 @@ function parseOptions(argv = process.argv.slice(2)) {
     confirmProject: valueAfter(argv, '--confirm-project'),
     fingerprint: valueAfter(argv, '--fingerprint'),
     requestedBy: valueAfter(argv, '--requested-by'),
-    reason: valueAfter(argv, '--reason') || 'Destination policy rollout repair',
+    reason: valueAfter(argv, '--reason') || 'Global verified destination auto-approval repair',
   };
   if (options.reason.length < 3 || options.reason.length > 500) fail('--reason is invalid.');
   return options;
@@ -97,10 +97,12 @@ function reviewId(countryId, cityId) {
   return crypto.createHash('sha256').update(`${countryId}\n${cityId}`).digest('base64url');
 }
 
-function localityEntryFromDestination({ destination, countryCode, registryId }) {
+function destinationEntryFromDestination({ destination, countryCode, registryId }) {
   const coordinates = destinationCoordinates(destination);
   const names = destination.googleCache?.names || destination.identity?.names || {};
   const viewport = destination.googleCache?.viewport || destination.identity?.viewport || null;
+  const googleTypes = destination.googleCache?.types || destination.identity?.types || [];
+  const kind = destination.canonicalPolicy?.kind || provisionalDestinationKind(googleTypes);
   const entry = {
     id: registryId,
     countryCode,
@@ -111,7 +113,7 @@ function localityEntryFromDestination({ destination, countryCode, registryId }) 
       ...(Array.isArray(destination.canonicalPolicy?.aliases)
         ? destination.canonicalPolicy.aliases : []),
     ].map((value) => String(value || '').trim()).filter(Boolean))),
-    kind: 'city_hub',
+    kind,
     parentId: null,
     groupingPolicy: 'self',
     center: coordinates,
@@ -119,7 +121,7 @@ function localityEntryFromDestination({ destination, countryCode, registryId }) 
     providerRefs: {
       googlePlaceId: destination.providerRefs?.googlePlaceId || destination.googleCache?.placeId || '',
     },
-    googleTypes: destination.googleCache?.types || destination.identity?.types || [],
+    googleTypes,
     registryVersion: REGISTRY_VERSION,
   };
   if (!viewport && coordinates) entry.radiusKm = derivedRadiusKm(entry);
@@ -151,13 +153,53 @@ function claimConflict(claim, cityId, placeId) {
 function registryCompatible(snapshot, planned) {
   if (!snapshot?.exists) return true;
   const current = { id: snapshot.id, ...(snapshot.data() || {}) };
-  if (verifiedIlRegistryEntryMatches(current, planned)) return true;
-  return current.id === planned.id && current.countryCode === 'IL' &&
+  if (verifiedProviderRegistryEntryMatches(current, planned)) return true;
+  return current.id === planned.id && current.countryCode === planned.countryCode &&
     current.status !== 'inactive' &&
     (!current.destinationPath || current.destinationPath === planned.destinationPath) &&
     current.providerRefs?.googlePlaceId === planned.providerRefs?.googlePlaceId &&
-    current.kind === 'city_hub' && current.groupingPolicy === 'self' &&
-    current.approval?.approvedByAdmin !== true;
+    current.kind === planned.kind && current.groupingPolicy === planned.groupingPolicy;
+}
+
+function canonicalPolicyForAdminRegistry({
+  generatedPolicy,
+  registryEntry,
+  countryId,
+}) {
+  const approval = registryEntry.approval || {};
+  const registryVersion = Math.max(
+    1,
+    Math.trunc(Number(registryEntry.registryVersion || generatedPolicy.registryVersion) || 1)
+  );
+  const approvalRevision = Math.max(
+    1,
+    Math.trunc(Number(registryEntry.approvalRevision || generatedPolicy.approvalRevision) || 1)
+  );
+  const approvedBy = String(approval.approvedBy || generatedPolicy.approvedBy || '').trim();
+  const approvedAt = approval.approvedAt || generatedPolicy.approvedAt;
+  return {
+    ...generatedPolicy,
+    registryId: registryEntry.id,
+    kind: registryEntry.kind,
+    parentId: registryEntry.parentId || null,
+    groupingPolicy: registryEntry.groupingPolicy,
+    aliases: Array.isArray(registryEntry.aliases) ? registryEntry.aliases : generatedPolicy.aliases,
+    registryVersion,
+    approvalRevision,
+    registryAttestation: {
+      approved: true,
+      registryId: registryEntry.id,
+      registryVersion,
+      approvalRevision,
+      countryId,
+      countryCode: registryEntry.countryCode,
+      approvalMode: 'admin',
+      issuedBy: approvedBy,
+      issuedAt: approvedAt,
+    },
+    approvedBy,
+    approvedAt,
+  };
 }
 
 function destinationPlan({
@@ -170,31 +212,35 @@ function destinationPlan({
 }) {
   const source = sourceSnapshot.data() || {};
   const sourceMatch = sourceSnapshot.ref.path.match(DESTINATION_PATH);
-  if (!sourceMatch || source.status !== 'active' || source.canonicalPolicy?.approved === true ||
-      source.canonicalPolicy?.provisional !== true) return null;
+  if (!sourceMatch || source.status !== 'active' ||
+      destinationAcceptsNewReferences(source, sourceMatch?.[1])) return null;
   const [, sourceCountryId, sourceCityId] = sourceMatch;
   const sourceCountryCode = String(sourceCountry?.code || sourceCountryId).toUpperCase();
   if (sourceCountry?.status !== 'active') return null;
   const coordinates = destinationCoordinates(source);
   const policyCountry = coordinates ? resolveIsraelPolicy(coordinates) : null;
   const crossCountry = sourceCountryCode !== 'IL' && policyCountry?.countryCode === 'IL';
-  if (sourceCountryCode !== 'IL' && !crossCountry) return null;
+  const targetCountryCode = crossCountry ? 'IL' : sourceCountryCode;
   if (!targetCountry?.id || targetCountry.status !== 'active' ||
-      String(targetCountry.code || '').toUpperCase() !== 'IL') return {
-    blocker: `${sourceSnapshot.ref.path}:missing_il_country`,
+      String(targetCountry.code || '').toUpperCase() !== targetCountryCode) return {
+    blocker: `${sourceSnapshot.ref.path}:missing_target_country`,
   };
 
   const placeId = source.providerRefs?.googlePlaceId || source.googleCache?.placeId || '';
   const registryId = crossCountry
     ? provisionalRegistryId('IL', placeId)
-    : source.canonicalPolicy?.registryId;
+    : source.canonicalPolicy?.registryId || provisionalRegistryId(targetCountryCode, placeId);
   const targetCountryId = targetCountry.id;
   const targetCityId = crossCountry
     ? canonicalDestinationId(targetCountryId, registryId)
     : sourceCityId;
   const destinationPath = `countries/${targetCountryId}/destinations/${targetCityId}`;
-  const entry = localityEntryFromDestination({ destination: source, countryCode: 'IL', registryId });
-  const approval = buildVerifiedIlLocalityApproval({
+  const entry = destinationEntryFromDestination({
+    destination: source,
+    countryCode: targetCountryCode,
+    registryId,
+  });
+  const approval = buildVerifiedProviderDestinationApproval({
     entry,
     countryId: targetCountryId,
     destinationPath,
@@ -221,35 +267,57 @@ function destinationPlan({
   const observedProviderCountryCode = String(
     base.googleCache?.countryCode || base.identity?.countryCode || ''
   ).toUpperCase();
+  const existingRegistry = registrySnapshot?.exists ? registrySnapshot.data() || {} : null;
+  const preservesAdminApproval = existingRegistry?.approval?.approvedByAdmin === true;
+  const registryData = preservesAdminApproval ? {
+    ...approval.registryEntry,
+    ...existingRegistry,
+    id: approval.registryEntry.id,
+    destinationPath: existingRegistry.destinationPath || approval.registryEntry.destinationPath,
+    status: 'active',
+    approvalRevision: Math.max(
+      1,
+      Math.trunc(Number(existingRegistry.approvalRevision) || 0),
+      Math.trunc(Number(approval.registryEntry.approvalRevision) || 0)
+    ),
+    approval: existingRegistry.approval,
+  } : approval.registryEntry;
+  const canonicalPolicy = preservesAdminApproval
+    ? canonicalPolicyForAdminRegistry({
+        generatedPolicy: approval.canonicalPolicy,
+        registryEntry: registryData,
+        countryId: targetCountryId,
+      })
+    : approval.canonicalPolicy;
   const targetData = {
     ...base,
     countryId: targetCountryId,
-    destinationType: 'city',
-    discoveryRegionId: discoveryRegionForCountry('IL'),
+    destinationType: destinationTypeForKind(entry.kind),
+    discoveryRegionId: discoveryRegionForCountry(targetCountryCode),
     providerRefs: { ...(base.providerRefs || {}), googlePlaceId: placeId },
     googleCache: {
       ...(base.googleCache || {}),
-      countryCode: 'IL',
-      ...(observedProviderCountryCode && observedProviderCountryCode !== 'IL'
+      countryCode: targetCountryCode,
+      ...(crossCountry && observedProviderCountryCode && observedProviderCountryCode !== targetCountryCode
         ? { providerCountryCode: observedProviderCountryCode }
         : {}),
     },
     ...(base.identity || crossCountry ? {
       identity: {
         ...(base.identity || {}),
-        countryCode: 'IL',
-        ...(observedProviderCountryCode && observedProviderCountryCode !== 'IL'
+        countryCode: targetCountryCode,
+        ...(crossCountry && observedProviderCountryCode && observedProviderCountryCode !== targetCountryCode
           ? { providerCountryCode: observedProviderCountryCode }
           : {}),
-        countryPolicy: 'israel-policy',
+        ...(crossCountry ? { countryPolicy: 'israel-policy' } : {}),
       },
     } : {}),
-    canonicalPolicy: approval.canonicalPolicy,
+    canonicalPolicy,
     publicationFence: {
       state: 'complete',
-      reason: 'verified_il_locality',
-      approvalRevision: approval.canonicalPolicy.approvalRevision,
-      completedAt: approval.canonicalPolicy.approvedAt,
+      reason: 'verified_provider_destination',
+      approvalRevision: canonicalPolicy.approvalRevision,
+      completedAt: canonicalPolicy.approvedAt,
     },
     status: 'active',
     ...(crossCountry ? { stats: { recommendationCount: 0 } } : {}),
@@ -269,7 +337,7 @@ function destinationPlan({
     registryPath: `${REGISTRY_PATH}/${approval.registryEntry.id}`,
     claimPath,
     targetData,
-    registryData: approval.registryEntry,
+    registryData,
     claimData: {
       countryId: targetCountryId,
       destinationType: targetData.destinationType,
@@ -330,9 +398,9 @@ async function loadState(db) {
 
 function buildRolloutPlan(state) {
   const countryById = new Map(state.countries.map((country) => [country.id, country]));
-  const ilCountry = state.countries.find((country) =>
-    String(country.data.code || '').toUpperCase() === 'IL' && country.data.status === 'active'
-  );
+  const activeCountryByCode = new Map(state.countries
+    .filter((country) => country.data.status === 'active')
+    .map((country) => [String(country.data.code || country.id).toUpperCase(), country]));
   const destinationByPath = new Map(state.destinations.map((snapshot) => [snapshot.ref.path, snapshot]));
   const provisionalPlans = [];
   const blockers = [];
@@ -346,31 +414,37 @@ function buildRolloutPlan(state) {
     const sourceCountryCode = String(sourceCountry?.data?.code || match[1]).toUpperCase();
     const crossCountry = sourceCountryCode !== 'IL' &&
       resolveIsraelPolicy(destinationCoordinates(source))?.countryCode === 'IL';
+    const targetCountryCode = crossCountry ? 'IL' : sourceCountryCode;
+    const targetCountry = activeCountryByCode.get(targetCountryCode);
     const registryId = crossCountry
       ? provisionalRegistryId('IL', placeId)
-      : source.canonicalPolicy?.registryId;
-    const targetCityId = crossCountry && ilCountry
-      ? canonicalDestinationId(ilCountry.id, registryId)
+      : source.canonicalPolicy?.registryId || provisionalRegistryId(targetCountryCode, placeId);
+    const targetCityId = crossCountry && targetCountry
+      ? canonicalDestinationId(targetCountry.id, registryId)
       : match[2];
-    const targetPath = ilCountry
-      ? `countries/${ilCountry.id}/destinations/${targetCityId}`
+    const targetPath = targetCountry
+      ? `countries/${targetCountry.id}/destinations/${targetCityId}`
       : '';
     const targetSnapshot = targetPath ? destinationByPath.get(targetPath) : null;
     const provisionalEntry = registryId
-      ? localityEntryFromDestination({ destination: source, countryCode: 'IL', registryId })
+      ? destinationEntryFromDestination({
+          destination: source,
+          countryCode: targetCountryCode,
+          registryId,
+        })
       : null;
-    const provisionalClaimPath = ilCountry && provisionalEntry
-      ? claimPathFor(ilCountry.id, {
+    const provisionalClaimPath = targetCountry && provisionalEntry
+      ? claimPathFor(targetCountry.id, {
           ...source,
-          countryId: ilCountry.id,
-          destinationType: 'city',
-          googleCache: { ...(source.googleCache || {}), countryCode: 'IL' },
+          countryId: targetCountry.id,
+          destinationType: destinationTypeForKind(provisionalEntry.kind),
+          googleCache: { ...(source.googleCache || {}), countryCode: targetCountryCode },
         })
       : '';
     const plan = destinationPlan({
       sourceSnapshot,
       sourceCountry: sourceCountry?.data,
-      targetCountry: ilCountry ? { id: ilCountry.id, ...ilCountry.data } : null,
+      targetCountry: targetCountry ? { id: targetCountry.id, ...targetCountry.data } : null,
       targetSnapshot,
       registrySnapshot: provisionalEntry
         ? state.registries.get(`${REGISTRY_PATH}/${approvedRegistryId(provisionalEntry)}`) : null,
@@ -419,6 +493,8 @@ function buildRolloutPlan(state) {
   }
 
   const reviewRepairs = [];
+  const plannedDestinationByPath = new Map(provisionalPlans
+    .map((plan) => [plan.target.path, plan.targetData]));
   for (const destinationSnapshot of state.destinations) {
     const match = destinationSnapshot.ref.path.match(DESTINATION_PATH);
     if (!match) continue;
@@ -426,7 +502,10 @@ function buildRolloutPlan(state) {
     const reviewPath = `system/moderation/destinationReviews/${reviewId(countryId, cityId)}`;
     const reviewSnapshot = state.reviews.get(reviewPath);
     const jobSnapshot = state.jobs.get(`system/runtime/destinationJobs/${countryId}_${cityId}`);
-    const destination = { ...(destinationSnapshot.data() || {}), countryId };
+    const destination = {
+      ...(plannedDestinationByPath.get(destinationSnapshot.ref.path) || destinationSnapshot.data() || {}),
+      countryId,
+    };
     const issues = qualityIssues(
       destination,
       jobSnapshot?.data() || {},
@@ -563,10 +642,15 @@ async function applyDestinationPlan({ db, adminImpl, plan }) {
 }
 
 function destinationAcceptsUpgrade(current, planned, countryId) {
-  return (current?.canonicalPolicy?.approved === true &&
-      current.canonicalPolicy.registryId === planned?.canonicalPolicy?.registryId &&
-      current?.providerRefs?.googlePlaceId === planned?.providerRefs?.googlePlaceId) ||
-    canUpgradeVerifiedIlLocality(current, planned, countryId);
+  const currentRegistryId = String(current?.canonicalPolicy?.registryId || '').trim();
+  const plannedRegistryIds = new Set([
+    planned?.canonicalPolicy?.registryId,
+    planned?.canonicalPolicy?.provisionalRegistryId,
+  ].map((value) => String(value || '').trim()).filter(Boolean));
+  return current?.status === 'active' &&
+    planned?.canonicalPolicy?.registryAttestation?.countryId === countryId &&
+    plannedRegistryIds.has(currentRegistryId) &&
+    current?.providerRefs?.googlePlaceId === planned?.providerRefs?.googlePlaceId;
 }
 
 async function finishReassignment({ adminImpl, plan, requestedBy, reason }) {
@@ -657,8 +741,8 @@ async function runRolloutRepair({ adminImpl = admin, options }) {
   await audit({
     admin: adminImpl,
     auth: { uid: options.requestedBy, token: { admin: true, name: actor.displayName || '' } },
-    action: 'destination_policy_rollout_repaired',
-    target: { type: 'system', id: 'destination-policy-rollout' },
+    action: 'destination_global_auto_approval_repaired',
+    target: { type: 'system', id: 'destination-global-auto-approval' },
     reason: options.reason,
     metadata: {
       fingerprint,
@@ -704,9 +788,10 @@ module.exports = {
   PROJECT_ID,
   assertApplyAllowed,
   buildRolloutPlan,
+  canonicalPolicyForAdminRegistry,
   claimConflict,
   destinationPlan,
-  localityEntryFromDestination,
+  destinationEntryFromDestination,
   manifestFingerprint,
   parseOptions,
   reassignmentRef,

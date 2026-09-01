@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   CONTAINING_PLACES_PRO_MONTHLY_LIMIT,
+  DESTINATION_AUTOCOMPLETE_TYPES,
   consumeContainingPlacesProBudget,
   monthKey,
   provisionalDestinationKind,
@@ -24,6 +25,11 @@ test('provisional destination kind follows explicit area types', () => {
   assert.equal(provisionalDestinationKind(['national_park', 'park']), 'natural_feature');
   assert.equal(provisionalDestinationKind(['colloquial_area']), 'tourism_region');
   assert.equal(provisionalDestinationKind(['locality', 'political']), 'city_hub');
+});
+
+test('destination search includes provider-backed islands, archipelagos, regions, and natural sites', () => {
+  ['locality', 'island', 'archipelago', 'colloquial_area', 'natural_feature', 'national_park']
+    .forEach((type) => assert.equal(DESTINATION_AUTOCOMPLETE_TYPES.has(type), true, type));
 });
 
 test('monthly Pro budget keys are stable UTC values', () => {

@@ -8,6 +8,7 @@ const {
   parseOptions,
   reassignmentRef,
 } = require('./repairDestinationPolicyRollout');
+const { matchCanonicalEntry } = require('../canonicalDestinationRegistry');
 
 function snapshot(path, data, version = 1) {
   return {
@@ -45,7 +46,7 @@ function locality(countryId, placeId, names, coordinates) {
   };
 }
 
-test('production rollout manifest dynamically includes IL upgrade, Rotem reassignment, holds, and status repair', () => {
+test('production rollout manifest includes global provider approvals, Rotem reassignment, holds, and status repair', () => {
   const kfar = snapshot(
     'countries/IL/destinations/kfar-tavor',
     locality('IL', 'kfar-tavor-place', { he: 'כפר תבור', en: 'Kfar Tavor' }, { lat: 32.686, lng: 35.421 }),
@@ -85,6 +86,33 @@ test('production rollout manifest dynamically includes IL upgrade, Rotem reassig
     },
   }, 13);
   const nazcaReviewPath = 'system/moderation/destinationReviews/nazca-review';
+  const invalidApprovedRegistryPath =
+    'system/destinationRegistry/entries/fr-invalid-approved';
+  const invalidApprovedRegistry = snapshot(invalidApprovedRegistryPath, {
+    id: 'fr-invalid-approved',
+    countryCode: 'FR',
+    names: { he: 'יעד לא מאומת', en: 'Invalid Approved Destination' },
+    aliases: ['יעד לא מאומת', 'Invalid Approved Destination'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    center: { lat: 48.8566, lng: 2.3522 },
+    radiusKm: 20,
+    providerRefs: { googlePlaceId: 'invalid-approved-place' },
+    googleTypes: ['locality', 'political'],
+    registryVersion: 3,
+    status: 'active',
+    geometryPolicy: {
+      autoMatchEligible: false,
+      aliasAutoMatchEligible: false,
+      source: 'admin_exact_only',
+      version: 3,
+    },
+    approval: {
+      approvedByAdmin: true,
+      approvedBy: 'admin-uid',
+      approvedAt: new Date('2026-08-31T10:00:00Z'),
+    },
+  }, 21);
   const state = {
     countries: [
       { id: 'IL', data: { code: 'IL', status: 'active' } },
@@ -95,7 +123,7 @@ test('production rollout manifest dynamically includes IL upgrade, Rotem reassig
     destinations: [kfar, rotem, nazca, invalidApproved],
     reviews: new Map([[nazcaReviewPath, snapshot(nazcaReviewPath, { status: 'open' }, 20)]]),
     jobs: new Map(),
-    registries: new Map(),
+    registries: new Map([[invalidApprovedRegistryPath, invalidApprovedRegistry]]),
     claims: new Map(),
     content: [
       snapshot('recommendations/nazca-rec', {
@@ -128,22 +156,31 @@ test('production rollout manifest dynamically includes IL upgrade, Rotem reassig
     ],
   };
 
-  const { manifest } = buildRolloutPlan(state);
+  const { manifest, provisionalPlans } = buildRolloutPlan(state);
   assert.equal(manifest.blockers.length, 0);
-  assert.equal(manifest.provisionalUpgrades.length, 2);
+  assert.equal(manifest.provisionalUpgrades.length, 3);
   assert.equal(manifest.provisionalUpgrades.filter((entry) => entry.crossCountry).length, 1);
   assert.deepEqual(manifest.holds.map((entry) => entry.path), [
+    'recommendations/invalid-approved-rec',
     'recommendations/nazca-rec',
     'recommendations/rotem-rec',
   ]);
   assert.ok(manifest.reviewRepairs.some((entry) =>
     entry.destinationPath === 'countries/FR/destinations/invalid-approved' &&
-    entry.desiredStatus === 'blocked'
+    ['approved', 'approved_with_warnings'].includes(entry.desiredStatus)
   ));
   assert.ok(manifest.reviewRepairs.some((entry) =>
     entry.destinationPath === 'countries/PE/destinations/nazca' &&
     ['approved', 'approved_with_warnings'].includes(entry.desiredStatus)
   ));
+  const repairedAdminPlan = provisionalPlans.find((entry) =>
+    entry.source.path === 'countries/FR/destinations/invalid-approved'
+  );
+  assert.equal(repairedAdminPlan.registryData.approval.approvedByAdmin, true);
+  assert.equal(repairedAdminPlan.targetData.canonicalPolicy.registryAttestation.approvalMode, 'admin');
+  assert.equal(matchCanonicalEntry([repairedAdminPlan.registryData], {
+    countryCode: 'FR', providerPlaceId: 'invalid-approved-place',
+  })?.entry?.id, 'fr-invalid-approved');
   assert.match(manifestFingerprint(manifest), /^[0-9a-f]{64}$/u);
 });
 

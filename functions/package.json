@@ -22,6 +22,7 @@
     "repair-applying-moderation": "node scripts/repairApplyingModerationEnforcements.js",
     "repair-destination-approval-release": "node scripts/repairDestinationApprovalRelease.js",
     "repair-destination-policy-rollout": "node scripts/repairDestinationPolicyRollout.js",
+    "repair-global-destination-approval": "node scripts/repairDestinationPolicyRollout.js",
     "repair-notification-created-at": "node scripts/repairNotificationCreatedAt.js",
     "repair-taxonomy-other": "node scripts/repairTaxonomyOtherRecommendations.js",
     "set-email-verified": "node scripts/setEmailVerified.js",
