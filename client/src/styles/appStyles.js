@@ -1449,16 +1449,11 @@ export const addRecommendationScreenStyles = StyleSheet.create({
 export const communityScreenStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.heroBlueGradient[1],
+    backgroundColor: colors.appSurface,
   },
   scroll: {
     flex: 1,
-    backgroundColor: colors.heroBlueGradient[1],
-  },
-  filtersAfterOverlappingHeader: {
-    paddingTop: radii.xl + 8,
-    position: 'relative',
-    zIndex: 2,
+    backgroundColor: colors.appSurface,
   },
   feedContent: {
     flexGrow: 1,
@@ -1588,7 +1583,7 @@ export const recommendationDetailScreenStyles = StyleSheet.create({
 export const homeScreenStyles = StyleSheet.create({
 	screen: {
 		flex: 1,
-		backgroundColor: colors.heroBlueGradient[1],
+		backgroundColor: colors.appSurface,
 	},
 	scroll: {
 		flex: 1,
@@ -4782,16 +4777,11 @@ export const routeMapStyles = StyleSheet.create({
 export const routesScreenStyles = StyleSheet.create({
 	screen: {
 		flex: 1,
-		backgroundColor: colors.heroBlueGradient[1],
+		backgroundColor: colors.appSurface,
 	},
 	scroll: {
 		flex: 1,
-		backgroundColor: colors.heroBlueGradient[1],
-	},
-	filtersAfterOverlappingHeader: {
-		paddingTop: radii.xl + 8,
-		position: 'relative',
-		zIndex: 2,
+		backgroundColor: colors.appSurface,
 	},
 	destinationClearBtn: {
 		alignItems: "center",

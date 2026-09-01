@@ -34,7 +34,6 @@ import {
   communityScreenStyles as styles,
   discoveryFilterTriggerStyles as filterUiStyles,
   tabHeroStyles,
-  TAB_HERO_OVERLAP,
   TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
 import { useAuthUser } from '../../../hooks/useAuthUser';
@@ -259,7 +258,7 @@ export default function CommunityScreen({ navigation, route }) {
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
 
   const renderActiveFilters = () => (
-    <View style={isFiltered ? styles.filtersAfterOverlappingHeader : null}>
+    <View style={tabHeroStyles.bodyContentInset}>
       <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
     </View>
   );
@@ -268,7 +267,6 @@ export default function CommunityScreen({ navigation, route }) {
     <PageHeader
       variant="hero"
       title="קהילה"
-      overlapNext
       style={tabHeroStyles.fixedHeader}
       testID="community-tab-header"
       renderTitleAccessory={() => (
@@ -404,13 +402,12 @@ export default function CommunityScreen({ navigation, route }) {
             windowSize={5}
             onScroll={onScroll}
             scrollEventThrottle={16}
-            renderItem={({ item, index }) => (
+            renderItem={({ item }) => (
               <RecommendationCard
                   item={item}
                   onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
                   variant="feed"
-                  topContentInset={!isFiltered && index === 0 ? TAB_HERO_OVERLAP : 0}
               />
             )}
             contentContainerStyle={[

@@ -738,7 +738,6 @@ export default function HomePlanningHubScreen({ navigation }) {
     <PageHeader
       variant="hero"
       title="מה מתכננים היום?"
-      overlapNext
       allowOverflow
       style={tabHeroStyles.fixedHeader}
       testID="home-tab-header"
@@ -892,7 +891,7 @@ export default function HomePlanningHubScreen({ navigation }) {
       <ScrollView
         ref={mainScrollRef}
         testID="home-scroll"
-        style={[styles.scroll, { backgroundColor: colors.heroBlueGradient[1] }]}
+        style={styles.scroll}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustsScrollIndicatorInsets={false}
