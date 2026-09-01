@@ -100,6 +100,50 @@ reports zero remaining rollout work and no blockers. No Hosting, EAS, client,
 App Check, iOS configuration, Rules, indexes, Storage, or IAM deployment was
 performed for this rollout.
 
+### Global destination auto-approval Functions and data release
+
+On `2026-09-01`, [PR #313](https://github.com/doric2000/PlanLi/pull/313)
+restored provider-verified automatic approval worldwide and merged to `main` as
+`7949e2147386606788231501ff98b05e759a4d15`. Cities, islands, provinces,
+tourism regions and explicitly selected natural destinations now use the same
+exact Google Place-ID, bilingual-name, geometry, registry and identity-claim
+gates. The existing Israel/Palestine policy remains unchanged. Exact-only
+entries cannot widen into alias or geometry matches, while an existing
+administrator-approved registry entry remains exact-matchable and retains an
+administrator attestation.
+
+Exactly 21 Node.js 22 v2 Functions were deployed from that merged commit to
+`europe-west1`: `saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `searchPlaces`, `resolvePlaceSelection`,
+`saveRoute`, `publishRouteDraft`, `recheckDestination`, `approveDestination`,
+`selectDestinationImageCandidate`, `setDestinationUploadedImage`,
+`setDestinationAirport`, `updateDestinationPolicy`,
+`previewDestinationReassignment`, `startDestinationReassignment`,
+`onDestinationImageCreated`, `auditDestinationQualityScheduled`,
+`reconcileDestinationApprovalReleasesScheduled`, `onDestinationCatalogSync`,
+`onDestinationRenameJobWritten`, and
+`onDestinationReassignmentJobWritten`. Independent inventory read-back found
+21/21 `ACTIVE` on `nodejs22`; their ready revisions were updated between
+`2026-09-01T18:29:18.540Z` and `2026-09-01T18:29:27.399Z`.
+
+The signed production repair applied fingerprint
+`acc8d668c112589d649bbf600c9a5cdb761d5dcb928c1924ac0a93cf8c9ab744`
+at `2026-09-01T18:31:09.480Z`. It upgraded Tirana and legacy Paris in place,
+released three destination-only recommendation holds, repaired both review
+statuses to `approved`, and reported no identity, registry, or country
+blockers. Independent read-back found both destinations active with one registry
+entry and one identity-claim owner each; all three recommendations are `active`
+with `publicationGate.destinationApprovalVerified: true`. The subsequent
+dry-run returned fingerprint
+`c9c6fe3600cea33c60386c65cf7501cf302a0cdca271821206628cab51ddcb8c`
+with zero upgrades, holds, review repairs, or blockers, and Cloud Run logging
+showed no `ERROR` entries after deployment.
+
+The affected 173 Functions tests, `validate:changed`, PR validation, CodeQL,
+Semgrep, Gitleaks, dependency review and security-invariant checks passed. No
+Hosting, EAS, client, App Check, iOS configuration, Rules, indexes, Storage,
+IAM, or dependency deployment accompanied this release.
+
 ### Admin console layout and scrolling Hosting release
 
 Implementation commit `4be4b93b4530a474a953723852ebb68e11271abe` passed
