@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
+import { captureDiagnosticException } from './ErrorReporting';
 
 const callables = new Map();
 const REPLAY_PROTECTED_CALLABLES = new Set(['deleteContent', 'requestAccountDeletion']);
@@ -37,8 +38,19 @@ export const saveComment = (target, text, options = {}) => {
 export const deleteComment = (target, commentId) =>
   call('deleteComment', { target, commentId });
 
-export const deleteContent = (target) =>
-  call('deleteContent', { target });
+export const deleteContent = async (target) => {
+  try {
+    return await call('deleteContent', { target });
+  } catch (error) {
+    captureDiagnosticException(error, {
+      operation: 'delete_content',
+      code: error?.code || 'unknown',
+      reason: 'delete_failed',
+      contentType: target?.type,
+    });
+    throw error;
+  }
+};
 
 export const setNotificationRead = (notificationId, read = true) =>
   call('setNotificationRead', { notificationId, read });

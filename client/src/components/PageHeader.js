@@ -41,7 +41,7 @@ export default function PageHeader({
         allowOverflow && styles.allowOverflow,
         {
           paddingTop: insets.top + (detail ? 4 : 8),
-          ...(hero ? { height: insets.top + TAB_HERO_BASE_HEIGHT } : {}),
+          ...(hero ? { minHeight: insets.top + TAB_HERO_BASE_HEIGHT } : {}),
         },
         style,
       ]}

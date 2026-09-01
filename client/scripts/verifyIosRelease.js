@@ -74,6 +74,7 @@ const requiredPlugins = [
   '@react-native-firebase/app',
   '@react-native-firebase/app-check',
   'expo-secure-store',
+  'expo-location',
 ];
 const configuredPlugins = (app.plugins || []).map(pluginName);
 
@@ -82,6 +83,12 @@ if (app.ios?.bundleIdentifier !== 'com.planli.planlitravels') {
 }
 if (app.ios?.usesAppleSignIn !== true) fail('Sign in with Apple must remain enabled.');
 if (app.ios?.supportsTablet !== false) fail('The untested iPad target must remain disabled for this beta.');
+if (
+  app.ios?.entitlements?.['com.apple.developer.devicecheck.appattest-environment']
+  !== 'production'
+) {
+  fail('Production iOS builds must include the production App Attest entitlement.');
+}
 if (app.ios?.infoPlist?.ITSAppUsesNonExemptEncryption !== false) {
   fail('ITSAppUsesNonExemptEncryption must explicitly remain false.');
 }
@@ -99,6 +106,14 @@ const rnFirebaseAppPlugin = (app.plugins || []).find(
   (plugin) => pluginName(plugin) === '@react-native-firebase/app',
 );
 const rnFirebaseAppOptions = Array.isArray(rnFirebaseAppPlugin) ? rnFirebaseAppPlugin[1] : null;
+const secureStorePlugin = (app.plugins || []).find(
+  (plugin) => pluginName(plugin) === 'expo-secure-store',
+);
+const secureStoreOptions = Array.isArray(secureStorePlugin) ? secureStorePlugin[1] : null;
+const locationPlugin = (app.plugins || []).find(
+  (plugin) => pluginName(plugin) === 'expo-location',
+);
+const locationOptions = Array.isArray(locationPlugin) ? locationPlugin[1] : null;
 if (rnFirebaseAppOptions?.ios?.disableSPM !== true) {
   fail('RNFirebase must use CocoaPods on iOS; set ios.disableSPM to true.');
 }
@@ -111,6 +126,27 @@ if (!String(imagePickerOptions?.cameraPermission || '').trim()) {
 if (imagePickerOptions?.microphonePermission !== false) {
   fail('The unused microphone permission must remain disabled.');
 }
+if (secureStoreOptions?.faceIDPermission !== false) {
+  fail('The unused Face ID permission must remain disabled.');
+}
+if (secureStoreOptions?.configureAndroidBackup !== false) {
+  fail('SecureStore Android backup must remain disabled.');
+}
+if (!String(locationOptions?.locationWhenInUsePermission || '').trim()) {
+  fail('The foreground location permission must remain configured.');
+}
+[
+  'locationAlwaysAndWhenInUsePermission',
+  'locationAlwaysPermission',
+  'motionUsagePermission',
+  'isIosBackgroundLocationEnabled',
+  'isAndroidBackgroundLocationEnabled',
+  'isAndroidMotionActivityEnabled',
+].forEach((option) => {
+  if (locationOptions?.[option] !== false) {
+    fail(`The unused location capability must remain disabled: ${option}.`);
+  }
+});
 if (Object.prototype.hasOwnProperty.call(app, 'newArchEnabled')) {
   fail('SDK 57 always uses the New Architecture; remove the obsolete newArchEnabled field.');
 }

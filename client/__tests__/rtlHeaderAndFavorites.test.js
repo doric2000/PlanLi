@@ -54,7 +54,8 @@ describe('overlapping hero headers', () => {
 
     const style = StyleSheet.flatten(getByTestId('uniform-hero-header').props.style);
     expect(getByTestId('uniform-hero-header').props.collapsable).toBe(false);
-    expect(style.height).toBe(TAB_HERO_BASE_HEIGHT + top);
+    expect(style.minHeight).toBe(TAB_HERO_BASE_HEIGHT + top);
+    expect(style.height).toBeUndefined();
     expect(style.paddingTop).toBe(top + 8);
   });
 
@@ -81,9 +82,9 @@ describe('overlapping hero headers', () => {
     );
 
     expect(getByTestId('region-title-accessory')).toBeTruthy();
-    expect(StyleSheet.flatten(getByTestId('header-with-region').props.style).height).toBe(
-      TAB_HERO_BASE_HEIGHT
-    );
+    const style = StyleSheet.flatten(getByTestId('header-with-region').props.style);
+    expect(style.minHeight).toBe(TAB_HERO_BASE_HEIGHT);
+    expect(style.height).toBeUndefined();
   });
 });
 

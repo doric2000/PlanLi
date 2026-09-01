@@ -27,6 +27,7 @@ import { deleteContent } from '../services/SocialService';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { CAPABILITIES } from '../constants/authPolicy';
 import { usePersonalizationFeedback } from '../features/profile/context/PersonalizationFeedbackContext';
+import { contentDeletionFailureMessage } from '../utils/contentDeletionError';
 
 
 /**
@@ -200,7 +201,7 @@ const RecommendationCard = ({
       onDeleted?.(item.id); // חשוב: לעדכן את הרשימה
     } catch (error) {
       console.error("Delete error:", error);
-      Alert.alert("שגיאה", "לא הצלחנו למחוק את ההמלצה.");
+      Alert.alert("שגיאה", contentDeletionFailureMessage(error, 'recommendation'));
     }
   };
   const renderHeader = (overlay = false) => (

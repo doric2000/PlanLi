@@ -907,6 +907,29 @@ function destinationUnavailable(message) {
   });
 }
 
+function mergedDestinationOwnsProviderClaim({
+  countryId,
+  destinationId,
+  providerPlaceId,
+  currentDestination,
+  claimedDestinationId,
+  claimedDestination,
+}) {
+  const mergedInto = claimedDestination?.mergedInto || {};
+  const reassignmentTarget = claimedDestination?.reassignment?.target || {};
+  return Boolean(
+    claimedDestinationId && claimedDestinationId !== destinationId &&
+    claimedDestination?.status === 'inactive' &&
+    claimedDestination?.reassignment?.state === 'complete' &&
+    mergedInto.countryId === countryId && mergedInto.cityId === destinationId &&
+    reassignmentTarget.countryId === countryId && reassignmentTarget.cityId === destinationId &&
+    claimedDestination?.providerRefs?.googlePlaceId === providerPlaceId &&
+    currentDestination?.status === 'active' &&
+    currentDestination?.providerRefs?.googlePlaceId === providerPlaceId &&
+    destinationAcceptsNewReferences(currentDestination, countryId)
+  );
+}
+
 async function resolveExistingDestination(db, destinationRef) {
   let { countryId, cityId } = cleanRecommendationDestinationRef(destinationRef);
   const visited = new Set();
@@ -2892,6 +2915,16 @@ async function saveRecommendation({
         ? transaction.get(destination.claimRef)
         : Promise.resolve(null),
     ]);
+    const claimed = claimSnapshot?.exists ? claimSnapshot.data() || {} : null;
+    const claimedProviderPlaceId = destination.cityData?.providerRefs?.googlePlaceId;
+    const claimedDestinationId = claimedProviderPlaceId && claimed
+      ? Object.entries(claimed.entries || {})
+        .find(([, entry]) => entry?.providerPlaceId === claimedProviderPlaceId)?.[0] ||
+        (claimed.providerPlaceId === claimedProviderPlaceId ? claimed.destinationId : null)
+      : null;
+    const conflictingClaimSnapshot = claimedDestinationId && claimedDestinationId !== destination.cityId
+      ? await transaction.get(db.doc(`countries/${destination.countryId}/destinations/${claimedDestinationId}`))
+      : null;
     const canonicalCity = citySnapshot.exists
       ? normalizeDestinationHebrewData(citySnapshot.data(), {
         countryCode: countrySnapshot.data()?.code || destination.countryId,
@@ -3022,7 +3055,6 @@ async function saveRecommendation({
     }
     if (destination.claimRef) {
       if (claimSnapshot?.exists) {
-        const claimed = claimSnapshot.data() || {};
         assert(
           claimed.countryId === destination.countryId &&
             claimed.destinationType === destination.cityData.destinationType,
@@ -3030,22 +3062,37 @@ async function saveRecommendation({
           'The destination identity claim changed while saving. Search again.'
         );
         const placeId = destination.cityData?.providerRefs?.googlePlaceId;
-        const destinationForPlace = Object.entries(claimed.entries || {})
-          .find(([, entry]) => entry?.providerPlaceId === placeId)?.[0] ||
-          (claimed.providerPlaceId === placeId ? claimed.destinationId : null);
+        const destinationForPlace = claimedDestinationId;
+        const safelyRebindsMergedDestination = destinationForPlace &&
+          destinationForPlace !== destination.cityId &&
+          conflictingClaimSnapshot?.exists &&
+          mergedDestinationOwnsProviderClaim({
+            countryId: destination.countryId,
+            destinationId: destination.cityId,
+            providerPlaceId: placeId,
+            currentDestination: citySnapshot.data() || {},
+            claimedDestinationId: destinationForPlace,
+            claimedDestination: conflictingClaimSnapshot.data() || {},
+          });
         assert(
-          !destinationForPlace || destinationForPlace === destination.cityId,
+          !destinationForPlace || destinationForPlace === destination.cityId || safelyRebindsMergedDestination,
           'failed-precondition',
           'The destination identity changed while saving. Search again.'
         );
-        transaction.set(destination.claimRef, {
+        const entries = {
+          ...(claimed.entries || {}),
+          ...(destination.claimData?.entries || {}),
+        };
+        if (safelyRebindsMergedDestination) delete entries[destinationForPlace];
+        transaction.update(destination.claimRef, {
           ...destination.claimData,
-          entries: {
-            ...(claimed.entries || {}),
-            ...(destination.claimData?.entries || {}),
-          },
+          entries,
+          ...(safelyRebindsMergedDestination && claimed.providerPlaceId === placeId ? {
+            providerPlaceId: admin.firestore.FieldValue.delete(),
+            destinationId: admin.firestore.FieldValue.delete(),
+          } : {}),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
       } else {
         assert(destination.claimData, 'failed-precondition', 'The destination identity claim is missing.');
         transaction.create(destination.claimRef, {

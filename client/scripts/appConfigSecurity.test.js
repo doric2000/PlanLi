@@ -5,6 +5,7 @@ const path = require('node:path');
 const configureApp = require('../app.config');
 const { assertProtectedFirebaseEnvironment } = configureApp;
 const fixture = (name) => path.join(__dirname, 'fixtures', name);
+const appJson = require('../app.json').expo;
 
 function stagingEnvironment(overrides = {}) {
   return {
@@ -163,4 +164,27 @@ test('native Maps keys use the SDK 57 react-native-maps config plugin only', () 
     assert.equal(resolved.ios.config?.googleMapsApiKey, undefined);
     assert.equal(resolved.android.config?.googleMaps, undefined);
   });
+});
+
+test('native privacy plugins expose only foreground location and used capabilities', () => {
+  const pluginOptions = (name) => {
+    const plugin = appJson.plugins.find((entry) => (
+      (Array.isArray(entry) ? entry[0] : entry) === name
+    ));
+    return Array.isArray(plugin) ? plugin[1] : null;
+  };
+  const secureStore = pluginOptions('expo-secure-store');
+  const location = pluginOptions('expo-location');
+
+  assert.equal(secureStore.configureAndroidBackup, false);
+  assert.equal(secureStore.faceIDPermission, false);
+  assert.match(location.locationWhenInUsePermission, /PlanLi/u);
+  [
+    'locationAlwaysAndWhenInUsePermission',
+    'locationAlwaysPermission',
+    'motionUsagePermission',
+    'isIosBackgroundLocationEnabled',
+    'isAndroidBackgroundLocationEnabled',
+    'isAndroidMotionActivityEnabled',
+  ].forEach((option) => assert.equal(location[option], false, option));
 });
