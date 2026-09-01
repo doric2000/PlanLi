@@ -24,8 +24,8 @@ const {
   isDestinationReassigning,
 } = require('./destinationReferencePolicy');
 const {
-  canUpgradeVerifiedIlLocality,
-  verifiedIlRegistryEntryMatches,
+  canUpgradeVerifiedProviderDestination,
+  verifiedProviderRegistryEntryMatches,
 } = require('./destinationApprovalPolicy');
 const { validateRegistryEntry } = require('./canonicalDestinationRegistry');
 const { normalizeRouteTime } = require('./routeTime');
@@ -1158,10 +1158,10 @@ async function saveRoute({
     if (destination.registryRef && destination.registryData) {
       const validation = validateRegistryEntry(destination.registryData);
       assert(validation.valid, 'failed-precondition',
-        `The verified locality registry plan is invalid: ${validation.errors[0] || 'unknown'}.`);
+        `The verified destination registry plan is invalid: ${validation.errors[0] || 'unknown'}.`);
       const existingPlan = destinationRegistries.get(destination.registryRef.path);
       assert(
-        !existingPlan || verifiedIlRegistryEntryMatches(existingPlan.data, destination.registryData),
+        !existingPlan || verifiedProviderRegistryEntryMatches(existingPlan.data, destination.registryData),
         'failed-precondition',
         'Two route stops resolved to conflicting locality registry identities.'
       );
@@ -1284,9 +1284,9 @@ async function saveRoute({
         return;
       }
       const countryId = entry.ref.path.split('/')[1];
-      const upgradesVerifiedIlLocality = entry.kind === 'destination' &&
-        canUpgradeVerifiedIlLocality(snapshot.data(), entry.data, countryId);
-      const effectiveData = upgradesVerifiedIlLocality ? entry.data : snapshot.data();
+      const upgradesVerifiedProviderDestination = entry.kind === 'destination' &&
+        canUpgradeVerifiedProviderDestination(snapshot.data(), entry.data, countryId);
+      const effectiveData = upgradesVerifiedProviderDestination ? entry.data : snapshot.data();
       assert(
         snapshot.data()?.status === 'active' &&
           (entry.kind !== 'destination' || destinationAcceptsNewReferences(
@@ -1300,7 +1300,7 @@ async function saveRoute({
         assert(hasHebrewName(canonical.name), 'failed-precondition',
           'The destination has no trustworthy Hebrew name.');
         canonicalDestinationNames.set(entry.ref.path, canonical.name);
-        if (upgradesVerifiedIlLocality) {
+        if (upgradesVerifiedProviderDestination) {
           transaction.update(entry.ref, {
             countryId,
             destinationType: entry.data.destinationType,
@@ -1323,11 +1323,11 @@ async function saveRoute({
     registryEntries.forEach((entry, index) => {
       const snapshot = registrySnapshots[index];
       assert(
-        !snapshot.exists || verifiedIlRegistryEntryMatches(
+        !snapshot.exists || verifiedProviderRegistryEntryMatches(
           { id: snapshot.id, ...snapshot.data() }, entry.data
         ),
         'failed-precondition',
-        'A verified locality registry identity changed while saving. Search again.'
+        'A verified destination registry identity changed while saving. Search again.'
       );
       if (!snapshot.exists) {
         transaction.create(entry.ref, {

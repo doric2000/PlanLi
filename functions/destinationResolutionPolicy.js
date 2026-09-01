@@ -6,6 +6,8 @@ const DIRECT_DESTINATION_TYPES = Object.freeze([
   'locality',
   'postal_town',
   'island',
+  'archipelago',
+  'colloquial_area',
   'administrative_area_level_3',
   'administrative_area_level_2',
   'administrative_area_level_1',

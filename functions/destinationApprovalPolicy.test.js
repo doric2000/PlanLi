@@ -3,9 +3,14 @@ const assert = require('node:assert/strict');
 
 const {
   VERIFIED_IL_LOCALITY_POLICY_ID,
+  VERIFIED_PROVIDER_DESTINATION_POLICY_ID,
+  buildVerifiedProviderDestinationApproval,
   buildVerifiedIlLocalityApproval,
+  canUpgradeVerifiedProviderDestination,
   canUpgradeVerifiedIlLocality,
+  destinationUsesVerifiedProviderDestinationPolicy,
   destinationUsesVerifiedIlLocalityPolicy,
+  verifiedProviderRegistryEntryMatches,
   verifiedIlRegistryEntryMatches,
 } = require('./destinationApprovalPolicy');
 const { matchCanonicalEntry, validateRegistryEntry } = require('./canonicalDestinationRegistry');
@@ -121,4 +126,102 @@ test('policy-approved localities match only their exact Place ID, never alias or
     aliases: ['Kfar Tavor'],
     coordinates: { lat: 32.686, lng: 35.421 },
   }), null);
+});
+
+test('verified provider destinations are approved in every country and supported destination kind', () => {
+  const fixtures = [
+    locality({ countryCode: 'AL', names: { he: 'טירנה', en: 'Tirana' } }),
+    locality({
+      id: 'pe-humantay', countryCode: 'PE', names: { he: 'אגם הומאנטאי', en: 'Humantay Lake' },
+      kind: 'natural_feature', googleTypes: ['natural_feature'],
+    }),
+    locality({
+      id: 'gr-corfu', countryCode: 'GR', names: { he: 'קורפו', en: 'Corfu' },
+      kind: 'island', googleTypes: ['island', 'natural_feature'],
+    }),
+    locality({
+      id: 'th-chiang-mai', countryCode: 'TH', names: { he: 'צ׳יאנג מאי', en: 'Chiang Mai' },
+      kind: 'province', googleTypes: ['administrative_area_level_1', 'political'],
+    }),
+    locality({
+      id: 'ie-wild-atlantic-way', countryCode: 'IE',
+      names: { he: 'דרך האטלנטית הפראית', en: 'Wild Atlantic Way' },
+      kind: 'tourism_region', googleTypes: ['colloquial_area', 'political'],
+    }),
+  ];
+
+  fixtures.forEach((entry) => {
+    const approval = buildVerifiedProviderDestinationApproval({
+      entry,
+      countryId: entry.countryCode,
+      destinationPath: `countries/${entry.countryCode}/destinations/${entry.id}`,
+      approvalRevision: 1,
+      registryVersion: 3,
+    });
+    assert.ok(approval, `${entry.kind} should be eligible`);
+    assert.equal(approval.registryEntry.approval.policyId, VERIFIED_PROVIDER_DESTINATION_POLICY_ID);
+    assert.equal(approval.canonicalPolicy.registryAttestation.countryCode, entry.countryCode);
+    assert.equal(approval.canonicalPolicy.kind, entry.kind);
+    assert.equal(validateRegistryEntry(approval.registryEntry).valid, true);
+  });
+});
+
+test('invalid provisional IDs are replaced with a country-scoped verified registry ID', () => {
+  const approval = buildVerifiedProviderDestinationApproval({
+    entry: locality({
+      id: 'al-provisional-invalid_id',
+      countryCode: 'AL',
+      names: { he: 'טירנה', en: 'Tirana' },
+    }),
+    countryId: 'AL',
+    destinationPath: 'countries/AL/destinations/tirana',
+  });
+  assert.match(approval.registryEntry.id, /^al-verified-[0-9a-f]{20}$/u);
+  assert.equal(approval.canonicalPolicy.provisionalRegistryId, 'al-provisional-invalid_id');
+});
+
+test('provider policy keeps ambiguous, mismatched, or incomplete identities out of auto-approval', () => {
+  const input = (entry) => buildVerifiedProviderDestinationApproval({
+    entry,
+    countryId: entry.countryCode || 'AL',
+    destinationPath: 'countries/AL/destinations/candidate',
+  });
+  assert.equal(input(locality({ countryCode: 'AL', providerRefs: {} })), null);
+  assert.equal(input(locality({
+    countryCode: 'AL', kind: 'natural_feature', googleTypes: ['locality'],
+  })), null);
+  assert.equal(input(locality({ countryCode: 'AL', groupingPolicy: 'parent', parentId: 'al-parent' })), null);
+  assert.equal(input(locality({ countryCode: 'AL', names: { he: 'Tirana', en: 'Tirana' } })), null);
+});
+
+test('foreign provisional destinations upgrade only through exact country, registry, and Place identity', () => {
+  const approval = buildVerifiedProviderDestinationApproval({
+    entry: locality({ countryCode: 'AL', names: { he: 'טירנה', en: 'Tirana' } }),
+    countryId: 'AL',
+    destinationPath: 'countries/AL/destinations/tirana',
+    approvalRevision: 1,
+    registryVersion: 3,
+  });
+  const resolved = {
+    status: 'active',
+    providerRefs: { googlePlaceId: 'kfar-tavor-place' },
+    canonicalPolicy: approval.canonicalPolicy,
+  };
+  const current = {
+    status: 'active',
+    providerRefs: { googlePlaceId: 'kfar-tavor-place' },
+    canonicalPolicy: {
+      approved: false,
+      provisional: true,
+      registryId: 'il-provisional-kfar-tavor',
+    },
+  };
+
+  assert.equal(canUpgradeVerifiedProviderDestination(current, resolved, 'AL'), true);
+  assert.equal(canUpgradeVerifiedProviderDestination(current, resolved, 'IL'), false);
+  assert.equal(destinationUsesVerifiedProviderDestinationPolicy(resolved), true);
+  assert.equal(verifiedProviderRegistryEntryMatches(
+    approval.registryEntry,
+    approval.registryEntry
+  ), true);
 });
