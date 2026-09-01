@@ -2417,6 +2417,150 @@ test('catalog recommendations support a general destination and a nearby manual 
   assert.deepEqual(pinSaved.place.coordinates, { lat: 47.5, lng: 19.05 });
 });
 
+test('saving safely rebinds a provider claim from an explicitly merged destination', async () => {
+  const countryId = 'HU';
+  const oldCityId = 'dst_budapest_legacy';
+  const cityId = 'dst_budapest_canonical';
+  const providerPlaceId = 'google-budapest';
+  const claimId = destinationClaimId({ countryId, type: 'city', nameEn: 'Budapest' });
+  const currentDestination = {
+    name: 'בודפשט',
+    names: { he: 'בודפשט', en: 'Budapest' },
+    status: 'active',
+    destinationType: 'city',
+    providerRefs: { googlePlaceId: providerPlaceId },
+    stats: { recommendationCount: 0 },
+  };
+  const admin = createFakeAdmin({
+    [`countries/${countryId}`]: {
+      name: 'הונגריה', names: { he: 'הונגריה', en: 'Hungary' }, code: countryId, status: 'active',
+    },
+    [`countries/${countryId}/destinations/${cityId}`]: currentDestination,
+    [`countries/${countryId}/destinations/${oldCityId}`]: {
+      name: 'בודפשט הישנה',
+      status: 'inactive',
+      destinationType: 'city',
+      providerRefs: { googlePlaceId: providerPlaceId },
+      mergedInto: { countryId, cityId },
+      reassignment: { state: 'complete', target: { countryId, cityId } },
+    },
+    [`system/runtime/destinationClaims/${claimId}`]: {
+      countryId,
+      destinationType: 'city',
+      nameEn: 'Budapest',
+      entries: { [oldCityId]: { providerPlaceId } },
+    },
+  });
+  const countryRef = admin.firestore().doc(`countries/${countryId}`);
+  const cityRef = admin.firestore().doc(`countries/${countryId}/destinations/${cityId}`);
+  const claimRef = admin.firestore().doc(`system/runtime/destinationClaims/${claimId}`);
+
+  await saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    data: {
+      destinationRef: { countryId, cityId },
+      locationMode: 'destination',
+      recommendation: {
+        taxonomyVersion: 5,
+        recommendationCatalogVersion: 1,
+        title: 'גלידה מצוינת',
+        description: 'מקום מקומי שכדאי להכיר.',
+        categoryId: 'food',
+        subcategoryIds: ['desserts_ice_cream'],
+        budget: 'balanced',
+        media: [],
+      },
+    },
+    resolveDestinationRef: async () => ({
+      countryId,
+      cityId,
+      countryRef,
+      cityRef,
+      countryData: admin.documents.get(`countries/${countryId}`),
+      cityData: admin.documents.get(`countries/${countryId}/destinations/${cityId}`),
+      claimId,
+      claimRef,
+      claimData: {
+        countryId,
+        destinationType: 'city',
+        nameEn: 'Budapest',
+        entries: { [cityId]: { providerPlaceId } },
+      },
+      createCountry: false,
+      createCity: false,
+      place: null,
+    }),
+  });
+
+  assert.deepEqual(
+    admin.documents.get(`system/runtime/destinationClaims/${claimId}`).entries,
+    { [cityId]: { providerPlaceId } }
+  );
+});
+
+test('saving does not rebind a conflicting provider claim without a completed merge', async () => {
+  const countryId = 'HU';
+  const oldCityId = 'dst_conflicting';
+  const cityId = 'dst_canonical';
+  const providerPlaceId = 'google-budapest';
+  const claimId = destinationClaimId({ countryId, type: 'city', nameEn: 'Budapest' });
+  const admin = createFakeAdmin({
+    [`countries/${countryId}`]: { name: 'הונגריה', code: countryId, status: 'active' },
+    [`countries/${countryId}/destinations/${cityId}`]: {
+      name: 'בודפשט', names: { he: 'בודפשט', en: 'Budapest' },
+      status: 'active', destinationType: 'city',
+      providerRefs: { googlePlaceId: providerPlaceId }, stats: { recommendationCount: 0 },
+    },
+    [`countries/${countryId}/destinations/${oldCityId}`]: {
+      name: 'יעד מתנגש', status: 'active', destinationType: 'city',
+      providerRefs: { googlePlaceId: providerPlaceId },
+    },
+    [`system/runtime/destinationClaims/${claimId}`]: {
+      countryId, destinationType: 'city', nameEn: 'Budapest',
+      entries: { [oldCityId]: { providerPlaceId } },
+    },
+  });
+  const countryRef = admin.firestore().doc(`countries/${countryId}`);
+  const cityRef = admin.firestore().doc(`countries/${countryId}/destinations/${cityId}`);
+  const claimRef = admin.firestore().doc(`system/runtime/destinationClaims/${claimId}`);
+
+  await assert.rejects(saveRecommendation({
+    admin,
+    auth: verifiedAuth,
+    data: {
+      destinationRef: { countryId, cityId },
+      locationMode: 'destination',
+      recommendation: {
+        taxonomyVersion: 5,
+        recommendationCatalogVersion: 1,
+        title: 'גלידה מצוינת',
+        description: 'מקום מקומי שכדאי להכיר.',
+        categoryId: 'food',
+        subcategoryIds: ['desserts_ice_cream'],
+        budget: 'balanced',
+        media: [],
+      },
+    },
+    resolveDestinationRef: async () => ({
+      countryId, cityId, countryRef, cityRef,
+      countryData: admin.documents.get(`countries/${countryId}`),
+      cityData: admin.documents.get(`countries/${countryId}/destinations/${cityId}`),
+      claimId, claimRef,
+      claimData: {
+        countryId, destinationType: 'city', nameEn: 'Budapest',
+        entries: { [cityId]: { providerPlaceId } },
+      },
+      createCountry: false, createCity: false, place: null,
+    }),
+  }), /destination identity changed/);
+
+  assert.deepEqual(
+    admin.documents.get(`system/runtime/destinationClaims/${claimId}`).entries,
+    { [oldCityId]: { providerPlaceId } }
+  );
+});
+
 test('saveRecommendation repairs an existing Latin-only Sa Pa destination without Google calls', async () => {
   const admin = createFakeAdmin({
     'countries/VN': { name: 'וייטנאם', code: 'VN', status: 'active' },

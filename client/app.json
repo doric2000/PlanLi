@@ -17,6 +17,9 @@
       "bundleIdentifier": "com.planli.planlitravels",
       "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "production"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "PlanLi משתמשת במיקום שלך כדי למיין המלצות ויעדים לפי הקרבה אליך.",
         "ITSAppUsesNonExemptEncryption": false
@@ -59,7 +62,20 @@
       [
         "expo-secure-store",
         {
-          "configureAndroidBackup": false
+          "configureAndroidBackup": false,
+          "faceIDPermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PlanLi משתמשת במיקום שלך כדי למיין המלצות ויעדים לפי הקרבה אליך.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidMotionActivityEnabled": false
         }
       ],
       [

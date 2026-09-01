@@ -33,6 +33,7 @@ import { CommentsModal } from '../../../components/CommentsModal';
 import ActiveRouteFiltersList from '../components/ActiveRouteFiltersList';
 import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
 import { deleteContent } from '../../../services/SocialService';
+import { contentDeletionFailureMessage } from '../../../utils/contentDeletionError';
 import {
   clearRouteDiscoveryCache,
   loadRouteDetails,
@@ -218,7 +219,7 @@ export default function RoutesScreen({ navigation }) {
           setRoutes((current) => current.filter((item) => item.id !== routeId));
         } catch (error) {
           console.error('Error deleting route:', error);
-          Alert.alert('שגיאה', 'לא הצלחנו למחוק את המסלול.');
+          Alert.alert('שגיאה', contentDeletionFailureMessage(error, 'route'));
         } finally {
           if (routeActionRef.current === actionKey) routeActionRef.current = '';
         }
