@@ -31,7 +31,7 @@ function productionEnvironment(overrides = {}) {
     EAS_BUILD_PROFILE: 'production',
     PLANLI_ENV: 'production',
     EXPO_PUBLIC_FIREBASE_API_KEY: 'public-production-key',
-    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: 'planli-f0b12.firebaseapp.com',
+    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: 'planli.cc',
     EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'planli-f0b12',
     EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET: 'planli-f0b12-media-eu',
     EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '633543026638',
@@ -81,7 +81,7 @@ test('protected builds reject a missing reCAPTCHA Enterprise App Check key', () 
 test('staging cannot consume the production Firebase project or bucket', () => {
   assert.throws(() => assertProtectedFirebaseEnvironment(stagingEnvironment({
     EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'planli-f0b12',
-    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: 'planli-f0b12.firebaseapp.com',
+    EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: 'planli.cc',
     EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET: 'planli-f0b12-media-eu',
   })), /distinct planli-staging/);
   assert.throws(() => assertProtectedFirebaseEnvironment(stagingEnvironment({

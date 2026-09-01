@@ -28,7 +28,7 @@ try {
   }
   if (
     process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID !== 'planli-f0b12'
-    || process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN !== 'planli-f0b12.firebaseapp.com'
+    || process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN !== 'planli.cc'
     || process.env.EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET !== 'planli-f0b12-media-eu'
     || process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID !== '633543026638'
     || process.env.EXPO_PUBLIC_FIREBASE_APP_ID !== '1:633543026638:web:b63d2a622f3d685646ad9f'

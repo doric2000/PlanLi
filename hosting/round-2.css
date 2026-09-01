@@ -1,0 +1,933 @@
+@font-face {
+  font-family: "Assistant";
+  src: url("assets/fonts/Assistant-Variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --navy: #1e3a5f;
+  --navy-deep: #0b223d;
+  --navy-soft: #385d82;
+  --orange: #f5961d;
+  --cream: #fff9ef;
+  --paper: #f7f1e7;
+  --white: #ffffff;
+  --ink: #10243e;
+  --muted: #607084;
+  --shadow: 0 30px 90px rgba(10, 34, 61, 0.24);
+  --soft-shadow: 0 22px 60px rgba(24, 54, 85, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--ink);
+  font-family: "Assistant", system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 12px;
+  right: 12px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--navy);
+  transform: translateY(-180%);
+  transition: transform 180ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow: hidden;
+}
+
+.topbar {
+  position: relative;
+  z-index: 20;
+  width: min(calc(100% - 48px), 1320px);
+  height: 92px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand img {
+  width: 43px;
+  height: 45px;
+  object-fit: contain;
+}
+
+.brand-name {
+  font-size: 29px;
+  font-weight: 790;
+  letter-spacing: -0.045em;
+}
+
+.brand-name em {
+  color: var(--orange);
+  font-style: normal;
+}
+
+.launch-note {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 15px;
+  border: 1px solid rgba(30, 58, 95, 0.15);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.56);
+  font-size: 14px;
+  font-weight: 680;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.launch-note::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--orange);
+  box-shadow: 0 0 0 5px rgba(245, 150, 29, 0.16);
+  content: "";
+}
+
+.hero-grid {
+  width: min(calc(100% - 48px), 1320px);
+  min-height: calc(100svh - 108px);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(520px, 1.08fr) minmax(450px, 0.92fr);
+  align-items: center;
+  gap: clamp(40px, 6vw, 100px);
+  padding: 12px 0 64px;
+  direction: ltr;
+}
+
+.hero-copy,
+.visual-stage {
+  min-width: 0;
+  direction: rtl;
+}
+
+.hero-copy {
+  z-index: 5;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.visual-stage {
+  position: relative;
+  z-index: 3;
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 690px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.eyebrow::before {
+  width: 36px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--orange);
+  content: "";
+}
+
+.hero-copy h1 {
+  margin: 0;
+  color: var(--navy);
+  font-size: clamp(64px, 6.5vw, 104px);
+  font-weight: 770;
+  letter-spacing: -0.062em;
+  line-height: 0.9;
+  text-wrap: balance;
+}
+
+.hero-copy h1 .accent {
+  color: var(--orange);
+}
+
+.hero-copy > p:not(.eyebrow) {
+  max-width: 570px;
+  margin: 26px 0 0;
+  color: var(--muted);
+  font-size: clamp(18px, 1.4vw, 22px);
+  font-weight: 430;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.store-row {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 11px;
+  margin-top: 30px;
+}
+
+.app-store-badge {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 9px;
+  background: #000;
+  box-shadow: 0 12px 28px rgba(10, 25, 42, 0.15);
+}
+
+.app-store-badge img {
+  width: 157px;
+  height: auto;
+}
+
+.store-unavailable {
+  min-width: 162px;
+  min-height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 17px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  color: var(--navy);
+  opacity: 0.52;
+  font-size: 15px;
+  font-weight: 690;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.store-unavailable::before {
+  width: 0;
+  height: 0;
+  border-top: 11px solid transparent;
+  border-bottom: 11px solid transparent;
+  border-right: 18px solid currentColor;
+  content: "";
+  opacity: 0.72;
+}
+
+.store-unavailable small {
+  display: block;
+  font-size: 10px;
+  font-weight: 560;
+  line-height: 1;
+}
+
+.device {
+  position: absolute;
+  overflow: hidden;
+  aspect-ratio: 589 / 1280;
+  border: 7px solid #0a0d12;
+  border-radius: 42px;
+  background: #0a0d12;
+  box-shadow: var(--shadow);
+  transform-origin: 50% 100%;
+}
+
+.device img {
+  width: 100%;
+  height: 100%;
+  border-radius: 34px;
+  object-fit: cover;
+}
+
+.concept-tag {
+  position: absolute;
+  z-index: 30;
+  bottom: 22px;
+  left: 24px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 04 — Quiet Journey */
+.concept-quiet {
+  background:
+    linear-gradient(90deg, rgba(255, 249, 239, 0.16) 0%, rgba(255, 249, 239, 0.58) 43%, #fff9ef 75%),
+    url("assets/images/mountain-hero-1120.webp") center / cover no-repeat;
+}
+
+.concept-quiet::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(16,36,62,0.08));
+  content: "";
+}
+
+.concept-quiet .hero-copy {
+  padding: 42px 0;
+}
+
+.concept-quiet .quiet-stage::before {
+  position: absolute;
+  top: 8%;
+  left: 4%;
+  width: min(90%, 560px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  box-shadow: 0 0 0 34px rgba(255,255,255,0.055), 0 0 0 72px rgba(255,255,255,0.025);
+  content: "";
+  backdrop-filter: blur(2px);
+}
+
+.concept-quiet .device-main {
+  z-index: 3;
+  bottom: -8%;
+  left: 23%;
+  width: min(48%, 318px);
+  animation: rise-straight 820ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.quiet-note {
+  position: absolute;
+  z-index: 5;
+  top: 19%;
+  left: 2%;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 17px;
+  border: 1px solid rgba(255,255,255,0.66);
+  border-radius: 999px;
+  background: rgba(255,250,242,0.9);
+  box-shadow: var(--soft-shadow);
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 720;
+  backdrop-filter: blur(14px);
+}
+
+.quiet-note::before {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--orange);
+  content: "";
+}
+
+/* 05 — PlanLi Layers */
+.concept-layers {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(245,150,29,0.13), transparent 24%),
+    linear-gradient(135deg, #f4f6f0 0%, #edf3f1 55%, #f9f4ea 100%);
+}
+
+.concept-layers::before {
+  position: absolute;
+  z-index: -1;
+  top: 15%;
+  left: -6%;
+  width: 54%;
+  height: 76%;
+  border-radius: 0 48% 48% 0;
+  background:
+    linear-gradient(180deg, rgba(22,50,77,0.12), rgba(22,50,77,0.32)),
+    url("assets/images/mountain-hero-1120.webp") center / cover no-repeat;
+  opacity: 0.94;
+  content: "";
+}
+
+.concept-layers .hero-copy h1 {
+  max-width: 560px;
+  font-size: clamp(72px, 7.4vw, 116px);
+  line-height: 0.86;
+}
+
+.concept-layers .layers-stage {
+  min-height: 710px;
+}
+
+.concept-layers .device-main {
+  z-index: 3;
+  bottom: -9%;
+  left: 20%;
+  width: min(49%, 326px);
+  animation: rise-tilted 860ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.real-layer {
+  position: absolute;
+  z-index: 5;
+  overflow: hidden;
+  border: 1px solid rgba(30,58,95,0.08);
+  background: #fff;
+  box-shadow: 0 22px 58px rgba(14,39,66,0.24);
+  animation: layer-in 900ms 100ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.real-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.route-card-layer {
+  top: 27%;
+  right: 0;
+  width: min(58%, 380px);
+  aspect-ratio: 1042 / 292;
+  border-radius: 24px;
+  transform: rotate(-1.5deg);
+}
+
+.nav-layer {
+  right: -2%;
+  bottom: 10%;
+  width: min(62%, 410px);
+  aspect-ratio: 1134 / 286;
+  border-radius: 28px;
+  transform: rotate(1deg);
+}
+
+.layers-logo-tile {
+  position: absolute;
+  z-index: 6;
+  top: 18%;
+  left: 8%;
+  width: 98px;
+  height: 98px;
+  display: grid;
+  place-items: center;
+  border-radius: 27px;
+  background: var(--navy);
+  box-shadow: 0 20px 48px rgba(10,34,61,0.26);
+}
+
+.layers-logo-tile img {
+  width: 53px;
+  height: 56px;
+  object-fit: contain;
+}
+
+/* 06 — Stay in the Journey */
+.concept-stay {
+  color: #fff;
+  background:
+    linear-gradient(90deg, rgba(5,21,37,0.1) 0%, rgba(5,21,37,0.28) 44%, rgba(5,21,37,0.62) 100%),
+    url("assets/images/mountain-hero-1120.webp") center / cover no-repeat;
+}
+
+.concept-stay::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4,17,31,0.08), rgba(4,17,31,0.34));
+  content: "";
+}
+
+.concept-stay .topbar,
+.concept-stay .brand {
+  color: #fff;
+}
+
+.concept-stay .launch-note {
+  border-color: rgba(255,255,255,0.38);
+  background: rgba(7,28,48,0.22);
+}
+
+.concept-stay .copy-panel {
+  padding: clamp(34px, 4.4vw, 58px);
+  border: 1px solid rgba(255,255,255,0.72);
+  border-radius: 34px;
+  background: rgba(255,250,242,0.92);
+  box-shadow: 0 30px 90px rgba(3,18,32,0.26);
+  color: var(--ink);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.concept-stay .copy-panel h1 {
+  font-size: clamp(62px, 5.9vw, 94px);
+}
+
+.concept-stay .stay-stage {
+  min-height: 700px;
+}
+
+.concept-stay .device-community {
+  z-index: 4;
+  bottom: -9%;
+  right: 4%;
+  width: min(47%, 310px);
+  transform: rotate(4deg);
+  animation: rise-community 880ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.concept-stay .device-map {
+  z-index: 2;
+  bottom: -3%;
+  right: 49%;
+  width: min(39%, 255px);
+  transform: rotate(-8deg) translateY(18px);
+  filter: saturate(0.93) brightness(0.96);
+  animation: rise-map 960ms 90ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.stay-caption {
+  position: absolute;
+  z-index: 5;
+  top: 12%;
+  left: 4%;
+  max-width: 245px;
+  padding: 14px 18px;
+  border: 1px solid rgba(255,255,255,0.44);
+  border-radius: 18px;
+  background: rgba(7,31,53,0.58);
+  box-shadow: 0 18px 46px rgba(4,19,33,0.2);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  backdrop-filter: blur(13px);
+}
+
+.concept-stay .concept-tag {
+  background: rgba(7,31,53,0.54);
+  color: #fff;
+}
+
+/* 07 — Editorial Route */
+.concept-route {
+  background:
+    radial-gradient(circle at 88% 15%, rgba(245,150,29,0.14), transparent 26%),
+    linear-gradient(140deg, #fffdf8 0%, #f6efe3 58%, #efe2d1 100%);
+}
+
+.concept-route .route-stage {
+  min-height: 710px;
+}
+
+.route-photo-window {
+  position: absolute;
+  z-index: 1;
+  inset: 3% 2% 0 12%;
+  overflow: hidden;
+  border-radius: 260px 260px 42px 42px;
+  background:
+    linear-gradient(180deg, rgba(8,28,48,0.02), rgba(8,28,48,0.38)),
+    url("assets/images/temple-hero-1440.webp") 54% center / cover no-repeat;
+  box-shadow: 0 30px 82px rgba(30,58,95,0.19);
+}
+
+.route-photo-window::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255,255,255,0.46);
+  border-radius: inherit;
+  content: "";
+}
+
+.concept-route .device-favorites {
+  z-index: 5;
+  bottom: -10%;
+  left: 32%;
+  width: min(41%, 280px);
+  animation: rise-straight 830ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.concept-route .device-itinerary {
+  z-index: 3;
+  bottom: -2%;
+  left: 8%;
+  width: min(28%, 195px);
+  transform: rotate(-8deg) translateY(18px);
+  animation: rise-map 930ms 100ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.concept-route .device-map-small {
+  z-index: 2;
+  bottom: 1%;
+  right: 1%;
+  width: min(28%, 195px);
+  transform: rotate(8deg) translateY(12px);
+  animation: rise-community 930ms 150ms cubic-bezier(.2,.74,.22,1) both;
+}
+
+.route-path {
+  position: absolute;
+  z-index: 4;
+  top: 7%;
+  left: -2%;
+  width: 110%;
+  height: 86%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.route-path path {
+  stroke-dasharray: 12 13;
+  stroke-dashoffset: 150;
+  animation: route-flow 3.8s linear infinite;
+}
+
+@keyframes rise-straight {
+  from { opacity: 0; transform: translateY(100px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rise-tilted {
+  from { opacity: 0; transform: translateY(100px) rotate(-3deg); }
+  to { opacity: 1; transform: rotate(-3deg); }
+}
+
+@keyframes rise-community {
+  from { opacity: 0; transform: translateY(115px) rotate(4deg); }
+  to { opacity: 1; }
+}
+
+@keyframes rise-map {
+  from { opacity: 0; transform: translateY(125px) rotate(-8deg); }
+  to { opacity: 1; }
+}
+
+@keyframes layer-in {
+  from { opacity: 0; transform: translateY(40px) scale(.96); }
+  to { opacity: 1; }
+}
+
+@keyframes route-flow {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (max-width: 1040px) {
+  .hero-grid {
+    width: min(calc(100% - 36px), 820px);
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding-top: 24px;
+  }
+
+  .hero-copy,
+  .visual-stage {
+    grid-column: 1;
+  }
+
+  .hero-copy {
+    grid-row: 1;
+    width: min(100%, 700px);
+    margin-inline: auto;
+  }
+
+  .visual-stage {
+    grid-row: 2;
+    width: min(100%, 650px);
+    min-height: 620px;
+    margin-inline: auto;
+  }
+
+  .concept-layers::before {
+    top: 48%;
+    width: 84%;
+    height: 49%;
+  }
+
+  .concept-stay .copy-panel {
+    width: min(100%, 670px);
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    width: calc(100% - 28px);
+    height: 74px;
+  }
+
+  .brand img {
+    width: 34px;
+    height: 36px;
+  }
+
+  .brand-name {
+    font-size: 24px;
+  }
+
+  .launch-note {
+    min-height: 38px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .hero-grid {
+    width: calc(100% - 28px);
+    min-height: auto;
+    gap: 10px;
+    padding: 18px 0 36px;
+  }
+
+  .hero-copy h1,
+  .concept-layers .hero-copy h1,
+  .concept-stay .copy-panel h1 {
+    font-size: clamp(51px, 15.2vw, 70px);
+    line-height: .92;
+  }
+
+  .hero-copy > p:not(.eyebrow) {
+    margin-top: 18px;
+    font-size: 17px;
+    line-height: 1.46;
+  }
+
+  .eyebrow {
+    margin-bottom: 13px;
+    font-size: 13px;
+  }
+
+  .store-row {
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .app-store-badge,
+  .store-unavailable {
+    min-height: 47px;
+  }
+
+  .app-store-badge img {
+    width: 137px;
+  }
+
+  .store-unavailable {
+    min-width: 145px;
+    padding-inline: 12px;
+    font-size: 13px;
+  }
+
+  .visual-stage,
+  .concept-layers .layers-stage,
+  .concept-stay .stay-stage,
+  .concept-route .route-stage {
+    min-height: 500px;
+  }
+
+  .device {
+    border-width: 5px;
+    border-radius: 31px;
+  }
+
+  .device img {
+    border-radius: 25px;
+  }
+
+  .concept-tag {
+    display: none;
+  }
+
+  .concept-quiet {
+    background:
+      linear-gradient(180deg, #fff9ef 0%, rgba(255,249,239,.96) 43%, rgba(255,249,239,.14) 68%),
+      url("assets/images/mountain-hero-720.webp") center bottom / cover no-repeat;
+  }
+
+  .concept-quiet .hero-copy {
+    padding: 0;
+  }
+
+  .concept-quiet .quiet-stage::before {
+    top: 11%;
+    left: 8%;
+    width: 84%;
+  }
+
+  .concept-quiet .device-main {
+    bottom: -19%;
+    left: 25%;
+    width: 50%;
+  }
+
+  .quiet-note {
+    top: 17%;
+    left: 4%;
+    padding: 10px 13px;
+    font-size: 13px;
+  }
+
+  .concept-layers::before {
+    top: 50%;
+    left: -20%;
+    width: 105%;
+    height: 48%;
+    border-radius: 0 45% 45% 0;
+  }
+
+  .concept-layers .device-main {
+    bottom: -18%;
+    left: 22%;
+    width: 51%;
+  }
+
+  .route-card-layer {
+    top: 29%;
+    right: -3%;
+    width: 62%;
+    border-radius: 16px;
+  }
+
+  .nav-layer {
+    right: -6%;
+    bottom: 11%;
+    width: 69%;
+    border-radius: 18px;
+  }
+
+  .layers-logo-tile {
+    top: 17%;
+    left: 5%;
+    width: 70px;
+    height: 70px;
+    border-radius: 20px;
+  }
+
+  .layers-logo-tile img {
+    width: 39px;
+    height: 42px;
+  }
+
+  .concept-stay {
+    background:
+      linear-gradient(180deg, rgba(4,18,32,.54), rgba(4,18,32,.12) 50%, rgba(4,18,32,.4)),
+      url("assets/images/mountain-hero-720.webp") center / cover no-repeat;
+  }
+
+  .concept-stay .copy-panel {
+    padding: 28px 23px 25px;
+    border-radius: 26px;
+    background: rgba(255,250,242,.95);
+  }
+
+  .concept-stay .device-community {
+    bottom: -18%;
+    right: 8%;
+    width: 47%;
+  }
+
+  .concept-stay .device-map {
+    bottom: -13%;
+    right: 51%;
+    width: 37%;
+  }
+
+  .stay-caption {
+    top: 13%;
+    left: 2%;
+    max-width: 175px;
+    padding: 10px 13px;
+    font-size: 12px;
+  }
+
+  .route-photo-window {
+    inset: 5% 2% 1% 4%;
+    border-radius: 180px 180px 30px 30px;
+    background-position: 58% center;
+  }
+
+  .concept-route .device-favorites {
+    bottom: -18%;
+    left: 31%;
+    width: 43%;
+  }
+
+  .concept-route .device-itinerary {
+    bottom: -10%;
+    left: 5%;
+    width: 29%;
+  }
+
+  .concept-route .device-map-small {
+    bottom: -8%;
+    right: 0;
+    width: 29%;
+  }
+}
+
+@media (max-width: 370px) {
+  .launch-note span {
+    display: none;
+  }
+
+  .launch-note {
+    width: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .store-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

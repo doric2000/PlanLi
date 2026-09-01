@@ -6,8 +6,78 @@ PlanLi is a photo-first travel application built with Expo and Firebase.
 
 PlanLi has an external TestFlight beta and an active Google Play internal-testing
 track; it has not been publicly released to the App Store, Google Play, or a
-public web domain. Native development is performed with an installed, signed EAS
+public mobile-store track. The production Web/Admin and public policy pages are
+available on `https://planli.cc`. Native development is performed with an installed, signed EAS
 Development Build connected to Metro. Expo Go is not supported.
+
+### Custom production domain rollout
+
+On `2026-09-01`, Firebase Hosting domain `planli.cc` was verified with managed
+TLS and independently returned the Hebrew Admin login at
+`https://planli.cc/admin/`. The legal, support, community-guidelines and
+account-deletion routes are also available on the custom domain. Firebase Auth's
+authorized-domain list now contains `planli.cc` plus the two Firebase-owned
+fallback domains. The Auth email sender domain was DNS-verified and applied:
+live Identity Platform read-back reports `customDomain: planli.cc`,
+`useCustomDomain: true`, and no pending custom domain. The required SPF and DKIM
+records resolve publicly.
+
+The production reCAPTCHA Enterprise key used by Web App Check now allows
+`planli.cc` alongside the two Firebase fallback hosts with domain enforcement
+still enabled. Production media-bucket CORS now allows the same custom origin;
+an independent `PUT` preflight returned HTTP 200 with
+`Access-Control-Allow-Origin: https://planli.cc`, the reviewed methods, and the
+existing 3,600-second max age. The EAS production environment's public Firebase
+Auth domain is now `planli.cc`; no EAS build or store submission was run.
+
+Repository source synchronization was prepared on
+`fix/custom-domain-hosting-rollout`, based on source commit
+`4c6063d8ed0152be0bf0153af046c6688af603c2`. The production Admin Web export was
+rebuilt with `authDomain: planli.cc` and the exact production reCAPTCHA
+Enterprise key, and its verifier resolved all 30 local asset references. A new
+static, RTL Hebrew landing page now serves the apex route without an additional
+hosting provider. Local desktop and 390px mobile browser checks found no
+horizontal overflow or console errors, and the rebuilt Admin login rendered
+without console errors.
+
+Firebase Hosting was deployed as the only Firebase target at
+`2026-09-01T19:10:28.108Z`. Release
+`sites/planli-f0b12/releases/1788289828108000` finalized version
+`sites/planli-f0b12/versions/f246bc8ada7478e9` with 48 files. Independent
+read-back against Firebase's expected `199.36.158.100` endpoint returned HTTP
+200 for the apex, Admin, Auth handler and every named public route. The live
+landing HTML, Admin HTML, Admin JavaScript bundle and brand image matched the
+local export byte-for-byte, and the reviewed CSP and other security headers
+remained present. The Firebase-owned fallback host rendered both the landing
+page and Hebrew Admin login without browser console errors.
+
+The approved “Stay in the Journey” landing design was then deployed from the
+same branch and source commit as the only Firebase target at
+`2026-09-01T19:33:10.478Z`. Release
+`sites/planli-f0b12/releases/1788291190478000` finalized Hosting version
+`sites/planli-f0b12/versions/d40a20b8e01e4bf1` with 54 files. The App Store
+badge is intentionally non-interactive until the public store URL is available;
+the concept-review label is absent. Independent read-back matched the local
+landing HTML, stylesheet, images, real app screens, Admin HTML and every named
+public route byte-for-byte. A direct TLS request for `planli.cc` against
+Firebase's expected address returned HTTP 200 with the reviewed security
+headers. The `/admin` export and named public routes remained available. No
+Functions, Rules, indexes, Storage, Auth, IAM, app build, store submission or
+OTA action accompanied this Hosting-only release.
+
+Cloudflare now serves proxied `www` addresses and returns a permanent 301 to the
+apex while preserving the original path and query string. The authoritative
+zone contains DMARC policy `v=DMARC1; p=none; adkim=r; aspf=r; pct=100`, and both
+Firebase DKIM selectors resolve to their expected `firebasemail.com` aliases.
+This workstation's Cisco Umbrella DNS policy currently classifies the newly seen
+domain and substitutes block-page address `146.112.61.110`, so ordinary local
+resolution reports a certificate error even though direct Firebase TLS and
+content validation pass. The domain needs allowlisting or recategorization in
+that network policy for normal access from this network. The custom Auth email
+action URL remains the Firebase handler because Identity Platform rejects its
+update with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. No Functions, Rules, indexes,
+Storage, IAM, production data, EAS build/update, or mobile-store action was
+changed by this Hosting release.
 
 ### Destination policy, automatic locality approval, and production repair
 
@@ -964,7 +1034,7 @@ Development Build or any release build:
    `com.planli.planlitravels` and create a Sign in with Apple key.
 2. Enable Google and Apple in Firebase Authentication. Configure Apple's Team
    ID, Key ID, private key and Services ID. Register
-   `https://planli-f0b12.firebaseapp.com/__/auth/handler` as the return URL and
+   `https://planli.cc/__/auth/handler` as the return URL and
    register Firebase's sending address with Apple Private Email Relay.
 3. Download the current `GoogleService-Info.plist` for the same bundle ID and
    replace `client/GoogleService-Info.plist`. Confirm that Google Cloud contains
@@ -981,9 +1051,9 @@ firebase functions:secrets:set APPLE_SIGN_IN_PRIVATE_KEY --project planli-f0b12
 ```
 
 The current legal drafts are available in-app and are configured for Firebase
-Hosting at `https://planli-f0b12.web.app/terms` and
-`https://planli-f0b12.web.app/privacy`. The Google Play account-deletion
-resource is configured at `https://planli-f0b12.web.app/account-deletion`.
+Hosting at `https://planli.cc/terms` and `https://planli.cc/privacy`. The Google
+Play account-deletion resource is configured at
+`https://planli.cc/account-deletion`.
 The legal, deletion and support pages must be reachable on Firebase Hosting,
 and their deployed versions must be compared with the release commit before
 every beta or store submission. They require legal review plus final contact
@@ -1775,7 +1845,7 @@ firebase deploy --only storage --project planli-f0b12
 
 The same responsive moderation console runs inside the iOS Development Build
 and as a Firebase Hosting web application at
-`https://planli-f0b12.web.app/admin`. Access requires the Firebase `admin`
+`https://planli.cc/admin/`. Access requires the Firebase `admin`
 custom claim; the server checks the claim again for every operation. Sensitive
 actions require a sign-in from the last ten minutes, a written reason, and are
 recorded in the append-only moderation audit log. Current sensitive actions are:
@@ -1817,7 +1887,7 @@ Console and are not changed by Firebase deployment:
 
 - Link the public privacy policy, terms, community guidelines, and support
   pages in the listing and review notes.
-- Link `https://planli-f0b12.web.app/account-deletion` in Google Play's account
+- Link `https://planli.cc/account-deletion` in Google Play's account
   deletion field and verify that its email request pathway works without the
   app being installed.
 - Complete the privacy questionnaire for account/profile data, user content,
