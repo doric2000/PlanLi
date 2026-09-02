@@ -123,6 +123,52 @@ unauthenticated publication probe returned the expected HTTP 401. No Hosting,
 Rules, indexes, Storage, Auth, IAM, EAS build/update, store submission, or
 production-document mutation accompanied this Functions-only release.
 
+### Stale destination-token and iOS App Check production repair
+
+On `2026-09-02`, the stale destination-token fix from
+[PR #332](https://github.com/doric2000/PlanLi/pull/332) was squash-merged as
+`a7a53ef5a330d5d5754b2457269eec3f2a135124`. A valid long-lived resolved-place
+token could retain a legacy geometry match whose destination was approved before
+registry attestations existed. Publication then reused that cache and failed the
+current destination referenceability gate before the verified-provider upgrade
+could run. The fix refreshes only an active legacy seed whose current and cached
+Place ID and registry ID still match, whose policy has no attestation or approval
+revision, and whose source was a reviewed geometry match. Claim conflicts,
+reassignment locks, merged destinations, inactive countries, natural-destination
+intent, and all other cache failures remain fail-closed. The refreshed verified
+place is resolved through the current policy and replaces the stale token cache.
+
+The independent deletion failure in Sentry was a native App Check configuration
+problem: TestFlight build `1.1.0 (28)` uses the repository's iOS Firebase API key,
+but that key allowed only the iOS Maps API. At `2026-09-02T08:21:36.947890Z`,
+`firebaseappcheck.googleapis.com` was appended to the same production key while
+retaining `maps-ios-backend.googleapis.com` and the exact iOS bundle restriction
+`com.planli.planlitravels`. Read-back returned only those two API targets and that
+bundle ID. The key in `client/GoogleService-Info.plist` still matches the restricted
+cloud key, and a direct App Attest challenge returned HTTP 200 instead of
+`API_KEY_SERVICE_BLOCKED`; no native rebuild was required.
+
+Exactly five Node.js 22 v2 Functions were deployed from the merged commit to
+`europe-west1`: `saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `saveRoute`, and `publishRouteDraft`.
+Independent read-back found all five `ACTIVE` with 100% traffic on revisions
+`saverecommendation-00054-yah`, `publishrecommendationdraft-00020-wib`,
+`resolverecommendationdestination-00048-maq`, `saveroute-00053-dim`, and
+`publishroutedraft-00019-xiq`; their updates completed between
+`2026-09-02T08:25:46.613589272Z` and `2026-09-02T08:25:47.965835908Z`.
+
+The affected recommendation, draft, route, destination-approval, identity,
+resolution, and reference suites passed 152/152 tests under Node.js 22;
+`validate:changed` and every PR check, including CodeQL, Semgrep, Gitleaks and the
+security invariants, passed. The new regression proves that the stale Ella cache
+for an Ambewela exact place is replaced by the current Nuwara Eliya resolution and
+provider attestation. An unauthenticated callable probe returned the expected HTTP
+401, and a post-deploy log query returned zero `ERROR` entries for the five
+services. Physical-device publication and deletion retries remain unverified until
+a tester repeats them. No Hosting, Rules, indexes, Firestore documents, Storage,
+EAS build/update, store submission, IAM role, secret, or dependency change
+accompanied this repair.
+
 ### Destination policy, automatic locality approval, and production repair
 
 On `2026-09-01`, the destination-policy rollout from
