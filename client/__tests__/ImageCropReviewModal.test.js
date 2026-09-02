@@ -99,6 +99,12 @@ describe('calculateCropRect', () => {
       containerHeight: 900,
       aspectRatio: 1,
     })).toEqual({ width: 640, height: 640 });
+    expect(fitCropViewport({
+      containerWidth: 760,
+      containerHeight: 760,
+      aspectRatio: 1,
+      maxWidth: 760,
+    })).toEqual({ width: 760, height: 760 });
   });
 
   it('centers a square crop and never exceeds the source', () => {

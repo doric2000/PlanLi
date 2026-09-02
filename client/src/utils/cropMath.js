@@ -19,8 +19,16 @@ export function boundCropTranslation({
   };
 }
 
-export function fitCropViewport({ containerWidth, containerHeight, aspectRatio }) {
-  const width = Math.min(MAX_CROP_VIEWPORT_WIDTH, Math.max(0, Number(containerWidth) || 0));
+export function fitCropViewport({
+  containerWidth,
+  containerHeight,
+  aspectRatio,
+  maxWidth = MAX_CROP_VIEWPORT_WIDTH,
+}) {
+  const widthLimit = Number.isFinite(maxWidth) && maxWidth > 0
+    ? maxWidth
+    : MAX_CROP_VIEWPORT_WIDTH;
+  const width = Math.min(widthLimit, Math.max(0, Number(containerWidth) || 0));
   const height = Math.max(0, Number(containerHeight) || 0);
   const ratio = Math.max(0.01, Number(aspectRatio) || 1);
   if (!width || !height) return null;
