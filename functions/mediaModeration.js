@@ -21,37 +21,52 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function readMetadata(file) {
+  try {
+    const [metadata] = await file.getMetadata();
+    return metadata || null;
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
+}
+
+function availabilityMetadata(metadata, available) {
+  const custom = metadata.metadata || {};
+  const publicTokens = custom.firebaseStorageDownloadTokens || null;
+  const preservedTokens = custom.planliOriginalDownloadTokens || null;
+  return {
+    cacheControl: available ? ACTIVE_CACHE_CONTROL : HELD_CACHE_CONTROL,
+    metadata: {
+      ...custom,
+      firebaseStorageDownloadTokens: available ? preservedTokens || publicTokens : null,
+      planliOriginalDownloadTokens: available ? null : preservedTokens || publicTokens,
+      availability: available ? 'active' : 'held',
+    },
+  };
+}
+
 async function updateVariant(file, available, knownMetadata = null) {
   let metadata = knownMetadata;
   for (let attempt = 0; attempt < METADATA_UPDATE_ATTEMPTS; attempt += 1) {
-    if (!metadata) {
-      try {
-        [metadata] = await file.getMetadata();
-      } catch (error) {
-        if (isNotFound(error)) return;
-        throw error;
-      }
-    }
+    if (!metadata) metadata = await readMetadata(file);
     if (!metadata) return;
-    const custom = metadata.metadata || {};
-    const publicTokens = custom.firebaseStorageDownloadTokens || null;
-    const preservedTokens = custom.planliOriginalDownloadTokens || null;
     try {
-      await file.setMetadata({
-        cacheControl: available ? ACTIVE_CACHE_CONTROL : HELD_CACHE_CONTROL,
-        metadata: {
-          ...custom,
-          firebaseStorageDownloadTokens: available ? preservedTokens || publicTokens : null,
-          planliOriginalDownloadTokens: available ? null : preservedTokens || publicTokens,
-          availability: available ? 'active' : 'held',
-        },
-      }, metadata.metageneration ? {
+      await file.setMetadata(availabilityMetadata(metadata, available), metadata.metageneration ? {
         ifMetagenerationMatch: Number(metadata.metageneration),
       } : undefined);
       return;
     } catch (error) {
-      if (!isMetagenerationConflict(error) || attempt === METADATA_UPDATE_ATTEMPTS - 1) {
-        throw error;
+      if (!isMetagenerationConflict(error)) throw error;
+      if (attempt === METADATA_UPDATE_ATTEMPTS - 1) {
+        // A burst of concurrent cleanup events can keep invalidating the
+        // generation between each read and write. At this point the desired
+        // availability projection is idempotent, so perform one final
+        // best-effort merge without a stale generation precondition.
+        const latest = await readMetadata(file);
+        if (!latest) return;
+        await file.setMetadata(availabilityMetadata(latest, available));
+        return;
       }
       metadata = null;
       await wait(METADATA_RETRY_DELAYS_MS[attempt] || METADATA_RETRY_DELAYS_MS.at(-1));

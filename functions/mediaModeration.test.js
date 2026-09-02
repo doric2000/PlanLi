@@ -80,6 +80,36 @@ test('metadata precondition conflicts are retried with fresh metadata', async ()
   assert.equal(current.metadata.planliOriginalDownloadTokens, 'public-token');
 });
 
+test('a persistent metadata conflict converges with an unguarded final write', async () => {
+  let current = {
+    metageneration: 11,
+    metadata: { firebaseStorageDownloadTokens: 'public-token' },
+  };
+  let guardedWrites = 0;
+  let fallbackWrites = 0;
+  const file = {
+    getMetadata: async () => [current],
+    setMetadata: async (patch, options) => {
+      if (options?.ifMetagenerationMatch) {
+        guardedWrites += 1;
+        current = { ...current, metageneration: current.metageneration + 1 };
+        const error = new Error('metadata was edited during the operation');
+        error.code = 412;
+        throw error;
+      }
+      fallbackWrites += 1;
+      current = { ...patch, metageneration: current.metageneration + 1 };
+    },
+  };
+
+  await setFileAvailability(file, true);
+
+  assert.equal(guardedWrites, 3);
+  assert.equal(fallbackWrites, 1);
+  assert.equal(current.metadata.availability, 'active');
+  assert.equal(current.metadata.firebaseStorageDownloadTokens, 'public-token');
+});
+
 test('restoring media restores its original token and bounded public caching', async () => {
   const state = fixture();
   await setMediaAvailability({ admin: state.admin, data: content, mediaBucket: 'media-eu', available: false });
