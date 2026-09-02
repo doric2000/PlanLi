@@ -104,7 +104,7 @@ metadata for Firestore/Storage failures, stops mapping backend `internal`
 errors to a Places-network outage in the client source, and reconciles
 orphaned destination approval holds without releasing unrelated safety holds.
 
-Exactly six Node.js 22 v2 Functions were deployed to `europe-west1` with 100%
+Exactly eight Node.js 22 v2 Functions were deployed to `europe-west1` with 100%
 traffic on the latest revision:
 `publishRecommendationDraft` (`publishrecommendationdraft-00023-zaq`),
 `saveRecommendation` (`saverecommendation-00057-guz`),
@@ -112,9 +112,13 @@ traffic on the latest revision:
 `saveRoute` (`saveroute-00054-dol`),
 `resolvePlaceSelection` (`resolveplaceselection-00035-kiw`), and
 `reconcileDestinationApprovalReleasesScheduled`
-(`reconciledestinationapprovalreleasesscheduled-00005-dah`). Their updates
+(`reconciledestinationapprovalreleasesscheduled-00005-dah`),
+`searchPlaces` (`searchplaces-00030-qop`), and
+`resolveRecommendationDestination`
+(`resolverecommendationdestination-00051-vej`). The first six updates
 completed between `2026-09-02T13:23:50.750Z` and
-`2026-09-02T13:24:02.037Z`; all six read back `ACTIVE`.
+`2026-09-02T13:24:02.037Z`; the final two completed at
+`2026-09-02T13:29:14.408Z`. All eight read back `ACTIVE` with 100% traffic.
 
 The signed production policy repair was applied before this deployment with
 fingerprint
@@ -123,7 +127,7 @@ Independent read-back confirms Ella has a complete provider/system
 attestation and the train recommendation is `active` with
 `destinationApprovalVerified: true`; the repair reported zero remaining
 provisional upgrades, eligible holds, review repairs, or blockers. A post-
-deployment Cloud Logging query returned zero `ERROR` entries for the six
+deployment Cloud Logging query returned zero `ERROR` entries for all eight
 targets. No Hosting, EAS, App Check, iOS configuration, Rules, indexes,
 Storage, IAM, or dependency deployment accompanied this release; the client
 message change will take effect for mobile users with the next app build.
