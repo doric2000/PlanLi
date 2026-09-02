@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   deleteAccountInternal,
+  deleteContent,
   deleteContentInternal,
   deleteDocumentStrict,
   deleteNotificationDevicesForUser,
@@ -10,6 +11,85 @@ const {
   removeReporterModerationData,
   requestAccountDeletion,
 } = require('./deletionService');
+
+test('an administrator deleting owned content uses owner authority without recent TOTP', async () => {
+  const target = { type: 'recommendation', id: 'owned-recommendation' };
+  const targetPath = 'recommendations/owned-recommendation';
+  let deletedWith = null;
+  const admin = {
+    firestore: () => ({
+      doc: (path) => ({
+        path,
+        get: async () => ({
+          exists: path === targetPath,
+          data: () => ({ ownerId: 'admin-owner' }),
+        }),
+      }),
+    }),
+  };
+
+  const result = await deleteContent({
+    admin,
+    auth: {
+      uid: 'admin-owner',
+      token: {
+        admin: true,
+        email_verified: true,
+        auth_time: 1,
+        firebase: { sign_in_provider: 'password' },
+      },
+    },
+    data: { target },
+    resolveAdminAccess: async () => {
+      throw new Error('owner deletion must not request admin elevation');
+    },
+    consumeDeleteRateLimit: async () => {},
+    deleteInternal: async (options) => {
+      deletedWith = options;
+      return { deleted: true, path: targetPath };
+    },
+  });
+
+  assert.equal(result.deleted, true);
+  assert.equal(deletedWith.actorUid, 'admin-owner');
+  assert.equal(deletedWith.isAdmin, false);
+  assert.deepEqual(deletedWith.target, { ...target, path: targetPath });
+});
+
+test('deleting another user content still requires recent TOTP admin authority', async () => {
+  const target = { type: 'route', id: 'other-route' };
+  let adminCheck = null;
+  let deletedWith = null;
+  const admin = {
+    firestore: () => ({
+      doc: (path) => ({
+        path,
+        get: async () => ({ exists: true, data: () => ({ ownerId: 'other-user' }) }),
+      }),
+    }),
+  };
+
+  await deleteContent({
+    admin,
+    auth: {
+      uid: 'admin-owner',
+      token: { admin: true, email_verified: true },
+    },
+    data: { target },
+    resolveAdminAccess: async (options) => {
+      adminCheck = options;
+      return true;
+    },
+    consumeDeleteRateLimit: async () => {},
+    deleteInternal: async (options) => {
+      deletedWith = options;
+      return { deleted: true };
+    },
+  });
+
+  assert.equal(adminCheck.requireRecentTotp, true);
+  assert.equal(deletedWith.isAdmin, true);
+});
 
 test('recommendation deletion waits while its destination is being reassigned', async () => {
   const recommendationRef = { path: 'recommendations/recommendation-1' };
