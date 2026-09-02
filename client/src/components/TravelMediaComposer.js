@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 
 import AppText from './AppText';
@@ -48,6 +50,16 @@ export const TRAVEL_MEDIA_SWIPE_DOMINANCE = 1.25;
 export const TRAVEL_MEDIA_REORDER_LONG_PRESS_MS = 220;
 const TRAVEL_MEDIA_REORDER_MAX_THUMB_SIZE = 76;
 const TRAVEL_MEDIA_REORDER_MIN_THUMB_SIZE = 48;
+const TRAVEL_MEDIA_EMBEDDED_MAX_WIDTH = 760;
+const TRAVEL_MEDIA_PAGER_EDGE_RESISTANCE = 0.16;
+const TRAVEL_MEDIA_PAGER_DISTANCE_RATIO = 0.18;
+
+export function travelMediaEmbeddedPreviewWidth(windowWidth) {
+  return Math.min(
+    TRAVEL_MEDIA_EMBEDDED_MAX_WIDTH,
+    Math.max(1, Number(windowWidth) || TRAVEL_MEDIA_EMBEDDED_MAX_WIDTH)
+  );
+}
 
 export function isTravelMediaSwipe({ translationX = 0, translationY = 0, velocityX = 0 } = {}) {
   'worklet';
@@ -60,18 +72,87 @@ export function isTravelMediaSwipe({ translationX = 0, translationY = 0, velocit
 export function travelMediaReorderTargetIndex({
   fromIndex,
   translationX = 0,
-  itemCount,
-  itemStride,
+  itemCenters = [],
 } = {}) {
   'worklet';
   if (
-    !Number.isInteger(fromIndex) || !Number.isInteger(itemCount) || itemCount <= 0 ||
-    !Number.isFinite(translationX) || !Number.isFinite(itemStride) || itemStride <= 0
+    !Number.isInteger(fromIndex) || !Number.isFinite(translationX) ||
+    !Array.isArray(itemCenters) || !Number.isFinite(itemCenters[fromIndex])
   ) return fromIndex;
-  return Math.max(0, Math.min(
-    itemCount - 1,
-    fromIndex + Math.round(-translationX / itemStride)
-  ));
+  const draggedCenter = itemCenters[fromIndex] + translationX;
+  let closestIndex = fromIndex;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < itemCenters.length; index += 1) {
+    if (!Number.isFinite(itemCenters[index])) continue;
+    const distance = Math.abs(itemCenters[index] - draggedCenter);
+    if (distance < closestDistance) {
+      closestIndex = index;
+      closestDistance = distance;
+    }
+  }
+  return closestIndex;
+}
+
+export function travelMediaReorderTranslationBounds({ fromIndex, itemCenters = [] } = {}) {
+  'worklet';
+  if (!Number.isInteger(fromIndex) || !Number.isFinite(itemCenters[fromIndex])) {
+    return { minimum: 0, maximum: 0 };
+  }
+  const startCenter = itemCenters[fromIndex];
+  let minimum = 0;
+  let maximum = 0;
+  for (let index = 0; index < itemCenters.length; index += 1) {
+    if (!Number.isFinite(itemCenters[index])) continue;
+    const translation = itemCenters[index] - startCenter;
+    minimum = Math.min(minimum, translation);
+    maximum = Math.max(maximum, translation);
+  }
+  return { minimum, maximum };
+}
+
+export function travelMediaReorderNeighborTranslation({
+  index,
+  activeIndex,
+  targetIndex,
+  itemCenters = [],
+} = {}) {
+  'worklet';
+  if (
+    !Number.isInteger(index) || !Number.isInteger(activeIndex) || !Number.isInteger(targetIndex) ||
+    !Array.isArray(itemCenters)
+  ) return 0;
+  if (activeIndex < targetIndex && index > activeIndex && index <= targetIndex) {
+    if (!Number.isFinite(itemCenters[index - 1]) || !Number.isFinite(itemCenters[index])) return 0;
+    return itemCenters[index - 1] - itemCenters[index];
+  }
+  if (activeIndex > targetIndex && index >= targetIndex && index < activeIndex) {
+    if (!Number.isFinite(itemCenters[index + 1]) || !Number.isFinite(itemCenters[index])) return 0;
+    return itemCenters[index + 1] - itemCenters[index];
+  }
+  return 0;
+}
+
+export function travelMediaPagerDelta({
+  translationX = 0,
+  translationY = 0,
+  velocityX = 0,
+  pageWidth = 0,
+} = {}) {
+  'worklet';
+  const width = Math.max(0, Number(pageWidth) || 0);
+  const horizontalDistance = Math.abs(translationX);
+  const horizontalVelocity = Math.abs(velocityX);
+  const directionValue = horizontalDistance > 0 ? translationX : velocityX;
+  const distanceThreshold = Math.max(
+    TRAVEL_MEDIA_SWIPE_DISTANCE,
+    width * TRAVEL_MEDIA_PAGER_DISTANCE_RATIO
+  );
+  const dominant = horizontalDistance >= Math.abs(translationY) * TRAVEL_MEDIA_SWIPE_DOMINANCE;
+  if (
+    !width || !directionValue || !dominant ||
+    (horizontalDistance < distanceThreshold && horizontalVelocity < TRAVEL_MEDIA_SWIPE_VELOCITY)
+  ) return 0;
+  return directionValue > 0 ? 1 : -1;
 }
 
 export function reorderTravelMediaItems(items, fromIndex, toIndex) {
@@ -101,7 +182,17 @@ function MediaImage({ uri, contentFit = 'cover', ...props }) {
   return <CachedImage {...props} source={{ uri }} contentFit={contentFit} />;
 }
 
-function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
+function CropPage({
+  item,
+  aspect,
+  onCropChange,
+  onSwipe,
+  cropEnabled = true,
+  navigationEnabled = true,
+  existingContentFit = 'contain',
+  showExistingHint = true,
+  maxViewportWidth,
+}) {
   const uri = travelMediaUri(item);
   const [sourceSize, setSourceSize] = useState(() => item.width && item.height
     ? { width: item.width, height: item.height }
@@ -137,7 +228,8 @@ function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
     containerWidth: stageSize?.width,
     containerHeight: stageSize?.height,
     aspectRatio: ratio,
-  }), [ratio, stageSize]);
+    maxWidth: maxViewportWidth,
+  }), [maxViewportWidth, ratio, stageSize]);
   const displaySize = useMemo(() => {
     if (!sourceSize || !viewport) return null;
     const scale = Math.max(viewport.width / sourceSize.width, viewport.height / sourceSize.height);
@@ -186,7 +278,7 @@ function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
   }, [canCrop, onCropChange, sourceSize, viewport]);
 
   const pan = useMemo(() => Gesture.Pan()
-    .enabled(Boolean(uri))
+    .enabled(Boolean(uri) && (canCrop || navigationEnabled))
     .minDistance(1)
     .maxPointers(1)
     .shouldCancelWhenOutside(false)
@@ -210,7 +302,7 @@ function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
       translateY.value = bounded.y;
     })
     .onEnd((event) => {
-      if (isTravelMediaSwipe(event)) {
+      if (navigationEnabled && isTravelMediaSwipe(event)) {
         translateX.value = startX.value;
         translateY.value = startY.value;
         isAdjusting.value = 0;
@@ -226,7 +318,7 @@ function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
         runOnJS(commitCrop)(zoom.value, translateX.value, translateY.value);
       }
     }), [
-      canCrop, commitCrop, displayHeight, displayWidth, isAdjusting, onSwipe, startX, startY,
+      canCrop, commitCrop, displayHeight, displayWidth, isAdjusting, navigationEnabled, onSwipe, startX, startY,
       translateX, translateY, uri, viewportHeight, viewportWidth, zoom,
     ]);
   const pinch = useMemo(() => Gesture.Pinch()
@@ -275,8 +367,10 @@ function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
     return (
       <GestureDetector gesture={pan}>
         <Animated.View style={styles.uncroppedPage} testID="travel-media-existing-preview">
-          <MediaImage uri={uri} style={styles.uncroppedImage} contentFit="contain" />
-          <AppText style={styles.existingHint}>תמונה שכבר פורסמה נשארת ללא שינוי</AppText>
+          <MediaImage uri={uri} style={styles.uncroppedImage} contentFit={existingContentFit} />
+          {showExistingHint ? (
+            <AppText style={styles.existingHint}>תמונה שכבר פורסמה נשארת ללא שינוי</AppText>
+          ) : null}
         </Animated.View>
       </GestureDetector>
     );
@@ -329,16 +423,130 @@ function CropPage({ item, aspect, onCropChange, onSwipe, cropEnabled = true }) {
 
 function SelectionBadge({ number }) {
   if (!number) return null;
-  return <View style={styles.badge}><AppText style={styles.badgeText}>{number}</AppText></View>;
+  return (
+    <View style={styles.badge}>
+      <AppText style={styles.badgeText} testID={`travel-media-selection-badge-${number}`}>
+        {String(number)}
+      </AppText>
+    </View>
+  );
+}
+
+function EmbeddedMediaPagerPage({
+  item,
+  pageIndex,
+  activeIndex,
+  pageWidth,
+  aspect,
+  dragTranslationX,
+}) {
+  const identity = travelMediaIdentity(item);
+  const baseTranslationX = -(pageIndex - activeIndex) * pageWidth;
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: baseTranslationX + dragTranslationX.value }],
+  }), [baseTranslationX]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.embeddedPagerPage, animatedStyle]}
+      testID={`travel-media-pager-page-${identity}`}
+    >
+      <CropPage
+        item={item}
+        aspect={aspect}
+        cropEnabled={false}
+        navigationEnabled={false}
+        existingContentFit="cover"
+        showExistingHint={false}
+        maxViewportWidth={pageWidth}
+        onCropChange={() => {}}
+        onSwipe={() => {}}
+      />
+    </Animated.View>
+  );
+}
+
+function EmbeddedMediaPager({ items, activeIndex, pageWidth, aspect, onNavigate }) {
+  const dragTranslationX = useSharedValue(0);
+
+  useEffect(() => {
+    dragTranslationX.value = 0;
+  }, [activeIndex, dragTranslationX, items.length, pageWidth]);
+
+  const gesture = useMemo(() => Gesture.Pan()
+    .enabled(items.length > 1 && pageWidth > 0)
+    .minDistance(6)
+    .activeOffsetX([-8, 8])
+    .failOffsetY([-12, 12])
+    .maxPointers(1)
+    .shouldCancelWhenOutside(false)
+    .onUpdate((event) => {
+      const hasNext = activeIndex < items.length - 1;
+      const hasPrevious = activeIndex > 0;
+      let translationX = event.translationX;
+      if (translationX > 0 && !hasNext) {
+        translationX *= TRAVEL_MEDIA_PAGER_EDGE_RESISTANCE;
+      } else if (translationX < 0 && !hasPrevious) {
+        translationX *= TRAVEL_MEDIA_PAGER_EDGE_RESISTANCE;
+      }
+      dragTranslationX.value = Math.max(-pageWidth, Math.min(pageWidth, translationX));
+    })
+    .onEnd((event) => {
+      const delta = travelMediaPagerDelta({
+        translationX: event.translationX,
+        translationY: event.translationY,
+        velocityX: event.velocityX,
+        pageWidth,
+      });
+      const canNavigate = delta > 0
+        ? activeIndex < items.length - 1
+        : delta < 0 && activeIndex > 0;
+      if (!delta || !canNavigate) {
+        dragTranslationX.value = withSpring(0, { damping: 22, stiffness: 260 });
+        return;
+      }
+      const destination = delta > 0 ? pageWidth : -pageWidth;
+      dragTranslationX.value = withTiming(destination, { duration: 180 }, (finished) => {
+        if (!finished) return;
+        runOnJS(onNavigate)(delta);
+        dragTranslationX.value = 0;
+      });
+    })
+    .onFinalize((_event, success) => {
+      if (!success) dragTranslationX.value = withSpring(0, { damping: 22, stiffness: 260 });
+    }), [activeIndex, dragTranslationX, items.length, onNavigate, pageWidth]);
+
+  const pageIndices = [activeIndex + 1, activeIndex - 1, activeIndex]
+    .filter((index) => index >= 0 && index < items.length);
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={styles.embeddedPager} testID="travel-media-pager">
+        {pageIndices.map((pageIndex) => (
+          <EmbeddedMediaPagerPage
+            key={travelMediaIdentity(items[pageIndex])}
+            item={items[pageIndex]}
+            pageIndex={pageIndex}
+            activeIndex={activeIndex}
+            pageWidth={pageWidth}
+            aspect={aspect}
+            dragTranslationX={dragTranslationX}
+          />
+        ))}
+      </Animated.View>
+    </GestureDetector>
+  );
 }
 
 function ReorderableMediaThumb({
   item,
   index,
   itemCount,
-  itemStride,
+  itemCenters,
   thumbnailSize,
   selected,
+  dragging,
   activeDragIndex,
   targetDragIndex,
   dragTranslationX,
@@ -346,6 +554,7 @@ function ReorderableMediaThumb({
   onBegin,
   onDrop,
   onRelease,
+  onLayout,
   onAccessibilityMove,
 }) {
   const identity = travelMediaIdentity(item);
@@ -360,15 +569,13 @@ function ReorderableMediaThumb({
       runOnJS(onBegin)(index);
     })
     .onUpdate((event) => {
-      const minTranslation = -(itemCount - 1 - index) * itemStride;
-      const maxTranslation = index * itemStride;
-      const translationX = Math.max(minTranslation, Math.min(maxTranslation, event.translationX));
+      const bounds = travelMediaReorderTranslationBounds({ fromIndex: index, itemCenters });
+      const translationX = Math.max(bounds.minimum, Math.min(bounds.maximum, event.translationX));
       dragTranslationX.value = translationX;
       targetDragIndex.value = travelMediaReorderTargetIndex({
         fromIndex: index,
         translationX,
-        itemCount,
-        itemStride,
+        itemCenters,
       });
     })
     .onEnd(() => {
@@ -383,8 +590,8 @@ function ReorderableMediaThumb({
     activeDragIndex,
     dragTranslationX,
     index,
+    itemCenters,
     itemCount,
-    itemStride,
     onBegin,
     onDrop,
     onRelease,
@@ -406,14 +613,12 @@ function ReorderableMediaThumb({
       };
     }
 
-    let translateX = 0;
-    if (activeIndex >= 0 && activeIndex < targetIndex && index > activeIndex && index <= targetIndex) {
-      translateX = itemStride;
-    } else if (
-      activeIndex >= 0 && activeIndex > targetIndex && index >= targetIndex && index < activeIndex
-    ) {
-      translateX = -itemStride;
-    }
+    const translateX = travelMediaReorderNeighborTranslation({
+      index,
+      activeIndex,
+      targetIndex,
+      itemCenters,
+    });
     return {
       zIndex: 1,
       elevation: 0,
@@ -423,12 +628,13 @@ function ReorderableMediaThumb({
         { scale: withSpring(1, { damping: 18, stiffness: 240 }) },
       ],
     };
-  }, [index, itemStride]);
+  }, [index, itemCenters]);
 
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
         style={[styles.embeddedThumbSurface, { width: thumbnailSize, height: thumbnailSize }, animatedStyle]}
+        onLayout={(event) => onLayout(index, event.nativeEvent.layout)}
         testID={`travel-media-drag-surface-${identity}`}
       >
         <Pressable
@@ -437,6 +643,7 @@ function ReorderableMediaThumb({
             styles.embeddedThumb,
             { width: thumbnailSize, height: thumbnailSize },
             selected && styles.selectedThumbActive,
+            dragging && styles.embeddedThumbDragging,
           ]}
           onPress={() => onPress(index)}
           accessibilityRole="button"
@@ -479,12 +686,15 @@ export default function TravelMediaComposer({
   const defaultSourceAdapter = useTravelMediaSource({ maxItems });
   const sourceAdapter = suppliedSourceAdapter || sourceAdapters?.[Platform.OS] || defaultSourceAdapter;
   const insets = useContext(SafeAreaInsetsContext) || ZERO_INSETS;
+  const windowDimensions = useWindowDimensions();
   const [working, setWorking] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [composerError, setComposerError] = useState('');
   const [composerSession, setComposerSession] = useState(0);
   const [cropEditing, setCropEditing] = useState(false);
   const [reorderTrackWidth, setReorderTrackWidth] = useState(0);
+  const [reorderCenters, setReorderCenters] = useState([]);
+  const [draggingIndex, setDraggingIndex] = useState(-1);
   const activeDragIndex = useSharedValue(-1);
   const targetDragIndex = useSharedValue(-1);
   const dragTranslationX = useSharedValue(0);
@@ -496,6 +706,7 @@ export default function TravelMediaComposer({
   const reorderInteractionCallbackRef = useRef(onReorderInteractionChange);
   reorderInteractionCallbackRef.current = onReorderInteractionChange;
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
+  const embeddedPreviewWidth = travelMediaEmbeddedPreviewWidth(windowDimensions.width);
   const options = useMemo(() => ({ aspect, maxItems, maxLongEdge, compress }), [
     aspect, compress, maxItems, maxLongEdge,
   ]);
@@ -517,6 +728,7 @@ export default function TravelMediaComposer({
 
   useEffect(() => {
     setActiveIndex((current) => Math.max(0, Math.min(current, Math.max(0, working.length - 1))));
+    setReorderCenters((current) => current.slice(0, working.length));
   }, [working.length]);
 
   const materializeSelection = useCallback(async (descriptor) => {
@@ -622,10 +834,12 @@ export default function TravelMediaComposer({
 
   const beginReorder = useCallback((index) => {
     setActiveIndex(index);
+    setDraggingIndex(index);
     setReorderInteractionActive(true);
   }, [setReorderInteractionActive]);
 
   const releaseReorder = useCallback(() => {
+    setDraggingIndex(-1);
     setReorderInteractionActive(false);
   }, [setReorderInteractionActive]);
 
@@ -646,12 +860,26 @@ export default function TravelMediaComposer({
   }, []);
 
   useEffect(() => {
-    if (!visible) setReorderInteractionActive(false);
+    if (!visible) {
+      setDraggingIndex(-1);
+      setReorderInteractionActive(false);
+    }
   }, [setReorderInteractionActive, visible]);
 
   const moveForAccessibility = useCallback((fromIndex, toIndex) => {
     finishReorder(fromIndex, toIndex);
   }, [finishReorder]);
+
+  const registerReorderLayout = useCallback((index, layout) => {
+    const center = Number(layout?.x) + Number(layout?.width) / 2;
+    if (!Number.isFinite(center)) return;
+    setReorderCenters((current) => {
+      if (current[index] === center) return current;
+      const next = current.slice();
+      next[index] = center;
+      return next;
+    });
+  }, []);
 
   const retryFailed = useCallback(() => {
     setComposerError('');
@@ -691,7 +919,7 @@ export default function TravelMediaComposer({
       TRAVEL_MEDIA_REORDER_MIN_THUMB_SIZE,
       Math.min(TRAVEL_MEDIA_REORDER_MAX_THUMB_SIZE, Math.floor(availableThumbnailWidth))
     );
-    const reorderItemStride = reorderThumbnailSize + reorderGap;
+    const cropActive = Boolean(cropEditing && activeItem?.transform);
     return (
       <GestureHandlerRootView
         style={styles.embeddedRoot}
@@ -712,23 +940,51 @@ export default function TravelMediaComposer({
           </Pressable>
         ) : (
           <>
-            <View style={[styles.previewWrap, styles.embeddedPreview, { aspectRatio: ratio }]}>
-              <CropPage
-                key={`${composerSession}:${travelMediaIdentity(activeItem)}`}
-                item={activeItem}
-                aspect={aspect}
-                cropEnabled={cropEditing}
-                onCropChange={(crop) => updateCrop(travelMediaIdentity(activeItem), crop)}
-                onSwipe={navigateBySwipe}
-              />
+            <View
+              style={[
+                styles.previewWrap,
+                styles.embeddedPreview,
+                {
+                  width: embeddedPreviewWidth,
+                  height: embeddedPreviewWidth / ratio,
+                  maxHeight: embeddedPreviewWidth / ratio,
+                  borderRadius: embeddedPreviewWidth >= windowDimensions.width
+                    ? 0
+                    : spacing.radiusLarge,
+                },
+              ]}
+              testID="travel-media-embedded-preview"
+            >
+              {cropActive ? (
+                <CropPage
+                  key={`${composerSession}:${travelMediaIdentity(activeItem)}`}
+                  item={activeItem}
+                  aspect={aspect}
+                  cropEnabled
+                  navigationEnabled={false}
+                  maxViewportWidth={embeddedPreviewWidth}
+                  onCropChange={(crop) => updateCrop(travelMediaIdentity(activeItem), crop)}
+                  onSwipe={() => {}}
+                />
+              ) : (
+                <EmbeddedMediaPager
+                  items={working}
+                  activeIndex={activeIndex}
+                  pageWidth={embeddedPreviewWidth}
+                  aspect={aspect}
+                  onNavigate={navigateBySwipe}
+                />
+              )}
               <View style={styles.previewTools} pointerEvents="box-none">
                 <View style={styles.activeBadge} pointerEvents="none">
-                  <AppText style={styles.activeBadgeText}>{activeIndex + 1}/{working.length}</AppText>
+                  <AppText style={styles.activeBadgeText} testID="travel-media-active-counter">
+                    {`${activeIndex + 1}/${working.length}`}
+                  </AppText>
                 </View>
               </View>
               <AppText style={styles.cropHint}>
-                {cropEditing && activeItem?.transform
-                  ? 'גרירה וצביטה מתאימות את החיתוך · החלקה מהירה עוברת תמונה'
+                {cropActive
+                  ? 'גרירה וצביטה מתאימות את החיתוך · מעבר לתמונה אחרת דרך התמונות הממוזערות'
                   : 'החליקו ימינה או שמאלה כדי לעבור בין התמונות'}
               </AppText>
             </View>
@@ -765,9 +1021,10 @@ export default function TravelMediaComposer({
                   item={item}
                   index={index}
                   itemCount={working.length}
-                  itemStride={reorderItemStride}
+                  itemCenters={reorderCenters}
                   thumbnailSize={reorderThumbnailSize}
                   selected={index === activeIndex}
+                  dragging={index === draggingIndex}
                   activeDragIndex={activeDragIndex}
                   targetDragIndex={targetDragIndex}
                   dragTranslationX={dragTranslationX}
@@ -775,6 +1032,7 @@ export default function TravelMediaComposer({
                   onBegin={beginReorder}
                   onDrop={finishReorder}
                   onRelease={releaseReorder}
+                  onLayout={registerReorderLayout}
                   onAccessibilityMove={moveForAccessibility}
                 />
               ))}
@@ -1010,16 +1268,19 @@ const styles = StyleSheet.create({
   embeddedAddIcon: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
   embeddedEmptyTitle: { color: colors.textPrimary, fontSize: 17 },
   embeddedEmptyText: { color: colors.textSecondary, fontSize: 13, marginTop: spacing.xs },
-  embeddedPreview: { borderRadius: spacing.radiusLarge },
+  embeddedPreview: { alignSelf: 'center', borderRadius: spacing.radiusLarge },
+  embeddedPager: { flex: 1, overflow: 'hidden', backgroundColor: '#101317' },
+  embeddedPagerPage: { ...StyleSheet.absoluteFillObject },
   embeddedActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.md },
   embeddedAction: { minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: spacing.radiusFull, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, paddingHorizontal: spacing.md },
   embeddedActionActive: { borderColor: colors.primary, backgroundColor: colors.accentLight },
   embeddedActionText: { color: colors.primary, fontSize: 13 },
   embeddedDeleteText: { color: colors.error },
   embeddedReorderHint: { color: colors.textSecondary, fontSize: 12, textAlign: 'right', writingDirection: 'rtl', marginTop: spacing.md, marginBottom: spacing.xs },
-  embeddedReorderTrack: { width: '100%', minHeight: 96, overflow: 'visible', direction: 'ltr', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingVertical: 10 },
-  embeddedThumbSurface: { overflow: 'visible', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowRadius: 8 },
+  embeddedReorderTrack: { width: '100%', minHeight: 96, overflow: 'visible', flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingVertical: 10 },
+  embeddedThumbSurface: { overflow: 'visible', borderRadius: spacing.radiusSmall, backgroundColor: colors.white, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowRadius: 8 },
   embeddedThumb: { width: 76, height: 76 },
+  embeddedThumbDragging: { borderColor: colors.accentAction, borderWidth: 4 },
   embeddedStatus: { marginTop: spacing.sm },
   header: { height: 58, paddingHorizontal: spacing.lg, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.white },
   headerCopy: { alignItems: 'center' },
@@ -1050,7 +1311,7 @@ const styles = StyleSheet.create({
   previewTools: { ...StyleSheet.absoluteFillObject, padding: spacing.md, flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between' },
   deleteButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,20,22,0.72)' },
   activeBadge: { minWidth: 38, height: 38, paddingHorizontal: spacing.sm, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,20,22,0.72)' },
-  activeBadgeText: { color: colors.white, fontSize: 12 },
+  activeBadgeText: { color: colors.white, fontSize: 12, textAlign: 'center', writingDirection: 'ltr', direction: 'ltr' },
   cropHint: { position: 'absolute', bottom: spacing.sm, left: spacing.md, right: spacing.md, color: colors.white, fontSize: 12, textAlign: 'center', writingDirection: 'rtl' },
   selectionPanel: { backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
   libraryHeader: { minHeight: 48, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.white },
@@ -1083,7 +1344,7 @@ const styles = StyleSheet.create({
   gridTile: { flex: 1 / 3, maxWidth: '33.333%', aspectRatio: 1, padding: 1 },
   gridImage: { width: '100%', height: '100%', backgroundColor: colors.borderLight },
   badge: { position: 'absolute', top: spacing.xs, right: spacing.xs, width: 25, height: 25, borderRadius: 13, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { color: colors.white, fontSize: 12 },
+  badgeText: { color: colors.white, fontSize: 12, textAlign: 'center', writingDirection: 'ltr', direction: 'ltr' },
   tileLoading: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   gridLoader: { marginVertical: spacing.lg },
 });
