@@ -49,33 +49,6 @@ export const contentPublishBannerStyles = StyleSheet.create({
 	discardText: { color: colors.error },
 });
 
-// components/ActionBar.js
-export const actionBarStyles = StyleSheet.create({
-	overlayFooter: {
-		backgroundColor: 'rgba(15,23,42,0.32)',
-		borderTopWidth: 0,
-		borderRadius: 24,
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		justifyContent: 'flex-start',
-		borderWidth: 1,
-		borderColor: 'rgba(255,255,255,0.14)',
-	},
-	overlayActionGroup: {
-		gap: 14,
-	},
-	overlayActionButton: {
-		gap: 5,
-	},
-	overlayText: {
-		color: '#FFFFFF',
-		fontFamily: fontFamilies.semiBold,
-		textShadowColor: 'rgba(0,0,0,0.35)',
-		textShadowOffset: { width: 0, height: 1 },
-		textShadowRadius: 3,
-	},
-});
-
 // components/ActionMenu.js
 export const actionMenuStyles = StyleSheet.create({
   menuBtn: {
@@ -592,14 +565,6 @@ export const recommendationCardStyles = StyleSheet.create({
     height: 118,
     zIndex: 3,
   },
-  feedBottomGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 118,
-    zIndex: 3,
-  },
   feedHeaderOverlay: {
     position: 'absolute',
     top: 12,
@@ -652,17 +617,6 @@ export const recommendationCardStyles = StyleSheet.create({
     borderRadius: 22,
     paddingHorizontal: 4,
     paddingVertical: 2,
-  },
-  feedDotsContainer: {
-    bottom: 72,
-    zIndex: 6,
-  },
-  feedActionOverlay: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 16,
-    zIndex: 7,
   },
   feedContent: {
     paddingHorizontal: 16,
@@ -3681,14 +3635,6 @@ export const routeCardStyles = StyleSheet.create({
 		height: 118,
 		zIndex: 3,
 	},
-	feedBottomGradient: {
-		position: "absolute",
-		left: 0,
-		right: 0,
-		bottom: 0,
-		height: 118,
-		zIndex: 3,
-	},
 	feedHeaderOverlay: {
 		position: "absolute",
 		top: 12,
@@ -3741,17 +3687,6 @@ export const routeCardStyles = StyleSheet.create({
 		borderRadius: 22,
 		paddingHorizontal: 4,
 		paddingVertical: 2,
-	},
-	feedDotsContainer: {
-		bottom: 72,
-		zIndex: 6,
-	},
-	feedActionOverlay: {
-		position: "absolute",
-		left: 12,
-		right: 12,
-		bottom: 16,
-		zIndex: 7,
 	},
 	feedContent: {
 		paddingHorizontal: 16,

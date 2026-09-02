@@ -1,18 +1,15 @@
-import { View, TouchableOpacity } from "react-native";
-import AppText from "./AppText";
-import { Ionicons } from "@expo/vector-icons";
 import { useLikes } from "../features/community/hooks/useLikes";
 import { useCommentsCount } from "../features/community/hooks/useCommentsCount";
-import { cards, colors, actionBarStyles as styles } from "../styles";
-import LikesModal from './LikesModal';
 import { useState } from 'react';
-import ReportButton from '../features/moderation/components/ReportButton';
+import LikesModal from './LikesModal';
+import { RecommendationActionBar } from './RecommendationActionBar';
 
 /**
- * ActionBar - Reusable footer component for cards with like, comment, and share actions.
+ * ActionBar - Stateful card wrapper around RecommendationActionBar.
  *
  * Handles like toggling, displays like count with a modal showing who liked,
- * comment count, and share button.
+ * and subscribes to the comment count. Detail screens provide sharing directly
+ * to RecommendationActionBar because cards do not expose that action.
  *
  * @param {Object} props
  * @param {Object} props.item - Content data with an id and stats counters.
@@ -35,9 +32,8 @@ import ReportButton from '../features/moderation/components/ReportButton';
  *   collectionName="routes"
  * />
  */
-const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', variant = 'default' }) => {
+const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' }) => {
 	const [showLikesModal, setShowLikesModal] = useState(false);
-	const isOverlay = variant === 'overlay';
 
 	const { isLiked, likeCount, toggleLike } = useLikes(
 		collectionName,
@@ -52,67 +48,28 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 	};
 
 	const commentsCount = useCommentsCount(collectionName, item.id);
+	const contentLabel = collectionName === 'routes'
+		? 'המסלול'
+		: collectionName === 'trips'
+			? 'הטיול'
+			: 'ההמלצה';
 
 	return (
-		<View style={[cards.recFooter, isOverlay && styles.overlayFooter]}>
-			<View style={[cards.recActionGroup, isOverlay && styles.overlayActionGroup]}>
-				<TouchableOpacity
-					style={[cards.recActionButton, isOverlay && styles.overlayActionButton]}
-					onPress={toggleLike}
-				>
-					<Ionicons
-						name={isLiked ? "heart" : "heart-outline"}
-						size={isOverlay ? 26 : 24}
-						color={isOverlay ? "#FFFFFF" : (isLiked ? colors.heart : colors.textSecondary)}
-					/>
-				</TouchableOpacity>
-
-				<TouchableOpacity
-					onPress={() => likeCount > 0 && setShowLikesModal(true)}
-				>
-					<AppText
-						style={[
-							cards.recLikeCount,
-							likeCount > 0 && cards.recLikeCountClickable,
-							isOverlay && styles.overlayText,
-						]}
-					>
-						{likeCount > 0 ? `${likeCount} לייקים` : ""}
-					</AppText>
-				</TouchableOpacity>
-
-				<TouchableOpacity
-					style={[cards.recActionButton, isOverlay && styles.overlayActionButton]}
-					onPress={handleCommentPress}
-				>
-					<Ionicons
-						name='chatbubble-outline'
-						size={isOverlay ? 25 : 22}
-						color={isOverlay ? "#FFFFFF" : "#4B5563"}
-					/>
-					<AppText style={[cards.recActionText, isOverlay && styles.overlayText]}>
-						תגובות {commentsCount > 0 && `(${commentsCount})`}
-					</AppText>
-				</TouchableOpacity>
-			</View>
-
-			<ReportButton
-				target={{
+		<>
+			<RecommendationActionBar
+				isLiked={isLiked}
+				likeCount={likeCount}
+				commentsCount={commentsCount}
+				onCommentPress={handleCommentPress}
+				onLikePress={toggleLike}
+				onLikesListPress={() => setShowLikesModal(true)}
+				contentLabel={contentLabel}
+				reportTarget={{
 					type: collectionName === 'routes' ? 'route' : collectionName === 'trips' ? 'trip' : 'recommendation',
 					id: item.id,
 				}}
 				ownerId={item.ownerId}
-				compact={isOverlay}
-				color={isOverlay ? '#FFFFFF' : colors.textSecondary}
 			/>
-
-			{/* <TouchableOpacity>
-				<Ionicons
-					name='share-social-outline'
-					size={22}
-					color='#4B5563'
-				/>
-			</TouchableOpacity> */}
 
 			<LikesModal
 				visible={showLikesModal}
@@ -121,7 +78,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', v
 				itemId={item.id}
 				likeCount={likeCount}
 			/>
-		</View>
+		</>
 	);
 };
 

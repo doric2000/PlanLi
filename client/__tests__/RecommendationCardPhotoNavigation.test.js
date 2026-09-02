@@ -10,6 +10,13 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
+jest.mock('expo-linear-gradient', () => {
+  const { View: MockView } = require('react-native');
+  return {
+    LinearGradient: ({ children, ...props }) => <MockView {...props}>{children}</MockView>,
+  };
+});
+
 jest.mock('../src/config/firebase', () => ({
   auth: { currentUser: null },
 }));
@@ -73,7 +80,10 @@ jest.mock('../src/components/Avatar', () => {
   return { Avatar: () => <MockView /> };
 });
 jest.mock('../src/components/ActionMenu', () => ({ ActionMenu: () => null }));
-jest.mock('../src/components/ActionBar', () => () => null);
+jest.mock('../src/components/ActionBar', () => {
+  const { View: MockView } = require('react-native');
+  return () => <MockView testID="action-bar" />;
+});
 jest.mock('../src/components/FavoriteButton', () => () => null);
 jest.mock('../src/components/PreferenceContextLine', () => () => null);
 jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
@@ -113,5 +123,15 @@ describe('RecommendationCard photo navigation', () => {
     expect(mockNavigate).toHaveBeenCalledWith('RecommendationDetail', {
       postId: 'recommendation-1',
     });
+  });
+
+  it('places the action bar after media and before content', () => {
+    const screen = render(<RecommendationCard item={recommendation} />);
+    const directChildren = screen.toJSON().children.filter((child) => child && typeof child === 'object');
+    const mediaIndex = directChildren.findIndex((child) => child.props?.testID === 'recommendation-media');
+    const actionBarIndex = directChildren.findIndex((child) => child.props?.testID === 'action-bar');
+
+    expect(mediaIndex).toBeGreaterThanOrEqual(0);
+    expect(actionBarIndex).toBe(mediaIndex + 1);
   });
 });
