@@ -51,6 +51,35 @@ test('destination catalog indexes match every popular search query and stable ID
   ]) assert.ok(catalogIndexes.includes(signature), `Missing destination catalog index: ${signature}`);
 });
 
+test('destination search indexes include canonical approval guard and every scope', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const catalogIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'destinationCatalog')
+    .map(fieldSignature);
+
+  for (const signature of [
+    'status:ASCENDING|canonicalApproved:ASCENDING|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'status:ASCENDING|canonicalApproved:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'countryId:ASCENDING|status:ASCENDING|canonicalApproved:ASCENDING|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'countryId:ASCENDING|status:ASCENDING|canonicalApproved:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'status:ASCENDING|canonicalApproved:ASCENDING|names.he:ASCENDING|__name__:ASCENDING',
+    'countryId:ASCENDING|status:ASCENDING|canonicalApproved:ASCENDING|names.he:ASCENDING|__name__:ASCENDING',
+    'discoveryRegionId:ASCENDING|status:ASCENDING|canonicalApproved:ASCENDING|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'discoveryRegionId:ASCENDING|status:ASCENDING|canonicalApproved:ASCENDING|search.prefixes:CONTAINS|recommendationCount:DESCENDING|__name__:ASCENDING',
+    'discoveryRegionId:ASCENDING|status:ASCENDING|canonicalApproved:ASCENDING|names.he:ASCENDING|__name__:ASCENDING',
+  ]) assert.ok(catalogIndexes.includes(signature), `Missing approved destination search index: ${signature}`);
+});
+
+test('pending trip content has a stable owner/status/time index', () => {
+  const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
+  const tripIndexes = config.indexes
+    .filter((entry) => entry.collectionGroup === 'trips')
+    .map(fieldSignature);
+  assert.ok(tripIndexes.includes(
+    'ownerId:ASCENDING|status:ASCENDING|createdAt:DESCENDING'
+  ));
+});
+
 test('personalized recommendation candidate queries have global and destination indexes', () => {
   const config = JSON.parse(fs.readFileSync(indexesPath, 'utf8'));
   const recommendationIndexes = config.indexes

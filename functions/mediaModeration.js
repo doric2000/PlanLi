@@ -2,35 +2,61 @@ const { collectCanonicalMediaAssets, FINAL_PATH_PATTERN } = require('./mediaProc
 
 const ACTIVE_CACHE_CONTROL = 'public,max-age=300,must-revalidate';
 const HELD_CACHE_CONTROL = 'private,max-age=0,no-store';
+const METADATA_UPDATE_ATTEMPTS = 3;
+const METADATA_RETRY_DELAYS_MS = [25, 75];
 
 function isNotFound(error) {
   return error?.code === 404 || error?.code === '404';
 }
 
+function isMetagenerationConflict(error) {
+  const status = error?.code ?? error?.response?.statusCode;
+  return status === 412 || status === '412'
+    || (Array.isArray(error?.errors) && error.errors.some((entry) => (
+      entry?.reason === 'conditionNotMet' || entry?.reason === 'preconditionFailed'
+    )));
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function updateVariant(file, available, knownMetadata = null) {
   let metadata = knownMetadata;
-  if (!metadata) {
+  for (let attempt = 0; attempt < METADATA_UPDATE_ATTEMPTS; attempt += 1) {
+    if (!metadata) {
+      try {
+        [metadata] = await file.getMetadata();
+      } catch (error) {
+        if (isNotFound(error)) return;
+        throw error;
+      }
+    }
+    if (!metadata) return;
+    const custom = metadata.metadata || {};
+    const publicTokens = custom.firebaseStorageDownloadTokens || null;
+    const preservedTokens = custom.planliOriginalDownloadTokens || null;
     try {
-      [metadata] = await file.getMetadata();
+      await file.setMetadata({
+        cacheControl: available ? ACTIVE_CACHE_CONTROL : HELD_CACHE_CONTROL,
+        metadata: {
+          ...custom,
+          firebaseStorageDownloadTokens: available ? preservedTokens || publicTokens : null,
+          planliOriginalDownloadTokens: available ? null : preservedTokens || publicTokens,
+          availability: available ? 'active' : 'held',
+        },
+      }, metadata.metageneration ? {
+        ifMetagenerationMatch: Number(metadata.metageneration),
+      } : undefined);
+      return;
     } catch (error) {
-      if (isNotFound(error)) return;
-      throw error;
+      if (!isMetagenerationConflict(error) || attempt === METADATA_UPDATE_ATTEMPTS - 1) {
+        throw error;
+      }
+      metadata = null;
+      await wait(METADATA_RETRY_DELAYS_MS[attempt] || METADATA_RETRY_DELAYS_MS.at(-1));
     }
   }
-  const custom = metadata.metadata || {};
-  const publicTokens = custom.firebaseStorageDownloadTokens || null;
-  const preservedTokens = custom.planliOriginalDownloadTokens || null;
-  await file.setMetadata({
-    cacheControl: available ? ACTIVE_CACHE_CONTROL : HELD_CACHE_CONTROL,
-    metadata: {
-      ...custom,
-      firebaseStorageDownloadTokens: available ? preservedTokens || publicTokens : null,
-      planliOriginalDownloadTokens: available ? null : preservedTokens || publicTokens,
-      availability: available ? 'active' : 'held',
-    },
-  }, metadata.metageneration ? {
-    ifMetagenerationMatch: Number(metadata.metageneration),
-  } : undefined);
 }
 
 async function setMediaAvailability({
