@@ -2544,9 +2544,24 @@ async function resolveExactPlaceWithDestination({
 
   let destination;
   if (resolvedPlace?.destinationResolution) {
-    destination = await materializeDestinationResolution(
-      admin.firestore(), resolvedPlace.destinationResolution
-    );
+    try {
+      destination = await materializeDestinationResolution(
+        admin.firestore(), resolvedPlace.destinationResolution
+      );
+    } catch (error) {
+      if (error?.details?.reason !== 'stale_cached_destination_policy') throw error;
+      destination = await resolveDestinationFromToken({
+        admin,
+        auth,
+        resolvedPlaceToken,
+        accessTokenProvider,
+        projectId,
+        placesProvider,
+        restCountriesKey,
+        providerRateLimitKey,
+        selectionIntent: 'exact_place',
+      });
+    }
     let expectedCountryId = cleanedDestinationRef.countryId;
     let expectedCityId = cleanedDestinationRef.cityId;
     if (destination.countryId !== expectedCountryId || destination.cityId !== expectedCityId) {

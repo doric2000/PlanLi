@@ -197,14 +197,29 @@ async function deleteContentInternal({
   return { deleted: true, path: normalized.path };
 }
 
-async function deleteContent({ admin, auth, data, mediaBucket }) {
+async function deleteContent({
+  admin,
+  auth,
+  data,
+  mediaBucket,
+  resolveAdminAccess = hasActiveAdminAccess,
+  consumeDeleteRateLimit = consumeRateLimit,
+  deleteInternal = deleteContentInternal,
+}) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
-  const isAdmin = await hasActiveAdminAccess({ admin, auth, requireRecentTotp: true });
-  assert(isVerified(auth) || isAdmin, 'permission-denied', 'Email verification is required.');
-  await consumeRateLimit({ admin, uid: auth.uid, action: 'deleteContent' });
-  return deleteContentInternal({
+  const target = normalizeTarget(data?.target);
+  const snapshot = await admin.firestore().doc(target.path).get();
+  const ownsTarget = snapshot.exists && snapshot.data()?.ownerId === auth.uid;
+  const isAdmin = ownsTarget ? false : await resolveAdminAccess({
     admin,
-    target: data?.target,
+    auth,
+    requireRecentTotp: true,
+  });
+  assert(isVerified(auth) || isAdmin, 'permission-denied', 'Email verification is required.');
+  await consumeDeleteRateLimit({ admin, uid: auth.uid, action: 'deleteContent' });
+  return deleteInternal({
+    admin,
+    target,
     actorUid: auth.uid,
     isAdmin,
     mediaBucket,

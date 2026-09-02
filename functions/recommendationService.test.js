@@ -1817,7 +1817,7 @@ test('a previously cached destination remains usable when an old token has no se
   assert.equal(result.createCity, false);
 });
 
-test('a stale geometry-cached destination is re-resolved and upgraded from the verified token', async () => {
+test('a stale geometry-cached exact binding is re-resolved and upgraded from the verified token', async () => {
   clearRegistryCache();
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -1899,12 +1899,13 @@ test('a stale geometry-cached destination is re-resolved and upgraded from the v
   });
 
   try {
-    const result = await resolveDestinationFromToken({
+    const result = await resolveExactPlaceWithDestination({
       admin,
       auth: verifiedAuth,
+      placeId: 'ambewela-station',
       resolvedPlaceToken,
+      destinationRef: { countryId: 'LK', cityId: nuwaraId },
       providerRateLimitKey,
-      selectionIntent: 'exact_place',
       placesProvider: 'new',
     });
 
