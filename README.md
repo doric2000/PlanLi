@@ -3270,3 +3270,29 @@ reusing the stage-five environment variable with `--only functions`.
   force-close and reopen the installed app up to twice before testing. No Android
   update, native build, Firebase deployment, Rules, IAM, migration or
   production-data mutation accompanied this recovery OTA.
+
+## Recommendation media gestures production OTA
+
+- Source commit: `0aba4bcdea8c89d4cab57e9e8c6eb62b138fd6aa`.
+- The verified iOS production candidate was published to the `staging` branch as
+  group `44ac2b2a-baf5-4bb7-904b-52cf35e2cbc0`, update
+  `01a06104-db7f-7a72-b645-e594457055d8`, using the EAS `production`
+  environment.
+- The exact candidate was republished to the `production` branch as group
+  `1516af03-c8a5-4708-93e5-1d453a6e760d`, update
+  `01a06107-5f2d-725a-b8f9-34c4ba3a04df`, runtime `1.2.0`, iOS, at
+  `2026-09-02T07:31:08.205Z` (`2026-09-02 10:31:08` Israel time).
+- The immutable production launch bundle is 8,478,516 bytes with SHA-256
+  `39C654BD5C172725E946FD79DF03127CCAA530784C5517AD0AC566D7CB0482D1`.
+  Independent EAS readback verified the source commit, runtime, platform, update
+  ID, manifest hash, production configuration markers, and byte equality with
+  the staging candidate.
+- Message: Fix recommendation media RTL gestures and full-width pager.
+- TestFlight build 28 is compatible with runtime `1.2.0`. Physical-device media
+  ordering, swipe direction, full-width preview, numeric badges, and keyboard
+  positioning remain pending; force-close and reopen the installed app up to
+  twice before testing.
+- Rollback: republish the immediately preceding verified production group
+  `0729537b-294a-4190-a57f-2380097e6b22`; never change the runtime URL or channel
+  in-app. No Android update, native build, Firebase deployment, Hosting deploy,
+  Rules, IAM, migration, or production-data mutation accompanied this OTA.
