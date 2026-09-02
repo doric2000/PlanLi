@@ -56,6 +56,7 @@ const {
 } = require('./canonicalDestinationRegistry');
 const {
   buildVerifiedProviderDestinationApproval,
+  canUpgradeVerifiedProviderRegistryEntry,
   canUpgradeVerifiedProviderDestination,
   verifiedProviderRegistryEntryMatches,
 } = require('./destinationApprovalPolicy');
@@ -1396,6 +1397,7 @@ async function resolveGoogleDestination({
     excludedKinds: explicitlySelectedNaturalDestination ? [] : ['natural_feature'],
     allowBlockedExactKinds: explicitlySelectedNaturalDestination ? ['natural_feature'] : [],
     exactOnlyKinds: explicitlySelectedNaturalDestination ? ['natural_feature'] : [],
+    requireAliasForKinds: ['city_hub'],
   });
   if (!canonicalMatch && !selectedIsDestination && selectionIntent !== 'destination' &&
       placesProvider === 'new' && parsed.placeId) {
@@ -1420,6 +1422,7 @@ async function resolveGoogleDestination({
             aliases: [containing.name],
             coordinates: selectedCoordinates,
             excludedKinds: ['natural_feature'],
+            requireAliasForKinds: ['city_hub'],
           });
           if (canonicalMatch) {
             canonicalMatch.source = 'canonical_containing_places_pro';
@@ -1661,6 +1664,7 @@ async function resolveGoogleDestination({
         ],
         coordinates: selectedCoordinates,
         excludedKinds: ['natural_feature'],
+        requireAliasForKinds: ['city_hub'],
       });
       if (canonicalMatch?.ambiguity?.length) {
         const ambiguityError = new HttpsError(
@@ -1947,7 +1951,12 @@ async function resolveGoogleDestination({
 
   let registryRef = null;
   let registryData = null;
-  if (provisionalDestination) {
+  // Rebuild the attested city policy from every non-admin provider registry
+  // entry. This also covers a verified registry whose destination document was
+  // never materialized, without replacing an administrator's approval mode.
+  const providerPolicyApprovalRequired = provisionalDestination ||
+    canonicalEntry?.approval?.approvedByAdmin !== true;
+  if (providerPolicyApprovalRequired) {
     const approval = buildVerifiedProviderDestinationApproval({
       entry: {
         ...canonicalEntry,
@@ -2845,7 +2854,29 @@ async function saveRecommendation({
   assert(!usesRecommendationCatalog || locationMode,
     'invalid-argument', 'locationMode is required.');
   let destination;
-  if (data?.destinationRef) {
+  const revalidatesHeldExactDestination = Boolean(
+    recommendationId &&
+    locationMode === 'exact' &&
+    previousData?.status === 'moderation_hold' &&
+    previousData?.moderation?.holdReason === 'destination_pending_approval' &&
+    previousData?.place?.placeId &&
+    previousData.place.placeId === data?.placeId
+  );
+  if (revalidatesHeldExactDestination) {
+    destination = await resolveSubmittedPlaceDestination({
+      admin,
+      auth,
+      placeId: data.placeId,
+      resolvedPlaceToken: data?.resolvedPlaceToken,
+      countryOverrideId: data?.countryOverrideId,
+      accessTokenProvider,
+      projectId,
+      placesProvider,
+      restCountriesKey,
+      providerRateLimitKey,
+      incidentId: data?.incidentId,
+    });
+  } else if (data?.destinationRef) {
     const trustedExactEdit = recommendationId
       ? await resolveUnchangedExactRecommendation({
           db,
@@ -3021,10 +3052,15 @@ async function saveRecommendation({
       assert(registryValidation.valid, 'failed-precondition',
         `The verified destination registry plan is invalid: ${registryValidation.errors[0] || 'unknown'}.`);
       assert(
-        !registrySnapshot?.exists || verifiedProviderRegistryEntryMatches(
-          { id: registrySnapshot.id, ...registrySnapshot.data() },
-          destination.registryData
-        ),
+        !registrySnapshot?.exists ||
+          verifiedProviderRegistryEntryMatches(
+            { id: registrySnapshot.id, ...registrySnapshot.data() },
+            destination.registryData
+          ) ||
+          canUpgradeVerifiedProviderRegistryEntry(
+            { id: registrySnapshot.id, ...registrySnapshot.data() },
+            destination.registryData
+          ),
         'failed-precondition',
         'The verified destination registry identity changed while saving. Search again.'
       );
@@ -3157,12 +3193,22 @@ async function saveRecommendation({
         });
       }
     }
-    if (destination.registryRef && !registrySnapshot?.exists) {
-      transaction.create(destination.registryRef, {
-        ...destination.registryData,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    if (destination.registryRef) {
+      if (!registrySnapshot?.exists) {
+        transaction.create(destination.registryRef, {
+          ...destination.registryData,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else if (!verifiedProviderRegistryEntryMatches(
+        { id: registrySnapshot.id, ...registrySnapshot.data() },
+        destination.registryData
+      )) {
+        transaction.update(destination.registryRef, {
+          ...destination.registryData,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     }
     if (destination.claimRef) {
       if (claimSnapshot?.exists) {

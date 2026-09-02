@@ -1579,6 +1579,127 @@ test('a verified foreign locality is auto-approved instead of entering the admin
   assert.equal(destination.registryData.geometryPolicy.autoMatchEligible, false);
 });
 
+test('Ambewela resolves to provider-returned Nuwara Eliya and publishes through a seeded registry upgrade', async () => {
+  clearRegistryCache();
+  const registryId = 'lk-nuwara-eliya';
+  const registryPath = `system/destinationRegistry/entries/${registryId}`;
+  const seededRegistry = {
+    countryCode: 'LK',
+    names: { he: 'נוארה אליה', en: 'Nuwara Eliya' },
+    aliases: ['Nuwara Eliya'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    status: 'active',
+    center: { lat: 6.9606886, lng: 80.7692959 },
+    viewport: {
+      southwest: { lat: 6.773045957406882, lng: 80.57505693616173 },
+      northeast: { lat: 7.02408695059005, lng: 80.86397794758678 },
+    },
+    providerRefs: { googlePlaceId: 'ChIJn0805_yA4zoRuqzft3l5Ic8' },
+    googleTypes: ['administrative_area_level_3', 'political'],
+    registryVersion: 3,
+  };
+  const admin = createFakeAdmin({
+    'countries/LK': {
+      name: 'סרי לנקה', names: { he: 'סרי לנקה', en: 'Sri Lanka' },
+      code: 'LK', region: 'Asia', currencyCode: 'LKR', status: 'active',
+    },
+    [registryPath]: seededRegistry,
+    [`countries/LK/destinations/${canonicalDestinationId('LK', 'lk-ella')}`]: {
+      countryId: 'LK',
+      status: 'active',
+      destinationType: 'city',
+      providerRefs: { googlePlaceId: 'ella-place' },
+      googleCache: { names: { he: 'אלה', en: 'Ella' } },
+      canonicalPolicy: {
+        approved: true,
+        registryId: 'lk-ella',
+        kind: 'city_hub',
+        groupingPolicy: 'self',
+        registryVersion: 3,
+      },
+      stats: { recommendationCount: 0 },
+    },
+    'recommendations/ambewela-held': {
+      ...validContent,
+      ownerId: 'owner',
+      status: 'moderation_hold',
+      moderation: {
+        holdReason: 'destination_pending_approval',
+        systemGate: 'destination_pending_approval',
+      },
+      destination: {
+        countryId: 'LK',
+        cityId: canonicalDestinationId('LK', 'lk-ella'),
+        countryName: 'סרי לנקה',
+        cityName: 'אלה',
+      },
+      locationMode: 'exact',
+      place: {
+        placeId: 'ambewela-station',
+        name: 'Ambewela Railway Station',
+        address: "World's End Road, Ambewela, Sri Lanka",
+        coordinates: { lat: 6.8771336, lng: 80.8146143 },
+      },
+      stats: { likeCount: 0, commentCount: 0 },
+    },
+  });
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      id: 'ambewela-station',
+      displayName: { text: 'Ambewela Railway Station' },
+      formattedAddress: "World's End Road, Ambewela, Sri Lanka",
+      addressComponents: [
+        { longText: 'Ambewela', types: ['locality', 'political'] },
+        { longText: 'Nuwara Eliya', types: ['administrative_area_level_3', 'political'] },
+        { longText: 'Central Province', types: ['administrative_area_level_1', 'political'] },
+        { longText: 'Sri Lanka', shortText: 'LK', types: ['country', 'political'] },
+      ],
+      location: { latitude: 6.8771336, longitude: 80.8146143 },
+      types: ['train_station', 'transit_station', 'point_of_interest', 'establishment'],
+    }),
+  });
+
+  try {
+    const result = await saveRecommendation({
+      admin,
+      auth: verifiedAuth,
+      projectId: 'planli-f0b12',
+      accessTokenProvider: async () => 'oauth-token',
+      data: {
+        recommendationId: 'ambewela-held',
+        placeId: 'ambewela-station',
+        locationMode: 'exact',
+        destinationRef: {
+          countryId: 'LK',
+          cityId: canonicalDestinationId('LK', 'lk-ella'),
+        },
+        recommendation: { ...validContent, title: 'Ambewela train' },
+      },
+    });
+    const cityId = canonicalDestinationId('LK', registryId);
+    const city = admin.documents.get(`countries/LK/destinations/${cityId}`);
+    const recommendation = admin.documents.get(`recommendations/${result.recommendationId}`);
+    const upgradedRegistry = admin.documents.get(registryPath);
+
+    assert.equal(result.city.id, cityId);
+    assert.equal(result.city.name, 'נוארה אליה');
+    assert.equal(result.resolutionSource, 'canonical_alias_and_geometry');
+    assert.equal(city.canonicalPolicy.registryAttestation.policyId,
+      'verified-provider-destination-v1');
+    assert.equal(recommendation.status, 'active');
+    assert.equal(recommendation.publicationGate.destinationApprovalVerified, true);
+    assert.equal(upgradedRegistry.approval.policyId, 'verified-provider-destination-v1');
+    assert.equal(upgradedRegistry.geometryPolicy.autoMatchEligible, false);
+  } finally {
+    global.fetch = originalFetch;
+    clearRegistryCache();
+  }
+});
+
 test('an explicitly selected verified natural feature is approved as a distinct destination', async () => {
   const admin = createFakeAdmin({
     'countries/PE': {

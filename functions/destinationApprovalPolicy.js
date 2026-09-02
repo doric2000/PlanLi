@@ -285,13 +285,29 @@ function canUpgradeVerifiedProviderDestination(current, resolved, countryId = ''
   ].filter(Boolean));
   const currentCountryId = clean(countryId);
   const attestedCountryId = clean(resolved?.canonicalPolicy?.registryAttestation?.countryId);
+  const currentPolicy = current?.canonicalPolicy || {};
+  const provisionalPolicy = currentPolicy.approved !== true && currentPolicy.provisional === true;
+  const legacySeedPolicy = currentPolicy.approved === true &&
+    !currentPolicy.registryAttestation &&
+    !Number(currentPolicy.approvalRevision || 0);
   return current?.status === 'active' &&
-    current?.canonicalPolicy?.approved !== true &&
-    current?.canonicalPolicy?.provisional === true &&
+    (provisionalPolicy || legacySeedPolicy) &&
     resolvedRegistryIds.has(currentRegistryId) &&
     clean(current?.providerRefs?.googlePlaceId) === clean(resolved?.providerRefs?.googlePlaceId) &&
     (!currentCountryId || currentCountryId === attestedCountryId) &&
     destinationUsesVerifiedProviderDestinationPolicy(resolved);
+}
+
+function canUpgradeVerifiedProviderRegistryEntry(current, planned) {
+  if (!current || !planned || current?.approval?.approvedByAdmin === true) return false;
+  return clean(current.id) === clean(planned.id) &&
+    clean(current.countryCode).toUpperCase() === clean(planned.countryCode).toUpperCase() &&
+    current.status !== 'inactive' &&
+    (!clean(current.destinationPath) ||
+      clean(current.destinationPath) === clean(planned.destinationPath)) &&
+    clean(current.providerRefs?.googlePlaceId) === clean(planned.providerRefs?.googlePlaceId) &&
+    clean(current.kind) === clean(planned.kind) &&
+    clean(current.groupingPolicy) === clean(planned.groupingPolicy);
 }
 
 function verifiedProviderRegistryEntryMatches(current, planned) {
@@ -336,6 +352,7 @@ module.exports = {
   approvedRegistryId,
   buildVerifiedProviderDestinationApproval,
   buildVerifiedIlLocalityApproval,
+  canUpgradeVerifiedProviderRegistryEntry,
   canUpgradeVerifiedProviderDestination,
   canUpgradeVerifiedIlLocality,
   destinationUsesVerifiedProviderDestinationPolicy,

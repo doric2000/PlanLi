@@ -62,6 +62,34 @@ test('known India locality resolves to Munnar by canonical containment', () => {
   assert.equal(match.entry.names.he, 'מונאר');
 });
 
+test('city hubs cannot capture a different Google locality through geometry alone', () => {
+  const ella = {
+    id: 'lk-ella',
+    countryCode: 'LK',
+    names: { he: 'אלה', en: 'Ella' },
+    aliases: ['Ella'],
+    kind: 'city_hub',
+    groupingPolicy: 'self',
+    status: 'active',
+    center: { lat: 6.8731332, lng: 81.0491074 },
+    radiusKm: 29.355252359876932,
+    providerRefs: { googlePlaceId: 'ella-place' },
+    googleTypes: ['locality', 'political'],
+  };
+  const request = {
+    countryCode: 'LK',
+    providerPlaceId: 'ambewela-station',
+    aliases: ['Ambewela', 'Nuwara Eliya', 'Central Province'],
+    coordinates: { lat: 6.8771336, lng: 80.8146143 },
+    requireAliasForKinds: ['city_hub'],
+  };
+
+  assert.equal(matchCanonicalEntry([ella], request), null);
+  const nuwara = matchCanonicalEntry(BUILTIN_POLICIES, request);
+  assert.equal(nuwara?.entry?.id, 'lk-nuwara-eliya');
+  assert.equal(nuwara?.source, 'canonical_alias_and_geometry');
+});
+
 test('India address descriptor aliases can resolve an approved hub', () => {
   const match = matchCanonicalEntry(BUILTIN_POLICIES, {
     countryCode: 'IN', aliases: ['Munnar'], coordinates: { lat: 10.13, lng: 77.04 },
