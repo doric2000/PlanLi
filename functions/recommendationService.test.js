@@ -1817,7 +1817,7 @@ test('a previously cached destination remains usable when an old token has no se
   assert.equal(result.createCity, false);
 });
 
-test('a stale geometry-cached exact binding is re-resolved and upgraded from the verified token', async () => {
+test('a stale geometry-cached exact binding refreshes from the explicit canonical destination', async () => {
   clearRegistryCache();
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -1916,6 +1916,12 @@ test('a stale geometry-cached exact binding is re-resolved and upgraded from the
       admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
         .destinationResolution.cityId,
       nuwaraId
+    );
+    assert.equal(
+      admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
+        .providerCallCount,
+      1,
+      'refreshing an explicit destination binding must not choose a different locality again'
     );
   } finally {
     clearRegistryCache();
