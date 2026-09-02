@@ -22,6 +22,7 @@ export const pageHeaderStyles = StyleSheet.create({
     borderBottomColor: colors.divider,
   },
   hero: {
+    backgroundColor: colors.heroBlueGradient[1],
     borderBottomLeftRadius: TAB_HERO_OVERLAP,
     borderBottomRightRadius: TAB_HERO_OVERLAP,
     paddingBottom: 18,
