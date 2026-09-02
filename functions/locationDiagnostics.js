@@ -17,7 +17,27 @@ function createIncidentId(value) {
 }
 
 function normalizedCode(error) {
-  return String(error?.code || 'internal').replace(/^functions\//, '');
+  const code = String(error?.code || 'internal').replace(/^functions\//, '').toLowerCase();
+  // @google-cloud/firestore exposes gRPC status codes as numbers while
+  // callable errors use Firebase's string codes. Keep the public recovery
+  // contract stable when a transaction or document read fails before it can
+  // be converted to an HttpsError.
+  const grpcCodes = {
+    1: 'cancelled',
+    3: 'invalid-argument',
+    4: 'deadline-exceeded',
+    5: 'not-found',
+    6: 'already-exists',
+    7: 'permission-denied',
+    8: 'resource-exhausted',
+    9: 'failed-precondition',
+    10: 'aborted',
+    13: 'internal',
+    14: 'unavailable',
+    15: 'data-loss',
+    16: 'unauthenticated',
+  };
+  return grpcCodes[code] || code;
 }
 
 function reasonForLocationError(error, fallback = 'location_resolution_failed') {
@@ -122,6 +142,8 @@ function locationLog(stage, {
   fallbackPath,
   providerEndpoint,
   providerStatus,
+  errorCode,
+  errorName,
 } = {}, loggerImpl = logger) {
   const safeProviderEndpoint = PROVIDER_ENDPOINTS.has(providerEndpoint)
     ? providerEndpoint
@@ -140,9 +162,16 @@ function locationLog(stage, {
     ...(fallbackPath ? { fallbackPath } : {}),
     ...(safeProviderEndpoint ? { providerEndpoint: safeProviderEndpoint } : {}),
     ...(safeProviderStatus !== null ? { providerStatus: safeProviderStatus } : {}),
+    ...(safeDiagnosticValue(errorCode) ? { errorCode: safeDiagnosticValue(errorCode) } : {}),
+    ...(safeDiagnosticValue(errorName) ? { errorName: safeDiagnosticValue(errorName) } : {}),
   };
   if (outcome === 'failed') loggerImpl.warn('location_request', payload);
   else loggerImpl.info('location_request', payload);
+}
+
+function safeDiagnosticValue(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return /^[a-z0-9_-]{1,80}$/u.test(normalized) ? normalized : '';
 }
 
 module.exports = {

@@ -1078,6 +1078,25 @@ function heldForPendingDestination(content, countryId, cityId) {
     content.moderation.pendingDestinationKeys.includes(destinationKey(countryId, cityId));
 }
 
+function pendingDestinationReferences(content, type) {
+  const moderation = content?.moderation || {};
+  if (type === 'route') {
+    return (Array.isArray(moderation.pendingDestinationKeys)
+      ? moderation.pendingDestinationKeys
+      : [])
+      .map((key) => {
+        const [countryId, cityId, ...extra] = String(key || '').split(':');
+        return extra.length || !countryId || !cityId
+          ? null
+          : storedDestinationReference(countryId, cityId);
+      })
+      .filter(Boolean);
+  }
+  const destination = moderation.destination || content?.destination;
+  const reference = storedDestinationReference(destination?.countryId, destination?.cityId);
+  return reference ? [reference] : [];
+}
+
 function destinationReviewMessage(content, { restored = false } = {}) {
   const destination = content?.destination ||
     (Array.isArray(content?.destinations) ? content.destinations[0] : null) || {};
@@ -1282,7 +1301,35 @@ async function releaseDestinationPendingContent({
   };
 }
 
-async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
+async function listOrphanedDestinationApprovalHolds(db, limit) {
+  const collections = [
+    ['recommendations', 'recommendation'],
+    ['trips', 'trip'],
+    ['routes', 'route'],
+  ];
+  const snapshots = await Promise.all(collections.map(async ([collection, type]) => ({
+    type,
+    snapshot: await db.collection(collection)
+      .where('moderation.systemGate', '==', 'destination_pending_approval')
+      .limit(limit)
+      .get(),
+  })));
+  const references = new Map();
+  for (const { type, snapshot } of snapshots) {
+    for (const entry of snapshot.docs) {
+      for (const reference of pendingDestinationReferences(entry.data() || {}, type)) {
+        references.set(`${reference.countryId}:${reference.cityId}`, reference);
+      }
+    }
+  }
+  return [...references.values()].slice(0, limit);
+}
+
+async function reconcileDestinationApprovalReleases({
+  admin,
+  limit = 50,
+  releaseImpl = releaseDestinationPendingContent,
+}) {
   const boundedLimit = Math.max(1, Math.min(100, Number(limit) || 50));
   const db = admin.firestore();
   const unfinishedSnapshot = await db.collection('system/moderation/operations')
@@ -1299,9 +1346,19 @@ async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
     ...lateSnapshot.docs,
   ].map((entry) => [entry.ref.path, entry]));
   const pending = Array.from(pendingByPath.values()).slice(0, boundedLimit);
+  const operationDestinationKeys = new Set(pending.map((entry) => {
+    const destination = entry.data()?.destination || {};
+    return `${destination.countryId || ''}:${destination.cityId || ''}`;
+  }));
+  const orphanedDestinations = (await listOrphanedDestinationApprovalHolds(db, boundedLimit))
+    .filter((destination) => !operationDestinationKeys.has(
+      `${destination.countryId}:${destination.cityId}`
+    ))
+    .slice(0, Math.max(0, boundedLimit - pending.length));
   const result = {
-    scanned: unfinishedSnapshot.size + lateSnapshot.size,
-    pending: pending.length,
+    scanned: unfinishedSnapshot.size + lateSnapshot.size + orphanedDestinations.length,
+    pending: pending.length + orphanedDestinations.length,
+    orphaned: orphanedDestinations.length,
     completed: 0,
     failed: 0,
   };
@@ -1310,7 +1367,7 @@ async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
     try {
       const countryId = cleanId(destination.countryId, 'destination.countryId');
       const cityId = cleanId(destination.cityId, 'destination.cityId');
-      await releaseDestinationPendingContent({
+      await releaseImpl({
         admin,
         countryId,
         cityId,
@@ -1324,6 +1381,21 @@ async function reconcileDestinationApprovalReleases({ admin, limit = 50 }) {
         lastFailedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+    }
+  }
+  for (const destination of orphanedDestinations) {
+    try {
+      await releaseImpl({
+        admin,
+        countryId: destination.countryId,
+        cityId: destination.cityId,
+        reconciliationPass: true,
+      });
+      result.completed += 1;
+    } catch {
+      // An unapproved destination remains a legitimate manual-review hold.
+      // It will be reconsidered on a later bounded reconciliation pass.
+      result.failed += 1;
     }
   }
   return result;
@@ -2022,6 +2094,7 @@ module.exports = {
   listDrainingDestinationSnapshots,
   notifyAdminsOfDestination,
   onDestinationCreated,
+  pendingDestinationReferences,
   publicationFenceReadyForRecovery,
   qualityIssues,
   quarantineDestinationPublicationFenceForManualRecovery,

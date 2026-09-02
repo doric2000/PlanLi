@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const admin = require('firebase-admin');
 
 const {
+  destinationAcceptsNewReferences,
   heldForPendingDestination,
   releaseDestinationPendingContent,
 } = require('../destinationAdminService');
@@ -143,8 +144,8 @@ async function runDestinationApprovalRepair({
     cityId: options.cityId,
     eligibleContent: manifest.candidates.length,
     expectedContentEligible: manifest.candidates.some(({ path }) => path === options.expectedContentPath),
-    destinationActive: manifest.destination.countryStatus === 'active' &&
-      manifest.destination.destinationStatus === 'active' && manifest.destination.approved,
+    destinationActive: countrySnapshot.data()?.status === 'active' &&
+      destinationAcceptsNewReferences(destinationSnapshot.data() || {}, options.countryId),
     fingerprint,
   };
   if (!options.apply) return report;

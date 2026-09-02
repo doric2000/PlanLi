@@ -91,6 +91,17 @@ test('temporary minute quota remains retryable', () => {
   assert.equal(decorated.details.retryable, true);
 });
 
+test('numeric Firestore status codes keep their callable recovery contract', () => {
+  const decorated = decorateLocationError(
+    Object.assign(new Error('transaction aborted'), { code: 10 }),
+    'loc_1234567890ab',
+    'recommendation_save_failed'
+  );
+  assert.equal(decorated.code, 'aborted');
+  assert.equal(decorated.details.reason, 'recommendation_save_failed');
+  assert.equal(decorated.details.recoveryAction, 'contact_support');
+});
+
 test('location logs discard query, identity and coordinate fields', () => {
   let captured;
   locationLog('search', {
