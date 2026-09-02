@@ -1,7 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { removedCanonicalMediaAssets, setMediaAvailability } = require('./mediaModeration');
+const {
+  removedCanonicalMediaAssets,
+  setFileAvailability,
+  setMediaAvailability,
+} = require('./mediaModeration');
 
 function fixture() {
   let metadata = {
@@ -46,6 +50,34 @@ test('holding media revokes download tokens and marks the asset unavailable', as
   assert.equal(state.getMetadata().metadata.planliOriginalDownloadTokens, 'public-token');
   assert.equal(state.getMetadata().cacheControl, 'private,max-age=0,no-store');
   assert(state.registryWrites.every((entry) => entry.value.status === 'held'));
+});
+
+test('metadata precondition conflicts are retried with fresh metadata', async () => {
+  let current = {
+    metageneration: 7,
+    metadata: { firebaseStorageDownloadTokens: 'public-token' },
+  };
+  let writes = 0;
+  const file = {
+    getMetadata: async () => [current],
+    setMetadata: async (patch, options) => {
+      writes += 1;
+      assert.equal(options.ifMetagenerationMatch, writes === 1 ? 7 : 8);
+      if (writes === 1) {
+        current = { ...current, metageneration: 8 };
+        const error = new Error('metadata was edited during the operation');
+        error.code = 412;
+        throw error;
+      }
+      current = { ...patch, metageneration: 9 };
+    },
+  };
+
+  await setFileAvailability(file, false);
+
+  assert.equal(writes, 2);
+  assert.equal(current.metadata.availability, 'held');
+  assert.equal(current.metadata.planliOriginalDownloadTokens, 'public-token');
 });
 
 test('restoring media restores its original token and bounded public caching', async () => {

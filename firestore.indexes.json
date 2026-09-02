@@ -4,6 +4,114 @@
       "collectionGroup": "destinationCatalog",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "search.prefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "search.prefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "names.he", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "countryId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "names.he", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "discoveryRegionId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "discoveryRegionId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "search.prefixes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "recommendationCount", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "discoveryRegionId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "canonicalApproved", "order": "ASCENDING" },
+        { "fieldPath": "names.he", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "trips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "destinationCatalog",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "countryId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "destinationClass", "order": "ASCENDING" }
