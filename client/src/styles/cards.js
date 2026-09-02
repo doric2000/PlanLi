@@ -384,49 +384,6 @@ export const cards = {
 		writingDirection: "rtl",
 	},
 
-	recFooter: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		justifyContent: "space-between",
-		paddingHorizontal: 12,
-		paddingVertical: 10,
-		borderTopWidth: 1,
-		borderTopColor: "#F9FAFB",
-	},
-
-	recActionGroup: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 12,
-	},
-
-	recActionButton: {
-		flexDirection: "row-reverse",
-		alignItems: "center",
-		gap: 6,
-	},
-
-	recActionText: {
-		fontSize: 14,
-		color: "#4B5563",
-		fontFamily: fontFamilies.medium,
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-
-	recLikeCount: {
-		fontSize: 14,
-		color: "#4B5563",
-		fontFamily: fontFamilies.medium,
-		textAlign: "right",
-		writingDirection: "rtl",
-	},
-
-	recLikeCountClickable: {
-		color: "#1F2937",
-		fontFamily: fontFamilies.semiBold,
-	},
-
 	// Popular destination cards (HomeScreen)
 	popular: {
 		width: "48%",

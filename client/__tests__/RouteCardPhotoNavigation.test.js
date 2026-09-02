@@ -7,6 +7,13 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
 }));
 
+jest.mock('expo-linear-gradient', () => {
+  const { View } = require('react-native');
+  return {
+    LinearGradient: ({ children, ...props }) => <View {...props}>{children}</View>,
+  };
+});
+
 jest.mock('../src/config/firebase', () => ({
   auth: { currentUser: null },
 }));
@@ -58,7 +65,10 @@ jest.mock('../src/components/Avatar', () => {
   return { Avatar: () => <View /> };
 });
 jest.mock('../src/components/ActionMenu', () => ({ ActionMenu: () => null }));
-jest.mock('../src/components/ActionBar', () => () => null);
+jest.mock('../src/components/ActionBar', () => {
+  const { View } = require('react-native');
+  return () => <View testID="action-bar" />;
+});
 jest.mock('../src/components/FavoriteButton', () => () => null);
 jest.mock('../src/components/PreferenceContextLine', () => () => null);
 jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({
@@ -108,5 +118,15 @@ describe('RouteCard photo navigation', () => {
     expect(screen.getByText('3 ימים')).toBeTruthy();
     expect(screen.getByText('בינוני · ₪₪')).toBeTruthy();
     expect(screen.queryByText(/42\.7|ק״מ/)).toBeNull();
+  });
+
+  it('places the action bar after media and before content', () => {
+    const screen = render(<RouteCard item={route} onPress={jest.fn()} />);
+    const directChildren = screen.toJSON().children.filter((child) => child && typeof child === 'object');
+    const mediaIndex = directChildren.findIndex((child) => child.props?.testID === 'route-media');
+    const actionBarIndex = directChildren.findIndex((child) => child.props?.testID === 'action-bar');
+
+    expect(mediaIndex).toBeGreaterThanOrEqual(0);
+    expect(actionBarIndex).toBe(mediaIndex + 1);
   });
 });

@@ -1,16 +1,16 @@
-import { fontFamilies } from "../styles/typography";
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 
+import { fontFamilies } from "../styles/typography";
 import { colors } from '../styles';
 import ReportButton from '../features/moderation/components/ReportButton';
 
 export const RecommendationActionBar = ({
-  isLiked,
-  likeCount,
-  commentsCount,
+  isLiked = false,
+  likeCount = 0,
+  commentsCount = 0,
   onCommentPress,
   onLikePress,
   onLikesListPress,
@@ -19,8 +19,13 @@ export const RecommendationActionBar = ({
   reportTarget,
   ownerId,
   style,
-}) => (
-  <View style={[styles.bar, style]}>
+}) => {
+  const normalizedLikeCount = Math.max(0, Number(likeCount) || 0);
+  const normalizedCommentsCount = Math.max(0, Number(commentsCount) || 0);
+  const likesListDisabled = normalizedLikeCount <= 0 || !onLikesListPress;
+
+  return (
+    <View style={[styles.bar, style]} testID="recommendation-action-bar">
     <View style={styles.likeGroup}>
       <TouchableOpacity
         style={styles.iconButton}
@@ -28,67 +33,85 @@ export const RecommendationActionBar = ({
         accessibilityRole="button"
         accessibilityLabel={isLiked ? 'ביטול לייק' : 'הוספת לייק'}
         accessibilityState={{ selected: isLiked }}
+        testID="recommendation-action-like"
       >
         <Ionicons
           name={isLiked ? 'heart' : 'heart-outline'}
           size={24}
-          color={isLiked ? colors.heart : colors.textSecondary}
+          color={colors.primary}
         />
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.countButton}
-        onPress={() => likeCount > 0 && onLikesListPress?.()}
-        disabled={likeCount <= 0}
+        onPress={onLikesListPress}
+        disabled={likesListDisabled}
         accessibilityRole="button"
-        accessibilityLabel={`${likeCount} לייקים, הצגת הרשימה`}
+        accessibilityLabel={`${normalizedLikeCount} לייקים, הצגת הרשימה`}
+        accessibilityState={{ disabled: likesListDisabled }}
+        testID="recommendation-action-likes"
       >
-        <AppText style={[styles.text, isLiked && styles.activeText]}>{likeCount}</AppText>
+        <AppText style={[styles.text, isLiked && styles.activeText]}>{normalizedLikeCount}</AppText>
       </TouchableOpacity>
     </View>
 
     <TouchableOpacity
-      style={styles.action}
+      style={styles.actionButton}
       onPress={onCommentPress}
       accessibilityRole="button"
-      accessibilityLabel={`${commentsCount} תגובות`}
+      accessibilityLabel={`${normalizedCommentsCount} תגובות`}
+      testID="recommendation-action-comments"
     >
-      <Ionicons name="chatbubble-outline" size={24} color={colors.textSecondary} />
-      <AppText style={styles.text}>{commentsCount}</AppText>
+      <Ionicons name="chatbubble-outline" size={24} color={colors.primary} />
+      <AppText style={styles.text}>{normalizedCommentsCount}</AppText>
     </TouchableOpacity>
 
-    <TouchableOpacity
-      style={styles.action}
-      onPress={onSharePress}
-      accessibilityRole="button"
-      accessibilityLabel={`שיתוף ${contentLabel}`}
-    >
-      <Ionicons name="share-social-outline" size={24} color={colors.textSecondary} />
-      <AppText style={styles.text}>שיתוף</AppText>
-    </TouchableOpacity>
+    {onSharePress ? (
+      <TouchableOpacity
+        style={styles.actionButton}
+        onPress={onSharePress}
+        accessibilityRole="button"
+        accessibilityLabel={`שיתוף ${contentLabel}`}
+        testID="recommendation-action-share"
+      >
+        <Ionicons name="share-social-outline" size={24} color={colors.primary} />
+        <AppText style={styles.text}>שיתוף</AppText>
+      </TouchableOpacity>
+    ) : null}
 
-    <ReportButton target={reportTarget} ownerId={ownerId} />
-  </View>
-);
+    <ReportButton
+      target={reportTarget}
+      ownerId={ownerId}
+      compact
+      color={colors.primary}
+      subjectLabel={contentLabel}
+    />
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   bar: {
-    minHeight: 64,
+    height: 52,
+    minHeight: 52,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
   },
-  action: {
-    minWidth: 72,
-    minHeight: 48,
-    paddingHorizontal: 10,
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: 6,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 6,
   },
   likeGroup: {
-    minWidth: 72,
-    minHeight: 48,
+    minHeight: 44,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
@@ -100,7 +123,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   countButton: {
-    minWidth: 32,
+    minWidth: 44,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -112,6 +135,6 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
   activeText: {
-    color: colors.heart,
+    color: colors.primary,
   },
 });

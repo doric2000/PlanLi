@@ -1,5 +1,5 @@
 import { fontFamilies } from "../../../styles/typography";
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { colors } from '../../../styles';
 
@@ -257,16 +257,7 @@ export const recommendationDetailStyles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingTop: 8,
-    paddingHorizontal: 18,
-    backgroundColor: Platform.OS === 'web' ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.96)',
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 10,
+    backgroundColor: colors.white,
   },
   loading: {
     flex: 1,

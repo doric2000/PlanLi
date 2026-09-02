@@ -214,6 +214,7 @@ export const RouteCard = ({
 				styles.feedCarouselContainer,
 				{ aspectRatio: undefined, height: frameHeight },
 			]}
+			testID="route-media"
 			onLayout={onCarouselLayout}
 		>
 			{routeImages.length > 0 ? (
@@ -260,7 +261,7 @@ export const RouteCard = ({
 			{renderOverlayHeader()}
 
 			{routeImages.length > 1 && (
-				<View style={[cards.recDotsContainer, styles.feedDotsContainer]} pointerEvents="none">
+				<View style={cards.recDotsContainer} pointerEvents="none">
 					{routeImages.map((_, index) => (
 						<View
 							key={`${item.id || "route"}:dot:${index}`}
@@ -298,21 +299,6 @@ export const RouteCard = ({
 				</View>
 			)}
 
-			<LinearGradient
-				pointerEvents="none"
-				colors={["transparent", "rgba(0,0,0,0.36)", "rgba(0,0,0,0.74)"]}
-				style={styles.feedBottomGradient}
-			/>
-			{showActionBar && (
-				<View style={styles.feedActionOverlay}>
-					<ActionBar
-						item={item}
-						onCommentPress={onCommentPress}
-						collectionName="routes"
-						variant="overlay"
-					/>
-				</View>
-			)}
 		</View>
 	);
 
@@ -322,7 +308,7 @@ export const RouteCard = ({
 		const budgetLabel = getBudgetLabel(item?.facets?.budgetLevel || item?.attributes?.budgetLevel || '');
 		const personalizationReasonCode = item?.personalization?.reasonCodes?.[0];
 		const content = (
-			<View style={[cards.recContent, feed && styles.feedContent]}>
+			<View testID="route-content" style={[cards.recContent, feed && styles.feedContent]}>
 				<View style={cards.recTitleRow}>
 					<AppText style={[cards.recTitle, feed && styles.feedTitle]} numberOfLines={1}>
 						{item.title}
@@ -390,6 +376,13 @@ export const RouteCard = ({
 		return (
 			<View style={styles.feedCard}>
 				{renderFeedMedia()}
+				{showActionBar && (
+					<ActionBar
+						item={item}
+						onCommentPress={onCommentPress}
+						collectionName="routes"
+					/>
+				)}
 				{renderContent(true)}
 			</View>
 		);
@@ -435,10 +428,9 @@ export const RouteCard = ({
 					style={cards.recImage}
 					contentFit="cover"
 					priority="normal"
+					testID="route-media"
 				/>
 			) : null}
-
-			{renderContent(false)}
 
 			{showActionBar && (
 				<ActionBar
@@ -447,6 +439,8 @@ export const RouteCard = ({
 					collectionName="routes"
 				/>
 			)}
+
+			{renderContent(false)}
 		</Pressable>
 	);
 };

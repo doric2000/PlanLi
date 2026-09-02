@@ -4,7 +4,6 @@ import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../../../hooks/useUserData';
-import { useLikes } from '../../community/hooks/useLikes';
 import { Avatar } from '../../../components/Avatar';
 import { ActionMenu } from '../../../components/ActionMenu';
 import { cards } from '../../../styles';
@@ -37,12 +36,6 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
   const ownerId = item.ownerId;
   const destination = item.destination || {};
   const author = useUserData(ownerId);
-  const { isLiked, likeCount, toggleLike } = useLikes(
-    'recommendations',
-    item.id,
-    item.stats?.likeCount || 0
-  );
-
   // Check if current user is the owner
   const { isAdmin } = useAdminClaim();
   const canManage = isActive && canManageRecommendation({
@@ -131,11 +124,16 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           style={cards.recImage}
           contentFit="cover"
           priority="low"
+          testID="recommendation-media"
         />
       )}
 
+      {showActionBar && (
+        <ActionBar item={item} onCommentPress={onCommentPress} />
+      )}
+
       {/* Content */}
-      <View style={cards.recContent}>
+      <View testID="recommendation-content" style={cards.recContent}>
         <View style={cards.recTitleRow}>
           <AppText style={cards.recTitle} numberOfLines={1}>{item.title}</AppText>
           {item.category && (
@@ -171,11 +169,6 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
           {item.description}
         </AppText>
       </View>
-
-      {/* Footer / Action Bar */}
-      {showActionBar && (
-        <ActionBar item={item} onCommentPress={onCommentPress} />
-      )}
 
     </Pressable>
   );

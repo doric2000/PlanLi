@@ -310,6 +310,7 @@ const RecommendationCard = ({
             isFeed && styles.feedCarouselContainer,
             { aspectRatio: undefined, height: frameHeight },
           ]}
+          testID="recommendation-media"
           onLayout={onCarouselLayout}
         >
           {isFeed && (
@@ -375,7 +376,7 @@ const RecommendationCard = ({
           )}
 
           {images.length > 1 && (
-            <View style={[cards.recDotsContainer, isFeed && styles.feedDotsContainer]} pointerEvents="none">
+            <View style={cards.recDotsContainer} pointerEvents="none">
               {images.map((_, index) => (
                 <View
                   key={`${item.id || 'rec'}:dot:${index}`}
@@ -387,20 +388,6 @@ const RecommendationCard = ({
               ))}
             </View>
           )}
-          {isFeed && (
-            <>
-              <LinearGradient
-                pointerEvents="none"
-                colors={["transparent", "rgba(0,0,0,0.36)", "rgba(0,0,0,0.74)"]}
-                style={styles.feedBottomGradient}
-              />
-              {showActionBar && (
-                <View style={styles.feedActionOverlay}>
-                  <ActionBar item={item} onCommentPress={onCommentPress} variant="overlay" />
-                </View>
-              )}
-            </>
-          )}
         </View>
       )}
       {isFeed && images.length === 0 && (
@@ -410,6 +397,7 @@ const RecommendationCard = ({
             styles.feedCarouselContainer,
             { aspectRatio: undefined, height: frameHeight },
           ]}
+          testID="recommendation-media"
           onLayout={onCarouselLayout}
         >
           <View style={styles.feedImagePlaceholder}>
@@ -421,22 +409,16 @@ const RecommendationCard = ({
             style={[styles.feedTopGradient, feedTopInset > 0 && { height: 118 + feedTopInset }]}
           />
           {renderHeader(true)}
-          <LinearGradient
-            pointerEvents="none"
-            colors={["transparent", "rgba(0,0,0,0.36)", "rgba(0,0,0,0.74)"]}
-            style={styles.feedBottomGradient}
-          />
-          {showActionBar && (
-            <View style={styles.feedActionOverlay}>
-              <ActionBar item={item} onCommentPress={onCommentPress} variant="overlay" />
-            </View>
-          )}
         </View>
+      )}
+
+      {showActionBar && (
+        <ActionBar item={item} onCommentPress={onCommentPress} />
       )}
 
       {/* Content */}
       <Pressable onPress={handleCardPress}>
-        <View style={[cards.recContent, isFeed && styles.feedContent]}>
+        <View testID="recommendation-content" style={[cards.recContent, isFeed && styles.feedContent]}>
         <PreferenceContextLine
           reasonCode={personalizationReasonCode}
           personalization={item?.personalization}
@@ -492,11 +474,6 @@ const RecommendationCard = ({
         </AppText>
         </View>
       </Pressable>
-
-      {/* Footer / Action Bar */}
-      {showActionBar && !isFeed && (
-        <ActionBar item={item} onCommentPress={onCommentPress} />
-      )}
 
     </View>
   );
