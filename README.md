@@ -3425,3 +3425,29 @@ reusing the stage-five environment variable with `--only functions`.
   EAS, App Check, iOS, Rules, IAM, migration, or production-data mutation was
   part of this follow-up. A physical-device publish/delete retry is still
   required to confirm the end-to-end user flow after propagation.
+
+## Firestore query indexes and media cleanup reliability release
+
+- PR [#338](https://github.com/doric2000/PlanLi/pull/338) passed the affected
+  Functions, security, CodeQL, dependency and secret checks, then squash-merged
+  to `main` as source commit `a5eecc67843d3b2f23a3bed0b37302c8387eefee` at
+  `2026-09-02T11:27:22Z`.
+- Ten Firestore composite indexes were applied to the Standard `(default)`
+  database in `eur3` in project `planli-f0b12`: nine canonical-approved
+  `destinationCatalog` search variants and the `trips` owner/status/createdAt
+  pending-content index. All ten reached `READY` by approximately
+  `2026-09-02T11:33:40Z`.
+- `onUserMediaCleanup` was deployed from that commit to Node.js 22 in
+  `europe-west1` at `2026-09-02T11:40:05Z`. The active revision is
+  `onusermediacleanup-00029-keq`, serving 100% of traffic with the existing
+  media service account. It now retries bounded Storage metadata writes after a
+  metageneration precondition conflict.
+- A post-deploy Cloud Run read-back from `2026-09-02T11:40:05Z` returned no
+  Error-severity entries for `onUserMediaCleanup`. No Hosting, client, EAS,
+  Rules, IAM, migration or production-data mutation accompanied this release;
+  an authenticated media-cleanup event remains the end-to-end runtime proof.
+- Focused Functions tests passed 31/31 under Node.js 22, the full Functions
+  suite passed 123/123, `npm run validate:changed` passed, and `git diff --check`
+  passed. The validation planner noted one pre-existing uncovered client source
+  warning caused by unrelated working-tree UI changes; those changes were not
+  included in PR #338.
