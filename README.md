@@ -3371,3 +3371,33 @@ reusing the stage-five environment variable with `--only functions`.
   `0729537b-294a-4190-a57f-2380097e6b22`; never change the runtime URL or channel
   in-app. No Android update, native build, Firebase deployment, Hosting deploy,
   Rules, IAM, migration, or production-data mutation accompanied this OTA.
+
+## Exact recommendation publication and owner deletion Functions release
+
+- PR [#334](https://github.com/doric2000/PlanLi/pull/334) passed affected
+  Functions validation, CodeQL, security invariants, dependency review, secret
+  scanning and a complete Codex Security diff scan with no findings. It squash
+  merged to `main` as source commit
+  `dffd3b92725c00d92489a2662c586a6e3bafd01b` at
+  `2026-09-02T08:55:38Z`.
+- Exactly four Node.js 22 v2 Functions in `europe-west1` were deployed to
+  production project `planli-f0b12`: `saveRecommendation`,
+  `publishRecommendationDraft`, `resolveRecommendationDestination` and
+  `deleteContent`. Their update times were `2026-09-02T09:04:21Z` through
+  `2026-09-02T09:04:51Z`.
+- Independent Cloud Functions read-back reported all four functions `ACTIVE`.
+  Cloud Run read-back reported their latest created and ready revisions equal,
+  healthy, and receiving 100% of traffic: `saverecommendation-00055-sas`,
+  `publishrecommendationdraft-00021-moz`,
+  `resolverecommendationdestination-00049-luf` and
+  `deletecontent-00031-fon`.
+- The release refreshes only the verified stale exact-place destination path
+  before reapplying the explicit destination identity checks. Owner deletion no
+  longer invokes privileged admin TOTP, while cross-owner admin deletion still
+  requires an active admin registry entry and recent TOTP and is rechecked in
+  the deletion transaction.
+- Post-deploy Cloud Run logging returned no Error-severity entries for the four
+  services from `2026-09-02T09:04:00Z` through the verification time. A new
+  physical-device publish and delete attempt remains pending. No Hosting, Rules,
+  IAM, Firestore data, EAS build, EAS Update or store action accompanied this
+  Functions release.
