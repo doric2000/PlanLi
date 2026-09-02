@@ -3451,3 +3451,25 @@ reusing the stage-five environment variable with `--only functions`.
   passed. The validation planner noted one pre-existing uncovered client source
   warning caused by unrelated working-tree UI changes; those changes were not
   included in PR #338.
+
+### Media cleanup conflict convergence follow-up
+
+- PR [#341](https://github.com/doric2000/PlanLi/pull/341) passed the affected
+  Functions, security, CodeQL, dependency and secret checks, then squash-merged
+  to `main` as source commit `0b54ef78094b4e8133e2f81a5ceabef41fe811ea` at
+  `2026-09-02T11:56:14Z`.
+- `onUserMediaCleanup` was redeployed from that commit to Node.js 22 in
+  `europe-west1` at `2026-09-02T12:12:37Z`. The active revision is
+  `onusermediacleanup-00030-jos`, serving 100% of traffic with the existing
+  media service account. After bounded guarded retries, a final fresh-metadata
+  write now converges concurrent Eventarc deliveries.
+- Independent read-back reports `ACTIVE`, Node.js 22, revision
+  `onusermediacleanup-00030-jos`, and the original Firestore trigger with retry
+  policy intact. Cloud Run returned no `ERROR` or `stderr` entries from
+  `2026-09-02T12:12:34Z` onward; no synthetic production media event was created,
+  so a fresh authenticated end-to-end cleanup event remains unverified.
+- The previously applied ten Firestore indexes remain `READY`; live read-only
+  catalog and pending-trip query probes succeeded. Focused regression tests
+  passed 19/19, `npm run validate:changed` and `git diff --check` passed. No
+  Hosting, client, EAS, Rules, IAM, migration or production-data mutation was
+  part of this follow-up.
