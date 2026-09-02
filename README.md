@@ -3401,3 +3401,27 @@ reusing the stage-five environment variable with `--only functions`.
   physical-device publish and delete attempt remains pending. No Hosting, Rules,
   IAM, Firestore data, EAS build, EAS Update or store action accompanied this
   Functions release.
+
+## Explicit destination binding follow-up Functions release
+
+- PR [#336](https://github.com/doric2000/PlanLi/pull/336) was squash-merged to
+  `main` as source commit `0d45010dff37dbb7d0056a4bff58497a5a3ba234` after all
+  required CI and security checks passed. The follow-up preserves the user's
+  explicit canonical destination when a stale exact-place cache is refreshed;
+  it no longer re-selects a different locality from provider fallback data.
+- Exactly three Node.js 22 v2 Functions were deployed from that merged `main`
+  commit to production project `planli-f0b12` in `europe-west1`:
+  `saveRecommendation`, `publishRecommendationDraft`, and
+  `resolveRecommendationDestination`. Deployment completed on
+  `2026-09-02` at approximately `10:47:44Z`.
+- Independent read-back found all three `ACTIVE`, healthy, and serving 100% of
+  traffic on revisions `saverecommendation-00056-xeg`,
+  `publishrecommendationdraft-00022-vub`, and
+  `resolverecommendationdestination-00050-rim`. A post-deploy Cloud Run query
+  returned no `ERROR` entries for the three services, and unauthenticated
+  callable probes returned the expected HTTP 401.
+- Focused Functions tests passed 128/128 under Node.js 22, and
+  `npm run validate:changed` plus `git diff --check` passed. No Hosting, client,
+  EAS, App Check, iOS, Rules, IAM, migration, or production-data mutation was
+  part of this follow-up. A physical-device publish/delete retry is still
+  required to confirm the end-to-end user flow after propagation.
