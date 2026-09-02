@@ -94,6 +94,40 @@ update with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. No Functions, Rules, indexes,
 Storage, IAM, production data, EAS build/update, or mobile-store action was
 changed by this Hosting release.
 
+### Recommendation publication diagnostics and destination-hold reconciliation
+
+On `2026-09-02`, [PR #343](https://github.com/doric2000/PlanLi/pull/343) was
+squash-merged as `6a968f633fbdb605da80d2717e183592e1eaca93` and deployed from
+the same `main` source to production project `planli-f0b12`. The release keeps
+the existing publication and reconciliation paths, adds safe callable error
+metadata for Firestore/Storage failures, stops mapping backend `internal`
+errors to a Places-network outage in the client source, and reconciles
+orphaned destination approval holds without releasing unrelated safety holds.
+
+Exactly six Node.js 22 v2 Functions were deployed to `europe-west1` with 100%
+traffic on the latest revision:
+`publishRecommendationDraft` (`publishrecommendationdraft-00023-zaq`),
+`saveRecommendation` (`saverecommendation-00057-guz`),
+`publishRouteDraft` (`publishroutedraft-00020-lin`),
+`saveRoute` (`saveroute-00054-dol`),
+`resolvePlaceSelection` (`resolveplaceselection-00035-kiw`), and
+`reconcileDestinationApprovalReleasesScheduled`
+(`reconciledestinationapprovalreleasesscheduled-00005-dah`). Their updates
+completed between `2026-09-02T13:23:50.750Z` and
+`2026-09-02T13:24:02.037Z`; all six read back `ACTIVE`.
+
+The signed production policy repair was applied before this deployment with
+fingerprint
+`ec38b880138ef2143d72d89e21d25b968e1d8b4d46a023d12b3d9b2d73ed5488`.
+Independent read-back confirms Ella has a complete provider/system
+attestation and the train recommendation is `active` with
+`destinationApprovalVerified: true`; the repair reported zero remaining
+provisional upgrades, eligible holds, review repairs, or blockers. A post-
+deployment Cloud Logging query returned zero `ERROR` entries for the six
+targets. No Hosting, EAS, App Check, iOS configuration, Rules, indexes,
+Storage, IAM, or dependency deployment accompanied this release; the client
+message change will take effect for mobile users with the next app build.
+
 ### Destination locality publication Functions hotfix
 
 On `2026-09-02`, the destination-locality fix from
