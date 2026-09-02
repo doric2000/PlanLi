@@ -173,6 +173,30 @@ function destinationMatchesResolvedPolicy(current, resolved, countryId = '') {
     current?.canonicalPolicy?.registryId === resolved?.canonicalPolicy?.registryId;
 }
 
+function legacyCachedDestinationNeedsPolicyRefresh(current, stored) {
+  const currentPolicy = current?.canonicalPolicy || {};
+  const storedPolicy = stored?.cityData?.canonicalPolicy || {};
+  const currentPlaceId = String(current?.providerRefs?.googlePlaceId || '').trim();
+  const storedPlaceId = String(stored?.cityData?.providerRefs?.googlePlaceId || '').trim();
+  const currentRegistryId = String(currentPolicy.registryId || '').trim();
+  const storedRegistryId = String(storedPolicy.registryId || '').trim();
+  return stored?.createCity === false &&
+    ['canonical_geometry', 'canonical_alias_and_geometry'].includes(
+      String(stored?.resolutionSource || '').trim()
+    ) &&
+    current?.status === 'active' &&
+    currentPolicy.approved === true &&
+    !currentPolicy.registryAttestation &&
+    !Number(currentPolicy.approvalRevision || 0) &&
+    storedPolicy.approved === true &&
+    !storedPolicy.registryAttestation &&
+    !Number(storedPolicy.approvalRevision || 0) &&
+    Boolean(currentPlaceId) &&
+    currentPlaceId === storedPlaceId &&
+    Boolean(currentRegistryId) &&
+    currentRegistryId === storedRegistryId;
+}
+
 function destinationOwnsResolvedRegistryEntry(destination, registryId) {
   return destination?.canonicalPolicy?.registryId === registryId ||
     destination?.canonicalPolicy?.provisionalRegistryId === registryId;
@@ -2289,8 +2313,6 @@ async function materializeDestinationResolution(db, stored) {
     };
   }
   assert(!countrySnapshot.exists || countryData.status === 'active', 'failed-precondition', 'The matching country is not active.');
-  assert(!citySnapshot.exists || destinationMatchesResolvedPolicy(cityData, stored.cityData, stored.countryId), 'failed-precondition',
-    'The matching destination is not available for new content.');
   if (claimSnapshot?.exists) {
     const claimed = claimSnapshot.data() || {};
     const destinationPlaceId = stored.cityData?.providerRefs?.googlePlaceId;
@@ -2303,6 +2325,15 @@ async function materializeDestinationResolution(db, stored) {
       'The resolved destination identity changed. Search again.'
     );
   }
+  if (currentCityData && legacyCachedDestinationNeedsPolicyRefresh(currentCityData, stored)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The cached destination policy needs to be refreshed.',
+      { reason: 'stale_cached_destination_policy', retryable: true }
+    );
+  }
+  assert(!citySnapshot.exists || destinationMatchesResolvedPolicy(cityData, stored.cityData, stored.countryId), 'failed-precondition',
+    'The matching destination is not available for new content.');
   return normalizeDestinationForUse({
     countryRef,
     cityRef,
@@ -2344,20 +2375,31 @@ async function resolveDestinationFromToken({
     incidentId,
   });
   if (resolvedPlace.destinationResolution && !countryOverrideId) {
-    const cached = await materializeDestinationResolution(
-      admin.firestore(),
-      resolvedPlace.destinationResolution
-    );
-    const cachedIsNaturalFeature = cached.cityData?.destinationType === 'natural_feature' ||
-      cached.cityData?.canonicalPolicy?.kind === 'natural_feature';
-    if (cachedIsNaturalFeature) {
-      assert(
-        selectionIntent === 'destination' && resolvedPlace.searchMode === 'destinations',
-        'failed-precondition',
-        'Choose the nature destination again from the destination search.'
+    try {
+      const cached = await materializeDestinationResolution(
+        admin.firestore(),
+        resolvedPlace.destinationResolution
       );
+      const cachedIsNaturalFeature = cached.cityData?.destinationType === 'natural_feature' ||
+        cached.cityData?.canonicalPolicy?.kind === 'natural_feature';
+      if (cachedIsNaturalFeature) {
+        assert(
+          selectionIntent === 'destination' && resolvedPlace.searchMode === 'destinations',
+          'failed-precondition',
+          'Choose the nature destination again from the destination search.'
+        );
+      }
+      return { ...cached, incidentId, providerCallCount: requestContext.count };
+    } catch (error) {
+      if (error?.details?.reason !== 'stale_cached_destination_policy') throw error;
+      locationLog('destination', {
+        incidentId,
+        outcome: 'fallback',
+        durationMs: 0,
+        reason: 'stale_cached_destination_policy',
+        fallbackPath: 'verified_resolved_place_refresh',
+      });
     }
-    return { ...cached, incidentId, providerCallCount: requestContext.count };
   }
   const destinationIntentVerified = resolvedPlace.searchMode === 'destinations';
   if (selectionIntent === 'destination') {
