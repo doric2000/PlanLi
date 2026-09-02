@@ -1817,6 +1817,110 @@ test('a previously cached destination remains usable when an old token has no se
   assert.equal(result.createCity, false);
 });
 
+test('a stale geometry-cached destination is re-resolved and upgraded from the verified token', async () => {
+  clearRegistryCache();
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
+  const coordinates = { lat: 6.8771336, lng: 80.8146143 };
+  const ellaId = canonicalDestinationId('LK', 'lk-ella');
+  const nuwaraId = canonicalDestinationId('LK', 'lk-nuwara-eliya');
+  const legacyElla = {
+    countryId: 'LK',
+    status: 'active',
+    destinationType: 'city',
+    providerRefs: { googlePlaceId: 'ella-place' },
+    googleCache: {
+      names: { he: 'אלה', en: 'Ella' },
+      coordinates: { lat: 6.8667, lng: 81.0466 },
+    },
+    canonicalPolicy: {
+      approved: true,
+      registryId: 'lk-ella',
+      kind: 'city_hub',
+      groupingPolicy: 'self',
+      registryVersion: 3,
+    },
+  };
+  const admin = createFakeAdmin({
+    'countries/LK': {
+      name: 'סרי לנקה', names: { he: 'סרי לנקה', en: 'Sri Lanka' },
+      code: 'LK', region: 'Asia', currencyCode: 'LKR', status: 'active',
+    },
+    'system/destinationRegistry/entries/lk-nuwara-eliya': {
+      countryCode: 'LK',
+      names: { he: 'נוארה אליה', en: 'Nuwara Eliya' },
+      aliases: ['Nuwara Eliya'],
+      kind: 'city_hub',
+      groupingPolicy: 'self',
+      status: 'active',
+      center: { lat: 6.9606886, lng: 80.7692959 },
+      viewport: {
+        southwest: { lat: 6.773045957406882, lng: 80.57505693616173 },
+        northeast: { lat: 7.02408695059005, lng: 80.86397794758678 },
+      },
+      providerRefs: { googlePlaceId: 'nuwara-place' },
+      googleTypes: ['administrative_area_level_3', 'political'],
+      registryVersion: 3,
+    },
+    [`countries/LK/destinations/${ellaId}`]: legacyElla,
+    [`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`]: {
+      uid: 'owner',
+      searchMode: 'places',
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+      incidentId: 'loc_stale_ambewela',
+      providerCallCount: 1,
+      he: {
+        placeId: 'ambewela-station', displayName: 'תחנת הרכבת אמבאוולה',
+        localityName: 'Ambewela', localityCandidates: ['Ambewela', 'Nuwara Eliya'],
+        countryName: 'סרי לנקה', countryCode: 'LK', coordinates,
+        types: ['train_station', 'transit_station', 'point_of_interest'],
+      },
+      en: {
+        placeId: 'ambewela-station', displayName: 'Ambewela Railway Station',
+        localityName: 'Ambewela', localityCandidates: ['Ambewela', 'Nuwara Eliya'],
+        countryName: 'Sri Lanka', countryCode: 'LK', coordinates,
+        types: ['train_station', 'transit_station', 'point_of_interest'],
+      },
+      destinationResolution: {
+        countryId: 'LK',
+        cityId: ellaId,
+        countryData: {
+          name: 'סרי לנקה', names: { he: 'סרי לנקה', en: 'Sri Lanka' },
+          code: 'LK', region: 'Asia', currencyCode: 'LKR', status: 'active',
+        },
+        cityData: legacyElla,
+        registryId: null,
+        registryData: null,
+        createCountry: false,
+        createCity: false,
+        resolutionSource: 'canonical_geometry',
+      },
+    },
+  });
+
+  try {
+    const result = await resolveDestinationFromToken({
+      admin,
+      auth: verifiedAuth,
+      resolvedPlaceToken,
+      providerRateLimitKey,
+      selectionIntent: 'exact_place',
+      placesProvider: 'new',
+    });
+
+    assert.equal(result.cityId, nuwaraId);
+    assert.equal(result.cityData.canonicalPolicy.registryAttestation.policyId,
+      'verified-provider-destination-v1');
+    assert.equal(
+      admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
+        .destinationResolution.cityId,
+      nuwaraId
+    );
+  } finally {
+    clearRegistryCache();
+  }
+});
+
 test('a cached natural feature requires a destination-search-bound token', async () => {
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
