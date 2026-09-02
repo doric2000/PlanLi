@@ -53,6 +53,7 @@ const BUILTIN_POLICIES = Object.freeze([
   { id: 'al-vlore', countryCode: 'AL', names: { he: 'ולורה', en: 'Vlorë' }, aliases: ['Vlorë', 'Vlore', 'Vlora'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 40.4660668, lng: 19.491356 }, viewport: { southwest: { lat: 40.4103918276953, lng: 19.45301060857941 }, northeast: { lat: 40.491234240659715, lng: 19.510002135866756 } }, radiusKm: 18, providerRefs: { googlePlaceId: 'ChIJlRjM6PEzRRMRhg4-8ZoJMQ0' }, googleTypes: ['locality', 'political'], providerIdentity: { reviewedOverride: true } },
   { id: 'ni-ometepe', countryCode: 'NI', names: { he: 'אומטפה', en: 'Ometepe' }, aliases: ['Ometepe', 'Isla de Ometepe', 'Moyogalpa', 'Altagracia', 'Tilgue'], kind: 'island', groupingPolicy: 'self', center: { lat: 11.514, lng: -85.583 }, radiusKm: 35 },
   { id: 'gr-corfu', countryCode: 'GR', names: { he: 'קורפו', en: 'Corfu' }, aliases: ['Corfu', 'Kerkyra', 'Perama'], kind: 'island', groupingPolicy: 'self', center: { lat: 39.6243, lng: 19.9217 }, radiusKm: 42 },
+  { id: 'lk-nuwara-eliya', countryCode: 'LK', names: { he: 'נוארה אליה', en: 'Nuwara Eliya' }, aliases: ['Nuwara Eliya'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 6.9606886, lng: 80.7692959 }, viewport: { southwest: { lat: 6.773045957406882, lng: 80.57505693616173 }, northeast: { lat: 7.02408695059005, lng: 80.86397794758678 } }, providerRefs: { googlePlaceId: 'ChIJn0805_yA4zoRuqzft3l5Ic8' }, googleTypes: ['administrative_area_level_3', 'political'] },
   { id: 'it-dolomites', countryCode: 'IT', names: { he: 'הדולומיטים', en: 'Dolomites' }, aliases: ['Dolomites'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 46.54, lng: 11.84 }, radiusKm: 65 },
   { id: 'th-chiang-mai', countryCode: 'TH', names: { he: 'צ׳יאנג מאי', en: 'Chiang Mai' }, aliases: ['Chiang Mai', 'Chiang Mai Province'], kind: 'province', groupingPolicy: 'self', center: { lat: 18.7883, lng: 98.9853 }, radiusKm: 115 },
   { id: 'th-chiang-rai', countryCode: 'TH', names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' }, aliases: ['Chiang Rai', 'Chiang Rai Province'], kind: 'province', groupingPolicy: 'self', center: { lat: 19.9105, lng: 99.8406 }, radiusKm: 105 },
@@ -483,11 +484,13 @@ function matchCanonicalEntry(entries, {
   excludedKinds = [],
   allowBlockedExactKinds = [],
   exactOnlyKinds = [],
+  requireAliasForKinds = [],
 }) {
   const code = String(countryCode || '').toUpperCase();
   const excluded = new Set(excludedKinds);
   const blockedExact = new Set(allowBlockedExactKinds);
   const exactOnly = new Set(exactOnlyKinds);
+  const aliasRequired = new Set(requireAliasForKinds);
   const activeEntries = prepareEntries(entries)
     .filter((entry) => entry.status === 'active' && entry.countryCode === code &&
       !excluded.has(entry.kind));
@@ -538,7 +541,8 @@ function matchCanonicalEntry(entries, {
   }
   const aliasMatchIds = new Set(aliasMatches.map((entry) => entry.id));
   const eligible = containing.filter((entry) => aliasMatchIds.has(entry.id));
-  const pool = eligible.length ? eligible : containing;
+  const geometryFallback = containing.filter((entry) => !aliasRequired.has(entry.kind));
+  const pool = eligible.length ? eligible : geometryFallback;
   if (!pool.length) return null;
   const children = pool.filter((entry) => entry.parentId &&
     candidates.find((candidate) => candidate.id === entry.parentId)?.groupingPolicy === 'approved_children');

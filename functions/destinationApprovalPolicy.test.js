@@ -6,6 +6,7 @@ const {
   VERIFIED_PROVIDER_DESTINATION_POLICY_ID,
   buildVerifiedProviderDestinationApproval,
   buildVerifiedIlLocalityApproval,
+  canUpgradeVerifiedProviderRegistryEntry,
   canUpgradeVerifiedProviderDestination,
   canUpgradeVerifiedIlLocality,
   destinationUsesVerifiedProviderDestinationPolicy,
@@ -224,4 +225,55 @@ test('foreign provisional destinations upgrade only through exact country, regis
     approval.registryEntry,
     approval.registryEntry
   ), true);
+});
+
+test('legacy seeded destinations and registry entries upgrade only with the exact provider identity', () => {
+  const entry = locality({
+    id: 'lk-ella',
+    countryCode: 'LK',
+    names: { he: 'אלה', en: 'Ella' },
+    providerRefs: { googlePlaceId: 'ella-place' },
+  });
+  const approval = buildVerifiedProviderDestinationApproval({
+    entry,
+    countryId: 'LK',
+    destinationPath: 'countries/LK/destinations/ella',
+    approvalRevision: 1,
+    registryVersion: 3,
+  });
+  const currentDestination = {
+    status: 'active',
+    providerRefs: { googlePlaceId: 'ella-place' },
+    canonicalPolicy: {
+      approved: true,
+      registryId: 'lk-ella',
+      kind: 'city_hub',
+      groupingPolicy: 'self',
+      registryVersion: 3,
+    },
+  };
+  const resolvedDestination = {
+    status: 'active',
+    providerRefs: { googlePlaceId: 'ella-place' },
+    canonicalPolicy: approval.canonicalPolicy,
+  };
+  const currentRegistry = {
+    ...entry,
+    status: 'active',
+  };
+
+  assert.equal(canUpgradeVerifiedProviderDestination(
+    currentDestination, resolvedDestination, 'LK'
+  ), true);
+  assert.equal(canUpgradeVerifiedProviderRegistryEntry(
+    currentRegistry, approval.registryEntry
+  ), true);
+  assert.equal(canUpgradeVerifiedProviderRegistryEntry({
+    ...currentRegistry,
+    providerRefs: { googlePlaceId: 'another-place' },
+  }, approval.registryEntry), false);
+  assert.equal(canUpgradeVerifiedProviderRegistryEntry({
+    ...currentRegistry,
+    approval: { approvedByAdmin: true },
+  }, approval.registryEntry), false);
 });

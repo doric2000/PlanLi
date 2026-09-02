@@ -24,6 +24,7 @@ const {
   isDestinationReassigning,
 } = require('./destinationReferencePolicy');
 const {
+  canUpgradeVerifiedProviderRegistryEntry,
   canUpgradeVerifiedProviderDestination,
   verifiedProviderRegistryEntryMatches,
 } = require('./destinationApprovalPolicy');
@@ -1323,9 +1324,13 @@ async function saveRoute({
     registryEntries.forEach((entry, index) => {
       const snapshot = registrySnapshots[index];
       assert(
-        !snapshot.exists || verifiedProviderRegistryEntryMatches(
-          { id: snapshot.id, ...snapshot.data() }, entry.data
-        ),
+        !snapshot.exists ||
+          verifiedProviderRegistryEntryMatches(
+            { id: snapshot.id, ...snapshot.data() }, entry.data
+          ) ||
+          canUpgradeVerifiedProviderRegistryEntry(
+            { id: snapshot.id, ...snapshot.data() }, entry.data
+          ),
         'failed-precondition',
         'A verified destination registry identity changed while saving. Search again.'
       );
@@ -1333,6 +1338,13 @@ async function saveRoute({
         transaction.create(entry.ref, {
           ...entry.data,
           createdAt: now,
+          updatedAt: now,
+        });
+      } else if (!verifiedProviderRegistryEntryMatches(
+        { id: snapshot.id, ...snapshot.data() }, entry.data
+      )) {
+        transaction.update(entry.ref, {
+          ...entry.data,
           updatedAt: now,
         });
       }
