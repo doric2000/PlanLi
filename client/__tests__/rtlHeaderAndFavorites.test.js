@@ -57,6 +57,7 @@ describe('overlapping hero headers', () => {
     expect(style.height).toBe(TAB_HERO_BASE_HEIGHT + top);
     expect(style.minHeight).toBeUndefined();
     expect(style.paddingTop).toBe(top + 8);
+    expect(style.backgroundColor).toBe(colors.heroBlueGradient[1]);
   });
 
   it('overlaps the next surface by the same amount as its lower corner radius', () => {
