@@ -15,8 +15,10 @@ const {
   listDestinationReviews,
   listDrainingDestinationSnapshots,
   notifyAdminsOfDestination,
+  pendingDestinationReferences,
   publicationFenceReadyForRecovery,
   quarantineDestinationPublicationFenceForManualRecovery,
+  reconcileDestinationApprovalReleases,
   destinationCoordinates,
   selectAirportByIataCode,
   selectDestinationPolicyRegistryBinding,
@@ -53,6 +55,81 @@ function validDestination() {
     travelFacts: { closestAirport: { iataCode: 'TLV' } },
   };
 }
+
+test('pending destination reconciliation can discover holds without a release operation', () => {
+  assert.deepEqual(
+    pendingDestinationReferences({
+      status: 'moderation_hold',
+      destination: { countryId: 'LK', cityId: 'dst-ella' },
+      moderation: {
+        systemGate: 'destination_pending_approval',
+        destination: { countryId: 'LK', cityId: 'dst-ella' },
+      },
+    }, 'recommendation'),
+    [{ countryId: 'LK', cityId: 'dst-ella' }]
+  );
+  assert.deepEqual(
+    pendingDestinationReferences({
+      status: 'moderation_hold',
+      moderation: {
+        systemGate: 'destination_pending_approval',
+        pendingDestinationKeys: ['LK:dst-ella', 'IL:dst-haifa', 'malformed:key:extra'],
+      },
+    }, 'route'),
+    [
+      { countryId: 'LK', cityId: 'dst-ella' },
+      { countryId: 'IL', cityId: 'dst-haifa' },
+    ]
+  );
+});
+
+test('destination approval reconciliation releases an orphaned hold', async () => {
+  const documents = new Map([
+    ['recommendations/orphan', {
+      status: 'moderation_hold',
+      destination: { countryId: 'LK', cityId: 'dst-ella' },
+      moderation: {
+        holdReason: 'destination_pending_approval',
+        systemGate: 'destination_pending_approval',
+        destination: { countryId: 'LK', cityId: 'dst-ella' },
+      },
+    }],
+  ]);
+  const valueAt = (value, field) => field.split('.').reduce((current, key) => current?.[key], value);
+  const queryFor = (name) => {
+    const filters = [];
+    const query = {
+      where: (field, operator, expected) => {
+        filters.push([field, operator, expected]);
+        return query;
+      },
+      limit: () => query,
+      get: async () => ({
+        docs: [...documents.entries()]
+          .filter(([path]) => path.startsWith(`${name}/`) && !path.slice(name.length + 1).includes('/'))
+          .filter(([, value]) => filters.every(([field, operator, expected]) => {
+            const actual = valueAt(value, field);
+            return operator === '==' ? actual === expected : true;
+          }))
+          .map(([path, data]) => ({ id: path.split('/').at(-1), ref: { path }, data: () => data })),
+      }),
+    };
+    return query;
+  };
+  const db = { collection: queryFor };
+  const calls = [];
+  const result = await reconcileDestinationApprovalReleases({
+    admin: { firestore: () => db },
+    releaseImpl: async (input) => calls.push(input),
+  });
+  assert.equal(result.orphaned, 1);
+  assert.equal(result.completed, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].admin.firestore(), db);
+  assert.equal(calls[0].countryId, 'LK');
+  assert.equal(calls[0].cityId, 'dst-ella');
+  assert.equal(calls[0].reconciliationPass, true);
+});
 
 test('legacy approved destinations can enter admin approval only before an attestation exists', () => {
   const legacy = validDestination();

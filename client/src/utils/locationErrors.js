@@ -25,8 +25,11 @@ export function locationErrorKind(error) {
   if (reason === 'provider_call_limit_reached' || message.includes('safe google request')) return 'requestCeiling';
   if (reason === 'temporary_limit_reached' || code === 'resource-exhausted' ||
       message.includes('quota') || message.includes('limit reached')) return 'temporaryQuota';
-  if (reason === 'provider_unavailable' || code === 'unavailable' || code === 'internal' ||
+  if (reason === 'provider_unavailable' || code === 'unavailable' ||
       message.includes('network')) return 'network';
+  // An internal callable error can come from Firestore/Storage publication
+  // work, not from Google Places. Do not tell the user that Places is down.
+  if (code === 'internal') return 'support';
   if (recoveryAction === 'search_again') return 'expired';
   if (recoveryAction === 'choose_destination' || recoveryAction === 'confirm_name') {
     return 'destinationRequired';

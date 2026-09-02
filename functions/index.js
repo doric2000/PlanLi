@@ -281,6 +281,12 @@ async function locationSave(stage, request, task) {
       outcome: 'failed',
       durationMs: Date.now() - startedAt,
       reason,
+      // Firestore and Storage errors can arrive with numeric gRPC codes and
+      // otherwise become indistinguishable `internal` failures at the
+      // callable boundary. Keep only bounded type/code metadata in logs so a
+      // failed publication is diagnosable without exposing paths or payloads.
+      errorCode: error?.code,
+      errorName: error?.name,
     });
     throw decorateLocationError(error, incidentId, `${stage}_failed`);
   }
