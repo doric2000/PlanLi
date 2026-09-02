@@ -287,6 +287,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
   const sourceRecommendationIdRef = useRef(requestedEditPostId || '');
   const lastSavedComparableRef = useRef('');
   const saveQueueRef = useRef(Promise.resolve());
+  const mediaPersistenceRef = useRef(Promise.resolve());
   const pendingSaveRequestRef = useRef(null);
   const latestDraftRef = useRef(null);
   const latestComparableRef = useRef('');
@@ -1087,7 +1088,10 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     setEditableMedia(nextItems);
     setValidationMessage('');
     setSaveError('');
-    persistDraftMedia(nextItems).catch(() => {
+    mediaPersistenceRef.current = mediaPersistenceRef.current
+      .catch(() => {})
+      .then(() => persistDraftMedia(nextItems));
+    mediaPersistenceRef.current.catch(() => {
       setSaveError('לא הצלחנו לשמור תמונה אחת במכשיר. אפשר לבחור אותה מחדש.');
     });
   };
@@ -1185,6 +1189,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     pauseAutosaveRef.current = true;
     let handedOff = false;
     try {
+      await mediaPersistenceRef.current;
       const version = await persistSnapshot(draftPayload, draftComparable, {
         force: true,
         allowDuringPublish: true,

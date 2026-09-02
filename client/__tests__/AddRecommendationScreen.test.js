@@ -1174,6 +1174,43 @@ describe('AddRecommendationScreen Integration Test', () => {
     expect(mockSaveRecommendation.mock.calls[0][0].recommendation.attributes.environment).toBe('indoor');
   });
 
+  it('reuses successfully uploaded local media after an edit save failure', async () => {
+    mockSaveRecommendation.mockRejectedValueOnce({
+      code: 'functions/invalid-argument',
+      message: 'Review the post.',
+    });
+    const navigationMock = {
+      goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    };
+    const screen = render(
+      <AddRecommendationScreen
+        navigation={navigationMock}
+        route={{ params: {
+          mode: 'edit',
+          item: makeEditItem({
+            facets: {
+              interests: ['food'], audienceScope: 'all', audiences: [],
+              vibes: ['relaxed'], environments: ['indoor'], needs: [],
+            },
+          }),
+          postId: 'post-1',
+        } }}
+      />
+    );
+    await waitFor(() => expect(screen.getByTestId('add-rec-title-input').props.value).toBe('Original'));
+    fireEvent.press(screen.getByLabelText(/פרטים ותמונות/));
+    fireEvent.press(screen.getByTestId('add-rec-image-picker'));
+    await waitFor(() => expect(mockPickImages).toHaveBeenCalledTimes(1));
+    fireEvent.press(screen.getByTestId('add-rec-submit'));
+    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalledTimes(1));
+    expect(mockUploadImages).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(screen.getByTestId('add-rec-submit'));
+    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalledTimes(2));
+    expect(mockUploadImages).toHaveBeenCalledTimes(1);
+  });
+
   it('clears hydrated attributes only after an applicable tag is removed', async () => {
     const navigationMock = {
       goBack: jest.fn(), setOptions: jest.fn(), navigate: jest.fn(), dispatch: jest.fn(),

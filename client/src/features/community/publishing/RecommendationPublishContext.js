@@ -15,6 +15,7 @@ import { TRAVEL_TAXONOMY_VERSION } from '../../../constants/travelTaxonomy';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUpload';
 import {
+  getCurrentRecommendationDraft,
   publishRecommendationDraft,
   saveRecommendation,
   saveRecommendationDraft,
@@ -175,6 +176,107 @@ export function recommendationPublishProgress(job) {
 
 function remotePreview(asset) {
   return asset?.feed?.url || asset?.large?.url || asset?.thumb?.url || null;
+}
+
+/**
+ * Resolve publish media in the same order as the queued descriptors. The
+ * descriptor id is intentionally retained for diagnostics and validation so a
+ * completion-order change in concurrent uploads cannot reorder the payload.
+ */
+export function resolvePreparedPublishMedia(entries) {
+  const media = Array.isArray(entries) ? entries : [];
+  const identities = media.map(publishMediaIdentity);
+  const assets = media.map((entry) => entry?.type === 'remote'
+    ? entry.asset
+    : entry.preparedAsset);
+  const missing = assets.map((asset, index) => (!asset?.assetId ? identities[index] : null)).filter(Boolean);
+  return {
+    assets: missing.length ? null : assets,
+    identities,
+    missing,
+  };
+}
+
+function publishMediaIdentity(entry, index) {
+  return String(entry?.id || entry?.asset?.assetId || entry?.preparedAsset?.assetId || `index:${index}`);
+}
+
+function isRecommendationDraftVersionConflict(error) {
+  return String(error?.details?.reason || '').toUpperCase() === 'RECOMMENDATION_DRAFT_VERSION_CONFLICT';
+}
+
+/**
+ * A media upload can finish while an autosave advances the draft pointer. Refresh
+ * that pointer once, keep the queued snapshot (especially its ordered media),
+ * and retry the same idempotent save request without uploading again.
+ */
+async function saveRecommendationDraftForPublication(options) {
+  try {
+    return {
+      saved: await saveRecommendationDraft(options),
+      draft: options.draft,
+      recovered: false,
+    };
+  } catch (error) {
+    if (!options?.draftId || !isRecommendationDraftVersionConflict(error)) throw error;
+    let latest;
+    try {
+      latest = await getCurrentRecommendationDraft();
+    } catch {
+      throw error;
+    }
+    const latestVersion = Number(latest?.version);
+    const sameDraft = latest?.id === options.draftId &&
+      (latest?.sourceRecommendationId || '') === (options.sourceRecommendationId || '');
+    if (!sameDraft || !Number.isSafeInteger(latestVersion) || latestVersion < 1) throw error;
+    const latestDraft = { ...latest };
+    delete latestDraft.id;
+    delete latestDraft.version;
+    delete latestDraft.sourceRecommendationId;
+    const retryDraft = {
+      ...latestDraft,
+      ...(options.draft || {}),
+      media: options.draft?.media || [],
+      localMediaCount: Number(options.draft?.localMediaCount || 0),
+    };
+    const saved = await saveRecommendationDraft({
+      ...options,
+      expectedVersion: latestVersion,
+      draft: retryDraft,
+    });
+    addDiagnosticBreadcrumb({
+      category: 'callable',
+      message: 'Recommendation draft version refreshed before publication',
+      data: {
+        operation: 'recommendation_draft_version_recovery',
+        stage: 'saving',
+        imageCount: retryDraft.media.length,
+        mediaIdentities: retryDraft.media.map((asset, index) => String(
+          asset?.assetId || asset?.id || `index:${index}`
+        )),
+      },
+    });
+    return {
+      saved,
+      draft: retryDraft,
+      recovered: true,
+    };
+  }
+}
+
+function mediaMappingError({ identities, missing, expectedCount }) {
+  const error = new Error('One or more selected images could not be prepared in order.');
+  error.code = 'media/order-mapping-incomplete';
+  error.details = {
+    publishStage: 'saving',
+    reason: 'media_order_mapping_incomplete',
+    expectedCount,
+    resolvedCount: expectedCount - missing.length,
+    mediaIdentities: identities,
+    missingMediaIdentities: missing,
+    retryable: false,
+  };
+  return error;
 }
 
 export function upgradeRestoredPublishJob(job) {
@@ -682,12 +784,25 @@ export function ContentPublishProvider({ children }) {
       await preparePendingMedia(jobId);
       let current = jobsRef.current.find((entry) => entry.id === jobId);
       if (!current) return;
-      const finalMedia = (current.media || []).map((entry) =>
-        entry.type === 'remote' ? entry.asset : entry.preparedAsset
-      ).filter(Boolean);
-      if (finalMedia.length !== (current.media || []).length) {
-        throw new Error('Not every image finished preparing.');
+      const resolvedMedia = resolvePreparedPublishMedia(current.media);
+      if (!resolvedMedia.assets) {
+        throw mediaMappingError({
+          identities: resolvedMedia.identities,
+          missing: resolvedMedia.missing,
+          expectedCount: current.media?.length || 0,
+        });
       }
+      const finalMedia = resolvedMedia.assets;
+      addDiagnosticBreadcrumb({
+        category: 'media',
+        message: 'Prepared publication media order verified',
+        data: {
+          operation: 'content_publish_media_order',
+          contentType: current.contentType || 'recommendation',
+          imageCount: finalMedia.length,
+          mediaIdentities: resolvedMedia.identities,
+        },
+      });
 
       await updateJob(jobId, (job) => ({
         ...job,
@@ -752,24 +867,30 @@ export function ContentPublishProvider({ children }) {
         if (current.payload?.draftId) {
           let publishDraftId = current.payload.draftId;
           let publishVersion = Number(current.payload.expectedVersion);
+          let recommendationDraft = {
+            ...current.draft,
+            media: finalMedia,
+            localMediaCount: 0,
+          };
           const hasPreparedLocalMedia = (current.media || []).some((entry) => entry.type === 'local');
           const hasProviderDestination = hasProviderDestinationDraft(current.draft);
           let mediaSaved = current.payload.recommendationDraftMediaSaved === true;
           let providerDestinationSaved = current.payload.recommendationDraftProviderDestinationSaved === true;
           if (mediaSaved && current.payload.recommendationDraftIdSynced !== true &&
               current.payload.recommendationDraftMediaSaveRequestId) {
-            const replayedMediaSave = await saveRecommendationDraft({
+            const replayedMediaSave = await saveRecommendationDraftForPublication({
               draftId: publishDraftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
               expectedVersion: publishVersion,
               saveRequestId: current.payload.recommendationDraftMediaSaveRequestId,
-              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
             });
-            publishDraftId = replayedMediaSave.draftId;
-            publishVersion = Number(replayedMediaSave.version);
+            publishDraftId = replayedMediaSave.saved.draftId;
+            publishVersion = Number(replayedMediaSave.saved.version);
+            recommendationDraft = replayedMediaSave.draft;
             await updateJob(jobId, (job) => ({
               ...job,
-              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
               payload: {
                 ...job.payload,
                 draftId: publishDraftId,
@@ -792,20 +913,21 @@ export function ContentPublishProvider({ children }) {
                 updatedAt: Date.now(),
               }));
             }
-            const savedDraft = await saveRecommendationDraft({
+            const savedDraft = await saveRecommendationDraftForPublication({
               draftId: current.payload.draftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
               expectedVersion: publishVersion,
               saveRequestId: mediaSaveRequestId,
-              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
             });
-            publishDraftId = savedDraft.draftId;
-            publishVersion = Number(savedDraft.version);
+            publishDraftId = savedDraft.saved.draftId;
+            publishVersion = Number(savedDraft.saved.version);
+            recommendationDraft = savedDraft.draft;
             mediaSaved = true;
             if (hasProviderDestination) providerDestinationSaved = true;
             await updateJob(jobId, (job) => ({
               ...job,
-              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
               payload: {
                 ...job.payload,
                 draftId: publishDraftId,
@@ -833,18 +955,19 @@ export function ContentPublishProvider({ children }) {
                 updatedAt: Date.now(),
               }));
             }
-            const syncedDestinationDraft = await saveRecommendationDraft({
+            const syncedDestinationDraft = await saveRecommendationDraftForPublication({
               draftId: publishDraftId,
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
               expectedVersion: publishVersion,
               saveRequestId: providerDestinationSaveRequestId,
-              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
             });
-            publishDraftId = syncedDestinationDraft.draftId;
-            publishVersion = Number(syncedDestinationDraft.version);
+            publishDraftId = syncedDestinationDraft.saved.draftId;
+            publishVersion = Number(syncedDestinationDraft.saved.version);
+            recommendationDraft = syncedDestinationDraft.draft;
             await updateJob(jobId, (job) => ({
               ...job,
-              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
               payload: {
                 ...job.payload,
                 draftId: publishDraftId,
@@ -877,13 +1000,14 @@ export function ContentPublishProvider({ children }) {
               sourceRecommendationId: current.payload.sourceRecommendationId || null,
               expectedVersion: publishVersion,
               saveRequestId: recoverySaveRequestId,
-              draft: { ...current.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
             });
             publishDraftId = recoveredDraft.draftId;
             publishVersion = Number(recoveredDraft.version);
+            recommendationDraft = { ...recommendationDraft, media: finalMedia, localMediaCount: 0 };
             await updateJob(jobId, (job) => ({
               ...job,
-              draft: { ...job.draft, media: finalMedia, localMediaCount: 0 },
+              draft: recommendationDraft,
               payload: {
                 ...job.payload,
                 draftId: publishDraftId,
@@ -1010,6 +1134,7 @@ export function ContentPublishProvider({ children }) {
         ? error.details.publishStage
         : current.stage;
       const retryPolicy = publishRetryPolicy(error, attempts);
+      const mediaIdentities = (current.media || []).map(publishMediaIdentity);
       addDiagnosticBreadcrumb({
         category: 'network',
         message: 'Content publication attempt failed',
@@ -1020,6 +1145,8 @@ export function ContentPublishProvider({ children }) {
           code: String(error?.code || 'unknown'),
           reason: String(error?.details?.reason || 'unknown'),
           attempt: attempts,
+          imageCount: mediaIdentities.length,
+          mediaIdentities,
           durationMs: Date.now() - startedAt,
         },
       });
