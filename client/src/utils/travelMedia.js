@@ -108,6 +108,22 @@ export function updateTravelMediaCrop(item, crop) {
   };
 }
 
+/**
+ * Pair upload results with the descriptors that produced them without relying
+ * on completion order. The returned map is keyed by the stable descriptor
+ * identity, so reordering the visible list cannot associate an asset with the
+ * wrong photo during an edit.
+ */
+export function pairTravelMediaUploads(items, uploadedAssets) {
+  const pairs = new Map();
+  (Array.isArray(items) ? items : []).forEach((item, index) => {
+    const identity = travelMediaIdentity(item);
+    const asset = Array.isArray(uploadedAssets) ? uploadedAssets[index] : null;
+    if (identity && asset) pairs.set(identity, asset);
+  });
+  return pairs;
+}
+
 export function removedTravelMediaItems(current, next) {
   const nextIdentities = new Set((next || []).map(travelMediaIdentity).filter(Boolean));
   return (current || []).filter((item) => {

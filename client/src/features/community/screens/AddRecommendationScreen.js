@@ -31,6 +31,7 @@ import { useImagePickerWithUpload } from '../../../hooks/useImagePickerWithUploa
 import useExactPlaceSelection from '../../../hooks/useExactPlaceSelection';
 import useDurableDraftMedia from '../../../hooks/useDurableDraftMedia';
 import { saveRecommendation } from '../../../services/RecommendationService';
+import { addDiagnosticBreadcrumb } from '../../../services/ErrorReporting';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
 
 // --- Constants ---
@@ -39,15 +40,16 @@ import { getBudgetTheme } from '../../../utils/getBudgetTheme';
 import { travelMediaErrorMessage } from '../../../utils/travelMediaErrors';
 import {
   createTravelMediaDescriptor,
+  pairTravelMediaUploads,
   removedTravelMediaItems,
   travelMediaUri,
+  travelMediaIdentity,
 } from '../../../utils/travelMedia';
 import {
   deletePreparedTravelMedia,
   prepareTravelMediaBatch,
 } from '../../../utils/travelMediaPreparation';
 import {
-  findMediaAssetByUrl,
   getMediaVariantUrl,
 } from '../../../utils/mediaAssets';
 import { UNSAVED_LEAVE_MESSAGE, UNSAVED_LEAVE_TITLE } from '../../../constants/unsavedLeaveStrings';
@@ -114,6 +116,15 @@ function exactDestinationRef(selectedCountry, selectedCity) {
     cityId: selectedCity.id,
     ...(providerPlaceId ? { provider: 'google', providerPlaceId } : {}),
   };
+}
+
+function mediaAssetsByIdentity(media) {
+  const assetsByIdentity = new Map();
+  (Array.isArray(media) ? media : []).forEach((asset) => {
+    const identity = travelMediaIdentity(asset);
+    if (identity && asset?.assetId) assetsByIdentity.set(identity, asset);
+  });
+  return assetsByIdentity;
 }
 
 function resolveCategoryIdFromEditItem(editItem) {
@@ -332,22 +343,36 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
     uploadImageAssets,
   } = useImagePickerWithUpload({ kind: 'recommendation' });
   const [editableMedia, setEditableMedia] = useState([]);
+  // Keep successfully prepared assets across a failed edit save. A retry can
+  // reuse them by descriptor identity instead of uploading the same photos again.
+  const uploadedAssetsByIdentityRef = useRef(new Map());
   const [mediaComposerVisible, setMediaComposerVisible] = useState(false);
+  const existingMediaByIdentity = useMemo(
+    () => mediaAssetsByIdentity(editItem?.media),
+    [editItem?.media]
+  );
   const editableImageUris = useMemo(() => editableMedia.map(travelMediaUri).filter(Boolean), [editableMedia]);
   const editablePreviewUris = useMemo(() => {
     return editableMedia.map((item) => {
       const uri = travelMediaUri(item);
-      const asset = item.asset || findMediaAssetByUrl(editItem?.media, uri);
+      const asset = item.asset || existingMediaByIdentity.get(travelMediaIdentity(item));
       return asset ? getMediaVariantUrl(asset, 'feed', uri) : uri;
     });
-  }, [editItem, editableMedia]);
+  }, [editableMedia, existingMediaByIdentity]);
 
   const handleAddImages = () => setMediaComposerVisible(true);
   const completeMediaSelection = (items) => {
     const nextItems = (items || []).slice(0, 5);
+    const nextIdentities = new Set(nextItems.map(travelMediaIdentity));
     removedTravelMediaItems(editableMedia, nextItems)
       .filter((item) => !item.asset)
-      .forEach((item) => forgetDurableImage(travelMediaUri(item)).catch(() => {}));
+      .forEach((item) => {
+        uploadedAssetsByIdentityRef.current.delete(travelMediaIdentity(item));
+        forgetDurableImage(travelMediaUri(item)).catch(() => {});
+      });
+    Array.from(uploadedAssetsByIdentityRef.current.keys())
+      .filter((identity) => !nextIdentities.has(identity))
+      .forEach((identity) => uploadedAssetsByIdentityRef.current.delete(identity));
     setEditableMedia(nextItems);
     setMediaComposerVisible(false);
     if (!isEdit) persistReviewedImages(nextItems.filter((item) => !item.asset).map(travelMediaUri)).catch(() => {});
@@ -357,7 +382,10 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
     setEditableMedia((prev) => {
       const next = Array.isArray(prev) ? [...prev] : [];
       const [removed] = next.splice(index, 1);
-      if (!removed?.asset) forgetDurableImage(travelMediaUri(removed)).catch(() => {});
+      if (!removed?.asset) {
+        uploadedAssetsByIdentityRef.current.delete(travelMediaIdentity(removed));
+        forgetDurableImage(travelMediaUri(removed)).catch(() => {});
+      }
       return next;
     });
   };
@@ -522,6 +550,7 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
       place: editItem.place || null,
       query: editItem.place?.name || editItem.destination?.cityName || '',
     });
+    uploadedAssetsByIdentityRef.current.clear();
     setEditableMedia((Array.isArray(editItem.media) ? editItem.media : [])
       .map((asset) => createTravelMediaDescriptor({
         asset,
@@ -823,7 +852,9 @@ const handleSubmit = async () => {
           },
           media: currentItems.map((item) => {
             const uri = travelMediaUri(item);
-            const asset = item.asset || (isRemote(uri) ? findMediaAssetByUrl(editItem?.media, uri) : null);
+            const asset = item.asset || (isRemote(uri)
+              ? existingMediaByIdentity.get(travelMediaIdentity(item))
+              : null);
             return asset ? { asset } : durableMediaForUri(uri);
           }),
           draft: {
@@ -855,7 +886,9 @@ const handleSubmit = async () => {
       }
 
       const localItems = currentItems.filter((item) => !item.asset && !isRemote(travelMediaUri(item)));
-      const preparedLocal = await prepareTravelMediaBatch(localItems, { concurrency: 2 });
+      const cachedAssets = uploadedAssetsByIdentityRef.current;
+      const itemsToUpload = localItems.filter((item) => !cachedAssets.has(travelMediaIdentity(item)));
+      const preparedLocal = await prepareTravelMediaBatch(itemsToUpload, { concurrency: 2 });
       let uploadedLocal;
       try {
         uploadedLocal = preparedLocal.length
@@ -864,11 +897,37 @@ const handleSubmit = async () => {
       } finally {
         await Promise.allSettled(preparedLocal.map(deletePreparedTravelMedia));
       }
-      const uploadedQueue = [...uploadedLocal];
+      pairTravelMediaUploads(itemsToUpload, uploadedLocal)
+        .forEach((asset, identity) => cachedAssets.set(identity, asset));
       const finalMedia = currentItems.map((item) => {
-        if (!item.asset && !isRemote(travelMediaUri(item))) return uploadedQueue.shift();
-        return item.asset || findMediaAssetByUrl(editItem?.media, travelMediaUri(item));
+        if (!item.asset && !isRemote(travelMediaUri(item))) {
+          return cachedAssets.get(travelMediaIdentity(item)) || null;
+        }
+        return item.asset || existingMediaByIdentity.get(travelMediaIdentity(item)) || null;
       }).filter(Boolean);
+      if (finalMedia.length !== currentItems.length) {
+        const error = new Error('One or more selected images could not be matched after upload.');
+        error.code = 'media/order-mapping-incomplete';
+        error.details = {
+          publishStage: 'saving',
+          reason: 'media_order_mapping_incomplete',
+          selectedCount: currentItems.length,
+          resolvedCount: finalMedia.length,
+        };
+        throw error;
+      }
+      if (typeof addDiagnosticBreadcrumb === 'function') {
+        addDiagnosticBreadcrumb({
+          category: 'media',
+          message: 'Recommendation edit media order verified',
+          data: {
+            operation: 'recommendation_edit_media_order',
+            stage: 'saving',
+            imageCount: finalMedia.length,
+            mediaIdentities: currentItems.map(travelMediaIdentity),
+          },
+        });
+      }
       const exactDestination = exactDestinationRef(selectedCountry, selectedCity);
       const destinationPayload = selectedPlace?.resolvedPlaceToken
         ? {
@@ -920,6 +979,7 @@ const handleSubmit = async () => {
       };
 
       await saveRecommendation(callablePayload);
+      uploadedAssetsByIdentityRef.current.clear();
       Alert.alert("איזה כיף!", "ההמלצה עודכנה בהצלחה!");
       if (
         typeof URL !== 'undefined' &&
@@ -938,6 +998,21 @@ const handleSubmit = async () => {
 
     } catch (error) {
       console.error("Error saving document: ", error);
+      if (typeof addDiagnosticBreadcrumb === 'function') {
+        addDiagnosticBreadcrumb({
+          category: 'network',
+          message: 'Recommendation edit save failed',
+          level: 'error',
+          data: {
+            operation: 'recommendation_edit_save',
+            stage: 'saving',
+            code: String(error?.code || 'unknown'),
+            reason: String(error?.details?.reason || 'unknown'),
+            imageCount: editableMedia.length,
+            mediaIdentities: editableMedia.map(travelMediaIdentity),
+          },
+        });
+      }
       // Unclaimed prepared media is removed by the scheduled server cleanup.
       Alert.alert(
         "אוי לא!",

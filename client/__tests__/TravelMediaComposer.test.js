@@ -367,6 +367,9 @@ test('embedded TravelMediaComposer keeps photo pixels and numeric badges unmirro
   }));
   expect(JSON.stringify(firstPageStyle.transform)).not.toContain('scaleX');
   expect(secondPageStyle.transform[0].translateX).toBeLessThan(0);
+  expect(screen.getByTestId('travel-media-pager-image-unmirrored-1').props.source).toEqual({
+    uri: 'file:///unmirrored-1.jpg',
+  });
   expect(previewStyle.height).toBe(previewStyle.width);
   expect(previewStyle.maxHeight).toBe(previewStyle.width);
   expect(JSON.stringify(screen.getByTestId('travel-media-selected-unmirrored-1').props.style))
@@ -443,7 +446,8 @@ test('embedded TravelMediaComposer advances right, returns left, and rejects a p
   expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('1/3');
 });
 
-test('embedded TravelMediaComposer reserves horizontal movement for crop while crop mode is active', () => {
+test('embedded TravelMediaComposer opens a full-screen crop editor for the active photo', async () => {
+  const onChange = jest.fn();
   const values = [1, 2].map((index) => ({
     id: `crop-pager-${index}`,
     sourceId: `crop-pager-${index}`,
@@ -467,22 +471,36 @@ test('embedded TravelMediaComposer reserves horizontal movement for crop while c
       value={values}
       maxItems={5}
       aspect={[1, 1]}
-      onChange={jest.fn()}
+      onChange={onChange}
       sourceAdapter={sourceAdapter}
     />
   );
 
   fireEvent.press(screen.getByTestId('travel-media-toggle-crop'));
-  expect(screen.queryByTestId('travel-media-pager')).toBeNull();
-  expect(screen.getByText(/מעבר לתמונה אחרת דרך התמונות הממוזערות/)).toBeTruthy();
+  expect(screen.getByTestId('travel-media-pager')).toBeTruthy();
+  expect(screen.getByTestId('travel-media-crop-modal')).toBeTruthy();
+  expect(screen.getByText('חיתוך תמונה')).toBeTruthy();
+  expect(screen.getByTestId('travel-media-crop-counter')).toHaveTextContent('1/2');
 
   const cropPan = latestGesture('pan');
   act(() => {
+    fireEvent(screen.getByTestId('travel-media-crop-stage'), 'layout', {
+      nativeEvent: { layout: { width: 390, height: 650 } },
+    });
+  });
+  await waitFor(() => expect(screen.getByTestId('travel-media-crop-viewport')).toBeTruthy());
+  act(() => {
+    fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
+      nativeEvent: { layout: { width: 390, height: 390 } },
+    });
     cropPan.callbacks.onStart({});
     cropPan.callbacks.onUpdate({ translationX: 80, translationY: 0 });
     cropPan.callbacks.onEnd({ translationX: 80, translationY: 0, velocityX: 900 });
   });
   expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('1/2');
+  fireEvent.press(screen.getByTestId('travel-media-crop-cancel'));
+  expect(screen.queryByTestId('travel-media-crop-modal')).toBeNull();
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 test('TravelMediaComposer confirms the whole selection without manipulating an image', async () => {
@@ -685,7 +703,7 @@ test('TravelMediaComposer reserves only fast dominant horizontal gestures for ph
   expect(isTravelMediaSwipe({ translationX: 40, translationY: 4, velocityX: 900 })).toBe(false);
 });
 
-test('TravelMediaComposer navigates on a fast swipe and commits slow, pinched, and cancelled crops', async () => {
+test('TravelMediaComposer navigates with the direct image pager and commits crop from the full-screen editor', async () => {
   const onChange = jest.fn();
   const values = [1, 2].map((index) => ({
     id: `gesture-${index}`,
@@ -715,36 +733,22 @@ test('TravelMediaComposer navigates on a fast swipe and commits slow, pinched, a
     />
   );
 
-  await act(async () => {
-    fireEvent(screen.getByTestId('travel-media-crop-stage'), 'layout', {
-      nativeEvent: { layout: { width: 300, height: 300 } },
-    });
-  });
-  await act(async () => {
-    fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
-      nativeEvent: { layout: { width: 300, height: 300 } },
-    });
-  });
-
-  let pan = latestGesture('pan');
+  let pan = screen.getByTestId('travel-media-pager').props.testGesture;
   act(() => {
-    pan.callbacks.onStart({});
-    pan.callbacks.onEnd({ translationX: -70, translationY: 8, velocityX: -700 });
+    pan.callbacks.onUpdate({ translationX: 180, translationY: 8, velocityX: 700 });
+    pan.callbacks.onEnd({ translationX: 180, translationY: 8, velocityX: 700 });
   });
   expect(screen.getByText('2/2')).toBeTruthy();
 
-  await act(async () => {
-    fireEvent(screen.getByTestId('travel-media-crop-stage'), 'layout', {
-      nativeEvent: { layout: { width: 300, height: 300 } },
-    });
+  fireEvent.press(screen.getByTestId('travel-media-toggle-crop'));
+  expect(screen.getByTestId('travel-media-crop-modal')).toBeTruthy();
+  fireEvent(screen.getByTestId('travel-media-crop-stage'), 'layout', {
+    nativeEvent: { layout: { width: 390, height: 650 } },
   });
-  await act(async () => {
-    fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
-      nativeEvent: { layout: { width: 300, height: 300 } },
-    });
+  fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
+    nativeEvent: { layout: { width: 390, height: 390 } },
   });
-
-  pan = latestGesture('pan');
+  pan = screen.getByTestId('travel-media-crop-modal').props.testGesture || latestGesture('pan');
   act(() => {
     pan.callbacks.onStart({});
     pan.callbacks.onUpdate({ translationX: 30, translationY: 0 });
@@ -756,6 +760,7 @@ test('TravelMediaComposer navigates on a fast swipe and commits slow, pinched, a
     pinch.callbacks.onUpdate({ scale: 2 });
     pinch.callbacks.onEnd({});
   });
+  fireEvent.press(screen.getByTestId('travel-media-crop-confirm'));
   fireEvent.press(screen.getByTestId('travel-media-done'));
 
   expect(onChange).toHaveBeenCalledWith([

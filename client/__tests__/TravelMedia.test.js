@@ -2,6 +2,7 @@ import {
   createTravelMediaDescriptor,
   defaultTravelMediaCrop,
   mergeTravelMediaSelection,
+  pairTravelMediaUploads,
   queueMediaFromDescriptor,
   removedTravelMediaItems,
   updateTravelMediaCrop,
@@ -66,5 +67,16 @@ describe('travel media descriptors', () => {
       { sourceId: 'three', uri: 'file:///three.jpg' },
     ];
     expect(removedTravelMediaItems(current, [current[0], current[2]])).toEqual([current[1]]);
+  });
+
+  it('maps upload results to stable identities while preserving a reordered display list', () => {
+    const first = { sourceId: 'local-a', uri: 'file:///a.jpg' };
+    const second = { sourceId: 'local-b', uri: 'file:///b.jpg' };
+    const uploaded = pairTravelMediaUploads([first, second], [
+      { assetId: 'asset-a' },
+      { assetId: 'asset-b' },
+    ]);
+    const reordered = [second, first].map((item) => uploaded.get(item.sourceId));
+    expect(reordered.map((asset) => asset.assetId)).toEqual(['asset-b', 'asset-a']);
   });
 });

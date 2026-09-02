@@ -437,7 +437,6 @@ function EmbeddedMediaPagerPage({
   pageIndex,
   activeIndex,
   pageWidth,
-  aspect,
   dragTranslationX,
 }) {
   const identity = travelMediaIdentity(item);
@@ -452,22 +451,18 @@ function EmbeddedMediaPagerPage({
       style={[styles.embeddedPagerPage, animatedStyle]}
       testID={`travel-media-pager-page-${identity}`}
     >
-      <CropPage
-        item={item}
-        aspect={aspect}
-        cropEnabled={false}
-        navigationEnabled={false}
-        existingContentFit="cover"
-        showExistingHint={false}
-        maxViewportWidth={pageWidth}
-        onCropChange={() => {}}
-        onSwipe={() => {}}
+      <MediaImage
+        uri={travelMediaUri(item)}
+        style={styles.embeddedPagerImage}
+        contentFit="cover"
+        pointerEvents="none"
+        testID={`travel-media-pager-image-${identity}`}
       />
     </Animated.View>
   );
 }
 
-function EmbeddedMediaPager({ items, activeIndex, pageWidth, aspect, onNavigate }) {
+function EmbeddedMediaPager({ items, activeIndex, pageWidth, onNavigate }) {
   const dragTranslationX = useSharedValue(0);
 
   useEffect(() => {
@@ -530,12 +525,94 @@ function EmbeddedMediaPager({ items, activeIndex, pageWidth, aspect, onNavigate 
             pageIndex={pageIndex}
             activeIndex={activeIndex}
             pageWidth={pageWidth}
-            aspect={aspect}
             dragTranslationX={dragTranslationX}
           />
         ))}
       </Animated.View>
     </GestureDetector>
+  );
+}
+
+function TravelMediaCropModal({
+  visible,
+  item,
+  activeIndex = 0,
+  itemCount = 1,
+  aspect,
+  onCancel,
+  onComplete,
+}) {
+  const insets = useContext(SafeAreaInsetsContext) || ZERO_INSETS;
+  const windowDimensions = useWindowDimensions();
+  const identity = travelMediaIdentity(item);
+  const [draftCrop, setDraftCrop] = useState(() => item?.transform?.crop || null);
+
+  useEffect(() => {
+    if (visible) setDraftCrop(item?.transform?.crop || null);
+  }, [identity, item?.transform?.crop, visible]);
+
+  if (!visible || !item) return null;
+
+  return (
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onCancel}
+    >
+      <GestureHandlerRootView style={styles.cropModalScreen} testID="travel-media-crop-modal">
+        <View style={[styles.cropModalContent, {
+          paddingTop: Math.max(insets.top, spacing.sm),
+          paddingBottom: Math.max(insets.bottom, spacing.sm),
+        }]}>
+          <View style={styles.cropModalHeader}>
+            <Pressable
+              onPress={onCancel}
+              style={styles.cropModalAction}
+              accessibilityRole="button"
+              accessibilityLabel="ביטול חיתוך"
+              testID="travel-media-crop-cancel"
+            >
+              <AppText style={styles.cropModalCancelText}>ביטול</AppText>
+            </Pressable>
+            <View style={styles.cropModalHeaderCopy}>
+              <AppText style={styles.cropModalTitle}>חיתוך תמונה</AppText>
+              <View style={styles.cropModalCounterRow}>
+                <AppText style={[styles.cropModalCounter, styles.cropModalIndex]} testID="travel-media-crop-counter">
+                  {`${activeIndex + 1}/${itemCount}`}
+                </AppText>
+                <AppText style={styles.cropModalCounter}> · החיתוך יישמר רק לאחר סיום</AppText>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => onComplete(draftCrop)}
+              disabled={!draftCrop}
+              style={[styles.cropModalAction, !draftCrop && styles.disabled]}
+              accessibilityRole="button"
+              accessibilityLabel="סיום חיתוך"
+              testID="travel-media-crop-confirm"
+            >
+              <AppText style={styles.cropModalConfirmText}>סיום</AppText>
+            </Pressable>
+          </View>
+          <View style={styles.cropModalStage}>
+            <CropPage
+              key={identity}
+              item={item}
+              aspect={aspect}
+              cropEnabled
+              navigationEnabled={false}
+              maxViewportWidth={windowDimensions.width}
+              onCropChange={setDraftCrop}
+              onSwipe={() => {}}
+            />
+          </View>
+          <AppText style={styles.cropModalHint}>גררו את התמונה וצבטו כדי להגדיל</AppText>
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
   );
 }
 
@@ -690,7 +767,6 @@ export default function TravelMediaComposer({
   const [working, setWorking] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [composerError, setComposerError] = useState('');
-  const [composerSession, setComposerSession] = useState(0);
   const [cropEditing, setCropEditing] = useState(false);
   const [reorderTrackWidth, setReorderTrackWidth] = useState(0);
   const [reorderCenters, setReorderCenters] = useState([]);
@@ -717,7 +793,6 @@ export default function TravelMediaComposer({
     setActiveIndex(0);
     setComposerError('');
     setCropEditing(false);
-    setComposerSession((current) => current + 1);
     sourceAdapter.kind === 'inline-library' && sourceAdapter.loadInitial().catch(() => {});
   }, [visible]); // The draft is intentionally captured only when the composer opens.
 
@@ -919,7 +994,6 @@ export default function TravelMediaComposer({
       TRAVEL_MEDIA_REORDER_MIN_THUMB_SIZE,
       Math.min(TRAVEL_MEDIA_REORDER_MAX_THUMB_SIZE, Math.floor(availableThumbnailWidth))
     );
-    const cropActive = Boolean(cropEditing && activeItem?.transform);
     return (
       <GestureHandlerRootView
         style={styles.embeddedRoot}
@@ -955,26 +1029,12 @@ export default function TravelMediaComposer({
               ]}
               testID="travel-media-embedded-preview"
             >
-              {cropActive ? (
-                <CropPage
-                  key={`${composerSession}:${travelMediaIdentity(activeItem)}`}
-                  item={activeItem}
-                  aspect={aspect}
-                  cropEnabled
-                  navigationEnabled={false}
-                  maxViewportWidth={embeddedPreviewWidth}
-                  onCropChange={(crop) => updateCrop(travelMediaIdentity(activeItem), crop)}
-                  onSwipe={() => {}}
-                />
-              ) : (
-                <EmbeddedMediaPager
-                  items={working}
-                  activeIndex={activeIndex}
-                  pageWidth={embeddedPreviewWidth}
-                  aspect={aspect}
-                  onNavigate={navigateBySwipe}
-                />
-              )}
+              <EmbeddedMediaPager
+                items={working}
+                activeIndex={activeIndex}
+                pageWidth={embeddedPreviewWidth}
+                onNavigate={navigateBySwipe}
+              />
               <View style={styles.previewTools} pointerEvents="box-none">
                 <View style={styles.activeBadge} pointerEvents="none">
                   <AppText style={styles.activeBadgeText} testID="travel-media-active-counter">
@@ -983,20 +1043,18 @@ export default function TravelMediaComposer({
                 </View>
               </View>
               <AppText style={styles.cropHint}>
-                {cropActive
-                  ? 'גרירה וצביטה מתאימות את החיתוך · מעבר לתמונה אחרת דרך התמונות הממוזערות'
-                  : 'החליקו ימינה או שמאלה כדי לעבור בין התמונות'}
+                החליקו ימינה או שמאלה כדי לעבור בין התמונות
               </AppText>
             </View>
             <View style={styles.embeddedActions}>
               <Pressable
-                style={[styles.embeddedAction, cropEditing && styles.embeddedActionActive]}
-                onPress={() => setCropEditing((current) => !current)}
+                style={styles.embeddedAction}
+                onPress={() => setCropEditing(true)}
                 disabled={!activeItem?.transform}
                 testID="travel-media-toggle-crop"
               >
                 <Ionicons name="crop-outline" size={20} color={colors.primary} />
-                <AppText style={styles.embeddedActionText}>{cropEditing ? 'סיום חיתוך' : 'חיתוך'}</AppText>
+                <AppText style={styles.embeddedActionText}>חיתוך</AppText>
               </Pressable>
               {working.length < maxItems ? (
                 <Pressable style={styles.embeddedAction} onPress={pickMore} testID="travel-media-pick-more">
@@ -1046,6 +1104,18 @@ export default function TravelMediaComposer({
             {failed ? <Pressable onPress={retryFailed}><AppText style={styles.retryText}>ניסיון נוסף</AppText></Pressable> : null}
           </View>
         ) : null}
+        <TravelMediaCropModal
+          visible={cropEditing && Boolean(activeItem?.transform)}
+          item={activeItem}
+          activeIndex={activeIndex}
+          itemCount={working.length}
+          aspect={aspect}
+          onCancel={() => setCropEditing(false)}
+          onComplete={(crop) => {
+            updateCrop(travelMediaIdentity(activeItem), crop);
+            setCropEditing(false);
+          }}
+        />
       </GestureHandlerRootView>
     );
   }
@@ -1076,12 +1146,11 @@ export default function TravelMediaComposer({
 
         <View style={[styles.previewWrap, { aspectRatio: ratio }]}>
           {working.length ? (
-            <CropPage
-              key={`${composerSession}:${travelMediaIdentity(working[activeIndex])}`}
-              item={working[activeIndex]}
-              aspect={aspect}
-              onCropChange={(crop) => updateCrop(travelMediaIdentity(working[activeIndex]), crop)}
-              onSwipe={navigateBySwipe}
+            <EmbeddedMediaPager
+              items={working}
+              activeIndex={activeIndex}
+              pageWidth={Math.max(1, Number(windowDimensions.width) || embeddedPreviewWidth)}
+              onNavigate={navigateBySwipe}
             />
           ) : (
             <View style={styles.emptyPreview}>
@@ -1091,6 +1160,15 @@ export default function TravelMediaComposer({
           )}
           {working.length ? <>
             <View style={styles.previewTools} pointerEvents="box-none">
+              <Pressable
+                style={[styles.deleteButton, styles.cropPreviewButton]}
+                onPress={() => setCropEditing(true)}
+                disabled={!working[activeIndex]?.transform}
+                accessibilityLabel="חיתוך התמונה הנוכחית"
+                testID="travel-media-toggle-crop"
+              >
+                <Ionicons name="crop-outline" size={18} color={colors.white} />
+              </Pressable>
               <Pressable
                 style={styles.deleteButton}
                 onPress={removeActive}
@@ -1200,6 +1278,19 @@ export default function TravelMediaComposer({
           </View>
         ) : null}
 
+        <TravelMediaCropModal
+          visible={cropEditing && Boolean(working[activeIndex]?.transform)}
+          item={working[activeIndex]}
+          activeIndex={activeIndex}
+          itemCount={working.length}
+          aspect={aspect}
+          onCancel={() => setCropEditing(false)}
+          onComplete={(crop) => {
+            updateCrop(travelMediaIdentity(working[activeIndex]), crop);
+            setCropEditing(false);
+          }}
+        />
+
         {!permissionBlocked && sourceAdapter.kind === 'inline-library' ? <FlatList
           data={gridItems}
           extraData={working}
@@ -1271,6 +1362,21 @@ const styles = StyleSheet.create({
   embeddedPreview: { alignSelf: 'center', borderRadius: spacing.radiusLarge },
   embeddedPager: { flex: 1, overflow: 'hidden', backgroundColor: '#101317' },
   embeddedPagerPage: { ...StyleSheet.absoluteFillObject },
+  embeddedPagerImage: { width: '100%', height: '100%' },
+  cropPreviewButton: { marginLeft: spacing.xs },
+  cropModalScreen: { flex: 1, backgroundColor: '#101317' },
+  cropModalContent: { flex: 1, backgroundColor: '#101317' },
+  cropModalHeader: { minHeight: 58, paddingHorizontal: spacing.lg, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.14)' },
+  cropModalHeaderCopy: { alignItems: 'center', flex: 1 },
+  cropModalTitle: { color: colors.white, fontSize: 17 },
+  cropModalCounterRow: { flexDirection: 'row', alignItems: 'center' },
+  cropModalCounter: { color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 2 },
+  cropModalIndex: { writingDirection: 'ltr', direction: 'ltr' },
+  cropModalAction: { minWidth: 62, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  cropModalCancelText: { color: 'rgba(255,255,255,0.78)', fontSize: 14 },
+  cropModalConfirmText: { color: colors.accentAction, fontSize: 14 },
+  cropModalStage: { flex: 1, width: '100%', backgroundColor: '#101317' },
+  cropModalHint: { color: 'rgba(255,255,255,0.72)', fontSize: 13, textAlign: 'center', writingDirection: 'rtl', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   embeddedActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.md },
   embeddedAction: { minHeight: 44, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, borderRadius: spacing.radiusFull, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, paddingHorizontal: spacing.md },
   embeddedActionActive: { borderColor: colors.primary, backgroundColor: colors.accentLight },

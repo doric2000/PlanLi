@@ -8,6 +8,7 @@ import {
   normalizedPublishError,
   normalizePublicationOutcome,
   publishRetryPolicy,
+  resolvePreparedPublishMedia,
   upgradeRestoredPublishJob,
   useRecommendationPublish,
 } from '../src/features/community/publishing/RecommendationPublishContext';
@@ -20,6 +21,7 @@ jest.mock('expo-crypto', () => ({
 const mockUser = { uid: 'owner-1' };
 const mockUploadImageAsset = jest.fn();
 const mockSaveRecommendation = jest.fn();
+const mockGetCurrentRecommendationDraft = jest.fn();
 const mockSaveRecommendationDraft = jest.fn();
 const mockPublishRecommendationDraft = jest.fn();
 const mockSaveRoute = jest.fn();
@@ -43,6 +45,7 @@ jest.mock('../src/hooks/useImagePickerWithUpload', () => ({
   useImagePickerWithUpload: () => ({ uploadImageAsset: mockUploadImageAsset }),
 }));
 jest.mock('../src/services/RecommendationService', () => ({
+  getCurrentRecommendationDraft: (...args) => mockGetCurrentRecommendationDraft(...args),
   saveRecommendation: (...args) => mockSaveRecommendation(...args),
   saveRecommendationDraft: (...args) => mockSaveRecommendationDraft(...args),
   publishRecommendationDraft: (...args) => mockPublishRecommendationDraft(...args),
@@ -800,9 +803,77 @@ describe('RecommendationPublishProvider', () => {
     expect(mockSaveRecommendation).toHaveBeenCalledTimes(2);
     screen.unmount();
   });
+
+  it('refreshes a conflicted recommendation draft once without re-uploading or reordering media', async () => {
+    mockSaveRecommendationDraft
+      .mockRejectedValueOnce({
+        code: 'functions/aborted',
+        message: 'The recommendation draft changed.',
+        details: { reason: 'RECOMMENDATION_DRAFT_VERSION_CONFLICT' },
+      })
+      .mockResolvedValueOnce({ draftId: 'draft-1', version: 4 });
+    mockGetCurrentRecommendationDraft.mockResolvedValue({
+      id: 'draft-1',
+      version: 3,
+      sourceRecommendationId: null,
+      title: 'Latest title',
+      media: [],
+    });
+    const screen = render(
+      <RecommendationPublishProvider><Harness /></RecommendationPublishProvider>
+    );
+    await waitFor(() => expect(api).toBeTruthy());
+    await act(async () => {
+      await api.enqueueCreate({
+        payload: {
+          draftId: 'draft-1',
+          expectedVersion: 2,
+          recommendation: { title: 'Queued', media: [] },
+        },
+        media: [{ uri: 'file:///ordered.jpg' }],
+        draft: { title: 'Queued', media: [] },
+      });
+    });
+    await waitFor(() => expect(api.activeJob?.status).toBe('success'));
+    expect(mockGetCurrentRecommendationDraft).toHaveBeenCalledTimes(1);
+    expect(mockSaveRecommendationDraft).toHaveBeenCalledTimes(2);
+    expect(mockSaveRecommendationDraft.mock.calls[1][0]).toEqual(expect.objectContaining({
+      expectedVersion: 3,
+      draft: expect.objectContaining({
+        media: [expect.objectContaining({ assetId: '123e4567-e89b-42d3-a456-426614174000' })],
+      }),
+    }));
+    expect(mockUploadImageAsset).toHaveBeenCalledTimes(1);
+    expect(mockPublishRecommendationDraft).toHaveBeenCalledWith('draft-1', 4);
+    screen.unmount();
+  });
 });
 
 describe('publish status helpers', () => {
+  it('resolves mixed remote and prepared media in queued descriptor order', () => {
+    const remote = { assetId: 'remote-asset' };
+    const local = { assetId: 'local-asset' };
+    expect(resolvePreparedPublishMedia([
+      { id: 'remote-id', type: 'remote', asset: remote },
+      { id: 'local-id', type: 'local', preparedAsset: local },
+    ])).toEqual({
+      assets: [remote, local],
+      identities: ['remote-id', 'local-id'],
+      missing: [],
+    });
+  });
+
+  it('stops before save when a queued descriptor has no prepared asset', () => {
+    expect(resolvePreparedPublishMedia([
+      { id: 'ready', type: 'remote', asset: { assetId: 'remote-asset' } },
+      { id: 'missing', type: 'local', preparedAsset: null },
+    ])).toEqual({
+      assets: null,
+      identities: ['ready', 'missing'],
+      missing: ['missing'],
+    });
+  });
+
   it('classifies retryable failures and bounds aggregate progress', () => {
     expect(isTransientPublishError({ code: 'functions/unavailable' })).toBe(true);
     expect(isTransientPublishError({ code: 'functions/invalid-argument' })).toBe(false);
