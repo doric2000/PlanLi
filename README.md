@@ -94,6 +94,35 @@ update with `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`. No Functions, Rules, indexes,
 Storage, IAM, production data, EAS build/update, or mobile-store action was
 changed by this Hosting release.
 
+### Destination locality publication Functions hotfix
+
+On `2026-09-02`, the destination-locality fix from
+[PR #329](https://github.com/doric2000/PlanLi/pull/329), implementation and
+merge commit `0aba4bcdea8c89d4cab57e9e8c6eb62b138fd6aa`, was deployed from clean
+`main` source commit `5a918e7324ea2955c00ec84868fb1c8ff07a408f`; the intervening commit was
+documentation-only and the deployed Functions tree matched `0aba4bc` exactly.
+The fix prevents a city hub from capturing an unrelated provider locality by
+geometry alone and allows exact, provider-verified legacy seed destinations to
+receive the current registry attestation atomically during publication.
+
+Exactly five Node.js 22 v2 Functions were deployed to `europe-west1`:
+`saveRecommendation`, `publishRecommendationDraft`,
+`resolveRecommendationDestination`, `saveRoute`, and `publishRouteDraft`.
+Independent read-back found all five `ACTIVE` with 100% traffic on revisions
+`saverecommendation-00053-jiy`,
+`publishrecommendationdraft-00019-ret`,
+`resolverecommendationdestination-00047-lak`, `saveroute-00052-bad`, and
+`publishroutedraft-00018-tic`; their updates completed between
+`2026-09-02T07:46:16.786Z` and `2026-09-02T07:46:21.685Z`.
+
+The affected 135 destination, recommendation, policy, and route tests passed
+under Node.js 22. PR validation, CodeQL, Semgrep, Gitleaks, dependency review,
+history scanning, and security-invariant checks also passed. A post-deploy log
+query returned zero `ERROR` entries for the five targets, and an
+unauthenticated publication probe returned the expected HTTP 401. No Hosting,
+Rules, indexes, Storage, Auth, IAM, EAS build/update, store submission, or
+production-document mutation accompanied this Functions-only release.
+
 ### Destination policy, automatic locality approval, and production repair
 
 On `2026-09-01`, the destination-policy rollout from
