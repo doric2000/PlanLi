@@ -229,7 +229,7 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
           showsVerticalScrollIndicator={false}
         >
           <RecommendationHero
-            item={routeData}
+            item={{ ...routeData, id: routeId }}
             snapshotData={snapshotData}
             favoriteType="routes"
             imageUrls={images}
@@ -424,8 +424,6 @@ function RouteDetailLoaded({ routeData, navigation, initialCommentsOpen, initial
             isLiked={isLiked}
             likeCount={likeCount}
             commentsCount={commentsCount}
-            reportTarget={{ type: 'route', id: routeId }}
-            ownerId={routeData?.ownerId}
             onCommentPress={() => setCommentsVisible(true)}
             onLikePress={toggleLike}
             onLikesListPress={() => setLikesVisible(true)}

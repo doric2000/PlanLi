@@ -52,6 +52,10 @@ export const contentPublishBannerStyles = StyleSheet.create({
 // components/ActionMenu.js
 export const actionMenuStyles = StyleSheet.create({
   menuBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 6,
     borderRadius: 999,
   },

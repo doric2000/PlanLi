@@ -13,6 +13,7 @@ test('production Storage CORS excludes development and wildcard origins', () => 
   assert.deepEqual(origins.sort(), [
     'https://planli-f0b12.firebaseapp.com',
     'https://planli-f0b12.web.app',
+    'https://planli.cc',
   ]);
   assert.equal(origins.some((origin) => /localhost|127\.0\.0\.1|\*/.test(origin)), false);
   assert.equal(entries.every((entry) => (entry.method || []).includes('DELETE')), true);

@@ -64,7 +64,7 @@ jest.mock('../src/components/Avatar', () => {
   const { View } = require('react-native');
   return { Avatar: () => <View /> };
 });
-jest.mock('../src/components/ActionMenu', () => ({ ActionMenu: () => null }));
+jest.mock('../src/components/ContentActionMenu', () => () => null);
 jest.mock('../src/components/ActionBar', () => {
   const { View } = require('react-native');
   return () => <View testID="action-bar" />;

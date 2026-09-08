@@ -6,6 +6,7 @@ import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { BackButton } from './BackButton';
 import CachedImage, { prefetchImage } from './CachedImage';
 import FavoriteButton from './FavoriteButton';
+import ContentActionMenu from './ContentActionMenu';
 import RtlPagedFlatList from './RtlPagedFlatList';
 import { common, cards } from '../styles';
 import { getTravelCategoryPresentation } from '../constants/travelPresentation';
@@ -29,6 +30,17 @@ export const RecommendationHero = ({
     [imageUrls, item]
   );
   const hasImage = images.length > 0;
+  const renderContentActions = () => (
+    <View style={styles.contentActions}>
+      <FavoriteButton type={favoriteType} id={item.id} variant={hasImage ? 'light' : 'dark'} snapshotData={snapshotData} />
+      <ContentActionMenu
+        target={{ type: favoriteType === 'routes' ? 'route' : 'recommendation', id: item.id }}
+        ownerId={item.ownerId}
+        subjectLabel={favoriteType === 'routes' ? 'המסלול' : 'ההמלצה'}
+        iconColor={hasImage ? '#FFFFFF' : undefined}
+      />
+    </View>
+  );
   const categoryPresentation = useMemo(
     () => getTravelCategoryPresentation(item?.categoryId, item?.category),
     [item?.category, item?.categoryId]
@@ -73,7 +85,7 @@ export const RecommendationHero = ({
         </View>
         <View style={styles.rtlActionsRow} testID="recommendation-hero-actions">
           <BackButton color="dark" variant="solid" iconDirection="rtl" />
-          <FavoriteButton type={favoriteType} id={item.id} variant="dark" snapshotData={snapshotData} />
+          {renderContentActions()}
         </View>
       </View>
     );
@@ -169,7 +181,7 @@ export const RecommendationHero = ({
       >
         <View style={styles.rtlActionsRow} pointerEvents="box-none" testID="recommendation-hero-actions">
           <BackButton iconDirection="rtl" />
-          <FavoriteButton type={favoriteType} id={item.id} variant="light" snapshotData={snapshotData} />
+          {renderContentActions()}
         </View>
       </LinearGradient>
     </View>
@@ -211,5 +223,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  contentActions: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
   },
 });
