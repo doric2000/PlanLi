@@ -10,7 +10,7 @@ import { setBlockedUser, submitReport } from '../../../services/SocialService';
 import { colors, moderationStyles as styles } from '../../../styles';
 import { REPORT_CATEGORIES } from '../constants/reportCategories';
 
-export default function ReportButton({ target, ownerId, compact = false, color = colors.textSecondary, subjectLabel = 'תוכן' }) {
+export default function ReportButton({ target, ownerId, compact = false, color = colors.textSecondary, subjectLabel = 'תוכן', renderTrigger }) {
   const { user, status, ensureCapability, handleCallableAuthError } = useAuth();
   const [visible, setVisible] = useState(false);
   const [category, setCategory] = useState(null);
@@ -21,7 +21,7 @@ export default function ReportButton({ target, ownerId, compact = false, color =
     !target?.id
     || ownerId === user?.uid
     || [AUTH_STATES.GUEST, AUTH_STATES.EMAIL_VERIFICATION_REQUIRED].includes(status)
-  ) return null;
+  ) return renderTrigger ? renderTrigger({ onReport: undefined }) : null;
 
   const open = async () => {
     if (!await ensureCapability(CAPABILITIES.ACTIVE)) return;
@@ -70,10 +70,10 @@ export default function ReportButton({ target, ownerId, compact = false, color =
 
   return (
     <>
-      <Pressable style={styles.reportButton} onPress={open} accessibilityRole="button" accessibilityLabel={`דיווח על ${subjectLabel}`}>
+      {renderTrigger ? renderTrigger({ onReport: open }) : <Pressable style={styles.reportButton} onPress={open} accessibilityRole="button" accessibilityLabel={`דיווח על ${subjectLabel}`}>
         <Ionicons name="flag-outline" size={compact ? 19 : 21} color={color} />
         {!compact ? <AppText style={[styles.reportLabel, { color }]}>דיווח</AppText> : null}
-      </Pressable>
+      </Pressable>}
       <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
         <Pressable style={styles.overlay} onPress={close}>
           <Pressable style={styles.sheet} onPress={() => {}}>

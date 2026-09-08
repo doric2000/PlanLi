@@ -64,11 +64,6 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' })
 				onLikePress={toggleLike}
 				onLikesListPress={() => setShowLikesModal(true)}
 				contentLabel={contentLabel}
-				reportTarget={{
-					type: collectionName === 'routes' ? 'route' : collectionName === 'trips' ? 'trip' : 'recommendation',
-					id: item.id,
-				}}
-				ownerId={item.ownerId}
 			/>
 
 			<LikesModal

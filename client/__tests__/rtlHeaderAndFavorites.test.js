@@ -9,6 +9,8 @@ import { RecommendationHero } from '../src/components/RecommendationHero';
 import { colors, radii, TAB_HERO_BASE_HEIGHT } from '../src/styles';
 
 const mockUseFavorite = jest.fn();
+const mockContentActionMenu = jest.fn(() => null);
+jest.mock('../src/components/ContentActionMenu', () => (props) => mockContentActionMenu(props));
 const mockUseSafeAreaInsets = jest.fn(() => ({ top: 0, right: 0, bottom: 0, left: 0 }));
 
 jest.mock('../src/hooks/useFavorite', () => ({
@@ -114,6 +116,9 @@ describe('RTL recommendation actions', () => {
     expect(style.flexDirection).toBe('row-reverse');
     expect(style.justifyContent).toBe('space-between');
     expect(getByTestId('icon-chevron-forward')).toBeTruthy();
+    expect(mockContentActionMenu).toHaveBeenLastCalledWith(expect.objectContaining({
+      target: { type: 'recommendation', id: item.id },
+    }));
   });
 
   it('supports the shared route hero without changing recommendation defaults', () => {
@@ -127,6 +132,9 @@ describe('RTL recommendation actions', () => {
       />
     );
     expect(mockUseFavorite).toHaveBeenCalledWith('routes', 'route-1', {});
+    expect(mockContentActionMenu).toHaveBeenLastCalledWith(expect.objectContaining({
+      target: { type: 'route', id: 'route-1' },
+    }));
   });
 
   it('opens the selected detail image through the shared gallery callback', () => {

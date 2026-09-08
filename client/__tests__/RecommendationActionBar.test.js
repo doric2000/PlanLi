@@ -46,31 +46,35 @@ describe('RecommendationActionBar', () => {
 
     const bar = screen.getByTestId('recommendation-action-bar');
     expect(StyleSheet.flatten(bar.props.style)).toMatchObject({
-      height: 52,
-      minHeight: 52,
-      flexDirection: 'row-reverse',
+      direction: 'ltr',
       backgroundColor: '#FFFFFF',
+      paddingHorizontal: 16,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-row').props.style)).toMatchObject({
+      minHeight: 56,
+      flexDirection: 'row-reverse',
+      justifyContent: 'flex-start',
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-divider').props.style)).toMatchObject({
+      height: StyleSheet.hairlineWidth,
     });
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-like').props.style)).toMatchObject({
       width: 44,
-      height: 44,
+      minHeight: 44,
     });
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-likes').props.style)).toMatchObject({
-      minWidth: 44,
+      width: 44,
       minHeight: 44,
     });
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-comments').props.style)).toMatchObject({
-      minWidth: 44,
+      width: 88,
       minHeight: 44,
     });
     expect(StyleSheet.flatten(screen.getByTestId('recommendation-action-share').props.style)).toMatchObject({
       minWidth: 44,
       minHeight: 44,
     });
-    expect(StyleSheet.flatten(screen.getByTestId('report-button').props.style)).toMatchObject({
-      minWidth: 44,
-      minHeight: 44,
-    });
+    expect(screen.queryByTestId('report-button')).toBeNull();
     expect(screen.getByTestId('icon-heart').props['data-color']).toBe('#1E3A5F');
     expect(screen.getByTestId('icon-chatbubble-outline').props['data-color']).toBe('#1E3A5F');
     expect(screen.getByLabelText('ביטול לייק').props.accessibilityState).toEqual({ selected: true });
@@ -78,7 +82,7 @@ describe('RecommendationActionBar', () => {
     expect(screen.getByLabelText('4 תגובות')).toBeTruthy();
     expect(screen.getByLabelText('שיתוף המסלול')).toBeTruthy();
     expect(screen.getByText('שיתוף')).toBeTruthy();
-    expect(screen.getByLabelText('דיווח על המסלול')).toBeTruthy();
+    expect(screen.queryByLabelText('דיווח על המסלול')).toBeNull();
   });
 
   it('keeps zero counters visible and hides share without a callback', () => {
@@ -121,12 +125,14 @@ describe('RecommendationActionBar', () => {
       />,
     );
 
-    fireEvent.press(screen.getByTestId('recommendation-action-like'));
+    const stopPropagation = jest.fn();
+    fireEvent.press(screen.getByTestId('recommendation-action-like'), { stopPropagation });
     fireEvent.press(screen.getByTestId('recommendation-action-likes'));
     fireEvent.press(screen.getByTestId('recommendation-action-comments'));
     fireEvent.press(screen.getByTestId('recommendation-action-share'));
 
     expect(handlers.like).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
     expect(handlers.likesList).toHaveBeenCalledTimes(1);
     expect(handlers.comments).toHaveBeenCalledTimes(1);
     expect(handlers.share).toHaveBeenCalledTimes(1);

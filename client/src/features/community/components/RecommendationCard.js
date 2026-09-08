@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserData } from '../../../hooks/useUserData';
 import { Avatar } from '../../../components/Avatar';
-import { ActionMenu } from '../../../components/ActionMenu';
+import ContentActionMenu from '../../../components/ContentActionMenu';
 import { cards } from '../../../styles';
 import ActionBar from '../../../components/ActionBar';
 import CachedImage from '../../../components/CachedImage';
@@ -108,13 +108,12 @@ const RecommendationCard = ({ item, onCommentPress, onDeleted, showActionBar = t
             )}
           </View>
         </View>
-        {canManage ? (
-          <ActionMenu
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            title="ניהול המלצה"
-          />
-        ) : null}
+        <ContentActionMenu
+          target={{ type: 'recommendation', id: item.id }}
+          ownerId={ownerId}
+          onEdit={canManage ? handleEdit : undefined}
+          onDelete={canManage ? handleDelete : undefined}
+        />
       </View>
 
       {/* Image */}

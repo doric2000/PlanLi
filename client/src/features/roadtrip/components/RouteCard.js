@@ -16,7 +16,7 @@ import { Avatar } from "../../../components/Avatar";
 import CachedImage, { prefetchImage } from "../../../components/CachedImage";
 import RtlPagedFlatList from "../../../components/RtlPagedFlatList";
 import PlacesRoute from "./PlacesRoute";
-import { ActionMenu } from "../../../components/ActionMenu";
+import ContentActionMenu from "../../../components/ContentActionMenu";
 import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
 import PreferenceContextLine from "../../../components/PreferenceContextLine";
@@ -37,7 +37,6 @@ import { usePersonalizationFeedback } from "../../profile/context/Personalizatio
 
 const text = {
 	defaultUser: "\u05de\u05d8\u05d9\u05d9\u05dc PlanLi",
-	menuTitle: "\u05e0\u05d9\u05d4\u05d5\u05dc \u05de\u05e1\u05dc\u05d5\u05dc",
 	days: "\u05d9\u05de\u05d9\u05dd",
 	noImage: "\u05de\u05e1\u05dc\u05d5\u05dc \u05d8\u05d9\u05d5\u05dc",
 };
@@ -195,12 +194,14 @@ export const RouteCard = ({
 					variant="overlay"
 					snapshotData={snapshotData}
 				/>
-				{canManage && showActionMenu ? (
-					<ActionMenu
+				{showActionMenu ? (
+					<ContentActionMenu
+						target={{ type: 'route', id: item.id }}
+						ownerId={item.ownerId}
+						subjectLabel="המסלול"
 						iconColor="#FFFFFF"
-						onEdit={onEdit}
-						onDelete={guardedDelete}
-						title={text.menuTitle}
+						onEdit={canManage ? onEdit : undefined}
+						onDelete={canManage && onDelete ? guardedDelete : undefined}
 					/>
 				) : null}
 			</View>
@@ -412,11 +413,13 @@ export const RouteCard = ({
 						variant="light"
 						snapshotData={snapshotData}
 					/>
-					{canManage && showActionMenu && (
-						<ActionMenu
-							onEdit={onEdit}
-							onDelete={guardedDelete}
-							title={text.menuTitle}
+					{showActionMenu && (
+						<ContentActionMenu
+							target={{ type: 'route', id: item.id }}
+							ownerId={item.ownerId}
+							subjectLabel="המסלול"
+							onEdit={canManage ? onEdit : undefined}
+							onDelete={canManage && onDelete ? guardedDelete : undefined}
 						/>
 					)}
 				</View>

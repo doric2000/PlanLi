@@ -167,8 +167,6 @@ function RecommendationDetailLoaded({ item, postId, navigation, initialCommentsO
             isLiked={isLiked}
             likeCount={likeCount}
             commentsCount={commentsCount}
-            reportTarget={{ type: 'recommendation', id: postId }}
-            ownerId={item?.ownerId}
             onCommentPress={() => setCommentsModalVisible(true)}
             onLikePress={toggleLike}
             onLikesListPress={() => setLikesModalVisible(true)}

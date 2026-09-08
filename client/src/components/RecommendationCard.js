@@ -8,7 +8,7 @@ import { useUserData } from '../hooks/useUserData';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { useStableCarouselLayout } from '../hooks/useStableCarouselLayout';
 import { Avatar } from './Avatar';
-import { ActionMenu } from './ActionMenu';
+import ContentActionMenu from './ContentActionMenu';
 import CachedImage, { prefetchImage } from './CachedImage';
 import RtlPagedFlatList from './RtlPagedFlatList';
 import { cards, colors, recommendationCardStyles as styles } from '../styles';
@@ -248,14 +248,13 @@ const RecommendationCard = ({
           variant={overlay ? "overlay" : "light"}
           snapshotData={snapshotData}
         />
-        {canManage ? (
-          <ActionMenu
-            iconColor={overlay ? "#FFFFFF" : undefined}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            title="ניהול המלצה"
-          />
-        ) : null}
+        <ContentActionMenu
+          target={{ type: 'recommendation', id: item.id }}
+          ownerId={ownerId}
+          iconColor={overlay ? "#FFFFFF" : undefined}
+          onEdit={canManage ? handleEdit : undefined}
+          onDelete={canManage ? handleDelete : undefined}
+        />
       </View>
     </View>
   );
@@ -291,13 +290,12 @@ const RecommendationCard = ({
             variant="light"
             snapshotData={snapshotData}
           />
-          {canManage ? (
-            <ActionMenu
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              title="ניהול המלצה"
-            />
-          ) : null}
+          <ContentActionMenu
+            target={{ type: 'recommendation', id: item.id }}
+            ownerId={ownerId}
+            onEdit={canManage ? handleEdit : undefined}
+            onDelete={canManage ? handleDelete : undefined}
+          />
         </View>
       </View>
       )}
