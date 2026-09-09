@@ -26,8 +26,11 @@ appId: com.planli.planlitravels.e2e
     visible:
       id: region-selector-screen
     timeout: 300000
+- tapOn: "האזור הבא"
+- tapOn: "האזור הבא"
+- assertVisible: "לגלות את אירופה"
 - tapOn:
-    id: region-option-europe
+    id: atlas-confirm
 - extendedWaitUntil:
     visible:
       id: home-tab-header

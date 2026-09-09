@@ -1,0 +1,61 @@
+appId: com.planli.planlitravels.e2e
+name: Atlas preview, cancel and global discovery
+---
+- runFlow: helpers/boot.yml
+- scrollUntilVisible:
+    element:
+      id: home-region-preview-change
+    direction: DOWN
+- tapOn:
+    id: home-region-preview-change
+- extendedWaitUntil:
+    visible: "עצירת סיבוב אוטומטי"
+    timeout: 120000
+- assertNotVisible:
+    id: atlas-globe-error
+- takeScreenshot: atlas-europe
+- swipe:
+    start: 35%, 45%
+    end: 65%, 45%
+    duration: 600
+- assertVisible: "הפעלת סיבוב אוטומטי"
+- takeScreenshot: atlas-globe-drag
+- scrollUntilVisible:
+    element:
+      id: region-option-global
+    direction: DOWN
+- tapOn:
+    id: region-option-global
+- assertVisible: "לגלות את כל העולם"
+- scrollUntilVisible:
+    element:
+      id: region-selector-cancel
+    direction: UP
+- tapOn:
+    id: region-selector-cancel
+- assertVisible:
+    id: home-region-preview-change
+- tapOn:
+    id: home-region-preview-change
+- assertVisible: "לגלות את אירופה"
+- scrollUntilVisible:
+    element:
+      id: region-option-global
+    direction: DOWN
+- tapOn:
+    id: region-option-global
+- takeScreenshot: atlas-global
+- tapOn:
+    id: atlas-confirm
+- assertVisible:
+    id: home-tab-header
+- tapOn:
+    id: main-tab-community
+- assertVisible: "האזור הנבחר: כל העולם. לחיצה להחלפה"
+- takeScreenshot: atlas-global-community
+- tapOn:
+    id: community-region-change
+- assertVisible: "לגלות את כל העולם"
+- assertNotVisible:
+    id: atlas-globe-error
+- takeScreenshot: atlas-global-restored

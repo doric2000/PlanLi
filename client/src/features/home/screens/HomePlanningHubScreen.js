@@ -122,7 +122,7 @@ export function buildHomeSearchPool({
   favoriteDestinations,
 }) {
   const localDestinations = mergeDestinations(recentDestinations, favoriteDestinations);
-  if (!regionDiscoveryEnabled) {
+  if (!regionDiscoveryEnabled || !selectedRegionId) {
     return mergeDestinations(
       searchResultsLoaded ? searchDestinationsList : recentDestinations,
       favoriteDestinations,
@@ -183,6 +183,7 @@ export default function HomePlanningHubScreen({ navigation }) {
   const favoriteCities = useFavoriteCityIds({ enabled: Boolean(user) && !isGuest });
   const {
     selectedRegionId,
+    selectedMode,
     hasSeenPrompt: hasSeenRegionPrompt,
     loading: regionSelectionLoading,
   } = useOptionalRegionSelection();
@@ -758,7 +759,7 @@ export default function HomePlanningHubScreen({ navigation }) {
           value={searchQuery}
           onChangeValue={setSearchQuery}
           localResults={localAutocompleteResults}
-          idleLocalResults={isRegionDiscoveryEnabled()
+          idleLocalResults={isRegionDiscoveryEnabled() && selectedRegionId
             ? recentDestinations.filter((item) => item.discoveryRegionId === selectedRegionId)
             : recentDestinations}
           idleLocalTitle="חיפושים אחרונים"
@@ -790,6 +791,7 @@ export default function HomePlanningHubScreen({ navigation }) {
       {isRegionSelectorPreviewEnabled() || isRegionDiscoveryEnabled() ? (
         <HomeRegionPreviewChip
           regionId={selectedRegionId}
+          mode={selectedMode}
           onPress={() => openRegionSelectorFrom(navigation, 'home-change')}
         />
       ) : null}

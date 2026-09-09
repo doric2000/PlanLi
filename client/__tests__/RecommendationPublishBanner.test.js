@@ -9,12 +9,13 @@ const mockDiscard = jest.fn();
 const mockBeginReview = jest.fn();
 const mockSelectRegion = jest.fn();
 let mockPublishState;
+let mockRegionId = 'europe';
 
 jest.mock('../src/features/community/publishing/RecommendationPublishContext', () => ({
   useContentPublish: () => mockPublishState,
 }));
 jest.mock('../src/features/region/context/RegionSelectionState', () => ({
-  useOptionalRegionSelection: () => ({ selectedRegionId: 'europe', selectRegion: mockSelectRegion }),
+  useOptionalRegionSelection: () => ({ selectedRegionId: mockRegionId, selectRegion: mockSelectRegion }),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 10, left: 0 }),
@@ -28,7 +29,7 @@ jest.mock('@expo/vector-icons', () => {
 describe('RecommendationPublishBanner', () => {
   const originalRegionFlag = process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.clearAllMocks(); mockRegionId = 'europe';
     mockPublishState = {
       activeJob: { id: 'job-1', status: 'uploading', stage: 'uploading', progress: 0.42 },
       bannerJobCount: 1,
@@ -42,6 +43,15 @@ describe('RecommendationPublishBanner', () => {
   afterEach(() => {
     if (originalRegionFlag === undefined) delete process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED;
     else process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = originalRegionFlag;
+  });
+
+  it('does not suggest changing region after publishing in global mode', () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true'; mockRegionId = null;
+    mockPublishState.activeJob = { id: 'job-1', contentType: 'recommendation', status: 'success', progress: 1,
+      result: { recommendationId: 'r1', publicationStatus: 'active', discoveryRegionId: 'israel' } };
+    const screen = render(<RecommendationPublishBanner />);
+    expect(screen.queryByTestId('publish-switch-region')).toBeNull();
+    expect(screen.getByText('ההמלצה פורסמה בהצלחה')).toBeTruthy();
   });
 
   it('offers view and explicit switch when published outside the selected region', () => {

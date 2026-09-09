@@ -244,4 +244,18 @@ describe('useRecommendations request behavior', () => {
     );
     consoleError.mockRestore();
   });
+  it('removes the region filter in global mode and restores it on return', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true'; mockRegionId = 'europe';
+    requestPersonalizedRecommendations.mockImplementation((request) => ({ requested: true, source: 'network',
+      promise: Promise.resolve({ items: request.regionId ? [{ id: 'europe', ownerId: 'visible' }] : [{ id: 'europe', ownerId: 'visible' }, { id: 'africa', ownerId: 'visible' }, { id: 'hidden', ownerId: 'blocked-user' }] }) }));
+    const { result, rerender } = renderHook(() => useRecommendations());
+    await act(async () => { await focusEffect(); });
+    mockRegionId = null; rerender({}); await act(async () => { await focusEffect(); });
+    expect(requestPersonalizedRecommendations.mock.calls.at(-1)[0].regionId).toBeUndefined();
+    expect(result.current.data.map((i) => i.id)).toEqual(['europe', 'africa']);
+    mockRegionId = 'europe'; rerender({}); await act(async () => { await focusEffect(); });
+    expect(requestPersonalizedRecommendations.mock.calls.at(-1)[0].regionId).toBe('europe');
+    expect(result.current.data.map((i) => i.id)).toEqual(['europe']);
+  });
+
 });

@@ -1,116 +1,87 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 import {
-  isSupportedRegionId,
-  REGION_SELECTION_SCHEMA_VERSION,
-  REGION_SELECTION_STORAGE_KEY,
+  normalizeDiscoveryScope, REGION_SELECTION_SCHEMA_VERSION, REGION_SELECTION_STORAGE_KEY,
 } from '../regionDefinitions';
 
 export function createEmptyRegionSelection() {
-  return {
-    version: REGION_SELECTION_SCHEMA_VERSION,
-    regionId: null,
-    selectedAt: null,
-    hasSeenPrompt: false,
-    pendingAccountSync: null,
-  };
+  return { version: REGION_SELECTION_SCHEMA_VERSION, mode: null, regionId: null,
+    selectedAt: null, hasSeenPrompt: false, pendingAccountSync: null };
+}
+
+export function selectionIdentity(value) {
+  const scope = normalizeDiscoveryScope(value);
+  return [scope.mode || '', scope.regionId || '', value?.selectedAt || ''].join(':');
 }
 
 export function normalizeRegionSelection(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!value || ![1, 2, REGION_SELECTION_SCHEMA_VERSION].includes(value.version)
+    || typeof value.hasSeenPrompt !== 'boolean') return createEmptyRegionSelection();
+  const scope = normalizeDiscoveryScope(value.version < 3 ? { regionId: value.regionId } : value);
+  if (!scope.mode) {
+    return value.regionId == null && value.mode == null
+      ? { ...createEmptyRegionSelection(), hasSeenPrompt: value.hasSeenPrompt }
+      : createEmptyRegionSelection();
+  }
+  if (typeof value.selectedAt !== 'string' || !Number.isFinite(Date.parse(value.selectedAt))) {
     return createEmptyRegionSelection();
   }
-  if (![1, REGION_SELECTION_SCHEMA_VERSION].includes(value.version)) {
-    return createEmptyRegionSelection();
+  const pending = value.pendingAccountSync;
+  const normalized = { version: REGION_SELECTION_SCHEMA_VERSION, ...scope,
+    selectedAt: value.selectedAt, hasSeenPrompt: value.hasSeenPrompt, pendingAccountSync: null };
+  if (pending && typeof pending.uid === 'string' && pending.uid
+    && selectionIdentity(pending) === selectionIdentity(normalized)) {
+    normalized.pendingAccountSync = { uid: pending.uid, ...scope, selectedAt: value.selectedAt };
   }
-  if (typeof value.hasSeenPrompt !== 'boolean') {
-    return createEmptyRegionSelection();
-  }
-  if (value.regionId === null) {
-    return {
-      version: REGION_SELECTION_SCHEMA_VERSION,
-      regionId: null,
-      selectedAt: null,
-      hasSeenPrompt: value.hasSeenPrompt,
-      pendingAccountSync: null,
-    };
-  }
-  if (!isSupportedRegionId(value.regionId) || typeof value.selectedAt !== 'string') {
-    return createEmptyRegionSelection();
-  }
-  const selectedAtMs = Date.parse(value.selectedAt);
-  if (!Number.isFinite(selectedAtMs)) {
-    return createEmptyRegionSelection();
-  }
-  return {
-    version: REGION_SELECTION_SCHEMA_VERSION,
-    regionId: value.regionId,
-    selectedAt: value.selectedAt,
-    hasSeenPrompt: value.hasSeenPrompt,
-    pendingAccountSync: value.version === REGION_SELECTION_SCHEMA_VERSION
-      && value.pendingAccountSync
-      && typeof value.pendingAccountSync.uid === 'string'
-      && isSupportedRegionId(value.pendingAccountSync.regionId)
-      ? value.pendingAccountSync
-      : null,
-  };
+  return normalized;
 }
 
 export async function loadRegionSelection() {
   try {
     const serialized = await AsyncStorage.getItem(REGION_SELECTION_STORAGE_KEY);
     return normalizeRegionSelection(serialized ? JSON.parse(serialized) : null);
-  } catch {
-    return createEmptyRegionSelection();
-  }
+  } catch { return createEmptyRegionSelection(); }
 }
 
-async function saveRegionSelection(state) {
-  const normalized = normalizeRegionSelection(state);
-  await AsyncStorage.setItem(REGION_SELECTION_STORAGE_KEY, JSON.stringify(normalized));
-  return normalized;
+// Serialize read/modify/write operations, including late sync acknowledgements.
+let mutations = Promise.resolve();
+function updateSelection(update) {
+  const operation = mutations.then(async () => {
+    const current = await loadRegionSelection();
+    const next = normalizeRegionSelection(update(current));
+    await AsyncStorage.setItem(REGION_SELECTION_STORAGE_KEY, JSON.stringify(next));
+    return next;
+  });
+  mutations = operation.catch(() => {});
+  return operation;
 }
 
-export async function saveSelectedRegion(regionId, now = new Date()) {
-  if (!isSupportedRegionId(regionId)) {
-    throw new Error('Unsupported region ID');
-  }
-  return saveRegionSelection({
-    version: REGION_SELECTION_SCHEMA_VERSION,
-    regionId,
-    selectedAt: now.toISOString(),
-    hasSeenPrompt: true,
-    pendingAccountSync: null,
+export function saveDiscoverySelection(value, now = new Date(), uid = null) {
+  const scope = normalizeDiscoveryScope(value);
+  if (!scope.mode) return Promise.reject(new Error('Unsupported region ID'));
+  const selectedAt = now.toISOString();
+  return updateSelection(() => ({
+    version: REGION_SELECTION_SCHEMA_VERSION, ...scope, selectedAt, hasSeenPrompt: true,
+    pendingAccountSync: uid ? { uid, ...scope, selectedAt } : null,
+  }));
+}
+
+export const saveSelectedRegion = (regionId, now = new Date()) =>
+  saveDiscoverySelection({ mode: 'region', regionId }, now);
+
+export function savePendingAccountSync(uid, regionId, selectedAt, mode = 'region') {
+  return updateSelection((current) => selectionIdentity(current) === selectionIdentity({ mode, regionId, selectedAt })
+    ? { ...current, pendingAccountSync: { uid, mode, regionId, selectedAt } } : current);
+}
+
+export function clearPendingAccountSync(uid, expectedSelection) {
+  return updateSelection((current) => {
+    if (current.pendingAccountSync?.uid !== uid
+      || (expectedSelection && selectionIdentity(current.pendingAccountSync) !== selectionIdentity(expectedSelection))) return current;
+    return { ...current, pendingAccountSync: null };
   });
 }
 
-export async function savePendingAccountSync(uid, regionId, selectedAt) {
-  const current = await loadRegionSelection();
-  return saveRegionSelection({
-    ...current,
-    pendingAccountSync: { uid, regionId, selectedAt },
-  });
-}
-
-export async function clearPendingAccountSync(uid) {
-  const current = await loadRegionSelection();
-  if (current.pendingAccountSync?.uid !== uid) return current;
-  return saveRegionSelection({ ...current, pendingAccountSync: null });
-}
-
-export async function saveRegionPromptDismissed() {
-  const current = await loadRegionSelection();
-  return saveRegionSelection({
-    ...current,
-    hasSeenPrompt: true,
-  });
-}
-
-export async function clearSelectedRegion() {
-  const current = await loadRegionSelection();
-  return saveRegionSelection({
-    ...current,
-    regionId: null,
-    selectedAt: null,
-  });
-}
+export const saveRegionPromptDismissed = () => updateSelection((current) => ({ ...current, hasSeenPrompt: true }));
+export const clearSelectedRegion = () => updateSelection((current) => ({
+  ...createEmptyRegionSelection(), hasSeenPrompt: current.hasSeenPrompt,
+}));

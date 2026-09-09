@@ -12,7 +12,7 @@ import { isRegionDiscoveryEnabled } from '../features/region/regionDefinitions';
 
 export default function PreferenceSetupGate({ navigation, route }) {
   const { status, loading, authFlowInProgress } = useAuth();
-  const { selectedRegionId, loading: regionLoading } = useOptionalRegionSelection();
+  const { selectedRegionId, selectedMode, loading: regionLoading } = useOptionalRegionSelection();
   const allowUnverified = route?.params?.allowUnverified === true;
   const allowIncomplete = route?.params?.allowIncomplete === true;
 
@@ -43,7 +43,7 @@ export default function PreferenceSetupGate({ navigation, route }) {
     );
   }
 
-  if (isRegionDiscoveryEnabled() && (regionLoading || !selectedRegionId)) {
+  if (isRegionDiscoveryEnabled() && (regionLoading || (!selectedRegionId && selectedMode !== 'global'))) {
     if (regionLoading) {
       return <SafeAreaView style={common.container}><View style={common.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View></SafeAreaView>;
     }

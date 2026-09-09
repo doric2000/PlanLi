@@ -183,4 +183,13 @@ describe('useMapRecommendations', () => {
       { forceRefresh: false },
     );
   });
+  it('drops the geographic region filter in global mode while retaining viewport bounds', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true'; mockRegionId = 'europe';
+    getMapRecommendations.mockResolvedValue({ items: [] });
+    const { result, rerender } = renderHook(() => useMapRecommendations({ enabled: true, request: {} }));
+    await act(async () => result.current.searchViewport(viewport));
+    mockRegionId = null; rerender({});
+    await waitFor(() => expect(getMapRecommendations).toHaveBeenLastCalledWith({ viewport }, { forceRefresh: false }));
+  });
+
 });

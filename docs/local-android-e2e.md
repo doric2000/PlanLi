@@ -44,7 +44,9 @@ business code. Emulator App Check uses a fixture token; hardware attestation is
 not established by this test.
 
 Scenarios: Hebrew guest navigation, verified email sign-in, photo publication,
-photo swipes/action menus, and disabled emulator Wi-Fi/mobile data followed by reconnection and retry.
+photo swipes/action menus, Atlas globe drag and region/global confirmation/cancel,
+and disabled emulator Wi-Fi/mobile data followed by reconnection and retry.
+Run the focused Atlas scenario with `npm run test:android -- --flows=atlas`.
 Logs, JUnit output and screenshots are kept under .codex_tmp/validation/android.
 A passing runtime receipt includes the tested inputs and flow list; failed or
 changed results cannot satisfy focused validation. No device receipt is reused in

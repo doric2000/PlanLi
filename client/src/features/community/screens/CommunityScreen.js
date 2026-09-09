@@ -92,7 +92,7 @@ function mergeFocusedRecommendation(recommendations, focusedRecommendation, mapF
 }
 
 export default function CommunityScreen({ navigation, route }) {
-  const { selectedRegionId } = useOptionalRegionSelection();
+  const { selectedRegionId, selectedMode } = useOptionalRegionSelection();
   useNoyaMainTabRegistration(navigation);
   const { activeDefinition, pendingMainDefinition } = useNoyaTour();
   const communitySearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communitySearch);
@@ -132,6 +132,12 @@ export default function CommunityScreen({ navigation, route }) {
     setDiscoveryRequest,
   } = useRecommendations(sortBy);
   const { filteredData, filters, isFiltered, updateFilters, replaceFilters, clearFilters } = useRecommendationFilter(recommendations);
+  const previousScope = useRef(selectedRegionId);
+  useEffect(() => {
+    if (previousScope.current === selectedRegionId) return;
+    previousScope.current = selectedRegionId;
+    if (isRegionDiscoveryEnabled()) updateFilters({ destinations: [] });
+  }, [selectedRegionId]);
   const discoveryRequest = useMemo(() => discoveryRequestFromFilters(filters), [filters]);
   const {
     items: mapRecommendations,
@@ -273,6 +279,7 @@ export default function CommunityScreen({ navigation, route }) {
         isRegionDiscoveryEnabled() ? (
           <RegionHeaderAction
             regionId={selectedRegionId}
+            mode={selectedMode}
             onPress={() => navigation.navigate('RegionSelector', { source: 'community-change' })}
             testID="community-region-change"
           />
