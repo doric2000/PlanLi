@@ -108,7 +108,13 @@ Planner comparisons count scanner jobs, excluding checkout/planning/aggregation:
 | Client source merged to main | 4 | 2 (CodeQL, secrets) |
 
 These are deterministic routing counts, not measured GitHub execution times.
-The workflows have not yet been pushed or run remotely.
+The first remote run in PR #349 skipped unrelated Functions, Rules and taxonomy
+checks. Client validation passed in 3m14s and planner validation in 11 seconds;
+Semgrep, secret scans, dependency review and dependency audits passed. CodeQL
+flagged a combined regex and file-derived local test payload. The regex was
+split into independent predicates; seed and smoke now share in-code synthetic
+account/recommendation definitions. Ten focused routing tests passed in 115 ms
+and the revised real emulator smoke passed in 2.624 seconds after startup/seed.
 
 A local comparison using the same eight policy tests executed 8 tests before
 and 0 on receipt reuse. Measured wall times were 1.022 seconds before,

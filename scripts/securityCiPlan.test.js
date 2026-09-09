@@ -24,6 +24,15 @@ test('main keeps CodeQL and delta secrets without repeating PR dependency or inv
   assert.equal(p.dependencyReview, false);
   assert.deepEqual(p.audits, []);
 });
+
+test('source filtering excludes complete test/dependency segments and test suffixes', () => {
+  const excluded = ['client/__tests__/screen.js', 'functions/node_modules/pkg/index.js',
+    'scripts/check.test.cjs'];
+  assert.equal(plan(excluded).codeql, false);
+  assert.deepEqual(plan([...excluded, 'client/src/__tests__helpers/screen.js',
+    'scripts/check.test.js.backup.js']).semgrepFiles,
+  ['client/src/__tests__helpers/screen.js', 'scripts/check.test.js.backup.js']);
+});
 test('dependency checks select the changed workspace and review Actions dependencies', () => {
   assert.deepEqual(plan(['client/package-lock.json']).audits, ['client']);
   assert.equal(plan(['.github/workflows/pr-validation.yml']).dependencyReview, true);

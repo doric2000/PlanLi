@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { createRequire } = require('node:module');
 const { ROOT, PROJECT, DIRECTORY, BUCKET, assertLocalEnvironment } = require('./environment');
 const { LOCAL_APP_CHECK_TOKEN } = require('../../client/src/config/localEmulators');
+const { ACCOUNT, recommendationFixture } = require('./fixtures');
 
 async function backendSmoke() {
   assertLocalEnvironment();
@@ -19,7 +20,9 @@ async function backendSmoke() {
   const storage = getStorage(app);
   connectStorageEmulator(storage, '127.0.0.1', 9199);
   try {
-  const fixture = JSON.parse(fs.readFileSync(path.join(DIRECTORY, 'fixture.json')));
+  const fromFunctions = createRequire(path.join(ROOT, 'functions/package.json'));
+  const { canonicalDestinationId } = fromFunctions('./canonicalDestinationRegistry');
+  const fixture = { ...ACCOUNT, cityId: canonicalDestinationId('GB', 'gb-london') };
   const session = await signInWithEmailAndPassword(auth, fixture.email, fixture.password);
   const idToken = await session.user.getIdToken();
   async function call(name, data, signedIn = true) {
@@ -43,7 +46,7 @@ async function backendSmoke() {
   await uploadBytes(ref(storage, objectPath), bytes, metadata);
   const media = await call('prepareMedia', { stagingPath: objectPath, kind: 'recommendation' });
   const saved = await call('saveRecommendation', { destinationRef: { countryId: 'GB', cityId: fixture.cityId },
-    recommendation: { ...fixture.recommendation, title: 'Local E2E Published', media: [media] } });
+    recommendation: { ...recommendationFixture([media]), title: 'Local E2E Published' } });
   assert.ok(saved.recommendationId, 'The real callable must return the published recommendation');
   await assert.rejects(uploadBytes(ref(storage, `media-staging/someone-else/${crypto.randomUUID()}.jpg`), bytes, metadata),
     (error) => error.code === 'storage/unauthorized');

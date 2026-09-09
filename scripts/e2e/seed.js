@@ -5,9 +5,8 @@ const crypto = require('node:crypto');
 const { createRequire } = require('node:module');
 const { ROOT, PROJECT, BUCKET, DIRECTORY, assertLocalEnvironment } = require('./environment');
 const fromFunctions = createRequire(path.join(ROOT, 'functions/package.json'));
-const EMAIL = 'traveler@example.test';
-const PASSWORD = 'Local-E2E-only-2468!';
-const UID = 'local-e2e-traveler';
+const { ACCOUNT, recommendationFixture } = require('./fixtures');
+const { email: EMAIL, password: PASSWORD, uid: UID } = ACCOUNT;
 
 async function seed() {
   assertLocalEnvironment();
@@ -57,9 +56,7 @@ async function seed() {
       metadata: { ownerUid: UID, variant: 'staging' } } });
     media.push(await fromFunctions('./mediaProcessor').prepareMedia({ admin, auth, data: { stagingPath, kind: 'recommendation' }, mediaBucket: BUCKET }));
   }
-  const recommendation = { taxonomyVersion: 5, title: 'Local E2E Gallery', description: 'Synthetic local recommendation',
-    category: 'Food', categoryId: 'food', tags: ['cafe'], budget: '$$', media,
-    attributes: { audienceScope: 'all', audiences: [], vibes: ['relaxed'], environment: 'indoor', needs: [], needsConfirmed: false } };
+  const recommendation = recommendationFixture(media);
   const { saveRecommendation } = fromFunctions('./recommendationService');
   const result = await saveRecommendation({ admin, auth, mediaBucket: BUCKET,
     data: { destinationRef: { countryId: 'GB', cityId }, recommendation } });

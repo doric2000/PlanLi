@@ -7,7 +7,8 @@ const { execFileSync } = require('node:child_process');
 const WEEKLY = '43 3 * * 1';
 const SOURCE = /\.[cm]?[jt]sx?$/i;
 const isSource = (file) => SOURCE.test(file)
-  && !/(?:^|\/)(?:__tests__|node_modules)\/|\.test\.[cm]?[jt]sx?$/i.test(file)
+  && !/(?:^|\/)(?:__tests__|node_modules)\//i.test(file)
+  && !/\.test\.[cm]?[jt]sx?$/i.test(file)
   && /^(?:client\/|functions\/|scripts\/|server\/|shared\/)/.test(file);
 const isSemgrepSource = (file) => isSource(file)
   && /^(?:functions\/|client\/src\/|client\/index\.js$|scripts\/)/.test(file);
