@@ -27,6 +27,12 @@ the existing Text Search quota remains zero. See
 
 ### Atlas native release (2026-09-09)
 
+**Current distribution:** Android **1.1.0 (10)** is available to the existing
+Google Play internal testers. iOS **1.1.1 (30)** is VALID / IN_BETA_TESTING in the
+existing **Team (Expo)** internal TestFlight group, independently verified at
+`2026-09-09T16:35:58.616Z`. Both use runtime **1.3.0**. Apple's public App Store
+version remains 1.1.0/build 28; no new public App Store review was submitted.
+
 PR [#354](https://github.com/doric2000/PlanLi/pull/354) merged as
 `890d70110de37ad1814b79c7c1b2106e42b74a54`. The release keeps marketing version
 `1.1.0` and uses runtime `1.3.0` for the new native WebView. Release input
@@ -91,6 +97,31 @@ Google Play internal release 7, **PlanLi 1.1.0 (10) – Atlas**, was published o
 **Available to internal testers**, version code 10, with no lost supported devices.
 The single non-blocking warning concerns the absent deobfuscation mapping file.
 [Internal-test install link](https://play.google.com/apps/internaltest/4701742858558783307).
+Replacement iOS build [b16eca67](https://expo.dev/accounts/doric2000/projects/client/builds/b16eca67-6291-4520-82b6-10cb1af190f5)
+was accepted at `2026-09-09T16:17:22.090Z` with build number 30, from merged
+PR [#355](https://github.com/doric2000/PlanLi/pull/355), source
+`263fccd283fa86ef9b52077232a8dbdfc02ab6cb`. All 1,067 archived source blobs
+matched; all 565 inspected upload files (19,951,230 bytes) matched the archive.
+The only client change from the initial Atlas release is `expo.ios.version: 1.1.1`.
+Native Info.plist introspection and iOS release configuration checks pass.
+Fresh Apple readback at `2026-09-09T16:10:35.242Z` verified candidate 1.1.1 is
+higher than approved 1.1.0. All applicable #355 CI checks passed.
+EAS CLI 22.6.0 reads the root `exp.version` for managed-build display metadata,
+so its `appVersion` field remains 1.1.0; the installed native config plugin
+resolves `ios.version` first, and the job overrides only the build number.
+The replacement build completed at `2026-09-09T16:25:27.975Z`. Independent
+inspection of its 40,537,721-byte IPA confirmed **1.1.1 (30)**, production
+identifier/channel, runtime 1.3.0, native WebView and all nine Atlas photos.
+IPA SHA-256: `afbcb6e6b37e0e72040501a1b5bd6de48ca166cc2c2606cbde9a323fbb8f78b4`.
+The verified IPA was delivered through Apple's official Build Upload API using
+the existing App Store Connect credentials, without another EAS Submit job.
+Apple upload ID: `666e1b3f-b965-4a56-980e-c0e4a18ad7cf`; file reservation:
+`2e7120b5-0b19-45f5-afad-0e5271dfdd03`. All eight parts uploaded; commit at
+`2026-09-09T16:31:43.373Z` returned file state COMPLETE with no errors/warnings.
+The accepted file-upload checksum is MD5; the independent local proof uses
+SHA-256. Apple upload processing reached **COMPLETE** at readback
+`2026-09-09T16:35:23.259Z`, identifying 1.1.1/build 30 with no errors, warnings
+or informational issues. Final internal TestFlight availability is being checked.
 No Atlas OTA was published to runtime 1.2.0. Physical-device installation and
 final store-artifact UI remain unverified.
 
