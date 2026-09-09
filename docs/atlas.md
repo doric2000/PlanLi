@@ -76,3 +76,16 @@ configuration security checks and Atlas reproducibility also passed. The final
 static review found no actionable issues. The previous Android UI proof predates
 these native dependency patches; physical iPhone and final store-artifact UI
 validation remain unverified. Live provider state is recorded in README.
+
+### Final dependency Android confirmation — 2026-09-09
+
+After Expo patch alignment and the runtime 1.3.0 change, the authorized local
+development APK was rebuilt and installed on the dedicated Android 14 AVD.
+The Atlas Maestro scenario passed in 287.443 seconds (320.384 seconds including
+CLI startup), completing at 15:25:41Z. It covered actual globe dragging, cancel,
+global confirmation and restored global scope. Europe and global screenshots
+were inspected. The app remains version 1.1.0 (local build 1), with its separate
+.e2e package and OTA disabled. README records the exact native signature and APK
+hash. Metro and the visible emulator remain running for manual inspection.
+The existing demo backend was attached; this is not a fresh-backend reusable
+receipt or proof of the signed store artifacts on a physical device.
