@@ -74,7 +74,7 @@ const text = {
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
 export default function RoutesScreen({ navigation }) {
-  const { selectedRegionId } = useOptionalRegionSelection();
+  const { selectedRegionId, selectedMode } = useOptionalRegionSelection();
   const activeRegionId = isRegionDiscoveryEnabled() ? selectedRegionId : null;
   useNoyaMainTabRegistration(navigation);
   const routesSearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesSearch);
@@ -92,6 +92,12 @@ export default function RoutesScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(createEmptyDiscoveryFilters);
   const [debouncedRequest, setDebouncedRequest] = useState(discoveryRequestFromFilters(filters, { surface: 'routes' }));
+  const previousScope = useRef(selectedRegionId);
+  useEffect(() => {
+    if (previousScope.current === selectedRegionId) return;
+    previousScope.current = selectedRegionId;
+    if (isRegionDiscoveryEnabled()) setFilters((previous) => ({ ...previous, destinations: [] }));
+  }, [selectedRegionId]);
   const [filterVisible, setFilterVisible] = useState(false);
   const [sortVisible, setSortVisible] = useState(false);
   const [sortBy, setSortBy] = useState('popularity');
@@ -274,6 +280,7 @@ export default function RoutesScreen({ navigation }) {
         isRegionDiscoveryEnabled() ? (
           <RegionHeaderAction
             regionId={selectedRegionId}
+            mode={selectedMode}
             onPress={() => navigation.navigate('RegionSelector', { source: 'routes-change' })}
             testID="routes-region-change"
           />

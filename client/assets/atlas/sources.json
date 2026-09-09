@@ -1,0 +1,69 @@
+{
+  "license": "Unsplash License",
+  "photos": [
+    {
+      "id": "north_america",
+      "place": "אגם מוריין · קנדה",
+      "author": "Nick H",
+      "source": "https://unsplash.com/photos/moraine-lake-surrounded-by-mountains-T0UJEFWU7EE",
+      "focusX": 50,
+      "focusY": 50
+    },
+    {
+      "id": "europe",
+      "place": "לאגו די בראייס · איטליה",
+      "author": "Finge Holden",
+      "source": "https://unsplash.com/photos/a-lake-surrounded-by-mountains-and-trees-NwJ-bJk4VRE",
+      "focusX": 50,
+      "focusY": 55
+    },
+    {
+      "id": "israel",
+      "place": "ים המלח · ישראל",
+      "author": "Sergey Mazhuga",
+      "source": "https://unsplash.com/photos/aerial-view-of-body-of-water-near-mountain-Z13gAGTTSAU",
+      "focusX": 50,
+      "focusY": 50
+    },
+    {
+      "id": "east_southeast_asia",
+      "place": "הר פוג׳י · יפן",
+      "author": "Gregoire Jeanneau",
+      "source": "https://unsplash.com/photos/mount-fuji-during-daytime-dHzfhpqx7hw",
+      "focusX": 50,
+      "focusY": 45
+    },
+    {
+      "id": "latin_america",
+      "place": "טורס דל פיינה · צ׳ילה",
+      "author": "Frans Ruiter",
+      "source": "https://unsplash.com/photos/turquoise-lake-with-jagged-mountains-under-a-clear-sky-Woda6n6Q-PQ",
+      "focusX": 50,
+      "focusY": 50
+    },
+    {
+      "id": "south_central_asia",
+      "place": "גשר תשע הקשתות · סרי לנקה",
+      "author": "Sarmat Batagov",
+      "source": "https://unsplash.com/photos/a-train-traveling-over-a-bridge-in-the-middle-of-a-forest-uCXOO4NS22E",
+      "focusX": 50,
+      "focusY": 65
+    },
+    {
+      "id": "africa",
+      "place": "דיונות נמיב · נמיביה",
+      "author": "Andreas Felske",
+      "source": "https://unsplash.com/ko/사진/사막의-모래-언덕-그룹-nt66_G8DCBM",
+      "focusX": 50,
+      "focusY": 55
+    },
+    {
+      "id": "oceania",
+      "place": "מילפורד סאונד · ניו זילנד",
+      "author": "Timothy Chan",
+      "source": "https://unsplash.com/photos/mountains-near-body-of-water-during-golden-time-U_r6fdv2lDI",
+      "focusX": 50,
+      "focusY": 62
+    }
+  ]
+}

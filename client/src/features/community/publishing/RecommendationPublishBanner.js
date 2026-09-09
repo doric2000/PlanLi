@@ -61,7 +61,7 @@ export default function RecommendationPublishBanner({ onReview, onView, onChoose
   const publishedRegionIds = activeJob.contentType === 'route'
     ? activeJob.result?.discoveryRegionIds || []
     : [activeJob.result?.discoveryRegionId].filter(Boolean);
-  const publishedOutsideRegion = isRegionDiscoveryEnabled() && success
+  const publishedOutsideRegion = isRegionDiscoveryEnabled() && Boolean(selectedRegionId) && success
     && activeJob.result?.publicationStatus === 'active'
     && publishedRegionIds.length > 0
     && !publishedRegionIds.includes(selectedRegionId);

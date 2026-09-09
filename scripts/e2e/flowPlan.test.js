@@ -11,6 +11,8 @@ test('Android flows follow changed behavior, including shared auth and media con
   assert.deepEqual(selectFlows(['client/src/config/firebase.js']), FLOWS);
   assert.deepEqual(selectFlows(['storage.rules']), FLOWS);
   assert.deepEqual(selectFlows(['scripts/setupAndroid.ps1']), FLOWS);
+  assert.deepEqual(selectFlows(['client/src/features/region/screens/RegionSelectorScreen.js']), ['atlas']);
+  assert.deepEqual(selectFlows(['client/src/styles/atlas.js']), ['atlas']);
   assert.deepEqual(parseFlows('gallery,auth,gallery'), ['gallery', 'auth']);
   assert.throws(() => parseFlows('typo'));
 });

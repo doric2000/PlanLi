@@ -23,6 +23,9 @@ jest.mock('@expo-google-fonts/assistant/600SemiBold', () => ({
   Assistant_600SemiBold: 'Assistant_600SemiBold',
 }));
 
+jest.mock('@expo-google-fonts/assistant/700Bold', () => ({ Assistant_700Bold: 'Assistant_700Bold' }));
+jest.mock('@expo-google-fonts/assistant/800ExtraBold', () => ({ Assistant_800ExtraBold: 'Assistant_800ExtraBold' }));
+
 jest.mock('expo-font', () => ({
   useFonts: jest.fn(),
 }));
@@ -37,7 +40,7 @@ describe('Assistant typography system', () => {
     jest.clearAllMocks();
   });
 
-  it('loads exactly the three supported Assistant faces and reveals the app', () => {
+  it('loads the supported Assistant faces, including Atlas headings, and reveals the app', () => {
     useFonts.mockReturnValue([true, null]);
     const screen = render(
       <AppFontProvider>
@@ -49,6 +52,8 @@ describe('Assistant typography system', () => {
       Assistant_400Regular: 'Assistant_400Regular',
       Assistant_500Medium: 'Assistant_500Medium',
       Assistant_600SemiBold: 'Assistant_600SemiBold',
+      Assistant_700Bold: 'Assistant_700Bold',
+      Assistant_800ExtraBold: 'Assistant_800ExtraBold',
     });
     expect(screen.getByTestId('loaded-copy')).toBeTruthy();
     expect(SplashScreen.hideAsync).toHaveBeenCalled();

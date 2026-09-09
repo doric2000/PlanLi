@@ -277,14 +277,14 @@ if (packageJson.dependencies?.['expo-modules-core']) {
 if (packageJson.dependencies?.['@expo/config-plugins']) {
   fail('@expo/config-plugins must be consumed through expo/config-plugins, not installed directly.');
 }
-if (packageJson.dependencies?.['expo-notifications'] !== '~57.0.15') {
-  fail('expo-notifications must stay on the SDK 57 compatible ~57.0.15 release.');
+if (packageJson.dependencies?.['expo-notifications'] !== '~57.0.17') {
+  fail('expo-notifications must stay on the SDK 57 compatible ~57.0.17 release.');
 }
 if (app.version !== '1.1.0') {
   fail('The beta marketing version must remain fixed at 1.1.0.');
 }
-if (app.runtimeVersion !== '1.2.0') {
-  fail('The SDK 57 security release must remain isolated on EAS runtime 1.2.0.');
+if (app.runtimeVersion !== '1.3.0') {
+  fail('The Atlas release with native WebView must remain isolated on EAS runtime 1.3.0.');
 }
 if (reactNativeFirebase?.app_check_token_auto_refresh !== true) {
   fail('The client firebase.json must keep native App Check token refresh enabled.');

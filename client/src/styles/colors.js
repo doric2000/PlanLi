@@ -1,4 +1,7 @@
 export const colors = {
+  atlasNight: "#0A2238",
+  atlasMist: "#B2C5D4",
+  atlasGold: "#FFB34D",
 	// Primary colors
 	primary: "#1E3A5F",
 	primaryLight: "#D1FAE5",

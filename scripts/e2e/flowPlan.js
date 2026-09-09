@@ -1,9 +1,10 @@
 'use strict';
-const FLOWS = ['guest', 'auth', 'publish', 'gallery', 'network', 'location'];
+const FLOWS = ['guest', 'auth', 'publish', 'gallery', 'network', 'location', 'atlas'];
 function selectFlows(files) {
   const selected = new Set();
   for (const file of files) {
     if (/\.md$|\.test\.[jt]sx?$/.test(file)) continue;
+    if (/^client\/src\/(?:features\/region\/|styles\/atlas\.js$)|^client\/assets\/atlas\//.test(file)) { selected.add('atlas'); continue; }
     if (file === 'client/src/components/ExactLocationMapPreview.js') { selected.add('location'); continue; }
     if (file === 'scripts/setupAndroid.ps1') return [...FLOWS];
     if (/^(?:scripts\/e2e\/|client\/(?:\.maestro\/|app\.|package|eas\.json|index\.js|metro\.config|src\/(?:config|navigation)\/))/.test(file)) return [...FLOWS];
@@ -30,6 +31,7 @@ function parseFlows(value, files = []) {
 }
 // A broad smoke selection is not proof that an unvisited screen was exercised.
 function runtimeFlowsForSource(file) {
+  if (/^client\/src\/(?:features\/region\/|styles\/atlas\.js$)/.test(file)) return ['atlas'];
   if (file === 'client/src/components/ExactLocationMapPreview.js') return ['location'];
   if (/^client\/src\/config\/(?:firebase|firebaseEnvironment|localEmulators|appCheck(?:\.native)?|secureAuthStorage)\.js$/.test(file)) return [...FLOWS];
   if (/\/(?:HomeScreen|RegionSelectorScreen|AuthEntryScreen)\.js$/.test(file)) return ['guest'];

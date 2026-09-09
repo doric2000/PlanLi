@@ -5,7 +5,7 @@ import {
   createEmptyRegionSelection,
   loadRegionSelection,
   saveRegionPromptDismissed,
-  saveSelectedRegion,
+  saveSelectedRegion, saveDiscoverySelection, savePendingAccountSync, clearPendingAccountSync,
 } from '../src/features/region/services/RegionSelectionStorage';
 import { REGION_SELECTION_STORAGE_KEY } from '../src/features/region/regionDefinitions';
 
@@ -24,7 +24,8 @@ describe('RegionSelectionStorage', () => {
     await saveSelectedRegion('europe', selectedAt);
 
     await expect(loadRegionSelection()).resolves.toEqual({
-      version: 2,
+      version: 3,
+      mode: 'region',
       regionId: 'europe',
       selectedAt: selectedAt.toISOString(),
       hasSeenPrompt: true,
@@ -39,7 +40,8 @@ describe('RegionSelectionStorage', () => {
   it('marks the prompt as seen without creating a region selection', async () => {
     await saveRegionPromptDismissed();
     await expect(loadRegionSelection()).resolves.toEqual({
-      version: 2,
+      version: 3,
+      mode: null,
       regionId: null,
       selectedAt: null,
       hasSeenPrompt: true,
@@ -51,7 +53,8 @@ describe('RegionSelectionStorage', () => {
     await saveSelectedRegion('africa', new Date('2026-08-27T10:00:00.000Z'));
     await clearSelectedRegion();
     await expect(loadRegionSelection()).resolves.toEqual({
-      version: 2,
+      version: 3,
+      mode: null,
       regionId: null,
       selectedAt: null,
       hasSeenPrompt: true,
@@ -86,7 +89,8 @@ describe('RegionSelectionStorage', () => {
       hasSeenPrompt: true,
     }));
     await expect(loadRegionSelection()).resolves.toEqual({
-      version: 2,
+      version: 3,
+      mode: 'region',
       regionId: 'israel',
       selectedAt: '2026-08-27T10:00:00.000Z',
       hasSeenPrompt: true,
@@ -97,5 +101,35 @@ describe('RegionSelectionStorage', () => {
   it('rejects attempts to persist an unsupported region ID', async () => {
     await expect(saveSelectedRegion('atlantis')).rejects.toThrow('Unsupported region ID');
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('explicit global scope and sync races', () => {
+  beforeEach(async () => { await AsyncStorage.clear(); });
+  it('distinguishes global from never selected and survives reload', async () => {
+    await saveDiscoverySelection({ mode: 'global', regionId: null }, new Date('2026-09-09T10:00:00Z'), 'u1');
+    const loaded = await loadRegionSelection();
+    expect(loaded).toMatchObject({ version: 3, mode: 'global', regionId: null, hasSeenPrompt: true,
+      pendingAccountSync: { uid: 'u1', mode: 'global', regionId: null } });
+    await clearSelectedRegion();
+    expect(await loadRegionSelection()).toMatchObject({ mode: null, regionId: null, pendingAccountSync: null });
+  });
+  it('migrates v2 including a pending account sync', async () => {
+    const time = '2026-09-09T10:00:00.000Z';
+    await AsyncStorage.setItem(REGION_SELECTION_STORAGE_KEY, JSON.stringify({ version: 2, regionId: 'israel', selectedAt: time,
+      hasSeenPrompt: true, pendingAccountSync: { uid: 'u1', regionId: 'israel', selectedAt: time } }));
+    expect(await loadRegionSelection()).toMatchObject({ version: 3, mode: 'region', regionId: 'israel', pendingAccountSync: { mode: 'region' } });
+  });
+  it('does not clear a newer choice when an earlier sync finishes', async () => {
+    const earlier = await saveDiscoverySelection({ regionId: 'europe' }, new Date('2026-09-09T10:00:00Z'), 'u1');
+    await saveDiscoverySelection({ mode: 'global' }, new Date('2026-09-09T10:00:01Z'), 'u1');
+    await clearPendingAccountSync('u1', earlier.pendingAccountSync);
+    expect((await loadRegionSelection()).pendingAccountSync).toMatchObject({ mode: 'global' });
+    await savePendingAccountSync('u2', 'europe', earlier.selectedAt);
+    expect((await loadRegionSelection()).pendingAccountSync.uid).toBe('u1');
+  });
+  it.each([{ mode: 'global', regionId: 'europe' }, { mode: 'globalish' }, { regionId: 'global' }])('rejects invalid scope %j', async (scope) => {
+    await expect(saveDiscoverySelection(scope)).rejects.toThrow();
   });
 });

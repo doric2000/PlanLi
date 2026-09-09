@@ -25,6 +25,33 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Atlas release preparation (2026-09-09)
+
+The authorized Atlas release targets Android internal testing and iPhone
+TestFlight, keeping marketing version `1.1.0` and isolating the new native
+WebView on runtime `1.3.0`. EAS identity/project and the production Firebase,
+App Check and Sentry environment have been verified.
+
+Release readiness passed for Android and iOS: all 1,118 client tests in 189
+suites, native configuration/package checks, Expo Doctor and dependency
+compatibility checks. Thirteen focused backend tests, twelve configuration
+security checks and Atlas bundle reproducibility passed. The final static review
+found no actionable issues. Twelve required Expo SDK 57 patch dependencies were
+aligned after the release compatibility check identified older patch versions;
+the final client suite and native checks cover the aligned lockfile.
+
+The Android 14 development UI check below passed before that patch alignment and
+runtime change. It is not proof of the final store artifact or physical iPhone
+rendering. Metro and the task's emulator were subsequently stopped for dependency
+alignment; the demo backend services were preserved.
+
+The only changed backend target is `setDiscoveryRegion`, in
+`planli-f0b12` / `europe-west1`. Its prior source hash is
+`731ea4c96100fc8c6b41bf10fc2b61cffe3f98a5`. It accepts existing regional requests
+and adds explicit global preferences. PR, deployment and native distribution
+remain pending at this checkpoint. The existing iOS OTA wrapper stays pinned to
+runtime `1.2.0`; it is not the distribution path for the new Atlas native binary.
+
 ### Hoi An classification and location-map release (2026-09-09)
 
 PR [#352](https://github.com/doric2000/PlanLi/pull/352) merged as
@@ -242,14 +269,42 @@ A separate local Development Build is installed on the Windows-hosted Android
 AVD `PlanLi_E2E_API34` (`emulator-5580`), using application ID
 `com.planli.planlitravels.e2e`, version `1.1.0`, Android version code `1`,
 and configured runtime `1.2.0`. OTA is disabled; no EAS channel, build ID,
-submission or update group applies to this local artifact. The latest native
-build completed at `2026-09-09T07:00:30.074Z` in 17m30s and was installed
-successfully. Source: `aaee60eb58451003810c664e5e37687d7b33eac0` plus the local
-validation/SDK compatibility changes on `fix/destination-resolution-and-world-catalog`.
-Client and Functions dependencies were synchronized to their reviewed lockfiles.
-Native-input signature:
-`d20edda8dc53e22e60064a995ea5e30b4bc228e323d78add55923d8975fa0f9a`.
+submission or update group applies to this local artifact. The current Atlas
+native build completed at `2026-09-09T13:18:06.872Z` in 23m54s and was
+installed at `2026-09-09T13:25:21Z` (Android package-manager readback).
+Source: `6133837efda7ce83d473e8f207926bbd6ba71eb5` plus the uncommitted Atlas
+and focused Android validation changes on the existing `docs/hoi-an-release`
+branch. It includes react-native-webview 13.16.1; no new branch or commit was
+created. Native-input signature:
+`3b3d5491930a575b8a7e936195e2c4da99725554f5b2cf8a09a1aaebffc94be1`.
+APK SHA-256:
+`da4ad54c34134a6ab5b9472d58faef33424a75642fae0a9c1369c9a22f67980d`.
 This debug APK is not a store artifact.
+
+Atlas acceptance passed on Android 14 at approximately `2026-09-09T13:36Z`:
+the focused Maestro flow passed in 432.7 seconds (508.3 seconds including CLI
+startup). It exercised initial region confirmation, native WebView globe drag,
+cancel without saving, global confirmation and restored global scope from the
+recommendation feed. A follow-up ADB hierarchy check verified that the actual
+`Local E2E Gallery` synthetic recommendation loaded with the global-scope label;
+its screenshot was inspected. An Android System UI ANR dialog required dismissal
+during initial startup; this is observed device evidence, not an unattended
+startup reliability or performance result. The authenticated local callable and
+persisted `users/{uid}.discoveryRegion` global/schema-2 readback also passed.
+
+Metro and the visible dedicated emulator were initially left on the Atlas for
+manual inspection, then stopped for the authorized release dependency alignment.
+The test session attached to the existing isolated
+`demo-planli-e2e` services; no reusable fresh-backend runtime receipt is claimed.
+Evidence: ignored `.codex_tmp/validation/android/atlas.xml`, the
+`2026-09-09_162755` screenshot directory and `atlas-feed-loaded.png`. Native
+images use the installed React Native `StyleSheet.absoluteFill` API. Three
+focused flow-routing tests and Git whitespace checks passed. Production,
+EAS/OTA and store state are unchanged; physical iPhone testing remains pending.
+
+The earlier 07:00 native build and its flow receipts below used the previous
+native-input signature `d20edda8dc53e22e60064a995ea5e30b4bc228e323d78add55923d8975fa0f9a`.
+Those results remain evidence for their recorded inputs only.
 
 The isolated project is `demo-planli-e2e`. Real local Auth, Storage Rules,
 Functions media processing/publication and rejection of unauthorized requests

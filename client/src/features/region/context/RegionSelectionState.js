@@ -3,6 +3,8 @@ import { createContext, useContext } from 'react';
 export const RegionSelectionStateContext = createContext(null);
 const EMPTY_CONTEXT_VALUE = Object.freeze({
   selectedRegionId: null,
+  selectedMode: null,
+  hasSelection: false,
   selectedAt: null,
   hasSeenPrompt: false,
   loading: false,

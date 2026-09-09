@@ -262,6 +262,13 @@ describe('HomeScreenSearchTest', () => {
     });
   });
 
+  it('keeps local destinations from every region in global search', () => {
+    const europe = { id: 'paris', countryId: 'FR', discoveryRegionId: 'europe' };
+    const africa = { id: 'nairobi', countryId: 'KE', discoveryRegionId: 'africa' };
+    expect(buildHomeSearchPool({ regionDiscoveryEnabled: true, selectedRegionId: null,
+      searchResultsLoaded: false, searchDestinationsList: [], recentDestinations: [europe], favoriteDestinations: [africa] })).toEqual([europe, africa]);
+  });
+
   it('keeps region-scoped search free of unclassified local destinations', () => {
     const serverEurope = { id: 'paris', countryId: 'FR', discoveryRegionId: 'europe' };
     const localEurope = { id: 'rome', countryId: 'IT', discoveryRegionId: 'europe' };

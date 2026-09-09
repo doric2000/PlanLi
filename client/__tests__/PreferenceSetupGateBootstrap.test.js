@@ -3,6 +3,8 @@ import { render, waitFor } from '@testing-library/react-native';
 import PreferenceSetupGate from '../src/navigation/PreferenceSetupGate';
 import { AUTH_STATES } from '../src/constants/authPolicy';
 
+let mockRegionEnabled = false;
+let mockSelection = {};
 let mockStatus = AUTH_STATES.READY;
 let mockLoading = false;
 let mockAuthFlowInProgress = false;
@@ -22,11 +24,18 @@ jest.mock('../src/features/auth/AuthContext', () => ({
 }));
 
 jest.mock('../src/features/region/regionDefinitions', () => ({
-  isRegionDiscoveryEnabled: () => false,
+  isRegionDiscoveryEnabled: () => mockRegionEnabled,
 }));
+
+jest.mock('../src/features/region/context/RegionSelectionState', () => ({ useOptionalRegionSelection: () => mockSelection }));
+jest.mock('../src/features/region/screens/RegionSelectorScreen', () => {
+  const React = require('react'); const { View } = require('react-native');
+  return () => React.createElement(View, { testID: 'atlas-required' });
+});
 
 describe('PreferenceSetupGate auth state routing', () => {
   beforeEach(() => {
+    mockRegionEnabled = false; mockSelection = {};
     mockStatus = AUTH_STATES.READY;
     mockLoading = false;
     mockAuthFlowInProgress = false;
@@ -80,5 +89,22 @@ describe('PreferenceSetupGate auth state routing', () => {
     );
     expect(screen.getByTestId('main-navigator')).toBeTruthy();
     expect(navigation.reset).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('Atlas selection gate', () => {
+  beforeEach(() => { mockRegionEnabled = true; mockStatus = AUTH_STATES.READY; mockLoading = false; mockAuthFlowInProgress = false; });
+  it('requires confirmation only while no scope has been selected', () => {
+    mockSelection = { selectedRegionId: null, selectedMode: null };
+    const screen = render(<PreferenceSetupGate navigation={{ reset: jest.fn() }} />);
+    expect(screen.getByTestId('atlas-required')).toBeTruthy();
+    mockSelection = { selectedRegionId: null, selectedMode: 'global' };
+    screen.rerender(<PreferenceSetupGate navigation={{ reset: jest.fn() }} />);
+    expect(screen.queryByTestId('atlas-required')).toBeNull(); expect(screen.getByTestId('main-navigator')).toBeTruthy();
+  });
+  it('accepts a saved regional choice from the older client', () => {
+    mockSelection = { selectedRegionId: 'europe' };
+    expect(render(<PreferenceSetupGate navigation={{ reset: jest.fn() }} />).getByTestId('main-navigator')).toBeTruthy();
   });
 });

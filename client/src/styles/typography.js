@@ -1,4 +1,6 @@
 export const fontFamilies = {
+	bold: "Assistant_700Bold",
+	extraBold: "Assistant_800ExtraBold",
 	regular: "Assistant_400Regular",
 	medium: "Assistant_500Medium",
 	semiBold: "Assistant_600SemiBold",
