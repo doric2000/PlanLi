@@ -22,7 +22,11 @@
     "test:validation-plan": "node --test scripts/validationPlan.test.js",
     "preflight:eas-production": "node scripts/easProductionPreflight.js",
     "release:eas-production": "node scripts/easProductionUpdate.js",
-    "validate:changed": "node scripts/validationPlan.js run"
+    "validate:changed": "node scripts/validationPlan.js run",
+    "validate:release": "node scripts/releaseReadiness.js",
+    "setup:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setupAndroid.ps1",
+    "test:android": "node scripts/e2e/run.js",
+    "test:e2e:backend": "node scripts/e2e/run.js --backend-only"
   },
   "devDependencies": {
     "patch-package": "^8.0.1"

@@ -46,7 +46,7 @@ Auth uses one `AuthProvider` state machine:
 - Preserve cached rendering, bounded list mounting, and the three-image carousel
   window. Use the intended `large`, `feed`, and `thumb` media variants.
 
-## Windows and iPhone workflow
+## Windows, Android and iPhone workflow
 
 The development computer is Windows and the available Apple test device is a
 physical iPhone. Expo Go is unsupported because PlanLi uses native auth modules.
@@ -81,14 +81,22 @@ npm.cmd test -- --runInBand --silent --runTestsByPath __tests__/RelevantScreen.t
 ```
 
 - Prefer React Native Testing Library roles, labels, text, and stable test IDs.
-- Exercise the changed UI in Web/admin or on iPhone when practical; cover loading,
+- Exercise the changed UI with the affected local Android Maestro flows, Web/admin,
+  or iPhone as appropriate; cover loading,
   error, or auth only when affected.
 - Admin UI/assets/entry/bundler changes require `npm run export:admin-web`,
   `npm run verify:admin-web`, and one focused browser smoke path.
-- Native config/dependency/assets/bundler/entry changes require
-  `npm run verify:ios-release-config` and an iOS export.
+- Native config/dependency/assets/bundler/entry changes need the affected platform
+  checks. For release readiness select ota/build/full and ios/android explicitly;
+  do not pre-export a bundle that EAS Update or EAS Build will package itself.
+  Use an iOS export when validating a separate iOS packaging change.
 - Shared navigation/auth/runtime changes require their related test groups.
 - Request an EAS build only for native/release need; never for JS-only work.
 
-Do not add a new E2E framework for a focused fix. The existing remote Maestro smoke
-workflow is on-demand only and cannot replace manual physical-device coverage.
+Use the existing local Android/Maestro harness described in `docs/local-android-e2e.md`.
+It uses a separate development app, the `demo-planli-e2e` Firebase emulators and
+synthetic data. Run only affected flows; reuse the binary for JavaScript changes.
+Never use Expo Go or production data for these flows. Keep Jest for logic and edge
+cases. iOS-specific Apple Sign-In, permissions and App Attest require physical
+iPhone evidence. Remote iOS Maestro stays optional; local Android does not extend
+the protected iOS production-update workflow.

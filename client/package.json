@@ -83,6 +83,12 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "<rootDir>/scripts/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/android/",
+      "<rootDir>/ios/",
+      "<rootDir>/.codex_tmp/",
+      "<rootDir>/.expo-validation/"
     ]
   },
   "overrides": {

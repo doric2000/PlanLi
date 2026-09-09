@@ -3,12 +3,12 @@
 const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { signature, reusableReceipt, writeReceipt } = require('./validationReceipt');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const TEST_FILE_RE = /\.test\.[cm]?[jt]sx?$/i;
 const CLIENT_CODE_RE = /\.[cm]?[jt]sx?$/i;
 const FUNCTIONS_CODE_RE = /\.[cm]?js$/i;
-const MAX_FOCUSED_CLIENT_TESTS = 4;
 const PACKAGE_FILE_RE = /(^|\/)package(?:-lock)?\.json$/;
 const TAXONOMY_PATHS = new Set([
   'shared/travelTaxonomy.json',
@@ -26,13 +26,19 @@ const VALIDATION_TOOLING_PATHS = new Set([
   'package.json',
   'scripts/validationPlan.js',
   'scripts/validationPlan.test.js',
+  'scripts/validationReceipt.js',
+  'scripts/validationReceipt.test.js',
+  'scripts/securityCiPlan.js',
+  'scripts/securityCiPlan.test.js',
+  'scripts/releaseReadiness.js',
+  'scripts/releaseReadiness.test.js',
+  '.github/workflows/security.yml',
   '.github/workflows/pr-validation.yml',
   '.github/workflows/release-readiness.yml',
 ]);
 const SECURITY_TOOLING_PATHS = new Set([
   '.gitignore',
   '.gitleaks.toml',
-  'docs/security-scanning.md',
   'scripts/securityLocalScan.js',
   'scripts/securityLocalScan.test.js',
 ]);
@@ -122,6 +128,7 @@ function listFiles(directory) {
   const result = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    if (path.basename(directory) === 'client' && ['android', 'ios', 'dist', 'coverage'].includes(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) result.push(...listFiles(absolute));
     else result.push(absolute);
@@ -224,7 +231,7 @@ function classifyChanges(files) {
   const functionsDependency = functionsFiles.some((file) => PACKAGE_FILE_RE.test(file));
   const clientLockfile = clientFiles.includes('client/package-lock.json');
   const functionsLockfile = functionsFiles.includes('functions/package-lock.json');
-  const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file));
+  const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file) || file.startsWith('scripts/e2e/') || file.startsWith('client/.maestro/android/'));
   const securityTooling = changedFiles.some((file) => (
     SECURITY_TOOLING_PATHS.has(file) || file.startsWith('.semgrep/')
   ));
@@ -259,14 +266,20 @@ function createPlan(files, repoRoot = REPO_ROOT) {
     functionsTests: [],
     warnings: [],
     fallbackReasons: [],
+    coverageGaps: [],
   };
 
   const clientFiles = plan.changedFiles.filter((file) => file.startsWith('client/'));
   plan.clientTests = clientFiles.filter((file) => TEST_FILE_RE.test(file) && !isClientNodeTest(file));
   plan.clientNodeTests = clientFiles.filter(isClientNodeTest);
   plan.clientSources = clientFiles.filter((file) => CLIENT_CODE_RE.test(file) && !TEST_FILE_RE.test(file));
+  for (const file of plan.clientSources.filter((source) => !fs.existsSync(path.join(repoRoot, source)))) {
+    plan.clientFull = true;
+    plan.fallbackReasons.push(`${file}: deleted source requires full client coverage`);
+  }
   if (plan.clientSources.length) {
     const graph = buildClientDependencyGraph(repoRoot);
+    plan.clientTests.push(...selectDependentTests(graph, plan.clientSources).filter((file) => !isClientNodeTest(file)));
     plan.clientNodeTests.push(
       ...selectDependentTests(graph, plan.clientSources).filter(isClientNodeTest)
     );
@@ -292,11 +305,8 @@ function createPlan(files, repoRoot = REPO_ROOT) {
     .map((file) => sameNameTest(file, repoRoot))
     .filter(Boolean);
   const explicitTests = functionsRuntimeFiles.flatMap((file) => EXPLICIT_FUNCTION_TESTS.get(file) || []);
-  const uncoveredRuntimeFiles = functionsRuntimeFiles.filter((file) =>
-    !sameNameTest(file, repoRoot) && !EXPLICIT_FUNCTION_TESTS.has(file)
-  );
   plan.functionsTests.push(
-    ...selectDependentTests(graph, uncoveredRuntimeFiles),
+    ...selectDependentTests(graph, functionsRuntimeFiles),
     ...plan.changedFiles.filter((file) =>
       file.startsWith('functions/') && TEST_FILE_RE.test(file) && file !== 'functions/rules.test.js'
     ),
@@ -323,11 +333,7 @@ function createPlan(files, repoRoot = REPO_ROOT) {
     const unresolved = !fs.existsSync(path.join(repoRoot, file));
     if (covered && !unsupported.has(file)) continue;
     if (file.startsWith('functions/scripts/')) {
-      const scriptTests = [...graph.keys()].filter((candidate) =>
-        candidate.startsWith('functions/scripts/') && TEST_FILE_RE.test(candidate)
-      );
-      plan.functionsTests.push(...scriptTests);
-      plan.fallbackReasons.push(`${file}: script test group`);
+      plan.coverageGaps.push(`${file}: add a direct/transitive test or provide a defined dry-run proof`);
     } else {
       plan.functionsFull = true;
       plan.fallbackReasons.push(`${file}: full Functions fallback`);
@@ -449,6 +455,7 @@ function printablePlan(plan) {
       functionsTests: plan.functionsTests,
     },
     fallbackReasons: plan.fallbackReasons,
+    coverageGaps: plan.coverageGaps,
     warnings: plan.warnings,
   };
 }
@@ -477,6 +484,22 @@ function tailLines(value, count = 120) {
 }
 
 function runCommand(label, command, args, cwd, repoRoot = REPO_ROOT) {
+  const logDirectory = path.join(repoRoot, '.codex_tmp', 'validation');
+  fs.mkdirSync(logDirectory, { recursive: true });
+  const basename = label.replace(/[^a-z0-9_-]+/gi, '-');
+  const logPath = path.join(logDirectory, `${basename}.log`);
+  const receiptPath = path.join(logDirectory, `${basename}.receipt.json`);
+  const scope = label.startsWith('client') || label.startsWith('ios') || label.startsWith('admin') ? 'client'
+    : label.startsWith('functions') ? 'functions' : label.includes('rules') ? 'rules' : 'all';
+  // Remote advisory state and generated exports cannot be proved by source hashes alone.
+  const cacheable = !process.env.CI && !/audit|export|verify|preflight/.test(label);
+  const digest = signature({ root: repoRoot, scope, command, args });
+  const previous = cacheable && reusableReceipt(receiptPath, digest);
+  if (previous) {
+    console.log(`REUSE ${label} (${previous.durationMs}ms previously; unchanged inputs)`);
+    return fs.readFileSync(previous.logPath, 'utf8');
+  }
+  const started = Date.now();
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
@@ -486,20 +509,34 @@ function runCommand(label, command, args, cwd, repoRoot = REPO_ROOT) {
   });
   const executionError = result.error ? `${result.error.message}\n` : '';
   const output = `${result.stdout || ''}${result.stderr || ''}${executionError}`;
-  const logDirectory = path.join(repoRoot, '.codex_tmp', 'validation');
-  fs.mkdirSync(logDirectory, { recursive: true });
-  const logPath = path.join(logDirectory, `${label.replace(/[^a-z0-9_-]+/gi, '-')}.log`);
   fs.writeFileSync(logPath, output);
+  writeReceipt(receiptPath, { status: result.status === 0 ? 'passed' : 'failed', signature: digest,
+    logPath, durationMs: Date.now() - started, completedAt: new Date().toISOString() });
   if (result.status !== 0) {
     process.stderr.write(`${tailLines(output)}\n`);
     throw new Error(`${label} failed; full log: ${normalizePath(path.relative(repoRoot, logPath))}`);
   }
-  console.log(`PASS ${label} (log: ${normalizePath(path.relative(repoRoot, logPath))})`);
+  console.log(`PASS ${label} (${Date.now() - started}ms; log: ${normalizePath(path.relative(repoRoot, logPath))})`);
   return output;
 }
 
 function jestExecutable(clientRoot) {
   return require.resolve('jest/bin/jest', { paths: [clientRoot] });
+}
+
+function runtimeEvidenceCovers(source, repoRoot) {
+  if (process.env.CI) return false;
+  const { runtimeFlowsForSource } = require('./e2e/flowPlan');
+  const { env: runtimeEnv } = require('./e2e/run');
+  const required = runtimeFlowsForSource(source);
+  if (!required.length) return false;
+  const file = path.join(repoRoot, '.codex_tmp/android/runtime.receipt.json');
+  try {
+    const previous = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!required.every((flow) => previous.flows?.includes(flow))) return false;
+    const digest = signature({ root: repoRoot, scope: 'all', command: 'android-e2e', args: previous.flows, env: runtimeEnv });
+    return Boolean(reusableReceipt(file, digest));
+  } catch { return false; }
 }
 
 function selectClientTestsWithJest(plan, repoRoot = REPO_ROOT) {
@@ -521,12 +558,13 @@ function selectClientTestsWithJest(plan, repoRoot = REPO_ROOT) {
   const isCovered = (source) => [...selected, ...plan.clientNodeTests].some((testFile) =>
     testFile === source || transitiveDependencies(graph, testFile).has(source)
   );
-  const unresolved = sources.filter((source) => !isClientPresentationOnly(source) && !isCovered(source));
-  if (unresolved.length) {
-    const absoluteSources = unresolved.map((file) => path.resolve(repoRoot, file));
+  const unresolved = sources.filter((source) => !isCovered(source));
+  for (const source of unresolved) {
+    const absoluteSources = [path.resolve(repoRoot, source)];
     const result = spawnSync(process.execPath, [
       jestExecutable(clientRoot),
       '--listTests',
+      '--runInBand',
       '--findRelatedTests',
       ...absoluteSources,
     ], { cwd: clientRoot, encoding: 'utf8', env: { ...process.env, FORCE_COLOR: '0' } });
@@ -538,13 +576,8 @@ function selectClientTestsWithJest(plan, repoRoot = REPO_ROOT) {
         related.push(normalizePath(path.relative(repoRoot, candidate)));
       }
     }
-    if (related.length === 0) {
-      console.log(`NO RELATED Jest test for ${unresolved.length} uncovered source file(s); add focused tests or runtime evidence`);
-    } else if (related.length <= MAX_FOCUSED_CLIENT_TESTS) {
-      for (const testFile of related) selected.add(testFile);
-    } else {
-      console.log(`SKIP ${related.length} broad Jest candidates for ${unresolved.length} uncovered source file(s); add focused tests or runtime evidence`);
-    }
+    if (related.length === 0 && !runtimeEvidenceCovers(source, repoRoot)) throw new Error(`No related test for ${source}; add focused coverage or run its defined Android flow before validation can pass`);
+    for (const testFile of related) selected.add(testFile);
   }
   return unique([...selected].map((file) => path.resolve(repoRoot, file)));
 }
@@ -566,13 +599,15 @@ function runClient(plan, repoRoot = REPO_ROOT) {
     if (tests.length) {
       runCommand(`client-related-tests-${tests.length}`, process.execPath,
         [jest, '--ci', '--runInBand', '--silent', '--runTestsByPath', ...tests], clientRoot, repoRoot);
-    } else if (plan.clientSources.length) {
+    } else if (plan.clientSources.length && !plan.clientSources.every((source) =>
+      plan.clientNodeTests.some((file) => transitiveDependencies(buildClientDependencyGraph(repoRoot), file).has(source))
+      || runtimeEvidenceCovers(source, repoRoot))) {
       const risky = plan.clientSources.some((file) => matchesAny(file, CLIENT_SHARED_RISK));
       if (risky) {
         runCommand('client-shared-fallback-tests', process.execPath,
           [jest, '--ci', '--runInBand', '--silent'], clientRoot, repoRoot);
       } else {
-        console.log('SKIP client tests: no related automated test; targeted runtime evidence is required');
+        throw new Error('No related client test; add focused automated coverage before validation can pass');
       }
     }
   }
@@ -595,6 +630,7 @@ function runClient(plan, repoRoot = REPO_ROOT) {
 
 function runFunctions(plan, repoRoot = REPO_ROOT) {
   if (!plan.functions) return;
+  if (plan.coverageGaps?.length) throw new Error(plan.coverageGaps.join('\n'));
   const functionsRoot = path.join(repoRoot, 'functions');
   if (plan.functionsFull) {
     runCommand('functions-full-tests', process.execPath,
@@ -635,7 +671,9 @@ function runTooling(plan, repoRoot = REPO_ROOT) {
   if (!plan.tooling) return;
   if (plan.validationTooling) {
     runCommand('validation-planner-tests', process.execPath,
-      ['--test', '--test-reporter=spec', 'scripts/validationPlan.test.js'], repoRoot, repoRoot);
+      ['--test', '--test-reporter=spec', 'scripts/validationPlan.test.js', 'scripts/validationReceipt.test.js',
+        'scripts/securityCiPlan.test.js', 'scripts/releaseReadiness.test.js', 'scripts/e2e/environment.test.js',
+        'scripts/e2e/flowPlan.test.js', 'scripts/e2e/native.test.js'], repoRoot, repoRoot);
   }
   if (plan.securityTooling) {
     runCommand('security-local-scanner-tests', process.execPath,
@@ -702,6 +740,8 @@ module.exports = {
   selectClientTestsWithJest,
   selectDependentTests,
   shouldRunSecurityPreflight,
+  runPlan,
+  runCommand,
   transitiveDependencies,
   unique,
 };

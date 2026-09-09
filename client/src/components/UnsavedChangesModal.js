@@ -21,7 +21,7 @@ export default function UnsavedChangesModal({
 
   const content = (
     <View style={[styles.unsavedDialogOverlay, contained && localStyles.containedOverlay]}>
-      <Pressable style={StyleSheet.absoluteFillObject} onPress={onCancel} />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
       <View style={styles.unsavedDialogCard} testID={testID}>
         <AppText style={styles.unsavedDialogTitle}>{title}</AppText>
         <AppText style={styles.unsavedDialogMessage}>{message}</AppText>
@@ -57,7 +57,7 @@ export default function UnsavedChangesModal({
 
 const localStyles = StyleSheet.create({
   containedOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000,
     elevation: 24,
   },

@@ -1,0 +1,25 @@
+appId: com.planli.planlitravels.e2e
+---
+- tapOn:
+    id: main-tab-community
+- tapOn:
+    id: community-add-button
+- extendedWaitUntil:
+    visible:
+      id: "recommendation-composer-header|recommendation-draft-discard"
+    timeout: 120000
+# An earlier local flow can leave an autosaved synthetic draft. Use the real
+# owned-draft action so flow order does not select a different initial screen.
+- runFlow:
+    when:
+      visible:
+        id: recommendation-draft-discard
+    commands:
+      - tapOn:
+          id: recommendation-draft-discard
+- extendedWaitUntil:
+    visible: "דילוג על ההדרכה"
+    timeout: 120000
+- runFlow: dismiss-tour.yml
+- assertVisible:
+    id: recommendation-composer-header

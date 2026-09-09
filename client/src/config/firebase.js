@@ -3,14 +3,18 @@ import {
   browserSessionPersistence,
   getReactNativePersistence,
   initializeAuth,
+  connectAuthEmulator,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-import { getFunctions } from "firebase/functions";
+import { getFirestore, initializeFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { Platform } from 'react-native'; // <--- Import Platform
 import { initializePlanLiAppCheck } from './appCheck';
 import { resolveFirebaseEnvironment } from './firebaseEnvironment';
 import { secureAuthStorage } from './secureAuthStorage';
+import { localEmulatorSettings } from './localEmulators';
+
+const emulators = localEmulatorSettings();
 
 const firebaseConfig = resolveFirebaseEnvironment({
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -37,7 +41,10 @@ if (Platform.OS === 'web') {
   });
 }
 
-const db = getFirestore(app);
+// The Android emulator transport buffers streaming responses; close each local poll.
+const db = emulators
+  ? initializeFirestore(app, { experimentalForceLongPolling: true })
+  : getFirestore(app);
 const mediaBucket =
   process.env.EXPO_PUBLIC_FIREBASE_MEDIA_BUCKET ||
   (firebaseConfig.projectId === "planli-f0b12"
@@ -48,5 +55,13 @@ const storage = getStorage(
   mediaBucket.startsWith("gs://") ? mediaBucket : `gs://${mediaBucket}`
 );
 const cloudFunctions = getFunctions(app, "europe-west1");
+
+// Connect every SDK before exporting it; a missing emulator must never fall back to live services.
+if (emulators) {
+  connectAuthEmulator(auth, `http://${emulators.host}:${emulators.auth}`, { disableWarnings: true });
+  connectFirestoreEmulator(db, emulators.host, emulators.firestore);
+  connectStorageEmulator(storage, emulators.host, emulators.storage);
+  connectFunctionsEmulator(cloudFunctions, emulators.host, emulators.functions);
+}
 
 export { app, appCheck, auth, cloudFunctions, db, mediaBucket, storage };

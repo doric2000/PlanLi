@@ -1,0 +1,7 @@
+appId: com.planli.planlitravels.e2e
+---
+- runFlow:
+    when:
+      visible: "דילוג על הסיור|דילוג על ההדרכה"
+    commands:
+      - tapOn: "דילוג על הסיור|דילוג על ההדרכה"

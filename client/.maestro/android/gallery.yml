@@ -1,0 +1,44 @@
+appId: com.planli.planlitravels.e2e
+name: Native photo swipes and content menu
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- tapOn:
+    id: main-tab-community
+- scrollUntilVisible:
+    element:
+      text: Local E2E Gallery
+    direction: DOWN
+    timeout: 90000
+    centerElement: true
+- tapOn: Local E2E Gallery
+- assertVisible:
+    id: recommendation-detail-content
+- tapOn:
+    id: recommendation-hero-image-0
+- assertVisible:
+    id: media-gallery-modal
+- swipe:
+    start: "25%, 50%"
+    end: "80%, 50%"
+- assertVisible: "2 / 2"
+- assertVisible: Local E2E Gallery
+- takeScreenshot: gallery-second-photo
+- tapOn: "סגירת גלריה"
+- assertNotVisible:
+    id: media-gallery-modal
+- tapOn: "חזרה"
+- assertNotVisible:
+    id: recommendation-detail-content
+- assertVisible:
+    id: main-tab-community
+- scrollUntilVisible:
+    element:
+      id: content-action-menu
+    direction: UP
+    timeout: 60000
+- tapOn:
+    id: content-action-menu
+- assertVisible: "עריכה"
+- assertVisible: "מחיקה"
+- takeScreenshot: gallery-actions

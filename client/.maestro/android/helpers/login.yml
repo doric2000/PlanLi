@@ -1,0 +1,23 @@
+appId: com.planli.planlitravels.e2e
+---
+- tapOn:
+    id: main-tab-auth
+- assertVisible:
+    id: auth-entry-screen
+- tapOn: "התחברות"
+- assertVisible:
+    id: login-screen
+- tapOn:
+    id: login-email
+- inputText: traveler@example.test
+- tapOn:
+    id: login-password
+- inputText: Local-E2E-only-2468!
+- hideKeyboard
+- tapOn:
+    id: email-login-button
+- extendedWaitUntil:
+    notVisible:
+      id: login-screen
+    timeout: 60000
+- runFlow: dismiss-tour.yml

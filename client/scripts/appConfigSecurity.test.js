@@ -189,3 +189,20 @@ test('native privacy config declares required iOS strings while optional capabil
     'isAndroidMotionActivityEnabled',
   ].forEach((option) => assert.equal(location[option], false, option));
 });
+
+
+test('local Android identity is distinct and emulator mode is rejected in every release context', () => {
+  const local = { PLANLI_LOCAL_E2E: 'true', EXPO_PUBLIC_USE_FIREBASE_EMULATORS: 'true',
+    PLANLI_ENV: 'development', EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'demo-planli-e2e', EAS_BUILD: '', NODE_ENV: 'development' };
+  withEnvironment(local, () => {
+    const result = configureApp({ config: appJson });
+    assert.equal(result.android.package, 'com.planli.planlitravels.e2e');
+    assert.equal(result.updates.enabled, false);
+    assert.match(result.android.googleServicesFile, /android[\\/]google-services.json$/);
+  });
+  for (const patch of [{ EAS_BUILD: '1' }, { NODE_ENV: 'production' }, { PLANLI_ENV: 'production' },
+    { PLANLI_ENV: 'staging' }, { PLANLI_LOCAL_E2E: '' }, { EXPO_PUBLIC_USE_FIREBASE_EMULATORS: '' },
+    { EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'planli-f0b12' }]) {
+    withEnvironment({ ...local, ...patch }, () => assert.throws(() => configureApp({ config: appJson }), /forbidden/));
+  }
+});

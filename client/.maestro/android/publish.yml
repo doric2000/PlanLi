@@ -1,0 +1,76 @@
+appId: com.planli.planlitravels.e2e
+name: Publish a recommendation through the real local callable and rules
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- runFlow: helpers/open-composer.yml
+- tapOn:
+    id: recommendation-image-picker
+- tapOn: "Photo taken on.*"
+- tapOn:
+    id: com.google.android.providers.media.module:id/button_add
+- scrollUntilVisible:
+    element:
+      id: recommendation-show-location-alternatives
+    direction: DOWN
+- tapOn:
+    id: recommendation-show-location-alternatives
+- tapOn:
+    id: recommendation-location-mode-destination
+- tapOn:
+    id: recommendation-destination-search
+- inputText: London
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "recommendation-destination-(provider-)?option-.*"
+    timeout: 60000
+- tapOn:
+    id: "recommendation-destination-(provider-)?option-.*"
+    index: 0
+- assertVisible:
+    id: recommendation-destination-selected
+- scrollUntilVisible:
+    element:
+      id: recommendation-category-food
+    direction: DOWN
+- tapOn:
+    id: recommendation-category-food
+- tapOn:
+    id: recommendation-subcategory-cafe
+- scrollUntilVisible:
+    element:
+      id: recommendation-title-input
+    direction: DOWN
+- tapOn:
+    id: recommendation-title-input
+- inputText: Maestro Local Photo
+- hideKeyboard
+- assertVisible:
+    id: recommendation-title-input
+    text: Maestro Local Photo
+- scrollUntilVisible:
+    element:
+      id: recommendation-description-input
+    direction: DOWN
+- tapOn:
+    id: recommendation-description-input
+- inputText: Synthetic photo published only to local Firebase emulators.
+- hideKeyboard
+- assertVisible:
+    id: recommendation-description-input
+    text: Synthetic photo published only to local Firebase emulators.
+- scrollUntilVisible:
+    element:
+      id: recommendation-budget-2
+    direction: DOWN
+- tapOn:
+    id: recommendation-budget-2
+- tapOn:
+    id: recommendation-next
+- extendedWaitUntil:
+    notVisible:
+      id: recommendation-composer-header
+    timeout: 90000
+- assertVisible: Maestro Local Photo
+- takeScreenshot: published-local-photo

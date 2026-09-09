@@ -1,0 +1,9 @@
+appId: com.planli.planlitravels.e2e
+name: Verified local email login
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- runFlow: helpers/open-composer.yml
+- assertVisible:
+    id: recommendation-composer-header
+- takeScreenshot: authenticated-composer

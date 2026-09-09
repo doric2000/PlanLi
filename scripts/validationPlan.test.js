@@ -169,7 +169,7 @@ test('unsupported dynamic backend loading uses the conservative full fallback', 
   assert.match(plan.warnings.join('\n'), /dynamic module load/);
 });
 
-test('an untested maintenance script falls back only to the script test group', (t) => {
+test('an untested maintenance script reports the gap instead of running unrelated tests', (t) => {
   const root = fixtureRepo({
     'functions/scripts/changedScript.js': 'module.exports = {};',
     'functions/scripts/existingScript.js': 'module.exports = {};',
@@ -178,8 +178,8 @@ test('an untested maintenance script falls back only to the script test group', 
   t.after(() => removeFixture(root));
   const plan = createPlan(['functions/scripts/changedScript.js'], root);
   assert.equal(plan.functionsFull, false);
-  assert.deepEqual(plan.functionsTests, ['functions/scripts/existingScript.test.js']);
-  assert.match(plan.fallbackReasons.join('\n'), /script test group/);
+  assert.deepEqual(plan.functionsTests, []);
+  assert.match(plan.coverageGaps.join('\n'), /changedScript.js.*direct\/transitive/);
 });
 
 test('client script tests run with Node and cover their changed dependencies', (t) => {
@@ -215,4 +215,21 @@ test('CLI defaults include the worktree and explicit heads use exact commits', (
   assert.equal(parseArgs(['run', '--scope', 'client', '--plan-only']).scope, 'client');
   assert.equal(parseArgs(['--help']).help, true);
   assert.throws(() => parseArgs(['--base']), /missing its required value/);
+});
+
+
+test('more than four affected client tests are retained, even with a same-name test', (t) => {
+  const files = { 'client/src/shared.js': 'module.exports = 1;', 'client/__tests__/shared.test.js': "require('../src/shared');" };
+  for (let i = 0; i < 6; i++) files['client/__tests__/consumer' + i + '.test.js'] = "require('../src/shared');";
+  const root = fixtureRepo(files);
+  t.after(() => removeFixture(root));
+  const plan = createPlan(['client/src/shared.js'], root);
+  assert.equal(plan.clientTests.length, 7);
+  assert.equal(plan.clientFull, false);
+});
+
+test('deletion of client code cannot silently lose its dependency coverage', (t) => {
+  const root = fixtureRepo({});
+  t.after(() => removeFixture(root));
+  assert.equal(createPlan(['client/src/deleted.js'], root).clientFull, true);
 });

@@ -175,7 +175,7 @@ export const community = {
 		writingDirection: "rtl",
 	},
 	mapLoadOverlay: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		alignItems: "center",
 		justifyContent: "center",
 		backgroundColor: "rgba(247,248,252,0.96)",

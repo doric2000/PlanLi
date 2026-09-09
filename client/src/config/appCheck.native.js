@@ -8,6 +8,7 @@ import {
 import { initializeAppCheck as initializeWebSdkAppCheck } from 'firebase/app-check';
 
 import { appCheckTokenExpiry } from './appCheckToken';
+import { localEmulatorSettings, localAppCheckProvider } from './localEmulators';
 
 let appCheckInstance;
 
@@ -42,6 +43,10 @@ class NativeAppCheckBridgeProvider {
 
 export function initializePlanLiAppCheck(webSdkApp) {
   if (appCheckInstance) return appCheckInstance;
+  if (localEmulatorSettings()) {
+    appCheckInstance = initializeWebSdkAppCheck(webSdkApp, { provider: localAppCheckProvider(), isTokenAutoRefreshEnabled: false });
+    return appCheckInstance;
+  }
 
   const nativeProvider = new ReactNativeFirebaseAppCheckProvider();
   nativeProvider.configure({

@@ -64,10 +64,26 @@ attempt stopped before creating a scan ID because the tool considered the select
 working-tree snapshot stale after `HEAD` changed. Neither failure is a successful
 or clean Codex Security result.
 
-For a dirty working tree, use `security:full` as the local release gate: it scans
-all current source, the complete tracked/untracked working tree for secrets, ignored
-local environment files, Git history, and all dependency trees. `security:diff`
-selects source files from the exact committed `base..head` range and still runs the
-working-tree secret scan, but it does not add uncommitted source files to Semgrep's
-diff target. CodeQL remains the independent interprocedural scan once the branch is
-pushed and a pull request is opened.
+## Frequency and scope
+
+These tools are opt-in checks for relevant changes, not mandatory steps on every
+commit, push, merge, EAS Build or EAS Update. Documentation-only changes require
+new-commit secret scanning and relevant syntax/diff checks, without application
+suites or CodeQL. A dirty tree alone is not a reason for a full scan.
+
+GitHub keeps existing check names. CodeQL runs for source/analysis configuration
+changes on PRs and main, plus weekly. Semgrep checks changed production source on
+PRs and scans its full inventory weekly or manually. Gitleaks scans the new commit
+range on PRs/main (including intermediate commits and merge-parent diffs), with
+full history weekly. Dependency review runs on manifest, lockfile and Actions
+changes. Audits run for changed dependency workspaces on PRs and all workspaces
+daily; failures and the existing audit exception policy remain unchanged.
+
+The always-running Security policy and PR validation results fail when a required
+job fails or is cancelled, and accept jobs that are deliberately not required.
+No branch-protection changes are made by this workflow change.
+
+Local security:diff selects committed source from base..head; it does not include
+unstaged source in its Semgrep target. Review the final working-tree diff explicitly.
+Use a current-source scan when that sensitive diff needs it; reserve complete
+history/dependency scans for explicit broad reviews and the scheduled CI runs.

@@ -109,9 +109,14 @@ Validate changed behavior and consumers, not the repository by habit.
   For UI, cover only changed and relevant error, auth, or async states.
 - Rules, indexes, exports, native configuration, and dependencies use their specific
   checks; they do not trigger unrelated suites.
+- Use `npm run validate:release -- --kind ota|build|full --platform ios|android --base <deployed-sha>`
+  for release readiness. OTA/build validate the affected client; backend and Rules are
+  included only when affected or explicitly requesting the full release.
 - Full client and Functions suites are explicit release checks only. Commit, push,
   PR, merge, build, and infrastructure retry events do not require reruns.
-- Reuse evidence only for an unchanged tested diff and scope; rerun invalidated checks.
+- Reuse successful local validation receipts only when source, dependency locks, command,
+  environment and configuration still match. Push/merge events do not invalidate them.
+  Remote advisory scans and generated exports are never satisfied by cached receipts.
 - Review the final diff. Run `/review` once only for a final sensitive, shared-contract,
   cross-subsystem, or release diff; it does not replace runtime evidence.
 - Keep output bounded: store noisy logs in ignored `.codex_tmp/validation/`, summarize

@@ -1,0 +1,38 @@
+appId: com.planli.planlitravels.e2e
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    when:
+      visible: "System UI isn't responding"
+    commands:
+      - tapOn: "Wait"
+- extendedWaitUntil:
+    visible: "New development server"
+    timeout: 120000
+- openLink: "com.planli.planlitravels.e2e://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081"
+- extendedWaitUntil:
+    visible: "Continue"
+    timeout: 300000
+- tapOn: "Continue"
+# The SDK 57 floating developer button otherwise covers real app controls.
+- scrollUntilVisible:
+    element:
+      text: Tools button
+    direction: DOWN
+- tapOn: Tools button
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible:
+      id: region-selector-screen
+    timeout: 300000
+- tapOn:
+    id: region-option-europe
+- extendedWaitUntil:
+    visible:
+      id: home-tab-header
+    timeout: 60000
+- extendedWaitUntil:
+    visible: "דילוג על הסיור"
+    timeout: 120000
+- runFlow: dismiss-tour.yml

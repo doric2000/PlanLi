@@ -1,0 +1,15 @@
+appId: com.planli.planlitravels.e2e
+# The runner verifies that both emulator network paths are disconnected.
+---
+- tapOn:
+    id: recommendation-destination-search
+- eraseText
+# Avoid a successful cached result masking the missing connection.
+- inputText: Local network lookup
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "recommendation-destination-(provider-)?retry"
+    timeout: 60000
+- assertVisible: "ניסיון נוסף"
+- takeScreenshot: network-error
