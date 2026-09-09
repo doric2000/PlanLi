@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { compactDestinationSearchText } = require('./destinationCatalogService');
 const { distanceKm } = require('./destinationIdentityService');
 const { hasVerifiedProviderDestinationApproval } = require('./destinationApprovalPolicy');
+const sriLankaPolicies = require('./data/sriLankaDestinationPolicies');
 
 const REGISTRY_PATH = 'system/destinationRegistry/entries';
 const REGISTRY_VERSION = 3;
@@ -15,7 +16,7 @@ const DESTINATION_KINDS = Object.freeze([
   'province',
 ]);
 const GROUPING_POLICIES = Object.freeze(['self', 'parent', 'approved_children']);
-const MATCH_PROFILE_VERSION = 3;
+const MATCH_PROFILE_VERSION = 4;
 const DEFAULT_MATCH_RADIUS_KM = Object.freeze({
   city_hub: 35,
   island: 60,
@@ -39,6 +40,7 @@ const GEOGRAPHIC_TYPES = new Set([
 // failures are fixed before the private registry seed is applied. The seed tool
 // enriches the full researched catalog with Google identity and viewport data.
 const BUILTIN_POLICIES = Object.freeze([
+  ...sriLankaPolicies,
   { id: 'in-munnar', countryCode: 'IN', names: { he: 'מונאר', en: 'Munnar' }, aliases: ['Munnar', 'Kannan Devan Hills', 'Rajamalai'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 10.0889, lng: 77.0595 }, radiusKm: 32 },
   { id: 'in-goa', countryCode: 'IN', names: { he: 'גואה', en: 'Goa' }, aliases: ['Goa', 'North Goa', 'South Goa'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 15.2993, lng: 74.124 }, radiusKm: 85 },
   { id: 'in-dharamshala', countryCode: 'IN', names: { he: 'דרמסלה', en: 'Dharamshala' }, aliases: ['Dharamshala', 'McLeod Ganj', 'Mcleodganj'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 32.219, lng: 76.3234 }, radiusKm: 18 },
@@ -260,6 +262,11 @@ function buildMatchProfile(entry, { radiusCapKm = Infinity } = {}) {
     source: entry?.matchProfile?.source || (legacyReviewed ? 'planli_reviewed_circle' : 'provider_derived'),
     identitySource: identity.source,
     identityReviewed: reviewedOverride,
+    // Provider bounds help rank candidates; only reviewed coverage proves
+    // membership. Policy approval must not erase semantic alias matching.
+    containmentReviewed: legacyReviewed || entry?.matchProfile?.source === 'planli_reviewed',
+    aliasEligible: identity.compatible && !exactOnlyNaturalFeature &&
+      (trusted || hasVerifiedProviderDestinationApproval(entry)),
     areas,
     aliasMaxDistanceKm: Number(entry?.matchProfile?.aliasMaxDistanceKm ||
       Math.max(15, ...areas.filter((area) => area.type === 'circle').map((area) => area.radiusKm), 0)),
@@ -494,7 +501,7 @@ function matchCanonicalEntry(entries, {
   const activeEntries = prepareEntries(entries)
     .filter((entry) => entry.status === 'active' && entry.countryCode === code &&
       !excluded.has(entry.kind));
-  const candidates = activeEntries.filter((entry) => entry.matchProfile?.trust === 'trusted' &&
+  const candidates = activeEntries.filter((entry) => entry.matchProfile?.aliasEligible &&
     !exactOnly.has(entry.kind));
   if (providerPlaceId) {
     const exactCandidates = activeEntries.filter((entry) =>
@@ -516,8 +523,20 @@ function matchCanonicalEntry(entries, {
       source: 'canonical_google_place_id',
     };
   }
+  const membershipMatches = activeEntries.filter((entry) => providerPlaceId &&
+    entry.membership?.reviewed === true &&
+    entry.membership.googlePlaceIds?.includes(providerPlaceId) &&
+    coordinates && entry.center &&
+    distanceKm(entry.center, coordinates) <= derivedRadiusKm(entry));
+  if (membershipMatches.length === 1) {
+    return { entry: groupedEntryFor(membershipMatches[0], activeEntries), source: 'canonical_reviewed_membership' };
+  }
+  if (membershipMatches.length > 1) return { ambiguity: membershipMatches.slice(0, 3) };
   const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
-  const rawContaining = candidates.filter((entry) => coordinates && entryContainsPoint(entry, coordinates));
+  const rawContaining = candidates.filter((entry) => coordinates &&
+    (entryContainsPoint(entry, coordinates) ||
+      (entry.matchProfile.aliasEligible && entry.center &&
+        distanceKm(entry.center, coordinates) <= derivedRadiusKm(entry))));
   const rawContainingIds = new Set(rawContaining.map((entry) => entry.id));
   const rawAliasMatches = candidates.filter((entry) => {
     if (!entry.aliasesNormalized.some((alias) => aliasKeys.has(alias))) return false;
@@ -541,7 +560,8 @@ function matchCanonicalEntry(entries, {
   }
   const aliasMatchIds = new Set(aliasMatches.map((entry) => entry.id));
   const eligible = containing.filter((entry) => aliasMatchIds.has(entry.id));
-  const geometryFallback = containing.filter((entry) => !aliasRequired.has(entry.kind));
+  const geometryFallback = containing.filter((entry) => !aliasRequired.has(entry.kind) &&
+    entry.matchProfile?.trust === 'trusted' && entry.matchProfile?.containmentReviewed);
   const pool = eligible.length ? eligible : geometryFallback;
   if (!pool.length) return null;
   const children = pool.filter((entry) => entry.parentId &&
@@ -587,14 +607,16 @@ async function registryEntriesForCountry(db, countryCode, now = Date.now()) {
       kind: reviewed.kind,
       parentId: reviewed.parentId || null,
       groupingPolicy: reviewed.groupingPolicy,
-      center: reviewed.center,
+      ...(reviewed.center ? { center: reviewed.center } : {}),
       ...(reviewed.viewport ? { viewport: reviewed.viewport } : {}),
       ...(reviewed.radiusKm ? { radiusKm: reviewed.radiusKm } : {}),
       providerIdentity: {
         ...(entry.providerIdentity || {}),
         ...(reviewed.providerIdentity || {}),
       },
-      geometryPolicy: {
+      ...(reviewed.membership ? { membership: reviewed.membership } : {}),
+      ...(reviewed.providerRefs ? { providerRefs: reviewed.providerRefs, googleTypes: reviewed.googleTypes } : {}),
+      geometryPolicy: reviewed.geometryPolicy || {
         autoMatchEligible: true,
         aliasAutoMatchEligible: true,
         source: 'planli_reviewed',

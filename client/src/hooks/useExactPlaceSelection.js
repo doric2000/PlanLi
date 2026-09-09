@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   finalizeDestinationChoice,
+  requestDestinationChoice,
+  confirmProvisionalDestinationName,
   resolveDestinationForPlacePreview,
   searchPlaces,
 } from '../services/LocationService';
@@ -191,6 +193,11 @@ export default function useExactPlaceSelection({
     try {
       const result = await resolveSelectionWithExpiryRecovery(selection);
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      if (result?.status === 'destination_name_confirmation_required') {
+        setDestinationChoice(result);
+        setPendingLocation({ place: result.place });
+        return null;
+      }
       if (result?.status === 'destination_choice_required') {
         if (preferredDestination?.countryId && preferredDestination?.cityId) {
           try {
@@ -287,25 +294,21 @@ export default function useExactPlaceSelection({
           incidentId: destinationChoice.incidentId,
         });
       } catch (error) {
-        if (!destinationChoiceExpired(error) || !lastSelection) throw error;
+        if (!destinationChoiceExpired(error)) throw error;
         const selectedAlternative = (destinationChoice.alternatives || [])
           .find((alternative) => alternative.destinationChoiceId === destinationChoiceId);
-        const refreshed = await resolveSelectionWithExpiryRecovery(lastSelection);
-        if (refreshed?.status === 'resolved') {
-          result = refreshed;
-        } else {
-          const replacement = (refreshed?.alternatives || []).find((alternative) =>
-            alternative.countryId === selectedAlternative?.countryId &&
-            alternative.cityId === selectedAlternative?.cityId
-          );
-          if (!replacement) throw error;
-          setDestinationChoice(refreshed);
-          result = await finalizeDestinationChoice({
-            resolutionId: refreshed.resolutionId,
-            destinationChoiceId: replacement.destinationChoiceId,
-            incidentId: refreshed.incidentId,
-          });
-        }
+        if (!selectedAlternative) throw error;
+        const place = destinationChoice.place || pendingLocation?.place || selectedPlace;
+        const renewedChoice = await requestDestinationChoice({
+          resolvedPlaceToken: destinationChoice.resolvedPlaceToken || place?.resolvedPlaceToken,
+          placeId: place?.placeId, incidentId: destinationChoice.incidentId,
+        });
+        if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+        setDestinationChoice(renewedChoice);
+        result = await finalizeDestinationChoice({
+          resolutionId: renewedChoice.resolutionId, incidentId: renewedChoice.incidentId,
+          destinationRef: { countryId: selectedAlternative.countryId, cityId: selectedAlternative.cityId },
+        });
       }
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
       const nextValue = buildExactPlaceValue(
@@ -333,7 +336,7 @@ export default function useExactPlaceSelection({
         setResolvingLocation(false);
       }
     }
-  }, [commitResolvedLocation, destinationChoice, lastSelection, locale, locationQuery]);
+  }, [commitResolvedLocation, destinationChoice, pendingLocation, selectedPlace, locale, locationQuery]);
 
   const chooseFallbackDestination = useCallback(async (destination, { autoConfirm = false } = {}) => {
     if (!destinationChoice?.resolutionId || !destination?.countryId || !destination?.cityId) return null;
@@ -353,20 +356,18 @@ export default function useExactPlaceSelection({
           ...destinationSelection,
         });
       } catch (error) {
-        if (!destinationChoiceExpired(error) || !lastSelection) throw error;
-        const refreshed = await resolveSelectionWithExpiryRecovery(lastSelection);
-        if (refreshed?.status === 'resolved') {
-          result = refreshed;
-        } else if (refreshed?.status === 'destination_choice_required') {
-          setDestinationChoice(refreshed);
-          result = await finalizeDestinationChoice({
-            resolutionId: refreshed.resolutionId,
-            incidentId: refreshed.incidentId,
-            ...destinationSelection,
-          });
-        } else {
-          throw error;
-        }
+        if (!destinationChoiceExpired(error)) throw error;
+        const place = destinationChoice.place || pendingLocation?.place || selectedPlace;
+        const renewedChoice = await requestDestinationChoice({
+          resolvedPlaceToken: destinationChoice.resolvedPlaceToken || place?.resolvedPlaceToken,
+          placeId: place?.placeId, incidentId: destinationChoice.incidentId,
+        });
+        if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+        setDestinationChoice(renewedChoice);
+        result = await finalizeDestinationChoice({
+          resolutionId: renewedChoice.resolutionId, incidentId: renewedChoice.incidentId,
+          ...destinationSelection,
+        });
       }
       if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
       const nextValue = buildExactPlaceValue(
@@ -394,12 +395,58 @@ export default function useExactPlaceSelection({
         setResolvingLocation(false);
       }
     }
-  }, [commitResolvedLocation, destinationChoice, lastSelection, locale, locationQuery]);
+  }, [commitResolvedLocation, destinationChoice, pendingLocation, selectedPlace, locale, locationQuery]);
 
   const retryLocationResolution = useCallback((options) => {
     if (!lastSelection) return Promise.resolve(null);
     return handleSelectGooglePlace(lastSelection, options);
   }, [handleSelectGooglePlace, lastSelection]);
+
+  const changeDestination = useCallback(async () => {
+    const place = pendingLocation?.place || selectedPlace;
+    if (!place?.placeId) return;
+    const generation = ++resolutionGenerationRef.current;
+    setResolvingLocation(true);
+    setLocationResolveError(null);
+    try {
+      const choice = await requestDestinationChoice({
+        resolvedPlaceToken: destinationChoice?.resolvedPlaceToken || place.resolvedPlaceToken,
+        incidentId: place.incidentId, placeId: place.placeId,
+      });
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return;
+      setDestinationChoice(choice);
+      setPendingLocation({ place });
+    } catch (error) {
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return;
+      setLocationResolveError(locationErrorMessage(error, locale));
+      setLocationResolveRetryable(locationErrorRetryable(error));
+    } finally {
+      if (mountedRef.current && generation === resolutionGenerationRef.current) setResolvingLocation(false);
+    }
+  }, [locale, pendingLocation, selectedPlace, destinationChoice]);
+
+  const confirmDestinationName = useCallback(async (confirmedHebrewName, { autoConfirm = false } = {}) => {
+    const generation = ++resolutionGenerationRef.current;
+    setResolvingLocation(true);
+    try {
+      const result = await confirmProvisionalDestinationName({
+        resolvedPlaceToken: destinationChoice?.resolvedPlaceToken,
+        incidentId: destinationChoice?.incidentId, confirmedHebrewName, selectionIntent: 'exact_place',
+      });
+      if (!mountedRef.current || generation !== resolutionGenerationRef.current) return null;
+      if (result.status !== 'resolved') { setDestinationChoice(result); return null; }
+      const next = buildExactPlaceValue(result.destination.country, result.destination.city, result.place);
+      if (autoConfirm) commitResolvedLocation(next, locationQuery);
+      else { setPendingLocation(next); setDestinationChoice(null); }
+      setLocationResolveError(null);
+      return next;
+    } catch (error) {
+      if (mountedRef.current && generation === resolutionGenerationRef.current) setLocationResolveError(locationErrorMessage(error, locale));
+      return null;
+    } finally {
+      if (mountedRef.current && generation === resolutionGenerationRef.current) setResolvingLocation(false);
+    }
+  }, [commitResolvedLocation, destinationChoice, locale, locationQuery]);
 
   const googleSearchFn = useCallback(
     (text, options) => searchPlaces(text, {
@@ -415,6 +462,8 @@ export default function useExactPlaceSelection({
     chooseDestination,
     chooseFallbackDestination,
     chooseAnotherLocation,
+    changeDestination,
+    confirmDestinationName,
     confirmPendingLocation,
     googleSearchFn,
     handleSelectGooglePlace,

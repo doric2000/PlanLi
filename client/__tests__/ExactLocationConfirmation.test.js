@@ -6,7 +6,7 @@ jest.mock('../src/components/ExactLocationMapPreview', () => function MapPreview
   const { View } = require('react-native');
   return <View testID="mock-location-map" />;
 });
-jest.mock('../src/components/DestinationFallbackPicker', () => function DestinationFallbackPicker({ onSelect }) {
+jest.mock('../src/components/DestinationFallbackPicker', () => function DestinationFallbackPicker({ onSelect, countryId }) {
   const { TouchableOpacity, Text } = require('react-native');
   return (
     <TouchableOpacity
@@ -14,6 +14,7 @@ jest.mock('../src/components/DestinationFallbackPicker', () => function Destinat
       onPress={() => onSelect({ countryId: 'IT', cityId: 'dolomites' })}
     >
       <Text>Fallback picker</Text>
+      <Text testID="mock-destination-country">{countryId}</Text>
     </TouchableOpacity>
   );
 });
@@ -46,6 +47,16 @@ test('exact-location confirmation exposes prepared English copy when requested',
   expect(onConfirm).toHaveBeenCalledTimes(1);
 });
 
+test('a resolved place exposes destination correction without replacing the place', () => {
+  const onChangeDestination = jest.fn();
+  const screen = render(<ExactLocationConfirmation pendingLocation={{ location: 'חופי הדרום',
+    country: 'סרי לנקה', place: { placeId: 'park', name: 'Udawalawe National Park' } }}
+    onChangeDestination={onChangeDestination} />);
+  fireEvent.press(screen.getByTestId('exact-location-change-destination'));
+  expect(onChangeDestination).toHaveBeenCalledTimes(1);
+  expect(screen.getByText('Udawalawe National Park')).toBeTruthy();
+});
+
 test('exact-location confirmation renders copy and controls before place resolution or map readiness', () => {
   const screen = render(
     <ExactLocationConfirmation
@@ -67,6 +78,7 @@ test('exact-location confirmation offers destination search instead of an error'
   const screen = render(
     <ExactLocationConfirmation
       destinationChoice={{
+        destinationCountryId: 'סרי לנקה', destinationCountryCode: 'LK',
         resolutionId: 'dcr_fallback1', alternatives: [], allowDestinationSearch: true,
         place: {
           placeId: 'hotel-liro', name: 'Hotel Liro', address: 'Vlorë, Albania',
@@ -78,6 +90,7 @@ test('exact-location confirmation offers destination search instead of an error'
     />
   );
   expect(screen.getByTestId('exact-location-choice-preview')).toBeTruthy();
+  expect(screen.getByTestId('mock-destination-country').props.children).toBe('סרי לנקה');
   expect(screen.getByTestId('mock-location-map')).toBeTruthy();
   expect(screen.getByText('Hotel Liro')).toBeTruthy();
   fireEvent.press(screen.getByTestId('mock-destination-fallback'));

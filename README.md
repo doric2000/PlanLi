@@ -2,6 +2,26 @@
 
 PlanLi is a photo-first travel application built with Expo and Firebase.
 
+### Destination publication repair (2026-09-09)
+
+Under explicit authorization, a fingerprinted production data repair completed at
+`2026-09-09T05:56:38Z` in `planli-f0b12` / Firestore `eur3`. Both
+destination-held recommendations were released; independent verification found
+all 42 recommendations active with approved destinations in the public catalog.
+Four destinations were added: Udawalawe National Park, Nuwara Eliya, Theth and
+Ha Long city. Five recommendation assignments/names were corrected, Ha Long Bay's
+identity was approved, and the misidentified South Coast record was retired.
+Two cases for already absent recommendations and two stale destination reviews
+were reconciled. The stale held admin search projection was refreshed.
+
+Source: `fix/destination-resolution-and-world-catalog`, based on
+`1c704dbaf351d7cbebe8cdcb8c08d92ac00c9b65`, with the reviewed destination changes.
+This was a data repair, not a backend/client deployment or store release.
+The new resolver, picker and admin projection event-order fix still require
+deployment. Bulk enrichment of the 3,000 research candidates was not applied;
+the existing Text Search quota remains zero. See
+[destination resolution and repair details](docs/destination-resolution.md).
+
 ## Current environment status
 
 PlanLi has an external TestFlight beta and an active Google Play internal-testing

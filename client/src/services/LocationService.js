@@ -3,6 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
 import { resolveRecommendationDestination } from './RecommendationService';
 import { compactDestinationText } from '../utils/destinationSearch';
+import { searchDestinations } from './DestinationService';
 
 let searchPlacesCallable;
 let resolvePlaceSelectionCallable;
@@ -70,6 +71,35 @@ export const searchCities = async (searchText, { signal } = {}) => {
   }
 };
 
+export async function searchDestinationChoices(query, { countryId, onResults } = {}) {
+  const catalogRequest = searchDestinations({ query, countryId, limit: 10 }).then((result) => {
+    const local = (result?.items || []).map((item) => ({
+      id: `catalog:${item.countryId}:${item.cityId}`,
+      destinationRef: { countryId: item.countryId, cityId: item.cityId },
+      structured_formatting: {
+        main_text: item.names?.he || item.names?.en,
+        secondary_text: item.countryNames?.he || item.countryNames?.en || item.countryId,
+      },
+    }));
+    // Existing verified destinations stay selectable while Google is pending.
+    if (local.length) onResults?.(local);
+    return local;
+  });
+  const [catalog, provider] = await Promise.allSettled([
+    catalogRequest,
+    searchCities(countryId ? `${query}, ${countryId}` : query),
+  ]);
+  if (catalog.status === 'rejected' && provider.status === 'rejected') throw catalog.reason;
+  return [...(catalog.status === 'fulfilled' ? catalog.value : []),
+    ...(provider.status === 'fulfilled' ? provider.value : [])];
+}
+
+export const requestDestinationChoice = ({ resolvedPlaceToken, incidentId, placeId }) =>
+  resolveRecommendationDestination({
+    resolvedPlaceToken, incidentId, placeId, requestDestinationChoice: true,
+    supportsDestinationChoice: true, supportsDestinationSearch: true,
+  });
+
 export const searchPlaces = async (searchText, { signal, locationBias } = {}) => {
   if (signal?.aborted) return [];
   try {
@@ -90,15 +120,23 @@ export const resolveDestinationForPlacePreview = async (selectionOrPlaceId, {
   const selection = selectionOrPlaceId && typeof selectionOrPlaceId === 'object'
     ? selectionOrPlaceId
     : null;
-  const placeId = selection?.providerPlaceId || selection?.place_id || selectionOrPlaceId;
+  const placeId = selection?.providerPlaceId || selection?.place_id || selection?.placeId || selectionOrPlaceId;
   if (!selection?.sessionId || !selection?.selectionId) {
-    return resolveRecommendationDestination(typeof selectionOrPlaceId === 'object'
+    const result = await resolveRecommendationDestination(typeof selectionOrPlaceId === 'object'
       ? {
           ...(selectionOrPlaceId || {}),
+          ...(typeof placeId === 'string' ? { placeId } : {}),
+          supportsDestinationChoice: true,
+          supportsDestinationSearch: true,
           selectionIntent,
           ...(confirmedHebrewName ? { confirmedHebrewName } : {}),
         }
-      : { placeId, selectionIntent, ...(confirmedHebrewName ? { confirmedHebrewName } : {}) });
+      : { placeId, selectionIntent, supportsDestinationChoice: true, supportsDestinationSearch: true,
+          ...(confirmedHebrewName ? { confirmedHebrewName } : {}) });
+    return { ...result, ...(result?.place ? { place: { ...result.place,
+      ...(result.resolvedPlaceToken ? { resolvedPlaceToken: result.resolvedPlaceToken } : {}),
+      ...(result.incidentId ? { incidentId: result.incidentId } : {}),
+    } } : {}) };
   }
   const response = await getResolvePlaceSelectionCallable()({
     sessionId: selection.sessionId,
@@ -168,11 +206,12 @@ export const confirmProvisionalDestinationName = async ({
   resolvedPlaceToken,
   incidentId,
   confirmedHebrewName,
+  selectionIntent = 'destination',
 }) => {
   const result = await resolveRecommendationDestination({
     resolvedPlaceToken,
     incidentId,
-    selectionIntent: 'destination',
+    selectionIntent,
     confirmedHebrewName,
     supportsDestinationChoice: true,
     supportsDestinationSearch: true,

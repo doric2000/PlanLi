@@ -1,6 +1,19 @@
 const HEBREW_LETTER = /[\u05D0-\u05EA]/;
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
-const DESTINATION_NAMING_POLICY_VERSION = 2;
+const DESTINATION_NAMING_POLICY_VERSION = 3;
+const { CANDIDATES } = require('./data/canonicalDestinationCandidates');
+const sriLankaPolicies = require('./data/sriLankaDestinationPolicies');
+const { distanceKm } = require('./destinationIdentityService');
+const catalogNameIndex = new Map();
+for (const entry of [...CANDIDATES, ...sriLankaPolicies]) {
+  for (const alias of [entry.names.en, ...(entry.aliases || [])]) {
+    const key = overrideKey(entry.countryCode, alias);
+    if (key.endsWith(':')) continue;
+    const entries = catalogNameIndex.get(key) || new Set();
+    entries.add(entry);
+    catalogNameIndex.set(key, entries);
+  }
+}
 
 const HEBREW_DESTINATION_OVERRIDES = Object.freeze({
   'AL:vlore': 'ולורה',
@@ -38,9 +51,11 @@ function hasHebrewName(value) {
 function overrideKey(countryCode, value) {
   const folded = String(value || '')
     .normalize('NFKD')
-    .replace(COMBINING_MARKS, '')
+    .replace(/\p{M}+/gu, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
+    // Keep every writing system: otherwise all Hebrew/local-language aliases
+    // collapse to the same country-only key and can rename an unrelated place.
+    .replace(/[^\p{L}\p{N}]+/gu, '');
   return `${String(countryCode || '').trim().toUpperCase()}:${folded}`;
 }
 
@@ -90,6 +105,7 @@ function resolveHebrewDestinationName({
   existingHebrewName,
   existingSource,
   existingAdminName,
+  coordinates,
 }) {
   const admin = String(existingAdminName || '').trim();
   if (hasHebrewName(admin)) return { name: admin, source: 'admin' };
@@ -103,6 +119,14 @@ function resolveHebrewDestinationName({
     overrideKey(countryCode, english)
   ];
   if (override) return { name: override, source: 'override' };
+  if (['planli_registry', 'user_confirmed'].includes(existingSource) && hasHebrewName(existing)) {
+    return { name: existing, source: existingSource };
+  }
+  const matchedEntries = [...(catalogNameIndex.get(overrideKey(countryCode, english)) || [])]
+    .filter((entry) => !entry.center || !coordinates ||
+      distanceKm(entry.center, coordinates) <= (entry.kind === 'city_hub' ? 15 : 50));
+  const uniqueNames = [...new Set(matchedEntries.map((entry) => entry.names.he).filter(hasHebrewName))];
+  if (uniqueNames.length === 1) return { name: uniqueNames[0], source: 'planli_registry' };
   if (hasHebrewName(google)) return { name: google, source: 'google' };
   if (hasHebrewName(existing)) {
     return { name: existing, source: existingSource || 'existing' };
@@ -146,6 +170,7 @@ function normalizeDestinationHebrewData(destination, options = {}) {
     existingHebrewName: names.he || source.identity?.names?.he || source.names?.he,
     existingSource,
     existingAdminName: existingSource === 'admin' ? names.he : '',
+    coordinates: googleCache.coordinates || source.identity?.coordinates || source.coordinates,
   });
   if (!hasHebrewName(localized.name)) {
     return { destination: source, name: '', source: 'unavailable', changed: false };

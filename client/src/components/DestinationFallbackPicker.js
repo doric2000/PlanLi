@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,7 +8,7 @@ import {
   confirmProvisionalDestinationName,
   finalizeDestinationChoice,
   resolveDestinationForPlacePreview,
-  searchCities,
+  searchDestinationChoices,
 } from '../services/LocationService';
 import { colors, recommendationComposerStyles as styles } from '../styles';
 
@@ -30,7 +30,7 @@ function destinationValue(result, selection) {
   };
 }
 
-export default function DestinationFallbackPicker({ onSelect }) {
+export default function DestinationFallbackPicker({ onSelect, countryId }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState('');
@@ -39,16 +39,25 @@ export default function DestinationFallbackPicker({ onSelect }) {
   const [nameConfirmation, setNameConfirmation] = useState(null);
   const [confirmedName, setConfirmedName] = useState('');
   const searchRequestRef = useRef(0);
+  const committingRef = useRef(false);
+  useEffect(() => () => { searchRequestRef.current += 1; }, []);
 
   const commitSelection = async (value) => {
     if (!value) throw new Error('Destination resolution is incomplete.');
     if (typeof onSelect !== 'function') {
       throw new Error('Destination selection handler is unavailable.');
     }
-    await onSelect(value);
+    committingRef.current = true;
+    setBusy('commit');
+    try {
+      await onSelect(value);
+    } finally {
+      committingRef.current = false;
+    }
   };
 
   const search = async () => {
+    if (committingRef.current) return;
     const normalizedQuery = query.trim();
     if (normalizedQuery.length < 2) {
       searchRequestRef.current += 1;
@@ -63,7 +72,14 @@ export default function DestinationFallbackPicker({ onSelect }) {
     setChoice(null);
     setNameConfirmation(null);
     try {
-      const nextResults = await searchCities(normalizedQuery);
+      const nextResults = await searchDestinationChoices(normalizedQuery, {
+        countryId,
+        onResults: (available) => {
+          if (searchRequestRef.current !== requestId) return;
+          setResults(available);
+          setBusy('');
+        },
+      });
       if (searchRequestRef.current === requestId) {
         setResults(Array.isArray(nextResults) ? nextResults : []);
       }
@@ -78,22 +94,32 @@ export default function DestinationFallbackPicker({ onSelect }) {
   };
 
   const changeQuery = (value) => {
+    if (committingRef.current) return;
     searchRequestRef.current += 1;
     setQuery(value);
     setResults([]);
     setChoice(null);
     setNameConfirmation(null);
     setError('');
-    setBusy((current) => (current === 'search' ? '' : current));
+    setBusy('');
   };
 
   const resolve = async (selection) => {
+    if (committingRef.current) return;
+    const requestId = ++searchRequestRef.current;
     setBusy(selection.selectionId || selection.id || 'resolve');
     setError('');
     try {
+      if (selection.destinationRef) {
+        await commitSelection({ ...selection.destinationRef,
+          name: selection.structured_formatting?.main_text,
+        });
+        return;
+      }
       const result = await resolveDestinationForPlacePreview(selection, {
         selectionIntent: 'destination',
       });
+      if (requestId !== searchRequestRef.current) return;
       if (result?.status === 'destination_name_confirmation_required') {
         setNameConfirmation({ ...result, selection });
         setConfirmedName(result.nameConfirmation?.suggestedHebrewName || '');
@@ -108,13 +134,14 @@ export default function DestinationFallbackPicker({ onSelect }) {
       const value = destinationValue(result, selection);
       await commitSelection(value);
     } catch (selectionError) {
-      setError(selectionError?.userMessage || 'לא הצלחנו לאמת את היעד. בחרו שוב או נסו יעד אחר.');
+      if (requestId === searchRequestRef.current) setError(selectionError?.userMessage || 'לא הצלחנו לאמת את היעד. בחרו שוב או נסו יעד אחר.');
     } finally {
-      setBusy('');
+      if (requestId === searchRequestRef.current) setBusy('');
     }
   };
 
   const finalizeChoice = async (destinationChoiceId) => {
+    const requestId = ++searchRequestRef.current;
     setBusy(destinationChoiceId);
     setError('');
     try {
@@ -123,17 +150,19 @@ export default function DestinationFallbackPicker({ onSelect }) {
         destinationChoiceId,
         incidentId: choice.incidentId,
       });
+      if (requestId !== searchRequestRef.current) return;
       const value = destinationValue(result, choice.selection);
       await commitSelection(value);
     } catch (selectionError) {
-      setError(selectionError?.userMessage || 'לא הצלחנו לאמת את היעד. נסו שוב.');
+      if (requestId === searchRequestRef.current) setError(selectionError?.userMessage || 'לא הצלחנו לאמת את היעד. נסו שוב.');
     } finally {
-      setBusy('');
+      if (requestId === searchRequestRef.current) setBusy('');
     }
   };
 
   const confirmName = async () => {
     if (!nameConfirmation?.resolvedPlaceToken || !confirmedName.trim()) return;
+    const requestId = ++searchRequestRef.current;
     setBusy('confirm-name');
     setError('');
     try {
@@ -142,12 +171,13 @@ export default function DestinationFallbackPicker({ onSelect }) {
         incidentId: nameConfirmation.incidentId,
         confirmedHebrewName: confirmedName.trim(),
       });
+      if (requestId !== searchRequestRef.current) return;
       const value = destinationValue(result, nameConfirmation.selection);
       await commitSelection(value);
     } catch (selectionError) {
-      setError(selectionError?.userMessage || 'השם חייב להיות שם עברי קצר וברור.');
+      if (requestId === searchRequestRef.current) setError(selectionError?.userMessage || 'השם חייב להיות שם עברי קצר וברור.');
     } finally {
-      setBusy('');
+      if (requestId === searchRequestRef.current) setBusy('');
     }
   };
 
@@ -161,13 +191,14 @@ export default function DestinationFallbackPicker({ onSelect }) {
           value={query}
           onChangeText={changeQuery}
           onSubmitEditing={search}
+          editable={busy !== 'commit'}
           placeholder="למשל: הדולומיטים, איטליה"
           style={styles.searchInput}
           textAlign="right"
           autoCorrect={false}
           testID="destination-fallback-search"
         />
-        <TouchableOpacity onPress={search} accessibilityRole="button" testID="destination-fallback-search-button">
+        <TouchableOpacity onPress={search} disabled={busy === 'commit'} accessibilityRole="button" testID="destination-fallback-search-button">
           <AppText style={styles.textAction}>חיפוש</AppText>
         </TouchableOpacity>
       </View>
@@ -182,6 +213,7 @@ export default function DestinationFallbackPicker({ onSelect }) {
           <AppTextInput
             value={confirmedName}
             onChangeText={setConfirmedName}
+            editable={!busy}
             style={styles.searchInput}
             textAlign="right"
             testID="destination-fallback-hebrew-name"
@@ -189,7 +221,7 @@ export default function DestinationFallbackPicker({ onSelect }) {
           <TouchableOpacity
             style={styles.destinationResult}
             onPress={confirmName}
-            disabled={busy === 'confirm-name' || !confirmedName.trim()}
+            disabled={Boolean(busy) || !confirmedName.trim()}
             accessibilityRole="button"
             testID="destination-fallback-confirm-name"
           >
@@ -203,6 +235,7 @@ export default function DestinationFallbackPicker({ onSelect }) {
           key={alternative.destinationChoiceId}
           style={styles.destinationResult}
           onPress={() => finalizeChoice(alternative.destinationChoiceId)}
+          disabled={Boolean(busy)}
           accessibilityRole="button"
           testID={`destination-fallback-choice-${alternative.destinationChoiceId}`}
         >

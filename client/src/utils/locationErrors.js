@@ -14,7 +14,7 @@ export function locationErrorKind(error) {
   if (reason === 'route_new_place_limit') return 'requestCeiling';
   if (reason === 'destination_reassignment_in_progress') return 'temporarilyLocked';
   if (reason === 'selection_expired' || message.includes('expired')) return 'expired';
-  if (reason === 'destination_not_resolved') return 'destinationRequired';
+  if (reason === 'destination_not_resolved' || reason === 'destination_selection_required') return 'destinationRequired';
   if (reason === 'destination_not_found') return 'destinationNotFound';
   if (reason === 'place_not_found') return 'placeNotFound';
   if (reason === 'destination_outside_bounds' || reason === 'country_mismatch' ||

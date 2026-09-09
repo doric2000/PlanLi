@@ -130,6 +130,23 @@ async function handleAdminSearchProjectionWrite({ admin, event }) {
   const target = targetForPath(sourcePath);
   if (!target) return { status: 'ignored', reason: 'unsupported_path' };
   const ref = admin.firestore().doc(`system/moderation/search/${projectionId(sourcePath)}`);
+  if (target.type === 'recommendation') {
+    // Firestore events can arrive out of order. A delayed hold event must not
+    // replace the admin projection of an already published recommendation.
+    const db = admin.firestore();
+    return db.runTransaction(async (transaction) => {
+      const current = await transaction.get(db.doc(sourcePath));
+      if (!current.exists) {
+        transaction.delete(ref);
+        return { status: 'deleted' };
+      }
+      transaction.set(ref, {
+        ...buildAdminSearchProjection({ target, data: current.data() || {} }),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: false });
+      return { status: 'updated', projectionId: ref.id };
+    });
+  }
   if (!after?.exists) {
     await ref.delete().catch((error) => {
       if (error?.code !== 5 && error?.code !== 404) throw error;

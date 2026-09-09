@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { CANDIDATES, REGIONAL_COUNTS } = require('./data/canonicalDestinationCandidates');
+const { CANDIDATES, CURATED_CANDIDATES, REGIONAL_COUNTS } = require('./data/canonicalDestinationCandidates');
 const {
   BUILTIN_POLICIES,
   buildMatchProfile,
@@ -33,9 +33,11 @@ test('legacy registry IDs are deterministic and valid for hashed destination IDs
 });
 
 test('researched catalog stays within the approved size and regional allocation', () => {
-  assert.equal(CANDIDATES.length, 252);
+  assert.equal(CANDIDATES.length, 3000);
+  assert.ok(CURATED_CANDIDATES.every((old) => CANDIDATES.some((entry) => entry.id === old.id)));
   assert.deepEqual(REGIONAL_COUNTS, {
-    europe: 102, asia: 80, central_america: 30, south_america: 40,
+    europe: 1000, east_southeast_asia: 430, south_central_asia: 350, latin_america: 420,
+    north_america: 300, africa: 300, oceania: 160, israel: 40,
   });
   assert.equal(new Set(CANDIDATES.map((entry) => entry.id)).size, CANDIDATES.length);
   CANDIDATES.forEach((entry) => {
@@ -453,4 +455,36 @@ test('equally strong overlapping destination profiles require an explicit choice
     { ...base, id: 'zz-second', aliases: ['Second'] },
   ], { countryCode: 'ZZ', coordinates: { lat: 1, lng: 1 } });
   assert.deepEqual(match.ambiguity.map((entry) => entry.id), ['zz-first', 'zz-second']);
+});
+
+test('an inland place is not assigned to a tourism region through its provider viewport', () => {
+  const match = matchCanonicalEntry([{
+    id: 'lk-coast-fixture', countryCode: 'LK', names: { he: 'חוף', en: 'Coast' },
+    kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 6.23, lng: 80.54 },
+    googleTypes: ['administrative_area_level_1', 'political'],
+    providerRefs: { googlePlaceId: 'province-fixture' },
+    viewport: { southwest: { lat: 5.9, lng: 79.9 }, northeast: { lat: 6.6, lng: 81.7 } },
+  }], { countryCode: 'LK', coordinates: { lat: 6.47, lng: 80.87 }, aliases: ['Udawalawa'] });
+  assert.equal(match, null);
+});
+
+test('reviewed trail membership survives destination policy approval', () => {
+  const ella = BUILTIN_POLICIES.find((entry) => entry.id === 'lk-ella');
+  const { buildVerifiedProviderDestinationApproval } = require('./destinationApprovalPolicy');
+  const approved = buildVerifiedProviderDestinationApproval({
+    entry: { ...ella, radiusKm: 35 }, countryId: 'LK', destinationPath: 'countries/LK/destinations/ella',
+  });
+  const match = matchCanonicalEntry([approved.registryEntry], {
+    countryCode: 'LK', providerPlaceId: ella.membership.googlePlaceIds[0],
+    aliases: ['Badulla'], coordinates: { lat: 6.865, lng: 81.063 },
+  });
+  assert.equal(match?.entry.id, 'lk-ella');
+  assert.equal(match?.source, 'canonical_reviewed_membership');
+  const alias = matchCanonicalEntry([approved.registryEntry], {
+    countryCode: 'LK', aliases: ['Ella'], coordinates: ella.center,
+  });
+  assert.equal(alias?.entry.id, 'lk-ella');
+  assert.equal(matchCanonicalEntry([approved.registryEntry], {
+    countryCode: 'LK', aliases: ['Badulla'], coordinates: ella.center,
+  }), null);
 });
