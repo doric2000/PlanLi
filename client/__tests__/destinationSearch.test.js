@@ -26,6 +26,8 @@ describe('destinationSearch', () => {
     ['Winston-Salem', 'winston salem'],
     ['Winston-Salem', 'salem'],
     ['São Paulo', 'sao paulo'],
+    ['Đà Nẵng', 'Da Nang'],
+    ['Hội An Đông', 'Hoi An Dong'],
   ])('matches formatting variants for %s with %s', (name, query) => {
     const destination = { id: 'match', countryId: 'ca', names: { en: name } };
     expect(filterAndSortDestinations([destination], { query })).toEqual([destination]);

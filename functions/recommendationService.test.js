@@ -1412,6 +1412,31 @@ test('Google destination resolution maps the reported Chiang Rai hotel to its Th
   }
 });
 
+test('Hoi An ward resolves through the provider adapter and destination service without another search', async () => {
+  clearRegistryCache();
+  const admin = createFakeAdmin({
+    'countries/VN': { name: 'וייטנאם', names: { he: 'וייטנאם', en: 'Vietnam' }, code: 'VN',
+      region: 'Asia', currencyCode: 'VND', status: 'active' },
+  });
+  const place = require('./placesProviderAdapter').parseNewLocalizedPlace({
+    id: 'test-hoi-an-gym', displayName: { text: 'HealthFit Gym & Yoga Center Hoi An' },
+    types: ['gym', 'establishment'], location: { latitude: 15.8863324, longitude: 108.3341622 },
+    addressComponents: [
+      { longText: 'Hội An Đông', types: ['administrative_area_level_2'] },
+      { longText: 'Đà Nẵng', types: ['administrative_area_level_1'] },
+      { longText: 'Vietnam', shortText: 'VN', types: ['country'] },
+    ],
+  });
+  try {
+    const destination = await resolveGoogleDestination({ admin, placesProvider: 'new',
+      resolvedPlace: { he: place, en: place, fetchedAt: new Date() } });
+    assert.equal(destination.cityId, canonicalDestinationId('VN', 'vn-hoi-an'));
+    assert.equal(destination.cityData.googleCache.names.he, 'הוי אן');
+    assert.equal(destination.place.placeId, place.placeId);
+    assert.equal(destination.providerCallCount, 0);
+  } finally { clearRegistryCache(); }
+});
+
 test('Hampi venues resolve to the shared tourism region without locality provider fallback', async () => {
   clearRegistryCache();
   const admin = createFakeAdmin({

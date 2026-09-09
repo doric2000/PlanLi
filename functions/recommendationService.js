@@ -1441,6 +1441,7 @@ async function resolveGoogleDestination({
   if (!canonicalMatch) canonicalMatch = matchCanonicalEntry(registryEntries, {
     countryCode: preliminaryCountry.countryCode,
     providerPlaceId: parsed.placeId,
+    localityEvidence: selectedEn.localityEvidence,
     aliases: [
       ...(selectedIsDestination ? [selectedEn.displayName] : []),
       selectedEn.localityName,
@@ -1705,6 +1706,7 @@ async function resolveGoogleDestination({
       canonicalMatch = matchCanonicalEntry(registryEntries, {
         countryCode: preliminaryCountry.countryCode,
         providerPlaceId: localityPlaceId,
+        localityEvidence: localityEn.localityEvidence,
         aliases: [
           localityEn.displayName,
           localityEn.localityName,

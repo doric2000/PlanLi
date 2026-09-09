@@ -9,6 +9,43 @@ remains unverified. The implementation review below predates this release.
 
 ## Root causes and behavior
 
+### Hoi An follow-up (2026-09-09; deployment pending)
+
+The reported gym returned `Hội An Đông` at administrative level 2 and `Đà Nẵng`
+at level 1. The registry knew only `Hoi An`, and the Latin search normalizer
+discarded `Đ` instead of folding it to `D`. The automatic matcher returned no
+match; the UI then offered nearby destinations. Those suggestions did not mean
+that both destinations had been positively identified.
+
+Provider parsing now retains typed locality and sublocality evidence. Exact
+aliases at the most specific recognized level take precedence after country,
+identity, and distance checks; equally specific conflicting matches still ask
+the user. Exact provider identities, reviewed memberships, explicit choices,
+and configured parent grouping remain authoritative. Street and business names
+do not establish membership. Hoi An includes the reviewed names of its eastern
+and western wards, with accented and ASCII forms; no new destination is created.
+The official ward sites identify these areas within Da Nang:
+[Hoi An Dong](https://hoiandong.danang.gov.vn/) and
+[Hoi An Tay](https://hoiantay.danang.gov.vn/).
+
+The location map opens in a full-screen view with pan/zoom, a close action, and
+native zoom/recenter buttons. The initial view shows a wider neighborhood.
+Opening, moving, retrying, and closing the map never change the recommendation's
+coordinates or destination. Load failure retains the existing confirmation flow.
+
+Validation: 183 backend tests, 27 client tests across four suites, and three
+Android flow-routing checks passed. Replaying the fetched venue details against
+the captured live registry plus the corrected policy resolves to `vn-hoi-an`.
+The real Web component was exercised at desktop and 393×852 viewport sizes:
+map tiles, geographic labels, expand, pan, zoom, close, and retained selection.
+The isolated preview used system fonts. The added Android `location` flow covers
+the no-key map failure/retry path; execution was blocked by another process using
+the emulator ports, without stopping that process. Physical iPhone rendering
+and live rollout of this follow-up remain unverified. The read-only code review
+found no actionable regressions.
+
+### Earlier publication repair
+
 - Google Places `viewport` was treated as a destination boundary. The South Coast
   seed actually used Southern Province, so an inland national park was captured by
   `canonical_geometry`. Provider-derived coverage now ranks user choices; only
