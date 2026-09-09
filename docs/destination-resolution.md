@@ -1,6 +1,11 @@
 # Destination resolution and world catalog
 
-Implementation and authorized production data repair, 2026-09-09. Application code requires a separate deployment; the data repair below is live.
+Implementation, authorized production data repair and release, 2026-09-09.
+The ten affected backend Functions are deployed; the iOS production OTA and
+Android internal-test build 9 have been distributed. Exact source, update groups,
+checksums, timestamps and verification limits are recorded in the destination
+release sections of [README.md](../README.md). Physical-device installation
+remains unverified. The implementation review below predates this release.
 
 ## Root causes and behavior
 

@@ -17,12 +17,83 @@ were reconciled. The stale held admin search projection was refreshed.
 Source: `fix/destination-resolution-and-world-catalog`, based on
 `1c704dbaf351d7cbebe8cdcb8c08d92ac00c9b65`, with the reviewed destination changes.
 This was a data repair, not a backend/client deployment or store release.
-The new resolver, picker and admin projection event-order fix still require
-deployment. Bulk enrichment of the 3,000 research candidates was not applied;
+The backend release below deploys the resolver and admin projection fix; client
+distribution is tracked separately. Bulk enrichment of the 3,000 research
+candidates was not applied;
 the existing Text Search quota remains zero. See
 [destination resolution and repair details](docs/destination-resolution.md).
 
 ## Current environment status
+
+### Destination resolver production release (2026-09-09)
+
+Under explicit release authorization, ten existing Node.js 22 v2 Functions were
+deployed to `planli-f0b12` / `europe-west1` from the verified source archive of
+merged `main` commit `297624eeace6abc7042bd9711c6c83bf6de6981a`:
+`resolveRecommendationDestination`, `resolvePlaceSelection`, `saveRecommendation`,
+`publishRecommendationDraft`, `saveRoute`, `publishRouteDraft`,
+`onRecommendationAdminSearchWritten`, `approveDestination`,
+`updateDestinationPolicy`, and `setDestinationHebrewName`.
+Updates completed between `2026-09-09T08:11:21Z` and `2026-09-09T08:11:31Z`.
+Independent Cloud Functions readback at `2026-09-09T08:12:49Z` confirmed all ten
+`ACTIVE`, `minInstances: 0`, and all traffic on the latest revisions. Three
+unauthenticated resolve/save/draft-publication requests returned HTTP 401.
+
+The archive matched all 990 tracked source files after Git's Windows newline
+conversion. Its SHA-256 is
+`f7493d1362fd19d72d000e1a5852a0fb6ca3f4bba4e477922e2f65c15b45736f`.
+All 227 focused backend tests and 524 related client tests passed against the
+isolated release source and locked dependencies. A fresh Google Places check
+confirmed seven reviewed identities, including Udawalawe, Ella and Little Adam's
+Peak, with the expected destination assignments. All 49 active destinations
+satisfied publication policy; all 42 recommendations remained active with no
+held records or stale admin views. No bulk catalog import, Rules, IAM, Hosting
+or native build was performed by this destination release. Post-deploy Cloud
+Logging returned zero Error-severity entries for the ten deployed services.
+
+### Destination client distribution (2026-09-09)
+
+The compatible iOS OTA retains marketing version `1.1.0`, runtime `1.2.0`, and
+the existing production/TestFlight binary (build 28). Reviewed native config and
+native dependencies were unchanged from the prior production source `03b5b53`;
+the dependency change is MapLibre's Web-only package. Production Firebase,
+App Check and Sentry environment verification passed. The verified candidate
+was published to `staging` with environment `production`, group
+`d1a73da7-3770-4180-9cda-9ab99339e064`, update
+`01a0853e-30d1-7f72-afe5-450600768b67`. Its immutable bundle matched the local
+8,447,244-byte artifact, SHA-256
+`150a723e21c08ebcf4bac21992feb6e2aead9b87f1caf8dcbf31cdc3c2f73908`.
+
+The exact candidate was republished at `2026-09-09T08:20:00.742Z` to production
+group `efee7462-1560-4b8e-a0b3-01f3d162a64d`, iOS update
+`01a08540-a266-76ce-803a-00a561d2f60d`. EAS and the public production-channel
+manifest independently confirmed that group, platform, runtime, source commit
+`297624eeace6abc7042bd9711c6c83bf6de6981a`, and the identical bundle hash.
+The preceding rollback candidate is production group
+`a13ab118-255a-41c4-ab45-a0503aedd72b`.
+
+The release used an immutable `main` archive because the shared checkout
+contained other work. An initial staging group
+`58f5e536-1d6e-45a6-be44-6eafa3cd5902` was not promoted: its Git metadata followed
+a parallel checkout change. The corrected upload reused the identical bundle
+and pinned only EAS's source-commit metadata to the verified archive commit.
+Every archived tracked file was rechecked before upload; account, runtime,
+environment, production ancestry, immutable manifest and bundle-hash checks
+remained enforced. No clone, extra Git worktree or shared-workspace reset was used.
+
+Android uses the already built production artifact `1.1.0 (9)`, EAS build
+`e4441c75-68b0-49e4-963c-6e594c5fc441`, documented below. Its downloaded AAB hash
+and manifest were verified before upload to the existing internal-test track.
+Google Play reports `PlanLi 1.1.0 (9) – Destination fixes` as **Available to
+internal testers**, released at `2026-09-09T11:21+03:00`, with version code `9`.
+Release ID: `6`; track: `4701742858558783307`; app: `4975848568601147626`;
+developer: `5821955120973423060`.
+[Play release](https://play.google.com/console/u/0/developers/5821955120973423060/app/4975848568601147626/tracks/4701742858558783307/releases/6/details).
+Play reported no lost supported devices and the existing non-blocking missing
+deobfuscation-file warning. No Android OTA, public-store rollout, new native
+build or new iOS store submission accompanied this release. Installation and
+authenticated end-to-end behavior of these distributed artifacts on physical
+devices remain unverified.
 
 PlanLi has an external TestFlight beta and an active Google Play internal-testing
 track; it has not been publicly released to the App Store, Google Play, or a
@@ -96,29 +167,30 @@ EAS uploaded 28.7 MB in 12 seconds and completed the build at
 SHA-256 `5c8bed43501a0b419452b3f788f177483e15e8c310c200cc3f7b616f4c6731d8`.
 Native fingerprint: `6241dbc43d80d437f04960df3eebf4dd5bec4b1d`.
 Independent manifest inspection confirms the production package, version
-`1.1.0 (9)`, SDK 36 and production OTA channel. Submission and physical-device
-installation have not been performed. Play build 8 remains the available
-internal release; no OTA accompanies this candidate.
+`1.1.0 (9)`, SDK 36 and production OTA channel. The destination release above
+subsequently published this exact artifact as Play internal release `6`, replacing
+build 8. Physical-device installation remains unverified; no Android OTA applies.
 The pinned SDK 57 dependency map passed its local compatibility check and the
 debug build compiled successfully. Expo's online check still exits with a
 warning for twelve newer recommended patch releases (including Expo 57.0.21);
 it did not pass. This task did not upgrade the SDK packages or waive that result.
 
-Before distributing this candidate, the new destination-choice contract needs
+Before distribution, the new destination-choice contract required
 the reviewed backend source from merged PR #348, commit
 `297624eeace6abc7042bd9711c6c83bf6de6981a`. The affected callable entry points are
 `resolveRecommendationDestination`, `resolvePlaceSelection`,
 `saveRecommendation`, `publishRecommendationDraft`, `saveRoute` and
 `publishRouteDraft`. Both direct saves and draft publication embed the changed
-resolver. All six production functions were independently read back as active
-Node.js 22 functions in `europe-west1`, last updated on 2026-09-02.
+resolver. The earlier readback found all six last updated on September 2. The
+authorized destination release above subsequently deployed and verified all six,
+plus four related admin functions, on September 9 before client distribution.
 
 An immutable source archive of reviewed `main` is prepared in ignored
 `.codex_tmp/validation/android/backend-main-297624e.tar`, SHA-256
 `684eaff962c1c5a4e3894f84841e43823f4c2257b93dea227593d51fe96dd0cc`.
-It excludes the unrelated uncommitted media patch. Deployment of these six
-existing Functions requires separate authorization; no backend deployment,
-Rules/IAM change, data repair or Hosting publication was performed by this task.
+It excludes the unrelated uncommitted media patch. This archive preparation made
+no production changes. The separately authorized destination release above
+records the completed backend deployment; Rules and IAM remain unchanged.
 
 ### Local Android validation (2026-09-09)
 
@@ -159,10 +231,10 @@ were stopped after acceptance.
 
 Destination PR #348 is merged into `main` at
 `297624eeace6abc7042bd9711c6c83bf6de6981a`. Its new destination-choice behavior
-still requires the corresponding production Functions before a client release
-containing it. Production read-back on 2026-09-09 found the relevant resolver
-and save Functions last updated on September 2. No backend deployment has been
-authorized or performed by this task. A pre-existing, uncommitted retained-media
+required the corresponding production Functions before client distribution.
+The earlier production readback found the relevant Functions last updated on
+September 2; the completed September 9 destination release is recorded above.
+A pre-existing, uncommitted retained-media
 URL change in `functions/recommendationService.js` was excluded from PR #348;
 review found that it rejects claimed media on edits. Preserve it as unrelated
 work and exclude it from any release source based on reviewed `main`.
