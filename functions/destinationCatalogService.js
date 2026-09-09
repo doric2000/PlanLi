@@ -27,6 +27,7 @@ function foldDestinationSearchText(value) {
     .normalize('NFKD')
     .replace(COMBINING_MARKS, '')
     .toLowerCase()
+    .replace(/đ/g, 'd')
     .replace(/[ךםןףץ]/g, (letter) => HEBREW_FINAL_LETTERS[letter] || letter);
 }
 

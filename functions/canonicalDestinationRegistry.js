@@ -41,6 +41,10 @@ const GEOGRAPHIC_TYPES = new Set([
 // enriches the full researched catalog with Google identity and viewport data.
 const BUILTIN_POLICIES = Object.freeze([
   ...sriLankaPolicies,
+  // Hoi An's tourism destination spans the wards created in 2025. Da Nang in
+  // these addresses is the containing municipality, not the tourism city.
+  // Sources: https://hoiandong.danang.gov.vn/ and https://hoiantay.danang.gov.vn/
+  { id: 'vn-hoi-an', countryCode: 'VN', names: { he: 'הוי אן', en: 'Hoi An' }, aliases: ['Hoi An', 'Hội An', 'Hoi An Dong', 'Hội An Đông', 'Hoi An Tay', 'Hội An Tây'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 15.8684775, lng: 108.3267319 }, viewport: { southwest: { lat: 15.854581940604344, lng: 108.30367493079602 }, northeast: { lat: 15.886089030465033, lng: 108.36119591746768 } }, providerRefs: { googlePlaceId: 'ChIJbzEWooEOQjERzgwxW8ayHwM' }, googleTypes: ['sublocality_level_1', 'sublocality', 'political'] },
   { id: 'in-munnar', countryCode: 'IN', names: { he: 'מונאר', en: 'Munnar' }, aliases: ['Munnar', 'Kannan Devan Hills', 'Rajamalai'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 10.0889, lng: 77.0595 }, radiusKm: 32 },
   { id: 'in-goa', countryCode: 'IN', names: { he: 'גואה', en: 'Goa' }, aliases: ['Goa', 'North Goa', 'South Goa'], kind: 'tourism_region', groupingPolicy: 'self', center: { lat: 15.2993, lng: 74.124 }, radiusKm: 85 },
   { id: 'in-dharamshala', countryCode: 'IN', names: { he: 'דרמסלה', en: 'Dharamshala' }, aliases: ['Dharamshala', 'McLeod Ganj', 'Mcleodganj'], kind: 'city_hub', groupingPolicy: 'self', center: { lat: 32.219, lng: 76.3234 }, radiusKm: 18 },
@@ -487,6 +491,7 @@ function matchCanonicalEntry(entries, {
   countryCode,
   providerPlaceId,
   aliases = [],
+  localityEvidence = [],
   coordinates,
   excludedKinds = [],
   allowBlockedExactKinds = [],
@@ -532,7 +537,17 @@ function matchCanonicalEntry(entries, {
     return { entry: groupedEntryFor(membershipMatches[0], activeEntries), source: 'canonical_reviewed_membership' };
   }
   if (membershipMatches.length > 1) return { ambiguity: membershipMatches.slice(0, 3) };
-  const aliasKeys = new Set(aliases.map(compactDestinationSearchText).filter(Boolean));
+  const localityRanks = {
+    neighborhood: 0, sublocality_level_5: 0, sublocality_level_4: 1,
+    sublocality_level_3: 2, sublocality_level_2: 3, sublocality_level_1: 4,
+    sublocality: 4, locality: 5, postal_town: 5,
+    administrative_area_level_4: 6, administrative_area_level_3: 7,
+    administrative_area_level_2: 8, administrative_area_level_1: 9,
+  };
+  const evidence = localityEvidence.filter((item) => item?.name &&
+    Object.hasOwn(localityRanks, item.type));
+  const aliasKeys = new Set([...aliases, ...evidence.map((item) => item.name)]
+    .map(compactDestinationSearchText).filter(Boolean));
   const rawContaining = candidates.filter((entry) => coordinates &&
     (entryContainsPoint(entry, coordinates) ||
       (entry.matchProfile.aliasEligible && entry.center &&
@@ -545,6 +560,22 @@ function matchCanonicalEntry(entries, {
   });
   const aliasMatches = uniqueGroupedEntries(rawAliasMatches, candidates);
   const containing = uniqueGroupedEntries(rawContaining, candidates);
+  // Rank only already country/identity/distance-validated exact alias matches.
+  // Keep grouping policy authoritative (e.g. Thai province and island hubs).
+  const rankedEvidence = rawAliasMatches.map((entry) => ({
+    entry: groupedEntryFor(entry, candidates),
+    rank: Math.min(...evidence.filter((item) =>
+      entry.aliasesNormalized.includes(compactDestinationSearchText(item.name)))
+      .map((item) => localityRanks[item.type])),
+  })).filter((item) => Number.isFinite(item.rank));
+  if (rankedEvidence.length) {
+    const bestRank = Math.min(...rankedEvidence.map((item) => item.rank));
+    const best = uniqueGroupedEntries(rankedEvidence.filter((item) => item.rank === bestRank)
+      .map((item) => item.entry), candidates);
+    if (best.length === 1) return { entry: best[0], source: 'canonical_alias_and_geometry' };
+    // Equal-specificity conflicting evidence still requires an explicit choice.
+    if (best.length > 1) return { ambiguity: best.slice(0, 3) };
+  }
   if (aliasMatches.length === 1) {
     return {
       entry: aliasMatches[0],

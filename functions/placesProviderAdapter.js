@@ -216,6 +216,24 @@ function newLocalityCandidatesFor(details) {
   )));
 }
 
+// Keep geographic levels: a ward/locality and its province are not equivalent
+// evidence. Street names and business names must never imply city membership.
+const LOCALITY_EVIDENCE_TYPES = [
+  'neighborhood', 'sublocality_level_5', 'sublocality_level_4',
+  'sublocality_level_3', 'sublocality_level_2', 'sublocality_level_1', 'sublocality',
+  'locality', 'postal_town', 'administrative_area_level_4',
+  'administrative_area_level_3', 'administrative_area_level_2', 'administrative_area_level_1',
+];
+
+function localityEvidenceFor(details) {
+  return (Array.isArray(details?.addressComponents) ? details.addressComponents : [])
+    .map((component) => ({
+      name: String(component?.longText || '').trim(),
+      type: LOCALITY_EVIDENCE_TYPES.find((type) => component?.types?.includes(type)),
+    }))
+    .filter((component) => component.name && component.type);
+}
+
 function parseNewLocalizedPlace(details) {
   assert(details && typeof details === 'object', 'failed-precondition', 'Google Places returned no result.');
   const country = newComponentFor(details, ['country']);
@@ -235,6 +253,7 @@ function parseNewLocalizedPlace(details) {
     countryCode: String(country?.shortText || '').trim().toUpperCase(),
     localityName: String(locality?.longText || '').trim(),
     localityCandidates: newLocalityCandidatesFor(details),
+    localityEvidence: localityEvidenceFor(details),
     localityType: locality?.types?.find((type) => LOCALITY_TYPES.includes(type)) || null,
     coordinates: Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
     viewport: [lowLat, lowLng, highLat, highLng].every(Number.isFinite)

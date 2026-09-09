@@ -2990,9 +2990,17 @@ export const exactLocationPickerStyles = StyleSheet.create({
 	},
 	previewMap: {
 		width: '100%',
-		height: 190,
+		height: 240,
 		borderWidth: 0,
 	},
+	mapOpenButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceSubtle },
+	mapExpandedScreen: { flex: 1, backgroundColor: colors.white },
+	mapExpandedFrame: { flex: 1 },
+	mapExpandedHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 12 },
+	mapExpandedTitle: { flex: 1, textAlign: 'right', fontSize: 16, color: colors.textPrimary },
+	mapHelp: { textAlign: 'right', paddingHorizontal: 16, paddingBottom: 12, color: colors.textSecondary },
+	mapControls: { position: 'absolute', right: 12, top: 12, gap: 8 },
+	mapControlButton: { minWidth: 48, minHeight: 48, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.white },
 	mapSkeleton: {
 		backgroundColor: colors.surfaceSubtle,
 		alignItems: 'center',

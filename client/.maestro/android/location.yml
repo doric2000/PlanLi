@@ -1,0 +1,47 @@
+appId: com.planli.planlitravels.e2e
+name: Exact place map opens, recovers from missing local tiles, and preserves selection
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- runFlow: helpers/open-composer.yml
+- scrollUntilVisible:
+    element:
+      id: recommendation-exact-location-search
+    direction: DOWN
+- tapOn:
+    id: recommendation-exact-location-search
+- inputText: London
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: google-place-result-local-london
+    timeout: 60000
+- tapOn:
+    id: google-place-result-local-london
+- extendedWaitUntil:
+    visible:
+      id: exact-location-map-preview-expand
+    timeout: 60000
+- tapOn:
+    id: exact-location-map-preview-expand
+- assertVisible: "סגירת המפה"
+# The isolated APK deliberately has no Google Maps key. Exercise the real
+# native failure and retry path; this flow does not claim tile-rendering proof.
+- extendedWaitUntil:
+    visible:
+      id: exact-location-map-preview-expanded-retry
+    timeout: 30000
+- takeScreenshot: location-expanded-map-unavailable
+- tapOn:
+    id: exact-location-map-preview-expanded-retry
+- tapOn:
+    id: exact-location-map-preview-close
+- scrollUntilVisible:
+    element:
+      id: exact-location-confirm
+    direction: DOWN
+- tapOn:
+    id: exact-location-confirm
+- assertVisible:
+    id: recommendation-confirmed-location
+- takeScreenshot: location-preserved-after-map-close

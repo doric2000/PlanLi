@@ -7,6 +7,7 @@ function foldDestinationText(value) {
     .normalize('NFKD')
     .replace(COMBINING_MARKS, '')
     .toLocaleLowerCase('he')
+    .replace(/đ/g, 'd')
     .replace(/[ךםןףץ]/g, (letter) => HEBREW_FINAL_LETTERS[letter] || letter);
 }
 
