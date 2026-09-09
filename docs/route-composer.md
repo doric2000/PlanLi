@@ -119,5 +119,39 @@ promote the identical artifact to the production channel for runtime 1.3.0.
 Retain the embedded build as rollback baseline. Record the resulting source SHA,
 Functions revisions, update group and physical-device status in README.
 
-No commit, push, merge, Functions deployment, EAS Update, native build or Apple
-submission has been performed during this preparation.
+PR [#357](https://github.com/doric2000/PlanLi/pull/357) merged as
+`3b4473c60e9bce43660513426c4a0c4ec4ce4c30` after all applicable CI checks passed.
+The archived source matches all 1,073 tracked Git blobs. Seven affected Functions
+were deployed and independently verified at `2026-09-09T20:58:30.123Z`:
+
+| Function | Active revision |
+| --- | --- |
+| saveRouteDraft | saveroutedraft-00012-sos |
+| publishRouteDraft | publishroutedraft-00023-meb |
+| saveRoute | saveroute-00057-nap |
+| saveRecommendation | saverecommendation-00060-buk |
+| publishRecommendationDraft | publishrecommendationdraft-00026-yux |
+| saveTrip | savetrip-00031-xil |
+| updateProfile | updateprofile-00035-bug |
+
+All are ACTIVE, Node.js 22 v2, minInstances 0 and serving the latest revision.
+Secret bindings and media bucket matched the pre-deploy inventory. Three
+unauthenticated route probes returned HTTP 401, and the error scan found no
+Error-severity entries since the pre-deploy snapshot.
+
+The iOS candidate group `cf42a744-579c-4217-971b-a36c2dbd52f3` was published with
+environment `production`, then promoted without rebuilding to production group
+`8112578f-96f8-4eb9-861c-00e3ccb5a42e`, update
+`01a087ff-11cd-722a-97ea-6e2263711124`. At `2026-09-09T21:08:00.518Z`, the
+immutable manifest, authenticated bundle download and public production-channel
+manifest verified the exact iOS update, runtime 1.3.0 and source commit above.
+Both bundles matched the 10,578,996-byte local artifact, SHA-256
+`65bb3605ac73854de3288fe45fae2a2f6cd7f9139a90852dd7e0d0773e9638da`.
+The environment was independently read from full channel metadata because
+EAS CLI 22.6 `update:view` omits that field. Native fingerprint
+`0b5dd5996352ba381e65fc1a036a28eae3000516` matches the existing iOS build 30.
+
+No native build or Apple submission was performed. The iPhone must have
+TestFlight 1.1.1 (30); opening online downloads the update for a subsequent
+restart. Physical-device installation and route photo/crop/publication acceptance
+remain pending. Android and runtime 1.2.0 delivery were not changed.

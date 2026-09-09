@@ -25,7 +25,7 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Route composer iPhone release preparation (2026-09-09)
+### Route composer iPhone release (2026-09-09)
 
 The user requested iPhone distribution of the route composer. Preparation passed
 568 related client tests, 244 backend tests, three Metro checks and 20 release
@@ -33,11 +33,40 @@ guard tests. EAS account/project and the readable production environment were
 verified. The candidate's native inputs match iOS 1.1.1 (30), runtime 1.3.0,
 source `263fccd283fa86ef9b52077232a8dbdfc02ab6cb`; no new native build is needed.
 
-The candidate was prepared on `feat/route-composer` / `b3562a1`.
-The user has authorized commit, push, PR, merge and the ordered release.
-No Functions deployment or OTA upload/promotion has occurred at preparation;
-the Atlas distribution below remains current. Physical iPhone application and
-route acceptance are unverified. See [candidate and rollout details](docs/route-composer.md).
+PR [#357](https://github.com/doric2000/PlanLi/pull/357) merged as
+`3b4473c60e9bce43660513426c4a0c4ec4ce4c30`; all applicable PR checks passed.
+The release uses an immutable archive of that source, verified against all 1,073
+tracked Git blobs. The unrelated local root `app.json` is preserved and excluded.
+
+Seven existing Functions were deployed to `planli-f0b12` / `europe-west1` between
+`2026-09-09T20:57:52Z` and `2026-09-09T20:57:55Z`: `saveRouteDraft`,
+`publishRouteDraft`, `saveRoute`, `saveRecommendation`, `publishRecommendationDraft`,
+`saveTrip` and `updateProfile`. Independent readback at
+`2026-09-09T20:58:30.123Z` confirmed all seven ACTIVE, Node.js 22 v2,
+minInstances 0 and latest-revision traffic, preserving secret bindings and the
+EU media bucket. Three unauthenticated route callable probes returned HTTP 401;
+the post-deploy Error-severity scan returned zero entries.
+
+The iOS-only OTA is available on the `production` channel / environment, runtime
+1.3.0, group [8112578f](https://expo.dev/accounts/doric2000/projects/client/updates/8112578f-96f8-4eb9-861c-00e3ccb5a42e),
+update `01a087ff-11cd-722a-97ea-6e2263711124`, published at
+`2026-09-09T21:07:15.533Z`. EAS metadata and the public channel
+manifest independently verified delivery at `2026-09-09T21:08:00.518Z`.
+The identical candidate was first published to staging group
+`cf42a744-579c-4217-971b-a36c2dbd52f3` using the production environment.
+The immutable 10,578,996-byte iOS bundle matches the local artifact, SHA-256
+`65bb3605ac73854de3288fe45fae2a2f6cd7f9139a90852dd7e0d0773e9638da`.
+Its native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` exactly matches
+build 30. The archive workflow supplied only verified source-commit metadata
+and a one-worker export limit; all tracked source blobs remained unchanged.
+
+The iOS binary remains 1.1.1 (30) in the existing internal TestFlight group.
+No new EAS build, Apple submission, Android OTA, runtime 1.2.0 update, Hosting,
+Rules, IAM or data migration was performed. The rollback baseline for runtime
+1.3.0 is build 30's embedded update. Physical iPhone application and route
+acceptance remain unverified; the user will exercise the installed update.
+All owned Android test helpers remained stopped during distribution.
+See [candidate, revisions and rollout details](docs/route-composer.md).
 
 ### Atlas native release (2026-09-09)
 
