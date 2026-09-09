@@ -105,6 +105,7 @@ export default function ManualMapPinPicker({ destination, value, onChange }) {
       const MarkerClass = module.Marker || module.default?.Marker;
       const NavigationControlClass = module.NavigationControl || module.default?.NavigationControl;
       if (!MapClass || !MarkerClass) throw new Error('MapLibre is unavailable.');
+      module.setWorkerUrl(new URL('/maplibre/6.4.1/maplibre-gl-worker.mjs', window.location.origin).href);
       map = new MapClass({
         container: mapContainerRef.current,
         style: styleUrl,

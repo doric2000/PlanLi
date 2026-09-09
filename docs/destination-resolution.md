@@ -139,7 +139,7 @@ authenticated raw-place recovery, independent choice tokens, explicit destinatio
 binding, original-token preservation and mismatched-place rejection. Only provider
 transport was synthetic; the owned emulators were stopped afterward. The final
 staged recommendation tests are also exercised without the unrelated media patch
-in the shared workspace. No dependency upgrade was required.
+in the shared workspace (86 tests passed).
 
 Live follow-up found that delayed Firestore events could overwrite an active
 recommendation's admin search projection with its earlier held status. The
@@ -195,3 +195,32 @@ Production Text Search has an intentional quota of zero and requires separate
 quota authorization before bulk enrichment. Existing autocomplete/detail quotas
 were preserved. Operational receipts and the complete Hebrew additions report
 remain in ignored local artifacts, not committed production records.
+
+## PR validation follow-up
+
+The initial remote run caught a rename regression fixture still expecting naming
+policy v2; its expected version is now v3. Dependency audit also identified newly
+reported advisories in existing locked packages. To satisfy the existing audit
+without expanding exceptions, the repair updates Sharp to 0.35.4, MapLibre GL JS
+to 6.4.1, Hono to 4.13.7 and js-yaml to 3.15.2. Only their required dependency
+chains change. The existing, separately reviewed React Navigation exception is
+unchanged; the client audit passes that policy and Functions has no advisories.
+
+MapLibre's first patched version requires its ESM v6 distribution and WebGL2.
+The application already uses its named Map/Marker APIs; its worker URL is now
+explicit. A postinstall step prepares the worker, shared module and license as
+same-origin, versioned Expo public assets. Generated vendor assets stay ignored.
+The existing coordinate fallback remains available when the map cannot load.
+The distribution's exports and worker URL, worker asset preparation, and actual
+Sharp JPEG/WebP processing were exercised. Eighteen focused media/rename tests
+passed using the patched Sharp installation in an isolated dependency directory.
+Both map picker suites passed (three tests). A fresh consumer Web export with
+the actual MapLibre 6.4.1 ESM distribution completed successfully; its versioned
+worker/shared assets were included. This is a bundle/runtime API proof, not a
+visual browser check. The connected UI tooling exposed no browser for rendering.
+
+Upstream references: [MapLibre advisory](https://github.com/maplibre/maplibre-gl-js/security/advisories/GHSA-jrc7-96c5-q579),
+[v6 migration changes](https://github.com/maplibre/maplibre-gl-js/releases/tag/v6.0.0),
+[Sharp patch](https://github.com/lovell/sharp/releases/tag/v0.35.4),
+[Hono patch](https://github.com/honojs/hono/releases/tag/v4.13.7),
+[js-yaml patch](https://github.com/nodeca/js-yaml/releases/tag/3.15.2).
