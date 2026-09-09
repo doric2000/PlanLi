@@ -27,7 +27,7 @@ for (const local of [false, true]) {
     delete require.cache[configPath];
     const config = require('../metro.config');
     const context = { originModulePath: path.resolve(__dirname, '../index.js') };
-    assert.equal(config.maxWorkers, local ? 2 : 7);
+    assert.equal(config.maxWorkers, local ? 1 : 7);
     assert.deepEqual(config.resolver.resolveRequest(context, './App', 'web'), {
       filePath: path.resolve(__dirname, '../AdminWebApp.js'), type: 'sourceFile',
     });

@@ -12,7 +12,7 @@ import {
   searchCities,
 } from '../../../services/LocationService';
 import { colors, recommendationComposerStyles as styles } from '../../../styles';
-import { compactDestinationText } from '../../../utils/destinationSearch';
+import { compactDestinationText, destinationSearchRank, destinationSearchText } from '../../../utils/destinationSearch';
 
 function providerDestinationValue(result, selection) {
   const country = result?.destination?.country;
@@ -34,7 +34,7 @@ function providerDestinationValue(result, selection) {
   };
 }
 
-export default function SingleDestinationPicker({ value, onChange, allowProviderDestinations = false }) {
+export default function SingleDestinationPicker({ value, onChange, allowProviderDestinations = false, inputRef }) {
   const [query, setQuery] = useState('');
   const [settledQuery, setSettledQuery] = useState('');
   const [focused, setFocused] = useState(false);
@@ -54,7 +54,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
     searchLoading,
     searchError,
     retrySearch,
-  } = useDestinationFilterOptions(true, settledQuery);
+  } = useDestinationFilterOptions(true, settledQuery, { respectRegion: false });
 
   useEffect(() => {
     const timer = setTimeout(() => setSettledQuery(query.trim()), 250);
@@ -66,24 +66,21 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
     if (needle.length < 2) return [];
     return options.filter((option) => {
       if (option.kind !== 'city') return false;
-      return compactDestinationText([
-        option.name,
-        option.countryName,
-        option.label,
-      ].filter(Boolean).join(' ')).includes(needle);
+      return destinationSearchRank([...destinationSearchText(option), ...(option.aliases || [])], settledQuery) >= 0;
     }).slice(0, 8);
   }, [options, settledQuery]);
 
   useEffect(() => {
     const needle = compactDestinationText(settledQuery);
     const generation = ++providerGenerationRef.current;
-    if (!allowProviderDestinations || needle.length < 2 || loading || searchLoading) {
+    if (!allowProviderDestinations || needle.length < 2) {
       setProviderResults([]);
       setProviderLoading(false);
       setProviderError('');
       return undefined;
     }
     const controller = new AbortController();
+    setProviderResults([]);
     setProviderLoading(true);
     setProviderError('');
     searchCities(settledQuery, { signal: controller.signal }).then((nextResults) => {
@@ -97,7 +94,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
       if (generation === providerGenerationRef.current) setProviderLoading(false);
     });
     return () => controller.abort();
-  }, [allowProviderDestinations, loading, providerRetry, searchLoading, settledQuery]);
+  }, [allowProviderDestinations, providerRetry, settledQuery]);
 
   const select = (option) => {
     onChange?.(option);
@@ -209,8 +206,8 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
 
   const normalizedQuery = compactDestinationText(query);
   const searchPending = normalizedQuery.length >= 2 && (
-    compactDestinationText(settledQuery) !== normalizedQuery || loading || searchLoading ||
-    (providerLoading && !results.length) || resolvingProvider
+    compactDestinationText(settledQuery) !== normalizedQuery ||
+    ((loading || searchLoading || providerLoading) && !results.length && !providerResults.length) || resolvingProvider
   );
   const visibleResults = [
     ...results.map((option) => ({ source: 'planli', option })),
@@ -230,6 +227,7 @@ export default function SingleDestinationPicker({ value, onChange, allowProvider
           ? <ActivityIndicator size="small" color={colors.primary} />
           : <Ionicons name="search" size={19} color={colors.textMuted} />}
         <AppTextInput
+          ref={inputRef}
           value={query}
           onChangeText={(text) => {
             resolutionGenerationRef.current += 1;

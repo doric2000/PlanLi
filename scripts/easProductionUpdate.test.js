@@ -28,7 +28,8 @@ function configuration() {
     app: {
       owner: 'doric2000',
       version: '1.1.0',
-      runtimeVersion: '1.2.0',
+      ios: { version: '1.1.1' },
+      runtimeVersion: '1.3.0',
       updates: { url: 'https://u.expo.dev/04731493-708f-4c82-b417-6ea815ea912e' },
       extra: { eas: { projectId: '04731493-708f-4c82-b417-6ea815ea912e' } },
     },
@@ -51,7 +52,7 @@ function update(group = previewGroup, overrides = {}) {
     createdAt: '2026-08-28T10:00:00.000Z',
     gitCommitHash: head,
     group,
-    runtimeVersion: '1.2.0',
+    runtimeVersion: '1.3.0',
     ...overrides,
   };
 }
@@ -117,6 +118,12 @@ test('rejects multiline messages, invalid group IDs, account drift, and CLI drif
 
 test('pins owner, project, runtime, channel, environment, and CLI configuration', () => {
   assert.doesNotThrow(() => validateReleaseConfiguration(configuration()));
+  const oldRuntime = configuration();
+  oldRuntime.app.runtimeVersion = '1.2.0';
+  assert.throws(() => validateReleaseConfiguration(oldRuntime), /runtime 1.3.0/);
+  const oldIosVersion = configuration();
+  oldIosVersion.app.ios.version = '1.1.0';
+  assert.throws(() => validateReleaseConfiguration(oldIosVersion), /marketing version 1.1.1/);
   const wrongProject = configuration();
   wrongProject.app.extra.eas.projectId = 'different-project';
   assert.throws(() => validateReleaseConfiguration(wrongProject), /EAS project must remain/);
@@ -136,7 +143,7 @@ test('accepts only the exact candidate commit and runtime in the selected previe
     value: [update(previewGroup, { runtimeVersion: '1.1.0' })],
     groupId: previewGroup,
     head,
-  }), /only runtime 1.2.0/);
+  }), /only runtime 1.3.0/);
   assert.throws(() => validatePreviewUpdates({
     value: [update(previewGroup, { branch: 'production' })],
     groupId: previewGroup,
@@ -146,12 +153,12 @@ test('accepts only the exact candidate commit and runtime in the selected previe
 
 test('extracts one production group and rejects ambiguous publish output', () => {
   const metadata = extractReleaseMetadata([
-    update(productionGroup, { branch: { name: 'production' }, runtimeVersion: undefined, runtime: { version: '1.2.0' } }),
+    update(productionGroup, { branch: { name: 'production' }, runtimeVersion: undefined, runtime: { version: '1.3.0' } }),
     update(productionGroup, {
       branch: { name: 'production' },
       createdAt: '2026-08-28T10:00:01.000Z',
       runtimeVersion: undefined,
-      runtime: { version: '1.2.0' },
+      runtime: { version: '1.3.0' },
     }),
   ], { head });
   assert.deepEqual(metadata, {
@@ -160,7 +167,7 @@ test('extracts one production group and rejects ambiguous publish output', () =>
     createdAt: '2026-08-28T10:00:01.000Z',
     environment: 'production',
     groupId: productionGroup,
-    runtime: '1.2.0',
+    runtime: '1.3.0',
   });
   assert.throws(() => extractReleaseMetadata([
     update(productionGroup),

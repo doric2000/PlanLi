@@ -25,6 +25,20 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Route composer iPhone release preparation (2026-09-09)
+
+The user requested iPhone distribution of the route composer. Preparation passed
+568 related client tests, 244 backend tests, three Metro checks and 20 release
+guard tests. EAS account/project and the readable production environment were
+verified. The candidate's native inputs match iOS 1.1.1 (30), runtime 1.3.0,
+source `263fccd283fa86ef9b52077232a8dbdfc02ab6cb`; no new native build is needed.
+
+The candidate was prepared on `feat/route-composer` / `b3562a1`.
+The user has authorized commit, push, PR, merge and the ordered release.
+No Functions deployment or OTA upload/promotion has occurred at preparation;
+the Atlas distribution below remains current. Physical iPhone application and
+route acceptance are unverified. See [candidate and rollout details](docs/route-composer.md).
+
 ### Atlas native release (2026-09-09)
 
 **Current distribution:** Android **1.1.0 (10)** is available to the existing
@@ -377,11 +391,35 @@ records the completed backend deployment; Rules and IAM remain unchanged.
 
 ### Local Android validation (2026-09-09)
 
-A separate local Development Build is installed on the Windows-hosted Android
+The current local debug APK was rebuilt at `2026-09-09T18:44:11.613Z`
+for route-composer validation, in 22m47s. Source: `b3562a1` plus the
+uncommitted working tree on `feat/route-composer`; existing recommendation
+changes were preserved. Application ID: `com.planli.planlitravels.e2e`,
+version `1.1.0`, version code `1`, runtime `1.3.0`; OTA is disabled.
+The latest successful reinstall was logged at `2026-09-09T20:17:16Z` on
+`PlanLi_E2E_API34` / `emulator-5580`. No EAS channel, remote build ID,
+submission or update group applies. Native-input signature:
+`08d0e2b20b1f26b3f35bcf26be5602201b21b75f8ccab870b3c2b9de94cd2fc5`.
+APK SHA-256:
+`7a83aa2fe7eb9918e90724c3555310c8ac3af209f5ea6776a454015f30ed5f93`.
+The route Android acceptance flow has not passed. The 540x960 / 240dpi profile
+reuses this APK with two cores, 30 Hz software rendering and the incompatible
+Pixel 6 cutout overlays disabled. A focused Maestro check verified closing the
+development menu and entering the app. Staged startup then reached the route
+editor and entered title, London, description and price level. The scenario
+failed on an incorrect transport selector, while the memory guard stopped the
+backend after two samples below 0.9 GiB. The selector was corrected to match the
+shared choice component; the corrected flow has syntax validation only, not a
+passing device receipt. Native route photos, three-day publication and enlarged
+text remain unverified. All owned Android/Metro/Firebase/Maestro helpers are
+stopped; Windows reported 5.66 GiB available after cleanup. No production,
+EAS/OTA or store state changed.
+
+Earlier on the same date, a separate local Development Build was installed on the Windows-hosted Android
 AVD `PlanLi_E2E_API34` (`emulator-5580`), using application ID
 `com.planli.planlitravels.e2e`, version `1.1.0`, Android version code `1`,
 and configured runtime `1.2.0`. OTA is disabled; no EAS channel, build ID,
-submission or update group applies to this local artifact. The current Atlas
+submission or update group applies to that local artifact. The earlier Atlas
 native build completed at `2026-09-09T13:18:06.872Z` in 23m54s and was
 installed at `2026-09-09T13:25:21Z` (Android package-manager readback).
 Source: `6133837efda7ce83d473e8f207926bbd6ba71eb5` plus the uncommitted Atlas

@@ -51,7 +51,7 @@ if ($Install) {
     }
     $avdConfigPath = Join-Path $env:ANDROID_AVD_HOME 'PlanLi_E2E_API34.avd\config.ini'
     $avdConfig = Get-Content -LiteralPath $avdConfigPath -Raw
-    $deviceSettings = @{ 'hw.gpu.enabled'='yes'; 'hw.gpu.mode'='software'; 'hw.lcd.width'='720'; 'hw.lcd.height'='1280'; 'hw.lcd.density'='280'; 'hw.cpu.ncore'='2'; 'hw.ramSize'='1536' }
+    $deviceSettings = @{ 'hw.gpu.enabled'='yes'; 'hw.gpu.mode'='swangle'; 'hw.lcd.width'='540'; 'hw.lcd.height'='960'; 'hw.lcd.density'='240'; 'hw.cpu.ncore'='2'; 'hw.ramSize'='2560' }
     foreach ($key in $deviceSettings.Keys) {
         $pattern = '(?m)^' + [regex]::Escape($key) + '=.*$'
         $entry = $key + '=' + $deviceSettings[$key]

@@ -93,6 +93,27 @@ test('route edits automatically reuse a server-trusted unchanged stop', async ()
   });
 });
 
+test('reordered days retain IDs and an optional title, while moved stops load only their original path in this route', async () => {
+  const first = canonicalRoute().days[0];
+  const input = sanitizeRouteInput(canonicalRoute({ days: [
+    { ...first, id: 'day-b', title: 'אגמים', stops: [{ ...first.stops[0], id: 'moved', savedLocationStopId: 'saved', savedLocationDayId: 'day-a', reuseSavedLocation: true }] },
+    { ...first, id: 'day-a' },
+  ] }));
+  assert.deepEqual(input.days.map((day) => [day.id, day.position, day.title]), [['day-b', 0, 'אגמים'], ['day-a', 1, '']]);
+  const paths = [];
+  const trusted = await loadTrustedRoutePlaces({
+    db: { doc: (path) => { paths.push(path); return { get: async () => ({ exists: true, data: () => ({
+      place: first.stops[0].place, destination: { countryId: 'IL', cityId: 'TLV' },
+    }) }) }; } },
+    routeRef: { id: 'owned-route' }, existingRoute: { activeRevisionId: 'active-revision' }, days: input.days,
+  });
+  assert.equal(paths[0], 'routes/owned-route/revisions/active-revision/days/day-a/stops/saved');
+  assert.equal(trusted.size, 1);
+  assert.throws(() => sanitizeRouteInput(canonicalRoute({ days: [{ ...first, id: 'same' }, { ...first, id: 'same' }] })), /unique/);
+  assert.throws(() => sanitizeRouteInput(canonicalRoute({ days: [{ ...first, title: 'x'.repeat(121) }] })), /title/);
+  assert.throws(() => sanitizeRouteInput(canonicalRoute({ days: [{ ...first, stops: [{ ...first.stops[0], editorState: { locationIncomplete: true } }] }] })), /Complete the stop location/);
+});
+
 test('changed places are not trusted without proof and stale reuse hints are rejected', async () => {
   const savedStop = {
     place: { placeId: 'saved-place', coordinates: { lat: 32.1, lng: 34.8 } },

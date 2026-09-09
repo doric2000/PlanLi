@@ -62,6 +62,43 @@ describe('useRouteDraftMedia', () => {
     });
   });
 
+  it('moves durable photos to another day without copying or deleting them and keeps order and crops', async () => {
+    const first = renderHook(() => useRouteDraftMedia());
+    const crop = { version: 1, crop: { originX: 10, originY: 20, width: 400, height: 300 } };
+    await act(async () => {
+      await first.result.current.bindDraft('draft-1');
+      await first.result.current.persistMedia([{ uri: 'file:///a.jpg', transform: crop }, { uri: 'file:///b.jpg' }], { dayId: 'a', stopId: 'stop' });
+      await first.result.current.persistMedia([{ uri: 'file:///b.jpg' }, { uri: 'file:///a.jpg', transform: crop }], { dayId: 'a', stopId: 'stop' });
+      await first.result.current.moveStopMedia({ fromDayId: 'a', toDayId: 'b', stopId: 'stop' });
+    });
+    expect(mockPersistMedia).toHaveBeenCalledTimes(2);
+    expect(mockDeleteMedia).not.toHaveBeenCalled();
+    first.unmount();
+    const second = renderHook(() => useRouteDraftMedia());
+    let restored;
+    await act(async () => { restored = await second.result.current.restoreDraft('draft-1', 2); });
+    expect(restored.missingCount).toBe(0);
+    const entries = restored.entries.sort((a, b) => a.position - b.position);
+    expect(entries.map((item) => [item.dayId, item.stopId, item.sourceId])).toEqual([
+      ['b', 'stop', 'file:///b.jpg'], ['b', 'stop', 'file:///a.jpg'],
+    ]);
+    expect(entries[1].transform).toEqual(crop);
+  });
+
+  it('retains a crop changed while the durable file copy is still pending', async () => {
+    let finishCopy;
+    mockPersistMedia.mockImplementationOnce(() => new Promise((resolve) => { finishCopy = resolve; }));
+    const hook = renderHook(() => useRouteDraftMedia());
+    const crop = { version: 1, crop: { originX: 12, originY: 9, width: 100, height: 75 } };
+    await act(async () => {
+      const first = hook.result.current.persistMedia([{ uri: 'file:///a.jpg' }], { dayId: 'a', stopId: 'stop' });
+      const latest = hook.result.current.persistMedia([{ uri: 'file:///a.jpg', transform: crop }], { dayId: 'a', stopId: 'stop' });
+      finishCopy({ platform: 'native', key: 'file:///durable/a.jpg' });
+      await Promise.all([first, latest]);
+    });
+    expect(hook.result.current.mediaForItem({ uri: 'file:///a.jpg' }, { dayId: 'a', stopId: 'stop' }).transform).toEqual(crop);
+  });
+
   it('reports local photos that are unavailable on another device', async () => {
     stored = JSON.stringify({
       version: 1,

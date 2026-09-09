@@ -22,6 +22,8 @@ const mockBindRouteDraftMedia = jest.fn(async () => {});
 const mockClearRouteDraftMedia = jest.fn(async () => {});
 const mockClearStaleRouteDraftMedia = jest.fn(async () => {});
 const mockRestoreRouteDraftMedia = jest.fn(async () => ({ entries: [], missingCount: 0 }));
+const mockMoveStopMedia = jest.fn(async () => {});
+const mockUuid = jest.fn(() => 'stable-new-stop-id');
 
 jest.mock('../src/services/RouteService', () => ({
   getCurrentRouteDraft: (...args) => mockGetCurrentRouteDraft(...args),
@@ -30,7 +32,7 @@ jest.mock('../src/services/RouteService', () => ({
   loadRouteDetails: (...args) => mockLoadRouteDetails(...args),
 }));
 
-jest.mock('expo-crypto', () => ({ randomUUID: () => 'stable-new-stop-id' }));
+jest.mock('expo-crypto', () => ({ randomUUID: () => mockUuid() }));
 
 jest.mock('../src/features/publishing/ContentPublishContext', () => ({
   useContentPublish: () => ({
@@ -52,6 +54,7 @@ jest.mock('../src/hooks/useRouteDraftMedia', () => ({
     persistMedia: jest.fn(async (items) => items),
     persistUris: jest.fn(async (uris) => uris),
     restoreDraft: mockRestoreRouteDraftMedia,
+    moveStopMedia: mockMoveStopMedia,
     waitForMedia: async (items) => items,
   }),
 }));
@@ -95,15 +98,17 @@ jest.mock('../src/features/community/components/SingleDestinationPicker', () => 
   );
 });
 jest.mock('../src/features/roadtrip/components/StopEditorModal', () => {
-  const { Pressable, Text, View } = require('react-native');
-  return ({ visible, initialData, dayIndex, stopIndex, onSave, onClose }) => visible ? (
+  const { Pressable, Text, TextInput, View } = require('react-native');
+  return ({ visible, initialData, dayIndex, stopIndex, onSave, onClose, onDraftChange }) => visible ? (
     <View
       testID="direct-stop-editor"
       accessibilityLabel={`stop-${dayIndex}-${stopIndex}-${initialData?.id || 'null'}`}
     >
       <Text>{initialData?.title || 'missing stop'}</Text>
+      <TextInput testID="inline-stop-name" value={initialData?.title || ''} onChangeText={(title) => onDraftChange?.({ ...initialData, title })} />
       <Pressable testID="direct-stop-save" onPress={() => {
-        onSave?.({ ...initialData, title: 'עצירה מעודכנת' }, stopIndex);
+        onSave?.({ ...initialData, title: 'עצירה מעודכנת', locationPrecision: 'general',
+          destination: { countryId: 'HU', cityId: 'budapest' }, editorState: undefined }, stopIndex);
         onClose?.();
       }}><Text>שמירת עצירה ישירה</Text></Pressable>
     </View>
@@ -140,8 +145,88 @@ const currentDraft = (overrides = {}) => ({
 });
 
 describe('streamlined route builder', () => {
+  it('moves legacy stops with duplicate per-day IDs and preserves their trusted source identity', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({ dayCount: 2, days: [
+      { id: 'first', stops: [currentDraft().days[0].stops[0]] },
+      { id: 'second', stops: [{ ...currentDraft().days[0].stops[0], title: 'עצירה אחרת' }] },
+    ] }));
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-stop-edit-a')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-stop-edit-a'));
+    fireEvent.press(screen.getByTestId('route-stop-transfer-a'));
+    fireEvent.press(screen.getByTestId('route-transfer-to-second'));
+    await waitFor(() => expect(screen.getByTestId('route-stop-edit-stable-new-stop-id')).toBeTruthy());
+    expect(screen.getByTestId('route-stop-edit-a')).toBeTruthy();
+    expect(mockMoveStopMedia).toHaveBeenCalledWith({ fromDayId: 'first', toDayId: 'second', stopId: 'a', toStopId: 'stable-new-stop-id' });
+    expect(screen.getByTestId('inline-stop-name').props.value).toBe('השוק');
+  });
+
+  it('recovers photos after an interrupted move that changed a legacy stop ID', () => {
+    const draft = currentDraft({ days: [{ id: 'first', stops: [{ id: 'old', title: 'תחנה' }] }] });
+    const merged = mergeRestoredRouteMedia(draft, [{ dayId: 'second', stopId: 'new', uri: 'file:///a.jpg',
+      previousLocations: [{ dayId: 'first', stopId: 'old' }], transform: { version: 1, crop: { originX: 10 } } }]);
+    expect(merged.days[0].stops[0].pendingMedia[0]).toEqual(expect.objectContaining({ uri: 'file:///a.jpg', transform: { version: 1, crop: { originX: 10 } } }));
+  });
+  it('adds three days, preserves unfinished text, moves a stop and publishes in the new day order', async () => {
+    let id = 0;
+    mockUuid.mockImplementation(() => `new-${++id}`);
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft());
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-add-day')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-add-day'));
+    fireEvent.press(screen.getByTestId('route-day-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-day-title-input'), 'כפרים ואגמים');
+    fireEvent.press(screen.getByTestId('route-add-stop'));
+    fireEvent.changeText(screen.getByTestId('inline-stop-name'), 'שם שלא הושלם');
+    fireEvent.press(screen.getByTestId('route-day-tab-0'));
+    fireEvent.press(screen.getByTestId('route-day-tab-1'));
+    const stopButton = screen.getAllByTestId(/^route-stop-edit-/)[0];
+    fireEvent.press(stopButton);
+    expect(screen.getByTestId('inline-stop-name').props.value).toBe('שם שלא הושלם');
+    fireEvent.press(screen.getByTestId('direct-stop-save'));
+    fireEvent.press(screen.getByTestId('route-add-day'));
+    fireEvent.press(screen.getByTestId('route-day-tab-0'));
+    fireEvent.press(screen.getByTestId('route-stop-edit-b'));
+    fireEvent.press(screen.getByTestId('route-stop-transfer-b'));
+    fireEvent.press(screen.getAllByTestId(/^route-transfer-to-/)[1]);
+    await waitFor(() => expect(mockMoveStopMedia).toHaveBeenCalledWith(expect.objectContaining({ fromDayId: 'day_001', stopId: 'b' })));
+    await waitFor(() => expect(screen.getByTestId('route-day-tab-2').props.accessibilityState.selected).toBe(true));
+    fireEvent.press(screen.getByTestId('route-manage-days'));
+    fireEvent.press(screen.getAllByTestId(/^route-day-up-/)[2]);
+    fireEvent.press(screen.getByTestId('route-submit'));
+    fireEvent.press(screen.getByTestId('route-submit'));
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(1));
+    const route = mockEnqueueCreate.mock.calls[0][0].payload.route;
+    expect(route.days).toHaveLength(3);
+    expect(route.days.map((day) => day.stops.length)).toEqual([1, 1, 1]);
+    expect(route.days[1].stops[0]).toEqual(expect.objectContaining({ id: 'b', savedLocationDayId: 'day_001' }));
+    expect(route.days[2].title).toBe('כפרים ואגמים');
+  });
+
+  it('takes a publication error to the missing day and keeps at least one day after deletion', async () => {
+    mockGetCurrentRouteDraft.mockResolvedValue(currentDraft({ dayCount: 2, days: [currentDraft().days[0], { id: 'empty', title: 'אגמים', stops: [] }] }));
+    const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
+    await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-draft-continue'));
+    await waitFor(() => expect(screen.getByTestId('route-submit')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-submit'));
+    expect(screen.getByTestId('route-day-tab-1').props.accessibilityState.selected).toBe(true);
+    expect(mockEnqueueCreate).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId('route-manage-days'));
+    fireEvent.press(screen.getByTestId('route-day-remove-empty'));
+    expect(screen.getByTestId('route-day-tab-1')).toBeTruthy();
+    const buttons = require('react-native').Alert.alert.mock.calls.at(-1)[2];
+    act(() => buttons.find((button) => button.style === 'destructive').onPress());
+    expect(screen.queryByTestId('route-day-tab-1')).toBeNull();
+    expect(screen.getByTestId('route-day-remove-day_001').props.accessibilityState.disabled).toBe(true);
+  });
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUuid.mockReturnValue('stable-new-stop-id');
     mockGetCurrentRouteDraft.mockResolvedValue(null);
     mockSaveRouteDraft.mockResolvedValue({ draftId: 'draft-1', version: 1 });
     mockDiscardRouteDraft.mockResolvedValue({ discarded: true });
@@ -152,6 +237,7 @@ describe('streamlined route builder', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     require('react-native').Alert.alert.mockRestore();
   });
 
@@ -243,7 +329,7 @@ describe('streamlined route builder', () => {
     expect(screen.getByTestId('route-stop-drag-handle-a')).toBeTruthy();
     expect(screen.getByTestId('route-stop-drag-handle-b')).toBeTruthy();
     fireEvent.press(screen.getByTestId('route-insert-stop-before-b'));
-    expect(screen.getByLabelText('stop-0-1-null')).toBeTruthy();
+    expect(screen.getByLabelText('stop-0-1-stable-new-stop-id')).toBeTruthy();
     fireEvent.press(screen.getByTestId('direct-stop-save'));
     fireEvent.press(screen.getByTestId('route-stop-edit-stable-new-stop-id'));
     expect(screen.getByLabelText('stop-0-1-stable-new-stop-id')).toBeTruthy();
@@ -259,7 +345,7 @@ describe('streamlined route builder', () => {
     expect(screen.getByLabelText('stop-0-1-b')).toBeTruthy();
     fireEvent.press(screen.getByTestId('direct-stop-save'));
     expect(screen.getByText('עצירה מעודכנת')).toBeTruthy();
-    expect(screen.getByTestId('direct-stop-editor-closed')).toBeTruthy();
+    expect(screen.queryByTestId('direct-stop-editor')).toBeNull();
   });
 
   it('edits day notes inline and removes a stop from the main day card', async () => {
@@ -268,11 +354,13 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
+    fireEvent.press(screen.getByTestId('route-day-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-day-description-input'), 'יום רגוע');
     expect(screen.getByTestId('route-day-description-input').props.value).toBe('יום רגוע');
     require('react-native').Alert.alert.mockImplementationOnce((_title, _message, buttons) => {
       buttons.find((button) => button.style === 'destructive')?.onPress?.();
     });
+    fireEvent.press(screen.getByTestId('route-stop-edit-a'));
     fireEvent.press(screen.getByTestId('route-stop-remove-a'));
     expect(screen.queryByText('השוק')).toBeNull();
     expect(screen.getByLabelText('עריכת העצירה בית קפה')).toBeTruthy();
@@ -345,7 +433,7 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: requested } }} />);
     await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     expect(screen.getByTestId('route-title-input').props.value).toBe('מסלול ב');
     expect(mockSaveRouteDraft).not.toHaveBeenCalled();
   });
@@ -360,7 +448,7 @@ describe('streamlined route builder', () => {
     fireEvent.press(screen.getByTestId('route-switch-discard'));
     await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     expect(screen.getByTestId('route-title-input').props.value).toBe('מסלול ב');
     expect(mockSaveRouteDraft).not.toHaveBeenCalled();
   });
@@ -384,7 +472,7 @@ describe('streamlined route builder', () => {
     const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: { routeToEdit: source } }} />);
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי ראשון');
     await act(async () => { jest.advanceTimersByTime(1000); await Promise.resolve(); });
     await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
@@ -400,7 +488,7 @@ describe('streamlined route builder', () => {
     const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
     const screen = render(<AddRoutesScreen navigation={nav} route={{ params: { routeToEdit: source } }} />);
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי לפני יציאה');
     const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
     await act(async () => { await backOptions.onPress(); });
@@ -434,7 +522,7 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי לפני יציאה');
     const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
     await act(async () => { await backOptions.onPress(); });
@@ -488,7 +576,7 @@ describe('streamlined route builder', () => {
     const source = currentDraft({ id: 'route-2', sourceRouteId: undefined });
     const screen = render(<AddRoutesScreen navigation={nav} route={{ params: { routeToEdit: source } }} />);
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי למחיקה');
     const backOptions = mockUseBackButton.mock.calls.at(-1)[1];
     await act(async () => { await backOptions.onPress(); });
@@ -506,21 +594,21 @@ describe('streamlined route builder', () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(() => expect(screen.getByTestId('route-draft-load-retry')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-load-retry'));
-    await waitFor(() => expect(screen.getByTestId('route-start-open')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('route-title-input')).toBeTruthy());
     expect(mockGetCurrentRouteDraft).toHaveBeenCalledTimes(2);
   });
 
-  it('opens a server draft from only a destination and day count', async () => {
+  it('starts with one day and automatically saves after choosing an area', async () => {
     const screen = render(<AddRoutesScreen navigation={navigation()} route={{ params: {} }} />);
     await waitFor(
-      () => expect(screen.getByText('פתיחת מסלול')).toBeTruthy(),
+      () => expect(screen.getByText('פרטי המסלול')).toBeTruthy(),
       { timeout: 5000 }
     );
     fireEvent.press(screen.getByTestId('destination-select'));
-    fireEvent.press(screen.getByTestId('route-start-days-2'));
-    fireEvent.press(screen.getByTestId('route-start-open'));
+    expect(screen.queryByTestId('route-start-open')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('route-title-input'), 'שם שנכתב לפני השמירה');
     await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
-      draft: expect.objectContaining({ dayCount: 2, title: '2 ימים בבודפשט' }),
+      draft: expect.objectContaining({ dayCount: 1, title: 'שם שנכתב לפני השמירה' }),
     })));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
   });
@@ -531,7 +619,7 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-discard'));
     await waitFor(() => expect(mockDiscardRouteDraft).toHaveBeenCalledWith('draft-1'));
-    expect(screen.getByText('פתיחת מסלול')).toBeTruthy();
+    expect(screen.getByText('פרטי המסלול')).toBeTruthy();
   });
 
   it('keeps an existing draft and requires route description, price and useful stops before publish', async () => {
@@ -547,7 +635,7 @@ describe('streamlined route builder', () => {
     expect(screen.queryByText('פרסום המסלול')).toBeNull();
     fireEvent.press(screen.getByTestId('route-submit'));
     await waitFor(() => expect(screen.getByTestId('route-description-input')).toBeTruthy());
-    expect(screen.getByText('כדאי להוסיף תיאור למסלול.')).toBeTruthy();
+    expect(screen.getAllByText('כדאי להוסיף תיאור למסלול.').length).toBeGreaterThan(0);
     expect(mockEnqueueCreate).not.toHaveBeenCalled();
   });
 
@@ -607,9 +695,9 @@ describe('streamlined route builder', () => {
         })],
       }),
     })));
-    expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({ expectedVersion: 3 }),
-    }));
+    })));
   });
 
   it('restores a failed background publication with its local image preview for editing', async () => {
@@ -644,7 +732,7 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'תיאור מעודכן');
     await act(async () => { jest.advanceTimersByTime(1000); await Promise.resolve(); });
     await waitFor(() => expect(mockSaveRouteDraft).toHaveBeenCalledWith(expect.objectContaining({
@@ -663,7 +751,7 @@ describe('streamlined route builder', () => {
     await waitFor(() => expect(screen.getByTestId('route-draft-continue')).toBeTruthy());
     fireEvent.press(screen.getByTestId('route-draft-continue'));
     await waitFor(() => expect(screen.getByTestId('route-map-peek')).toBeTruthy());
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'תיאור שנשאר במסך');
     await waitFor(() => expect(screen.getByTestId('route-save-retry')).toBeTruthy(), { timeout: 4000 });
     expect(screen.getByTestId('route-description-input').props.value).toBe('תיאור שנשאר במסך');
@@ -698,7 +786,7 @@ describe('streamlined route builder', () => {
       expect.objectContaining({ cancelable: true })
     );
 
-    fireEvent.press(screen.getByTestId('route-details-toggle'));
+    if (!screen.queryByTestId('route-title-input')) fireEvent.press(screen.getByTestId('route-details-toggle'));
     fireEvent.changeText(screen.getByTestId('route-description-input'), 'שינוי מאוחר בזמן הפרסום');
     await act(async () => {
       jest.advanceTimersByTime(1000);

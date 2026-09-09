@@ -838,7 +838,26 @@ async function validateMediaAssets({
           );
         });
       });
-      if (trustedExistingAsset) return trustedExistingAsset;
+      const hasCanonicalUrls = ['large', 'feed', 'thumb'].every(
+        (variantName) => typeof trustedExistingAsset?.[variantName]?.url === 'string'
+          && trustedExistingAsset[variantName].url
+      );
+      if (trustedExistingAsset && hasCanonicalUrls) return trustedExistingAsset;
+      if (trustedExistingAsset) {
+        // Existing media comes from the authorized document, not client ownership claims.
+        // An administrator can retain its author's media without owning new uploads there.
+        const variants = await Promise.all(['large', 'feed', 'thumb'].map(async (variantName) => {
+          const variant = trustedExistingAsset[variantName];
+          if (typeof variant?.url === 'string' && variant.url) return [variantName, variant];
+          const ownerMatch = /^media\/([^/]+)\//.exec(variant?.path || '');
+          assert(ownerMatch, 'failed-precondition', 'Existing image has no canonical media path.');
+          return [variantName, await validateVariant({
+            admin, uid: ownerMatch[1], assetId: trustedExistingAsset.assetId,
+            variant, expectedVariant: variantName, mediaBucket,
+          })];
+        }));
+        return { ...trustedExistingAsset, ...Object.fromEntries(variants) };
+      }
 
       assert(
         typeof asset?.assetId === 'string' &&

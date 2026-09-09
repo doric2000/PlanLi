@@ -96,6 +96,8 @@ export default function useRouteDraftMedia() {
         mediaId: entry.mediaId,
         localReference: entry.localReference,
         transform: entry.transform || null,
+        position: entry.position ?? 0,
+        previousLocations: entry.previousLocations || [],
       }));
       return AsyncStorage.setItem(storageKey(uid), JSON.stringify({
         version: 2,
@@ -133,7 +135,7 @@ export default function useRouteDraftMedia() {
       return persistManifest().then(() => updated);
     }
     const pending = pendingByIdentityRef.current.get(identity);
-    if (pending) return pending;
+    if (pending) return pending.then(() => persistOne(item, location));
     const uid = auth.currentUser?.uid;
     if (!uid) return Promise.reject(new Error('You must be signed in to keep selected images.'));
     forgottenRef.current.delete(identity);
@@ -173,7 +175,7 @@ export default function useRouteDraftMedia() {
     const worker = async () => {
       while (cursor < list.length) {
         const index = cursor++;
-        results[index] = await persistOne(list[index], location);
+        results[index] = await persistOne({ ...createTravelMediaDescriptor(list[index]), position: index }, location);
       }
     };
     await Promise.all(Array.from({ length: Math.min(2, list.length) }, worker));
@@ -184,6 +186,21 @@ export default function useRouteDraftMedia() {
     await persistMedia(uris, location);
     return uris;
   }, [persistMedia]);
+
+  const moveStopMedia = useCallback(async ({ fromDayId, toDayId, stopId, toStopId = stopId }) => {
+    await Promise.all(Array.from(pendingByIdentityRef.current.values()));
+    const before = new Map(entriesByIdentityRef.current);
+    for (const [key, entry] of before) {
+      if (entry.dayId !== fromDayId || entry.stopId !== stopId) continue;
+      entriesByIdentityRef.current.delete(key);
+      const previousLocations = [...(entry.previousLocations || []), { dayId: fromDayId, stopId }]
+        .filter((location, index, all) => all.findIndex((item) => item.dayId === location.dayId && item.stopId === location.stopId) === index);
+      const moved = { ...entry, dayId: toDayId, stopId: toStopId, previousLocations };
+      entriesByIdentityRef.current.set(routeMediaEntryKey(moved, travelMediaIdentity(moved)), moved);
+    }
+    try { await persistManifest(); }
+    catch (error) { entriesByIdentityRef.current = before; throw error; }
+  }, [persistManifest]);
 
   const waitForMedia = useCallback(async (items) => {
     const descriptors = (Array.isArray(items) ? items : []).map((item) => createTravelMediaDescriptor(item)).filter(Boolean);
@@ -207,7 +224,7 @@ export default function useRouteDraftMedia() {
         item,
         routeMediaLocation(item)
       ));
-      return entry ? { ...item, ...entry, slot: item.slot, persistence: 'ready' } : item;
+      return entry ? { ...item, ...entry, ...(item.transform ? { transform: item.transform } : {}), slot: item.slot, persistence: 'ready' } : item;
     });
   }, [persistOne]);
 
@@ -327,6 +344,7 @@ export default function useRouteDraftMedia() {
     forgetUri,
     mediaForItem,
     mediaForUri,
+    moveStopMedia,
     persistMedia,
     persistUris,
     restoreDraft,

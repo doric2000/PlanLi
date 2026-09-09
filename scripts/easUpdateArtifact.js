@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 
-const EXPECTED_RUNTIME = '1.2.0';
+const EXPECTED_RUNTIME = '1.3.0';
 const REQUIRED_PRODUCTION_MARKERS = [
   'planli-f0b12',
   '633543026638',

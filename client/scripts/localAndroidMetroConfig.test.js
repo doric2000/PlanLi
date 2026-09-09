@@ -5,7 +5,7 @@ test('local Metro bounds workers and ignores downloaded tools while preserving n
   const original = { maxWorkers: 12, resolver: { blockList: /existing/, assetExts: ['jpg'] } };
   assert.equal(withLocalAndroidValidation(original, {}), original);
   const local = withLocalAndroidValidation(original, { PLANLI_LOCAL_E2E: 'true' });
-  assert.equal(local.maxWorkers, 2);
+  assert.equal(local.maxWorkers, 1);
   assert.deepEqual(local.resolver.assetExts, ['jpg']);
   assert.equal(local.resolver.blockList[0], original.resolver.blockList);
   assert.ok(local.resolver.blockList[1].test('C:/repo/.codex_tmp/android/sdk/bin/tool'));

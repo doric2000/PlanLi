@@ -14,8 +14,8 @@ const EXPECTED_OWNER = 'doric2000';
 const EXPECTED_PROJECT_ID = '04731493-708f-4c82-b417-6ea815ea912e';
 const EXPECTED_CHANNEL = 'production';
 const EXPECTED_ENVIRONMENT = 'production';
-const EXPECTED_MARKETING_VERSION = '1.1.0';
-const EXPECTED_RUNTIME = '1.2.0';
+const EXPECTED_MARKETING_VERSION = '1.1.1';
+const EXPECTED_RUNTIME = '1.3.0';
 const EXPECTED_CLI_VERSION = '22.6.0';
 const EXPECTED_STAGING_BRANCH = 'staging';
 
@@ -116,8 +116,8 @@ function validateReleaseConfiguration({ app, eas }) {
   if (app.updates?.url !== `https://u.expo.dev/${EXPECTED_PROJECT_ID}`) {
     fail('The EAS Update URL does not match the reviewed project.');
   }
-  if (app.version !== EXPECTED_MARKETING_VERSION || app.runtimeVersion !== EXPECTED_RUNTIME) {
-    fail(`The security release must use marketing version ${EXPECTED_MARKETING_VERSION} and runtime ${EXPECTED_RUNTIME}.`);
+  if ((app.ios?.version || app.version) !== EXPECTED_MARKETING_VERSION || app.runtimeVersion !== EXPECTED_RUNTIME) {
+    fail(`The iOS release must use marketing version ${EXPECTED_MARKETING_VERSION} and runtime ${EXPECTED_RUNTIME}.`);
   }
   const production = eas.build?.production || {};
   if (production.channel !== EXPECTED_CHANNEL || production.environment !== EXPECTED_ENVIRONMENT) {
@@ -196,7 +196,7 @@ function extractReleaseMetadata(value, fallback = {}) {
 function formatReleaseRecord(metadata, message, artifact) {
   return [
     '',
-    '## Security production OTA release',
+    '## iOS production OTA release',
     '',
     `- Source commit: \`${metadata.commit}\`.`,
     `- EAS Update group: \`${metadata.groupId}\`; channel \`${metadata.channel}\`; runtime \`${metadata.runtime}\`.`,

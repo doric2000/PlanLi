@@ -60,6 +60,12 @@ const days = [{
 }];
 
 describe('RouteItinerary', () => {
+  it('shows the optional day title and still supports older days without one', () => {
+    const screen = render(<RouteItinerary day={{ ...days[0], title: 'כפרים ואגמים' }} dayIndex={1} dayCount={3} />);
+    expect(screen.getByText('יום 2 · כפרים ואגמים')).toBeTruthy();
+    screen.rerender(<RouteItinerary day={days[0]} dayIndex={0} dayCount={2} />);
+    expect(screen.getByText('יום 1')).toBeTruthy();
+  });
   it('shows one selected day with useful time metadata and an optional legacy note', () => {
     const screen = render(<RouteItinerary day={days[0]} dayIndex={0} dayCount={2} />);
     expect(screen.getByTestId('route-day-stops-0')).toBeTruthy();

@@ -85,7 +85,7 @@ function resolveProductionLineage(entries, readGroup) {
 
 function currentProductionCommit(clientRoot) {
   const branch = JSON.parse(runEas(clientRoot, [
-    'update:list', '--branch', 'production', '--runtime-version', '1.2.0',
+    'update:list', '--branch', 'production', '--runtime-version', '1.3.0',
     '--platform', 'ios', '--limit', '10', '--json', '--non-interactive',
   ]));
   return resolveProductionLineage(branch?.currentPage || [], (groupId) => (

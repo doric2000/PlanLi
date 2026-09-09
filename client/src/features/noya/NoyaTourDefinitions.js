@@ -177,7 +177,7 @@ export const CREATOR_GUIDE_STEPS = Object.freeze({
     {
       targetId: NOYA_CREATOR_TARGETS.routeBase,
       title: 'פותחים מסלול',
-      message: 'מתחילים מעיר או אזור וממספר הימים. אפשר לשנות ולהוסיף פרטים אחר כך.',
+      message: 'מתחילים בשם ובעיר או באזור. היום הראשון כבר מוכן, ואפשר להוסיף ימים ולעבור ביניהם באותו עמוד.',
     },
     {
       targetId: NOYA_CREATOR_TARGETS.routeStop,
@@ -188,7 +188,7 @@ export const CREATOR_GUIDE_STEPS = Object.freeze({
     {
       targetId: NOYA_CREATOR_TARGETS.routePublish,
       title: 'לפני הפרסום',
-      message: 'לפני הפרסום משלימים תיאור מסלול ורמת מחיר כוללת. שאר הפרטים נשארים לבחירה.',
+      message: 'לפני הפרסום משלימים שם, תיאור ומחיר למסלול כולו, עם עצירה בכל יום ולפחות שתי עצירות בסך הכול. שאר הפרטים נשארים לבחירה.',
     },
   ],
 });

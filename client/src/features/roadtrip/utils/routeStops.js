@@ -34,6 +34,12 @@ export const getStopMediaUrls = (stop, variant = "feed") => {
 	const urls = getStopMediaAssets(stop)
 		.map((asset) => getMediaVariantUrl(asset, variant))
 		.filter(Boolean);
+	if (stop?.mediaOrder?.length) {
+		const pending = (stop.pendingMedia || []).map((item) => item.previewUri || item.uri);
+		let remoteIndex = 0;
+		let localIndex = 0;
+		return stop.mediaOrder.map((kind) => kind === 'remote' ? urls[remoteIndex++] : pending[localIndex++]).filter(Boolean).slice(0, 3);
+	}
 	(Array.isArray(stop?.pendingMedia) ? stop.pendingMedia : [])
 		.map((entry) => entry?.uri)
 		.filter(Boolean)
@@ -174,14 +180,17 @@ export const markUnchangedRouteLocations = (days = [], originalDays = []) => {
 		return {
 			...day,
 			stops: (day?.stops || []).map((stop) => {
-				const original = originalById.get(stop?.id);
+        const sourceDay = originalDaysById.get(stop?.savedLocationDayId);
+        const original = sourceDay
+          ? sourceDay.stops?.find((item) => item.id === (stop?.savedLocationStopId || stop?.id))
+          : originalById.get(stop?.id);
 				const unchanged = Boolean(
 					original &&
 					!stop?.place?.resolvedPlaceToken &&
 					original?.place?.placeId &&
 					original.place.placeId === stop?.place?.placeId
 				);
-				return unchanged ? { ...stop, reuseSavedLocation: true } : stop;
+        return unchanged ? { ...stop, reuseSavedLocation: true, savedLocationDayId: sourceDay?.id || originalDay?.id } : stop;
 			}),
 		};
 	});

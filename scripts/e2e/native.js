@@ -70,11 +70,15 @@ async function nativeSmoke({ args, env, start, run, waitFor, LOGS, inputSignatur
   let emulator;
   if (device.status === 0 && device.stdout.trim() !== 'PlanLi_E2E_API34') throw new Error(`${SERIAL} belongs to another virtual device.`);
   if (device.status !== 0) emulator = start('android-emulator', path.join(DIRECTORY, 'sdk/emulator/emulator.exe'),
-    ['-avd', 'PlanLi_E2E_API34', '-port', '5580', '-no-window', '-no-audio', '-no-snapshot', '-no-boot-anim', '-cores', '2', '-memory', '1536', '-gpu', 'software']);
+    ['-avd', 'PlanLi_E2E_API34', '-port', '5580', '-no-window', '-no-audio', '-no-snapshot', '-no-boot-anim', '-cores', '2', '-memory', '2560', '-gpu', 'swangle', '-vsync-rate', '30']);
   await waitFor('Android boot', () => output(['shell', 'getprop', 'sys.boot_completed']).stdout?.trim() === '1', emulator, 300000);
   const adbRun = (label, params) => run(label, adb, ['-s', SERIAL, ...params]);
-  await adbRun('android-screen-size', ['shell', 'wm', 'size', '720x1280']);
-  await adbRun('android-screen-density', ['shell', 'wm', 'density', '280']);
+  await adbRun('android-screen-size', ['shell', 'wm', 'size', '540x960']);
+  await adbRun('android-screen-density', ['shell', 'wm', 'density', '240']);
+  // Pixel 6's fixed 128px cutout does not scale with this small test display.
+  // Its status-bar touch region otherwise covers Expo's Close button.
+  await adbRun('android-display-overlay', ['shell', 'cmd', 'overlay', 'disable', '--user', '0', 'com.android.internal.emulation.pixel_6']);
+  await adbRun('android-systemui-overlay', ['shell', 'cmd', 'overlay', 'disable', '--user', '0', 'com.android.systemui.emulation.pixel_6']);
   await adbRun('android-install', ['install', '-r', apk]);
   await adbRun('android-fixture-photo', ['push', path.join(DIRECTORY, 'fixture.jpg'), '/sdcard/Pictures/planli-e2e.jpg']);
   await adbRun('android-index-photo', ['shell', 'am', 'broadcast', '-a', 'android.intent.action.MEDIA_SCANNER_SCAN_FILE', '-d', 'file:///sdcard/Pictures/planli-e2e.jpg']);

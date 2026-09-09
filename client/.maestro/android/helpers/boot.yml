@@ -23,9 +23,15 @@ appId: com.planli.planlitravels.e2e
 - tapOn: Tools button
 - tapOn: "Close"
 - extendedWaitUntil:
+    notVisible: "Go home"
+    timeout: 10000
+- extendedWaitUntil:
     visible:
       id: region-selector-screen
     timeout: 300000
+- tapOn:
+    text: "עצירת סיבוב אוטומטי"
+    optional: true
 - tapOn: "האזור הבא"
 - tapOn: "האזור הבא"
 - assertVisible: "לגלות את אירופה"
