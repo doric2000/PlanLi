@@ -13,6 +13,7 @@
     "icon": "./assets/brand-app-icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "version": "1.1.1",
       "supportsTablet": false,
       "bundleIdentifier": "com.planli.planlitravels",
       "usesAppleSignIn": true,

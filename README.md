@@ -25,32 +25,104 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Atlas release preparation (2026-09-09)
+### Atlas native release (2026-09-09)
 
-The authorized Atlas release targets Android internal testing and iPhone
-TestFlight, keeping marketing version `1.1.0` and isolating the new native
-WebView on runtime `1.3.0`. EAS identity/project and the production Firebase,
-App Check and Sentry environment have been verified.
+PR [#354](https://github.com/doric2000/PlanLi/pull/354) merged as
+`890d70110de37ad1814b79c7c1b2106e42b74a54`. The release keeps marketing version
+`1.1.0` and uses runtime `1.3.0` for the new native WebView. Release input
+was an immutable archive of that merged source: all 1,067 tracked blobs matched,
+allowing only Git's Windows newline conversion. The inspected EAS source contained
+565 files / 19,945,787 unpacked bytes (15.4 MB uploaded), without local native
+outputs, private environment files, backend workspaces or unrelated local edits.
+EAS used explicit archive-root/no-VCS mode; provider Git SHA is therefore null.
+Its build message records the independently verified source commit above.
 
-Release readiness passed for Android and iOS: all 1,118 client tests in 189
-suites, native configuration/package checks, Expo Doctor and dependency
-compatibility checks. Thirteen focused backend tests, twelve configuration
-security checks and Atlas bundle reproducibility passed. The final static review
+Only `setDiscoveryRegion` was deployed to production `planli-f0b12` /
+`europe-west1`. Readback at `2026-09-09T14:44:32.453Z` confirmed
+Node.js 22 v2, ACTIVE, minInstances 0 and all traffic on revision
+`setdiscoveryregion-00003-xet`, updated at `2026-09-09T14:44:11.069Z`.
+Source hash: `89c211863f405a7d83240eab0231c17f0201becd`.
+An unauthenticated global-selection request returned HTTP 401; the post-deploy
+error scan found zero entries. The first attempt stopped during local source
+discovery before deployment; the unchanged source loaded successfully and the
+documented 60-second discovery timeout allowed the subsequent deployment.
+
+EAS accepted both production-profile/environment/channel, store-distribution builds:
+
+- Android `1.1.0 (10)`: [build b0648036](https://expo.dev/accounts/doric2000/projects/client/builds/b0648036-61d6-4af6-b659-442a22b603dc), accepted
+  `2026-09-09T14:44:16.736Z`, package `com.planli.planlitravels`.
+- iOS `1.1.0 (29)`: [build 1fb1b645](https://expo.dev/accounts/doric2000/projects/client/builds/1fb1b645-c200-481f-ba51-58df217a3096), accepted
+  `2026-09-09T14:45:00.291Z`, bundle ID `com.planli.planlitravels`.
+
+The iOS build completed at `2026-09-09T14:53:50.673Z`. The downloaded IPA
+(40,538,116 bytes) has SHA-256
+`cfc698fb33236c4c39e9cd5b0149c13d5df5c57aad2b0a0a4ca6ee79f22a792c`.
+Inspection confirmed version/build, production identifier/channel, runtime 1.3.0,
+native WebView and all nine Atlas hero/fallback photos matching source bytes.
+EAS accepted iOS submission `f5bc00ae-db99-4a80-89a9-f6e4e32fb498` at
+`2026-09-09T14:55:08.672Z` for the existing `Team (Expo)` internal group
+(`2939d99e-114f-468d-865b-dce7183b5856`, access to all builds). The first scheduling
+attempt was rejected before creating a submission because EAS automatic changelog
+submission requires Enterprise; the regular submission was accepted.
+EAS marked the iOS transfer FINISHED at `2026-09-09T15:59:18.356Z`, but Apple
+subsequently rejected build 29 with ITMS-90186 and ITMS-90062: the approved
+marketing version 1.1.0 is closed to additional binary submissions. The user
+supplied the rejection notice; App Store Connect readback still lists build 28
+as the latest valid TestFlight build. Build 29 is not available to testers.
+The pre-build readback already showed 1.1.0 READY_FOR_DISTRIBUTION; failing to
+block that submission was a release-preflight error. EAS transport completion
+is not Apple acceptance. The prior 1.1.0 releases used compatible OTA updates
+on build 28; the Atlas WebView addition requires a new native binary.
+The user subsequently approved an iOS-only 1.1.1 correction and a new native
+build for the existing internal TestFlight group. Android remains 1.1.0.
+Before the replacement build, compare the evaluated iOS version with fresh
+`eas submit:status --platform ios --profile production --json --non-interactive`
+App Store Connect output; a closed/approved version must not be resubmitted.
+After transfer, verify Apple processing and internal-group availability before
+reporting TestFlight distribution complete.
+Android build 10 completed at `2026-09-09T16:04:17.327Z`. The 88,168,860-byte
+AAB has SHA-256 `af7a1b3ca7f68fe7c4c88afa9410008aebe838b24dc149daeac2ce3ac1e3057e`.
+Bundletool validation, JAR signature verification, the production identifier/channel,
+version 1.1.0/build 10, compiled runtime 1.3.0, native WebView and all nine Atlas
+photos passed. The upload certificate matches accepted build 9 (SHA-256
+`648c5b2dc5fbd29afe0e8ee83d8215c578459912a3a92cb022d055e0daf55f54`).
+Google Play internal release 7, **PlanLi 1.1.0 (10) – Atlas**, was published on
+2026-09-09 at 19:07 Israel time (16:07Z). Independent track readback reported
+**Available to internal testers**, version code 10, with no lost supported devices.
+The single non-blocking warning concerns the absent deobfuscation mapping file.
+[Internal-test install link](https://play.google.com/apps/internaltest/4701742858558783307).
+No Atlas OTA was published to runtime 1.2.0. Physical-device installation and
+final store-artifact UI remain unverified.
+
+Release readiness passed for Android and iOS: 1,118 client tests in 189 suites,
+native configuration/package checks, Expo Doctor/dependency compatibility,
+13 focused backend tests, 12 configuration security checks and Atlas bundle
+reproducibility. All applicable PR checks passed, including dependency review,
+fresh locked audit, CodeQL, Semgrep and secrets scanning. Final static review
 found no actionable issues. Twelve required Expo SDK 57 patch dependencies were
-aligned after the release compatibility check identified older patch versions;
-the final client suite and native checks cover the aligned lockfile.
+aligned for release compatibility; the final client suite covers that lockfile.
+The earlier Android 14 UI receipt below predates that native patch alignment and
+runtime change. A final-dependency local development APK subsequently rebuilt in
+12m53s, completing at `2026-09-09T15:16:33.247Z`, native signature
+`740e1133ad3be7d89ee1900ec6eaf2e9d7e40274875c568b93dc98c955507d7c`.
+It was installed on the dedicated Android 14 AVD as `1.1.0 (1)`, runtime `1.3.0`,
+package `com.planli.planlitravels.e2e`, with OTA disabled. Metro is running on
+8081 against the preserved demo services. The final focused Atlas flow passed
+at `2026-09-09T15:25:41.677Z`: 287.443 seconds for the scenario, 320.384 seconds
+including CLI startup. Globe drag, cancel, global confirmation and restoration
+from Community passed; the rendered Europe/global screens were inspected.
+APK SHA-256: `9aa62bf7d0a22234fa1ba05ddf4e1c5f5408ebc42f9905bff27628a909a461ed`.
+Evidence is in ignored `.codex_tmp/validation/android/atlas-final-device/`,
+including `atlas-final.xml` and `observed-result.json`. Existing demo services
+were attached, so this is observed device evidence, not a reusable fresh-backend
+receipt. The visible emulator and Metro remain running for manual inspection.
 
-The Android 14 development UI check below passed before that patch alignment and
-runtime change. It is not proof of the final store artifact or physical iPhone
-rendering. Metro and the task's emulator were subsequently stopped for dependency
-alignment; the demo backend services were preserved.
-
-The only changed backend target is `setDiscoveryRegion`, in
-`planli-f0b12` / `europe-west1`. Its prior source hash is
-`731ea4c96100fc8c6b41bf10fc2b61cffe3f98a5`. It accepts existing regional requests
-and adds explicit global preferences. PR, deployment and native distribution
-remain pending at this checkpoint. The existing iOS OTA wrapper stays pinned to
-runtime `1.2.0`; it is not the distribution path for the new Atlas native binary.
+App Store Connect API readback before this release reports existing version
+1.1.0/build 28 as READY_FOR_DISTRIBUTION, with TestFlight VALID,
+IN_BETA_TESTING / BETA_APPROVED. This supersedes earlier README statements that
+the Apple release was only a beta; public listing availability was not checked.
+The authorized Atlas distribution here targets the existing Android internal-test
+and iPhone TestFlight tracks.
 
 ### Hoi An classification and location-map release (2026-09-09)
 
