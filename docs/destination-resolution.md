@@ -198,6 +198,13 @@ remain in ignored local artifacts, not committed production records.
 
 ## PR validation follow-up
 
+CodeQL's local research-cache race findings were corrected: JSON snapshots are
+written to exclusive temporary files and published atomically without replacing
+another run's result. Concurrent runs use the winning ID list; failed batches
+can resume, and malformed existing snapshots fail visibly. Focused tests cover
+those cases. The network-data-to-file notice describes the script's intended
+public JSON cache: provider values never control paths or execute as code.
+
 The initial remote run caught a rename regression fixture still expecting naming
 policy v2; its expected version is now v3. Dependency audit also identified newly
 reported advisories in existing locked packages. To satisfy the existing audit

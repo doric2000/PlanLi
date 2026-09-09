@@ -3,8 +3,37 @@
 // live records. Source snapshots are resumable and remain outside version control.
 const fs = require('node:fs');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const USER_AGENT = 'PlanLi/1.0 (https://github.com/doric2000/PlanLi; destination research)';
 const ENDPOINT = 'https://query.wikidata.org/sparql';
+
+function readSnapshot(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function publishSnapshot(file, data) {
+  // Public network JSON is intentionally cached as data. Neither its values nor
+  // provider IDs determine a path; only the operator's directory and local batch
+  // index do. Publish a complete file without replacing another run's snapshot.
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, JSON.stringify(data), { flag: 'wx', mode: 0o600 });
+    try {
+      fs.linkSync(temporary, file);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+  } finally {
+    try { fs.unlinkSync(temporary); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+}
 
 async function queryWikidata(query, fetchImpl = global.fetch) {
   const response = await fetchImpl(`${ENDPOINT}?format=json&query=${encodeURIComponent(query)}`, {
@@ -21,15 +50,14 @@ async function research({ directory, fetchImpl = global.fetch } = {}) {
   if (!directory) throw new Error('An explicit output directory is required.');
   fs.mkdirSync(directory, { recursive: true });
   const idsPath = path.join(directory, 'wikivoyage-ids.json');
-  let ids;
-  if (fs.existsSync(idsPath)) {
-    const raw = JSON.parse(fs.readFileSync(idsPath, 'utf8'));
-    ids = (raw.results?.bindings || raw).map((row) => row.item.value.split('/').pop());
-  } else {
+  let raw = readSnapshot(idsPath);
+  if (raw === null) {
     const rows = await queryWikidata('SELECT DISTINCT ?item WHERE { ?a schema:about ?item; schema:isPartOf <https://en.wikivoyage.org/> }', fetchImpl);
-    fs.writeFileSync(idsPath, JSON.stringify(rows));
-    ids = rows.map((row) => row.item.value.split('/').pop());
+    publishSnapshot(idsPath, rows);
+    // A concurrent run may have published first; every batch uses its ID order.
+    raw = readSnapshot(idsPath);
   }
+  let ids = (raw.results?.bindings || raw).map((row) => row.item.value.split('/').pop());
   ids = [...new Set(ids)].filter((id) => /^Q\d+$/.test(id));
   const chunks = Array.from({ length: Math.ceil(ids.length / 200) }, (_, i) => ids.slice(i * 200, (i + 1) * 200));
   let cursor = 0;
@@ -38,7 +66,7 @@ async function research({ directory, fetchImpl = global.fetch } = {}) {
     while (cursor < chunks.length) {
       const index = cursor++;
       const file = path.join(directory, `entities-${String(index).padStart(4, '0')}.json`);
-      if (fs.existsSync(file)) continue;
+      if (readSnapshot(file) !== null) continue;
       const values = chunks[index].map((id) => `wd:${id}`).join(' ');
       const query = `SELECT DISTINCT ?item ?en ?he ?countryCode ?coord ?type ?links WHERE {
         VALUES ?item { ${values} }
@@ -48,7 +76,7 @@ async function research({ directory, fetchImpl = global.fetch } = {}) {
       }`;
       try {
         const rows = await queryWikidata(query, fetchImpl);
-        fs.writeFileSync(file, JSON.stringify({ fetchedAt: new Date().toISOString(), query, rows }));
+        publishSnapshot(file, { fetchedAt: new Date().toISOString(), query, rows });
         if (index % 10 === 0) console.log(`Research ${index + 1}/${chunks.length}`);
       } catch (error) {
         errors.push({ index, message: error.message });
