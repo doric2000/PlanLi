@@ -64,8 +64,33 @@ EAS accepted iOS submission `f5bc00ae-db99-4a80-89a9-f6e4e32fb498` at
 (`2939d99e-114f-468d-865b-dce7183b5856`, access to all builds). The first scheduling
 attempt was rejected before creating a submission because EAS automatic changelog
 submission requires Enterprise; the regular submission was accepted.
-At the 14:59Z checkpoint, Android build 10 and the iOS submission are in EAS queues;
-Google Play upload and Apple processing/distribution remain pending.
+EAS marked the iOS transfer FINISHED at `2026-09-09T15:59:18.356Z`, but Apple
+subsequently rejected build 29 with ITMS-90186 and ITMS-90062: the approved
+marketing version 1.1.0 is closed to additional binary submissions. The user
+supplied the rejection notice; App Store Connect readback still lists build 28
+as the latest valid TestFlight build. Build 29 is not available to testers.
+The pre-build readback already showed 1.1.0 READY_FOR_DISTRIBUTION; failing to
+block that submission was a release-preflight error. EAS transport completion
+is not Apple acceptance. The prior 1.1.0 releases used compatible OTA updates
+on build 28; the Atlas WebView addition requires a new native binary.
+The user subsequently approved an iOS-only 1.1.1 correction and a new native
+build for the existing internal TestFlight group. Android remains 1.1.0.
+Before the replacement build, compare the evaluated iOS version with fresh
+`eas submit:status --platform ios --profile production --json --non-interactive`
+App Store Connect output; a closed/approved version must not be resubmitted.
+After transfer, verify Apple processing and internal-group availability before
+reporting TestFlight distribution complete.
+Android build 10 completed at `2026-09-09T16:04:17.327Z`. The 88,168,860-byte
+AAB has SHA-256 `af7a1b3ca7f68fe7c4c88afa9410008aebe838b24dc149daeac2ce3ac1e3057e`.
+Bundletool validation, JAR signature verification, the production identifier/channel,
+version 1.1.0/build 10, compiled runtime 1.3.0, native WebView and all nine Atlas
+photos passed. The upload certificate matches accepted build 9 (SHA-256
+`648c5b2dc5fbd29afe0e8ee83d8215c578459912a3a92cb022d055e0daf55f54`).
+Google Play internal release 7, **PlanLi 1.1.0 (10) – Atlas**, was published on
+2026-09-09 at 19:07 Israel time (16:07Z). Independent track readback reported
+**Available to internal testers**, version code 10, with no lost supported devices.
+The single non-blocking warning concerns the absent deobfuscation mapping file.
+[Internal-test install link](https://play.google.com/apps/internaltest/4701742858558783307).
 No Atlas OTA was published to runtime 1.2.0. Physical-device installation and
 final store-artifact UI remain unverified.
 
