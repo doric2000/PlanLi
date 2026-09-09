@@ -15,7 +15,12 @@ function start(label, command, args, cwd = ROOT) {
   fs.mkdirSync(LOGS, { recursive: true });
   const log = path.join(LOGS, `${label}.log`);
   const fd = fs.openSync(log, 'w');
-  const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: ['ignore', fd, fd] });
+  // Bound the demo JVMs on the 16 GB validation host without constraining Gradle.
+  const javaHeap = label === 'firebase' ? 512 : label.startsWith('maestro-') ? 768 : null;
+  const childEnv = javaHeap ? { ...env,
+    JAVA_TOOL_OPTIONS: `${env.JAVA_TOOL_OPTIONS || ''} -Xms32m -Xmx${javaHeap}m -XX:ActiveProcessorCount=2`.trim(),
+  } : env;
+  const child = spawn(command, args, { cwd, env: childEnv, windowsHide: true, stdio: ['ignore', fd, fd] });
   fs.closeSync(fd);
   children.add(child);
   fs.writeFileSync(path.join(LOGS, `${label}.pid`), String(child.pid || ''));

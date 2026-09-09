@@ -20,6 +20,7 @@ export default function ExactLocationPicker({
 	placeholder,
 	inputTestID,
 	onResolvingChange,
+	onQueryChange,
 	locale = 'he',
 	variant = 'default',
 	helper = '',
@@ -63,6 +64,7 @@ export default function ExactLocationPicker({
 		hydrateSelection(value);
 	}, [
 		hydrateSelection,
+		value?.query,
 		value?.city?.googlePlaceId,
 		value?.city?.id,
 		value?.city?.providerPlaceId,
@@ -112,7 +114,7 @@ export default function ExactLocationPicker({
 			) : <GooglePlacesInput
 				mode="google"
 				value={locationQuery}
-				onChangeValue={clearSelectionForTyping}
+				onChangeValue={(text) => { clearSelectionForTyping(text); onQueryChange?.(text); }}
 				onSelect={selectPlace}
 				googleSearchFn={googleSearchFn}
 				explicitSearch

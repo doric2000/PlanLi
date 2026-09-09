@@ -83,13 +83,63 @@ The local suite uses Firebase's documented serialized Functions mode on localhos
 inspector port 9230 to bound memory on this 16GB Windows machine. This verifies
 UI/business flows, not production concurrency. Gradle is limited to two workers.
 
-The dedicated AVD uses software graphics rendering, two CPU cores,
-a 720x1280 display and density 280. Metro also uses two workers. Run setup
+The dedicated AVD uses the installed emulator's `swangle` software mode, two CPU
+cores, a 540x960 display and density 240 (360dp wide), at 30 Hz. Local Metro uses
+one worker. Run setup
 before starting tests; updating device tools during a flow can interrupt ADB.
 Host GPU rendering produced repeated OpenGL errors and a black, unresponsive
 emulator during acceptance on this workstation. The runner uses the installed
-emulator's supported `software` renderer and a cold boot to avoid that driver
+emulator's supported software renderer and a cold boot to avoid that driver
 path; it does not accept interrupted tests as successes.
+
+For this 16 GiB host, the runner caps each Firebase Java process at a 512 MiB
+heap and Maestro at a 768 MiB heap, with two JVM processors. These are heap
+limits, not limits on total process memory. They apply to owned local helper
+processes only; Gradle and normal app configuration are unchanged.
+
+Android Emulator 37.1.11 raises Android 14 guest RAM to 2560 MiB even when
+`-memory 1536` is requested, as confirmed by its startup log and
+[Android's emulator source](https://android.googlesource.com/platform/external/qemu/+/emu-master-dev/android/android-emu/android/main-common.c).
+The runner now requests that effective minimum explicitly. Lowering the old
+number did not reduce allocation. A SwiftShader trial with Vulkan disabled
+still exceeded 3 GiB of host memory and did not resolve the pressure. A later
+host-GPU trial with Vulkan disabled rendered the launcher but froze when the app
+opened, with `glReadPixels` / `glPixelStorei` errors. Hardware rendering is not a
+usable workaround on this workstation. The smaller physical display reduces the
+pixel workload; it does not reduce Android's minimum guest RAM. Stop owned helpers when inspection
+ends, reuse the APK for JavaScript changes, and avoid other heavy builds or
+test suites while the emulator is running. Host memory pressure is not a
+passing device result.
+
+The runner disables the two Pixel 6 emulation overlays on the dedicated AVD.
+Their fixed 128px cutout did not scale with the smaller display: the status-bar
+touch region covered Expo's Close button at y=117. Device readback confirmed a
+normal 36px status bar after removing those overlays. This small-screen profile
+has no camera cutout. A global animation-disable trial was inconclusive and was
+reverted; normal motion remains enabled. The boot flow asserts developer-menu
+dismissal and pauses the globe through its existing UI button when available.
+A diagnostic wrapper
+sampled available host RAM every five
+seconds and stopped only its own test helpers after two samples below 0.9 GiB.
+Keep enough headroom before running; that temporary wrapper is not part of the
+normal npm command. Do not build native code or run Jest concurrently with the AVD.
+
+The later constrained run held roughly 2 GiB available during parts of startup,
+but that headroom did not persist through the entire route scenario. Even staged
+startup eventually fell below the guard's threshold; the route publication test
+remains incomplete. Closing the owned AVD, Metro and demo services restored
+5.66 GiB available. These measurements include other desktop applications and
+do not establish a controlled RAM saving for any individual setting. A paused
+or failed scenario must not be reported as a passing device receipt.
+
+On 2026-09-09, the constrained backend run passed synthetic seed and the real
+backend smoke (3.853s and 2.015s after startup). Java startup confirmed the
+512 MiB Firebase heap; a separate JVM check confirmed Maestro's 768 MiB heap.
+The two focused runner/Metro checks passed. This does not establish a complete
+Maestro flow under the new limits. After owned services and the AVD stopped,
+Windows reported 5.81 GiB available versus 0.83 GiB during the overloaded run;
+the user also confirmed improved responsiveness. Those snapshots include other
+desktop applications and are not a controlled per-setting memory benchmark.
 
 ADB reverse was observed to report success without forwarding HTTP traffic on
 this workstation. The runner therefore uses the documented Android host alias

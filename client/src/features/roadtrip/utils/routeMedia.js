@@ -52,7 +52,10 @@ export function extractRoutePublishMedia(tripDays) {
             stopIndex,
             dayDraftId: day.draftId || day.id || null,
             draftId: stop.draftId || stop.id || null,
-            mediaIndex: canonicalCount + pendingIndex,
+            mediaIndex: stop.mediaOrder?.includes('local')
+              ? stop.mediaOrder.map((kind, index) => kind === 'local' ? index : -1).filter((index) => index >= 0)[pendingIndex]
+              : canonicalCount + pendingIndex,
+            pendingIndex,
           },
         });
       });
@@ -66,24 +69,27 @@ export function extractRoutePublishMedia(tripDays) {
 const targetForSlot = (days, slot) => {
   if (!slot) return null;
   const desiredDayId = slot.type === 'route-day' ? slot.draftId : slot.dayDraftId;
-  const day = days.find((entry) =>
+  const day = desiredDayId ? days.find((entry) =>
     desiredDayId && (entry.draftId === desiredDayId || entry.id === desiredDayId)
-  ) || days[slot.dayIndex];
+  ) : days[slot.dayIndex];
   if (!day) return null;
   if (slot.type === 'route-day') return day;
-  return (day.stops || []).find((entry) =>
+  return slot.draftId ? (day.stops || []).find((entry) =>
     slot.draftId && (entry.draftId === slot.draftId || entry.id === slot.draftId)
-  ) || day.stops?.[slot.stopIndex] || null;
+  ) || null : day.stops?.[slot.stopIndex] || null;
 };
 
 export function applyRoutePublishMedia(route, mediaEntries, { preview = false } = {}) {
   const nextRoute = { ...route, days: cloneTripDays(route?.days) };
+  const preparedByTarget = new Map();
+  const previewsByTarget = new Map();
   for (const entry of mediaEntries || []) {
     const target = targetForSlot(nextRoute.days, entry.slot);
     if (!target) throw new Error('A queued route image no longer matches its day or stop.');
     if (entry.slot?.type === 'route-stop' && preview) {
-      const pending = Array.isArray(target.pendingMedia) ? [...target.pendingMedia] : [];
-      const pendingIndex = Math.max(0, Number(entry.slot.mediaIndex || 0) -
+      const pending = previewsByTarget.get(target) || (Array.isArray(target.pendingMedia) ? [...target.pendingMedia] : []);
+      previewsByTarget.set(target, pending);
+      const pendingIndex = entry.slot.pendingIndex ?? Math.max(0, Number(entry.slot.mediaIndex || 0) -
         [target.media, ...(target.additionalMedia || [])].filter(Boolean).length);
       pending[pendingIndex] = {
         uri: entry.uri,
@@ -96,20 +102,22 @@ export function applyRoutePublishMedia(route, mediaEntries, { preview = false } 
         ...(entry.localReference ? { localReference: entry.localReference } : {}),
         ...(entry.transform ? { transform: entry.transform } : {}),
       };
-      target.pendingMedia = pending.filter(Boolean).slice(0, 3);
-      target.image = target.pendingMedia[0]?.uri || target.image;
     } else if (entry.slot?.type === 'route-stop') {
       const asset = entry.asset || entry.preparedAsset;
       if (!asset) throw new Error('A queued route image was not prepared.');
-      const assets = [target.media, ...(Array.isArray(target.additionalMedia)
-        ? target.additionalMedia
-        : [])].filter(Boolean);
-      const mediaIndex = Math.max(0, Number(entry.slot.mediaIndex || assets.length));
+      let assets = preparedByTarget.get(target);
+      if (!assets) {
+        const remote = [target.media, ...(target.additionalMedia || [])].filter(Boolean);
+        let index = 0;
+        assets = target.mediaOrder?.includes('local')
+          ? target.mediaOrder.map((kind) => kind === 'remote' ? remote[index++] : null)
+          : remote;
+        preparedByTarget.set(target, assets);
+      }
+      const mediaIndex = Math.max(0, Number(entry.slot.mediaIndex ?? assets.length));
       assets[mediaIndex] = asset;
       delete target.image;
       delete target.pendingMedia;
-      target.media = assets[0] || null;
-      target.additionalMedia = assets.slice(1, 3);
     } else if (preview) {
       target.image = entry.uri;
       target.media = entry.asset || entry.preparedAsset || target.media || null;
@@ -118,6 +126,17 @@ export function applyRoutePublishMedia(route, mediaEntries, { preview = false } 
       target.media = entry.asset || entry.preparedAsset || null;
     }
   }
+  for (const [target, pending] of previewsByTarget) {
+    target.pendingMedia = pending.filter(Boolean).slice(0, 3);
+    target.image = target.pendingMedia[0]?.uri || target.image;
+  }
+  for (const [target, assets] of preparedByTarget) {
+    if (assets.some((asset) => !asset)) throw new Error('A queued route photo is missing.');
+    target.media = assets[0] || null;
+    target.additionalMedia = assets.slice(1, 3);
+    delete target.mediaOrder;
+  }
+  if (!preview) nextRoute.localMediaCount = 0;
   return nextRoute;
 }
 

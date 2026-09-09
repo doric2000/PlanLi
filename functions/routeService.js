@@ -412,6 +412,7 @@ function sanitizeRouteInput(input) {
       'invalid-argument', 'Every published route day requires at least one stop.');
     totalStops += stops.length;
     const sanitizedStops = stops.map((stop, stopIndex) => {
+      assert(!stop?.editorState?.locationIncomplete, 'invalid-argument', 'Complete the stop location before publishing.');
       const destination = cleanDestinationRef(
         stop?.destination || stop?.destinationRef,
         `days[${dayIndex}].stops[${stopIndex}].destination`
@@ -455,20 +456,23 @@ function sanitizeRouteInput(input) {
         ...(canonicalPlace ? { place: canonicalPlace } : {}),
         ...(canonicalCoordinates ? { coordinates: canonicalCoordinates } : {}),
         ...(recommendationId ? { source: { type: 'recommendation', recommendationId } } : {}),
-        startTime: cleanOptionalTime(stop?.startTime, `days[${dayIndex}].stops[${stopIndex}].startTime`),
+        startTime: cleanOptionalTime(stop?.editorState?.startTime ?? stop?.startTime, `days[${dayIndex}].stops[${stopIndex}].startTime`),
         durationMinutes: cleanOptionalDuration(
-          stop?.durationMinutes,
+          stop?.editorState?.durationMinutes || stop?.durationMinutes,
           `days[${dayIndex}].stops[${stopIndex}].durationMinutes`
         ),
         subcategoryIds: [],
         reuseSavedLocation: stop?.reuseSavedLocation === true,
+        savedLocationDayId: cleanDocumentId(stop?.savedLocationDayId || day.id, 'savedLocationDayId', `day_${String(dayIndex + 1).padStart(3, '0')}`),
+        savedLocationStopId: cleanDocumentId(stop?.savedLocationStopId || stop?.id, 'savedLocationStopId', `stop_${String(stopIndex + 1).padStart(3, '0')}`),
         media: stop?.media || null,
         additionalMedia,
       };
     });
     return {
-      id: `day_${String(dayIndex + 1).padStart(3, '0')}`,
+      id: cleanDocumentId(day?.id, `days[${dayIndex}].id`, `day_${String(dayIndex + 1).padStart(3, '0')}`),
       position: dayIndex,
+      title: cleanOptionalString(day?.title, `days[${dayIndex}].title`, 120),
       description: cleanOptionalString(day?.description, `days[${dayIndex}].description`, 5000),
       media: day?.media || null,
       stops: sanitizedStops,
@@ -476,6 +480,9 @@ function sanitizeRouteInput(input) {
   });
   assert(totalStops >= (streamlined ? 2 : 1) && totalStops <= MAX_ROUTE_STOPS,
     'invalid-argument', 'Route stops are invalid.');
+  assert(new Set(sanitizedDays.map((day) => day.id)).size === sanitizedDays.length &&
+    sanitizedDays.every((day) => new Set(day.stops.map((stop) => stop.id)).size === day.stops.length),
+  'invalid-argument', 'Route day and stop identities must be unique within their collection.');
   const distanceKm = streamlined ? 0 : Number(input.distanceKm);
   assert(Number.isFinite(distanceKm) && distanceKm >= 0, 'invalid-argument', 'distanceKm is invalid.');
   return {
@@ -892,14 +899,14 @@ async function loadTrustedRoutePlaces({ db, routeRef, existingRoute, days }) {
   const trustedStops = days.flatMap((day) => day.stops
     .filter((stop) => stop.id && stop.locationPrecision === 'exact' &&
       stop.place?.placeId && !stop.place?.resolvedPlaceToken)
-    .map((stop) => ({ dayId: day.id, stop }))
+    .map((stop) => ({ dayId: stop.savedLocationDayId || day.id, stop }))
   );
   if (!trustedStops.length) return new Map();
   assert(existingRoute?.activeRevisionId, 'failed-precondition',
     'The active route revision is unavailable. Reload the route and try again.');
   const snapshots = await Promise.all(trustedStops.map(({ dayId, stop }) =>
     db.doc(
-      `routes/${routeRef.id}/revisions/${existingRoute.activeRevisionId}/days/${dayId}/stops/${stop.id}`
+      `routes/${routeRef.id}/revisions/${existingRoute.activeRevisionId}/days/${dayId}/stops/${stop.savedLocationStopId || stop.id}`
     ).get()
   ));
   const trustedPlaces = new Map();
@@ -1060,7 +1067,7 @@ async function saveRoute({
   const textSafety = evaluateTextSafety([
     route.title,
     route.description,
-    ...route.days.flatMap((day) => [day.description, ...day.stops.flatMap((stop) => [stop.title, stop.description])]),
+    ...route.days.flatMap((day) => [day.title, day.description, ...day.stops.flatMap((stop) => [stop.title, stop.description])]),
   ]);
   const requestedMedia = collectMedia(route.days);
   assert(requestedMedia.length <= MAX_ROUTE_MEDIA, 'invalid-argument', 'Route contains too many images.');
@@ -1184,7 +1191,7 @@ async function saveRoute({
   });
   days.forEach((day) => {
     const dayRef = revisionRef.collection('days').doc(day.id);
-    batch.set(dayRef, { position: day.position, description: day.description, media: day.media, stopCount: day.stops.length });
+    batch.set(dayRef, { position: day.position, title: day.title, description: day.description, media: day.media, stopCount: day.stops.length });
     day.stops.forEach((stop) => {
       batch.set(dayRef.collection('stops').doc(stop.id), {
         position: stop.position,

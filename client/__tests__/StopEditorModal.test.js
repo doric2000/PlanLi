@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Modal } from 'react-native';
 
 import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal';
@@ -8,6 +8,7 @@ const mockGetPersonalizedRecommendations = jest.fn();
 const mockPickImagesForReview = jest.fn();
 const mockResolveLocation = jest.fn();
 const mockSearchPlaces = jest.fn(async () => []);
+let mockMediaProps;
 
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
@@ -79,9 +80,11 @@ jest.mock('../src/features/community/components/ManualMapPinPicker', () => {
 });
 jest.mock('../src/components/TravelMediaComposer', () => {
   const React = require('react');
-  return function MockTravelMediaComposer({ visible, value = [], onChange }) {
+  return function MockTravelMediaComposer(props) {
+    mockMediaProps = props;
+    const { visible, value = [], onChange } = props;
     React.useEffect(() => {
-      if (!visible) return;
+      if (!visible || props.embedded) return;
       mockPickImagesForReview({
         onComplete: (uris, { replace = false } = {}) => onChange?.([
           ...(replace ? [] : value),
@@ -94,6 +97,65 @@ jest.mock('../src/components/TravelMediaComposer', () => {
 });
 
 describe('StopEditorModal', () => {
+  it('preserves the source recommendation when a linked stop is reopened and edited', async () => {
+    const onDraftChange = jest.fn();
+    const initialData = {
+      id: 'stop-a', title: 'בית קפה', locationPrecision: 'general',
+      destination: { countryId: 'HU', cityId: 'budapest', cityName: 'בודפשט' },
+      source: { type: 'recommendation', recommendationId: 'recommendation-a' },
+      editorState: { locationMode: 'planli', locationIncomplete: false },
+    };
+    const screen = render(<StopEditorModal embedded visible initialData={initialData} onDraftChange={onDraftChange} />);
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'בית קפה בבוקר');
+    await waitFor(() => expect(onDraftChange).toHaveBeenCalled());
+    expect(onDraftChange.mock.calls.at(-1)[0].source).toEqual(initialData.source);
+    expect(onDraftChange.mock.calls.at(-1)[0].id).toBe('stop-a');
+  });
+
+  it('keeps unfinished inline text, query and invalid timing across parent updates and remounts', async () => {
+    const onDraftChange = jest.fn();
+    const initial = { id: 'stop-a', title: '', editorState: { locationMode: 'exact', locationIncomplete: true } };
+    const props = { embedded: true, visible: true, initialData: initial, onDraftChange, routeDestination: { countryId: 'HU', cityId: 'budapest', name: 'בודפשט' } };
+    const screen = render(<StopEditorModal {...props} />);
+    expect(screen.UNSAFE_queryAllByType(Modal)).toHaveLength(0);
+    expect(onDraftChange).not.toHaveBeenCalled();
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'שם חלקי');
+    fireEvent.changeText(screen.getByTestId('route-stop-location-input'), 'Lake Gar');
+    fireEvent.press(screen.getByTestId('route-stop-details-toggle'));
+    fireEvent.changeText(screen.getByTestId('route-stop-start-time'), '9:');
+    fireEvent.changeText(screen.getByTestId('route-stop-duration'), '0');
+    const draft = onDraftChange.mock.calls.at(-1)[0];
+    expect(draft.editorState).toEqual(expect.objectContaining({ query: 'Lake Gar', locationIncomplete: true, startTime: '9:', durationMinutes: '0' }));
+    screen.rerender(<StopEditorModal {...props} initialData={draft} />);
+    expect(screen.getByTestId('route-stop-title-input').props.value).toBe('שם חלקי');
+    screen.unmount();
+    const restored = render(<StopEditorModal {...props} initialData={draft} />);
+    expect(restored.getByTestId('route-stop-location-input').props.value).toBe('Lake Gar');
+    fireEvent.changeText(restored.getByTestId('route-stop-location-input'), 'Lake Garda');
+    expect(restored.getByTestId('route-stop-location-input').props.value).toBe('Lake Garda');
+    fireEvent.press(restored.getByTestId('route-stop-details-toggle'));
+    expect(restored.getByTestId('route-stop-start-time').props.value).toBe('9:');
+    expect(restored.getByTestId('route-stop-duration').props.value).toBe('0');
+  });
+
+  it('embeds the shared image editor and retains mixed photo order and the latest crop', async () => {
+    const onDraftChange = jest.fn();
+    const remote = { assetId: 'remote', feed: { url: 'https://example.test/remote.webp' } };
+    const crop = { version: 1, crop: { originX: 9, originY: 12, width: 400, height: 300 } };
+    const props = { embedded: true, visible: true, initialData: { id: 's', title: 'תחנה', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' }, media: remote }, onDraftChange,
+      mediaForImage: (item) => ({ ...item, transform: { version: 1, crop: { originX: 0 } } }), onPersistImages: jest.fn(async (items) => items) };
+    const screen = render(<StopEditorModal {...props} />);
+    expect(mockMediaProps.embedded).toBe(true);
+    expect(mockMediaProps.visible).toBe(true);
+    const existing = mockMediaProps.value[0];
+    await act(async () => mockMediaProps.onChange([{ uri: 'file:///new.jpg', sourceId: 'new', transform: crop, persistence: 'ready' }, existing]));
+    const draft = onDraftChange.mock.calls.at(-1)[0];
+    expect(draft.mediaOrder).toEqual(['local', 'remote']);
+    expect(draft.pendingMedia[0].transform).toEqual(crop);
+    screen.unmount();
+    render(<StopEditorModal {...props} initialData={draft} />);
+    expect(mockMediaProps.value.map((item) => item.sourceId)).toEqual(['new', 'remote']);
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetPersonalizedRecommendations.mockResolvedValue({ items: [] });

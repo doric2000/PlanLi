@@ -76,7 +76,7 @@ export default function RouteItinerary({
         <View style={styles.dayHeader} testID={`route-day-header-${dayIndex}`}>
           <View style={styles.dayFallback}><AppText style={styles.dayFallbackText}>{dayIndex + 1}</AppText></View>
           <View style={styles.dayCopy}>
-            <AppText style={styles.dayTitle}>יום {dayIndex + 1}</AppText>
+            <AppText style={styles.dayTitle}>יום {dayIndex + 1}{day?.title ? ` · ${day.title}` : ''}</AppText>
             <AppText style={styles.dayMeta}>{stops.length} עצירות</AppText>
           </View>
         </View>

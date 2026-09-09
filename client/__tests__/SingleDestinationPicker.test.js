@@ -52,6 +52,19 @@ describe('SingleDestinationPicker provider fallback', () => {
 
   afterEach(() => jest.useRealTimers());
 
+  it.each(['St Johns', 'Saint Johns', 'סנט גונס'])('keeps a bilingual catalog match for %s', async (query) => {
+    mockOptions = [{ key: 'city:CA:st-johns', kind: 'city', countryId: 'CA', cityId: 'st-johns',
+      name: 'סנט ג׳ונס', names: { he: 'סנט ג׳ונס', en: 'St. John’s' },
+      aliases: ['Saint Johns'], countryName: 'קנדה', countryNames: { en: 'Canada' } }];
+    const onChange = jest.fn();
+    const screen = render(<SingleDestinationPicker value={null} onChange={onChange} />);
+    fireEvent(screen.getByTestId('recommendation-destination-search'), 'focus');
+    fireEvent.changeText(screen.getByTestId('recommendation-destination-search'), query);
+    await act(async () => { jest.advanceTimersByTime(300); });
+    fireEvent.press(screen.getByTestId('recommendation-destination-option-CA-st-johns'));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ cityId: 'st-johns' }));
+  });
+
   it('offers and preserves a server-verified destination that is not yet in PlanLi', async () => {
     const onChange = jest.fn();
     const screen = render(

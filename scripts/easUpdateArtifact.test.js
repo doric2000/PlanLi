@@ -5,12 +5,20 @@ const crypto = require('node:crypto');
 const {
   REQUIRED_PRODUCTION_MARKERS,
   parseMultipartJsonPart,
+  validateCandidateUpdates,
   validateProductionBundle,
   verifyProductionUpdateArtifact,
 } = require('./easUpdateArtifact');
 
 const groupId = '11111111-2222-4333-8444-555555555555';
 const updateId = '01a05f00-0000-7000-8000-000000000000';
+
+test('rejects an update for the previous native runtime before fetching assets', () => {
+  assert.throws(() => validateCandidateUpdates([{
+    id: updateId, group: groupId, platform: 'ios', runtimeVersion: '1.2.0',
+    manifestPermalink: 'https://u.expo.dev/update/test',
+  }], groupId), /runtime 1.3.0/);
+});
 
 function productionBundle(extra = '') {
   return Buffer.from([
@@ -58,7 +66,7 @@ test('downloads, hashes, and validates the immutable iOS launch asset', async ()
   const launchHash = crypto.createHash('sha256').update(bundle).digest('base64url');
   const manifest = {
     id: updateId,
-    runtimeVersion: '1.2.0',
+    runtimeVersion: '1.3.0',
     metadata: { updateGroup: groupId },
     launchAsset: {
       hash: launchHash,
@@ -78,7 +86,7 @@ test('downloads, hashes, and validates the immutable iOS launch asset', async ()
     id: updateId,
     group: groupId,
     platform: 'ios',
-    runtimeVersion: '1.2.0',
+    runtimeVersion: '1.3.0',
     manifestPermalink: 'https://u.expo.dev/update/test',
     isRollBackToEmbedded: false,
   }], groupId, fetchImpl);

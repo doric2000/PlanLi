@@ -2,6 +2,7 @@ appId: com.planli.planlitravels.e2e
 ---
 - tapOn:
     id: main-tab-auth
+    retryTapIfNoChange: true
 - assertVisible:
     id: auth-entry-screen
 - tapOn: "התחברות"

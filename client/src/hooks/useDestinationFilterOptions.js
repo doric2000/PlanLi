@@ -24,6 +24,8 @@ function catalogItemToOption(data, countryNameFallbacks = {}) {
     cityId,
     name,
     names,
+    aliases: data?.aliases || [],
+    providerPlaceId: data?.providerPlaceId || data?.googlePlaceId || '',
     countryName,
     countryNames,
     label: `${name} · ${countryName}`,
@@ -77,9 +79,9 @@ async function loadDestinationOptions(regionId = null) {
   return promise;
 }
 
-export function useDestinationFilterOptions(enabled = true, searchQuery = '') {
+export function useDestinationFilterOptions(enabled = true, searchQuery = '', { respectRegion = true } = {}) {
   const { selectedRegionId } = useOptionalRegionSelection();
-  const activeRegionId = isRegionDiscoveryEnabled() ? selectedRegionId : null;
+  const activeRegionId = respectRegion && isRegionDiscoveryEnabled() ? selectedRegionId : null;
   const [optionsState, setOptionsState] = useState(() => ({
     regionId: activeRegionId,
     items: cachedOptions?.regionId === activeRegionId ? cachedOptions.items : [],

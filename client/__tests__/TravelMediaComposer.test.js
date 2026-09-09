@@ -3,6 +3,12 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, Linking, StyleSheet } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import CachedImage from '../src/components/CachedImage';
+import StopEditorModal from '../src/features/roadtrip/components/StopEditorModal';
+
+jest.mock('../src/services/PersonalizationService', () => ({ getPersonalizedRecommendations: jest.fn(async () => ({ items: [] })) }));
+jest.mock('../src/components/ExactLocationPicker', () => () => null);
+jest.mock('../src/features/community/components/SingleDestinationPicker', () => () => null);
+jest.mock('../src/features/community/components/ManualMapPinPicker', () => () => null);
 
 import TravelMediaComposer, {
   isTravelMediaSwipe,
@@ -192,6 +198,26 @@ beforeEach(() => {
 });
 
 const latestGesture = (type) => global.__travelMediaGestures.filter((gesture) => gesture.type === type).at(-1);
+
+test('a route stop renders the real inline photo controls and retains a picked photo', async () => {
+  const sourceSpy = jest.spyOn(require('../src/hooks/useTravelMediaSource'), 'default').mockReturnValue(sourceAdapter);
+  try {
+    const onDraftChange = jest.fn();
+    const screen = render(<StopEditorModal embedded visible initialData={{
+      id: 'route-stop', title: 'Cafe', locationPrecision: 'general',
+      destination: { countryId: 'GB', cityId: 'london', cityName: 'London' },
+    }} onDraftChange={onDraftChange} />);
+    fireEvent.press(screen.getByTestId('travel-media-embedded-add'));
+    await waitFor(() => expect(screen.getByTestId('travel-media-embedded-preview')).toBeTruthy());
+    expect(sourceAdapter.pickMore).toHaveBeenCalledWith(3);
+    expect(screen.getByTestId('travel-media-toggle-crop')).toBeTruthy();
+    expect(screen.getByTestId('travel-media-delete-active')).toBeTruthy();
+    await waitFor(() => expect(onDraftChange.mock.calls.at(-1)[0].pendingMedia).toEqual([
+      expect.objectContaining({ sourceId: 'picker-1' }),
+    ]));
+    screen.unmount();
+  } finally { sourceSpy.mockRestore(); }
+});
 
 test('embedded TravelMediaComposer opens the system gallery in one tap and updates inline', async () => {
   const onChange = jest.fn();

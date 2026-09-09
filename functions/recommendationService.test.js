@@ -873,6 +873,71 @@ test('new recommendations cannot smuggle external media', async () => {
   );
 });
 
+test('legacy trusted media without URLs is rebuilt with verified download URLs', async () => {
+  const assetId = '323e4567-e89b-42d3-a456-426614174001';
+  const makeMetadata = (variant, ownerUid = 'u1', state = 'prepared') => ({
+    size: '1024',
+    contentType: 'image/webp',
+    metadata: {
+      ownerUid,
+      assetId,
+      variant,
+      state,
+      width: '800',
+      height: '600',
+      firebaseStorageDownloadTokens: `${variant}-token`,
+    },
+  });
+  const admin = fakeAdminForMetadata({
+    [`media/u1/${assetId}/large.webp`]: makeMetadata('large'),
+    [`media/u1/${assetId}/feed.webp`]: makeMetadata('feed'),
+    [`media/u1/${assetId}/thumb.webp`]: makeMetadata('thumb'),
+  });
+  const existingAsset = {
+    assetId,
+    aspectRatio: 1,
+    placeholder: { thumbhash: 'legacy-hash', color: '#112233' },
+    large: { path: `media/u1/${assetId}/large.webp` },
+    feed: { path: `media/u1/${assetId}/feed.webp` },
+    thumb: { path: `media/u1/${assetId}/thumb.webp` },
+  };
+  const [retained] = await validateMediaAssets({
+    admin,
+    uid: 'u1',
+    mediaBucket: 'test.appspot.com',
+    media: [existingAsset],
+    existingMedia: [existingAsset],
+  });
+  assert.equal(retained.large.path, `media/u1/${assetId}/large.webp`);
+  assert.equal(retained.feed.path, `media/u1/${assetId}/feed.webp`);
+  assert.equal(retained.thumb.path, `media/u1/${assetId}/thumb.webp`);
+  assert.match(retained.large.url, /large-token/);
+  assert.match(retained.feed.url, /feed-token/);
+  assert.match(retained.thumb.url, /thumb-token/);
+  const [adminRetained] = await validateMediaAssets({
+    admin, uid: 'admin-editor', mediaBucket: 'test.appspot.com',
+    media: [existingAsset], existingMedia: [existingAsset],
+  });
+  assert.deepEqual(adminRetained, retained);
+  // Authoritative existing paths permit retention, not arbitrary uploads by the editor.
+  await assert.rejects(validateMediaAssets({
+    admin, uid: 'admin-editor', mediaBucket: 'test.appspot.com',
+    media: [existingAsset], existingMedia: [],
+  }), /outside the caller media folder/);
+  const tampered = { ...existingAsset, feed: { path: `media/other/${assetId}/feed.webp` } };
+  await assert.rejects(validateMediaAssets({
+    admin, uid: 'admin-editor', mediaBucket: 'test.appspot.com',
+    media: [tampered], existingMedia: [existingAsset],
+  }), /outside the caller media folder/);
+  const mixedLegacy = { ...existingAsset, large: { url: 'https://trusted/legacy-large' } };
+  const [mixedRetained] = await validateMediaAssets({
+    admin, uid: 'admin-editor', mediaBucket: 'test.appspot.com',
+    media: [mixedLegacy], existingMedia: [mixedLegacy],
+  });
+  assert.deepEqual(mixedRetained.large, mixedLegacy.large);
+  assert.match(mixedRetained.feed.url, /feed-token/);
+});
+
 test('authorized edits can retain media already attached to the document', async () => {
   const assetId = '223e4567-e89b-42d3-a456-426614174000';
   const existingAsset = {

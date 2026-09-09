@@ -140,6 +140,19 @@ function mediaCleanupKey(asset, ownerUid) {
 
 function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination, ownerUid) {
   const stop = value && typeof value === 'object' ? value : {};
+  const editor = stop.editorState;
+  const editorState = editor ? {
+    locationMode: cleanString(editor.locationMode || 'exact', 'editor.locationMode', { max: 10 }),
+    locationIncomplete: editor.locationIncomplete === true,
+    query: cleanString(editor.query || '', 'editor.query', { max: 300, optional: true }),
+    startTime: cleanString(editor.startTime || '', 'editor.startTime', { max: 5, optional: true }),
+    durationMinutes: cleanString(editor.durationMinutes || '', 'editor.durationMinutes', { max: 4, optional: true }),
+  } : null;
+  assert(!editorState || ['exact', 'general', 'pin', 'planli'].includes(editorState.locationMode),
+    'invalid-argument', 'ROUTE_DRAFT_INVALID', 'editor.locationMode is invalid.');
+  const mediaOrder = stop.mediaOrder || [];
+  assert(Array.isArray(mediaOrder) && mediaOrder.length <= 3 && mediaOrder.every((kind) => ['local', 'remote'].includes(kind)),
+    'invalid-argument', 'ROUTE_DRAFT_INVALID', 'mediaOrder is invalid.');
   const place = cleanPlace(stop.place);
   const coordinates = cleanCoordinates(stop.coordinates || place?.coordinates);
   const destination = cleanDestination(stop.destination || stop.destinationRef || fallbackDestination, { optional: true });
@@ -190,7 +203,11 @@ function cleanDraftStop(value, dayIndex, stopIndex, fallbackDestination, ownerUi
   const mediaAssets = [media, ...additionalMedia].filter(Boolean);
   return {
     id: cleanId(stop.id || `stop_${dayIndex + 1}_${stopIndex + 1}`, 'stop.id'),
+    ...(stop.savedLocationDayId ? { savedLocationDayId: cleanId(stop.savedLocationDayId, 'savedLocationDayId') } : {}),
+    ...(stop.savedLocationStopId ? { savedLocationStopId: cleanId(stop.savedLocationStopId, 'savedLocationStopId') } : {}),
     position: stopIndex,
+    ...(editorState ? { editorState } : {}),
+    ...(mediaOrder.length ? { mediaOrder } : {}),
     title: cleanString(stop.title || '', 'stop.title', { max: 160, optional: true }),
     description: cleanString(stop.description || '', 'stop.description', { max: 3000, optional: true }),
     location: cleanString(stop.location || '', 'stop.location', { max: 200, optional: true }),
@@ -222,8 +239,9 @@ function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
     const day = rawDays[dayIndex] && typeof rawDays[dayIndex] === 'object' ? rawDays[dayIndex] : {};
     const stops = Array.isArray(day.stops) ? day.stops : [];
     return {
-      id: `day_${String(dayIndex + 1).padStart(3, '0')}`,
+      id: cleanId(day.id || `day_${String(dayIndex + 1).padStart(3, '0')}`, 'day.id'),
       position: dayIndex,
+      title: cleanString(day.title || '', 'day.title', { max: 120, optional: true }),
       description: cleanString(day.description || '', 'day.description', { max: 5000, optional: true }),
       media: cleanMedia(day.media),
       stops: stops.map((stop, stopIndex) => cleanDraftStop(
@@ -232,6 +250,9 @@ function sanitizeRouteDraft(value, { ownerUid = '' } = {}) {
     };
   });
   const stopCount = days.reduce((sum, day) => sum + day.stops.length, 0);
+  assert(new Set(days.map((day) => day.id)).size === days.length &&
+    days.every((day) => new Set(day.stops.map((stop) => stop.id)).size === day.stops.length),
+  'invalid-argument', 'ROUTE_DRAFT_INVALID', 'Route day and stop identities must be unique within their collection.');
   assert(stopCount <= MAX_ROUTE_STOPS,
     'invalid-argument', 'ROUTE_DRAFT_INVALID', 'Route draft contains too many stops.');
   const mediaCount = days.reduce((total, day) => total + (day.media ? 1 : 0) +
@@ -317,7 +338,11 @@ function attachServerLocationBindings(draft, trustedRecommendations, previousDra
       ...day,
       stops: day.stops.map((stop) => {
         const trustedBinding = bindingForTrustedRecommendation(stop, trustedRecommendations);
-        const previousBinding = previousStops.get(`${day.id}/${stop.id}`)?.serverLocationBinding;
+        const movedBindings = Array.from(previousStops.values()).filter((previous) => [stop.id, stop.savedLocationStopId].includes(previous.id) &&
+          locationBindingMatchesStop(previous.serverLocationBinding, stop));
+        const previousBinding = previousStops.get(`${day.id}/${stop.id}`)?.serverLocationBinding ||
+          previousStops.get(`${stop.savedLocationDayId}/${stop.savedLocationStopId || stop.id}`)?.serverLocationBinding ||
+          (movedBindings.length === 1 ? movedBindings[0].serverLocationBinding : null);
         const binding = trustedBinding || (
           locationBindingMatchesStop(previousBinding, stop) ? previousBinding : null
         );
@@ -547,6 +572,7 @@ async function saveRouteDraft({
     batch.create(dayRef, {
       position: day.position,
       description: day.description,
+      title: day.title,
       media: day.media,
       stopCount: day.stops.length,
     });

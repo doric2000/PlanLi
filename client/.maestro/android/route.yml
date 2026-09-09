@@ -1,0 +1,218 @@
+appId: com.planli.planlitravels.e2e
+name: Build and publish a three-day route on one page
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- tapOn:
+    id: main-tab-routes
+- tapOn:
+    id: routes-add-button
+- extendedWaitUntil:
+    visible:
+      id: "route-title-input|route-draft-discard"
+    timeout: 120000
+- runFlow:
+    when:
+      visible:
+        id: route-draft-discard
+    commands:
+      - tapOn:
+          id: route-draft-discard
+- runFlow: helpers/dismiss-tour.yml
+- assertNotVisible: "פתיחת המסלול"
+- takeScreenshot: route-new
+- tapOn:
+    id: route-title-input
+- inputText: Maestro Route One Page
+- hideKeyboard
+- tapOn:
+    id: recommendation-destination-search
+- inputText: London
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "recommendation-destination-option-.*"
+    timeout: 60000
+- tapOn:
+    id: "recommendation-destination-option-.*"
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: route-description-input
+    direction: DOWN
+- tapOn:
+    id: route-description-input
+- inputText: Three days with local stops and a photo, only in Firebase emulators.
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: route-budget-2
+    direction: DOWN
+- tapOn:
+    id: route-budget-2
+- scrollUntilVisible:
+    element:
+      id: route-optional-toggle
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: route-optional-toggle
+- scrollUntilVisible:
+    element:
+      id: route-transport-2
+    direction: DOWN
+- tapOn:
+    id: route-transport-2
+- scrollUntilVisible:
+    element:
+      id: route-difficulty-0
+    direction: DOWN
+- tapOn:
+    id: route-difficulty-0
+- scrollUntilVisible:
+    element:
+      id: route-pace-1
+    direction: DOWN
+- tapOn:
+    id: route-pace-1
+- scrollUntilVisible:
+    element:
+      id: route-season-1
+    direction: DOWN
+- tapOn:
+    id: route-season-1
+- scrollUntilVisible:
+    element:
+      id: route-price-note
+    direction: DOWN
+- tapOn:
+    id: route-price-note
+- inputText: 600 ILS per traveler
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: route-details-toggle
+    direction: UP
+- tapOn:
+    id: route-details-toggle
+- runFlow:
+    file: helpers/add-route-stop.yml
+    env:
+      STOP_NAME: First stop
+- scrollUntilVisible:
+    element:
+      id: travel-media-embedded-add
+    direction: DOWN
+- tapOn:
+    id: travel-media-embedded-add
+- tapOn: "Photo taken on.*"
+- tapOn:
+    id: com.google.android.providers.media.module:id/button_add
+- extendedWaitUntil:
+    visible:
+      id: travel-media-embedded-preview
+    timeout: 60000
+- scrollUntilVisible:
+    element:
+      id: travel-media-toggle-crop
+    direction: DOWN
+- tapOn:
+    id: travel-media-toggle-crop
+- assertVisible:
+    id: travel-media-crop-modal
+- swipe:
+    start: "50%, 50%"
+    end: "58%, 55%"
+    duration: 500
+- takeScreenshot: route-photo-crop
+- tapOn:
+    id: travel-media-crop-confirm
+- assertNotVisible:
+    id: travel-media-crop-modal
+- takeScreenshot: route-inline-photos
+- tapOn:
+    id: route-add-day
+- runFlow:
+    file: helpers/add-route-stop.yml
+    env:
+      STOP_NAME: Second stop
+- tapOn:
+    id: route-add-day
+- tapOn:
+    id: route-submit
+- assertVisible: "כדאי להוסיף לפחות עצירה אחת לכל יום."
+- takeScreenshot: route-focused-error
+- runFlow:
+    file: helpers/add-route-stop.yml
+    env:
+      STOP_NAME: Third stop
+- tapOn:
+    id: route-day-tab-0
+- assertVisible: First stop
+- tapOn: First stop
+- scrollUntilVisible:
+    element:
+      id: travel-media-embedded-preview
+    direction: DOWN
+- assertVisible:
+    id: travel-media-embedded-preview
+- scrollUntilVisible:
+    element:
+      id: "route-stop-transfer-.*"
+    direction: DOWN
+- tapOn:
+    id: "route-stop-transfer-.*"
+- tapOn:
+    id: "route-transfer-to-.*"
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: "route-stop-transfer-.*"
+    direction: DOWN
+- tapOn:
+    id: "route-stop-transfer-.*"
+- tapOn:
+    id: "route-transfer-to-.*"
+    index: 0
+- scrollUntilVisible:
+    element:
+      id: travel-media-embedded-preview
+    direction: UP
+- assertVisible:
+    id: travel-media-embedded-preview
+- tapOn:
+    id: route-day-tab-1
+- assertVisible: Second stop
+- tapOn:
+    id: route-day-details-toggle
+- tapOn:
+    id: route-day-title-input
+- inputText: Villages and lakes
+- hideKeyboard
+- tapOn:
+    id: route-day-tab-2
+- tapOn:
+    id: route-day-tab-1
+- assertVisible: ".*Villages and lakes.*"
+- tapOn:
+    id: route-manage-days
+- tapOn:
+    id: "route-day-up-.*"
+    index: 1
+- assertVisible: ".*Villages and lakes.*"
+- tapOn:
+    id: "route-day-down-.*"
+    index: 0
+- tapOn:
+    id: route-manage-days
+- takeScreenshot: route-three-days
+- tapOn:
+    id: route-submit
+- extendedWaitUntil:
+    notVisible:
+      id: route-submit
+    timeout: 90000
+- extendedWaitUntil:
+    visible: Maestro Route One Page
+    timeout: 90000
+- takeScreenshot: route-published

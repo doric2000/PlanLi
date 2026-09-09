@@ -6,6 +6,7 @@ const { FLOWS, selectFlows, parseFlows } = require('./flowPlan');
 test('Android flows follow changed behavior, including shared auth and media consumers', () => {
   assert.deepEqual(selectFlows(['README.md', 'functions/weather.js']), []);
   assert.deepEqual(selectFlows(['client/src/features/home/HomeScreen.js']), ['guest']);
+  assert.deepEqual(selectFlows(['client/src/features/roadtrip/screens/AddRoutesScreen.js', 'functions/routeDraftService.js']), ['route']);
   assert.deepEqual(selectFlows(['client/src/components/RecommendationHero.js']), ['gallery']);
   assert.deepEqual(selectFlows(['client/src/services/LocationService.js']), ['publish', 'network']);
   assert.deepEqual(selectFlows(['client/src/config/firebase.js']), FLOWS);

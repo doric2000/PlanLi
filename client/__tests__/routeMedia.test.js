@@ -25,6 +25,39 @@ const makeAsset = (id) => ({
 });
 
 describe("routeMedia", () => {
+  it('replaces the local photo count before saving a fully uploaded 40-photo route', () => {
+    const extracted = extractRoutePublishMedia(Array.from({ length: 14 }, (_, dayIndex) => ({
+      id: `day-${dayIndex}`, stops: [{ id: `stop-${dayIndex}`,
+        pendingMedia: Array.from({ length: dayIndex === 13 ? 1 : 3 }, (_, index) => ({ uri: `file:///photo-${dayIndex}-${index}.jpg` })),
+      }],
+    })));
+    const source = { days: extracted.days, localMediaCount: 40 };
+    const prepared = applyRoutePublishMedia(source, extracted.media.map((entry, index) => ({ ...entry, asset: makeAsset(String(index).padStart(2, '0')) })));
+    const uploadedCount = prepared.days.reduce((sum, day) => sum + day.stops.reduce((count, stop) => count + [stop.media, ...stop.additionalMedia].filter(Boolean).length, 0), 0);
+    expect(uploadedCount + prepared.localMediaCount).toBe(40);
+    expect(prepared.localMediaCount).toBe(0);
+    expect(applyRoutePublishMedia(source, extracted.media, { preview: true }).localMediaCount).toBe(40);
+    expect(source.localMediaCount).toBe(40);
+  });
+
+  it('preserves interleaved existing and new photos even if uploads complete in reverse order', () => {
+    const existing = makeAsset('01');
+    const extracted = extractRoutePublishMedia([{ id: 'day', stops: [{
+      id: 'stop', media: existing, mediaOrder: ['local', 'remote', 'local'],
+      pendingMedia: [{ uri: 'file:///first.jpg' }, { uri: 'file:///last.jpg' }],
+    }] }]);
+    expect(extracted.media.map((item) => item.slot.mediaIndex)).toEqual([0, 2]);
+    const completed = applyRoutePublishMedia({ days: extracted.days }, [
+      { ...extracted.media[1], asset: makeAsset('03') }, { ...extracted.media[0], asset: makeAsset('02') },
+    ]);
+    const stop = completed.days[0].stops[0];
+    expect([stop.media, ...stop.additionalMedia].map((asset) => asset.assetId)).toEqual([
+      makeAsset('02').assetId, existing.assetId, makeAsset('03').assetId,
+    ]);
+    expect(stop.mediaOrder).toBeUndefined();
+    const preview = applyRoutePublishMedia({ days: extracted.days }, [...extracted.media].reverse(), { preview: true });
+    expect(preview.days[0].stops[0].pendingMedia.map((item) => item.uri)).toEqual(['file:///first.jpg', 'file:///last.jpg']);
+  });
   it('keeps nested images attached to stable draft IDs after reordering', () => {
     const days = ensureRouteDraftIds([
       { draftId: 'day-a', image: 'file:///a.jpg', stops: [] },

@@ -22,6 +22,15 @@ jest.mock('../src/features/region/context/RegionSelectionState', () => ({
 }));
 
 describe('useDestinationFilterOptions', () => {
+  it('searches all destinations for creation even when discovery is restricted to a region', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'israel';
+    getDocs.mockResolvedValue({ docs: [] });
+    searchDestinations.mockResolvedValue({ items: [{ cityId: 'london', countryId: 'GB', names: { he: 'לונדון', en: 'London' } }] });
+    const { result } = renderHook(() => useDestinationFilterOptions(true, 'London', { respectRegion: false }));
+    await waitFor(() => expect(result.current.options.some((option) => option.cityId === 'london')).toBe(true));
+    expect(searchDestinations).toHaveBeenCalledWith({ query: 'London', sort: 'popular', limit: 30 });
+  });
   beforeEach(() => {
     jest.clearAllMocks();
     mockRegionId = null;

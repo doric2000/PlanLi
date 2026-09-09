@@ -5,3 +5,9 @@ appId: com.planli.planlitravels.e2e
       visible: "דילוג על הסיור|דילוג על ההדרכה"
     commands:
       - tapOn: "דילוג על הסיור|דילוג על ההדרכה"
+      - extendedWaitUntil:
+          notVisible:
+            id: "noya-tour-overlay-.*"
+          timeout: 10000
+      - waitForAnimationToEnd:
+          timeout: 5000

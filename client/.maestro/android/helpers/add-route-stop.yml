@@ -1,0 +1,25 @@
+appId: com.planli.planlitravels.e2e
+---
+- scrollUntilVisible:
+    element:
+      id: route-add-stop
+    direction: DOWN
+- tapOn:
+    id: route-add-stop
+- runFlow: dismiss-tour.yml
+- scrollUntilVisible:
+    element:
+      id: route-stop-title-input
+    direction: DOWN
+- tapOn:
+    id: route-stop-title-input
+- inputText: ${STOP_NAME}
+- hideKeyboard
+- scrollUntilVisible:
+    element:
+      id: route-stop-mode-general
+    direction: DOWN
+- tapOn:
+    id: route-stop-mode-general
+- assertVisible:
+    id: recommendation-destination-selected

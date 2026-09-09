@@ -63,6 +63,24 @@ test('route drafts accept the minimal destination and day count without publish 
   assert.deepEqual(draft.days.map((day) => day.stops.length), [0, 0]);
 });
 
+test('drafts preserve day identity, personal titles and unfinished editor input after reordering', () => {
+  const days = [
+    { id: 'second', title: 'כפרים ואגמים', stops: [{ id: 'a', title: '',
+      savedLocationDayId: 'first', mediaOrder: ['local', 'remote'],
+      editorState: { locationMode: 'exact', locationIncomplete: true, query: 'Lake Garda', startTime: '9:', durationMinutes: '0' } }] },
+    { id: 'first', stops: [] },
+  ];
+  const draft = sanitizeRouteDraft(partialDraft({ days }));
+  assert.deepEqual(draft.days.map(({ id, position, title }) => ({ id, position, title })), [
+    { id: 'second', position: 0, title: 'כפרים ואגמים' }, { id: 'first', position: 1, title: '' },
+  ]);
+  assert.deepEqual(draft.days[0].stops[0].editorState, days[0].stops[0].editorState);
+  assert.equal(draft.days[0].stops[0].savedLocationDayId, 'first');
+  assert.deepEqual(draft.days[0].stops[0].mediaOrder, ['local', 'remote']);
+  assert.throws(() => sanitizeRouteDraft(partialDraft({ days: [days[0], days[0]] })), /unique/);
+  assert.throws(() => sanitizeRouteDraft(partialDraft({ days: [{ ...days[0], title: 'x'.repeat(121) }, days[1]] })), /day.title/);
+});
+
 test('route drafts keep general, pin, recommendation and optional timing fields bounded', () => {
   const draft = sanitizeRouteDraft(partialDraft({
     dayCount: 1,
@@ -218,6 +236,12 @@ test('private PlanLi location bindings survive draft versions but never reach cl
 
   const carried = attachServerLocationBindings(sanitized, new Map(), bound);
   assert.deepEqual(carried.days[0].stops[0].serverLocationBinding, binding);
+  const movedStop = { ...sanitized.days[0].stops[0], id: 'moved-stop', savedLocationDayId: sanitized.days[0].id,
+    savedLocationStopId: sanitized.days[0].stops[0].id };
+  const moved = attachServerLocationBindings({ ...sanitized, days: [{ id: 'new-day', stops: [movedStop] }] }, new Map(), bound);
+  assert.deepEqual(moved.days[0].stops[0].serverLocationBinding, binding);
+  const movedAgain = attachServerLocationBindings({ ...sanitized, days: [{ id: 'third-day', stops: [movedStop] }] }, new Map(), moved);
+  assert.deepEqual(movedAgain.days[0].stops[0].serverLocationBinding, binding);
   assert.equal(stripServerLocationBindings(carried).days[0].stops[0].serverLocationBinding, undefined);
   assert.equal(publishableRoute(carried).days[0].stops[0].serverLocationBinding, undefined);
   assert.deepEqual(trustedPlacesFromDraft(carried).get('cafe-1'), {

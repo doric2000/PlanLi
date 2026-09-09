@@ -1,3 +1,4 @@
+import { CONTENT_COMPOSER_COPY } from '../../../constants/contentComposerCopy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { randomUUID } from 'expo-crypto';
 import {
@@ -1123,7 +1124,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     if (targetStep === 4) {
       if (!title.trim()) return 'כדאי להוסיף שם קצר וברור.';
       if (!description.trim()) return 'כדאי להוסיף תיאור קצר עם הפרטים החשובים.';
-      if (!budget) return 'כדאי לבחור מחיר.';
+      if (!budget) return CONTENT_COMPOSER_COPY.budgetRequired;
       if (!isValidExternalUrl(details.externalUrl)) {
         return 'כדאי להזין קישור מלא שמתחיל ב־http:// או https://.';
       }
@@ -1573,8 +1574,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
     return (
       <>
         <RtlChoiceGroup
-          label="מחיר (חובה)"
-          helper="מספיק לבחור הערכה כללית; אפשר להוסיף סכום מדויק בפרטים הנוספים."
+          label={CONTENT_COMPOSER_COPY.budgetLabel}
+          helper={CONTENT_COMPOSER_COPY.budgetHelper}
           options={POST_BUDGETS}
           selectedIds={[budget]}
           selectionMode="single"
@@ -1601,7 +1602,7 @@ export default function CreateRecommendationScreen({ navigation, route }) {
           </View>
         ) : null}
 
-        <AppText style={styles.optionalTitle}>פרטים נוספים, רק אם רלוונטי</AppText>
+        <AppText style={styles.optionalTitle}>{CONTENT_COMPOSER_COPY.optionalDetails}</AppText>
         <View style={styles.chipWrap}>
           {OPTIONAL_FIELDS.map((field) => {
             const selected = activeOptionalField === field.id || Boolean(details[field.id]);
