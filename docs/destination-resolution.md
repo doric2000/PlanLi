@@ -1,15 +1,15 @@
 # Destination resolution and world catalog
 
 Implementation, authorized production data repair and release, 2026-09-09.
-The ten affected backend Functions are deployed; the iOS production OTA and
+The backend fixes are deployed; the iOS production OTA and
 Android internal-test build 9 have been distributed. Exact source, update groups,
 checksums, timestamps and verification limits are recorded in the destination
 release sections of [README.md](../README.md). Physical-device installation
-remains unverified. The implementation review below predates this release.
+remains unverified. Release state and local runtime evidence are distinguished below.
 
 ## Root causes and behavior
 
-### Hoi An follow-up (2026-09-09; deployment pending)
+### Hoi An follow-up (2026-09-09; backend and iOS deployed)
 
 The reported gym returned `Hội An Đông` at administrative level 2 and `Đà Nẵng`
 at level 1. The registry knew only `Hoi An`, and the Latin search normalizer
@@ -40,9 +40,17 @@ The real Web component was exercised at desktop and 393×852 viewport sizes:
 map tiles, geographic labels, expand, pan, zoom, close, and retained selection.
 The isolated preview used system fonts. The added Android `location` flow covers
 the no-key map failure/retry path; execution was blocked by another process using
-the emulator ports, without stopping that process. Physical iPhone rendering
-and live rollout of this follow-up remain unverified. The read-only code review
-found no actionable regressions.
+the emulator ports, without stopping that process. The read-only code review
+found no actionable regressions. All PR checks passed and PR #352 merged as
+`09ee5f1d6e6996e864b726aca5d0d69527243fa0`.
+
+The seven affected backend callables are deployed and active. The iOS release
+archive passed 788 related client tests and 83 focused resolver tests. Production
+group `7c5d6402-be86-49b6-a517-43946c5b14b1` was published at
+`2026-09-09T10:51:49.037Z`; its immutable bundle and public-channel delivery were
+independently verified. Physical iPhone installation/rendering remain unverified;
+the Android map change has not been distributed in this follow-up. Exact release
+metadata and rollback group are recorded in [README.md](../README.md).
 
 ### Earlier publication repair
 

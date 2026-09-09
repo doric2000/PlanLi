@@ -25,7 +25,51 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Destination resolver production release (2026-09-09)
+### Hoi An classification and location-map release (2026-09-09)
+
+PR [#352](https://github.com/doric2000/PlanLi/pull/352) merged as
+`09ee5f1d6e6996e864b726aca5d0d69527243fa0`. The resolver now recognizes Hoi An's
+reviewed ward names, retains address hierarchy, and folds Vietnamese Đ correctly.
+The map opens into an interactive full-screen view. No destination records or
+recommendations were created, changed, or published by this follow-up.
+
+Seven Node.js 22 v2 Functions were deployed to `planli-f0b12` / `europe-west1`:
+`resolvePlaceSelection`, `resolveRecommendationDestination`, `saveRecommendation`,
+`publishRecommendationDraft`, `saveRoute`, `publishRouteDraft`, and
+`searchDestinations`. Readback at `2026-09-09T10:37:52.781Z` confirmed all seven
+`ACTIVE`, `minInstances: 0`, and latest-revision traffic. The deployed
+`resolveRecommendationDestination` hash is
+`7bfc30691087083be27d097f2a3ba56f79441d71`. Three unauthenticated callable probes
+returned HTTP 401. The error-log check at `2026-09-09T10:42:37.972Z` found no
+Error-severity entries for these services since rollout began.
+
+The iOS update retains version `1.1.0`, runtime `1.2.0`, and TestFlight build 28.
+Staging group `dec1243f-7c9b-4f21-b641-818ac9424632` was published with the actual
+production environment, then the identical artifact was republished at
+`2026-09-09T10:51:49.037Z` to production group
+`7c5d6402-be86-49b6-a517-43946c5b14b1`, update
+`01a085cb-9dad-7568-9594-49f06866f57c`. EAS readback and the public channel
+manifest verified delivery at `2026-09-09T10:54:05.329Z`. The 8,455,528-byte bundle
+has SHA-256 `c74c551ed56dd8a006a9eab2b189f028ddba8a59f216c94dfd399ebe585ee2b7`.
+The previous rollback group is `efee7462-1560-4b8e-a0b3-01f3d162a64d`.
+
+Release input was an immutable archive of merged main, verified against all 1,035
+tracked Git blobs. The documented archive workflow pinned only EAS's commit
+metadata; account/project, source ancestry, evaluated production configuration,
+locked native dependencies, environment, runtime, and artifact checks remained
+enforced. The evaluated production app configuration and native dependencies
+matched the preceding iOS release. All 788 related client tests in 123 suites
+passed on the archive, as did 83 focused resolver tests; pre-release checks and
+the read-only review are recorded in [the resolution report](docs/destination-resolution.md).
+
+Physical iPhone installation and native rendering remain unverified. Web map
+tiles, labels, pan/zoom, expand, and close were exercised at desktop and phone
+widths. The local Android map-flow run was blocked by occupied emulator ports;
+no unrelated process was stopped. Android remains on internal-test build 9;
+no Android OTA, native build, store submission, Hosting, Rules, or IAM change was
+performed by this follow-up.
+
+### Earlier destination resolver production release (2026-09-09)
 
 Under explicit release authorization, ten existing Node.js 22 v2 Functions were
 deployed to `planli-f0b12` / `europe-west1` from the verified source archive of
@@ -51,7 +95,7 @@ held records or stale admin views. No bulk catalog import, Rules, IAM, Hosting
 or native build was performed by this destination release. Post-deploy Cloud
 Logging returned zero Error-severity entries for the ten deployed services.
 
-### Destination client distribution (2026-09-09)
+### Earlier destination client distribution (2026-09-09)
 
 The compatible iOS OTA retains marketing version `1.1.0`, runtime `1.2.0`, and
 the existing production/TestFlight binary (build 28). Reviewed native config and
