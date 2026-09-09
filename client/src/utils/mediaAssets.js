@@ -1,3 +1,5 @@
+import { localMediaUrl } from '../config/localEmulators';
+
 export const isDisplayableImageUri = (value) =>
   typeof value === 'string' &&
   /^(https?:|file:|blob:|data:image\/|content:|ph:|assets-library:)/i.test(
@@ -6,8 +8,8 @@ export const isDisplayableImageUri = (value) =>
 
 export function getMediaVariantUrl(asset, variant = 'large', fallback = null) {
   const candidate = asset?.[variant]?.url;
-  if (isDisplayableImageUri(candidate)) return candidate;
-  return isDisplayableImageUri(fallback) ? fallback : null;
+  if (isDisplayableImageUri(candidate)) return localMediaUrl(candidate);
+  return isDisplayableImageUri(fallback) ? localMediaUrl(fallback) : null;
 }
 
 export function getMediaPlaceholder(asset) {
@@ -28,7 +30,7 @@ export function getMediaSrcSet(asset) {
         isDisplayableImageUri(descriptor?.url) &&
         Number.isFinite(descriptor?.width)
     )
-    .map((descriptor) => `${descriptor.url} ${descriptor.width}w`)
+    .map((descriptor) => `${localMediaUrl(descriptor.url)} ${descriptor.width}w`)
     .join(', ');
 }
 
@@ -59,7 +61,7 @@ export function findMediaAssetByUrl(media, url) {
   return (
     media.find((asset) =>
       ['large', 'feed', 'thumb'].some(
-        (variant) => asset?.[variant]?.url === url
+        (variant) => localMediaUrl(asset?.[variant]?.url) === url
       )
     ) || null
   );

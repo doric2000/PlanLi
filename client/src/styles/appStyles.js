@@ -4196,7 +4196,7 @@ export const mediaGalleryModalStyles = StyleSheet.create({
 		fontSize: 15, fontFamily: fontFamilies.medium, textAlign: 'center', writingDirection: 'rtl',
 	},
 	webNavigation: {
-		...StyleSheet.absoluteFillObject, paddingHorizontal: 22, flexDirection: 'row',
+		...StyleSheet.absoluteFill, paddingHorizontal: 22, flexDirection: 'row',
 		alignItems: 'center', justifyContent: 'space-between',
 	},
 	navButton: {
@@ -4344,10 +4344,10 @@ export const routeMapPreviewStyles = StyleSheet.create({
 		overflow: "hidden",
 	},
 	map: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 	},
 	mapShade: {
-		...StyleSheet.absoluteFillObject,
+		...StyleSheet.absoluteFill,
 		backgroundColor: "rgba(15,23,42,0.04)",
 	},
 	webFallback: {

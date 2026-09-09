@@ -9,7 +9,6 @@
       "distribution": "internal",
       "env": {
         "PLANLI_ENV": "development",
-        "EXPO_PUBLIC_USE_FIREBASE_EMULATORS": "true",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },

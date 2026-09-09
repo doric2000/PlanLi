@@ -373,7 +373,7 @@ export const notificationCenterStyles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   sheet: {
     width: '100%',

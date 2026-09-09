@@ -1,0 +1,15 @@
+appId: com.planli.planlitravels.e2e
+---
+- runFlow: helpers/boot.yml
+- runFlow: helpers/login.yml
+- runFlow: helpers/open-composer.yml
+- assertVisible:
+    id: recommendation-composer-header
+- scrollUntilVisible:
+    element:
+      id: recommendation-show-location-alternatives
+    direction: DOWN
+- tapOn:
+    id: recommendation-show-location-alternatives
+- tapOn:
+    id: recommendation-location-mode-destination

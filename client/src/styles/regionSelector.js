@@ -21,7 +21,7 @@ export const regionSelectorStyles = StyleSheet.create({
     backgroundColor: '#08213E',
   },
   referenceImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
@@ -37,7 +37,7 @@ export const regionSelectorStyles = StyleSheet.create({
     pointerEvents: 'none',
   },
   regionPressedImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },

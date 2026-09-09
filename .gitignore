@@ -16,6 +16,7 @@ functions/.destination-images/
 functions/.destination-identities/
 functions/.prelaunch-reset/
 .codex_tmp/
+.security-plan.json
 client/.codex_tmp/
 client/.expo-validation/
 client/assets/campaign/

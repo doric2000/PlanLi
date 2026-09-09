@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Platform, useWindowDimensions, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useBoundedImageWindow } from '../hooks/useBoundedImageWindow';
 import { BackButton } from './BackButton';
@@ -25,6 +26,8 @@ export const RecommendationHero = ({
   onImagePress,
 }) => {
   const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const controlsTop = Math.max(50, insets.top + 16);
   const images = useMemo(
     () => Array.isArray(imageUrls) ? imageUrls.filter(Boolean) : getRecommendationImageUrls(item, 'large'),
     [imageUrls, item]
@@ -77,7 +80,7 @@ export const RecommendationHero = ({
 
   if (!hasImage) {
     return (
-      <View style={styles.noImageHeader}>
+      <View style={[styles.noImageHeader, { paddingTop: controlsTop }]}>
         <View style={styles.noImagePresentation} pointerEvents="none">
           <View style={styles.noImageIcon}>
             <MaterialIcons name={emptyIcon || categoryPresentation.icon} size={36} color="#64748B" />
@@ -129,7 +132,7 @@ export const RecommendationHero = ({
                 placeholder={getMediaPlaceholder(item?.media?.[index])}
                 srcSet={getMediaSrcSet(item?.media?.[index])}
                 sizes="100vw"
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 contentFit="cover"
                 priority={index === imageWindow.currentIndex ? 'high' : 'low'}
               />
@@ -175,15 +178,16 @@ export const RecommendationHero = ({
         </View>
       )}
       <LinearGradient
-        pointerEvents="box-none"
+        pointerEvents="none"
         colors={['rgba(0,0,0,0.3)', 'transparent', 'transparent']}
         style={common.heroGradient}
-      >
+      />
+      <View style={[common.heroGradient, { paddingTop: controlsTop }]} pointerEvents="box-none">
         <View style={styles.rtlActionsRow} pointerEvents="box-none" testID="recommendation-hero-actions">
           <BackButton iconDirection="rtl" />
           {renderContentActions()}
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 };
@@ -205,7 +209,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEF1F6',
   },
   noImagePresentation: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

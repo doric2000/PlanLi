@@ -1,0 +1,5 @@
+appId: com.planli.planlitravels.e2e
+name: Deliberately failing assertion for harness verification
+---
+- assertVisible:
+    id: this-screen-must-never-exist

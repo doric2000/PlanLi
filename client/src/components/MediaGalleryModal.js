@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, SafeAreaView, View, useWindowDimensions } from 'react-native';
+import { Modal, Platform, Pressable, View, useWindowDimensions } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import AppText from './AppText';
@@ -11,6 +12,7 @@ import { colors, mediaGalleryModalStyles as styles } from '../styles';
 
 export default function MediaGalleryModal({ visible, items = [], initialIndex = 0, onClose }) {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const listRef = useRef(null);
   const normalized = useMemo(() => items.filter((item) => item?.url), [items]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -56,7 +58,7 @@ export default function MediaGalleryModal({ visible, items = [], initialIndex = 
           maxToRenderPerBatch={1}
           windowSize={3}
           renderItem={({ item, index }) => (
-            <View style={[styles.page, { width, height: Math.max(300, height - 110) }]}>
+            <View style={[styles.page, { width, height: Math.max(300, height - insets.top - insets.bottom - 110) }]}>
               {window.indices.includes(index) ? (
                 <CachedImage
                   source={{ uri: item.url }}

@@ -1353,7 +1353,7 @@ export default function TravelMediaComposer({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  contained: { ...StyleSheet.absoluteFillObject, zIndex: 120, backgroundColor: colors.background },
+  contained: { ...StyleSheet.absoluteFill, zIndex: 120, backgroundColor: colors.background },
   embeddedRoot: { width: '100%', backgroundColor: colors.white },
   embeddedEmpty: { width: '100%', minHeight: 210, borderRadius: spacing.radiusLarge, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.accentLight, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   embeddedAddIcon: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
@@ -1361,7 +1361,7 @@ const styles = StyleSheet.create({
   embeddedEmptyText: { color: colors.textSecondary, fontSize: 13, marginTop: spacing.xs },
   embeddedPreview: { alignSelf: 'center', borderRadius: spacing.radiusLarge },
   embeddedPager: { flex: 1, overflow: 'hidden', backgroundColor: '#101317' },
-  embeddedPagerPage: { ...StyleSheet.absoluteFillObject },
+  embeddedPagerPage: { ...StyleSheet.absoluteFill },
   embeddedPagerImage: { width: '100%', height: '100%' },
   cropPreviewButton: { marginLeft: spacing.xs },
   cropModalScreen: { flex: 1, backgroundColor: '#101317' },
@@ -1403,7 +1403,7 @@ const styles = StyleSheet.create({
   gestureSurface: { flex: 1 },
   cropImageWrap: { position: 'absolute' },
   cropImage: { width: '100%', height: '100%' },
-  cropGrid: { ...StyleSheet.absoluteFillObject },
+  cropGrid: { ...StyleSheet.absoluteFill },
   cropGridLine: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.55)' },
   cropGridVerticalOne: { top: 0, bottom: 0, left: '33.333%', width: StyleSheet.hairlineWidth },
   cropGridVerticalTwo: { top: 0, bottom: 0, left: '66.666%', width: StyleSheet.hairlineWidth },
@@ -1414,7 +1414,7 @@ const styles = StyleSheet.create({
   existingHint: { position: 'absolute', bottom: spacing.xl, color: colors.white, fontSize: 12 },
   emptyPreview: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   emptyText: { color: colors.textMuted },
-  previewTools: { ...StyleSheet.absoluteFillObject, padding: spacing.md, flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between' },
+  previewTools: { ...StyleSheet.absoluteFill, padding: spacing.md, flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between' },
   deleteButton: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,20,22,0.72)' },
   activeBadge: { minWidth: 38, height: 38, paddingHorizontal: spacing.sm, borderRadius: 19, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13,20,22,0.72)' },
   activeBadgeText: { color: colors.white, fontSize: 12, textAlign: 'center', writingDirection: 'ltr', direction: 'ltr' },
@@ -1451,6 +1451,6 @@ const styles = StyleSheet.create({
   gridImage: { width: '100%', height: '100%', backgroundColor: colors.borderLight },
   badge: { position: 'absolute', top: spacing.xs, right: spacing.xs, width: 25, height: 25, borderRadius: 13, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.white, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: colors.white, fontSize: 12, textAlign: 'center', writingDirection: 'ltr', direction: 'ltr' },
-  tileLoading: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
+  tileLoading: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
   gridLoader: { marginVertical: spacing.lg },
 });

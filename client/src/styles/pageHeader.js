@@ -28,7 +28,7 @@ export const pageHeaderStyles = StyleSheet.create({
     paddingBottom: 18,
   },
   heroBackground: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderBottomLeftRadius: TAB_HERO_OVERLAP,
     borderBottomRightRadius: TAB_HERO_OVERLAP,
   },

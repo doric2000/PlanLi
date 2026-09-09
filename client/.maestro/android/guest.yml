@@ -1,0 +1,19 @@
+appId: com.planli.planlitravels.e2e
+name: Guest and Hebrew navigation
+---
+- runFlow: helpers/boot.yml
+- assertVisible:
+    id: home-tab-header
+- tapOn:
+    id: main-tab-community
+- assertVisible:
+    id: community-tab-header
+- tapOn:
+    id: main-tab-auth
+- assertVisible: "התחברות"
+- assertVisible: "יצירת חשבון"
+- takeScreenshot: guest-hebrew-navigation
+- tapOn:
+    id: continue-as-guest
+- assertVisible:
+    id: home-tab-header

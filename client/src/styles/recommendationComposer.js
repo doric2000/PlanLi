@@ -309,7 +309,7 @@ export const recommendationComposerStyles = StyleSheet.create({
   },
   webMapPickerShell: { position: 'relative', width: '100%' },
   webMapLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceSubtle,

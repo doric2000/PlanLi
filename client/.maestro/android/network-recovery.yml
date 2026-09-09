@@ -1,0 +1,15 @@
+appId: com.planli.planlitravels.e2e
+# Emulator connectivity has been restored. Exercise the actual retry action.
+---
+- tapOn:
+    id: "recommendation-destination-(provider-)?retry"
+- extendedWaitUntil:
+    visible:
+      id: "recommendation-destination-(provider-)?option-.*"
+    timeout: 60000
+- tapOn:
+    id: "recommendation-destination-(provider-)?option-.*"
+    index: 0
+- assertVisible:
+    id: recommendation-destination-selected
+- takeScreenshot: network-recovered

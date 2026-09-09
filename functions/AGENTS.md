@@ -84,7 +84,11 @@ node --test --test-reporter=spec relevantService.test.js relevantPolicy.test.js
   nearest integration coverage.
 - Media changes require upload/display/delete smoke coverage without production data.
 - Migrations must pass dry-run before any separately authorized `--apply`.
-- Audit dependencies only after dependency/lockfile changes or for release readiness.
+- Audit dependencies after dependency/lockfile changes; the deterministic daily CI
+  audit covers new advisories in unchanged dependencies. Client-only OTA/builds do
+  not trigger backend suites; changed backend code receives its affected checks.
+  The local Android harness exercises real callables and
+  Rules against the isolated demo project; it does not prove live App Check attestation.
 
 ## Deployment gate
 

@@ -131,6 +131,16 @@ function assertProtectedFirebaseEnvironment(env = process.env) {
 }
 
 function configureApp({ config }) {
+  const emulatorEnabled = process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
+  const localE2e = process.env.PLANLI_LOCAL_E2E === 'true';
+  if (emulatorEnabled || localE2e) {
+    if (!localE2e || !emulatorEnabled || process.env.EAS_BUILD
+      || process.env.NODE_ENV === 'production'
+      || process.env.PLANLI_ENV !== 'development'
+      || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID !== 'demo-planli-e2e') {
+      throw new Error('Local emulator configuration is forbidden outside the local demo development build.');
+    }
+  }
   assertProtectedFirebaseEnvironment(process.env);
   const iosKey = String(process.env.GOOGLE_MAPS_IOS_KEY || '').trim();
   const androidKey = String(process.env.GOOGLE_MAPS_ANDROID_KEY || '').trim();
@@ -167,6 +177,7 @@ function configureApp({ config }) {
 
   return {
     ...config,
+    ...(localE2e ? { name: 'PlanLi Local E2E', scheme: 'com.planli.planlitravels.e2e', updates: { ...config.updates, enabled: false } } : {}),
     plugins: [
       ...plugins,
       [
@@ -187,6 +198,8 @@ function configureApp({ config }) {
     },
     android: {
       ...config.android,
+      ...(localE2e ? { package: 'com.planli.planlitravels.e2e',
+        googleServicesFile: require('node:path').resolve(__dirname, '../.codex_tmp/android/google-services.json') } : {}),
       ...(protectedNativeFiles ? { googleServicesFile: protectedNativeFiles.androidPath } : {}),
     },
   };

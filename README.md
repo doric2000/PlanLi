@@ -30,6 +30,146 @@ public mobile-store track. The production Web/Admin and public policy pages are
 available on `https://planli.cc`. Native development is performed with an installed, signed EAS
 Development Build connected to Metro. Expo Go is not supported.
 
+### Android internal-test release (2026-09-09)
+
+The user authorized a new production Android build for the existing Google Play
+internal-testing track. EAS accepted `1.1.0 (8)`, build
+`9276e973-33d2-4653-8d9f-39497d3a67e3`, at `2026-09-08T22:40:07.650Z`.
+EAS native fingerprint: `0cae3f6d1cbe67c9d0e20a4c880778ee357be39c`.
+Profile/environment/channel: `production`; distribution: store; package:
+`com.planli.planlitravels`. EAS completed the build at
+`2026-09-08T23:03:12.355Z`. Independent inspection of the downloaded AAB confirms
+version `1.1.0 (8)`, runtime `1.2.0`, target SDK 36, production OTA channel and
+the normal application ID, without local-emulator configuration. AAB size:
+89,797,854 bytes; SHA-256:
+`2a005e54f008146d4165d28826b91273d4e3006a3a974b028f843d7e2e262bf1`.
+
+Play Console reports 37.8 MB for a new installation, versus 39.3 MB for the
+first Play bundle (build 5). The approximately 89.8 MB AAB is the complete store
+upload, including symbols and multiple CPU architectures. See the
+[Android size investigation](docs/android-build-size.md) for archive contents,
+historical comparison and the unavailable earlier development APK.
+
+The EAS submission attempt stopped before creating a submission because no
+Google service-account submission key is configured. After the user signed in,
+the same AAB was uploaded and published through Play Console. Google Play
+independently reports `PlanLi 1.1.0 (8) – Android refresh` as **Available to
+internal testers**, released at `2026-09-09T06:26+03:00`, with one version code:
+`8`. Developer account: `5821955120973423060`; app: `4975848568601147626`;
+internal track: `4701742858558783307`; release: `5`.
+[Play release](https://play.google.com/console/u/0/developers/5821955120973423060/app/4975848568601147626/tracks/4701742858558783307/releases/5/details).
+[Existing internal testers' installation link](https://play.google.com/apps/internaltest/4701742858558783307).
+There was one non-blocking warning about an absent deobfuscation mapping file,
+as with build 6. No device support was lost according to Play's comparison.
+Installation and physical-device testing of the store artifact remain unverified.
+No public or closed-track release was made, and no OTA group accompanies it.
+
+Source: `1c704dbaf351d7cbebe8cdcb8c08d92ac00c9b65` plus the uncommitted client
+and validation changes on `chore/focused-validation-and-android-e2e`. The exact
+local inspection signature is recorded in ignored
+`.codex_tmp/validation/android/production-source-inspection.json`. EAS uploaded
+28.6 MB in 44 seconds after archive inspection excluded local emulator/native
+outputs, environment files and backend workspaces. Production Firebase and
+Sentry configuration verification passed. No backend deployment or OTA update
+accompanies this Android build.
+
+Subsequent local device validation found SDK compatibility issues in the gallery:
+the removed `StyleSheet.absoluteFillObject` left images without their intended
+layout, the decorative Android gradient intercepted photo taps, and controls
+overlapped the system inset. Local fixes use `StyleSheet.absoluteFill`, separate
+the decorative gradient from the controls, and honor safe-area insets. These
+follow-up fixes are **not included in Play build 8**. A replacement store artifact
+has been built as the candidate below.
+
+### Android corrected candidate (2026-09-09)
+
+EAS accepted production Android `1.1.0 (9)` at
+`2026-09-09T07:37:35.832Z`, build
+`e4441c75-68b0-49e4-963c-6e594c5fc441`. Source:
+`aaee60eb58451003810c664e5e37687d7b33eac0` plus the reviewed local validation and
+SDK compatibility changes. Profile/environment/channel: `production`;
+package `com.planli.planlitravels`; configured runtime `1.2.0`.
+Production Firebase, App Check and Sentry environment verification passed.
+The inspected source excludes local emulator/native outputs and backend code;
+EAS uploaded 28.7 MB in 12 seconds and completed the build at
+`2026-09-09T07:53:42.362Z`. The downloaded AAB contains 89,802,440 bytes;
+SHA-256 `5c8bed43501a0b419452b3f788f177483e15e8c310c200cc3f7b616f4c6731d8`.
+Native fingerprint: `6241dbc43d80d437f04960df3eebf4dd5bec4b1d`.
+Independent manifest inspection confirms the production package, version
+`1.1.0 (9)`, SDK 36 and production OTA channel. Submission and physical-device
+installation have not been performed. Play build 8 remains the available
+internal release; no OTA accompanies this candidate.
+The pinned SDK 57 dependency map passed its local compatibility check and the
+debug build compiled successfully. Expo's online check still exits with a
+warning for twelve newer recommended patch releases (including Expo 57.0.21);
+it did not pass. This task did not upgrade the SDK packages or waive that result.
+
+Before distributing this candidate, the new destination-choice contract needs
+the reviewed backend source from merged PR #348, commit
+`297624eeace6abc7042bd9711c6c83bf6de6981a`. The affected callable entry points are
+`resolveRecommendationDestination`, `resolvePlaceSelection`,
+`saveRecommendation`, `publishRecommendationDraft`, `saveRoute` and
+`publishRouteDraft`. Both direct saves and draft publication embed the changed
+resolver. All six production functions were independently read back as active
+Node.js 22 functions in `europe-west1`, last updated on 2026-09-02.
+
+An immutable source archive of reviewed `main` is prepared in ignored
+`.codex_tmp/validation/android/backend-main-297624e.tar`, SHA-256
+`684eaff962c1c5a4e3894f84841e43823f4c2257b93dea227593d51fe96dd0cc`.
+It excludes the unrelated uncommitted media patch. Deployment of these six
+existing Functions requires separate authorization; no backend deployment,
+Rules/IAM change, data repair or Hosting publication was performed by this task.
+
+### Local Android validation (2026-09-09)
+
+A separate local Development Build is installed on the Windows-hosted Android
+AVD `PlanLi_E2E_API34` (`emulator-5580`), using application ID
+`com.planli.planlitravels.e2e`, version `1.1.0`, Android version code `1`,
+and configured runtime `1.2.0`. OTA is disabled; no EAS channel, build ID,
+submission or update group applies to this local artifact. The latest native
+build completed at `2026-09-09T07:00:30.074Z` in 17m30s and was installed
+successfully. Source: `aaee60eb58451003810c664e5e37687d7b33eac0` plus the local
+validation/SDK compatibility changes on `fix/destination-resolution-and-world-catalog`.
+Client and Functions dependencies were synchronized to their reviewed lockfiles.
+Native-input signature:
+`d20edda8dc53e22e60064a995ea5e30b4bc228e323d78add55923d8975fa0f9a`.
+This debug APK is not a store artifact.
+
+The isolated project is `demo-planli-e2e`. Real local Auth, Storage Rules,
+Functions media processing/publication and rejection of unauthorized requests
+have passed with synthetic users and images. Autonomous guest navigation and
+verified email login have passed on Android 14. The complete gallery flow passed
+again on 2026-09-09 at 08:04 +03:00 (187 seconds including CLI startup), including
+a real photo swipe, caption and safe-area controls, return to the feed and the
+owner action menu. After the parallel task finished, verified email login passed
+in 290 seconds and guest navigation in 122 seconds. The auth flow exercised the
+real owned-draft discard action. The deliberately nonexistent screen assertion
+failed as intended, proving that Maestro detects a broken expectation. The
+receipt completed at `2026-09-09T07:10:47.732Z`.
+
+The latest photo publication and actual network disconnection/recovery passed
+in 328 and 281 seconds, respectively, reusing the native APK. Their receipt
+completed at `2026-09-09T07:28:58.665Z`; publication, Hebrew retry and recovered
+destination screenshots were inspected. Both receipts and short logs are in
+ignored `.codex_tmp/validation/android`. These are separate observed flow results,
+not a single all-flow receipt for the mixed working tree. Earlier concurrent
+source/dependency edits correctly invalidated runs; a deliberately hung child
+process also failed and was terminated. Owned emulator/Metro/Firebase helpers
+were stopped after acceptance.
+
+Destination PR #348 is merged into `main` at
+`297624eeace6abc7042bd9711c6c83bf6de6981a`. Its new destination-choice behavior
+still requires the corresponding production Functions before a client release
+containing it. Production read-back on 2026-09-09 found the relevant resolver
+and save Functions last updated on September 2. No backend deployment has been
+authorized or performed by this task. A pre-existing, uncommitted retained-media
+URL change in `functions/recommendationService.js` was excluded from PR #348;
+review found that it rejects claimed media on edits. Preserve it as unrelated
+work and exclude it from any release source based on reviewed `main`.
+See [local Android validation](docs/local-android-e2e.md) for setup, focused
+scenarios, logs and the CI/release validation policy. Production and store
+release state is unchanged by this work.
+
 ### Custom production domain rollout
 
 On `2026-09-01`, Firebase Hosting domain `planli.cc` was verified with managed
@@ -944,13 +1084,18 @@ npm workspaces currently report zero audit vulnerabilities. These checks do not
 replace a signed TestFlight/Play Internal build, physical-device App Check and
 SecureStore tests, or gradual enforcement verification.
 
-The current Android internal release is `1.1.0 (6)`, EAS build
+The previous Android internal release was `1.1.0 (6)`, EAS build
 `6eb6a704-2546-4f4e-acaa-fff95ec38d7c`, built from clean `main` source commit
 `5bf89e69d90cf6c35da414b3bdac84ea1a5181f5` and completed at
 `2026-08-26T15:46:09.341Z`. Google Play reports release
 `PlanLi 1.1.0 (6) – RTL Navigation` as available to internal testers, released at
 `2026-08-26T18:58+03:00`. Download, installation, and physical Hebrew/Arabic RTL
 verification on Android remain pending.
+
+The current Android internal release is `1.1.0 (8)`, runtime `1.2.0`, available
+to internal testers since `2026-09-09T06:26+03:00`. Its exact EAS artifact was
+inspected and published through Play Console. See
+[Android internal-test release](#android-internal-test-release-2026-09-09).
 
 The current iOS production binary is `1.1.0 (15)`, EAS build
 `d9e78de5-6f97-4371-b223-245862ec4fbb`, built from the same source commit and
@@ -1266,7 +1411,8 @@ remain explicit release operations; merging source code does not perform them.
 
 ## Google Play internal beta release
 
-Current Android release record:
+Current release: [1.1.0 (8), published on 2026-09-09](#android-internal-test-release-2026-09-09).
+The following is the previous `2026-08-26` Android release record:
 
 - App version/build: `1.1.0 (6)`, package `com.planli.planlitravels`, runtime
   `1.1.0`.
@@ -3530,4 +3676,34 @@ reusing the stage-five environment variable with `--only functions`.
   catalog and pending-trip query probes succeeded. Focused regression tests
   passed 19/19, `npm run validate:changed` and `git diff --check` passed. No
   Hosting, client, EAS, Rules, IAM, migration or production-data mutation was
-  part of this follow-up.
+part of this follow-up.
+
+## Recommendation publication diagnostics OTA release
+
+- PR [#343](https://github.com/doric2000/PlanLi/pull/343) was squash-merged as
+  `6a968f633fbdb605da80d2717e183592e1eaca93`; the published iOS bundle records
+  candidate source commit `03b5b53f6895c7e4613392ea2286646aec358c3e` (the later
+  commits on `main` changed documentation only). The change is JavaScript-only
+  and uses the existing marketing version `1.1.0` and OTA runtime `1.2.0`.
+- The production candidate was published on the `staging` branch with the
+  `production` EAS environment as group
+  `bc965a3c-fd80-4eaa-ba0b-54f62b4b9011`, iOS update
+  `01a062f8-490e-7f50-8f63-2a1679e6bb5c`, at
+  `2026-09-02T16:33:53.934Z`. Its immutable launch bundle was independently
+  verified at 8,487,252 bytes with SHA-256
+  `72FAECD270F05D864D3D432BB8E957CEA259CAB44493E209DEEC47A2B7937FDB`.
+- That exact verified bundle was republished to the `production` channel as
+  group `a13ab118-255a-41c4-ab45-a0503aedd72b`, iOS update
+  `01a062f9-4d8d-7146-a5ff-4e6f25d5708d`, at
+  `2026-09-02T16:35:00.621Z`. EAS read-back confirmed environment `production`,
+  runtime `1.2.0`, source commit `03b5b53`, and the identical bundle SHA.
+- An earlier staging group `23fff53f-9258-42a7-ad01-958c1657ad93` was created
+  with the empty `preview` environment and was intentionally not promoted
+  because its bundle lacked production Firebase markers. The existing guarded
+  wrapper also stopped on the unrelated untracked root `app.json`; that file
+  was preserved, and the equivalent account, branch, commit, runtime, marker,
+  manifest and hash checks were completed manually before promotion.
+- The update contains no native changes and needs no new store build. Physical
+  device download, restart and the final authenticated publish retry remain
+  unverified; the existing Functions deployment and production data repair are
+  documented in the preceding release entries.

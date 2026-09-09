@@ -2,11 +2,16 @@ import {
   ReCaptchaEnterpriseProvider,
   initializeAppCheck,
 } from 'firebase/app-check';
+import { localEmulatorSettings, localAppCheckProvider } from './localEmulators';
 
 let appCheckInstance;
 
 export function initializePlanLiAppCheck(app, { projectId } = {}) {
   if (appCheckInstance) return appCheckInstance;
+  if (localEmulatorSettings()) {
+    appCheckInstance = initializeAppCheck(app, { provider: localAppCheckProvider(), isTokenAutoRefreshEnabled: false });
+    return appCheckInstance;
+  }
   if (!projectId || projectId === 'planli-dummy') return null;
 
   const siteKey = String(process.env.EXPO_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY || '').trim();
