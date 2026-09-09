@@ -34,8 +34,8 @@ existing **Team (Expo)** internal TestFlight group, independently verified at
 version remains 1.1.0/build 28; no new public App Store review was submitted.
 
 PR [#354](https://github.com/doric2000/PlanLi/pull/354) merged as
-`890d70110de37ad1814b79c7c1b2106e42b74a54`. The release keeps marketing version
-`1.1.0` and uses runtime `1.3.0` for the new native WebView. Release input
+`890d70110de37ad1814b79c7c1b2106e42b74a54`. The initial builds used marketing
+version `1.1.0` and runtime `1.3.0` for the new native WebView. Release input
 was an immutable archive of that merged source: all 1,067 tracked blobs matched,
 allowing only Git's Windows newline conversion. The inspected EAS source contained
 565 files / 19,945,787 unpacked bytes (15.4 MB uploaded), without local native
@@ -97,6 +97,7 @@ Google Play internal release 7, **PlanLi 1.1.0 (10) – Atlas**, was published o
 **Available to internal testers**, version code 10, with no lost supported devices.
 The single non-blocking warning concerns the absent deobfuscation mapping file.
 [Internal-test install link](https://play.google.com/apps/internaltest/4701742858558783307).
+
 Replacement iOS build [b16eca67](https://expo.dev/accounts/doric2000/projects/client/builds/b16eca67-6291-4520-82b6-10cb1af190f5)
 was accepted at `2026-09-09T16:17:22.090Z` with build number 30, from merged
 PR [#355](https://github.com/doric2000/PlanLi/pull/355), source
@@ -121,7 +122,15 @@ Apple upload ID: `666e1b3f-b965-4a56-980e-c0e4a18ad7cf`; file reservation:
 The accepted file-upload checksum is MD5; the independent local proof uses
 SHA-256. Apple upload processing reached **COMPLETE** at readback
 `2026-09-09T16:35:23.259Z`, identifying 1.1.1/build 30 with no errors, warnings
-or informational issues. Final internal TestFlight availability is being checked.
+or informational issues. App Store Connect readback confirmed marketing
+version **1.1.1**, build **30**, processing state **VALID**, internal state
+**IN_BETA_TESTING**, not expired. External state is READY_FOR_BETA_SUBMISSION;
+no external beta review was requested. Group readback at
+`2026-09-09T16:35:58.616Z` confirmed Apple build ID
+`666e1b3f-b965-4a56-980e-c0e4a18ad7cf` in the existing **Team (Expo)** internal
+group. The build inherited that group's access-to-all-builds setting; no groups
+or testers were created. The direct upload has no EAS submission ID.
+[App Store Connect TestFlight](https://appstoreconnect.apple.com/apps/6801453067/testflight/ios).
 No Atlas OTA was published to runtime 1.2.0. Physical-device installation and
 final store-artifact UI remain unverified.
 
