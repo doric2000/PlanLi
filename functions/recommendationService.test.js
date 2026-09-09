@@ -280,7 +280,7 @@ test('alias fallback never turns an exact place into a natural-feature destinati
   assert.equal(result, null);
 });
 
-test('a containing PlanLi city outranks a closer administrative region without an alias match', async () => {
+test('a city viewport alone does not override an administrative name match', async () => {
   const countryDocument = {
     id: 'PE',
     data: () => ({ code: 'PE', status: 'active', name: 'Peru' }),
@@ -339,8 +339,8 @@ test('a containing PlanLi city outranks a closer administrative region without a
     coordinates: { lat: -13.5167, lng: -71.9783 },
   });
 
-  assert.equal(result.cityId, 'city');
-  assert.equal(result.cityData.destinationType, 'city');
+  assert.equal(result.cityId, 'region');
+  assert.equal(result.cityData.destinationType, 'region');
 });
 
 test('a Thai province outranks a non-containing same-name city', async () => {
@@ -925,7 +925,11 @@ function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
   const snapshot = (ref) => ({
     id: ref.id,
     exists: documents.has(ref.path),
-    data: () => documents.get(ref.path),
+    data: () => {
+      const value = documents.get(ref.path);
+      return value?.expiresAt instanceof Date
+        ? { ...value, expiresAt: { toDate: () => value.expiresAt } } : value;
+    },
   });
   const makeRef = (documentPath) => ({
     path: documentPath,
@@ -1028,6 +1032,140 @@ function createFakeAdmin(seed = {}, { beforeTransaction = null } = {}) {
   };
 }
 
+test('the reported Sri Lanka park and trails resolve to publishable distinct destinations', async () => {
+  const country = { name: 'סרי לנקה', code: 'LK', status: 'active', region: 'Asia', currencyCode: 'LKR' };
+  const cases = [
+    ['ChIJeX6IiP8I5DoR14DZ-5_nEq8', 'Udawalawe National Park', '', ['national_park', 'park'], { lat: 6.4746, lng: 80.8763 }, 'lk-udawalawe-national-park'],
+    ['ChIJO9eppsRl5DoRFtLkLnZEP0k', "Little Adam's Peak", 'Badulla', ['natural_feature', 'mountain_peak'], { lat: 6.8651, lng: 81.0631 }, 'lk-ella'],
+    ['ChIJFeqM3nll5DoRBG4AC5Pl9Aw', "Little Adam's Peak End Point", 'Ella', ['hiking_area'], { lat: 6.8601, lng: 81.0665 }, 'lk-ella'],
+  ];
+  for (const [placeId, displayName, localityName, types, coordinates, registryId] of cases) {
+    clearRegistryCache();
+    const admin = createFakeAdmin({ 'countries/LK': country });
+    const place = { placeId, displayName, localityName, localityCandidates: [localityName], types, coordinates,
+      countryCode: 'LK', countryName: 'Sri Lanka' };
+    const providerRateLimitKey = 'provider-limit-secret-for-tests';
+    const token = createResolvedPlaceToken(providerRateLimitKey);
+    admin.documents.set(`system/runtime/resolvedPlaceTokens/${token}`, {
+      uid: 'owner', he: place, en: place, searchMode: 'places', expiresAt: new Date(Date.now() + 60_000),
+    });
+    const result = await resolveDestinationFromToken({ admin, auth: verifiedAuth,
+      providerRateLimitKey, resolvedPlaceToken: token });
+    assert.equal(result.cityData.canonicalPolicy.registryId, registryId);
+    assert.equal(result.cityData.canonicalPolicy.registryAttestation.approved, true);
+    assert.equal(result.place.placeId, placeId);
+    assert.equal(result.providerCallCount, 0);
+    const request = { admin, auth: verifiedAuth, providerRateLimitKey, data: {
+      placeId, resolvedPlaceToken: token, locationMode: 'exact',
+      destinationRef: { countryId: 'LK', cityId: result.cityId },
+      publishRequestId: '123e4567-e89b-42d3-a456-426614174000', recommendation: validContent,
+    } };
+    const saved = await saveRecommendation(request);
+    assert.equal(saved.publicationStatus, 'active');
+    const document = admin.documents.get(`recommendations/${saved.recommendationId}`);
+    assert.equal(document.destination.cityId, result.cityId);
+    assert.equal(document.place.placeId, placeId);
+    const replay = await saveRecommendation(request);
+    assert.equal(replay.recommendationId, saved.recommendationId);
+    assert.equal(replay.idempotentReplay, true);
+  }
+  clearRegistryCache();
+});
+
+test('changing a resolved destination retains the exact place and verifies token ownership', async () => {
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const token = createResolvedPlaceToken(providerRateLimitKey);
+  const place = { placeId: 'test-exact-place', displayName: 'Trail', countryCode: 'LK', countryName: 'Sri Lanka',
+    types: ['hiking_area'], coordinates: { lat: 6.86, lng: 81.06 } };
+  const admin = createFakeAdmin({
+    [`system/runtime/resolvedPlaceTokens/${token}`]: {
+      uid: 'owner', searchMode: 'places', he: place, en: place,
+      expiresAt: { toDate: () => new Date(Date.now() + 60_000) },
+    },
+  });
+  const result = await resolveRecommendationDestination({
+    admin, auth: verifiedAuth, providerRateLimitKey,
+    data: { requestDestinationChoice: true, resolvedPlaceToken: token },
+  });
+  assert.equal(result.status, 'destination_choice_required');
+  assert.equal(result.destinationCountryCode, 'LK');
+  assert.equal(result.place.placeId, place.placeId);
+  assert.equal(result.allowDestinationSearch, true);
+  await assert.rejects(resolveRecommendationDestination({
+    admin, auth: { ...verifiedAuth, uid: 'other' }, providerRateLimitKey,
+    data: { requestDestinationChoice: true, resolvedPlaceToken: token },
+  }), (error) => error.code === 'permission-denied');
+});
+
+test('a cancelled in-flight destination change cannot overwrite the committed token', async () => {
+  clearRegistryCache();
+  const countryId = 'סרי לנקה';
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const token = createResolvedPlaceToken(providerRateLimitKey);
+  const expiresAt = new Date(Date.now() + 60_000);
+  const place = { placeId: 'synthetic-trail', displayName: 'Trail', countryCode: 'LK',
+    countryName: 'Sri Lanka', coordinates: { lat: 6.86, lng: 81.06 }, types: ['hiking_area'] };
+  const city = (name) => ({ countryId, status: 'active', googleCache: {
+    names: { he: name, en: name }, coordinates: place.coordinates,
+  }, stats: { recommendationCount: 0 } });
+  const admin = createFakeAdmin({
+    [`countries/${countryId}`]: { code: 'LK', name: countryId, status: 'active' },
+    [`countries/${countryId}/destinations/original`]: city('מקורי'),
+    [`countries/${countryId}/destinations/replacement`]: city('חדש'),
+    [`countries/${countryId}/destinations/${canonicalDestinationId(countryId, 'lk-ella')}`]: city('אלה'),
+    [`system/runtime/resolvedPlaceTokens/${token}`]: {
+      uid: 'owner', he: place, en: place, expiresAt, searchMode: 'places',
+    },
+  });
+  const shared = { admin, auth: verifiedAuth, providerRateLimitKey };
+  await resolveExactPlaceWithDestination({ ...shared, placeId: place.placeId, resolvedPlaceToken: token,
+    destinationRef: { countryId, cityId: 'original' } });
+  const before = admin.documents.get(`system/runtime/resolvedPlaceTokens/${token}`).destinationResolution;
+  const choice = await resolveRecommendationDestination({ ...shared,
+    data: { requestDestinationChoice: true, resolvedPlaceToken: token, placeId: place.placeId } });
+  assert.notEqual(choice.resolvedPlaceToken, token);
+  assert.equal(choice.destinationCountryId, countryId);
+  assert.equal(choice.destinationCountryCode, 'LK');
+  assert.ok(choice.alternatives.some((item) => item.countryId === countryId && item.cityName === 'אלה'));
+  const fork = admin.documents.get(`system/runtime/resolvedPlaceTokens/${choice.resolvedPlaceToken}`);
+  assert.equal(fork.expiresAt.toDate().getTime(), expiresAt.getTime(), 'Choice must not extend the provider lease');
+  const changed = await finalizeDestinationChoice({ ...shared,
+    data: { resolutionId: choice.resolutionId, destinationRef: { countryId, cityId: 'replacement' } } });
+  assert.equal(changed.destination.city.id, 'replacement');
+  assert.deepEqual(admin.documents.get(`system/runtime/resolvedPlaceTokens/${token}`).destinationResolution, before);
+  const original = await resolveExactPlaceWithDestination({ ...shared, placeId: place.placeId,
+    resolvedPlaceToken: token, destinationRef: { countryId, cityId: 'original' } });
+  assert.equal(original.cityId, 'original');
+  clearRegistryCache();
+});
+
+test('an unchanged destination ref cannot release a held park recommendation under the old coast', async () => {
+  clearRegistryCache();
+  const providerRateLimitKey = 'provider-limit-secret-for-tests';
+  const token = createResolvedPlaceToken(providerRateLimitKey);
+  const place = { placeId: 'ChIJeX6IiP8I5DoR14DZ-5_nEq8', displayName: 'Udawalawe National Park',
+    countryCode: 'LK', countryName: 'Sri Lanka', coordinates: { lat: 6.4746, lng: 80.8763 }, types: ['national_park', 'park'] };
+  const oldRef = { countryId: 'LK', cityId: 'old-coast' };
+  const admin = createFakeAdmin({
+    'countries/LK': { name: 'סרי לנקה', code: 'LK', status: 'active', region: 'Asia', currencyCode: 'LKR' },
+    'countries/LK/destinations/old-coast': { status: 'active', countryId: 'LK',
+      googleCache: { names: { he: 'חופי הדרום', en: 'South Coast' }, coordinates: place.coordinates },
+      stats: { recommendationCount: 1 } },
+    'recommendations/held-park': { ...validContent, ownerId: 'owner', status: 'moderation_hold',
+      moderation: { holdReason: 'destination_pending_approval', systemGate: 'destination_pending_approval' },
+      locationMode: 'exact', destination: oldRef, place, stats: { likeCount: 0, commentCount: 0 } },
+    [`system/runtime/resolvedPlaceTokens/${token}`]: { uid: 'owner', he: place, en: place,
+      expiresAt: new Date(Date.now() + 60_000), searchMode: 'places' },
+  });
+  const result = await saveRecommendation({ admin, auth: verifiedAuth, providerRateLimitKey, data: {
+    recommendationId: 'held-park', recommendation: validContent, locationMode: 'exact',
+    placeId: place.placeId, resolvedPlaceToken: token, destinationRef: oldRef,
+  } });
+  assert.equal(result.city.id, canonicalDestinationId('LK', 'lk-udawalawe-national-park'));
+  assert.equal(admin.documents.get('recommendations/held-park').destination.cityId, result.city.id);
+  clearRegistryCache();
+});
+
 const verifiedAuth = {
   uid: 'owner',
   token: {
@@ -1062,6 +1200,11 @@ test('saveRecommendation requires taxonomy v5 for budget-bearing writes', async 
 
 test('Google destination resolution groups Chiang Mai places to the approved province', async () => {
   const admin = createFakeAdmin({
+    [`system/destinationRegistry/entries/th-chiang-mai`]: {
+      id: 'th-chiang-mai', countryCode: 'TH', names: { he: 'צ׳יאנג מאי', en: 'Chiang Mai' },
+      kind: 'province', groupingPolicy: 'self', providerRefs: { googlePlaceId: 'province-chiang-mai' },
+      googleTypes: ['administrative_area_level_1', 'political'],
+    },
     'countries/TH': {
       name: 'Thailand',
       names: { he: 'Thailand', en: 'Thailand' },
@@ -1153,7 +1296,13 @@ test('Google destination resolution groups Chiang Mai places to the approved pro
 });
 
 test('Google destination resolution maps the reported Chiang Rai hotel to its Thai province', async () => {
+  clearRegistryCache();
   const admin = createFakeAdmin({
+    [`system/destinationRegistry/entries/th-chiang-rai`]: {
+      id: 'th-chiang-rai', countryCode: 'TH', names: { he: 'צ׳יאנג ראי', en: 'Chiang Rai' },
+      kind: 'province', groupingPolicy: 'self', providerRefs: { googlePlaceId: 'province-chiang-rai' },
+      googleTypes: ['administrative_area_level_1', 'political'],
+    },
     'countries/TH': {
       name: 'Thailand',
       names: { he: 'Thailand', en: 'Thailand' },
@@ -1266,6 +1415,14 @@ test('Google destination resolution maps the reported Chiang Rai hotel to its Th
 test('Hampi venues resolve to the shared tourism region without locality provider fallback', async () => {
   clearRegistryCache();
   const admin = createFakeAdmin({
+    [`countries/IN/destinations/${canonicalDestinationId('IN', 'in-hampi')}`]: {
+      countryId: 'IN', status: 'active', destinationType: 'region',
+      googleCache: { names: { he: 'האמפי', en: 'Hampi' } },
+      canonicalPolicy: {
+        ...approvedCanonicalPolicyFor('IN'), registryId: 'in-hampi', kind: 'tourism_region',
+        registryAttestation: { ...approvedCanonicalPolicyFor('IN').registryAttestation, registryId: 'in-hampi' },
+      },
+    },
     'countries/IN': {
       name: 'הודו', names: { he: 'הודו', en: 'India' }, code: 'IN',
       region: 'Asia', currencyCode: 'INR', status: 'active',
@@ -1579,7 +1736,7 @@ test('a verified foreign locality is auto-approved instead of entering the admin
   assert.equal(destination.registryData.geometryPolicy.autoMatchEligible, false);
 });
 
-test('Ambewela resolves to provider-returned Nuwara Eliya and publishes through a seeded registry upgrade', async () => {
+test('Ambewela preview selects Nuwara Eliya and publication preserves that explicit correction', async () => {
   clearRegistryCache();
   const registryId = 'lk-nuwara-eliya';
   const registryPath = `system/destinationRegistry/entries/${registryId}`;
@@ -1664,18 +1821,26 @@ test('Ambewela resolves to provider-returned Nuwara Eliya and publishes through 
   });
 
   try {
+    const providerRateLimitKey = 'provider-limit-secret-for-tests';
+    const preview = await resolveRecommendationDestination({
+      admin, auth: verifiedAuth, projectId: 'planli-f0b12', providerRateLimitKey,
+      accessTokenProvider: async () => 'oauth-token',
+      data: { placeId: 'ambewela-station', supportsDestinationChoice: true, supportsDestinationSearch: true },
+    });
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
+      providerRateLimitKey,
       projectId: 'planli-f0b12',
       accessTokenProvider: async () => 'oauth-token',
       data: {
         recommendationId: 'ambewela-held',
+        resolvedPlaceToken: preview.resolvedPlaceToken,
         placeId: 'ambewela-station',
         locationMode: 'exact',
         destinationRef: {
           countryId: 'LK',
-          cityId: canonicalDestinationId('LK', 'lk-ella'),
+          cityId: preview.destination.city.id,
         },
         recommendation: { ...validContent, title: 'Ambewela train' },
       },
@@ -1817,7 +1982,7 @@ test('a previously cached destination remains usable when an old token has no se
   assert.equal(result.createCity, false);
 });
 
-test('a stale geometry-cached exact binding refreshes from the explicit canonical destination', async () => {
+test('a stale automatic geometry binding requires renewed user confirmation before publication', async () => {
   clearRegistryCache();
   const providerRateLimitKey = 'provider-limit-secret-for-tests';
   const resolvedPlaceToken = createResolvedPlaceToken(providerRateLimitKey);
@@ -1899,7 +2064,7 @@ test('a stale geometry-cached exact binding refreshes from the explicit canonica
   });
 
   try {
-    const result = await resolveExactPlaceWithDestination({
+    await assert.rejects(resolveExactPlaceWithDestination({
       admin,
       auth: verifiedAuth,
       placeId: 'ambewela-station',
@@ -1907,22 +2072,20 @@ test('a stale geometry-cached exact binding refreshes from the explicit canonica
       destinationRef: { countryId: 'LK', cityId: nuwaraId },
       providerRateLimitKey,
       placesProvider: 'new',
-    });
-
-    assert.equal(result.cityId, nuwaraId);
-    assert.equal(result.cityData.canonicalPolicy.registryAttestation.policyId,
-      'verified-provider-destination-v1');
-    assert.equal(
-      admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
-        .destinationResolution.cityId,
-      nuwaraId
-    );
+    }), (error) => error.details?.reason === 'destination_selection_required');
+    await assert.rejects(saveRecommendation({ admin, auth: verifiedAuth, providerRateLimitKey,
+      data: { placeId: 'ambewela-station', resolvedPlaceToken, locationMode: 'exact', recommendation: validContent },
+    }), (error) => error.details?.reason === 'destination_selection_required');
     assert.equal(
       admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`)
         .providerCallCount,
       1,
       'refreshing an explicit destination binding must not choose a different locality again'
     );
+    admin.documents.get(`system/runtime/resolvedPlaceTokens/${resolvedPlaceToken}`).expiresAt = new Date(0);
+    await assert.rejects(saveRecommendation({ admin, auth: verifiedAuth, providerRateLimitKey,
+      data: { placeId: 'ambewela-station', resolvedPlaceToken, locationMode: 'exact', recommendation: validContent },
+    }), (error) => error.details?.reason === 'destination_selection_required');
   } finally {
     clearRegistryCache();
   }
@@ -2146,7 +2309,7 @@ test('an exact-place token bound to a merged destination follows the canonical d
   );
 });
 
-test('a worldwide destination without reliable Hebrew asks for explicit name confirmation', async () => {
+test('an uncatalogued destination without reliable Hebrew asks for explicit name confirmation', async () => {
   const admin = createFakeAdmin();
   const coordinates = { lat: 60.3913, lng: 5.3221 };
   const destination = await resolveGoogleDestination({
@@ -2156,20 +2319,20 @@ test('a worldwide destination without reliable Hebrew asks for explicit name con
     resolvedPlace: {
       fetchedAt: new Date(),
       he: {
-        placeId: 'bergen-place', displayName: 'Bergen', localityName: 'Bergen',
-        countryName: 'Norway', countryCode: 'NO', localityCandidates: ['Bergen'],
+        placeId: 'testville-place', displayName: 'Testville', localityName: 'Testville',
+        countryName: 'Norway', countryCode: 'NO', localityCandidates: ['Testville'],
         coordinates, types: ['locality', 'political'],
       },
       en: {
-        placeId: 'bergen-place', displayName: 'Bergen', localityName: 'Bergen',
-        countryName: 'Norway', countryCode: 'NO', localityCandidates: ['Bergen'],
+        placeId: 'testville-place', displayName: 'Testville', localityName: 'Testville',
+        countryName: 'Norway', countryCode: 'NO', localityCandidates: ['Testville'],
         coordinates, types: ['locality', 'political'],
       },
     },
   });
   assert.equal(destination.status, 'destination_name_confirmation_required');
   assert.equal(destination.requiresNameConfirmation, true);
-  assert.equal(destination.nameConfirmation.englishName, 'Bergen');
+  assert.equal(destination.nameConfirmation.englishName, 'Testville');
   assert.ok(hasHebrewName(destination.nameConfirmation.suggestedHebrewName));
 });
 
@@ -3124,7 +3287,7 @@ test('saveRecommendation rejects unverified and foreign edits', async () => {
   );
 });
 
-test('Google place cannot create an unapproved destination document', async () => {
+test('a verified containing locality with a catalog Hebrew name publishes with an attested destination', async () => {
   const admin = createFakeAdmin();
   const originalFetch = global.fetch;
   global.fetch = async (urlValue, options = {}) => {
@@ -3174,7 +3337,6 @@ test('Google place cannot create an unapproved destination document', async () =
   };
 
   try {
-    await assert.rejects((async () => {
     const result = await saveRecommendation({
       admin,
       auth: verifiedAuth,
@@ -3188,13 +3350,13 @@ test('Google place cannot create an unapproved destination document', async () =
     });
 
     const countryId = 'IL';
-    const cityId = stableDestinationId(countryId, 'city-google-id');
+    const cityId = canonicalDestinationId(countryId, provisionalRegistryId(countryId, 'city-google-id'));
     assert.equal(result.country.id, countryId);
     assert.equal(result.city.id, cityId);
     assert.equal(admin.documents.get(`countries/${countryId}`).code, 'IL');
     assert.deepEqual(
       Object.keys(admin.documents.get(`countries/${countryId}`)).sort(),
-      ['code', 'createdAt', 'currencyCode', 'name', 'names', 'region', 'status', 'updatedAt']
+      ['code', 'createdAt', 'currencyCode', 'discoveryRegionId', 'name', 'names', 'region', 'status', 'updatedAt']
     );
     assert.deepEqual(
       admin.documents.get(`countries/${countryId}/destinations/${cityId}`).providerRefs.googlePlaceId,
@@ -3226,13 +3388,15 @@ test('Google place cannot create an unapproved destination document', async () =
       { lat: 32.08, lng: 34.78 }
     );
     assert.ok(mapLocation.geohash);
-    })(), /not mapped to an approved PlanLi destination/);
+    assert.equal(result.publicationStatus, 'active');
+    assert.equal(admin.documents.get(`countries/${countryId}/destinations/${cityId}`)
+      .canonicalPolicy.registryAttestation.approved, true);
   } finally {
     global.fetch = originalFetch;
   }
 });
 
-test('same-name raw localities cannot bypass the approved registry', async () => {
+test('same-name localities with a shared Hebrew spelling retain distinct verified identities', async () => {
   const admin = createFakeAdmin({
     'countries/US': {
       name: 'ארצות הברית', names: { he: 'ארצות הברית', en: 'United States' },
@@ -3248,7 +3412,7 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
       ok: true, status: 200,
       json: async () => ({
         id: placeId,
-        displayName: { text: 'Springfield' },
+        displayName: { text: url.searchParams.get('languageCode') === 'he' ? 'ספרינגפילד' : 'Springfield' },
         formattedAddress: 'Springfield, United States',
         addressComponents: [
           { longText: 'Springfield', types: ['locality', 'political'] },
@@ -3261,7 +3425,6 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
   };
 
   try {
-    await assert.rejects((async () => {
     const first = await saveRecommendation({
       admin, auth: verifiedAuth, projectId: 'planli-f0b12',
       accessTokenProvider: async () => 'oauth-token',
@@ -3282,7 +3445,8 @@ test('same-name raw localities cannot bypass the approved registry', async () =>
         [second.city.id]: { providerPlaceId: 'springfield-b' },
       }
     );
-    })(), /verified Hebrew name/);
+    assert.equal(first.publicationStatus, 'active');
+    assert.equal(second.publicationStatus, 'active');
   } finally {
     global.fetch = originalFetch;
   }

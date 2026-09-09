@@ -10,7 +10,7 @@ jest.mock('../src/services/LocationService', () => ({
   confirmProvisionalDestinationName: (...args) => mockConfirmName(...args),
   finalizeDestinationChoice: jest.fn(),
   resolveDestinationForPlacePreview: (...args) => mockResolve(...args),
-  searchCities: (...args) => mockSearchCities(...args),
+  searchDestinationChoices: (...args) => mockSearchCities(...args),
 }));
 
 const deferred = () => {
@@ -21,6 +21,69 @@ const deferred = () => {
 };
 
 beforeEach(() => jest.clearAllMocks());
+
+test('choosing an existing destination skips provider resolution', async () => {
+  mockSearchCities.mockResolvedValue([{ id: 'catalog:LK:ella', destinationRef: { countryId: 'LK', cityId: 'ella' },
+    structured_formatting: { main_text: 'אלה' } }]);
+  const onSelect = jest.fn();
+  const screen = render(<DestinationFallbackPicker countryId="LK" onSelect={onSelect} />);
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'Ella');
+  fireEvent.press(screen.getByTestId('destination-fallback-search-button'));
+  await screen.findByText('אלה');
+  fireEvent.press(screen.getByTestId('destination-fallback-result-0'));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ countryId: 'LK', cityId: 'ella', name: 'אלה' }));
+  expect(mockResolve).not.toHaveBeenCalled();
+});
+
+test('a late provider resolution cannot replace a newly entered destination', async () => {
+  const pending = deferred();
+  mockSearchCities.mockResolvedValue([{ id: 'provider', structured_formatting: { main_text: 'Old destination' } }]);
+  mockResolve.mockReturnValue(pending.promise);
+  const onSelect = jest.fn();
+  const screen = render(<DestinationFallbackPicker onSelect={onSelect} />);
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'Old');
+  fireEvent.press(screen.getByTestId('destination-fallback-search-button'));
+  await screen.findByText('Old destination');
+  fireEvent.press(screen.getByTestId('destination-fallback-result-0'));
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'New');
+  await act(async () => pending.resolve({ destination: { country: { id: 'IT' }, city: { id: 'old' } } }));
+  expect(onSelect).not.toHaveBeenCalled();
+});
+
+test('catalog results are selectable while provider search is pending', async () => {
+  const pending = deferred();
+  const catalogEntry = { id: 'catalog:LK:ella', destinationRef: { countryId: 'LK', cityId: 'ella' },
+    structured_formatting: { main_text: 'אלה' } };
+  mockSearchCities.mockImplementation((_query, { onResults }) => {
+    onResults([catalogEntry]);
+    return pending.promise;
+  });
+  const onSelect = jest.fn();
+  const screen = render(<DestinationFallbackPicker countryId="LK" onSelect={onSelect} />);
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'Ella');
+  fireEvent.press(screen.getByTestId('destination-fallback-search-button'));
+  fireEvent.press(await screen.findByTestId('destination-fallback-result-0'));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ countryId: 'LK', cityId: 'ella', name: 'אלה' }));
+  await act(async () => pending.resolve([{ id: 'late-provider', structured_formatting: { main_text: 'Late result' } }]));
+  expect(screen.queryByText('Late result')).toBeNull();
+});
+
+test('the query cannot change while the parent is committing a destination', async () => {
+  const pending = deferred();
+  mockSearchCities.mockResolvedValue([{ id: 'catalog:LK:ella',
+    destinationRef: { countryId: 'LK', cityId: 'ella' }, structured_formatting: { main_text: 'אלה' } }]);
+  const onSelect = jest.fn(() => pending.promise);
+  const screen = render(<DestinationFallbackPicker countryId="LK" onSelect={onSelect} />);
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'Ella');
+  fireEvent.press(screen.getByTestId('destination-fallback-search-button'));
+  fireEvent.press(await screen.findByTestId('destination-fallback-result-0'));
+  await waitFor(() => expect(onSelect).toHaveBeenCalledTimes(1));
+  expect(screen.getByTestId('destination-fallback-search').props.editable).toBe(false);
+  fireEvent.changeText(screen.getByTestId('destination-fallback-search'), 'New query');
+  expect(screen.getByTestId('destination-fallback-search').props.value).toBe('Ella');
+  await act(async () => pending.reject(new Error('retryable')));
+  expect(screen.getByTestId('destination-fallback-search').props.editable).toBe(true);
+});
 
 test('fallback destination search lets the user correct a provisional Hebrew name', async () => {
   const selection = {

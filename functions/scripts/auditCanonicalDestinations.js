@@ -77,6 +77,25 @@ function auditDestination({ countryId, cityId, countryCode, destination, registr
   };
 }
 
+function auditRecommendationAssignment({ id, recommendation, countryCode, currentRegistryId, registryEntries }) {
+  const match = matchCanonicalEntry(registryEntries, {
+    countryCode: countryCode || recommendation.destination?.countryId,
+    providerPlaceId: recommendation.place?.placeId,
+    coordinates: recommendation.place?.coordinates || recommendation.mapLocation,
+    // Never use the current destination's name as proof of its own assignment.
+    aliases: [], allowBlockedExactKinds: ['natural_feature'], exactOnlyKinds: ['natural_feature'],
+    requireAliasForKinds: ['city_hub', 'island', 'tourism_region', 'province'],
+  });
+  return { id, currentDestination: recommendation.destination || null,
+    currentRegistryId: currentRegistryId || null, proposedRegistryId: match?.entry?.id || null,
+    source: match?.source || null,
+    reviewRequired: Boolean(match?.entry && match.entry.id !== currentRegistryId),
+    action: match?.entry && match.entry.id !== currentRegistryId ? 'review_individual_recommendation' : 'none',
+    // Corrections must preserve unrelated moderation holds and use the existing
+    // publication fence. Never merge an entire region based on one bad post.
+    publishAutomatically: false };
+}
+
 async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = admin } = {}) {
   if (apply) throw new Error('This audit is read-only. Use the admin impact preview and reassignment workflow to write.');
   if (projectId !== DEFAULT_PROJECT_ID) throw new Error(`Expected project ${DEFAULT_PROJECT_ID}.`);
@@ -141,6 +160,14 @@ async function run({ projectId = DEFAULT_PROJECT_ID, apply = false, adminImpl = 
   });
   const result = {
     mode: 'dry-run',
+    recommendationAssignments: recommendations.docs.map((document) => {
+      const recommendation = document.data();
+      const current = items.find((item) => item.countryId === recommendation.destination?.countryId &&
+        item.cityId === recommendation.destination?.cityId);
+      return auditRecommendationAssignment({ id: document.id, recommendation,
+        countryCode: countryCodes.get(recommendation.destination?.countryId),
+        currentRegistryId: current?.currentRegistryId, registryEntries });
+    }).filter((item) => item.reviewRequired),
     registry: {
       count: registryEntries.length,
       trustedMatchProfiles: registryEntries.filter((entry) => entry.matchProfile?.trust === 'trusted').length,
@@ -173,4 +200,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { auditDestination, parseArguments, run };
+module.exports = { auditDestination, auditRecommendationAssignment, parseArguments, run };

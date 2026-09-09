@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { CANDIDATES } = require('../data/canonicalDestinationCandidates');
 const {
   auditEntries,
+  commitRegistry,
   enrichCandidate,
   mergePolicy,
   parseArguments,
@@ -11,7 +12,7 @@ const {
 } = require('./seedCanonicalDestinationRegistry');
 
 test('registry seed is dry-run by default and apply requires enrichment', async () => {
-  assert.deepEqual(parseArguments([]), { apply: false, enrich: false, projectId: 'planli-f0b12' });
+  assert.deepEqual(parseArguments([]), { apply: false, enrich: false, projectId: 'planli-f0b12', offset: 0, limit: 3000, checkpoint: '' });
   const result = await run();
   assert.equal(result.mode, 'local-dry-run');
   assert.equal(result.localAudit.valid, true);
@@ -98,4 +99,69 @@ test('city enrichment refuses a business Place ID even when it is the only resul
   assert.equal(requestBody.strictTypeFiltering, true);
   assert.equal(result.providerRefs, undefined);
   assert.equal(result.enrichmentIssue, 'missing_google_match');
+});
+
+test('country-qualified catalog labels accept their explicit provider aliases', async () => {
+  for (const [id, country, providerName] of [
+    ['ni-granada-nicaragua', 'NI', 'Granada'], ['co-cartagena-colombia', 'CO', 'Cartagena'],
+    ['cl-santiago-chile', 'CL', 'Santiago'], ['ec-cuenca-ecuador', 'EC', 'Cuenca'],
+  ]) {
+    const candidate = CANDIDATES.find((entry) => entry.id === id);
+    const result = await enrichCandidate(candidate, { accessTokenProvider: async () => 'synthetic',
+      fetchImpl: async () => ({ ok: true, json: async () => ({ places: [{
+        id: `synthetic-${id}`, displayName: { text: providerName }, types: ['locality'],
+        location: { latitude: 1, longitude: 1 },
+        addressComponents: [{ shortText: country, types: ['country'] }],
+      }] }) }) });
+    assert.equal(result.enrichmentIssue, undefined, id);
+    assert.equal(result.providerRefs.googlePlaceId, `synthetic-${id}`);
+  }
+});
+
+test('enrichment refuses Southern Province as the identity of the south coast', async () => {
+  const candidate = mergePolicy(CANDIDATES.find((entry) => entry.id === 'lk-sri-lanka-south-coast'));
+  const result = await enrichCandidate(candidate, { fetchImpl: () => assert.fail('No provider call for quarantined identity') });
+  assert.equal(result.enrichmentIssue, 'review_required_provider_identity');
+  assert.equal(result.geometryPolicy.autoMatchEligible, false);
+});
+
+test('an unrelated same-country city cannot win just because Google returns one result', async () => {
+  const candidate = CANDIDATES.find((entry) => entry.names.en === 'Bergen' && entry.countryCode === 'NO');
+  const result = await enrichCandidate(candidate, { projectId: 'planli-f0b12', accessTokenProvider: async () => 'test',
+    fetchImpl: async () => ({ ok: true, json: async () => ({ places: [{ id: 'wrong',
+      displayName: { text: 'Oslo' }, types: ['locality'], location: { latitude: 59.91, longitude: 10.75 },
+      addressComponents: [{ shortText: 'NO', types: ['country'] }],
+    }] }) }) });
+  assert.equal(result.enrichmentIssue, 'missing_google_match');
+});
+
+test('resumed imports preserve administrator decisions and existing provider identities', async () => {
+  const entries = [
+    { id: 'lk-existing', providerRefs: { googlePlaceId: 'existing', googlePlaceIds: ['secondary'] } },
+    { id: 'lk-alias', providerRefs: { googlePlaceId: 'existing' } },
+    { id: 'lk-secondary', providerRefs: { googlePlaceId: 'secondary' } },
+    { id: 'lk-reverse-secondary', providerRefs: { googlePlaceId: 'different', googlePlaceIds: ['existing'] } },
+    { id: 'lk-both-secondary', providerRefs: { googlePlaceId: 'another', googlePlaceIds: ['secondary'] } },
+    { id: 'lk-new', providerRefs: { googlePlaceId: 'new' }, names: { he: 'חדש', en: 'New' } },
+  ];
+  const documents = new Map([['system/destinationRegistry/entries/lk-existing', {
+    ...entries[0], status: 'inactive', approval: { approvedByAdmin: true }, names: { he: 'שם מנהל' },
+  }]]);
+  const original = structuredClone(documents.get('system/destinationRegistry/entries/lk-existing'));
+  const db = { doc: (path) => ({ path, set: async () => {} }),
+    collection: () => ({ where: (field, _op, value) => ({ limit: () => ({ field, providerId: value }) }) }),
+    runTransaction: async (body) => body({
+      get: async (query) => query.path
+        ? { exists: documents.has(query.path), data: () => documents.get(query.path) }
+        : { empty: ![...documents.values()].some((entry) => query.field === 'providerRefs.googlePlaceIds'
+          ? entry.providerRefs.googlePlaceIds?.includes(query.providerId)
+          : entry.providerRefs.googlePlaceId === query.providerId) },
+      create: (ref, data) => documents.set(ref.path, data),
+    }),
+  };
+  const admin = { firestore: { FieldValue: { serverTimestamp: () => 'timestamp' } } };
+  assert.equal((await commitRegistry(db, entries, admin)).created, 1);
+  assert.equal((await commitRegistry(db, entries, admin)).created, 0);
+  assert.equal(documents.size, 2);
+  assert.deepEqual(documents.get('system/destinationRegistry/entries/lk-existing'), original);
 });

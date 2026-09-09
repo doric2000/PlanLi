@@ -40,6 +40,8 @@ export default function ExactLocationPicker({
 		chooseDestination,
 		chooseFallbackDestination,
 		chooseAnotherLocation,
+		changeDestination,
+		confirmDestinationName,
 		confirmPendingLocation,
 		googleSearchFn,
 		handleSelectGooglePlace,
@@ -124,6 +126,9 @@ export default function ExactLocationPicker({
 			/>}
 
 			<ExactLocationConfirmation
+				onChangeDestination={changeDestination}
+				onConfirmDestinationName={confirmDestinationName}
+				error={locationResolveError}
 				pendingLocation={pendingLocation}
 				destinationChoice={destinationChoice}
 				resolving={resolvingLocation}
@@ -136,6 +141,12 @@ export default function ExactLocationPicker({
 			/>
 
 			{composerVariant && resolvingLocation ? <AppText style={composer.fieldHint}>{copy.resolving}</AppText> : null}
+			{selectedPlace && !destinationChoice && !pendingLocation ? (
+				<TouchableOpacity onPress={changeDestination} disabled={resolvingLocation} style={styles.chooseAnotherButton}
+					accessibilityRole="button" testID="selected-location-change-destination">
+					<AppText style={styles.chooseAnotherText}>שינוי יעד</AppText>
+				</TouchableOpacity>
+			) : null}
 
 			{!!selectedLabel && !locationResolveError && !composerVariant && (
 				<AppText style={styles.selectedText} numberOfLines={2}>

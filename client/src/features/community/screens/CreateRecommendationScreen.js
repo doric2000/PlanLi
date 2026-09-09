@@ -307,6 +307,8 @@ export default function CreateRecommendationScreen({ navigation, route }) {
 
   const {
     chooseAnotherLocation,
+    changeDestination,
+    confirmDestinationName,
     chooseDestination,
     chooseFallbackDestination,
     destinationChoice,
@@ -1343,6 +1345,11 @@ export default function CreateRecommendationScreen({ navigation, route }) {
                     <AppText style={styles.confirmedLocationTitle}>{selectedPlace.name || selectedPlace.address}</AppText>
                   </View>
                   {selectedPlace.address ? <AppText style={styles.confirmedLocationAddress}>{selectedPlace.address}</AppText> : null}
+                  <AppText style={styles.confirmedLocationAddress}>{selectedCity?.name}</AppText>
+                  <TouchableOpacity onPress={changeDestination} disabled={resolvingLocation} style={styles.moreButton}
+                    accessibilityRole="button" testID="recommendation-change-destination">
+                    <AppText style={styles.moreText}>שינוי יעד</AppText>
+                  </TouchableOpacity>
                 </View>
                 <ExactLocationMapPreview place={selectedPlace} title="המיקום שנבחר" locale="he" />
                 {normalizeManualCoordinate(selectedPlace.coordinates || selectedPlace.geometry?.location) ? (
@@ -1355,6 +1362,12 @@ export default function CreateRecommendationScreen({ navigation, route }) {
             ) : null}
             {destinationChoice ? (
               <ExactLocationConfirmation
+                onChangeDestination={changeDestination}
+                onConfirmDestinationName={async (name) => {
+                  const resolved = await confirmDestinationName(name, { autoConfirm: true });
+                  if (resolved) applyPlaceAutofill(resolved);
+                }}
+                error={locationResolveError}
                 pendingLocation={pendingLocation}
                 destinationChoice={destinationChoice}
                 resolving={resolvingLocation}

@@ -34,7 +34,7 @@ test('a completed job is restarted when an admin returns to an earlier name', ()
 
 test('canonical rename patch records an admin source without changing identity', () => {
   assert.deepEqual(destinationNamePatch('סאפה'), {
-    namingPolicyVersion: 2,
+    namingPolicyVersion: 3,
     'googleCache.names.he': 'סאפה',
     'googleCache.nameSources.he': 'admin',
   });

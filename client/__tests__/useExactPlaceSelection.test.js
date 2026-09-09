@@ -5,10 +5,14 @@ import useExactPlaceSelection, { buildExactPlaceValue } from '../src/hooks/useEx
 const mockResolve = jest.fn();
 const mockFinalize = jest.fn();
 const mockSearch = jest.fn(async () => []);
+const mockRequestChoice = jest.fn();
+const mockConfirmName = jest.fn();
 jest.mock('../src/services/LocationService', () => ({
   finalizeDestinationChoice: (...args) => mockFinalize(...args),
   resolveDestinationForPlacePreview: (...args) => mockResolve(...args),
   searchPlaces: (...args) => mockSearch(...args),
+  requestDestinationChoice: (...args) => mockRequestChoice(...args),
+  confirmProvisionalDestinationName: (...args) => mockConfirmName(...args),
 }));
 
 const resolved = {
@@ -24,6 +28,56 @@ describe('useExactPlaceSelection', () => {
     mockResolve.mockReset();
     mockFinalize.mockReset();
     mockSearch.mockClear();
+    mockRequestChoice.mockReset();
+    mockConfirmName.mockReset();
+  });
+
+  it('renews an expired choice and reapplies the user-selected destination without reclassification', async () => {
+    mockResolve.mockResolvedValue({ status: 'destination_choice_required', resolutionId: 'old-choice',
+      resolvedPlaceToken: 'exact-token', place: resolved.place, alternatives: [] });
+    mockFinalize.mockRejectedValueOnce(Object.assign(new Error('choice expired'), {
+      code: 'functions/deadline-exceeded', details: { reason: 'selection_expired' },
+    })).mockResolvedValueOnce(resolved);
+    mockRequestChoice.mockResolvedValue({ resolutionId: 'renewed-choice', incidentId: 'renewed-incident' });
+    const { result } = renderHook(() => useExactPlaceSelection());
+    await act(async () => result.current.handleSelectGooglePlace('wat-doi-kham'));
+    await act(async () => result.current.chooseFallbackDestination({ countryId: 'TH', cityId: 'chiang-mai' }));
+    expect(mockResolve).toHaveBeenCalledTimes(1);
+    expect(mockFinalize).toHaveBeenLastCalledWith({ resolutionId: 'renewed-choice',
+      incidentId: 'renewed-incident', destinationRef: { countryId: 'TH', cityId: 'chiang-mai' } });
+    expect(result.current.pendingLocation.place.placeId).toBe('wat-doi-kham');
+  });
+
+  it('changes only the destination after a successful place selection', async () => {
+    mockResolve.mockResolvedValue(resolved);
+    mockRequestChoice.mockResolvedValue({ status: 'destination_choice_required', resolutionId: 'dcr_change',
+      destinationCountryCode: 'TH', alternatives: [], allowDestinationSearch: true, place: resolved.place });
+    const onChange = jest.fn();
+    const { result } = renderHook(() => useExactPlaceSelection({ onChange }));
+    await act(async () => result.current.handleSelectGooglePlace('wat-doi-kham', { autoConfirm: true }));
+    await act(async () => result.current.changeDestination());
+    expect(result.current.selectedPlace).toEqual(resolved.place);
+    expect(result.current.destinationChoice.resolutionId).toBe('dcr_change');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    mockFinalize.mockResolvedValue({ ...resolved, destination: { ...resolved.destination,
+      city: { id: 'other-destination', name: 'Other destination' } } });
+    await act(async () => result.current.chooseFallbackDestination({ countryId: 'TH', cityId: 'other-destination' }, { autoConfirm: true }));
+    expect(result.current.selectedPlace.placeId).toBe('wat-doi-kham');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ cityId: 'other-destination' }));
+  });
+
+  it('confirms a missing Hebrew name without searching for the place again', async () => {
+    mockResolve.mockResolvedValue({ status: 'destination_name_confirmation_required', resolvedPlaceToken: 'name-token',
+      nameConfirmation: { englishName: 'Town', suggestedHebrewName: 'טאון' }, place: resolved.place });
+    mockConfirmName.mockResolvedValue({ ...resolved, status: 'resolved' });
+    const { result } = renderHook(() => useExactPlaceSelection());
+    await act(async () => result.current.handleSelectGooglePlace('town'));
+    await act(async () => result.current.confirmDestinationName('טאון', { autoConfirm: true }));
+    expect(mockResolve).toHaveBeenCalledTimes(1);
+    expect(mockConfirmName).toHaveBeenCalledWith(expect.objectContaining({
+      resolvedPlaceToken: 'name-token', confirmedHebrewName: 'טאון', selectionIntent: 'exact_place',
+    }));
+    expect(result.current.selectedPlace.placeId).toBe('wat-doi-kham');
   });
 
   it('owns the canonical exact-place value shared by both forms', () => {

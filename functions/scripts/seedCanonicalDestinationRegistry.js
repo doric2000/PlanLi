@@ -1,5 +1,9 @@
 /* eslint-disable no-await-in-loop, no-console */
 const admin = require('firebase-admin');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { distanceKm } = require('../destinationIdentityService');
 const { fetchWithGoogleMapsOAuth } = require('../placesProviderAdapter');
 
 const { initializeAdmin } = require('./localCredentials');
@@ -52,7 +56,6 @@ const ENRICHMENT_OVERRIDES = Object.freeze({
   'in-parvati-valley': { expectedPlaceId: 'ChIJ2dW19rpGBDkRE3LFCA5XJxk' },
   'in-leh-and-ladakh': { query: 'Ladakh, India', expectedPlaceId: 'ChIJOXF947yG_TgRx4rS2g-ZwsY' },
   'np-everest-region': { query: 'Sagarmatha National Park, Nepal', expectedPlaceId: 'ChIJW_9Y6LlU6DkRvkeHfWBmlKc' },
-  'lk-sri-lanka-south-coast': { query: 'Southern Province, Sri Lanka', expectedPlaceId: 'ChIJdzMB2bpz4ToRfvT2UOiPI0Q' },
   'kr-busan': { expectedPlaceId: 'ChIJNc0j6G3raDURpwhxJHTL2DU' },
   'mx-isla-mujeres': { expectedPlaceId: 'ChIJaWJUx1wlTI8Rv72Dh9MpwzE' },
   'cr-manuel-antonio': { query: 'Manuel Antonio National Park Costa Rica', expectedPlaceId: 'ChIJS_Wpm5xxoY8Rhkpczjlh5pU' },
@@ -82,6 +85,9 @@ function parseArguments(argv) {
     apply: argv.includes('--apply'),
     enrich: argv.includes('--enrich'),
     projectId: valueFor('--project') || DEFAULT_PROJECT_ID,
+    offset: Number(valueFor('--offset') || 0),
+    limit: Number(valueFor('--limit') || CANDIDATES.length),
+    checkpoint: valueFor('--checkpoint'),
   };
 }
 
@@ -93,9 +99,12 @@ function countryCodeFor(place) {
 }
 
 function normalizedCoordinates(value) {
-  const lat = Number(value?.lat ?? value?.latitude);
-  const lng = Number(value?.lng ?? value?.longitude);
-  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  const latitude = value?.lat ?? value?.latitude;
+  const longitude = value?.lng ?? value?.longitude;
+  if (latitude == null || longitude == null) return null;
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  return Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lng) && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }
 
 function normalizedViewport(value) {
@@ -115,13 +124,14 @@ function mergePolicy(candidate) {
     ...(builtIn.center ? { center: builtIn.center } : {}),
     ...(builtIn.viewport ? { viewport: builtIn.viewport } : {}),
     ...(builtIn.radiusKm ? { radiusKm: builtIn.radiusKm } : {}),
-    geometryPolicy: {
+    geometryPolicy: builtIn.geometryPolicy || {
       autoMatchEligible: true,
       aliasAutoMatchEligible: true,
       source: 'planli_reviewed',
       version: REGISTRY_VERSION,
     },
     ...(builtIn.providerIdentity ? { providerIdentity: builtIn.providerIdentity } : {}),
+    ...(builtIn.membership ? { membership: builtIn.membership } : {}),
     matchProfile: buildMatchProfile({
       ...candidate,
       ...builtIn,
@@ -143,6 +153,9 @@ async function enrichCandidate(candidate, {
   fetchImpl = global.fetch,
 }) {
   const override = ENRICHMENT_OVERRIDES[candidate.id] || {};
+  if (candidate.geometryPolicy?.source === 'identity_requires_review') {
+    return { ...candidate, enrichmentIssue: 'review_required_provider_identity' };
+  }
   const response = await fetchWithGoogleMapsOAuth(SEARCH_URL, {
     method: 'POST',
     headers: {
@@ -162,6 +175,9 @@ async function enrichCandidate(candidate, {
   const body = await response.json();
   const providerResults = body.places || [];
   const matches = providerResults.filter((place) => countryCodeFor(place) === candidate.countryCode &&
+    providerIdentityNameMatches(candidate, place.displayName?.text) &&
+    (!candidate.research?.sourceVerified || (normalizedCoordinates(place.location) &&
+      distanceKm(candidate.center, normalizedCoordinates(place.location)) <= (candidate.kind === 'city_hub' ? 15 : 50))) &&
     providerIdentityPolicy(candidate.kind, place.types, {
       reviewedOverride: override.allowPoiIdentity === true ||
         REVIEWED_PROVIDER_IDENTITY_IDS.has(candidate.id),
@@ -220,13 +236,15 @@ async function enrichCandidate(candidate, {
         REVIEWED_PROVIDER_IDENTITY_IDS.has(candidate.id),
     },
     googleTypes: place.types || [],
+    ...(candidate.research ? { research: { ...candidate.research, providerVerified: true } } : {}),
     registryVersion: REGISTRY_VERSION,
     status: 'active',
   };
   return { ...enriched, matchProfile: buildMatchProfile(enriched) };
 }
 
-function auditEntries(entries, { requireProviderIdentity }) {
+function auditEntries(entries, { requireProviderIdentity, expectedCount = CANDIDATES.length,
+  parentEntries = entries } = {}) {
   const validations = entries.map((entry) => ({
     id: entry.id,
     ...validateRegistryEntry(entry, { requireProviderIdentity }),
@@ -236,9 +254,10 @@ function auditEntries(entries, { requireProviderIdentity }) {
   const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
   const duplicatePlaceIds = placeIds.filter((id, index) => placeIds.indexOf(id) !== index);
   const invalid = validations.filter((validation) => !validation.valid);
-  const collectionIssues = registryCollectionIssues(entries);
+  const collectionIssues = registryCollectionIssues(parentEntries).filter((issue) =>
+    ids.includes(issue.id) && (issue.code !== 'unresolved_overlap' || requireProviderIdentity));
   return {
-    valid: entries.length >= 240 && entries.length <= 260 && !invalid.length &&
+    valid: entries.length === expectedCount && !invalid.length &&
       !duplicateIds.length && !duplicatePlaceIds.length && !collectionIssues.length,
     count: entries.length,
     regionalCounts: REGIONAL_COUNTS,
@@ -250,24 +269,46 @@ function auditEntries(entries, { requireProviderIdentity }) {
 }
 
 async function commitRegistry(db, entries, adminImpl) {
-  for (let offset = 0; offset < entries.length; offset += 400) {
-    const batch = db.batch();
-    entries.slice(offset, offset + 400).forEach((entry) => {
+  const result = { created: 0, preserved: 0, identityConflicts: [] };
+  for (const entry of entries) {
+    const outcome = await db.runTransaction(async (transaction) => {
+      const ref = db.doc(`${REGISTRY_PATH}/${entry.id}`);
+      const existing = await transaction.get(ref);
+      // Import is create-only. Administrator decisions, destination paths and
+      // stable identities are never overwritten by a rerun or a partial import.
+      if (existing.exists) {
+        return existing.data().providerRefs?.googlePlaceId === entry.providerRefs.googlePlaceId
+          ? 'preserved' : 'conflict';
+      }
+      const providerIds = [...new Set([entry.providerRefs.googlePlaceId,
+        ...(entry.providerRefs.googlePlaceIds || [])].filter(Boolean))];
+      for (const providerId of providerIds) {
+        const matches = await Promise.all([
+          transaction.get(db.collection(REGISTRY_PATH)
+            .where('providerRefs.googlePlaceId', '==', providerId).limit(1)),
+          transaction.get(db.collection(REGISTRY_PATH)
+            .where('providerRefs.googlePlaceIds', 'array-contains', providerId).limit(1)),
+        ]);
+        if (matches.some((snapshot) => !snapshot.empty)) return 'preserved';
+      }
       const { id, providerQuery, researchRegion, enrichmentIssue, enrichmentMatches, ...data } = entry;
-      batch.set(db.doc(`${REGISTRY_PATH}/${id}`), {
+      transaction.create(ref, {
         ...data,
         registryVersion: REGISTRY_VERSION,
         updatedAt: adminImpl.firestore.FieldValue.serverTimestamp(),
       });
+      return 'created';
     });
-    await batch.commit();
+    if (outcome === 'conflict') result.identityConflicts.push(entry.id);
+    else result[outcome] += 1;
   }
   await db.doc('system/destinationRegistry').set({
     version: REGISTRY_VERSION,
-    entryCount: entries.length,
-    regionalCounts: REGIONAL_COUNTS,
+    // A partial import must not replace the total inventory with its batch size.
+    lastImport: result,
     updatedAt: adminImpl.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
+  return result;
 }
 
 async function run({
@@ -277,11 +318,18 @@ async function run({
   adminImpl = admin,
   fetchImpl = global.fetch,
   accessTokenProvider,
+  offset = 0,
+  limit = CANDIDATES.length,
+  checkpoint = '',
 } = {}) {
   if (apply && !enrich) throw new Error('--apply requires --enrich; unresolved candidates are never written.');
   if (!/^[a-z0-9-]+$/.test(projectId)) throw new Error('Project ID is invalid.');
   if (projectId !== DEFAULT_PROJECT_ID) throw new Error(`Expected project ${DEFAULT_PROJECT_ID}.`);
-  let entries = CANDIDATES.map(mergePolicy);
+  if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 ||
+      offset >= CANDIDATES.length || limit > CANDIDATES.length) throw new Error('Invalid batch range.');
+  if (apply && !checkpoint) throw new Error('--apply requires an explicit --checkpoint directory.');
+  const candidates = CANDIDATES.map(mergePolicy);
+  let entries = candidates;
   const localAudit = auditEntries(entries, { requireProviderIdentity: false });
   const result = { mode: apply ? 'apply' : enrich ? 'enriched-dry-run' : 'local-dry-run', localAudit };
   if (!enrich) {
@@ -289,11 +337,24 @@ async function run({
     return result;
   }
   const enriched = [];
-  for (const candidate of entries) {
-    enriched.push(await enrichCandidate(candidate, { accessTokenProvider, projectId, fetchImpl }));
+  if (checkpoint) fs.mkdirSync(checkpoint, { recursive: true });
+  for (const candidate of candidates.slice(offset, offset + limit)) {
+    const digest = crypto.createHash('sha256').update(JSON.stringify({ candidate, projectId, version: 4 })).digest('hex');
+    const file = checkpoint ? path.join(checkpoint, `${candidate.id}.json`) : null;
+    let cached;
+    if (file && fs.existsSync(file)) cached = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (cached?.digest === digest && Date.now() - cached.fetchedAt < 24 * 60 * 60 * 1000 && !cached.entry?.enrichmentIssue) {
+      enriched.push(cached.entry);
+      continue;
+    }
+    const entry = await enrichCandidate(candidate, { accessTokenProvider, projectId, fetchImpl });
+    enriched.push(entry);
+    if (file) fs.writeFileSync(file, JSON.stringify({ digest, fetchedAt: Date.now(), entry }));
   }
   entries = enriched;
-  result.materializedAudit = auditEntries(entries, { requireProviderIdentity: true });
+  const parentEntries = candidates.map((candidate) => entries.find((entry) => entry.id === candidate.id) || candidate);
+  result.materializedAudit = auditEntries(entries, { requireProviderIdentity: true,
+    expectedCount: Math.min(limit, candidates.length - offset), parentEntries });
   result.enrichmentIssues = entries.filter((entry) => entry.enrichmentIssue).map((entry) => ({
     id: entry.id,
     query: entry.providerQuery,
@@ -307,8 +368,7 @@ async function run({
   }
   if (apply) {
     initializeAdmin(adminImpl);
-    await commitRegistry(adminImpl.firestore(), entries, adminImpl);
-    result.written = entries.length;
+    result.import = await commitRegistry(adminImpl.firestore(), entries, adminImpl);
   }
   console.log(JSON.stringify(result, null, 2));
   return result;
@@ -323,6 +383,7 @@ if (require.main === module) {
 
 module.exports = {
   auditEntries,
+  commitRegistry,
   countryCodeFor,
   ENRICHMENT_OVERRIDES,
   enrichCandidate,

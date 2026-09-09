@@ -3,10 +3,58 @@ const assert = require('node:assert/strict');
 
 const {
   buildAdminSearchProjection,
+  handleAdminSearchProjectionWrite,
   projectionId,
   removeInactiveRouteStopProjections,
   targetForPath,
 } = require('./adminSearchProjection');
+
+function recommendationProjectionAdmin(current) {
+  const writes = [];
+  const db = {
+    doc: (path) => ({ path, id: path.split('/').at(-1) }),
+    runTransaction: async (callback) => callback({
+      get: async (ref) => {
+        assert.equal(ref.path, 'recommendations/rec-1');
+        return { exists: current != null, data: () => current };
+      },
+      set: (ref, data) => writes.push({ path: ref.path, data }),
+      delete: (ref) => writes.push({ path: ref.path, deleted: true }),
+    }),
+  };
+  const firestore = () => db;
+  firestore.FieldValue = { serverTimestamp: () => 'server-time' };
+  return { admin: { firestore }, writes };
+}
+
+test('a delayed hold event projects the current published recommendation', async () => {
+  const current = { status: 'active', title: 'Published', destination: { countryId: 'LK', cityId: 'park', cityName: 'שמורת אודוואלווה' } };
+  const { admin, writes } = recommendationProjectionAdmin(current);
+  await handleAdminSearchProjectionWrite({ admin, event: { data: { after: {
+    ref: { path: 'recommendations/rec-1' }, exists: true,
+    data: () => ({ status: 'moderation_hold', title: 'Old hold' }),
+  } } } });
+  assert.equal(writes[0].data.status, 'active');
+  assert.equal(writes[0].data.destination.cityId, 'park');
+});
+
+test('an old recommendation update cannot recreate a deleted projection', async () => {
+  const { admin, writes } = recommendationProjectionAdmin(null);
+  const result = await handleAdminSearchProjectionWrite({ admin, event: { data: { after: {
+    ref: { path: 'recommendations/rec-1' }, exists: true, data: () => ({ status: 'active' }),
+  } } } });
+  assert.equal(result.status, 'deleted');
+  assert.equal(writes[0].deleted, true);
+});
+
+test('a delayed deletion does not remove a recreated recommendation projection', async () => {
+  const { admin, writes } = recommendationProjectionAdmin({ status: 'active', title: 'Recreated' });
+  await handleAdminSearchProjectionWrite({ admin, event: { data: {
+    before: { ref: { path: 'recommendations/rec-1' } }, after: { exists: false },
+  } } });
+  assert.equal(writes[0].data.status, 'active');
+  assert.equal(writes[0].deleted, undefined);
+});
 
 test('admin search maps every private projection source to its canonical target', () => {
   assert.deepEqual(targetForPath('countries/IL/destinations/haifa'), {

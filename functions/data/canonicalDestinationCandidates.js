@@ -68,12 +68,28 @@ function slug(value) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// These labels include a country to disambiguate the search query. The provider
+// commonly returns the city name alone; country and type checks still apply.
+const PROVIDER_ALIASES = Object.freeze({
+  'gt-antigua-guatemala': ['Antigua'],
+  'ni-granada-nicaragua': ['Granada'],
+  'ni-leon-nicaragua': ['Leon', 'León'],
+  'co-cartagena-colombia': ['Cartagena', 'Cartagena de Indias'],
+  'ec-banos-ecuador': ['Banos', 'Baños', 'Baños de Agua Santa'],
+  'ec-cuenca-ecuador': ['Cuenca'],
+  'pe-sacred-valley-peru': ['Sacred Valley'],
+  'pe-lake-titicaca-peru': ['Lake Titicaca'],
+  'bo-la-paz-bolivia': ['La Paz'],
+  'bo-sucre-bolivia': ['Sucre'],
+  'cl-santiago-chile': ['Santiago'],
+});
+
 function buildRegion(region, rows) {
   return rows.map(([countryCode, he, en, kind]) => ({
     id: `${countryCode.toLowerCase()}-${slug(en)}`,
     countryCode,
     names: { he, en },
-    aliases: [en],
+    aliases: [en, ...(PROVIDER_ALIASES[`${countryCode.toLowerCase()}-${slug(en)}`] || [])],
     kind,
     groupingPolicy: 'self',
     providerQuery: `${en}, ${countryCode}`,
@@ -83,20 +99,27 @@ function buildRegion(region, rows) {
   }));
 }
 
-const CANDIDATES = Object.freeze([
+const CURATED_CANDIDATES = Object.freeze([
   ...buildRegion('europe', EUROPE),
   ...buildRegion('asia', ASIA),
   ...buildRegion('central_america', CENTRAL_AMERICA),
   ...buildRegion('south_america', SOUTH_AMERICA),
 ]);
 
+// A generated public-source catalog. Source validation is distinct from Google
+// identity approval: every entry stays a candidate until provider verification.
+let worldCatalog;
+try { worldCatalog = require('./worldDestinationCandidates.json'); } catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+}
+const CANDIDATES = Object.freeze(worldCatalog || CURATED_CANDIDATES);
+
 module.exports = {
   CANDIDATES,
+  CURATED_CANDIDATES,
   RESEARCH,
-  REGIONAL_COUNTS: Object.freeze({
-    europe: EUROPE.length,
-    asia: ASIA.length,
-    central_america: CENTRAL_AMERICA.length,
-    south_america: SOUTH_AMERICA.length,
-  }),
+  REGIONAL_COUNTS: Object.freeze(CANDIDATES.reduce((counts, entry) => {
+    counts[entry.researchRegion] = (counts[entry.researchRegion] || 0) + 1;
+    return counts;
+  }, {})),
 };

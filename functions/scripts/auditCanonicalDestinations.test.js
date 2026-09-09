@@ -2,11 +2,31 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { BUILTIN_POLICIES } = require('../canonicalDestinationRegistry');
-const { auditDestination, parseArguments } = require('./auditCanonicalDestinations');
+const { auditDestination, auditRecommendationAssignment, parseArguments } = require('./auditCanonicalDestinations');
+
+test('assignment audit proposes an individual park correction and never automatic publication', () => {
+  const result = auditRecommendationAssignment({ id: 'synthetic-park', currentRegistryId: 'lk-sri-lanka-south-coast',
+    recommendation: { destination: { countryId: 'LK', cityId: 'south-coast' }, place: {
+      placeId: 'ChIJeX6IiP8I5DoR14DZ-5_nEq8', coordinates: { lat: 6.4746, lng: 80.8763 },
+    } }, registryEntries: BUILTIN_POLICIES });
+  assert.equal(result.proposedRegistryId, 'lk-udawalawe-national-park');
+  assert.equal(result.action, 'review_individual_recommendation');
+  assert.equal(result.publishAutomatically, false);
+});
 
 test('canonical audit is dry-run only', () => {
   assert.deepEqual(parseArguments([]), { projectId: 'planli-f0b12', apply: false });
   assert.equal(parseArguments(['--apply']).apply, true);
+});
+
+test('assignment audit uses the country ISO code independently of the document ID', () => {
+  const result = auditRecommendationAssignment({ id: 'synthetic-legacy-country', countryCode: 'LK',
+    currentRegistryId: 'lk-sri-lanka-south-coast', registryEntries: BUILTIN_POLICIES,
+    recommendation: { destination: { countryId: 'סרי לנקה', cityId: 'south-coast' }, place: {
+      placeId: 'ChIJeX6IiP8I5DoR14DZ-5_nEq8', coordinates: { lat: 6.4746, lng: 80.8763 },
+    } } });
+  assert.equal(result.proposedRegistryId, 'lk-udawalawe-national-park');
+  assert.equal(result.reviewRequired, true);
 });
 
 test('audit identifies the two reported production destination failures', () => {

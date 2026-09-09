@@ -4,6 +4,7 @@
   "packageManager": "npm@10.9.8",
   "main": "index.js",
   "scripts": {
+    "postinstall": "node scripts/prepareMapLibreWorker.js",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -50,7 +51,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.19",
     "firebase": "^12.6.0",
-    "maplibre-gl": "5.24.0",
+    "maplibre-gl": "6.4.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",

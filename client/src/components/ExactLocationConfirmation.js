@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, TouchableOpacity, View } from 'react-native';
 
 import AppText from './AppText';
 import DestinationFallbackPicker from './DestinationFallbackPicker';
 import ExactLocationMapPreview from './ExactLocationMapPreview';
+import DestinationNameConfirmationModal from './DestinationNameConfirmationModal';
 import { exactLocationPickerStyles as styles } from '../styles';
 import { locationCopy } from '../utils/locationCopy';
 
@@ -14,11 +15,24 @@ export default function ExactLocationConfirmation({
   onChooseFallbackDestination,
   onConfirm,
   onChooseAnother,
+  onChangeDestination,
+  onConfirmDestinationName,
+  error = '',
   resolving = false,
   resolvingPreview = null,
   locale = 'he',
 }) {
   const copy = locationCopy(locale);
+  const [hebrewName, setHebrewName] = useState('');
+  useEffect(() => {
+    setHebrewName(destinationChoice?.nameConfirmation?.suggestedHebrewName || '');
+  }, [destinationChoice?.resolvedPlaceToken, destinationChoice?.nameConfirmation?.suggestedHebrewName]);
+  if (destinationChoice?.status === 'destination_name_confirmation_required') {
+    return <DestinationNameConfirmationModal visible
+      englishName={destinationChoice.nameConfirmation?.englishName} value={hebrewName}
+      onChangeText={setHebrewName} onConfirm={() => onConfirmDestinationName?.(hebrewName)}
+      onCancel={onChangeDestination || onChooseAnother} busy={resolving} error={error} />;
+  }
   if (destinationChoice) {
     const hasAlternatives = Boolean(destinationChoice.alternatives?.length);
     const choicePlace = pendingLocation?.place || destinationChoice.place || null;
@@ -52,6 +66,7 @@ export default function ExactLocationConfirmation({
             key={alternative.destinationChoiceId}
             style={styles.choiceButton}
             onPress={() => onChooseDestination?.(alternative.destinationChoiceId)}
+            disabled={resolving}
             accessibilityRole="button"
             testID={`exact-location-destination-${alternative.destinationChoiceId}`}
           >
@@ -64,7 +79,8 @@ export default function ExactLocationConfirmation({
         {destinationChoice.allowDestinationSearch ? (
           <View testID="exact-location-destination-search">
             <AppText style={styles.choiceHelper}>לא מצאתם? חפשו עיר או אזור מתאימים.</AppText>
-            <DestinationFallbackPicker onSelect={onChooseFallbackDestination} />
+            <DestinationFallbackPicker onSelect={onChooseFallbackDestination}
+              countryId={destinationChoice.destinationCountryId || destinationChoice.destinationCountryCode} />
           </View>
         ) : null}
         <TouchableOpacity
@@ -104,6 +120,12 @@ export default function ExactLocationConfirmation({
         {!!destinationLabel && (
           <AppText style={styles.previewDestination}>{destinationLabel}</AppText>
         )}
+        {onChangeDestination && previewPlace ? (
+          <TouchableOpacity onPress={onChangeDestination} disabled={resolving} style={styles.chooseAnotherButton}
+            accessibilityRole="button" testID="exact-location-change-destination">
+            <AppText style={styles.chooseAnotherText}>שינוי יעד</AppText>
+          </TouchableOpacity>
+        ) : null}
       </View>
       <View style={styles.previewActions}>
         <TouchableOpacity

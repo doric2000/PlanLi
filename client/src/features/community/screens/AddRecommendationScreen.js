@@ -320,6 +320,8 @@ function LegacyAddRecommendationScreen({ navigation , route }) {
     chooseDestination,
     chooseFallbackDestination,
     chooseAnotherLocation,
+    changeDestination,
+    confirmDestinationName,
     confirmPendingLocation,
     googleSearchFn,
     handleSelectGooglePlace,
@@ -1082,6 +1084,9 @@ const handleSubmit = async () => {
             inputTestID="add-rec-location-input"
           />
           <ExactLocationConfirmation
+            onChangeDestination={changeDestination}
+            onConfirmDestinationName={confirmDestinationName}
+            error={locationResolveError}
             pendingLocation={pendingLocation}
             destinationChoice={destinationChoice}
             resolving={resolvingLocation}
@@ -1094,6 +1099,12 @@ const handleSubmit = async () => {
           {resolvingLocation && (
             <AppText style={guidedStyles.fieldHelper}>{EXACT_LOCATION_COPY.resolving}</AppText>
           )}
+          {selectedPlace && !destinationChoice && !pendingLocation ? (
+            <TouchableOpacity onPress={changeDestination} disabled={resolvingLocation} style={locationStyles.retryButton}
+              accessibilityRole="button" testID="add-rec-change-destination">
+              <AppText style={locationStyles.retryText}>שינוי יעד</AppText>
+            </TouchableOpacity>
+          ) : null}
           {!!locationResolveError && (
             <AppText
               style={guidedStyles.fieldError}

@@ -106,7 +106,7 @@ test('an in-place upgrade requires the exact provisional registry and Place ID',
   ), true);
 });
 
-test('policy-approved localities match only their exact Place ID, never alias or geometry', () => {
+test('policy approval preserves verified locality aliases while blocking geometry-only assignment', () => {
   const approval = buildVerifiedIlLocalityApproval({
     entry: locality(),
     countryId: 'IL',
@@ -126,6 +126,9 @@ test('policy-approved localities match only their exact Place ID, never alias or
     countryCode: 'IL',
     aliases: ['Kfar Tavor'],
     coordinates: { lat: 32.686, lng: 35.421 },
+  })?.source, 'canonical_alias_and_geometry');
+  assert.equal(matchCanonicalEntry([approval.registryEntry], {
+    countryCode: 'IL', aliases: [], coordinates: { lat: 32.686, lng: 35.421 },
   }), null);
 });
 
