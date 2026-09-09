@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
+  cancelAnimation,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -44,6 +45,8 @@ import {
 } from '../utils/travelMedia';
 
 const ZERO_INSETS = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+const DEFAULT_ASPECT = Object.freeze([1, 1]);
+const EMPTY_SELECTION = Object.freeze([]);
 export const TRAVEL_MEDIA_SWIPE_DISTANCE = 48;
 export const TRAVEL_MEDIA_SWIPE_VELOCITY = 500;
 export const TRAVEL_MEDIA_SWIPE_DOMINANCE = 1.25;
@@ -167,20 +170,21 @@ export function reorderTravelMediaItems(items, fromIndex, toIndex) {
   return next;
 }
 
-function MediaImage({ uri, contentFit = 'cover', ...props }) {
+const MediaImage = memo(function MediaImage({ uri, contentFit = 'cover', ...props }) {
+  const source = useMemo(() => ({ uri }), [uri]);
   if (uri?.startsWith('ph://')) {
     // The Expo SDK 54 image loader drops PhotoKit's /L0/001 identifier suffix.
     // expo-media-library registers a React Native Image loader that preserves it.
     return (
       <Image
         {...props}
-        source={{ uri }}
+        source={source}
         resizeMode={contentFit === 'fill' ? 'stretch' : contentFit}
       />
     );
   }
-  return <CachedImage {...props} source={{ uri }} contentFit={contentFit} />;
-}
+  return <CachedImage {...props} source={source} contentFit={contentFit} />;
+});
 
 function CropPage({
   item,
@@ -435,18 +439,19 @@ function SelectionBadge({ number }) {
 function EmbeddedMediaPagerPage({
   item,
   pageIndex,
-  activeIndex,
   pageWidth,
-  dragTranslationX,
+  position,
 }) {
   const identity = travelMediaIdentity(item);
-  const baseTranslationX = -(pageIndex - activeIndex) * pageWidth;
+  // Absolute page progress stays put while React commits the new selection.
+  // Relative offsets plus a separately reset drag can briefly hide every page.
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: baseTranslationX + dragTranslationX.value }],
-  }), [baseTranslationX]);
+    transform: [{ translateX: (position.value - pageIndex) * pageWidth }],
+  }), [pageIndex, pageWidth, position]);
 
   return (
     <Animated.View
+      collapsable={false}
       pointerEvents="none"
       style={[styles.embeddedPagerPage, animatedStyle]}
       testID={`travel-media-pager-page-${identity}`}
@@ -455,6 +460,7 @@ function EmbeddedMediaPagerPage({
         uri={travelMediaUri(item)}
         style={styles.embeddedPagerImage}
         contentFit="cover"
+        transition={0}
         pointerEvents="none"
         testID={`travel-media-pager-image-${identity}`}
       />
@@ -463,11 +469,31 @@ function EmbeddedMediaPagerPage({
 }
 
 function EmbeddedMediaPager({ items, activeIndex, pageWidth, onNavigate }) {
-  const dragTranslationX = useSharedValue(0);
+  const position = useSharedValue(activeIndex);
+  const settling = useSharedValue(false);
+  const blockedGesture = useSharedValue(false);
+  const revision = useSharedValue(0);
+  const committedRevision = useRef(0);
+  const navigateRef = useRef(onNavigate);
+  const itemOrder = JSON.stringify(items.map(travelMediaIdentity));
 
-  useEffect(() => {
-    dragTranslationX.value = 0;
-  }, [activeIndex, dragTranslationX, items.length, pageWidth]);
+  useLayoutEffect(() => { navigateRef.current = onNavigate; }, [onNavigate]);
+  useLayoutEffect(() => {
+    revision.value = ++committedRevision.current;
+    cancelAnimation(position);
+    position.value = activeIndex;
+    settling.value = false;
+    return () => {
+      // Discard an animation completion already queued for JS if selection,
+      // order, size or visibility changed before that completion was handled.
+      committedRevision.current += 1;
+      cancelAnimation(position);
+    };
+  }, [activeIndex, itemOrder, pageWidth, position, revision, settling]);
+
+  const completeNavigation = useCallback((delta, animationRevision) => {
+    if (committedRevision.current === animationRevision) navigateRef.current(delta);
+  }, []);
 
   const gesture = useMemo(() => Gesture.Pan()
     .enabled(items.length > 1 && pageWidth > 0)
@@ -476,7 +502,9 @@ function EmbeddedMediaPager({ items, activeIndex, pageWidth, onNavigate }) {
     .failOffsetY([-12, 12])
     .maxPointers(1)
     .shouldCancelWhenOutside(false)
+    .onStart(() => { blockedGesture.value = settling.value; })
     .onUpdate((event) => {
+      if (settling.value || blockedGesture.value) return;
       const hasNext = activeIndex < items.length - 1;
       const hasPrevious = activeIndex > 0;
       let translationX = event.translationX;
@@ -485,9 +513,13 @@ function EmbeddedMediaPager({ items, activeIndex, pageWidth, onNavigate }) {
       } else if (translationX < 0 && !hasPrevious) {
         translationX *= TRAVEL_MEDIA_PAGER_EDGE_RESISTANCE;
       }
-      dragTranslationX.value = Math.max(-pageWidth, Math.min(pageWidth, translationX));
+      position.value = activeIndex + Math.max(-1, Math.min(1, translationX / pageWidth));
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
+      // Cancelled active gestures also receive onEnd; onFinalize returns them
+      // to the current photo without starting or locking a page transition.
+      if (!success || settling.value || blockedGesture.value) return;
+      settling.value = true;
       const delta = travelMediaPagerDelta({
         translationX: event.translationX,
         translationY: event.translationY,
@@ -498,21 +530,27 @@ function EmbeddedMediaPager({ items, activeIndex, pageWidth, onNavigate }) {
         ? activeIndex < items.length - 1
         : delta < 0 && activeIndex > 0;
       if (!delta || !canNavigate) {
-        dragTranslationX.value = withSpring(0, { damping: 22, stiffness: 260 });
+        position.value = withSpring(activeIndex, { damping: 22, stiffness: 260 }, (finished) => {
+          if (finished) settling.value = false;
+        });
         return;
       }
-      const destination = delta > 0 ? pageWidth : -pageWidth;
-      dragTranslationX.value = withTiming(destination, { duration: 180 }, (finished) => {
+      const animationRevision = revision.value;
+      position.value = withTiming(activeIndex + delta, { duration: 180 }, (finished) => {
         if (!finished) return;
-        runOnJS(onNavigate)(delta);
-        dragTranslationX.value = 0;
+        runOnJS(completeNavigation)(delta, animationRevision);
       });
     })
     .onFinalize((_event, success) => {
-      if (!success) dragTranslationX.value = withSpring(0, { damping: 22, stiffness: 260 });
-    }), [activeIndex, dragTranslationX, items.length, onNavigate, pageWidth]);
+      if (!success && !settling.value && !blockedGesture.value) {
+        settling.value = true;
+        position.value = withSpring(activeIndex, { damping: 22, stiffness: 260 }, (finished) => {
+          if (finished) settling.value = false;
+        });
+      }
+    }), [activeIndex, blockedGesture, completeNavigation, items.length, pageWidth, position, revision, settling]);
 
-  const pageIndices = [activeIndex + 1, activeIndex - 1, activeIndex]
+  const pageIndices = [activeIndex - 1, activeIndex, activeIndex + 1]
     .filter((index) => index >= 0 && index < items.length);
 
   return (
@@ -523,9 +561,8 @@ function EmbeddedMediaPager({ items, activeIndex, pageWidth, onNavigate }) {
             key={travelMediaIdentity(items[pageIndex])}
             item={items[pageIndex]}
             pageIndex={pageIndex}
-            activeIndex={activeIndex}
             pageWidth={pageWidth}
-            dragTranslationX={dragTranslationX}
+            position={position}
           />
         ))}
       </Animated.View>
@@ -746,9 +783,9 @@ function ReorderableMediaThumb({
 
 export default function TravelMediaComposer({
   visible,
-  value = [],
+  value = EMPTY_SELECTION,
   maxItems = 5,
-  aspect = [1, 1],
+  aspect = DEFAULT_ASPECT,
   maxLongEdge = 1600,
   compress = 0.94,
   onChange,
@@ -776,6 +813,8 @@ export default function TravelMediaComposer({
   const dragTranslationX = useSharedValue(0);
   const workingRef = useRef(working);
   workingRef.current = working;
+  const activeIdentityRef = useRef('');
+  activeIdentityRef.current = travelMediaIdentity(working[activeIndex]);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const reorderInteractionActiveRef = useRef(false);
@@ -783,12 +822,15 @@ export default function TravelMediaComposer({
   reorderInteractionCallbackRef.current = onReorderInteractionChange;
   const ratio = (Number(aspect?.[0]) || 1) / (Number(aspect?.[1]) || 1);
   const embeddedPreviewWidth = travelMediaEmbeddedPreviewWidth(windowDimensions.width);
-  const options = useMemo(() => ({ aspect, maxItems, maxLongEdge, compress }), [
-    aspect, compress, maxItems, maxLongEdge,
+  const aspectWidth = Number(aspect?.[0]) || 1;
+  const aspectHeight = Number(aspect?.[1]) || 1;
+  const options = useMemo(() => ({ aspect: [aspectWidth, aspectHeight], maxItems, maxLongEdge, compress }), [
+    aspectWidth, aspectHeight, compress, maxItems, maxLongEdge,
   ]);
 
   useEffect(() => {
     if (!visible) return;
+    activeIdentityRef.current = '';
     setWorking(mergeTravelMediaSelection([], value, options));
     setActiveIndex(0);
     setComposerError('');
@@ -798,7 +840,12 @@ export default function TravelMediaComposer({
 
   useEffect(() => {
     if (!embedded || !visible) return;
-    setWorking(mergeTravelMediaSelection([], value, options));
+    const next = mergeTravelMediaSelection([], value, options);
+    const nextActiveIndex = next.findIndex((item) => travelMediaIdentity(item) === activeIdentityRef.current);
+    setWorking(next);
+    setActiveIndex((current) => nextActiveIndex >= 0
+      ? nextActiveIndex
+      : Math.max(0, Math.min(current, next.length - 1)));
   }, [embedded, options, value, visible]);
 
   useEffect(() => {

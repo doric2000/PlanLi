@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { FlatList, Linking, StyleSheet } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
+import CachedImage from '../src/components/CachedImage';
 
 import TravelMediaComposer, {
   isTravelMediaSwipe,
@@ -26,7 +27,7 @@ jest.mock('expo-media-library/legacy', () => ({
 }));
 jest.mock('../src/components/CachedImage', () => {
   const { View } = require('react-native');
-  return (props) => <View {...props} />;
+  return jest.fn((props) => <View {...props} />);
 });
 jest.mock('react-native-gesture-handler', () => {
   const ReactModule = require('react');
@@ -72,12 +73,31 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { View },
-    runOnJS: (fn) => fn,
-    useAnimatedStyle: (factory) => factory(),
+    cancelAnimation: jest.fn(),
+    runOnJS: (fn) => (...args) => {
+      if (global.__deferTravelMediaJS) global.__travelMediaJS.push(() => fn(...args));
+      else fn(...args);
+    },
+    // Read the current shared values when inspecting layout, including before
+    // React rerenders. The old snapshot mock could not detect a reset race.
+    useAnimatedStyle: (factory) => {
+      const current = ReactModule.useRef(factory);
+      current.current = factory;
+      return new Proxy({}, {
+        ownKeys: () => Reflect.ownKeys(current.current()),
+        getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+        get: (_target, key) => current.current()[key],
+      });
+    },
     useSharedValue: (value) => ReactModule.useRef({ value }).current,
-    withSpring: (value) => value,
+    withSpring: (value, _config, callback) => {
+      if (callback && global.__deferTravelMediaAnimation) global.__travelMediaAnimations.push(callback);
+      else callback?.(true);
+      return value;
+    },
     withTiming: (value, _config, callback) => {
-      callback?.(true);
+      if (callback && global.__deferTravelMediaAnimation) global.__travelMediaAnimations.push(callback);
+      else callback?.(true);
       return value;
     },
   };
@@ -165,6 +185,10 @@ const sourceAdapter = {
 beforeEach(() => {
   jest.clearAllMocks();
   global.__travelMediaGestures = [];
+  global.__deferTravelMediaAnimation = false;
+  global.__deferTravelMediaJS = false;
+  global.__travelMediaAnimations = [];
+  global.__travelMediaJS = [];
 });
 
 const latestGesture = (type) => global.__travelMediaGestures.filter((gesture) => gesture.type === type).at(-1);
@@ -424,7 +448,7 @@ test('embedded TravelMediaComposer advances right, returns left, and rejects a p
   let pagerGesture = screen.getByTestId('travel-media-pager').props.testGesture;
   act(() => {
     pagerGesture.callbacks.onUpdate({ translationX: 180 });
-    pagerGesture.callbacks.onEnd({ translationX: 180, translationY: 5, velocityX: 250 });
+    pagerGesture.callbacks.onEnd({ translationX: 180, translationY: 5, velocityX: 250 }, true);
     pagerGesture.callbacks.onFinalize({}, true);
   });
   expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('2/3');
@@ -432,7 +456,7 @@ test('embedded TravelMediaComposer advances right, returns left, and rejects a p
   pagerGesture = screen.getByTestId('travel-media-pager').props.testGesture;
   act(() => {
     pagerGesture.callbacks.onUpdate({ translationX: -180 });
-    pagerGesture.callbacks.onEnd({ translationX: -180, translationY: 5, velocityX: -250 });
+    pagerGesture.callbacks.onEnd({ translationX: -180, translationY: 5, velocityX: -250 }, true);
     pagerGesture.callbacks.onFinalize({}, true);
   });
   expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('1/3');
@@ -440,13 +464,13 @@ test('embedded TravelMediaComposer advances right, returns left, and rejects a p
   pagerGesture = screen.getByTestId('travel-media-pager').props.testGesture;
   act(() => {
     pagerGesture.callbacks.onUpdate({ translationX: 20 });
-    pagerGesture.callbacks.onEnd({ translationX: 20, translationY: 4, velocityX: 100 });
+    pagerGesture.callbacks.onEnd({ translationX: 20, translationY: 4, velocityX: 100 }, true);
     pagerGesture.callbacks.onFinalize({}, true);
   });
   expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('1/3');
 });
 
-test('embedded TravelMediaComposer opens a full-screen crop editor for the active photo', async () => {
+test('embedded TravelMediaComposer opens a full-screen crop editor for the active photo', () => {
   const onChange = jest.fn();
   const values = [1, 2].map((index) => ({
     id: `crop-pager-${index}`,
@@ -488,7 +512,7 @@ test('embedded TravelMediaComposer opens a full-screen crop editor for the activ
       nativeEvent: { layout: { width: 390, height: 650 } },
     });
   });
-  await waitFor(() => expect(screen.getByTestId('travel-media-crop-viewport')).toBeTruthy());
+  expect(screen.getByTestId('travel-media-crop-viewport')).toBeTruthy();
   act(() => {
     fireEvent(screen.getByTestId('travel-media-crop-viewport'), 'layout', {
       nativeEvent: { layout: { width: 390, height: 390 } },
@@ -501,6 +525,173 @@ test('embedded TravelMediaComposer opens a full-screen crop editor for the activ
   fireEvent.press(screen.getByTestId('travel-media-crop-cancel'));
   expect(screen.queryByTestId('travel-media-crop-modal')).toBeNull();
   expect(onChange).not.toHaveBeenCalled();
+});
+
+const previewItems = (count = 3) => Array.from({ length: count }, (_, index) => ({
+  sourceId: `stable-${index + 1}`,
+  uri: `file:///stable-${index + 1}.jpg`,
+  width: 1200,
+  height: 900,
+  persistence: 'ready',
+}));
+
+const preview = (value, props = {}) => (
+  <TravelMediaComposer
+    embedded
+    visible
+    value={value}
+    aspect={[1, 1]}
+    sourceAdapter={sourceAdapter}
+    {...props}
+  />
+);
+
+const pageX = (screen, identity) => StyleSheet.flatten(
+  screen.getByTestId(`travel-media-pager-page-${identity}`).props.style
+).transform[0].translateX;
+
+const swipePreview = (screen, translationX = 180) => {
+  const gesture = screen.getByTestId('travel-media-pager').props.testGesture;
+  act(() => {
+    gesture.callbacks.onStart?.({});
+    gesture.callbacks.onUpdate({ translationX });
+    gesture.callbacks.onEnd({ translationX, translationY: 0, velocityX: 250 }, true);
+    gesture.callbacks.onFinalize({}, true);
+  });
+};
+
+test.each([1, 3])('preview keeps the selected image mounted across draft updates with %i photos', (count) => {
+  const values = previewItems(count);
+  const screen = render(preview(values));
+  if (count > 1) fireEvent.press(screen.getByTestId('travel-media-selected-stable-2'));
+  const identity = count > 1 ? 'stable-2' : 'stable-1';
+  const renderCount = CachedImage.mock.calls.length;
+  const source = screen.getByTestId(`travel-media-pager-image-${identity}`).props.source;
+
+  for (let index = 0; index < 3; index += 1) {
+    screen.rerender(preview(values.map((item) => ({ ...item, mediaId: item.sourceId }))));
+    expect(pageX(screen, identity)).toBe(0);
+    expect(screen.getByTestId(`travel-media-pager-image-${identity}`).props.source).toBe(source);
+  }
+  expect(CachedImage.mock.calls.length).toBe(renderCount);
+  expect(screen.getByTestId(`travel-media-pager-image-${identity}`).props.transition).toBe(0);
+  expect(screen.getByTestId(`travel-media-pager-page-${identity}`).props.collapsable).toBe(false);
+});
+
+test('preview holds the destination while animation completion and React navigation are separated', () => {
+  global.__deferTravelMediaAnimation = true;
+  global.__deferTravelMediaJS = true;
+  const values = previewItems();
+  const screen = render(preview(values));
+  swipePreview(screen);
+  act(() => global.__travelMediaAnimations.shift()(true));
+
+  // The native animation finished; JS has not yet selected the new photo.
+  expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('1/3');
+  expect(pageX(screen, 'stable-2')).toBe(0);
+  const firstPageX = pageX(screen, 'stable-1');
+  expect(firstPageX).toBeGreaterThan(0);
+
+  // Autosave metadata and a new array with equal aspect values must not reset
+  // the animated position or accept another swipe before the commit.
+  screen.rerender(preview(values.map((item) => ({ ...item, mediaId: item.sourceId }))));
+  swipePreview(screen, -180);
+  expect(pageX(screen, 'stable-2')).toBe(0);
+  expect(global.__travelMediaAnimations).toHaveLength(0);
+  expect(global.__travelMediaJS).toHaveLength(1);
+
+  act(() => global.__travelMediaJS.shift()());
+  expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('2/3');
+  expect(pageX(screen, 'stable-2')).toBe(0);
+  expect(pageX(screen, 'stable-1')).toBe(firstPageX);
+});
+
+test.each(['thumbnail', 'reorder', 'delete', 'close'])('preview rejects queued navigation after %s', (action) => {
+  global.__deferTravelMediaAnimation = true;
+  global.__deferTravelMediaJS = true;
+  const values = previewItems();
+  const screen = render(preview(values));
+  swipePreview(screen);
+  act(() => global.__travelMediaAnimations.shift()(true));
+
+  if (action === 'thumbnail') fireEvent.press(screen.getByTestId('travel-media-selected-stable-3'));
+  if (action === 'reorder') screen.rerender(preview([values[1], values[0], values[2]]));
+  if (action === 'delete') screen.rerender(preview([values[1], values[2]]));
+  if (action === 'close') screen.rerender(preview(values, { visible: false }));
+  act(() => global.__travelMediaJS.shift()());
+
+  if (action === 'close') {
+    screen.rerender(preview(values));
+    expect(pageX(screen, 'stable-1')).toBe(0);
+    expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('1/3');
+  } else {
+    const identity = action === 'thumbnail' ? 'stable-3' : action === 'reorder' ? 'stable-1' : 'stable-2';
+    const counter = action === 'thumbnail' ? '3/3' : action === 'reorder' ? '2/3' : '1/2';
+    expect(pageX(screen, identity)).toBe(0);
+    expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent(counter);
+  }
+});
+
+test.each([180, -180, 20])('preview returns after cancellation at %i pixels and allows the next swipe', (translationX) => {
+  global.__deferTravelMediaAnimation = true;
+  const screen = render(preview(previewItems()));
+  fireEvent.press(screen.getByTestId('travel-media-selected-stable-2'));
+  const gesture = screen.getByTestId('travel-media-pager').props.testGesture;
+  const event = { translationX, translationY: 0, velocityX: Math.sign(translationX) * 250 };
+  act(() => {
+    gesture.callbacks.onStart(event);
+    gesture.callbacks.onUpdate(event);
+    // An ACTIVE -> CANCELLED transition dispatches both callbacks, in order.
+    gesture.callbacks.onEnd(event, false);
+    gesture.callbacks.onFinalize(event, false);
+  });
+  expect(pageX(screen, 'stable-2')).toBe(0);
+  swipePreview(screen);
+  expect(global.__travelMediaAnimations).toHaveLength(1);
+  act(() => global.__travelMediaAnimations.shift()(true));
+  expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('2/3');
+  global.__deferTravelMediaAnimation = false;
+  swipePreview(screen);
+  expect(screen.getByTestId('travel-media-active-counter')).toHaveTextContent('3/3');
+  expect(pageX(screen, 'stable-3')).toBe(0);
+});
+
+test('a gesture started while navigation is pending stays blocked after that navigation commits', () => {
+  global.__deferTravelMediaAnimation = true;
+  global.__deferTravelMediaJS = true;
+  const screen = render(preview(previewItems()));
+  swipePreview(screen);
+  act(() => global.__travelMediaAnimations.shift()(true));
+  const pendingGesture = screen.getByTestId('travel-media-pager').props.testGesture;
+  act(() => pendingGesture.callbacks.onStart({}));
+  act(() => global.__travelMediaJS.shift()());
+  const gesture = screen.getByTestId('travel-media-pager').props.testGesture;
+  act(() => {
+    gesture.callbacks.onUpdate({ translationX: 180 });
+    gesture.callbacks.onEnd({ translationX: 180, translationY: 0, velocityX: 250 }, true);
+    gesture.callbacks.onFinalize({}, true);
+  });
+  expect(pageX(screen, 'stable-2')).toBe(0);
+  expect(global.__travelMediaAnimations).toHaveLength(0);
+});
+
+test('preview updates a replaced image source and mounts at most three of five photos', () => {
+  const values = previewItems(5);
+  const screen = render(preview(values));
+  fireEvent.press(screen.getByTestId('travel-media-selected-stable-3'));
+  const replacement = values.map((item, index) => index === 2 ? { ...item, previewUri: 'file:///replacement.jpg' } : item);
+  screen.rerender(preview(replacement));
+  expect(pageX(screen, 'stable-3')).toBe(0);
+  expect(screen.getByTestId('travel-media-pager-image-stable-3').props.source).toEqual({ uri: 'file:///replacement.jpg' });
+  expect(screen.getAllByTestId(/^travel-media-pager-page-/)).toHaveLength(3);
+  expect(screen.queryByTestId('travel-media-pager-image-stable-1')).toBeNull();
+  expect(screen.queryByTestId('travel-media-pager-image-stable-5')).toBeNull();
+});
+
+test('embedded composer with default selection and aspect settles without resynchronizing itself', () => {
+  const screen = render(<TravelMediaComposer embedded visible sourceAdapter={sourceAdapter} />);
+  expect(screen.getByTestId('travel-media-embedded-add')).toBeTruthy();
+  expect(screen.queryByTestId('travel-media-pager')).toBeNull();
 });
 
 test('TravelMediaComposer confirms the whole selection without manipulating an image', async () => {
@@ -736,7 +927,7 @@ test('TravelMediaComposer navigates with the direct image pager and commits crop
   let pan = screen.getByTestId('travel-media-pager').props.testGesture;
   act(() => {
     pan.callbacks.onUpdate({ translationX: 180, translationY: 8, velocityX: 700 });
-    pan.callbacks.onEnd({ translationX: 180, translationY: 8, velocityX: 700 });
+    pan.callbacks.onEnd({ translationX: 180, translationY: 8, velocityX: 700 }, true);
   });
   expect(screen.getByText('2/2')).toBeTruthy();
 
