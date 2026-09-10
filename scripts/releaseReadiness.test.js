@@ -30,6 +30,17 @@ test('native inputs require a build compatibility check', () => {
   assert.throws(() => releasePlan(['client/package-lock.json']), /Native inputs/);
   assert.throws(() => releasePlan(['client/app.config.js']), /Native inputs/);
 });
+
+test('OTA triage includes local native modules and fingerprint/configuration inputs', () => {
+  for (const file of ['client/modules/planli-transfers/ios/PlanLiTransfersModule.swift',
+    'client/modules/planli-transfers/expo-module.config.json', 'client\\modules\\example\\index.js',
+    'client/GoogleService-Info.plist', 'client/eas.json', 'client/.gitignore',
+    'client/.fingerprintignore', 'client/app.config.ts', 'client/fingerprint.config.js',
+    'client/react-native.config.js', 'client/plugins/withTransfers.js']) {
+    assert.throws(() => releasePlan([file]), /Native inputs changed/);
+  }
+  assert.doesNotThrow(() => releasePlan(['client/src/styles/communityDiscovery.js']));
+});
 test('native builds expand client coverage for dependency changes without unrelated backend', () => {
   const r = releasePlan(['client/package-lock.json'], { kind: 'build', platform: 'android' });
   assert.equal(r.plan.clientFull, true);

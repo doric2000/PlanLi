@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "projectId": "04731493-708f-4c82-b417-6ea815ea912e",
+  "buildId": "b16eca67-6291-4520-82b6-10cb1af190f5",
+  "buildNumber": "30",
+  "iosVersion": "1.1.1",
+  "runtime": "1.3.0",
+  "channel": "production",
+  "fingerprint": "0b5dd5996352ba381e65fc1a036a28eae3000516",
+  "metadataCrlfSha1": {
+    "client/.gitignore": "51c70b9fea9a53cc5bcb5838c8c31df64d04c1d4",
+    "client/eas.json": "ec959d780a56e727649ab24b2bdc8e01d9592f98",
+    "client/GoogleService-Info.plist": "9e9b779534d8bbb77d089a4c4e1dae1066df8817"
+  },
+  "reviewedOptionalDelta": {
+    "fingerprint": "f5fac23f11fb1f2c0b1adbaf545b164644c461d3",
+    "module": "PlanLiTransfers",
+    "review": "docs/eas-native-compatibility.md",
+    "sourceCommit": "7c420beef68f9b61c41f9bf544e5891af99ba29e",
+    "requiredSources": {
+      "client/modules/planli-transfers/index.js": "ad518ab214c8ce8a2d106175d9869ab21137ff8a19a1cc9cc0941961968cfb01",
+      "client/src/features/operations/BackgroundMediaService.js": "8876a91fc293c168ec9f4f7d1e99f34f165097db9aad68d10f7ee95f66094969",
+      "client/src/features/operations/OperationContext.js": "6b6702fbf19bb7fffeb015adda70d369d807c64cdf124aefbac101aae0754da4",
+      "client/src/features/operations/ProfilePhotoContext.js": "7684592a46b8655f3377ed92c82034b9e8a77d8099f5fadc01d6ded0174f20c8",
+      "client/src/features/operations/ActivityScreen.js": "e03af328e65d0c570831fc9404938f86209b22d0e7c658f0bec7ba8b2327f6af",
+      "client/src/features/community/publishing/RecommendationPublishContext.js": "73f59ded60116b80d5c1f4b6b839a275ad4e8591435f321b6fa6c6bbcf07f221"
+    }
+  }
+}

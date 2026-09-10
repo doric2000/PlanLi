@@ -17,11 +17,29 @@ const {
   validatePreviewGroupId,
   validatePreviewUpdates,
   validateReleaseConfiguration,
+  runRelease,
 } = require('./easProductionUpdate');
+const { fixture } = require('./testFixtures/easRelease');
 
 const head = 'a'.repeat(40);
 const previewGroup = '11111111-2222-4333-8444-555555555555';
 const productionGroup = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+test('production promotion is blocked before republish on a native mismatch', async t => {
+  const f = fixture(t);
+  f.dependencies.verifyPreviewNative = () => { throw new Error('Unreviewed native fingerprint'); };
+  await assert.rejects(runRelease({ repoRoot: f.root, args: { apply: true,
+    confirmation: `PUBLISH PRODUCTION ${f.head.slice(0, 12)}`, previewGroup: f.group, message: 'Native guard test' } }, f.dependencies), /Unreviewed native fingerprint/);
+  assert.ok(!f.calls.some(c => ['update:republish', 'artifact'].includes(c[0])));
+});
+
+test('production dry run checks native compatibility without republishing', async t => {
+  const f = fixture(t);
+  const result = await runRelease({ repoRoot: f.root, args: { apply: false, previewGroup: f.group, message: 'Native guard test' } }, f.dependencies);
+  assert.equal(result.native.status, 'exact');
+  assert.ok(f.calls.some(c => c[0] === 'native-preview'));
+  assert.ok(!f.calls.some(c => c[0] === 'update:republish'));
+});
 
 function configuration() {
   return {

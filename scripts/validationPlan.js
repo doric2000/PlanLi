@@ -4,6 +4,7 @@ const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { signature, reusableReceipt, writeReceipt } = require('./validationReceipt');
+const { isNativeReleaseInput } = require('./nativeReleaseInputs');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const TEST_FILE_RE = /\.test\.[cm]?[jt]sx?$/i;
@@ -231,7 +232,9 @@ function classifyChanges(files) {
   const functionsDependency = functionsFiles.some((file) => PACKAGE_FILE_RE.test(file));
   const clientLockfile = clientFiles.includes('client/package-lock.json');
   const functionsLockfile = functionsFiles.includes('functions/package-lock.json');
-  const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file) || file.startsWith('scripts/e2e/') || file.startsWith('client/.maestro/android/'));
+  const validationTooling = changedFiles.some((file) => VALIDATION_TOOLING_PATHS.has(file)
+    || /^scripts\/(?:eas|nativeReleaseInputs)/.test(file) || file === 'config/eas-ios-native-baseline.json'
+    || file.startsWith('scripts/e2e/') || file.startsWith('client/.maestro/android/'));
   const securityTooling = changedFiles.some((file) => (
     SECURITY_TOOLING_PATHS.has(file) || file.startsWith('.semgrep/')
   ));
@@ -249,7 +252,7 @@ function classifyChanges(files) {
     indexes,
     taxonomy,
     adminExport: clientFiles.some((file) => matchesAny(file, ADMIN_INPUTS)),
-    nativeExport: clientFiles.some((file) => matchesAny(file, NATIVE_INPUTS)),
+    nativeExport: clientFiles.some((file) => matchesAny(file, NATIVE_INPUTS) || isNativeReleaseInput(file)),
     clientAudit: clientDependency,
     functionsAudit: functionsDependency,
     clientFull: clientLockfile,
@@ -673,7 +676,9 @@ function runTooling(plan, repoRoot = REPO_ROOT) {
     runCommand('validation-planner-tests', process.execPath,
       ['--test', '--test-reporter=spec', 'scripts/validationPlan.test.js', 'scripts/validationReceipt.test.js',
         'scripts/securityCiPlan.test.js', 'scripts/releaseReadiness.test.js', 'scripts/e2e/environment.test.js',
-        'scripts/e2e/flowPlan.test.js', 'scripts/e2e/native.test.js'], repoRoot, repoRoot);
+        'scripts/e2e/flowPlan.test.js', 'scripts/e2e/native.test.js', 'scripts/easNativeCompatibility.test.js',
+        'scripts/easReleaseSource.test.js', 'scripts/easCandidate.test.js', 'scripts/easProductionPreflight.test.js',
+        'scripts/easProductionUpdate.test.js'], repoRoot, repoRoot);
   }
   if (plan.securityTooling) {
     runCommand('security-local-scanner-tests', process.execPath,

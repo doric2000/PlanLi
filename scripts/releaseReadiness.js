@@ -3,13 +3,14 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { createPlan, changedFilesFromGit, runPlan, runCommand } = require('./validationPlan');
+const { isNativeReleaseInput } = require('./nativeReleaseInputs');
 
 function releasePlan(files, { kind = 'ota', platform = 'ios', root = path.resolve(__dirname, '..') } = {}) {
   if (!['ota', 'build', 'full'].includes(kind)) throw new Error('kind must be ota, build or full');
   if (!['ios', 'android'].includes(platform)) throw new Error('platform must be ios or android');
-  if (kind === 'ota' && files.some((file) =>
-    /^client\/(?:app\.json|app\.config\.js|package(?:-lock)?\.json|plugins\/|ios\/|android\/)/.test(file))) {
-    throw new Error('Native inputs changed: verify binary compatibility with a build validation before publishing an OTA');
+  const nativeChanges = files.filter(isNativeReleaseInput);
+  if (kind === 'ota' && nativeChanges.length) {
+    throw new Error(`Native inputs changed: ${nativeChanges.join(', ')}. Review compatibility against the installed binary before publishing an OTA; build validation alone is not proof of compatibility.`);
   }
   const plan = createPlan(files, root);
   plan.client = true;
