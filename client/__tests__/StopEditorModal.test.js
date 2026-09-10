@@ -97,6 +97,44 @@ jest.mock('../src/components/TravelMediaComposer', () => {
 });
 
 describe('StopEditorModal', () => {
+  it('finishes a valid embedded stop and keeps rejected saves open', () => {
+    const onClose = jest.fn();
+    const onSave = jest.fn(() => false);
+    const screen = render(<StopEditorModal embedded visible onClose={onClose} onSave={onSave} initialData={{ id: 'a', title: 'בית קפה', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' }, editorState: { locationMode: 'general', locationIncomplete: false } }} />);
+    fireEvent.press(screen.getByTestId('route-stop-done'));
+    expect(onClose).not.toHaveBeenCalled();
+    onSave.mockReturnValue(true);
+    fireEvent.press(screen.getByTestId('route-stop-done'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'a', editorState: expect.objectContaining({ locationIncomplete: false }) }), 0);
+  });
+
+  it('keeps an incomplete stop open and reveals invalid timing before finishing', async () => {
+    const onClose = jest.fn();
+    const onSave = jest.fn();
+    const screen = render(<StopEditorModal embedded visible onClose={onClose} onSave={onSave} initialData={{ id: 'a', title: '', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' }, editorState: { locationMode: 'general', startTime: '9:' } }} />);
+    fireEvent.press(screen.getByTestId('route-stop-done'));
+    expect(screen.getByText('כדאי להוסיף שם קצר לעצירה.')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('route-stop-title-input'), 'קפה');
+    fireEvent.press(screen.getByTestId('route-stop-done'));
+    expect(screen.getByTestId('route-stop-start-time').props.value).toBe('9:');
+    expect(onSave).not.toHaveBeenCalled(); expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('only replaces the location after choosing a recommendation and preserves manual text', () => {
+    const onDraftChange = jest.fn();
+    const onRequestRecommendations = jest.fn();
+    const screen = render(<StopEditorModal embedded visible onDraftChange={onDraftChange} onRequestRecommendations={onRequestRecommendations} initialData={{ id: 'a', title: 'הכותרת שלי', description: 'הטקסט שלי', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' } }} />);
+    fireEvent.press(screen.getByTestId('route-stop-location-change'));
+    fireEvent.press(screen.getByTestId('route-stop-mode-planli'));
+    expect(onDraftChange).not.toHaveBeenCalled();
+    act(() => onRequestRecommendations.mock.calls[0][0]({ id: 'rec', title: 'המלצה', description: 'טקסט מקור', destination: { countryId: 'IT', cityId: 'rome' } }));
+    expect(screen.getByTestId('route-stop-title-input').props.value).toBe('הכותרת שלי');
+    expect(screen.getByTestId('route-stop-description-input').props.value).toBe('הטקסט שלי');
+    expect(screen.getByTestId('route-stop-location-summary')).toBeTruthy();
+    expect(onDraftChange.mock.calls.at(-1)[0]).toEqual(expect.objectContaining({ source: { type: 'recommendation', recommendationId: 'rec' }, destination: expect.objectContaining({ cityId: 'rome' }) }));
+  });
+
   it('preserves the source recommendation when a linked stop is reopened and edited', async () => {
     const onDraftChange = jest.fn();
     const initialData = {
@@ -140,9 +178,10 @@ describe('StopEditorModal', () => {
 
   it('embeds the shared image editor and retains mixed photo order and the latest crop', async () => {
     const onDraftChange = jest.fn();
+    const onSave = jest.fn();
     const remote = { assetId: 'remote', feed: { url: 'https://example.test/remote.webp' } };
     const crop = { version: 1, crop: { originX: 9, originY: 12, width: 400, height: 300 } };
-    const props = { embedded: true, visible: true, initialData: { id: 's', title: 'תחנה', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' }, media: remote }, onDraftChange,
+    const props = { embedded: true, visible: true, initialData: { id: 's', title: 'תחנה', locationPrecision: 'general', destination: { countryId: 'HU', cityId: 'budapest' }, media: remote }, onDraftChange, onSave,
       mediaForImage: (item) => ({ ...item, transform: { version: 1, crop: { originX: 0 } } }), onPersistImages: jest.fn(async (items) => items) };
     const screen = render(<StopEditorModal {...props} />);
     expect(mockMediaProps.embedded).toBe(true);
@@ -153,8 +192,14 @@ describe('StopEditorModal', () => {
     expect(draft.mediaOrder).toEqual(['local', 'remote']);
     expect(draft.pendingMedia[0].transform).toEqual(crop);
     screen.unmount();
-    render(<StopEditorModal {...props} initialData={draft} />);
+    const restored = render(<StopEditorModal {...props} initialData={draft} />);
     expect(mockMediaProps.value.map((item) => item.sourceId)).toEqual(['new', 'remote']);
+    fireEvent.press(restored.getByTestId('route-stop-done'));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      id: 's', media: remote, mediaOrder: ['local', 'remote'],
+      pendingMedia: [expect.objectContaining({ transform: crop })],
+      editorState: expect.objectContaining({ locationIncomplete: false }),
+    }), 0);
   });
   beforeEach(() => {
     jest.clearAllMocks();
@@ -459,6 +504,7 @@ describe('StopEditorModal', () => {
         allowImages={false}
       />
     );
+    fireEvent.press(screen.getByTestId('route-stop-location-change'));
     fireEvent.press(screen.getByTestId('route-stop-mode-general'));
     fireEvent.press(screen.getByTestId('route-stop-select-destination'));
     fireEvent.press(screen.getByText('שמירה'));
@@ -588,6 +634,7 @@ describe('StopEditorModal', () => {
       />
     );
 
+    fireEvent.press(screen.getByTestId('route-stop-location-change'));
     fireEvent.press(await screen.findByTestId('route-stop-mode-exact'));
     fireEvent.press(await screen.findByTestId('route-stop-google-result'));
     await waitFor(() => expect(screen.getByTestId('route-stop-confirm-location')).toBeTruthy());
@@ -620,6 +667,7 @@ describe('StopEditorModal', () => {
       />
     );
 
+    fireEvent.press(screen.getByTestId('route-stop-location-change'));
     fireEvent.press(screen.getByTestId('route-stop-mode-pin'));
     expect(screen.getByTestId('route-stop-location-message')).toBeTruthy();
     expect(screen.queryByTestId('manual-pin-picker')).toBeNull();

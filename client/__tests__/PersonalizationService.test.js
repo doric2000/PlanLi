@@ -88,6 +88,20 @@ describe('PersonalizationService discovery cache', () => {
     expect(mockCallable).toHaveBeenCalledTimes(1);
   });
 
+  it('explicitly retries a failed search without evicting other cached destinations', async () => {
+    const cached = { context: { countryId: 'HU', cityId: 'budapest' }, query: 'cafe' };
+    const failed = { context: { countryId: 'IT', cityId: 'rome' }, query: 'market' };
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'cached' }] } });
+    await getPersonalizedRecommendations(cached);
+    mockCallable.mockRejectedValueOnce(Error('offline'));
+    await expect(getPersonalizedRecommendations(failed)).rejects.toThrow('offline');
+    mockCallable.mockResolvedValueOnce({ data: { items: [{ id: 'recovered' }] } });
+    await expect(getPersonalizedRecommendations(failed, { retryFailed: true })).resolves.toEqual({ items: [{ id: 'recovered' }] });
+    await expect(getPersonalizedRecommendations(cached)).resolves.toEqual({ items: [{ id: 'cached' }] });
+    await expect(getPersonalizedRecommendations(failed, { retryFailed: true })).resolves.toEqual({ items: [{ id: 'recovered' }] });
+    expect(mockCallable).toHaveBeenCalledTimes(3);
+  });
+
   it('deduplicates identical in-flight requests', async () => {
     let resolveRequest;
     mockCallable.mockImplementation(() => new Promise((resolve) => {

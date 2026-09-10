@@ -1,15 +1,22 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 import { colors } from './colors';
 import { fontFamilies } from './typography';
 
 export const routeBuilderStyles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.appSurface },
+  // Rows use explicit row-reverse; isolate them from the device's Yoga direction.
+  screen: { flex: 1, direction: 'ltr', backgroundColor: colors.appSurface },
+  hiddenEditor: { display: 'none' },
+  inlineEditor: { direction: 'ltr', gap: 14 },
+  stopList: { gap: 8 },
+  modeHeader: { padding: 16, gap: 12 },
+  modeList: { flex: 1 },
+  searchInput: { minHeight: 48, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, borderRadius: 12, paddingHorizontal: 14, color: colors.textPrimary, textAlign: 'right', writingDirection: 'rtl' },
   content: { padding: 16, paddingBottom: 24, gap: 16 },
   headerContent: { gap: 12 },
-  flexCopy: { flex: 1, flexShrink: 1, textAlign: 'right', gap: 3 },
+  flexCopy: { flex: 1, flexShrink: 1, textAlign: 'right', writingDirection: 'rtl', gap: 3 },
   dayRail: { backgroundColor: colors.appSurface, paddingTop: 8 },
-  dayManager: { maxHeight: 240, backgroundColor: colors.white, borderRadius: 14 },
+  dayManager: { backgroundColor: colors.white, borderRadius: 14 },
   managerRow: { flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 8, gap: 4 },
   textButton: { minHeight: 44, minWidth: 44, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 4 },
   dayContent: { gap: 12 },
@@ -22,7 +29,7 @@ export const routeBuilderStyles = StyleSheet.create({
   stopHeading: { flexDirection: 'row-reverse', alignItems: 'center', padding: 12, gap: 4 },
   inlineStop: { padding: 12, paddingTop: 4, gap: 12 },
   stopTools: { flexDirection: 'row-reverse', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between', gap: 4 },
-  footerMeta: { color: colors.textMuted, textAlign: 'center', fontSize: 12 },
+  footerMeta: { color: colors.textMuted, textAlign: 'center', writingDirection: 'rtl', fontSize: 12 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: colors.textSecondary, textAlign: 'center' },
   card: {
@@ -76,7 +83,7 @@ export const routeBuilderStyles = StyleSheet.create({
   rowActions: { flexDirection: 'row-reverse', gap: 10 },
   rowButton: { flex: 1 },
   statusRow: { minHeight: 24, flexDirection: 'row-reverse', alignItems: 'center', gap: 7 },
-  statusText: { color: colors.textMuted, fontSize: 13 },
+  statusText: { color: colors.textMuted, fontSize: 13, textAlign: 'right', writingDirection: 'rtl' },
   statusError: { color: colors.error },
   retryText: { color: colors.primary, fontSize: 13, fontFamily: fontFamilies.semiBold },
   mapPeek: {
@@ -91,7 +98,7 @@ export const routeBuilderStyles = StyleSheet.create({
   mapPeekTitle: { color: colors.white, fontSize: 16, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
   mapPeekMeta: { color: '#DCE6F2', marginTop: 4, textAlign: 'right' },
   tabs: { flexGrow: 0 },
-  tabsContent: { flexDirection: 'row-reverse', gap: 8, paddingVertical: 2 },
+  tabsContent: { direction: Platform.OS === 'web' ? 'rtl' : 'ltr', flexDirection: 'row-reverse', flexGrow: 1, gap: 8, paddingVertical: 2 },
   tab: {
     minHeight: 44,
     minWidth: 76,
@@ -104,11 +111,11 @@ export const routeBuilderStyles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   tabSelected: { backgroundColor: '#FFF3E2', borderColor: colors.brandOrange },
-  tabText: { color: colors.textSecondary, fontFamily: fontFamilies.semiBold },
+  tabText: { color: colors.textSecondary, fontFamily: fontFamilies.semiBold, writingDirection: 'rtl' },
   tabTextSelected: { color: colors.primary },
   sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: colors.textPrimary, fontSize: 18, fontFamily: fontFamilies.semiBold, textAlign: 'right' },
-  sectionMeta: { color: colors.textMuted, fontSize: 13 },
+  sectionMeta: { color: colors.textMuted, fontSize: 13, textAlign: 'right', writingDirection: 'rtl' },
   empty: { color: colors.textMuted, textAlign: 'center', paddingVertical: 18, lineHeight: 21 },
   reorderHint: { color: colors.textMuted, fontSize: 12, textAlign: 'right' },
   stopCard: {
@@ -184,7 +191,7 @@ export const routeBuilderStyles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: 14,
   },
-  detailsToggleText: { color: colors.primary, fontFamily: fontFamilies.semiBold },
+  detailsToggleText: { color: colors.primary, fontFamily: fontFamilies.semiBold, textAlign: 'right', writingDirection: 'rtl' },
   optionalBox: { gap: 14, paddingTop: 4 },
   errorBox: { backgroundColor: colors.errorLight, borderRadius: 13, padding: 12 },
   errorText: { color: colors.error, textAlign: 'right' },
