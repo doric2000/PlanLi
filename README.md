@@ -25,6 +25,12 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+The repeated iOS fingerprint warnings are addressed by a tracked, pre-upload
+native compatibility guard and deterministic Git-archive packaging. See
+[native compatibility findings and release commands](docs/eas-native-compatibility.md).
+This release-tooling change does not publish an OTA or change the installed build;
+the Community production update below remains the current release.
+
 ### Community redesign iPhone OTA (2026-09-11 local / 2026-09-10 UTC)
 
 PR [#372](https://github.com/doric2000/PlanLi/pull/372) merged as
@@ -2459,8 +2465,8 @@ use a unique, incremented build number, and the production EAS profile keeps
 and bundled assets so the installed `1.1.0` binary can receive beta changes
 without another binary upload. Keeping the marketing version does not guarantee
 that Apple will waive TestFlight review for a later build.
-Test an update on the `preview` channel before publishing the same commit to
-production. Production releases must run from a clean `main` checkout that
+Test an update on the `staging` channel with production variables before promoting
+the same artifact. Production releases must run from a tracked-clean `main` checkout that
 exactly matches `origin/main` and contains the Git commit recorded by the latest
 production update group. The preflight queries EAS and blocks the release if a
 newer update came from work that is not in the candidate. This prevents a later
@@ -2476,13 +2482,10 @@ healthy.
 
 ```powershell
 cd C:\Users\doric\Documents\PlanLi\PlanLi
-npm run preflight:eas-production
-
-cd .\client
-eas update --channel staging --environment production --platform ios --message '<summary>'
+npm run preflight:eas-native
+npm run release:eas-candidate -- --apply --message '<summary>'
 
 # Read back the staging group, then dry-run the guarded promotion wrapper.
-cd ..
 npm run release:eas-production -- --preview-group '<staging-group-id>' --message '<summary>'
 
 # Only after explicit production authorization, bind the confirmation to HEAD.
@@ -2492,7 +2495,12 @@ npm run release:eas-production -- --preview-group '<staging-group-id>' --message
 The staging channel is a production-candidate lane, so it must use the same
 `production` EAS environment as the production channel. Never promote an
 artifact built with the empty `preview` environment or with staging Firebase
-values. The wrapper pins EAS CLI `22.6.0`, account `doric2000`, project, owner,
+values. The wrappers archive only tracked committed source, preserve unrelated
+local files, normalize verified native metadata bytes and check the actual native
+fingerprint against the installed-build baseline before upload and promotion.
+The narrow existing optional-module review is invalidated by changes to its
+fallback source. Unknown mismatches stop the release; see the compatibility
+document above. The wrapper pins EAS CLI `22.6.0`, account `doric2000`, project, owner,
 runtime, channel and environment; requires a clean synchronized `main`; verifies
 that the selected staging group contains only the exact candidate commit and
 runtime; downloads the immutable iOS Hermes launch asset; rejects dummy or

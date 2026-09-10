@@ -1,13 +1,12 @@
-const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  easExecOptions,
-  easExecutable,
   runPreflight,
 } = require('./easProductionPreflight');
 const { verifyProductionUpdateArtifact } = require('./easUpdateArtifact');
+const { prepareSource, createEasRunner } = require('./easReleaseSource');
+const { readBaseline, verifyPreviewNative } = require('./easNativeCompatibility');
 
 const EXPECTED_ACCOUNT = 'doric2000';
 const EXPECTED_OWNER = 'doric2000';
@@ -215,13 +214,6 @@ function appendReleaseRecord(readmePath, metadata, message, artifact) {
   fs.appendFileSync(readmePath, formatReleaseRecord(metadata, message, artifact), 'utf8');
 }
 
-function eas(clientRoot, args) {
-  return execFileSync(easExecutable(), args, {
-    cwd: clientRoot,
-    ...easExecOptions(),
-  });
-}
-
 function buildRepublishCommand({ previewGroup, message }) {
   return [
     'update:republish',
@@ -241,32 +233,38 @@ function parseRepublishedGroupId(output) {
   return groupId;
 }
 
-async function runRelease({ repoRoot, args }) {
+async function runRelease({ repoRoot, args }, dependencies = {}) {
   validateMessage(args.message);
   validatePreviewGroupId(args.previewGroup);
   validateReleaseConfiguration(readReleaseConfiguration(repoRoot));
-  const preflight = runPreflight({ repoRoot, deployedCommit: args.deployedCommit });
+  const preflight = (dependencies.runPreflight || runPreflight)({ repoRoot, deployedCommit: args.deployedCommit, archive: true });
   validateConfirmation({ ...args, head: preflight.head });
 
-  const clientRoot = path.join(repoRoot, 'client');
-  validateEasVersion(eas(clientRoot, ['--version']));
-  validateEasIdentity(eas(clientRoot, ['whoami']));
-  const preview = JSON.parse(eas(clientRoot, ['update:view', args.previewGroup, '--json']));
+  const baseline = readBaseline(repoRoot);
+  const source = (dependencies.prepareSource || prepareSource)({ repoRoot, baseline });
+  const runEas = (dependencies.createEasRunner || createEasRunner)(source);
+  validateEasVersion(runEas(['--version']));
+  validateEasIdentity(runEas(['whoami']));
+  const preview = JSON.parse(runEas(['update:view', args.previewGroup, '--json']));
   validatePreviewUpdates({ value: preview, groupId: args.previewGroup, head: preflight.head });
-  const previewArtifact = await verifyProductionUpdateArtifact(preview, args.previewGroup);
+  const native = (dependencies.verifyPreviewNative || verifyPreviewNative)({ runEas, baseline, sourceRoot: source.sourceRoot, update: normalizeUpdates(preview)[0] });
+  const verifyArtifact = dependencies.verifyArtifact || verifyProductionUpdateArtifact;
+  const previewArtifact = await verifyArtifact(preview, args.previewGroup);
 
   const command = buildRepublishCommand({
     previewGroup: args.previewGroup,
     message: args.message,
   });
   if (!args.apply) {
-    return { apply: false, command, preflight, previewArtifact, previewGroup: args.previewGroup };
+    return { apply: false, command, preflight, native, previewArtifact, previewGroup: args.previewGroup };
   }
 
-  const productionGroup = parseRepublishedGroupId(eas(clientRoot, command));
-  const published = JSON.parse(eas(clientRoot, ['update:view', productionGroup, '--json']));
+  const latest = (dependencies.runPreflight || runPreflight)({ repoRoot, archive: true });
+  if (latest.head !== preflight.head || latest.deployedCommit !== preflight.deployedCommit) fail('Production or source changed during verification.');
+  const productionGroup = parseRepublishedGroupId(runEas(command));
+  const published = JSON.parse(runEas(['update:view', productionGroup, '--json']));
   const metadata = extractReleaseMetadata(published, { head: preflight.head });
-  const productionArtifact = await verifyProductionUpdateArtifact(published, metadata.groupId);
+  const productionArtifact = await verifyArtifact(published, metadata.groupId);
   if (productionArtifact.sha256 !== previewArtifact.sha256) {
     fail('Production republish changed the verified preview launch bundle.');
   }
@@ -281,6 +279,7 @@ async function runRelease({ repoRoot, args }) {
     command,
     metadata,
     preflight,
+    native,
     previewArtifact,
     productionArtifact,
     previewGroup: args.previewGroup,
@@ -317,4 +316,5 @@ module.exports = {
   validatePreviewGroupId,
   validatePreviewUpdates,
   validateReleaseConfiguration,
+  runRelease,
 };

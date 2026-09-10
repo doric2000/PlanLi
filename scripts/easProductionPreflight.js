@@ -93,14 +93,21 @@ function currentProductionCommit(clientRoot) {
   ));
 }
 
-function runPreflight({ repoRoot, deployedCommit = '' }) {
-  validateRootConfigFiles(repoRoot);
+function runPreflight({ repoRoot, deployedCommit = '', archive = false }) {
+  if (!archive) validateRootConfigFiles(repoRoot);
+  else {
+    // Archive mode excludes unrelated/untracked files instead of moving them.
+    // A tracked root Expo config is still invalid and would enter the archive.
+    if (git(repoRoot, ['ls-files', '--', 'app.json', 'eas.json'])) {
+      fail('Tracked Expo configuration must live under client/.');
+    }
+  }
   git(repoRoot, ['fetch', '--quiet', 'origin', 'main']);
   const state = {
     branch: git(repoRoot, ['branch', '--show-current']),
     head: git(repoRoot, ['rev-parse', 'HEAD']),
     originMain: git(repoRoot, ['rev-parse', 'origin/main']),
-    status: git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']),
+    status: git(repoRoot, ['status', '--porcelain=v1', archive ? '--untracked-files=no' : '--untracked-files=all']),
   };
   validateRepositoryState(state);
 
