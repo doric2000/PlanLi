@@ -14,6 +14,7 @@ The user approved implementation after reviewing the Figma proposal. Design sour
 
 ## Validation
 
+- Release readiness for iOS OTA against `c6ea08e063e3f5365de598c0b2138df3316ff1d1`: 85 suites / 731 tests passed. All applicable PR #372 checks passed.
 - `npm run validate:changed -- --scope client`: 24 related suites / 245 tests passed.
 - After final sort-sheet/label adjustments: 4 directly affected suites / 17 tests passed. These overlap with the first run and are not an additional 17 distinct tests.
 - Final review found three edge cases; all were corrected: clearing filters preserves the independent text query, sheets fill the keyboard-adjusted area, and catalogue failure no longer hides successful destination search matches. Five new regression cases failed before the fixes; the final 5 affected suites / 33 tests passed, including the shared destination picker consumer. No second broad review was run.
@@ -52,3 +53,10 @@ channel. Publication follows the repository's reviewed PR/merge and staged-artif
 workflow; the current release result is recorded in README.md. App versions, native
 build numbers and runtime configuration remain unchanged.
 The pre-existing untracked root `app.json` is outside this task and was preserved.
+
+Published iOS production group: [638d125b-fa3a-47c7-9d78-c8c3d767229f](https://expo.dev/accounts/doric2000/projects/client/updates/638d125b-fa3a-47c7-9d78-c8c3d767229f), source `7c420beef68f9b61c41f9bf544e5891af99ba29e`.
+TestFlight remains 1.1.1 (30), runtime 1.3.0. Device application is not yet verified.
+Immediate whole-OTA rollback group: `05fe7bdd-4153-43b3-a24b-14d49b3fd5c7`.
+The same OTA includes the merged JavaScript operation feedback; also check its progress
+banner and Activity history when changing an avatar or publishing content. Native
+background transfers remain unavailable in build 30; no lock-screen delivery is claimed.
