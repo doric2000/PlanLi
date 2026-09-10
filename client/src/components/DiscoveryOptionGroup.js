@@ -4,6 +4,7 @@ import AppText from "./AppText";
 import CompactChip from './CompactChip';
 import { discoveryFilterStyles as styles } from '../styles';
 import { orderProgressiveOptions } from '../utils/progressiveDiscoveryFilters';
+import { communityDiscoveryStyles as s } from '../styles/communityDiscovery';
 
 const optionId = (option) => option?.value || option?.id;
 
@@ -17,6 +18,7 @@ export default function DiscoveryOptionGroup({
   testIDPrefix,
   collapsedLimit = 6,
   alwaysShowAll = false,
+  design,
 }) {
   const [expanded, setExpanded] = useState(alwaysShowAll);
   const selected = new Set(selectedIds || []);
@@ -27,7 +29,7 @@ export default function DiscoveryOptionGroup({
 
   return (
     <View style={styles.optionGroup}>
-      {!!label && <AppText style={styles.optionGroupLabel}>{label}</AppText>}
+      {!!label && <AppText style={design === 'community' ? s.filterHeading : styles.optionGroupLabel}>{label}</AppText>}
       {!!helper && <AppText style={styles.optionGroupHelper}>{helper}</AppText>}
       <View style={styles.optionGrid}>
         {result.options.map((option) => {
@@ -42,6 +44,8 @@ export default function DiscoveryOptionGroup({
               selected={active}
               onPress={() => onToggle?.(id)}
               testID={testIDPrefix ? `${testIDPrefix}-${sourceIndex}` : undefined}
+              style={design === 'community' && [s.optionChip, active && s.optionSelected]}
+              textStyle={design === 'community' && [s.optionText, active && s.optionSelectedText]}
             />
           );
         })}

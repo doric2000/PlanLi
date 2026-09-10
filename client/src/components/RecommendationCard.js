@@ -12,6 +12,9 @@ import ContentActionMenu from './ContentActionMenu';
 import CachedImage, { prefetchImage } from './CachedImage';
 import RtlPagedFlatList from './RtlPagedFlatList';
 import { cards, colors, recommendationCardStyles as styles } from '../styles';
+import CommunityCardBody from '../features/community/components/CommunityCardBody';
+import { COMMUNITY_MEDIA_RATIO, communityDiscoveryStyles as compactStyles } from '../styles/communityDiscovery';
+import { getBudgetLabel } from '../constants/travelTaxonomy';
 import ActionBar from './ActionBar';
 import FavoriteButton from './FavoriteButton';
 import PreferenceContextLine from './PreferenceContextLine';
@@ -53,9 +56,10 @@ const RecommendationCard = ({
   const personalizationTarget = { type: 'recommendation', id: item?.id };
   const { isHidden } = usePersonalizationFeedback();
 
-  const isFeed = variant === 'feed';
+  const compact = variant === 'community';
+  const isFeed = variant === 'feed' || compact;
   const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
-  const carouselAspectRatio = isFeed ? 1.1 : 1;
+  const carouselAspectRatio = compact ? COMMUNITY_MEDIA_RATIO : isFeed ? 1.1 : 1;
   const {
     pageWidth,
     frameHeight,
@@ -216,12 +220,12 @@ const RecommendationCard = ({
         activeOpacity={0.75}
         onPress={() => ownerId && navigation.navigate("UserProfile", { uid: ownerId })}
       >
-        <View style={overlay ? styles.feedAvatarRing : null}>
+        <View style={overlay ? [styles.feedAvatarRing, compact && compactStyles.avatarRing] : null}>
           <Avatar
             photoURL={author.photoURL}
             photoMedia={author.photoMedia}
             displayName={author.displayName}
-            size={overlay ? 40 : 36}
+            size={compact ? 36 : overlay ? 40 : 36}
             insideRing={overlay}
           />
         </View>
@@ -234,18 +238,19 @@ const RecommendationCard = ({
               {formatDate(item.createdAt)}
             </AppText>
           )}
-          {overlay && (destination.cityName || destination.countryName) ? (
+          {overlay && !compact && (destination.cityName || destination.countryName) ? (
             <AppText style={styles.feedMetaText} numberOfLines={1}>
               {destination.cityName}{destination.countryName ? `, ${destination.countryName}` : ''}
             </AppText>
           ) : null}
         </View>
       </TouchableOpacity>
-      <View style={[cards.recHeaderActionsRow, overlay && styles.feedHeaderActions]}>
+      <View style={[cards.recHeaderActionsRow, overlay && styles.feedHeaderActions, compact && compactStyles.headerActions]}>
         <FavoriteButton
           type="recommendations"
           id={item.id}
-          variant={overlay ? "overlay" : "light"}
+          variant={overlay && !compact ? "overlay" : "light"}
+          style={compact && compactStyles.favorite}
           snapshotData={snapshotData}
         />
         <ContentActionMenu
@@ -262,7 +267,7 @@ const RecommendationCard = ({
   if (isHidden(personalizationTarget)) return null;
 
   return (
-    <View style={[isFeed ? styles.feedCard : cards.recommendation, style]}>
+    <View style={[isFeed ? styles.feedCard : cards.recommendation, compact && compactStyles.card, style]}>
       {/* Header */}
       {!isFeed && (
       <View style={cards.recHeader}>
@@ -373,7 +378,8 @@ const RecommendationCard = ({
             </View>
           )}
 
-          {images.length > 1 && (
+          {compact && images.length > 1 && <View style={compactStyles.photoPosition} pointerEvents="none"><AppText style={compactStyles.photoPositionText}>{activeImageIndex + 1} / {images.length}</AppText></View>}
+          {!compact && images.length > 1 && (
             <View style={cards.recDotsContainer} pointerEvents="none">
               {images.map((_, index) => (
                 <View
@@ -410,12 +416,12 @@ const RecommendationCard = ({
         </View>
       )}
 
-      {showActionBar && (
+      {!compact && showActionBar && (
         <ActionBar item={item} onCommentPress={onCommentPress} />
       )}
 
       {/* Content */}
-      <Pressable onPress={handleCardPress}>
+      {!compact && <Pressable onPress={handleCardPress}>
         <View testID="recommendation-content" style={[cards.recContent, isFeed && styles.feedContent]}>
         <PreferenceContextLine
           reasonCode={personalizationReasonCode}
@@ -471,8 +477,15 @@ const RecommendationCard = ({
           {item.description}
         </AppText>
         </View>
-      </Pressable>
-
+      </Pressable>}
+      {compact && <>
+        <CommunityCardBody testID="recommendation-content" title={item.title}
+          destination={[destination.cityName, destination.countryName].filter(Boolean).join(' · ')}
+          onDestinationPress={destination.cityId && destination.countryId ? () => navigation.navigate('LandingPage', { cityId: destination.cityId, countryId: destination.countryId }) : undefined}
+          metadata={[item.category, getBudgetLabel(item?.facets?.budgetLevel || item?.attributes?.budgetLevel || ''), Number.isFinite(item.distanceKm) ? item.distanceKm.toFixed(1) + ' ק״מ ממך' : ''].filter(Boolean).join(' · ')}
+          description={item.description} onPress={handleCardPress} />
+        {showActionBar && <ActionBar item={item} onCommentPress={onCommentPress} onReadMore={handleCardPress} />}
+      </>}
     </View>
   );
 };

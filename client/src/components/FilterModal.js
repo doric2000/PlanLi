@@ -11,6 +11,7 @@ import AppText from "./AppText";
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { common, colors, buttons } from '../styles';
+import { communityDiscoveryStyles as s } from '../styles/communityDiscovery';
 
 export default function FilterModal({
   visible,
@@ -24,8 +25,11 @@ export default function FilterModal({
   overlayStyle,
   contentStyle,
   children,
+  presentation,
+  subtitle,
 }) {
   const insets = useSafeAreaInsets();
+  const community = presentation === 'community';
   return (
     <Modal
       visible={visible}
@@ -36,32 +40,43 @@ export default function FilterModal({
     >
       <KeyboardAvoidingView style={common.modalKeyboardAvoiding}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={[common.modalOverlay, overlayStyle]} onPress={onClose}>
-        <Pressable style={[tall ? common.modalContentTall : common.modalContent, contentStyle]}
+        <Pressable style={[common.modalOverlay, overlayStyle, community && s.sheetOverlay, community && { paddingTop: insets.top }]} onPress={onClose}>
+        <Pressable style={[tall ? common.modalContentTall : common.modalContent, contentStyle, community && s.sheet]}
           onPress={(event) => event.stopPropagation?.()}>
-          <View style={[common.modalHeader, { flexDirection: 'row', alignItems: 'center' }]}>
+          {community ? <View style={s.sheetHeader}>
+            <View style={s.sheetHeadingRow}>
+              <TouchableOpacity style={[s.iconButton, s.mapButton]} onPress={onClose} accessibilityRole="button" accessibilityLabel="סגירה">
+                <Ionicons name="close-outline" size={22} color={colors.primary} />
+              </TouchableOpacity>
+              {!!onClear && <TouchableOpacity onPress={onClear} style={s.clearFilters} accessibilityRole="button" testID="filter-modal-clear">
+                <AppText style={s.activeLabel}>{clearText}</AppText>
+              </TouchableOpacity>}
+              <AppText style={s.sheetTitle}>{title}</AppText>
+            </View>
+            {!!subtitle && <AppText style={s.suggestionHint}>{subtitle}</AppText>}
+          </View> : <View style={[common.modalHeader, { flexDirection: 'row', alignItems: 'center' }]}>
             <TouchableOpacity onPress={onClose} accessibilityRole="button" accessibilityLabel="סגירה">
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
 
             <AppText style={[common.modalTitle, { textAlign: 'right', flex: 1 }]}>{title}</AppText>
-          </View>
+          </View>}
 
           {children}
 
           {(onClear || onApply) && (
-            <View style={[common.modalActions, { flexDirection: 'row-reverse', paddingBottom: insets.bottom }]}>
-              {!!onClear && (
-                <TouchableOpacity style={buttons.clear} onPress={onClear} accessibilityRole="button"
+            <View style={community ? [s.sheetFooter, { paddingBottom: Math.max(insets.bottom, 12) }] : [common.modalActions, { flexDirection: 'row-reverse', paddingBottom: insets.bottom }]}>
+              {!!onClear && !community && (
+                <TouchableOpacity style={community ? s.secondaryAction : buttons.clear} onPress={onClear} accessibilityRole="button"
                   testID="filter-modal-clear">
-                  <AppText style={buttons.clearText}>{clearText}</AppText>
+                  <AppText style={community ? s.activeLabel : buttons.clearText}>{clearText}</AppText>
                 </TouchableOpacity>
               )}
 
               {!!onApply && (
-                <TouchableOpacity style={buttons.apply} onPress={onApply} accessibilityRole="button"
+                <TouchableOpacity style={community ? s.stateButton : buttons.apply} onPress={onApply} accessibilityRole="button"
                   testID="filter-modal-apply">
-                  <AppText style={buttons.applyText}>{applyText}</AppText>
+                  <AppText style={community ? s.stateButtonText : buttons.applyText}>{applyText}</AppText>
                 </TouchableOpacity>
               )}
             </View>

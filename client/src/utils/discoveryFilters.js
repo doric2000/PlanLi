@@ -56,7 +56,7 @@ export function applySmartProfileFilters(filters, profile, { surface = 'recommen
   const budgetLevels = profile?.budget && profile.budget !== 'flexible' ? [profile.budget] : [];
 	const result = {
     ...filters,
-    audienceIds: [...(profile?.travelParties || [])],
+    audienceIds: isRoutesSurface ? [] : [...(profile?.travelParties || [])],
     vibeIds: [...(profile?.vibe || [])],
     needIds: [...(profile?.needs || [])],
     budgetLevels,
@@ -76,6 +76,11 @@ export function discoveryRequestFromFilters(filters, { surface = 'recommendation
     ...serverFilters
   } = filters || {};
 	delete serverFilters.interestIds;
+	if (surface === 'routes') {
+    // The streamlined composer no longer collects these. Keep historical content untouched.
+    delete serverFilters.audienceIds;
+    delete serverFilters.experienceLevelIds;
+  }
 	if (surface !== 'routes') {
 		delete serverFilters.travelerStyleIds;
 		delete serverFilters.seasons;

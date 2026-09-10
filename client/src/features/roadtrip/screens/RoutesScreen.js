@@ -3,29 +3,20 @@ import {
 	Alert,
 	FlatList,
 	StatusBar,
-	TouchableOpacity,
 	View,
 } from 'react-native';
-import AppText from "../../../components/AppText";
-import AppTextInput from "../../../components/AppTextInput";
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import PageHeader from '../../../components/PageHeader';
-import SearchFilterRow from '../../../components/SearchFilterRow';
+import CommunityHeader from '../../community/components/CommunityHeader';
+import CommunityFeedState from '../../community/components/CommunityFeedState';
+import { communityDiscoveryStyles as discoveryStyles } from '../../../styles/communityDiscovery';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RoutesFilterModal from '../../../components/RoutesFilterModal';
 import { useAuthUser } from '../../../hooks/useAuthUser';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import { useSmartProfile } from '../../../hooks/useSmartProfile';
 import {
-  common,
-  colors,
   routesScreenStyles as styles,
-  discoveryFilterTriggerStyles as filterUiStyles,
-  tabHeroStyles,
-  TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
-import CommunityContentSwitch from '../../community/components/CommunityContentSwitch';
 import { RouteCard } from '../components/RouteCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import ActiveRouteFiltersList from '../components/ActiveRouteFiltersList';
@@ -60,15 +51,6 @@ import {
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
 import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
 import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
-import RegionHeaderAction from '../../region/components/RegionHeaderAction';
-
-const text = {
-  title: 'קהילה',
-  searchPlaceholder: 'חפשו מסלול, מקום או תחום עניין...',
-  noFiltered: 'אין מסלולים שמתאימים לחיפוש ולמסננים שבחרתם.',
-  noRoutes: 'עדיין אין מסלולים.',
-  firstRoute: 'היו הראשונים לשתף מסלול!',
-};
 
 const serverSort = (sortBy) => sortBy === 'personalized' ? 'forYou' : sortBy === 'newest' ? 'newest' : 'popular';
 
@@ -264,82 +246,33 @@ export default function RoutesScreen({ navigation }) {
   const sortLabel = sortBy === 'personalized' ? 'בשבילך' : sortBy === 'newest' ? 'חדש' : 'פופולרי';
 
   const renderTopArea = () => (
-    <PageHeader
-      variant="hero"
-      title={text.title}
-      style={tabHeroStyles.fixedHeader}
-      testID="routes-tab-header"
-      renderTitleAccessory={() => (
-        isRegionDiscoveryEnabled() ? (
-          <RegionHeaderAction
-            regionId={selectedRegionId}
-            mode={selectedMode}
-            onPress={() => navigation.navigate('RegionSelector', { source: 'routes-change' })}
-            testID="routes-region-change"
-          />
-        ) : null
-      )}
-      renderEnd={() => (
-        <TouchableOpacity
-          accessibilityLabel="מיון מסלולים"
-          collapsable={false}
-          onLayout={routesSortTourTarget.onLayout}
-          onPress={() => setSortVisible(true)}
-          ref={routesSortTourTarget.ref}
-          style={tabHeroStyles.labelAction}
-          testID="routes-sort-button"
-        >
-          <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
-          <AppText style={tabHeroStyles.labelText}>{sortLabel}</AppText>
-        </TouchableOpacity>
-      )}
-    >
-      <SearchFilterRow
-        style={tabHeroStyles.searchRow}
-        searchTargetRef={routesSearchTourTarget.ref}
-        searchTargetTestID="routes-search-tour-target"
-        onSearchTargetLayout={routesSearchTourTarget.onLayout}
-        filterTargetRef={routesFilterTourTarget.ref}
-        onFilterTargetLayout={routesFilterTourTarget.onLayout}
-        onFilterPress={() => setFilterVisible(true)}
-        activeFilterCount={activeFilterCount}
-        accessibilityLabel="סינון מסלולים"
-        testID="routes-search-row"
-        filterTestID="routes-filter-button"
-      >
-        <View style={tabHeroStyles.searchField} testID="routes-search-field">
-          <Ionicons name="search" size={TAB_HERO_SEARCH_ICON_SIZE} color="rgba(255,255,255,0.62)" />
-          <AppTextInput value={filters.query} onChangeText={(query) => setFilters((current) => ({ ...current, query }))}
-            placeholder={text.searchPlaceholder} placeholderTextColor="rgba(255,255,255,0.48)"
-            style={tabHeroStyles.searchInput} textAlign="right" autoCorrect={false} autoCapitalize="none"
-            testID="routes-search-input" />
-          {!!filters.query && (
-            <TouchableOpacity onPress={() => setFilters((current) => ({ ...current, query: '' }))}
-              style={styles.destinationClearBtn} accessibilityLabel="נקה חיפוש">
-              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.76)" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </SearchFilterRow>
-    </PageHeader>
+    <CommunityHeader navigation={navigation} mode="Routes" filters={filters}
+      regionId={selectedRegionId} regionMode={selectedMode}
+      onSubmit={(query) => setFilters((current) => ({ ...current, query }))}
+      onDestinationsChange={(destinations) => setFilters((current) => ({ ...current, destinations }))}
+      onFilter={() => setFilterVisible(true)}
+      onSort={() => setSortVisible(true)} sortLabel={sortLabel} activeFilterCount={activeFilterCount}
+
+      targets={{ search: routesSearchTourTarget, filter: routesFilterTourTarget, sort: routesSortTourTarget }}
+    />
   );
 
   const renderActiveFilters = () => (
-    <View style={tabHeroStyles.bodyContentInset}>
-      <ActiveRouteFiltersList filters={filters}
+    <View>
+      <ActiveRouteFiltersList compact filters={filters}
         onRemove={(field, value) => setFilters((current) => removeDiscoveryFilter(current, field, value))}
-        onClear={() => setFilters(createEmptyDiscoveryFilters())} />
+        onClear={() => setFilters((current) => ({ ...createEmptyDiscoveryFilters(), query: current.query }))} />
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.screen} edges={['left', 'right']}>
+    <SafeAreaView style={discoveryStyles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
-      <CommunityContentSwitch navigation={navigation} selected="Routes" />
-      <FlatList style={styles.scroll} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
+      {renderActiveFilters()}
+      <FlatList style={[styles.scroll, discoveryStyles.screen]} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[
-            styles.feedContent,
+            styles.feedContent, discoveryStyles.feed,
             (loading || refreshing || confirming || routes.length === 0) && styles.feedContentEmpty,
             { paddingBottom: getTabOverlayBottomInset(insets, 16) },
           ]}
@@ -347,33 +280,18 @@ export default function RoutesScreen({ navigation }) {
           renderItem={({ item }) => (
             <RouteCard item={item} onPress={() => openRoute(item)} isOwner={currentUser && item.ownerId === currentUser.uid}
               onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)}
-              onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="feed" />
+              onCommentPress={(routeId) => { setSelectedRouteId(routeId); setCommentsModalVisible(true); }} variant="community" />
           )}
           refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
-          ListHeaderComponent={renderActiveFilters()}
+
           ListEmptyComponent={loading || refreshing || confirming ? <CenteredRefreshState
             accessibilityLabel={confirming ? 'המסלולים מעודכנים' : refreshing ? 'מרענן מסלולים' : 'טוען מסלולים'}
             confirming={confirming}
             style={styles.feedBodyState}
             testID={confirming ? 'routes-refresh-confirmation' : refreshing ? 'routes-refresh-state' : 'routes-loading-state'}
-          /> : <View style={[common.emptyState, styles.feedEmptyState, styles.feedBodyState]} testID="routes-empty-state"><Ionicons name="trail-sign-outline" size={50} color={colors.textMuted} />
-            <AppText style={common.emptyText}>{error
-              ? 'לא הצלחנו לטעון מסלולים. משכו מטה כדי לנסות שוב.'
-              : isFiltered ? text.noFiltered : text.noRoutes}</AppText>
-            {!isFiltered && <AppText style={common.emptySubText}>{text.firstRoute}</AppText>}
-            {isFiltered && (
-              <View style={filterUiStyles.emptyActions}>
-                <TouchableOpacity style={[filterUiStyles.emptyAction, filterUiStyles.emptyActionPrimary]}
-                  onPress={() => setFilterVisible(true)} accessibilityRole="button">
-                  <AppText style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</AppText>
-                </TouchableOpacity>
-                <TouchableOpacity style={filterUiStyles.emptyAction}
-                  onPress={() => setFilters(createEmptyDiscoveryFilters())} accessibilityRole="button">
-                  <AppText style={filterUiStyles.emptyActionText}>נקה הכול</AppText>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>} showsVerticalScrollIndicator={false} />
+          /> : <CommunityFeedState error={error} filtered={isFiltered} routes onRetry={refresh}
+            onFilter={() => setFilterVisible(true)} onClear={() => setFilters(createEmptyDiscoveryFilters())} />}
+          showsVerticalScrollIndicator={false} />
       <RoutesFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={filters}
         onApply={(next) => { setFilters({ ...createEmptyDiscoveryFilters(), ...next }); setFilterVisible(false); }}
         onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile, { surface: 'routes' })} />

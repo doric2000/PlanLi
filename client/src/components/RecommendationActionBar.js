@@ -14,6 +14,7 @@ export const RecommendationActionBar = ({
   onLikePress,
   onLikesListPress,
   onSharePress,
+  onReadMore,
   contentLabel = 'ההמלצה',
   style,
 }) => {
@@ -27,7 +28,7 @@ export const RecommendationActionBar = ({
 
   return (
     <View {...(Platform.OS === 'web' ? { dir: 'ltr' } : {})} style={[styles.bar, style]} testID="recommendation-action-bar">
-      <View style={styles.actions} testID="recommendation-action-row">
+      <View style={[styles.actions, onReadMore && styles.compactActions]} testID="recommendation-action-row">
         <View style={styles.group}>
           <TouchableOpacity
             style={styles.iconSlot}
@@ -79,8 +80,12 @@ export const RecommendationActionBar = ({
             <AppText style={styles.shareText}>שיתוף</AppText>
           </TouchableOpacity>
         ) : null}
+        {onReadMore && <TouchableOpacity style={styles.readMore} onPress={press(onReadMore)} accessibilityRole="button"
+          accessibilityLabel={`קריאת ${contentLabel} במלואה`} testID="community-card-read-more">
+          <AppText style={styles.readMoreText}>קרא עוד ←</AppText>
+        </TouchableOpacity>}
       </View>
-      <View style={styles.divider} pointerEvents="none" testID="recommendation-action-divider" />
+      {!onReadMore && <View style={styles.divider} pointerEvents="none" testID="recommendation-action-divider" />}
     </View>
   );
 };

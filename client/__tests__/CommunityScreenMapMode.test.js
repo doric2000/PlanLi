@@ -17,6 +17,9 @@ const mockFilters = {
   environments: [],
 };
 
+jest.mock('../src/hooks/useDestinationFilterOptions', () => ({ useDestinationFilterOptions: () => ({ options: [], loading: false }) }));
+jest.mock('../src/utils/recentDiscoveryDestinations', () => ({ rememberDiscoveryDestinations: jest.fn(async () => {}) }));
+
 let mockRecommendationState;
 let mockFilteredData;
 let mockMapItems;
@@ -88,9 +91,10 @@ jest.mock('../src/features/region/context/RegionSelectionState', () => ({
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { Text, View } = require('react-native');
-  return ({ children, title, renderStart, renderEnd, renderTitleAccessory, ...props }) => ReactModule.createElement(
+  return ({ children, title, renderStart, renderEnd, renderTitleAccessory, renderTopRow, ...props }) => ReactModule.createElement(
     View,
     props,
+    renderTopRow?.(),
     renderStart?.(),
     title ? ReactModule.createElement(Text, null, title) : null,
     renderTitleAccessory?.(),
@@ -182,11 +186,8 @@ describe('CommunityScreen map mode', () => {
     fireEvent.press(screen.getByTestId('community-map-toggle'));
 
     expect(screen.queryByTestId('community-sort-button')).toBeNull();
-    expect(screen.getByText('כל ההמלצות באזור')).toBeTruthy();
-    expect(StyleSheet.flatten(screen.getByTestId('map-all-recommendations-label').props.style)).toMatchObject({
-      width: 136,
-      height: 44,
-    });
+    expect(screen.getByLabelText('חזרה לרשימת המלצות')).toBeTruthy();
+
     expect(screen.getByTestId('mock-community-map')).toBeTruthy();
   });
 
@@ -229,60 +230,31 @@ describe('CommunityScreen map mode', () => {
     const emptyStyle = StyleSheet.flatten(screen.getByTestId('community-empty-state').props.style);
 
     expect(contentStyle).toMatchObject({ flexGrow: 1 });
-    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#F4F5F9');
-    expect(list.props.ListHeaderComponent).toBeTruthy();
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#FAF7F2');
+    expect(list.props.ListHeaderComponent).toBeUndefined();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
     const header = screen.getByTestId('community-tab-header');
     expect(header.props.overlapNext).toBeUndefined();
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
-    expect(screen.getByTestId('community-search-tour-target').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('community-search-field').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-filter-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-sort-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-map-toggle').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-mode-recommendations').props.accessibilityState.selected).toBe(true);
     expect(within(list).queryByTestId('community-tab-header')).toBeNull();
-    expect(StyleSheet.flatten(list.props.ListHeaderComponent.props.style)).toMatchObject({
-      paddingTop: 28,
-      backgroundColor: '#F4F5F9',
-    });
-    expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
+    expect(StyleSheet.flatten(list.props.contentContainerStyle)).toMatchObject({ paddingTop: 16, paddingHorizontal: 16 });
+    expect(emptyStyle).toMatchObject({ justifyContent: 'center' });
   });
 
-  it('uses the shared hero action geometry', () => {
+  it('keeps the compact header and accessible controls within the approved height', () => {
     const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
-    expect(StyleSheet.flatten(screen.getByTestId('community-sort-button').props.style)).toMatchObject({
-      width: 80,
-      height: 44,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('community-map-toggle').props.style)).toMatchObject({
-      width: 44,
-      height: 44,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('community-filter-button').props.style)).toMatchObject({
-      width: 44,
-      height: 44,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('community-search-row').props.style)).toMatchObject({
-      width: '100%',
-      marginTop: 12,
-      gap: 8,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('community-search-field').props.style)).toMatchObject({
-      width: '100%',
-      height: 48,
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      flexDirection: 'row-reverse',
-      gap: 9,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('community-search-input').props.style)).toMatchObject({
-      height: '100%',
-      fontSize: 15,
-      paddingLeft: 0,
-      paddingRight: 0,
-      textAlign: 'right',
-    });
+    expect(StyleSheet.flatten(screen.getByTestId('community-tab-header').props.style).height).toBe(120);
+    for (const control of ['sort', 'filter', 'map']) {
+      const id = control === 'map' ? 'community-map-toggle' : 'community-' + control + '-button';
+      expect(StyleSheet.flatten(screen.getByTestId(id).props.style)).toMatchObject({ width: 44, minHeight: 44 });
+    }
+    expect(StyleSheet.flatten(screen.getByTestId('community-search-field').props.style)).toMatchObject({ height: 48, borderRadius: 20 });
   });
 
   it('replaces the feed with a centered state while refreshing', () => {
@@ -297,7 +269,7 @@ describe('CommunityScreen map mode', () => {
     mockFilteredData = [{ id: 'cached-recommendation' }];
     const screen = render(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
     expect(screen.getByTestId('recommendation-cached-recommendation').props.topContentInset).toBeUndefined();
-    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent.props.style).paddingTop).toBe(28);
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.contentContainerStyle).paddingTop).toBe(16);
 
     mockRecommendationState.refreshing = true;
     screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
@@ -307,7 +279,7 @@ describe('CommunityScreen map mode', () => {
     mockRecommendationState.refreshing = false;
     screen.rerender(<CommunityScreen navigation={{ navigate: jest.fn() }} />);
     expect(screen.getByTestId('recommendation-refreshed-recommendation').props.topContentInset).toBeUndefined();
-    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent.props.style).paddingTop).toBe(28);
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.contentContainerStyle).paddingTop).toBe(16);
   });
 
   it('consumes a focused-map command and keeps the canonical target ahead of filtered results', async () => {

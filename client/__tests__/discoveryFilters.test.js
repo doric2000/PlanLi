@@ -7,6 +7,15 @@ import {
 } from '../src/utils/discoveryFilters';
 
 describe('shared community and route filters', () => {
+  it('omits uncollected route fields while retaining recommendation kosher and accessibility filters', () => {
+    const filters = { ...createEmptyDiscoveryFilters(), audienceIds: ['couple'], experienceLevelIds: ['beginner'], needIds: ['kosher', 'wheelchair_access'] };
+    const route = discoveryRequestFromFilters(filters, { surface: 'routes' });
+    expect(route.filters.audienceIds).toBeUndefined();
+    expect(route.filters.experienceLevelIds).toBeUndefined();
+    expect(route.filters.needIds).toEqual(filters.needIds);
+    expect(discoveryRequestFromFilters(filters).filters.needIds).toEqual(filters.needIds);
+    expect(discoveryRequestFromFilters(filters).filters.audienceIds).toEqual(['couple']);
+  });
   it('applies profile choices as visible hard filters without changing destinations', () => {
     const current = {
       ...createEmptyDiscoveryFilters(),
@@ -18,7 +27,7 @@ describe('shared community and route filters', () => {
     }, { surface: 'routes' });
     expect(result.destinations).toEqual(current.destinations);
 	expect(result.interestIds).toBeUndefined();
-    expect(result.audienceIds).toEqual(['couple']);
+    expect(result.audienceIds).toEqual([]);
 	expect(result.travelerStyleIds).toEqual(['city_break']);
     expect(result.paceIds).toEqual(['relaxed']);
     expect(hasDiscoveryFilters(result)).toBe(true);

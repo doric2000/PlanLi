@@ -165,4 +165,53 @@ describe('useDestinationFilterOptions', () => {
     expect(result.current.options).toEqual([]);
     consoleError.mockRestore();
   });
+
+  it('clears loading when dismissed and reuses a completed catalog after reopening', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'cancel-reopen-test';
+    let finish;
+    getDocs.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    searchDestinations.mockResolvedValue({ items: [] });
+    const { result, rerender } = renderHook(({ enabled }) => useDestinationFilterOptions(enabled, ''), { initialProps: { enabled: true } });
+    expect(result.current.loading).toBe(true);
+    rerender({ enabled: false });
+    expect(result.current.loading).toBe(false);
+    await act(async () => finish({ docs: [{ id: 'IT', data: () => ({ names: { he: 'איטליה' } }) }] }));
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.options.some((option) => option.countryId === 'IT')).toBe(true));
+    expect(result.current.loading).toBe(false);
+    expect(getDocs).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a failed country catalog retry without showing results from another region', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'retry-catalog-test';
+    getDocs.mockRejectedValueOnce(new Error('offline'));
+    searchDestinations.mockResolvedValue({ items: [] });
+    const logger = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useDestinationFilterOptions(true, ''));
+    await waitFor(() => expect(result.current.optionsError).toBeTruthy());
+    expect(result.current.options).toEqual([]);
+    getDocs.mockResolvedValue({ docs: [{ id: 'IT', data: () => ({ names: { he: 'איטליה' } }) }] });
+    act(() => result.current.retrySearch());
+    await waitFor(() => expect(result.current.optionsError).toBe(''));
+    await waitFor(() => expect(result.current.options.some((option) => option.countryId === 'IT')).toBe(true));
+    logger.mockRestore();
+  });
+
+  it('keeps a successful destination search usable when the country catalog fails', async () => {
+    process.env.EXPO_PUBLIC_REGION_DISCOVERY_ENABLED = 'true';
+    mockRegionId = 'partial-catalog-failure-test';
+    getDocs.mockRejectedValue(new Error('catalog offline'));
+    searchDestinations.mockImplementation(async ({ query }) => ({
+      items: query ? [{ countryId: 'IT', cityId: 'rome', names: { he: 'רומא' } }] : [],
+    }));
+    const logger = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useDestinationFilterOptions(true, 'רומא'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.options).toEqual(expect.arrayContaining([expect.objectContaining({ cityId: 'rome' })]));
+    expect(result.current.searchError).toBe('');
+    expect(result.current.optionsError).toBeTruthy();
+    logger.mockRestore();
+  });
 });

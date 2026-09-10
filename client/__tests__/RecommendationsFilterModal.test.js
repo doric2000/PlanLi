@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import RecommendationsFilterModal from '../src/components/RecommendationsFilterModal';
+import RoutesFilterModal from '../src/components/RoutesFilterModal';
 import { createEmptyDiscoveryFilters } from '../src/utils/discoveryFilters';
 
 jest.mock('../src/components/FilterModal', () => function MockFilterModal({
@@ -34,6 +35,27 @@ jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
 }));
 
 describe('RecommendationsFilterModal draft behavior', () => {
+  it.each([
+    ['recommendations', RecommendationsFilterModal],
+    ['routes', RoutesFilterModal],
+  ])('clears only the %s filter draft and preserves the independent search', (_, Component) => {
+    const onApply = jest.fn();
+    const filters = {
+      ...createEmptyDiscoveryFilters(),
+      query: 'קפה',
+      destinations: [{ countryId: 'IT', label: 'איטליה' }],
+      categoryIds: ['food'],
+      budgetLevels: ['balanced'],
+      needsIds: ['kosher'],
+    };
+    const screen = render(<Component visible filters={filters} onApply={onApply} onClose={jest.fn()} />);
+    fireEvent.press(screen.getByTestId('mock-clear'));
+    expect(onApply).not.toHaveBeenCalled();
+    expect(filters.destinations).toHaveLength(1);
+    fireEvent.press(screen.getByTestId('mock-apply'));
+    expect(onApply).toHaveBeenCalledWith({ ...createEmptyDiscoveryFilters(), query: 'קפה' });
+  });
+
   it('keeps changes in a draft, clears without closing, and applies only on demand', () => {
     const onApply = jest.fn();
     const onClose = jest.fn();

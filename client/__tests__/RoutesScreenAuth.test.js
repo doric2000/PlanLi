@@ -6,6 +6,9 @@ import RoutesScreen from '../src/features/roadtrip/screens/RoutesScreen';
 import { loadRouteDetails, requestRoutes } from '../src/services/RouteService';
 import { routesScreenStyles } from '../src/styles';
 
+jest.mock('../src/hooks/useDestinationFilterOptions', () => ({ useDestinationFilterOptions: () => ({ options: [], loading: false }) }));
+jest.mock('../src/utils/recentDiscoveryDestinations', () => ({ rememberDiscoveryDestinations: jest.fn(async () => {}) }));
+
 let mockUser = null;
 let mockFocusEffect = null;
 let mockTabRefresh = null;
@@ -86,9 +89,10 @@ jest.mock('../src/services/SocialService', () => ({
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { Text, View } = require('react-native');
-  return ({ children, title, renderStart, renderEnd, renderTitleAccessory, ...props }) => ReactModule.createElement(
+  return ({ children, title, renderStart, renderEnd, renderTitleAccessory, renderTopRow, ...props }) => ReactModule.createElement(
     View,
     props,
+    renderTopRow?.(),
     renderStart?.(),
     title ? ReactModule.createElement(Text, null, title) : null,
     renderTitleAccessory?.(),
@@ -265,56 +269,31 @@ describe('RoutesScreen authentication state', () => {
     const emptyStyle = StyleSheet.flatten(screen.getByTestId('routes-empty-state').props.style);
 
     expect(contentStyle).toMatchObject({ flexGrow: 1 });
-    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#F4F5F9');
-    expect(list.props.ListHeaderComponent).toBeTruthy();
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#FAF7F2');
+    expect(list.props.ListHeaderComponent).toBeUndefined();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
     const header = screen.getByTestId('routes-tab-header');
     expect(header.props.overlapNext).toBeUndefined();
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
-    expect(screen.getByTestId('routes-search-tour-target').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('routes-search-field').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('routes-filter-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('routes-sort-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.queryByTestId('routes-add-button')).toBeNull();
     expect(screen.getByTestId('community-mode-routes').props.accessibilityState.selected).toBe(true);
     expect(within(list).queryByTestId('routes-tab-header')).toBeNull();
-    expect(StyleSheet.flatten(list.props.ListHeaderComponent.props.style)).toMatchObject({
-      paddingTop: 28,
-      backgroundColor: '#F4F5F9',
-    });
-    expect(emptyStyle).toMatchObject({ marginTop: 0, justifyContent: 'center' });
+    expect(StyleSheet.flatten(list.props.contentContainerStyle)).toMatchObject({ paddingTop: 16, paddingHorizontal: 16 });
+    expect(emptyStyle).toMatchObject({ justifyContent: 'center' });
   });
 
-  it('matches the Community labeled-action geometry', () => {
+  it('keeps the compact header and accessible controls within the approved height', () => {
     const screen = render(<RoutesScreen navigation={{ navigate: jest.fn() }} />);
-    expect(StyleSheet.flatten(screen.getByTestId('routes-sort-button').props.style)).toMatchObject({
-      width: 80,
-      height: 44,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('routes-filter-button').props.style)).toMatchObject({
-      width: 44,
-      height: 44,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('routes-search-row').props.style)).toMatchObject({
-      width: '100%',
-      marginTop: 12,
-      gap: 8,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('routes-search-field').props.style)).toMatchObject({
-      width: '100%',
-      height: 48,
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      flexDirection: 'row-reverse',
-      gap: 9,
-    });
-    expect(StyleSheet.flatten(screen.getByTestId('routes-search-input').props.style)).toMatchObject({
-      height: '100%',
-      fontSize: 15,
-      paddingLeft: 0,
-      paddingRight: 0,
-      textAlign: 'right',
-    });
+    expect(StyleSheet.flatten(screen.getByTestId('routes-tab-header').props.style).height).toBe(120);
+    for (const control of ['sort', 'filter']) {
+      const id = control === 'map' ? 'community-map-toggle' : 'routes-' + control + '-button';
+      expect(StyleSheet.flatten(screen.getByTestId(id).props.style)).toMatchObject({ width: 44, minHeight: 44 });
+    }
+    expect(StyleSheet.flatten(screen.getByTestId('routes-search-field').props.style)).toMatchObject({ height: 48, borderRadius: 20 });
   });
 
   it('replaces retained routes with a centered state only while refresh is pending', async () => {
@@ -341,6 +320,6 @@ describe('RoutesScreen authentication state', () => {
     });
     expect(screen.getByTestId('route-route-2')).toBeTruthy();
     expect(screen.getByTestId('route-route-2').props.topContentInset).toBeUndefined();
-    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.ListHeaderComponent.props.style).paddingTop).toBe(28);
+    expect(StyleSheet.flatten(screen.UNSAFE_getByType(FlatList).props.contentContainerStyle).paddingTop).toBe(16);
   });
 });

@@ -102,6 +102,12 @@ const recommendation = {
 };
 
 describe('RecommendationCard photo navigation', () => {
+  it('preserves the destination shortcut in a compact community card', () => {
+    const item = { ...recommendation, destination: { cityId: 'bay', countryId: 'lk', cityName: 'ארוגם באי', countryName: 'סרי לנקה' } };
+    const screen = render(<RecommendationCard item={item} variant="community" showActionBar={false} />);
+    fireEvent.press(screen.getByLabelText('פתיחת ארוגם באי · סרי לנקה'));
+    expect(mockNavigate).toHaveBeenCalledWith('LandingPage', { cityId: 'bay', countryId: 'lk' });
+  });
   beforeEach(() => {
     mockNavigate.mockClear();
   });
@@ -134,4 +140,15 @@ describe('RecommendationCard photo navigation', () => {
     expect(mediaIndex).toBeGreaterThanOrEqual(0);
     expect(actionBarIndex).toBe(mediaIndex + 1);
   });
+});
+
+it('keeps community text and actions after its wide photo, with a two-line excerpt', () => {
+  const screen = render(<RecommendationCard item={recommendation} variant="community" onPress={jest.fn()} />);
+  expect(screen.getByText(recommendation.title).props.numberOfLines).toBe(2);
+  expect(screen.getByText(recommendation.description).props.numberOfLines).toBe(2);
+  const children = screen.toJSON().children;
+  const contentIndex = children.findIndex((node) => node.props?.testID === 'recommendation-content');
+  const actionsIndex = children.findIndex((node) => node.props?.testID === 'action-bar');
+  expect(contentIndex).toBeGreaterThan(0);
+  expect(actionsIndex).toBe(contentIndex + 1);
 });

@@ -74,7 +74,7 @@ async function loadDestinationOptions(regionId = null) {
     const items = [...countries, ...cities].sort((a, b) => a.label.localeCompare(b.label, 'he'));
     cachedOptions = { regionId, items };
     return items;
-  }).finally(() => { pendingOptions = null; });
+  }).finally(() => { if (pendingOptions?.promise === promise) pendingOptions = null; });
   pendingOptions = { regionId, promise };
   return promise;
 }
@@ -87,26 +87,33 @@ export function useDestinationFilterOptions(enabled = true, searchQuery = '', { 
     items: cachedOptions?.regionId === activeRegionId ? cachedOptions.items : [],
   }));
   const [loading, setLoading] = useState(false);
+  const [optionsError, setOptionsError] = useState('');
   const [remoteOptionsState, setRemoteOptionsState] = useState({ regionId: activeRegionId, items: [] });
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchRetryKey, setSearchRetryKey] = useState(0);
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled) { setLoading(false); return undefined; }
     if (cachedOptions?.regionId === activeRegionId) {
       setOptionsState({ regionId: activeRegionId, items: cachedOptions.items });
+      setLoading(false);
+      setOptionsError('');
       return undefined;
     }
     let active = true;
     setOptionsState({ regionId: activeRegionId, items: [] });
     setLoading(true);
+    setOptionsError('');
     loadDestinationOptions(activeRegionId).then((next) => {
       if (active) setOptionsState({ regionId: activeRegionId, items: next });
     })
-      .catch((error) => console.error('Failed to load destination filter options', error))
+      .catch((error) => {
+        if (active) setOptionsError('לא הצלחנו לטעון את רשימת היעדים.');
+        console.error('Failed to load destination filter options', error);
+      })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [activeRegionId, enabled]);
+  }, [activeRegionId, enabled, searchRetryKey]);
   useEffect(() => {
     const queryKey = compactDestinationText(searchQuery);
     if (!enabled || queryKey.length < 2) {
@@ -151,6 +158,7 @@ export function useDestinationFilterOptions(enabled = true, searchQuery = '', { 
     loading: loading || searchLoading,
     searchLoading,
     searchError,
+    optionsError,
     retrySearch: () => setSearchRetryKey((value) => value + 1),
   };
 }

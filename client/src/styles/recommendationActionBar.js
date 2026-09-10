@@ -3,6 +3,9 @@ import { colors } from './colors';
 import { fontFamilies } from './typography';
 
 export const recommendationActionBarStyles = StyleSheet.create({
+  compactActions: { minHeight: 44, paddingVertical: 0 },
+  readMore: { minHeight: 44, minWidth: 72, marginRight: 'auto', justifyContent: 'center', flexShrink: 1 },
+  readMoreText: { fontSize: 14, lineHeight: 20, fontFamily: fontFamilies.bold, color: colors.primary, writingDirection: 'rtl', textAlign: 'left' },
   bar: {
     backgroundColor: colors.white,
     // Isolate the physical right-hand anchor from native and inherited Web RTL.
