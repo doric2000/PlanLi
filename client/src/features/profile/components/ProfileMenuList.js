@@ -3,7 +3,8 @@ import { View, TouchableOpacity } from 'react-native';
 import AppText from "../../../components/AppText";
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors, drawerMenuListStyles as styles } from '../../../styles';
+import { colors } from '../../../styles';
+import { refreshedMenuStyles as styles } from '../../../styles/designRefresh';
 
 export default function ProfileMenuList({ items, onPressItem, notificationBadge }) {
   return (
@@ -25,7 +26,7 @@ export default function ProfileMenuList({ items, onPressItem, notificationBadge 
             <View style={styles.iconBubble} testID={`drawer-menu-icon-${itemKey}`}>
               <Ionicons name={item.icon} size={20} color={colors.primary} />
             </View>
-            <AppText numberOfLines={1} style={styles.label}>{item.label}</AppText>
+            <AppText numberOfLines={2} style={styles.label}>{item.label}</AppText>
             {showBadge ? (
               <View accessibilityLabel={`${notificationBadge} התראות חדשות`} style={styles.badge}>
                 <AppText style={styles.badgeText}>

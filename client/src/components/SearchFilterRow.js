@@ -12,6 +12,7 @@ export default function SearchFilterRow({
   style,
   testID,
   filterTestID,
+  filterColor = colors.white,
   searchTargetRef,
   searchTargetTestID,
   onSearchTargetLayout,
@@ -50,7 +51,7 @@ export default function SearchFilterRow({
         <Ionicons
           name={active ? 'options' : 'options-outline'}
           size={22}
-          color={active ? colors.accentAction : colors.white}
+          color={active ? colors.accentAction : filterColor}
         />
       </TouchableOpacity>
     </View>

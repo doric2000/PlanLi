@@ -262,6 +262,20 @@ describe('HomeScreenSearchTest', () => {
     });
   });
 
+  it.each([false, true])('keeps route creation behind the existing capability check (granted=%s)', async (granted) => {
+    mockEnsureCapability.mockResolvedValue(granted);
+    const navigation = { navigate: jest.fn() };
+    const screen = render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 44, right: 0, bottom: 34, left: 0 } }}>
+        <HomeScreen navigation={navigation} />
+      </SafeAreaProvider>
+    );
+    await act(async () => { fireEvent.press(screen.getByTestId('home-quick-action-route')); });
+    expect(mockEnsureCapability).toHaveBeenCalledWith(expect.any(String), { name: 'AddRoutesScreen' });
+    if (granted) expect(navigation.navigate).toHaveBeenCalledWith('AddRoutesScreen');
+    else expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
   it('keeps local destinations from every region in global search', () => {
     const europe = { id: 'paris', countryId: 'FR', discoveryRegionId: 'europe' };
     const africa = { id: 'nairobi', countryId: 'KE', discoveryRegionId: 'africa' };
@@ -380,7 +394,7 @@ describe('HomeScreenSearchTest', () => {
     );
 
     await waitFor(() => expect(screen.getByTestId('home-continuation-new')).toBeTruthy());
-    expect(screen.getByText('מה אפשר לעשות עכשיו?')).toBeTruthy();
+    expect(screen.getByText('יעדים ששמרת')).toBeTruthy();
     expect(screen.getByText('מסלולים חדשים')).toBeTruthy();
     expect(screen.getByText('חדש מהקהילה')).toBeTruthy();
     expect(mockRequestPersonalizedRoutes).toHaveBeenCalledWith({ sort: 'newest', limit: 4 });
@@ -760,7 +774,7 @@ describe('HomeScreenSearchTest', () => {
     });
     expect(getByTestId('home-results-title')).toHaveTextContent('תוצאות חיפוש');
     expect(queryByTestId('home-preferences-prompt')).toBeNull();
-    expect(queryByText('מה אפשר לעשות עכשיו?')).toBeNull();
+    expect(queryByText('יעדים ששמרת')).toBeNull();
     expect(queryByText('מסלולים חדשים')).toBeNull();
 
     fireEvent.press(getByTestId('city-card-athens'));
@@ -774,7 +788,7 @@ describe('HomeScreenSearchTest', () => {
     fireEvent.changeText(getByTestId('home-search-input'), '!@#');
     await waitFor(() => expect(queryByTestId('home-results-title')).toBeNull());
     expect(mockSearchDestinations).toHaveBeenCalledTimes(callsBeforePunctuation);
-    expect(queryByText('מה אפשר לעשות עכשיו?')).toBeTruthy();
+    expect(queryByText('יעדים ששמרת')).toBeTruthy();
     expect(queryByText('מסלולים חדשים')).toBeTruthy();
   });
 
@@ -822,8 +836,8 @@ describe('HomeScreenSearchTest', () => {
     );
 
     await waitFor(() => expect(mockRequestPersonalizedRoutes).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('מה מתכננים היום?')).toBeTruthy();
-    expect(screen.getByText('מה אפשר לעשות עכשיו?')).toBeTruthy();
+    expect(screen.getByText('מה נגלה היום?')).toBeTruthy();
+    expect(screen.getByText('יעדים ששמרת')).toBeTruthy();
     expect(screen.queryByText('יעדים פופולריים')).toBeNull();
     fireEvent.press(screen.getByLabelText('סינון יעדים'));
     expect(screen.getByText('סינון יעדים')).toBeTruthy();
@@ -853,17 +867,17 @@ describe('HomeScreenSearchTest', () => {
     expect(header.props.rootRef).toBeUndefined();
     expect(header.props.onLayout).toBeUndefined();
     expect(screen.getByTestId('home-search-tour-target').props.onLayout).toEqual(expect.any(Function));
-    expect(within(header).getByText('מה מתכננים היום?')).toBeTruthy();
+    expect(within(header).getByText('מה נגלה היום?')).toBeTruthy();
     expect(within(header).getByTestId('home-search-input')).toBeTruthy();
     expect(StyleSheet.flatten(within(header).getByTestId('home-search-row').props.style)).toMatchObject({
       width: '100%',
       marginTop: 12,
-      gap: 8,
+      gap: 0,
     });
     expect(StyleSheet.flatten(within(header).getByTestId('home-search-field').props.style)).toMatchObject({
       width: '100%',
       height: 48,
-      borderRadius: 16,
+      borderRadius: 10,
       paddingHorizontal: 14,
       flexDirection: 'row-reverse',
       gap: 9,
@@ -886,10 +900,10 @@ describe('HomeScreenSearchTest', () => {
       height: 44,
     });
     expect(within(scroll).queryByTestId('home-tab-header')).toBeNull();
-    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#F4F5F9');
+    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#FAF7F2');
     expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toMatchObject({
-      paddingTop: 28,
-      backgroundColor: '#F4F5F9',
+      paddingTop: 0,
+      backgroundColor: '#FAF7F2',
     });
   });
 
@@ -941,7 +955,7 @@ describe('HomeScreenSearchTest', () => {
     expect(scroll.props.contentInset).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     expect(scroll.props.scrollIndicatorInsets).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
     expect(scroll.props.contentOffset).toEqual({ x: 0, y: 0 });
-    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#F4F5F9');
+    expect(StyleSheet.flatten(scroll.props.style).backgroundColor).toBe('#FAF7F2');
   });
 
   it('keeps the Home header and replaces discovery content while refresh is pending', async () => {
@@ -971,7 +985,7 @@ describe('HomeScreenSearchTest', () => {
 
     expect(screen.getByTestId('home-tab-header')).toBeTruthy();
     expect(screen.getByTestId('home-refresh-state')).toBeTruthy();
-    expect(screen.queryByText('מה אפשר לעשות עכשיו?')).toBeNull();
+    expect(screen.queryByText('יעדים ששמרת')).toBeNull();
 
     await act(async () => {
       pendingRefresh.resolve({ mode: 'generic', items: [] });

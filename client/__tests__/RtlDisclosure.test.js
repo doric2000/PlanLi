@@ -26,7 +26,7 @@ describe('RTL disclosure rows', () => {
 
     expect(rowStyle).toEqual(expect.objectContaining({
       flexDirection: 'row-reverse',
-      minHeight: 58,
+      minHeight: 64,
     }));
     expect(StyleSheet.flatten(screen.getByText('הגדרות').props.style).writingDirection).toBe('rtl');
     expect(screen.getByText('chevron-back', { includeHiddenElements: true })).toBeTruthy();

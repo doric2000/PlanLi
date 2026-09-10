@@ -74,14 +74,14 @@ function renderHeroMedia(media, styles, fallback) {
   );
 }
 
-function StatusPill({ icon, label, color, styles, accessibilityLabel }) {
+function StatusPill({ icon, label, color, styles, accessibilityLabel, refreshed }) {
   return (
     <View
       style={[styles.statusPill, { backgroundColor: `${color}12`, borderColor: `${color}42` }]}
       accessibilityLabel={accessibilityLabel || label}
     >
       <MaterialIcons name={icon} size={16} color={color} />
-      <AppText style={[styles.statusPillText, { color }]} numberOfLines={1}>{label}</AppText>
+      <AppText style={[styles.statusPillText, { color }]} numberOfLines={refreshed ? undefined : 1}>{label}</AppText>
     </View>
   );
 }
@@ -98,6 +98,7 @@ export default function ProfileHeader({
   onEditSmartProfile,
   styles: providedStyles,
   width = 390,
+  refreshed = false,
 }) {
   const styles = providedStyles || createProfileStyles({}, width);
   const wide = width >= 900;
@@ -151,7 +152,7 @@ export default function ProfileHeader({
             ) : null}
           </View>
 
-          <AppText style={styles.name} numberOfLines={1}>{userData?.displayName || 'Traveler'}</AppText>
+          <AppText style={styles.name} numberOfLines={refreshed ? undefined : 1}>{userData?.displayName || 'Traveler'}</AppText>
 
           {bio || isOwner ? (
             <View style={styles.bioRow}>
@@ -178,6 +179,7 @@ export default function ProfileHeader({
           <View style={styles.statusRow}>
             {!statsLoading && standing ? (
               <StatusPill
+                refreshed={refreshed}
                 icon={standing.icon}
                 label={standing.label}
                 color={standing.color}
@@ -187,6 +189,7 @@ export default function ProfileHeader({
             ) : null}
             {!statsLoading && dominant ? (
               <StatusPill
+                refreshed={refreshed}
                 icon={dominant.icon}
                 label={`הכי בבית ב${dominant.label}`}
                 color={dominant.color}
@@ -196,6 +199,7 @@ export default function ProfileHeader({
             ) : null}
             {userData?.isExpert ? (
               <StatusPill
+                refreshed={refreshed}
                 icon="verified"
                 label="מומחה/ית PlanLi"
                 color={colors.secondary}
@@ -204,7 +208,7 @@ export default function ProfileHeader({
             ) : null}
           </View>
 
-          <ProfileStatsCard stats={stats} loading={statsLoading} styles={styles} />
+          <ProfileStatsCard stats={stats} loading={statsLoading} styles={styles} refreshed={refreshed} />
         </View>
       </View>
 

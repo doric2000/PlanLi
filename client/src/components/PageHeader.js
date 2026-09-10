@@ -13,6 +13,8 @@ export default function PageHeader({
   renderStart,
   renderEnd,
   renderTitleAccessory,
+  renderTopRow,
+  heroColors = colors.heroBlueGradient,
   children,
   style,
   contentStyle,
@@ -49,14 +51,14 @@ export default function PageHeader({
       {hero ? (
         <LinearGradient
           pointerEvents="none"
-          colors={colors.heroBlueGradient}
+          colors={heroColors}
           start={{ x: 0.15, y: 0 }}
           end={{ x: 0.9, y: 1 }}
           style={styles.heroBackground}
         />
       ) : null}
       <View style={[styles.content, contentStyle]}>
-        {hasTop ? <View style={[styles.topRow, detail && styles.topRowDetail]}>
+        {renderTopRow ? renderTopRow() : hasTop ? <View style={[styles.topRow, detail && styles.topRowDetail]}>
           <View style={styles.side}>{renderStart?.() || null}</View>
           <View style={styles.titleWrap}>
             <View style={styles.titleLine}>
