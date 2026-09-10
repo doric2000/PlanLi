@@ -25,6 +25,54 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Integrated navigation iPhone OTA (2026-09-10)
+
+PR [#365](https://github.com/doric2000/PlanLi/pull/365) merged as
+`193f98b77f128068ecb27d580757243997765ca0` after all applicable CI checks passed.
+The main bar now has five equal slots: Home, Community, integrated center plus,
+Favorites and Profile (RTL). The plus opens the existing recommendation/public
+route composers. Private trip planning is explicitly Coming soon. Community
+retains separate recommendation/route search, filters, scroll and map state;
+notifications open through the authenticated Profile drawer/root stack.
+
+The user explicitly requested this iOS EAS Update for their TestFlight build on
+the production channel. Published at `2026-09-10T10:36:06.773Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[ed896780](https://expo.dev/accounts/doric2000/projects/client/updates/ed896780-d9d1-47b8-bf26-848a035f0616),
+update `01a08ae3-98f5-7932-85cd-4ccbd7b8e3e6`. Candidate group
+`23109828-9705-4ba1-8790-ab883d31e2f5` used production variables on staging; its
+identical artifact was promoted without another export. At
+`2026-09-10T10:36:24.673Z`, the immutable launch bundle, server environment,
+native fingerprint and public production-channel manifest were independently
+verified. Bundle: 10,631,696 bytes; SHA-256
+`358d24ffb24fe8c9caba91d8f2c0446953fc285343860f0e003bd89bcc80adf2`.
+
+All 1096 archived files matched their Git blobs (normalizing line endings for
+three native metadata files). An initial staging candidate had a fingerprint
+mismatch caused solely by LF/CRLF differences in .gitignore, eas.json and the
+iOS Firebase plist. Those files were restored to the existing binary's exact
+bytes; the same exported bundle was reused and its fingerprint revalidated.
+First staging group `20c6c374-a1e8-4d2c-bd49-af8413844992` was never
+promoted to production. The unrelated root
+`app.json` was preserved and excluded. Native inputs match the installed
+TestFlight **1.1.1 (30)**, EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`;
+fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516`.
+No native build, version change, Apple submission/review, Android OTA or backend
+deployment occurred. The public iOS runtime 1.2.0 manifest and Android runtime
+1.3.0 response were unchanged before/after promotion. This record supersedes the
+Home/Profile correction below while retaining those fixes.
+
+OTA readiness against `d5dfb305` passed 57 related suites / 492 tests.
+The navigation/create/community-switch components were exercised at 320/390px
+widths in a browser fixture. Android emulator testing was explicitly waived by
+the user; physical iPhone application, rendering, auth and push behavior for
+this update remain pending. Manual final diff review completed; the previously
+recorded CLI/model incompatibility prevented automated CLI review.
+
+Immediate rollback group: `7950ae31-5993-4795-aabf-39506c72939c`.
+The Codex source checkpoint remains `213065097abcb7c4d399851cb610db8732cab769`.
+See [iPhone checks and rollback details](docs/navigation-refresh-iphone-checklist.md).
+
 ### iPhone Home/Profile layout correction (2026-09-10)
 
 The user's first iPhone screenshots of the refresh revealed a navy strip below
@@ -560,10 +608,9 @@ records the completed backend deployment; Rules and IAM remain unchanged.
 
 ### Navigation refresh local validation (2026-09-10)
 
-Source baseline: `2130650`; local, uncommitted implementation on
-`feat/integrated-create-navigation`. No EAS build, submission or Update was
-started for this navigation change; the production and TestFlight records above
-remain unchanged. [iPhone checks and Codex rollback checkpoint](docs/navigation-refresh-iphone-checklist.md).
+Source baseline: `2130650`; implemented on `feat/integrated-create-navigation`
+and subsequently merged through PR #365. The authorized iOS OTA is recorded
+above. The Android limitations in this section remain current. [iPhone checks and Codex rollback checkpoint](docs/navigation-refresh-iphone-checklist.md).
 
 The local Android prebuild completed, but debug compilation was stopped when
 free host memory fell below 0.5 GiB. Prebuild recreated the ignored Android
@@ -4212,3 +4259,12 @@ part of this follow-up.
   device download, restart and the final authenticated publish retry remain
   unverified; the existing Functions deployment and production data repair are
   documented in the preceding release entries.
+
+### iOS navigation OTA release record (2026-09-10)
+
+- Source: `193f98b77f128068ecb27d580757243997765ca0` (PR #365).
+- Group: `ed896780-d9d1-47b8-bf26-848a035f0616`; update: `01a08ae3-98f5-7932-85cd-4ccbd7b8e3e6`.
+- Published: `2026-09-10T10:36:06.773Z`; channel/environment `production`; runtime `1.3.0`.
+- Existing TestFlight: 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`. No new binary or Apple review.
+- Immutable artifact and delivery verified at `2026-09-10T10:36:24.673Z`; physical iPhone testing pending.
+- Rollback: republish prior group `7950ae31-5993-4795-aabf-39506c72939c` for iOS only.
