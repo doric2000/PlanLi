@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizedHash, readBaseline, validateBuild, validateFingerprint, previewNativeMetadata, verifyLocalNative } = require('./easNativeCompatibility');
+const { normalizedHash, parseEasJson, readBaseline, validateBuild, validateFingerprint, previewNativeMetadata, verifyLocalNative } = require('./easNativeCompatibility');
 const { fixture } = require('./testFixtures/easRelease');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,6 +10,14 @@ const baseline = { buildId: 'installed-build', projectId: 'project', buildNumber
 const build = { id: 'installed-build', app: { id: 'project' }, platform: 'IOS', status: 'FINISHED', appBuildVersion: '30',
   runtime: { version: '1.3.0' }, updateChannel: { name: 'production' }, fingerprint: { hash: baseline.fingerprint } };
 const check = (hash, content = 'optional import\n') => validateFingerprint({ hash, baseline, sourceRoot: '/source', readFile: () => Buffer.from(content) });
+
+test('CLI environment preamble is separated from complete JSON without exposing it on errors', () => {
+  assert.deepEqual(parseEasJson('Environment variables loaded\n{\n  "hash": "abc"\n}\n'), { hash: 'abc' });
+  assert.deepEqual(parseEasJson('[{"id":"build"}]'), [{ id: 'build' }]);
+  for (const bad of ['private-env-value\n{invalid}', 'private-env-value\n{"hash":"abc"}\ntrailing text']) {
+    assert.throws(() => parseEasJson(bad), error => error.message === 'EAS did not return one complete JSON result.');
+  }
+});
 
 test('baseline identity must agree with actual app configuration', t => {
   const f = fixture(t);

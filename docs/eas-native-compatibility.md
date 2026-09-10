@@ -27,6 +27,9 @@ missed `client/modules/**`. It was also possible to compare the wrong inputs:
 installed EAS CLI 22.6.0 handles mixed `--build-id` and `--update-id` flags as
 one first operand, then compares it to the local project. Its own example is
 misleading. Use two explicit fingerprint hashes for a server-to-server comparison.
+The same CLI prints environment-loading notices before `fingerprint:generate
+--json` output. The guard accepts a complete terminal JSON value after those
+notices and rejects malformed results without printing environment output.
 
 ## Guarded workflow
 

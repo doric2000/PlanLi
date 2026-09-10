@@ -19,6 +19,19 @@ function normalizedHash(bytes) {
   return crypto.createHash('sha256').update(Buffer.from(bytes.toString('utf8').replace(/\r\n/g, '\n'))).digest('hex');
 }
 
+function parseEasJson(output) {
+  const text = String(output).trim();
+  try { return JSON.parse(text); } catch { /* CLI 22.6 logs env loading before some JSON results. */ }
+  // Accept a complete terminal JSON value after informational lines. Never
+  // include environment output in an error or guess when the JSON is malformed.
+  const candidates = [];
+  for (const match of text.matchAll(/^[\[{]/gm)) {
+    try { candidates.push(JSON.parse(text.slice(match.index))); } catch { /* not a complete JSON value */ }
+  }
+  if (candidates.length !== 1) throw new Error('EAS did not return one complete JSON result.');
+  return candidates[0];
+}
+
 function validateBuild(build, baseline) {
   if (build.id !== baseline.buildId || build.app?.id !== baseline.projectId
     || build.platform !== 'IOS' || build.status !== 'FINISHED'
@@ -62,7 +75,7 @@ function previewNativeMetadata(channel, updateId) {
 }
 
 function verifyBuild({ runEas, baseline }) {
-  const build = JSON.parse(runEas(['build:view', baseline.buildId, '--json']));
+  const build = parseEasJson(runEas(['build:view', baseline.buildId, '--json']));
   validateBuild(build, baseline);
   return build;
 }
@@ -71,17 +84,17 @@ function verifyLocalNative({ runEas, baseline, sourceRoot }) {
   verifyBuild({ runEas, baseline });
   // CLI 22.6.0 incorrectly treats mixed --build-id/--update-id comparisons as
   // update-vs-local. Generate explicitly; never use that ambiguous command.
-  const generated = JSON.parse(runEas(['fingerprint:generate', '--platform', 'ios', '--environment', 'production', '--json', '--non-interactive']));
+  const generated = parseEasJson(runEas(['fingerprint:generate', '--platform', 'ios', '--environment', 'production', '--json', '--non-interactive']));
   return validateFingerprint({ hash: generated.hash, baseline, sourceRoot });
 }
 
 function verifyPreviewNative({ runEas, baseline, sourceRoot, update }) {
   verifyBuild({ runEas, baseline });
-  const channel = JSON.parse(runEas(['channel:view', 'staging', '--json']));
+  const channel = parseEasJson(runEas(['channel:view', 'staging', '--json']));
   const metadata = previewNativeMetadata(channel, update.id);
   if (metadata.group !== update.group) throw new Error('Candidate fingerprint group mismatch.');
   return validateFingerprint({ hash: metadata.fingerprint.hash, baseline, sourceRoot });
 }
 
-module.exports = { readBaseline, normalizedHash, validateBuild, validateFingerprint,
+module.exports = { readBaseline, normalizedHash, parseEasJson, validateBuild, validateFingerprint,
   previewNativeMetadata, verifyBuild, verifyLocalNative, verifyPreviewNative };

@@ -33,8 +33,14 @@ function verifySource(record) {
     const [mode, type, blob] = meta.split(' ');
     if (type !== 'blob' || !['100644', '100755'].includes(mode)) throw new Error(`Unsupported archive entry: ${file}`);
     const absolute = path.join(sourceRoot, file);
-    if (fs.lstatSync(absolute).isSymbolicLink()) throw new Error(`Archived file became a link: ${file}`);
-    let bytes = fs.readFileSync(absolute);
+    // Type-check and read the same open descriptor, avoiding a check/open race.
+    // O_NOFOLLOW additionally rejects links on platforms supporting that flag.
+    const descriptor = fs.openSync(absolute, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+    let bytes;
+    try {
+      if (!fs.fstatSync(descriptor).isFile()) throw new Error(`Archived entry is not a regular file: ${file}`);
+      bytes = fs.readFileSync(descriptor);
+    } finally { fs.closeSync(descriptor); }
     if (metadataCrlfSha1[file]) {
       const expected = nativeMetadataBytes(bytes, metadataCrlfSha1[file], file);
       if (!bytes.equals(expected)) throw new Error(`Native metadata line endings changed: ${file}`);
