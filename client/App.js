@@ -31,6 +31,7 @@ import NotificationPushBridge from "./src/features/notifications/push/Notificati
 import AdminPanelScreen from "./src/features/admin/screens/AdminPanelScreen";
 import PreferenceSetupGate from "./src/navigation/PreferenceSetupGate";
 import {
+	profileStackScreenOptions,
 	rtlContentScreenOptions,
 	rtlModalScreenOptions,
 	rtlStackScreenOptions,
@@ -131,24 +132,24 @@ export default function App() {
 				>
 					<Stack.Screen name='VerifyEmail' component={VerifyEmailScreen} />
 					<Stack.Screen name='CompleteAccount' component={CompleteAccountScreen} />
-					<Stack.Screen name='Terms' component={LegalDocumentScreen} />
-					<Stack.Screen name='Privacy' component={LegalDocumentScreen} />
-					<Stack.Screen name='CommunityGuidelines' component={LegalDocumentScreen} />
+					<Stack.Screen name='Terms' component={LegalDocumentScreen} options={profileStackScreenOptions} />
+					<Stack.Screen name='Privacy' component={LegalDocumentScreen} options={profileStackScreenOptions} />
+					<Stack.Screen name='CommunityGuidelines' component={LegalDocumentScreen} options={profileStackScreenOptions} />
 					<Stack.Screen name='Main' component={PreferenceSetupGate} />
-					<Stack.Screen name='RegionSelector' component={RegionSelectorScreen} />
+					<Stack.Screen name='RegionSelector' component={RegionSelectorScreen} options={profileStackScreenOptions} />
 					<Stack.Screen name='PreferenceSetup' component={PreferenceSetupScreen} />
-					<Stack.Screen name="EditProfile" component={EditProfileAuthed} />
-					<Stack.Screen name="NotificationSettings" component={NotificationSettingsAuthed} />
-					<Stack.Screen name='Settings' component={SettingsAuthed} />
-					<Stack.Screen name='BlockedUsers' component={BlockedUsersAuthed} />
-					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} />
-					<Stack.Screen name="ChangePassword" component={ChangePasswordAuthed} /> 
-					<Stack.Screen name="TotpEnrollment" component={TotpEnrollmentAuthed} />
+					<Stack.Screen name="EditProfile" component={EditProfileAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name="NotificationSettings" component={NotificationSettingsAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name='Settings' component={SettingsAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name='BlockedUsers' component={BlockedUsersAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name="ChangeName" component={ChangeNameAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name="ChangePassword" component={ChangePasswordAuthed} options={profileStackScreenOptions} />
+					<Stack.Screen name="TotpEnrollment" component={TotpEnrollmentAuthed} options={profileStackScreenOptions} />
 					<Stack.Screen name='UserProfile' component={UserProfileScreen} />
-					<Stack.Screen name="AdminPanel" component={AdminPanelAuthed} />
+					<Stack.Screen name="AdminPanel" component={AdminPanelAuthed} options={profileStackScreenOptions} />
 					<Stack.Screen name='Route' component={LegacyRoutesScreen} />
                     <Stack.Screen name='Routes' component={LegacyRoutesScreen} />
-                    <Stack.Screen name='Notifications' component={NotificationsAuthed} />
+                    <Stack.Screen name='Notifications' component={NotificationsAuthed} options={profileStackScreenOptions} />
                     <Stack.Screen
                       name='CreateMenu'
                       component={CreateMenuScreen}

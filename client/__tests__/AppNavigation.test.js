@@ -7,6 +7,7 @@ let mockAuth = { isGuest: true, isActive: false, loading: false, status: 'guest'
 const mockScreen = jest.fn(() => null);
 jest.mock('@react-navigation/stack', () => ({
   CardStyleInterpolators: { forHorizontalIOS: jest.fn() },
+  TransitionPresets: { SlideFromRightIOS: {} },
   createStackNavigator: () => ({ Navigator: ({ children }) => children, Screen: (props) => mockScreen(props) }),
 }));
 jest.mock('@react-navigation/native', () => ({
@@ -67,4 +68,15 @@ it('keeps the root notification entry protected, then renders the authenticated 
   screen.rerender(<Inbox route={{ name: 'Notifications' }} />);
   await act(async () => {});
   expect(screen.toJSON().type).toBe('InboxContent');
+});
+
+it('keeps every profile destination header in its moving screen card', () => {
+  render(<App />);
+  const screens = mockScreen.mock.calls.map(([props]) => props);
+  const { profileStackScreenOptions } = require('../src/navigation/rtlStackOptions');
+  for (const name of ['EditProfile', 'Settings', 'Notifications', 'NotificationSettings', 'ChangeName', 'ChangePassword', 'BlockedUsers', 'TotpEnrollment', 'Terms', 'Privacy', 'CommunityGuidelines', 'RegionSelector', 'AdminPanel']) {
+    expect(screens.find((screen) => screen.name === name).options).toBe(profileStackScreenOptions);
+    expect(screens.find((screen) => screen.name === name).options.headerMode).toBe('screen');
+  }
+  expect(screens.find((screen) => screen.name === 'CreateMenu').options.presentation).toBe('transparentModal');
 });

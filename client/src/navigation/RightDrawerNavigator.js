@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { Alert, Image, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
+import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,8 +17,10 @@ import { refreshedDrawerStyles as styles } from '../styles/designRefresh';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { useAdminClaim } from '../hooks/useAdminClaim';
+import { createProfileDrawerNavigator } from './ProfileDrawerNavigator';
+import useDrawerCloseAction from './useDrawerCloseAction';
 
-const Drawer = createDrawerNavigator();
+const Drawer = createProfileDrawerNavigator();
 
 const MENU_ITEMS = [
   { key: 'editProfile', icon: 'person-outline', label: 'עריכת פרופיל' },
@@ -80,7 +82,7 @@ export function DrawerIdentity({ isGuest, user, userDocument }) {
 }
 
 export function CustomDrawerContent(props) {
-  const { navigation } = props;
+  const { navigation, runAfterClose } = props;
   const insets = useSafeAreaInsets();
   const unreadCount = useUnreadCount();
   const { isGuest, user, userDocument } = useAuthUser();
@@ -99,42 +101,35 @@ export function CustomDrawerContent(props) {
       } else {
         navigation.navigate('Tabs', { screen: 'Profile', params });
       }
-      navigation.closeDrawer?.();
     },
     [navigation, isGuest]
   );
 
   const handleMenuPress = useCallback(
-    (key) => {
+    (key) => runAfterClose(navigation, () => {
       if (key === 'login' || key === 'register') {
-        navigation.closeDrawer?.();
         openAuthFlow(rootStackNav || navigation, key === 'login' ? 'Login' : 'Register');
         return;
       }
 
       if (isGuest) {
-        navigation.closeDrawer?.();
         openAuthFlow(rootStackNav || navigation, 'Login');
         return;
       }
 
       if (key === 'editProfile') {
-        navigation.closeDrawer?.();
         rootStackNav?.navigate?.('EditProfile');
         return;
       }
       if (key === 'notifications') {
-        navigation.closeDrawer?.();
         rootStackNav?.navigate?.('Notifications');
         return;
       }
       if (key === 'settings') {
-        navigation.closeDrawer?.();
         rootStackNav?.navigate?.('Settings');
         return;
       }
       if (key === 'adminPanel') {
-        navigation.closeDrawer?.();
         rootStackNav?.navigate?.('AdminPanel');
         return;
       }
@@ -142,14 +137,12 @@ export function CustomDrawerContent(props) {
         goToProfile({ openSupport: true });
         return;
       }
-      navigation.closeDrawer?.();
-    },
-    [goToProfile, isGuest, navigation, rootStackNav]
+    }),
+    [goToProfile, isGuest, navigation, rootStackNav, runAfterClose]
   );
 
   const handleSignOut = useCallback(() => {
-    navigation.closeDrawer?.();
-    setTimeout(async () => {
+    runAfterClose(navigation, async () => {
       try {
         await signOutCentral();
         (rootStackNav || navigation).reset?.({
@@ -159,8 +152,8 @@ export function CustomDrawerContent(props) {
       } catch {
         Alert.alert('שגיאה', 'לא הצלחנו להתנתק. נסו שוב.');
       }
-    }, 300);
-  }, [navigation, rootStackNav]);
+    });
+  }, [navigation, rootStackNav, runAfterClose]);
 
   return (
     <DrawerContentScrollView
@@ -225,12 +218,15 @@ export function CustomDrawerContent(props) {
 
 export default function RightDrawerNavigator() {
   const { width } = useWindowDimensions();
+  const { user, isGuest } = useAuthUser();
+  const { runAfterClose, onTransition } = useDrawerCloseAction(`${user?.uid || ''}:${isGuest}`);
   const drawerWidth = getDrawerWidth(width);
 
   return (
     <Drawer.Navigator
       id="RightDrawer"
-      drawerContent={(props) => <CustomDrawerContent {...props} />}
+      onTransition={onTransition}
+      drawerContent={(props) => <CustomDrawerContent {...props} runAfterClose={runAfterClose} />}
       screenOptions={{
         headerShown: false,
         drawerPosition: 'right',

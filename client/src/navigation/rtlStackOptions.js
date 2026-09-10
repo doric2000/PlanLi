@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { CardStyleInterpolators } from "@react-navigation/stack";
+import { CardStyleInterpolators, TransitionPresets } from "@react-navigation/stack";
 
 const iosRtlBackGesture = {
 	gestureDirection: "horizontal-inverted",
@@ -8,6 +8,15 @@ const iosRtlBackGesture = {
 export const rtlStackScreenOptions = {
 	headerShown: false,
 	...(Platform.OS === "ios" ? iosRtlBackGesture : null),
+};
+
+export const profileStackScreenOptions = {
+	headerShown: false,
+	headerMode: "screen",
+	...(Platform.OS === "ios" ? {
+		...TransitionPresets.SlideFromRightIOS,
+		...iosRtlBackGesture,
+	} : null),
 };
 
 export const rtlModalScreenOptions = {

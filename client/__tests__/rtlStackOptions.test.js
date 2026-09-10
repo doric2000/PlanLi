@@ -9,17 +9,20 @@ describe("RTL stack navigation options", () => {
 			Platform: { OS: "ios" },
 		}));
 		jest.doMock("@react-navigation/stack", () => ({
+			TransitionPresets: { SlideFromRightIOS: { transitionSpec: { open: "ios-spring", close: "ios-spring" }, cardStyleInterpolator: "horizontal-interpolator" } },
 			CardStyleInterpolators: {
 				forHorizontalIOS: "horizontal-interpolator",
 			},
 		}));
 
 		const {
+			profileStackScreenOptions,
 			rtlContentScreenOptions,
 			rtlModalScreenOptions,
 			rtlStackScreenOptions,
 		} = require("../src/navigation/rtlStackOptions");
 
+		expect(profileStackScreenOptions).toMatchObject({ headerMode: 'screen', headerShown: false, gestureDirection: 'horizontal-inverted', cardStyleInterpolator: 'horizontal-interpolator', transitionSpec: { open: 'ios-spring', close: 'ios-spring' } });
 		expect(rtlStackScreenOptions).toMatchObject({
 			headerShown: false,
 			gestureDirection: "horizontal-inverted",
@@ -42,17 +45,20 @@ describe("RTL stack navigation options", () => {
 			Platform: { OS: "android" },
 		}));
 		jest.doMock("@react-navigation/stack", () => ({
+			TransitionPresets: { SlideFromRightIOS: { transitionSpec: { open: "ios-spring", close: "ios-spring" }, cardStyleInterpolator: "horizontal-interpolator" } },
 			CardStyleInterpolators: {
 				forHorizontalIOS: "horizontal-interpolator",
 			},
 		}));
 
 		const {
+			profileStackScreenOptions,
 			rtlContentScreenOptions,
 			rtlModalScreenOptions,
 			rtlStackScreenOptions,
 		} = require("../src/navigation/rtlStackOptions");
 
+		expect(profileStackScreenOptions).toEqual({ headerShown: false, headerMode: 'screen' });
 		expect(rtlStackScreenOptions).toEqual({ headerShown: false });
 		expect(rtlModalScreenOptions).toEqual({ presentation: "modal" });
 		expect(rtlContentScreenOptions).toEqual({ headerShown: false, gestureEnabled: true });
