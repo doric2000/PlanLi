@@ -25,7 +25,63 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
-### Operation feedback implementation — unreleased (2026-09-10)
+### Community redesign iPhone OTA (2026-09-11 local / 2026-09-10 UTC)
+
+PR [#372](https://github.com/doric2000/PlanLi/pull/372) merged as
+`7c420beef68f9b61c41f9bf544e5891af99ba29e` after all applicable GitHub checks passed.
+The approved Figma Community redesign is now published for iOS: compact shared
+header, Recommendations/Routes tabs, 16:10 photos, two-line excerpts and Read more,
+independent search/filter/sort choices, destination suggestions and loading/empty/retry
+states. Kosher/accessibility filters remain; unused route audience/experience fields
+were removed from the UI and request only. Existing navigation and card actions remain.
+
+Published `2026-09-10T21:31:02.981Z`, channel/environment `production`,
+runtime `1.3.0`, group [638d125b](https://expo.dev/accounts/doric2000/projects/client/updates/638d125b-fa3a-47c7-9d78-c8c3d767229f),
+update `01a08d3b-35c5-71bd-aaff-5bcf2574c891`. Candidate group
+`65908052-d5e3-4dbf-be40-5cab871957fd` used production variables on staging;
+the identical artifact was republished without a second export. Independent verification
+at `2026-09-10T21:31:39.938Z` checked the immutable launch bundle, production
+environment, source commit and public channel manifest. Bundle: 10,768,092 bytes;
+SHA-256 `59351ccd5c0c702ad574368813c6569d6536b02dee71fb57087a027e39c27fb2`. All 1140 archived tracked files matched Git
+blobs, allowing text CRLF normalization. The unrelated root app.json was preserved
+and excluded from the release archive.
+
+Target remains TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, runtime `1.3.0`.
+No build, version change, Apple submission/review, Android OTA or backend deployment
+was performed. Public iOS runtime 1.2.0 and Android runtime 1.3.0 responses were unchanged.
+Actual download/application on the user's iPhone remains unverified.
+
+The source also includes PR #371's previously merged JavaScript operation feedback,
+Activity history and avatar queue. Its native/server background-transfer rollout remains
+pending. The candidate fingerprint `f5fac23f11fb1f2c0b1adbaf545b164644c461d3`
+differs from build 30's `0b5dd5996352ba381e65fc1a036a28eae3000516`.
+Server fingerprint comparison found exactly two deltas: the optional PlanLiTransfers
+iOS directory and its autolinking registration. Removing only that registration made
+the existing autolinking configuration identical; existing native inputs and dependency
+hashes match. An isolated execution of the actual bridge/service with the native module
+absent confirmed a null optional import and disabled background transfers. Legacy
+recommendation/avatar paths were covered by the release tests. This is a documented
+backward-compatibility assessment, not a claim that fingerprints match or that a physical
+iPhone native test passed. No new native module is delivered by this OTA.
+
+Validation: iOS OTA readiness against previous production commit
+`c6ea08e063e3f5365de598c0b2138df3316ff1d1` passed **85 suites / 731 tests**.
+The final read-only review found no remaining actionable findings. A mocked Web preview
+using real components/navigators covered search, per-tab state, filter cancellation,
+map/list and preserved scrolling, error recovery and 320/390px layouts. Physical iPhone
+keyboard, map gestures, VoiceOver and rendering checks remain pending; Android emulator
+testing was waived. See [iPhone checklist](docs/community-redesign-implementation.md).
+
+Immediate whole-OTA rollback: republish group
+`05fe7bdd-4153-43b3-a24b-14d49b3fd5c7` to production for iOS/runtime 1.3.0.
+That also rolls back the operation-feedback JavaScript included in this release. A
+Community-only source rollback uses the scoped Codex checkpoint at
+`C:/Users/doric/Desktop/PlanLi-Community-Figma/implementation-checkpoint`, baseline
+`888b97a87231e90d3bf15e06740c468eb31d62c8`, preserving unrelated changes.
+Local artifact/proof records use `.codex_tmp/validation/community-design-*`.
+
+### Operation feedback — JavaScript published; native rollout pending
 
 The implementation on `feat/operation-feedback`, based on `161270d`, adds
 shared progress/outcome feedback, private Activity history, a root-owned avatar
@@ -43,10 +99,11 @@ publication. The APK was installed on the local Android emulator and its JavaScr
 bundle compiled. At `2026-09-10T15:24Z`, the device flow failed in the existing Expo
 developer-menu Close step, before reaching app assertions; System UI had also
 reported an ANR under host memory pressure. The publication-to-Activity device flow
-remains unverified. No physical iPhone native test, EAS build, submission, OTA,
-backend/index deployment, IAM change or
-production-data write has occurred. The distributed release records below remain
-unchanged; this feature is not live.
+remains unverified. The Community OTA above now distributes the JavaScript feedback,
+Activity history and root-owned avatar queue from merged PR #371. Build 30 uses the
+existing JavaScript transfer path. No physical iPhone native test, new EAS build,
+submission, backend/index deployment, IAM change or production-data write has occurred.
+Native background transfers and server completion remain unreleased.
 
 ### Consistent profile-menu transitions iPhone OTA (2026-09-10)
 
