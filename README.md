@@ -25,7 +25,57 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Home, Profile and drawer iPhone update (2026-09-10)
+
+PR [#361](https://github.com/doric2000/PlanLi/pull/361) merged as
+`b6c46f1caead3c3a47a6f406f9c09a2c0b2f47f3` after all applicable CI checks passed.
+Home now uses the approved photo dashboard and quick actions; the profile keeps
+the full avatar visible; the right drawer separates icons, labels and badges.
+Existing Atlas, route editor, data services and authorization remain connected.
+
+The user explicitly selected TestFlight on the production channel. The iOS OTA
+was published at `2026-09-10T08:18:00.331Z`, channel/environment `production`,
+runtime `1.3.0`, group
+[514b2a9b](https://expo.dev/accounts/doric2000/projects/client/updates/514b2a9b-6ff8-49fb-bb5a-8acb9926aa1c),
+update `01a08a65-280b-7cd5-8b61-619d14adf0f5`.
+Candidate group `fe0aa846-07d2-47a5-a7b1-94db167ff024` used the production
+environment on staging; the identical artifact was promoted without another export.
+At `2026-09-10T08:18:42.568Z`, the immutable update, downloaded launch bundle
+and public production-channel manifest independently matched the source and update.
+Bundle: 10,611,820 bytes; SHA-256
+`99fe37cdb38afea98c450c685663f39f889af760c9b95d11d5c866f3272166d7`.
+
+The native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` matches
+existing iOS TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`. Fresh Apple status reported that build
+VALID / IN_BETA_TESTING. The public App Store version remains 1.1.0 (28), runtime
+1.2.0, READY_FOR_DISTRIBUTION. At `2026-09-10T08:19:20.979Z`, its public
+manifest/update `01a085cb-9dad-7568-9594-49f06866f57c` was unchanged;
+Android runtime 1.3.0 still returned no OTA (HTTP 204). No new native build,
+Apple submission/review, Android OTA or backend deployment was performed.
+
+OTA readiness against deployed source `872642e` passed 16 affected client
+suites / 120 tests. Browser checks covered 320/390px layouts, long names, guest
+content, profile tabs and the drawer. The automated CLI review could not start
+because its installed version does not support the configured model; a direct
+diff review was completed. Physical iPhone download/application, native RTL,
+enlarged text, photo upload and real authenticated flows remain unverified.
+The existing TestFlight installation has not been independently inspected.
+
+The immutable release archive matched all 1,083 tracked Git blobs. The unrelated
+untracked root `app.json` was preserved and excluded; account, project,
+production environment, lineage, native compatibility and artifact checks were
+retained. Archive mode supplied verified commit metadata and one export worker.
+The source checkpoint and verified backup remain available for Codex-only,
+per-surface restoration; there is no in-app design switch. Immediate OTA rollback
+group: `619dddfc-7bd4-4efe-a432-98d75e16f61d`.
+Open PlanLi from TestFlight 1.1.1 (30) online, then close and reopen if needed to
+apply the update. See [refresh and rollback details](docs/home-profile-design-refresh.md).
+
 ### Route editor usability iPhone update (2026-09-10)
+
+The iOS OTA below is superseded by the Home/Profile/drawer update above; the
+route editor changes and deployed indexes remain included.
 
 PR [#359](https://github.com/doric2000/PlanLi/pull/359) merged as
 `872642e261eb52eb5b3fb248caa04bd4e0925481` after all applicable CI checks passed.
