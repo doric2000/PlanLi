@@ -155,3 +155,61 @@ No native build or Apple submission was performed. The iPhone must have
 TestFlight 1.1.1 (30); opening online downloads the update for a subsequent
 restart. Physical-device installation and route photo/crop/publication acceptance
 remain pending. Android and runtime 1.2.0 delivery were not changed.
+
+## Route editor usability release (2026-09-10)
+
+PR [#359](https://github.com/doric2000/PlanLi/pull/359) merged as
+`872642e261eb52eb5b3fb248caa04bd4e0925481` after all applicable CI checks passed.
+The update adds explicit completion and collapse actions, one main editing scroll
+surface, RTL day tabs, a separate bounded stop sorter and destination-scoped,
+searchable PlanLi recommendation selection. Draft text and media remain mounted
+when switching modes.
+
+Release readiness against the previous deployed source `3b4473c` passed:
+604 client tests in 87 affected suites and 14 Firestore index tests. Final review
+found no actionable issues. A 360x740 React Native Web harness exercised scrolling,
+RTL, collapse/focus, sorting arrows, recommendation search, selection and cancel.
+The CLI review attempt was unavailable because its installed version does not
+support the selected model; a direct review was completed instead.
+
+Six new recommendation indexes were deployed with the exact
+`--only firestore:indexes` target to `planli-f0b12` / `(default)` / `eur3`.
+At `2026-09-10T05:54:51.388Z`, independent inventory verification found
+all six READY and all 128 previous indexes preserved (134 total).
+
+The iOS OTA is available on channel/environment `production`, runtime `1.3.0`:
+group `619dddfc-7bd4-4efe-a432-98d75e16f61d`, update
+`01a089e5-b9ed-7ee6-891f-8d6c19ea2399`, published `2026-09-10T05:58:49.069Z`.
+Candidate group `d0cfaff3-d836-4425-8b35-a007e4f49064` used the production
+environment on staging. The identical artifact was promoted without rebuilding.
+At `2026-09-10T05:59:18.016Z`, the immutable manifest, authenticated
+launch bundle and public production-channel manifest matched the source and update.
+Bundle: 10,597,800 bytes; SHA-256
+`35cd5abed54ba7554a78f94badae914b14f86fc9e69affabd62c603708667b04`.
+
+The release archive matched all 1,078 tracked Git blobs and excluded the unrelated
+untracked root `app.json`. Only verified source-commit metadata and a one-worker
+export limit were supplied to EAS archive mode; account, project, production
+environment, lineage, native compatibility and artifact checks were retained.
+Node used a 2 GiB heap limit without an emulator or parallel heavy tests.
+Native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` matches existing
+iOS TestFlight 1.1.1 (30), EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`.
+
+Physical iPhone download/application, touch dragging, keyboard, enlarged text,
+gallery/crops and end-to-end route publication remain unverified. No new native
+build, Apple submission/review, Android OTA, Functions, Rules, Hosting, IAM or data
+mutation accompanied this release. The previous runtime-1.3.0 production group
+`8112578f-96f8-4eb9-861c-00e3ccb5a42e` is the rollback baseline.
+Open TestFlight 1.1.1 (30) online, then force-close and reopen up to twice to
+download and apply the update. See [current environment status](../README.md#current-environment-status).
+
+Verified new indexes:
+
+| Index ID | Fields | State |
+| --- | --- | --- |
+| `CICAgLix04EK` | `status`, `publicationGate.destinationApprovalVerified`, `facets.interests` | READY |
+| `CICAgNi6rIIK` | `status`, `publicationGate.destinationApprovalVerified`, `search.prefixes` | READY |
+| `CICAgPiQxIgK` | `destination.countryId`, `destination.cityId`, `status`, `publicationGate.destinationApprovalVerified`, `stats.likeCount` | READY |
+| `CICAgNiE2YwK` | `destination.countryId`, `destination.cityId`, `status`, `publicationGate.destinationApprovalVerified`, `createdAt` | READY |
+| `CICAgPjfxJoK` | `destination.countryId`, `destination.cityId`, `status`, `publicationGate.destinationApprovalVerified`, `facets.interests` | READY |
+| `CICAgLioy50K` | `destination.countryId`, `destination.cityId`, `status`, `publicationGate.destinationApprovalVerified`, `search.prefixes` | READY |
