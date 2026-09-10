@@ -64,3 +64,16 @@ The checkpoint SHA-256, ZIP integrity and three primary screen files were verifi
 - Physical iPhone download/application and authenticated native flows are pending the user's test. Open PlanLi from TestFlight online, allow the update to download, then close and reopen if needed.
 
 Local proofs: `.codex_tmp/validation/home-refresh-{source,candidate,production}-proof.json`, `home-refresh-delivery-boundaries.json` and `home-refresh-release-readiness.log`. These ignored files contain verification evidence, not production credentials.
+
+## iPhone layout correction
+
+User-provided iPhone screenshots showed that the navy profile SafeAreaView painted its bottom inset and that Home hero image percentages resolved within a padded container. PR [#363](https://github.com/doric2000/PlanLi/pull/363), source `d5dfb30589b2c89952a1cf5c44386efbb16c1730`, removes that bottom safe-area edge while keeping list clearance and separates hero media bounds from content padding. The original design rollback checkpoint above remains unchanged.
+
+- Production group: [7950ae31](https://expo.dev/accounts/doric2000/projects/client/updates/7950ae31-5993-4795-aabf-39506c72939c); update `01a08a7a-05a8-7d90-b3f2-5b5d972944b4`; published `2026-09-10T08:40:47.784Z`; verified `2026-09-10T08:41:13.751Z`.
+- iOS only, production channel/environment, runtime 1.3.0; existing TestFlight 1.1.1 (30), EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`. Fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516`.
+- Candidate `83d5f17b-8140-42ed-a703-26aa7ad100a7` was promoted without another export. Local/downloaded bundle: 10,668,412 bytes; SHA-256 `3b84d9358e0d45c63488d208777f2a112436c3e003a1705e29b0cda459f700aa`. The public production manifest matched.
+- Release readiness against deployed `b6c46f1`: six affected suites / 45 tests passed. All applicable PR checks passed; direct diff review completed. No native build, version change, store submission or backend deployment.
+- Web fixture: 34px bottom inset, floating translucent tab bar, matching Home card/photo geometry at 320/390px, global action preserved and profile content reaching the bottom. Physical iPhone validation of the correction is pending; the earlier screenshots verify only the preceding visual refresh.
+- Immediate correction rollback: `514b2a9b-6ff8-49fb-bb5a-8acb9926aa1c`; complete pre-redesign OTA baseline remains `619dddfc-7bd4-4efe-a432-98d75e16f61d`. Restore only when requested through Codex.
+
+Proofs are under `.codex_tmp/validation/native-layout-*`, including source/artifact verification, release readiness and visual measurements.
