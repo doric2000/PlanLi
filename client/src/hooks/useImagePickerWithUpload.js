@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState, useRef } from 'react';
 
 import { prepareMedia } from '../services/MediaService';
 import { TRAVEL_UPLOAD_STALL_TIMEOUT_MS } from '../constants/travelMedia';
@@ -67,6 +67,8 @@ export const uploadUrisWithConcurrency = async (
 
 export const useImagePickerWithUpload = (options = {}) => {
   const config = { ...DEFAULT_OPTIONS, ...options };
+  const [pipelineActive, setPipelineActive] = useState(false);
+  const pipelines = useRef(0);
   const travelUpload = ['recommendation', 'route'].includes(config.kind);
   const picker = useImagePicker({
     aspect: config.aspect,
@@ -86,18 +88,22 @@ export const useImagePickerWithUpload = (options = {}) => {
   });
 
   const uploadImageAsset = useCallback(
-    async (uri, { onProgress } = {}) => {
+    async (uri, { onProgress, onStage, expectedOwnerUid } = {}) => {
       if (!uri) return null;
+      pipelines.current += 1;
+      setPipelineActive(true);
       let staging = null;
       let publishStage = 'uploading';
       try {
-        onProgress?.(0.02);
+        await onStage?.('uploading');
+        onProgress?.(0);
         const stagingStartedAt = Date.now();
         staging = await uploader.uploadImageDetailed(uri, {
+          expectedOwnerUid,
           variant: 'staging',
           resolveDownloadUrl: false,
-          stallTimeoutMs: travelUpload ? TRAVEL_UPLOAD_STALL_TIMEOUT_MS : 0,
-          onProgress: (ratio) => onProgress?.(ratio * 0.65),
+          stallTimeoutMs: TRAVEL_UPLOAD_STALL_TIMEOUT_MS,
+          onProgress,
         });
         console.info('media_staging_upload_timing', {
           kind: config.kind,
@@ -106,8 +112,8 @@ export const useImagePickerWithUpload = (options = {}) => {
         if (!staging?.path) {
           throw new Error('Staging upload did not return a Storage path.');
         }
-        onProgress?.(0.68);
         publishStage = 'processing';
+        await onStage?.('processing');
         const preparationStartedAt = Date.now();
         const asset = await prepareMedia({
           stagingPath: staging.path,
@@ -125,13 +131,16 @@ export const useImagePickerWithUpload = (options = {}) => {
         ) {
           throw new Error('Media processing returned an incomplete asset.');
         }
-        onProgress?.(1);
         return asset;
       } catch (error) {
         if (staging?.path) {
-          await uploader.removeUploadedImage(staging.path).catch(() => {});
+          // Cleanup is best effort; an offline delete must not hide the upload failure.
+          uploader.removeUploadedImage(staging.path).catch(() => {});
         }
         throw withPublishStage(error, error?.details?.publishStage || publishStage);
+      } finally {
+        pipelines.current = Math.max(0, pipelines.current - 1);
+        setPipelineActive(pipelines.current > 0);
       }
     },
     [config.kind, travelUpload, uploader]
@@ -208,7 +217,7 @@ export const useImagePickerWithUpload = (options = {}) => {
     imageUri: picker.imageUri,
     setImageUri: picker.setImageUri,
     pickerError: picker.error,
-    uploading: uploader.uploading,
+    uploading: pipelineActive,
     uploadError: uploader.uploadError,
     uploadProgress: uploader.uploadProgress,
     pickImage: picker.pickImage,

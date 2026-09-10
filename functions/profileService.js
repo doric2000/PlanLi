@@ -161,7 +161,7 @@ function sanitizeNoyaOnboarding(value) {
   return { version: value.version, status: value.status };
 }
 
-async function updateProfile({ admin, auth, data, mediaBucket }) {
+async function updateProfile({ admin, auth, data, mediaBucket, operation }) {
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
   assert(data && typeof data === 'object' && !Array.isArray(data),
     'invalid-argument', 'Profile update is invalid.');
@@ -173,6 +173,10 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
       'invalid-argument', 'completeSmartProfile must be boolean.');
   }
   const uid = auth.uid;
+  if (operation) {
+    const receipt = (await operation.ref.get()).data()?.committedResult;
+    if (receipt) return receipt;
+  }
   const displayName = cleanOptionalName(data?.displayName);
   const bio = cleanOptionalBio(data?.bio);
   assert(evaluateTextSafety([displayName, bio]).safe, 'invalid-argument', 'Profile text cannot be published.');
@@ -309,6 +313,22 @@ async function updateProfile({ admin, auth, data, mediaBucket }) {
           displayNameChangedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       }, { merge: true });
+    });
+  } else if (operation) {
+    assert(photoMedia && bio === undefined && smartProfile === undefined && noyaOnboarding === undefined,
+      'invalid-argument', 'Background profile writes must contain only a photo.');
+    await db.runTransaction(async (transaction) => {
+      const [latestSnapshot, jobSnapshot] = await Promise.all([transaction.get(userRef), transaction.get(operation.ref)]);
+      assert(jobSnapshot.data()?.ownerUid === uid && jobSnapshot.data()?.leaseId === operation.leaseId
+        && jobSnapshot.data()?.status === 'processing', 'aborted', 'The operation is no longer active.');
+      if (jobSnapshot.data()?.committedResult) return;
+      const latest = latestSnapshot.data();
+      assert(latest && !['suspended', 'deleting'].includes(latest.moderation?.status) && latest.status !== 'deleting',
+        'permission-denied', 'The profile is no longer available.');
+      assert((latest.photoMedia?.assetId || null) === operation.expectedPhotoAssetId,
+        'failed-precondition', 'The profile photo changed. Review the current photo before retrying.');
+      transaction.set(userRef, fields, { merge: true });
+      transaction.update(operation.ref, { committedResult: { photoMedia, photoURL: photoMedia.feed.url, publicationStatus: 'active' } });
     });
   } else {
     await userRef.set(fields, { merge: true });

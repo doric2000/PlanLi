@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["PlanLiTransfersModule"], "appDelegateSubscribers": ["PlanLiTransfersSubscriber"] },
+  "android": { "modules": ["expo.modules.planlitransfers.PlanLiTransfersModule"] }
+}

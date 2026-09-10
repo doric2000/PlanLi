@@ -411,6 +411,13 @@ async function deleteAccountInternal({
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
+  // Fence workers before content deletion; their commit transactions read the user and job.
+  const backgroundJobs = await db.collection('system/operations/jobs').where('ownerUid', '==', uid).get();
+  for (const entry of backgroundJobs.docs) {
+    if (typeof db.recursiveDelete === 'function') await db.recursiveDelete(entry.ref);
+    else { await deleteQueryInBatches(db, () => entry.ref.collection('items')); await deleteDocumentStrict(entry.ref); }
+  }
+  await deleteDocumentStrict(db.doc(`system/operations/owners/${uid}`));
   const ownedContent = await deleteOwnedContent({ admin, uid, mediaBucket });
   await updateJob('interactions', { ownedContent });
   const interactions = await removeAuthoredInteractions({ admin, uid });

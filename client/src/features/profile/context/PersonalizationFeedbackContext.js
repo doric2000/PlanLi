@@ -8,6 +8,7 @@ import { setPersonalizationFeedback } from '../../../services/PersonalizationSer
 import { colors } from '../../../styles/colors';
 import { fontFamilies } from '../../../styles/typography';
 import { useAuth } from '../../auth/AuthContext';
+import { useOperations } from '../../operations/OperationState';
 
 const PersonalizationFeedbackContext = createContext(null);
 
@@ -22,6 +23,11 @@ export function PersonalizationFeedbackProvider({ children }) {
   const principal = user?.uid || 'guest';
   const [hiddenPaths, setHiddenPaths] = useState(() => new Set());
   const [notice, setNotice] = useState(null);
+  const { setNoticeActive } = useOperations();
+  useEffect(() => {
+    setNoticeActive(Boolean(notice));
+    return () => setNoticeActive(false);
+  }, [notice, setNoticeActive]);
   const timerRef = useRef(null);
   const principalRef = useRef(principal);
 

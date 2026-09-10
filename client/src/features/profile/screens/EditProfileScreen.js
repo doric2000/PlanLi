@@ -120,12 +120,10 @@ export default function EditProfileScreen({ navigation }) {
     try {
       await saveProfile({ smartProfile: profile }, { completeSmartProfile: true });
       setBaseline(comparable(profile));
-      Alert.alert('נשמר', 'העדפות הטיול עודכנו.', [{ text: 'אישור', onPress: () => {
-        allowLeaveRef.current = true;
-        navigation.goBack();
-      } }]);
+      allowLeaveRef.current = true;
+      navigation.goBack();
     } catch (error) {
-      Alert.alert('שגיאה', error?.message || 'לא הצלחנו לשמור את ההעדפות.');
+      Alert.alert('השמירה לא הושלמה', 'אפשר לבדוק את פרטי הפעולה בפעילות שלי ולנסות שוב.');
     } finally {
       setSaving(false);
     }

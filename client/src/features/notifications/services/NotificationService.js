@@ -40,12 +40,16 @@ export function getNotificationFilterPredicates(channel, filter) {
   return [];
 }
 
+import { trackOperation } from '../../operations/operationService';
+
 const callables = new Map();
 
 const call = async (name, payload = {}) => {
   if (!callables.has(name)) callables.set(name, httpsCallable(cloudFunctions, name));
-  const response = await callables.get(name)(payload);
-  return response.data;
+  const execute = async () => (await callables.get(name)(payload)).data;
+  return ['setNotificationRead', 'clearNotifications', 'deleteNotification'].includes(name)
+    ? trackOperation({ kind: 'notifications', quiet: name !== 'clearNotifications', recoveryRoute: 'Notifications' }, execute)
+    : execute();
 };
 
 const notificationsRef = (userId) => collection(db, 'users', userId, 'notifications');

@@ -37,12 +37,15 @@ const leaves = [
   'notifications/screens/NotificationSettingsScreen', 'notifications/push/NotificationPushBridge',
   'admin/screens/AdminPanelScreen', 'publishing/ContentPublishBanner', 'auth/components/AuthGateModal',
   'noya/NoyaTourOverlay', 'profile/components/GuestPersonalizationBridge', 'region/screens/RegionSelectorScreen',
+  'operations/OperationBanner', 'operations/ActivityScreen',
 ];
 for (const leaf of leaves) jest.doMock('../src/features/' + leaf, () => () => null);
 jest.mock('../src/navigation/PreferenceSetupGate', () => () => null);
 jest.mock('../src/components/AppFontProvider', () => ({ children }) => children);
 jest.mock('../src/features/notifications/context/NotificationCenterContext', () => ({ NotificationCenterProvider: ({ children }) => children }));
 jest.mock('../src/features/publishing/ContentPublishContext', () => ({ ContentPublishProvider: ({ children }) => children }));
+jest.mock('../src/features/operations/OperationContext', () => ({ OperationProvider: ({ children }) => children }));
+jest.mock('../src/features/operations/ProfilePhotoContext', () => ({ ProfilePhotoProvider: ({ children }) => children }));
 jest.mock('../src/features/moderation/BlockedUsersContext', () => ({ BlockedUsersProvider: ({ children }) => children }));
 jest.mock('../src/features/noya/NoyaTourContext', () => ({ NoyaTourProvider: ({ children }) => children }));
 jest.mock('../src/features/profile/context/PersonalizationFeedbackContext', () => ({ PersonalizationFeedbackProvider: ({ children }) => children }));

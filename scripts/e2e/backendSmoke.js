@@ -50,6 +50,45 @@ async function backendSmoke() {
   assert.ok(saved.recommendationId, 'The real callable must return the published recommendation');
   await assert.rejects(uploadBytes(ref(storage, `media-staging/someone-else/${crypto.randomUUID()}.jpg`), bytes, metadata),
     (error) => error.code === 'storage/unauthorized');
+  const operationId = crypto.randomUUID(); const avatarId = crypto.randomUUID();
+  const avatarPath = `media-staging/${fixture.uid}/${avatarId}.jpg`;
+  const intent = { operationId, kind: 'avatar', items: [{ id: avatarId, bytes: bytes.length, stagingPath: avatarPath }] };
+  await assert.rejects(call('startBackgroundOperation', intent, false), /UNAUTHENTICATED/);
+  assert.equal((await call('startBackgroundOperation', intent)).status, 'uploading');
+  assert.equal((await call('startBackgroundOperation', intent)).operationId, operationId);
+  await uploadBytes(ref(storage, avatarPath), bytes, { ...metadata,
+    customMetadata: { ...metadata.customMetadata, operationId } });
+  let completion; const deadline = Date.now() + 120000;
+  do {
+    completion = await call('getBackgroundOperations', { operationId });
+    if (['success', 'review', 'failed'].includes(completion.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  } while (Date.now() < deadline);
+  assert.equal(completion.status, 'success', `Background avatar did not complete: ${JSON.stringify(completion.error || { status: completion.status })}`);
+  assert.ok(completion.result.photoMedia.assetId, 'The worker must persist the processed avatar without another client save');
+  const publicationDraft = await call('saveRecommendationDraft', { draft: {
+    step: 3, locationMode: 'destination', selectedCountry: { id: 'GB', name: 'בריטניה' },
+    selectedCity: { id: fixture.cityId, name: 'לונדון' }, categoryId: 'food', subcategoryIds: ['cafe'],
+    title: 'Local Background Publication', description: 'A synthetic server-owned publication.', budget: 'balanced',
+    details: {}, media: [], localMediaCount: 1,
+  } });
+  const publicationId = crypto.randomUUID();
+  const publicationMediaId = crypto.randomUUID();
+  const publicationPath = `media-staging/${fixture.uid}/${publicationMediaId}.jpg`;
+  await call('startBackgroundOperation', { operationId: publicationId, kind: 'recommendation',
+    draftId: publicationDraft.draftId, expectedVersion: publicationDraft.version,
+    items: [{ id: publicationMediaId, bytes: bytes.length, stagingPath: publicationPath }] });
+  await uploadBytes(ref(storage, publicationPath), bytes, { ...metadata,
+    customMetadata: { ...metadata.customMetadata, operationId: publicationId } });
+  const publicationDeadline = Date.now() + 120000;
+  let publication;
+  do {
+    publication = await call('getBackgroundOperations', { operationId: publicationId });
+    if (['success', 'review', 'failed'].includes(publication.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  } while (Date.now() < publicationDeadline);
+  assert.equal(publication.status, 'success', `Background publication failed: ${JSON.stringify(publication.error || { status: publication.status })}`);
+  assert.ok(publication.result.recommendationId);
   // Exercise the same persisted-draft state left by a previous device flow.
   const draft = await call('saveRecommendationDraft', { draft: {
     step: 2, locationMode: 'destination', selectedCountry: { id: 'GB', name: 'Britain' },
@@ -57,7 +96,7 @@ async function backendSmoke() {
     title: 'Local E2E unfinished draft', description: '', budget: '', details: {}, media: [], localMediaCount: 0,
   } });
   assert.ok(draft.draftId, 'The real draft callable must establish the composer-resume fixture');
-  console.log('PASS local backend: guest session and discovery, email login, owned upload, real media processing, publication, unauthenticated and wrong-owner rejection, persisted draft fixture.');
+  console.log('PASS local backend: guest session and discovery, email login, owned upload, real media processing, publication, unauthenticated and wrong-owner rejection, autonomous background avatar completion, persisted draft fixture.');
   } finally { await deleteApp(app); }
 }
 if (require.main === module) backendSmoke().catch((error) => { console.error(error.message); process.exitCode = 1; });

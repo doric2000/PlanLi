@@ -9,9 +9,20 @@ import {
   NotificationChannel,
   NotificationFilter,
   notificationMatchesFilter,
+  notificationRequiresAvailabilityCheck,
 } from '../src/features/notifications/models/NotificationModel';
 
 describe('NotificationModel schema v2', () => {
+  it('opens operation outcomes in Activity without requiring a public content target', () => {
+    const notification = normalizeNotification('operation_notice', {
+      type: 'system', subtype: 'operation_failed', channel: 'personal',
+      navigation: { action: 'open_operation', operationId: '123e4567-e89b-42d3-a456-426614174000' },
+    });
+    expect(buildNotificationRouteAction(notification)).toMatchObject({
+      type: 'navigate', routeName: 'Activity', params: { operationId: '123e4567-e89b-42d3-a456-426614174000' },
+    });
+    expect(notificationRequiresAvailabilityCheck(notification)).toBe(false);
+  });
   it('presents direct replies distinctly from comments on owned content', () => {
     expect(getNotificationPresentation({
       type: 'comment',

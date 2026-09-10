@@ -586,12 +586,14 @@ async function cleanupRecommendationDraftArtifacts({ admin, limit = 100, now = n
 }
 
 module.exports = {
+  readVersion,
   assertPublishableRecommendationDraft,
   assertEditableSource,
   cleanupRecommendationDraftArtifacts,
   discardRecommendationDraft,
   getCurrentRecommendationDraft,
   pointerRef,
+  receiptRef,
   publishData,
   publishRecommendationDraft,
   sanitizeRecommendationDraft,

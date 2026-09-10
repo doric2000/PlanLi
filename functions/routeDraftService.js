@@ -674,6 +674,7 @@ async function publishRouteDraft({
   placesProvider,
   restCountriesKey,
   providerRateLimitKey,
+  operation,
 }) {
   assert(auth?.uid, 'unauthenticated', 'ROUTE_DRAFT_AUTH_REQUIRED', 'You must be signed in.');
   assert(isVerifiedCaller(auth), 'permission-denied', 'ROUTE_DRAFT_AUTH_REQUIRED', 'Email verification is required.');
@@ -717,6 +718,7 @@ async function publishRouteDraft({
     restCountriesKey,
     providerRateLimitKey,
     serverTrustedPlaces,
+    operation,
   });
 
   await db.runTransaction(async (transaction) => {
@@ -750,6 +752,7 @@ async function publishRouteDraft({
 }
 
 module.exports = {
+  readDraftRevision,
   attachServerLocationBindings,
   assertEditableSource,
   cleanupPublishedRouteDraftReceipts,

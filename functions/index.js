@@ -2,6 +2,8 @@ const admin = require('firebase-admin');
 const { onCall } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onObjectFinalized } = require('firebase-functions/v2/storage');
+const backgroundOperations = require('./backgroundOperationService');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const {
   buildAllowedMediaPrefixes,
@@ -262,6 +264,38 @@ function firestoreCreated(document, handler, options = {}) {
     ...options,
   }, handler);
 }
+
+const backgroundOperationOptions = () => ({
+  admin, mediaBucket: mediaStorageBucket.value(), restCountriesKey: restCountriesKey.value(),
+  providerRateLimitKey: publicRateLimitKey.value(),
+});
+
+exports.startBackgroundOperation = callable({ access: 'active', timeoutSeconds: 60, memory: '512MiB' },
+  (request) => backgroundOperations.startBackgroundOperation({ admin, auth: request.auth, data: request.data,
+    mediaBucket: mediaStorageBucket.value() }));
+exports.getBackgroundOperations = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => backgroundOperations.getBackgroundOperations({ admin, auth: request.auth, data: request.data }));
+exports.retryBackgroundOperation = callable({ access: 'active', timeoutSeconds: 30 },
+  (request) => backgroundOperations.retryBackgroundOperation({ admin, auth: request.auth, data: request.data, mediaBucket: mediaStorageBucket.value() }));
+exports.acknowledgeBackgroundOperation = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => backgroundOperations.acknowledgeBackgroundOperation({ admin, auth: request.auth, data: request.data }));
+exports.discardBackgroundOperation = callable({ access: 'signedIn', timeoutSeconds: 30 },
+  (request) => backgroundOperations.discardBackgroundOperation({ admin, auth: request.auth, data: request.data }));
+exports.reportBackgroundTransferFailure = callable({ access: 'active', timeoutSeconds: 30 },
+  (request) => backgroundOperations.reportBackgroundTransferFailure({ admin, auth: request.auth, data: request.data }));
+exports.onBackgroundMediaUploaded = onObjectFinalized({ bucket: mediaStorageBucket, region: REGION,
+  serviceAccount: MEDIA_SERVICE_ACCOUNT, timeoutSeconds: 60, retry: true },
+  (event) => backgroundOperations.recordBackgroundUpload({ admin, object: event.data, mediaBucket: mediaStorageBucket.value() }));
+exports.onBackgroundOperationWritten = firestoreWritten('system/operations/jobs/{operationId}', (event) => {
+  const after = event.data?.after;
+  if (!after?.exists || !['ready', 'success', 'review', 'failed'].includes(after.data()?.status)) return null;
+  return backgroundOperations.processBackgroundOperation({ ...backgroundOperationOptions(), id: event.params.operationId });
+}, { timeoutSeconds: 540, memory: '1GiB', concurrency: 1, maxInstances: 3,
+  serviceAccount: MEDIA_SERVICE_ACCOUNT, secrets: [restCountriesKey, publicRateLimitKey] });
+exports.maintainBackgroundOperationsScheduled = onSchedule({ schedule: 'every 5 minutes', region: REGION,
+  timeZone: 'UTC', serviceAccount: MEDIA_SERVICE_ACCOUNT, timeoutSeconds: 540, memory: '1GiB',
+  maxInstances: 1, secrets: [restCountriesKey, publicRateLimitKey] },
+  () => backgroundOperations.maintainBackgroundOperations(backgroundOperationOptions()));
 
 async function locationSave(stage, request, task) {
   const incidentId = createIncidentId(request?.data?.incidentId);

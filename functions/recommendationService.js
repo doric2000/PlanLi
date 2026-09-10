@@ -2970,6 +2970,7 @@ async function saveRecommendation({
   resolveDestinationRef = resolveRecommendationDestinationRef,
   resolveExactPlace = resolveExactPlaceWithDestination,
   resolveExistingForEdit = resolveExistingDestination,
+  operation,
 }) {
   const saveStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -2979,6 +2980,10 @@ async function saveRecommendation({
   }
   const uid = auth.uid;
   const db = admin.firestore();
+  if (operation) {
+    const receipt = (await operation.ref.get()).data()?.committedResult;
+    if (receipt) return receipt;
+  }
   const recommendationId =
     typeof data?.recommendationId === 'string' && data.recommendationId.trim()
       ? data.recommendationId.trim()
@@ -3247,8 +3252,23 @@ async function saveRecommendation({
     interestIds: Array.from(new Set([...(facets.interests || []), ...(content.catalogInterestIds || [])])),
   });
   const transactionOutcome = await db.runTransaction(async (transaction) => {
+    if (operation) {
+      const [operationSnapshot, ownerSnapshot] = await Promise.all([
+        transaction.get(operation.ref), transaction.get(db.doc(`users/${uid}`)),
+      ]);
+      assert(operationSnapshot.data()?.ownerUid === uid && operationSnapshot.data()?.leaseId === operation.leaseId
+        && operationSnapshot.data()?.status === 'processing', 'aborted', 'The operation is no longer active.');
+      if (operationSnapshot.data()?.committedResult) return { operationResult: operationSnapshot.data().committedResult };
+      const owner = ownerSnapshot.data();
+      assert(owner && !['suspended', 'deleting'].includes(owner.moderation?.status) && owner.status !== 'deleting',
+        'permission-denied', 'The owner is no longer eligible to publish.');
+    }
     const current = await transaction.get(recommendationRef);
     const currentData = current.exists ? current.data() : null;
+    if (operation?.expectedUpdatedAt != null && recommendationId) {
+      assert((currentData?.updatedAt?.toMillis?.() || 0) === operation.expectedUpdatedAt,
+        'failed-precondition', 'The recommendation changed. Review the current content before retrying.');
+    }
     if (!recommendationId && current.exists) {
       if (
         publishRequestId &&
@@ -3558,6 +3578,13 @@ async function saveRecommendation({
         stats: { likeCount: 0, commentCount: 0 },
       });
     }
+    if (operation) transaction.update(operation.ref, { committedResult: {
+      recommendationId: recommendationRef.id,
+      country: { id: transactionPayload.destination.countryId, name: transactionPayload.destination.countryName },
+      city: { id: transactionPayload.destination.cityId, name: transactionPayload.destination.cityName },
+      discoveryRegionId: discoveryRegionForCountry(transactionPayload.destination.countryId),
+      ...publicationOutcome(current.exists ? nextStatus : (moderationHoldReason ? 'moderation_hold' : 'active')),
+    } });
     return {
       replay: false,
       destination: transactionPayload.destination,
@@ -3565,6 +3592,7 @@ async function saveRecommendation({
     };
   });
 
+  if (transactionOutcome?.operationResult) return transactionOutcome.operationResult;
   console.info('recommendation_save_timing', {
     durationMs: Date.now() - saveStartedAt,
     imageCount: media.length,

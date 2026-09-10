@@ -1,9 +1,17 @@
 import { httpsCallable } from 'firebase/functions';
 import { cloudFunctions } from '../config/firebase';
 import { captureDiagnosticException } from './ErrorReporting';
+import { trackOperation } from '../features/operations/operationService';
 
 const callables = new Map();
 const REPLAY_PROTECTED_CALLABLES = new Set(['deleteContent', 'requestAccountDeletion']);
+const FEEDBACK = {
+  setFavorite: { kind: 'favorite', quiet: true }, setReaction: { kind: 'reaction', quiet: true },
+  saveComment: { kind: 'comment' }, deleteComment: { kind: 'deletion' },
+  deleteContent: { kind: 'deletion' }, setNotificationRead: { kind: 'notifications', quiet: true },
+  clearNotifications: { kind: 'notifications' }, deleteNotification: { kind: 'notifications', quiet: true },
+  requestAccountDeletion: { kind: 'deletion' }, submitReport: { kind: 'report' }, setBlockedUser: { kind: 'block' },
+};
 
 const call = async (name, payload = {}) => {
   if (!callables.has(name)) {
@@ -12,8 +20,11 @@ const call = async (name, payload = {}) => {
       : undefined;
     callables.set(name, httpsCallable(cloudFunctions, name, options));
   }
-  const response = await callables.get(name)(payload);
-  return response.data;
+  const execute = async () => (await callables.get(name)(payload)).data;
+  return FEEDBACK[name] ? trackOperation({ ...FEEDBACK[name],
+    targetId: payload.target?.id || payload.blockedUid || payload.notificationId,
+    targetType: payload.target?.type,
+  }, execute) : execute();
 };
 
 export const setFavorite = (target, saved) =>

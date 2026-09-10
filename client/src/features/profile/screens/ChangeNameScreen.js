@@ -75,17 +75,9 @@ export default function ChangeNameScreen({ navigation }) {
     setSaving(true);
     try {
       await saveProfile({ displayName: next });
-      await u.reload();
-
-      Alert.alert('הצלחה', 'השם עודכן בהצלחה', [
-        {
-          text: 'אישור',
-          onPress: () => {
-            allowLeaveRef.current = true;
-            navigation.goBack();
-          },
-        },
-      ]);
+      await u.reload().catch(() => {});
+      allowLeaveRef.current = true;
+      navigation.goBack();
     } catch (error) {
       Alert.alert('לא הצלחנו לעדכן', formatProfileUpdateError(error, 'עדכון השם נכשל. נסו שוב.'));
     } finally {

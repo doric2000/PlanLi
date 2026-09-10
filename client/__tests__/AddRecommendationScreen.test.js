@@ -1169,13 +1169,14 @@ describe('AddRecommendationScreen Integration Test', () => {
     beforeRemoveHandler({ preventDefault, data: { action: { type: 'POP' } } });
     expect(preventDefault).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId('add-rec-submit'));
-    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalled());
-    expect(mockSaveRecommendation.mock.calls[0][0].recommendation.attributes.vibes).toEqual(['relaxed']);
-    expect(mockSaveRecommendation.mock.calls[0][0].recommendation.attributes.environment).toBe('indoor');
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalled());
+    expect(mockEnqueueCreate.mock.calls[0][0].payload.recommendationId).toBe(editItem.id);
+    expect(mockEnqueueCreate.mock.calls[0][0].payload.recommendation.attributes.vibes).toEqual(['relaxed']);
+    expect(mockEnqueueCreate.mock.calls[0][0].payload.recommendation.attributes.environment).toBe('indoor');
   });
 
-  it('reuses successfully uploaded local media after an edit save failure', async () => {
-    mockSaveRecommendation.mockRejectedValueOnce({
+  it('retains legacy edit media and target when durable enqueue fails', async () => {
+    mockEnqueueCreate.mockRejectedValueOnce({
       code: 'functions/invalid-argument',
       message: 'Review the post.',
     });
@@ -1203,12 +1204,17 @@ describe('AddRecommendationScreen Integration Test', () => {
     fireEvent.press(screen.getByTestId('add-rec-image-picker'));
     await waitFor(() => expect(mockPickImages).toHaveBeenCalledTimes(1));
     fireEvent.press(screen.getByTestId('add-rec-submit'));
-    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalledTimes(1));
-    expect(mockUploadImages).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(1));
+    expect(navigationMock.goBack).not.toHaveBeenCalled();
+    const first = mockEnqueueCreate.mock.calls[0][0];
+    expect(first.payload.recommendationId).toBe('post-1');
+    expect(first.media.length).toBeGreaterThan(0);
+    expect(mockUploadImages).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByTestId('add-rec-submit'));
-    await waitFor(() => expect(mockSaveRecommendation).toHaveBeenCalledTimes(2));
-    expect(mockUploadImages).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockEnqueueCreate).toHaveBeenCalledTimes(2));
+    expect(mockEnqueueCreate.mock.calls[1][0].media).toEqual(first.media);
+    expect(mockSaveRecommendation).not.toHaveBeenCalled();
   });
 
   it('clears hydrated attributes only after an applicable tag is removed', async () => {

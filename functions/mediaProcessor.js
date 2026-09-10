@@ -262,6 +262,7 @@ async function prepareMedia({
   data,
   mediaBucket,
   nowMs = Date.now(),
+  commitPreparedAsset,
 }) {
   const preparationStartedAt = Date.now();
   assert(auth?.uid, 'unauthenticated', 'You must be signed in.');
@@ -324,6 +325,7 @@ async function prepareMedia({
     bucket.file(`media/${auth.uid}/${assetId}/${variant}.webp`)
   );
   const descriptors = {};
+  let checkpointAttempted = false;
   try {
     const placeholder = await createPlaceholder(sourceBuffer);
     const encodedVariants = {};
@@ -345,13 +347,12 @@ async function prepareMedia({
       descriptors[variant] = writtenVariants[index];
     });
 
-    await stagingFile.delete({ ignoreNotFound: true });
     console.info('media_prepare_timing', {
       kind,
       sourceBytes,
       durationMs: Date.now() - preparationStartedAt,
     });
-    return {
+    const preparedAsset = {
       assetId,
       aspectRatio:
         descriptors.large.width / Math.max(1, descriptors.large.height),
@@ -360,8 +361,17 @@ async function prepareMedia({
       feed: descriptors.feed,
       thumb: descriptors.thumb,
     };
+    // A background job checkpoints the prepared asset before the only source is removed.
+    if (commitPreparedAsset) {
+      checkpointAttempted = true;
+      await commitPreparedAsset(preparedAsset);
+    }
+    await stagingFile.delete({ ignoreNotFound: true }).catch(() => {});
+    return preparedAsset;
   } catch (error) {
-    await removeFiles(candidateFiles);
+    // A checkpoint response can be lost after its write commits; preserve its immutable variants.
+    // Unclaimed files remain covered by the scheduled prepared-media cleanup.
+    if (!checkpointAttempted || error?.details?.reason === 'OPERATION_LEASE_LOST') await removeFiles(candidateFiles);
     if (error instanceof HttpsError) throw error;
     console.error('Media preparation failed.', {
       kind,
@@ -448,7 +458,9 @@ async function cleanupPreparedMedia({
         .collectionGroup('stops')
         .where('mediaCleanupKeys', 'array-contains-any', assetKeys)
         .get();
-      snapshot.docs.forEach((document) => {
+      const operationItems = await admin.firestore().collectionGroup('items')
+        .where('mediaCleanupKeys', 'array-contains-any', assetKeys).get();
+      [...snapshot.docs, ...operationItems.docs].forEach((document) => {
         (document.data()?.mediaCleanupKeys || []).forEach((assetKey) => {
           if (assetKeys.includes(assetKey)) referencedAssetKeys.add(assetKey);
         });

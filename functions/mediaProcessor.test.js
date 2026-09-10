@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const sharp = require('sharp');
+const { HttpsError } = require('firebase-functions/v2/https');
 
 const {
   CACHE_CONTROL,
@@ -129,6 +130,30 @@ test('recommendation variants are WebP, square and never upscale', async () => {
   assert.deepEqual([feed.width, feed.height], [240, 240]);
   assert.deepEqual([thumb.width, thumb.height], [240, 240]);
   assert.equal((await sharp(large.buffer).metadata()).format, 'webp');
+});
+
+test('background preparation removes variants after a lost lease but preserves an ambiguous checkpoint', async () => {
+  const source = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#245678' } }).jpeg().toBuffer();
+  for (const lostLease of [false, true]) {
+    const objects = new Set(); const stagingPath = 'media-staging/user-1/123e4567-e89b-42d3-a456-426614174000.jpg';
+    objects.add(stagingPath);
+    const bucket = { name: 'demo-media', file: (path) => ({
+      getMetadata: async () => [{ size: source.length, contentType: 'image/jpeg', metadata: { ownerUid: 'user-1', variant: 'staging' } }],
+      download: async () => [source], save: async () => objects.add(path), delete: async () => objects.delete(path),
+    }) };
+    const db = { doc: () => ({}), runTransaction: async (work) => work({ get: async () => ({ exists: false }), set: () => {} }) };
+    const admin = { storage: () => ({ bucket: () => bucket }),
+      firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 1 } }) };
+    await assert.rejects(prepareMedia({ admin, auth: { uid: 'user-1' }, mediaBucket: bucket.name,
+      data: { stagingPath, kind: 'avatar' }, commitPreparedAsset: async () => {
+        assert.equal(objects.size, 4, 'The source remains available until the checkpoint succeeds');
+        throw new HttpsError(lostLease ? 'aborted' : 'unavailable', 'Interrupted',
+          lostLease ? { reason: 'OPERATION_LEASE_LOST' } : undefined);
+      },
+    }));
+    assert.equal(objects.size, lostLease ? 1 : 4);
+    assert(objects.has(stagingPath));
+  }
 });
 
 test('route variants retain aspect ratio and use the configured long edges', async () => {

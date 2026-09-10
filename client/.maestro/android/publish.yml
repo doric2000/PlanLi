@@ -72,5 +72,17 @@ name: Publish a recommendation through the real local callable and rules
     notVisible:
       id: recommendation-composer-header
     timeout: 90000
-- assertVisible: Maestro Local Photo
+- tapOn:
+    id: main-tab-profile
+- extendedWaitUntil:
+    visible: "הפרופיל שלי"
+    timeout: 60000
+- tapOn: "פתיחת תפריט פרופיל"
+- tapOn:
+    id: drawer-menu-item-activity
+- assertVisible:
+    id: activity-screen
+- extendedWaitUntil:
+    visible: "ההמלצה פורסמה בהצלחה"
+    timeout: 90000
 - takeScreenshot: published-local-photo
