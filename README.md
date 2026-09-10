@@ -25,6 +25,59 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Consistent profile-menu transitions iPhone OTA (2026-09-10)
+
+PR [#369](https://github.com/doric2000/PlanLi/pull/369) merged as
+`c6ea08e063e3f5365de598c0b2138df3316ff1d1` after all applicable CI checks passed.
+The profile destinations and their account/settings subpages now share the
+existing iOS horizontal slide, RTL gesture direction and opening/closing timing.
+Screen-mode navigation headers move with their page; Android retains platform
+defaults. Drawer actions wait for actual closing completion, ignore repeated taps,
+and cancel when the account changes, the drawer reopens or the flow unmounts.
+Support remains a dialog. The installed Drawer 7.7 targets completion events at
+the navigator key, so a small adapter observes the public DrawerView emitter and
+preserves its normal delivery. Routes, parameters and native dependencies are unchanged.
+
+The authorized iOS OTA was published at `2026-09-10T12:22:18.594Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[05fe7bdd](https://expo.dev/accounts/doric2000/projects/client/updates/05fe7bdd-4153-43b3-a24b-14d49b3fd5c7),
+update `01a08b44-d2e2-7e0b-ae93-e402fb1a6895`. Candidate group
+`a343533f-96eb-4b10-8375-7832327e3887` used production variables on staging;
+the identical artifact was promoted without another export. At
+`2026-09-10T12:22:48.487Z`, the downloaded immutable launch bundle,
+server environment, native fingerprint and public production-channel manifest
+were independently verified. Bundle: 10,622,340 bytes; SHA-256
+`ff1444bff1ee25f7db63d1b95132622e4585364775c31160c6e5f29affe9f5cc`.
+
+All 1098 archived files matched their Git blobs, allowing only
+CRLF normalization for text. Native metadata bytes and source inputs match the
+installed TestFlight **1.1.1 (30)**, EAS build
+`b16eca67-6291-4520-82b6-10cb1af190f5`, fingerprint
+`0b5dd5996352ba381e65fc1a036a28eae3000516`. No native build, app-version change,
+Apple submission/review, Android OTA or backend deployment occurred.
+Public iOS runtime 1.2.0 and Android runtime 1.3.0 responses were unchanged.
+The unrelated root app.json was preserved and excluded from the archive.
+This supersedes the badge/avatar OTA below while retaining its fixes.
+
+Validation: iOS OTA readiness against
+`2a26b5521c042d4e0763deda8d5c31125cd0ee4e` passed 6 suites / 40 tests,
+including transition configuration, drawer sequencing/cancellation and Edit
+Profile's unsaved-change back/POP guard. A browser fixture used the real stack,
+drawer, headers and leave guard with mocked data, a loading state, and iOS
+interpolation forced on Web. At 390px, Edit Profile, Settings, Change Name,
+Notifications and Notification Settings each had zero relative header/body
+drift during opening and returning (387-390px travel). Observation used a
+slower linear timing in the fixture only. Discard-dialog cancel/confirm worked.
+Manual final diff review completed; the previously recorded CLI/model
+incompatibility prevents automated CLI review. Android emulator testing remains
+waived. Physical iPhone download/application, native spring timing, interactive
+and cancelled swipe gestures, and absence of device-only flashes remain unverified.
+
+Immediate rollback group: `5829a5e8-1041-4ab2-9b91-f75784f0d297`.
+Source checkpoint: `d77095674f435b0b0b68ee46ffb19892ded7d1e7`;
+local record: `.codex_tmp/design-backups/profile-transitions-20260910/checkpoint.json`.
+See [iPhone checks and rollback details](docs/navigation-refresh-iphone-checklist.md).
+
 ### Profile unread badge and Home avatar iPhone OTA (2026-09-10)
 
 The user's iPhone feedback on the integrated navigation requested a notification
@@ -4327,3 +4380,13 @@ part of this follow-up.
 - Message: Profile unread notification count and aligned Home header avatar
 - Device application, visual alignment and live notification-count checks: pending.
 - Rollback: republish verified group `ed896780-d9d1-47b8-bf26-848a035f0616` for iOS only.
+
+## iOS production OTA release
+
+- Source commit: `c6ea08e063e3f5365de598c0b2138df3316ff1d1`.
+- EAS Update group: `05fe7bdd-4153-43b3-a24b-14d49b3fd5c7`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-10T12:22:18.594Z`.
+- Immutable iOS launch bundle: update `01a08b44-d2e2-7e0b-ae93-e402fb1a6895`; 10622340 bytes; SHA-256 `FF1444BFF1EE25F7DB63D1B95132622E4585364775C31160C6E5F29AFFE9F5CC`.
+- Message: Consistent profile transitions and drawer-close sequencing
+- Device application, native transitions and interrupted swipe-back checks: pending.
+- Rollback: republish verified group `5829a5e8-1041-4ab2-9b91-f75784f0d297` for iOS only.
