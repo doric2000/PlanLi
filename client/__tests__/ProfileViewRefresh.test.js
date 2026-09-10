@@ -1,6 +1,6 @@
 import React from 'react';
 import { FlatList, StyleSheet } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 import ProfileView from '../src/features/profile/components/ProfileView';
 
@@ -50,7 +50,7 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('@expo/vector-icons', () => {
   const ReactModule = require('react');
   const { Text: MockText } = require('react-native');
-  return { MaterialIcons: ({ name }) => ReactModule.createElement(MockText, null, name) };
+  return { MaterialIcons: ({ name }) => ReactModule.createElement(MockText, null, name), Ionicons: ({ name }) => ReactModule.createElement(MockText, null, name) };
 });
 
 const baseProps = {
@@ -66,14 +66,27 @@ const baseProps = {
 };
 
 describe('ProfileView refresh behavior', () => {
+  it('routes the visible toolbar to the owner menu or public-profile back action', () => {
+    const menu = jest.fn();
+    const back = jest.fn();
+    const screen = render(<ProfileView {...baseProps} onMenuPress={menu} onBackPress={back} />);
+    fireEvent.press(screen.getByRole('button', { name: 'פתיחת תפריט פרופיל' }));
+    expect(menu).toHaveBeenCalledTimes(1);
+    expect(back).not.toHaveBeenCalled();
+    screen.rerender(<ProfileView {...baseProps} isOwner={false} onMenuPress={menu} onBackPress={back} />);
+    expect(screen.queryByRole('button', { name: 'פתיחת תפריט פרופיל' })).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'חזרה' }));
+    expect(back).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the list and identity header mounted while replacing only the grid body', () => {
     const screen = render(<ProfileView {...baseProps} refreshing />);
     const list = screen.UNSAFE_getByType(FlatList);
 
     expect(list.props.ListHeaderComponent).toBeTruthy();
     expect(list.props.stickyHeaderIndices).toBeUndefined();
-    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#28486D');
-    expect(StyleSheet.flatten(list.props.contentContainerStyle).backgroundColor).toBe('#F4F5F9');
+    expect(StyleSheet.flatten(list.props.style).backgroundColor).toBe('#FAF7F2');
+    expect(StyleSheet.flatten(list.props.contentContainerStyle).backgroundColor).toBe('#FAF7F2');
     expect(screen.getByTestId('profile-identity-header')).toBeTruthy();
     expect(screen.getByTestId('profile-content-tabs')).toBeTruthy();
     expect(screen.getByTestId('profile-refresh-state')).toBeTruthy();

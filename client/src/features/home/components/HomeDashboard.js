@@ -10,6 +10,8 @@ import { colors, homeScreenStyles as styles } from '../../../styles';
 import { getRecommendationImageUrls, getRouteImageUrls } from '../../../utils/mediaAssets';
 import { getRouteDestinationPreviews } from '../../roadtrip/utils/routeDestinationPreviews';
 
+const defaultStyles = styles;
+
 const CONTENT_FALLBACK_GRADIENTS = {
   route: ['#31557E', '#1E3A5F'],
   recommendation: ['#F5961D', '#B85E18'],
@@ -76,6 +78,7 @@ export function HomeContinuationCard({
   recentDestination,
   onPress,
   onRetry,
+  appearanceStyles: styles = defaultStyles,
 }) {
   const hasContinuation = Boolean(draft || recentDestination);
 
@@ -234,11 +237,11 @@ function recommendationCardMeta(item) {
   return place || item?.category || item?.description || 'המלצה מהקהילה';
 }
 
-function HomeContentCard({ item, kind, personalized, index, onPress }) {
+function HomeContentCard({ item, kind, personalized, index, onPress, styles = defaultStyles }) {
   const isRoute = kind === 'route';
   const imageUrl = isRoute
-    ? getRouteImageUrls(item, 'thumb')[0] || item?.thumbnail_url || null
-    : getRecommendationImageUrls(item, 'thumb')[0] || item?.thumbnail_url || null;
+    ? getRouteImageUrls(item, 'feed')[0] || getRouteImageUrls(item, 'thumb')[0] || item?.thumbnail_url || null
+    : getRecommendationImageUrls(item, 'feed')[0] || getRecommendationImageUrls(item, 'thumb')[0] || item?.thumbnail_url || null;
   const title = item?.title || (isRoute ? 'מסלול לטיול הבא' : 'המלצה ששווה לשמור');
   const meta = isRoute ? routeCardMeta(item) : recommendationCardMeta(item);
 
@@ -298,7 +301,7 @@ function HomeContentCard({ item, kind, personalized, index, onPress }) {
   );
 }
 
-function RailStatus({ kind, error, onRetry, onSeeAll }) {
+function RailStatus({ kind, error, onRetry, onSeeAll, styles = defaultStyles }) {
   return (
     <View style={styles.railStatus} testID={`home-${kind}-${error ? 'error' : 'empty'}`}>
       <View style={styles.railStatusIcon}>
@@ -328,7 +331,7 @@ function RailStatus({ kind, error, onRetry, onSeeAll }) {
   );
 }
 
-function RailRefreshNotice({ kind, loading, error, onRetry }) {
+function RailRefreshNotice({ kind, loading, error, onRetry, styles = defaultStyles }) {
   if (!loading && !error) return null;
   if (loading) {
     return (
@@ -367,6 +370,7 @@ export function HomeContentRail({
   onRetry,
   onSeeAll,
   onItemPress,
+  appearanceStyles: styles = defaultStyles,
 }) {
   const personalized = mode === 'personalized';
   const isRoute = kind === 'route';
@@ -408,10 +412,11 @@ export function HomeContentRail({
           ))}
         </View>
       ) : !hasItems ? (
-        <RailStatus kind={kind} error={error} onRetry={onRetry} onSeeAll={onSeeAll} />
+        <RailStatus kind={kind} error={error} onRetry={onRetry} onSeeAll={onSeeAll} styles={styles} />
       ) : (
         <>
           <RailRefreshNotice
+            styles={styles}
             kind={kind}
             loading={loading}
             error={error}
@@ -420,6 +425,7 @@ export function HomeContentRail({
           <RtlHorizontalScrollView contentContainerStyle={styles.contentRail}>
             {items.map((item, index) => (
               <HomeContentCard
+                styles={styles}
                 key={item?.id || `${kind}-${index}`}
                 item={item}
                 kind={kind}

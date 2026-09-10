@@ -22,6 +22,7 @@ export function ProfileContentHeader({
   pendingCount = 0,
   showPending = false,
   title = 'התוכן שלי',
+  compact = false,
 }) {
   const renderTab = (tab, label, count, icon) => {
     const isActive = contentTab === tab;
@@ -34,11 +35,11 @@ export function ProfileContentHeader({
         accessibilityState={{ selected: isActive }}
         accessibilityLabel={`${label}, ${count}`}
       >
-        <MaterialIcons
+        {!compact ? <MaterialIcons
           name={icon}
           size={18}
           color={isActive ? colors.white : colors.textSecondary}
-        />
+        /> : null}
         <AppText style={[styles.contentTabText, isActive && styles.contentTabTextActive]}>
           {label} {count}
         </AppText>

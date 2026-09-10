@@ -6,7 +6,6 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
 
 import { getContentGridColumns } from '../../../components/ContentTile';
 import { colors } from '../../../styles';
@@ -23,6 +22,9 @@ import { selectProfileHeroMedia } from '../utils/profileMetrics';
 import ReportButton from '../../moderation/components/ReportButton';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import EmptyState from '../../../components/EmptyState';
+import AppText from '../../../components/AppText';
+import { Ionicons } from '@expo/vector-icons';
+import { createRefreshedProfileStyles } from '../../../styles/profileRefresh';
 
 export default function ProfileView({
   navigation,
@@ -50,7 +52,10 @@ export default function ProfileView({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const gridColumns = getContentGridColumns(width);
-  const styles = useMemo(() => createProfileStyles(insets, width, gridColumns), [insets, width, gridColumns]);
+  const styles = useMemo(() => {
+    const classic = createProfileStyles(insets, width, gridColumns);
+    return createRefreshedProfileStyles(classic, width, gridColumns);
+  }, [insets, width, gridColumns]);
   const [contentTab, setContentTab] = useState('recommendations');
   const [bioModalVisible, setBioModalVisible] = useState(false);
   const profileListRef = useRef(null);
@@ -83,31 +88,15 @@ export default function ProfileView({
 
   return (
     <SafeAreaView style={styles.screen}>
-      {isOwner && typeof onMenuPress === 'function' ? (
-        <Pressable
-          style={[styles.topAction, styles.topActionEnd]}
-          onPress={onMenuPress}
-          accessibilityRole="button"
-          accessibilityLabel="פתיחת תפריט פרופיל"
-        >
-          <MaterialIcons name="menu" size={24} color={colors.textPrimary} />
-        </Pressable>
-      ) : null}
-      {!isOwner && typeof onBackPress === 'function' ? (
-        <Pressable
-          style={[styles.topAction, styles.topActionEnd]}
-          onPress={onBackPress}
-          accessibilityRole="button"
-          accessibilityLabel="חזרה"
-        >
-          <MaterialIcons name="arrow-forward" size={23} color={colors.textPrimary} />
-        </Pressable>
-      ) : null}
-      {!isOwner && profileUid ? (
-        <View style={[styles.topAction, styles.topActionStart]}>
-          <ReportButton target={{ type: 'profile', id: profileUid }} ownerId={profileUid} compact />
-        </View>
-      ) : null}
+      <View style={styles.toolbar} testID="profile-refresh-toolbar">
+        {typeof (isOwner ? onMenuPress : onBackPress) === 'function' ? (
+          <Pressable style={styles.toolbarAction} onPress={isOwner ? onMenuPress : onBackPress} accessibilityRole="button" accessibilityLabel={isOwner ? 'פתיחת תפריט פרופיל' : 'חזרה'}>
+            <Ionicons name={isOwner ? 'menu-outline' : 'arrow-forward-outline'} size={26} color={colors.white} />
+          </Pressable>
+        ) : null}
+        <AppText style={styles.toolbarTitle} numberOfLines={1}>{isOwner ? 'הפרופיל שלי' : 'פרופיל המטייל/ת'}</AppText>
+        {!isOwner && profileUid ? <ReportButton target={{ type: 'profile', id: profileUid }} ownerId={profileUid} compact color={colors.white} subjectLabel="פרופיל" /> : null}
+      </View>
 
       <FlatList
         style={styles.list}
@@ -145,6 +134,7 @@ export default function ProfileView({
               onEditSmartProfile={onEditSmartProfile}
               styles={styles}
               width={width}
+              refreshed
             />
             <ProfileContentHeader
               styles={styles}
@@ -156,6 +146,7 @@ export default function ProfileView({
               pendingCount={pendingContent.length}
               showPending={isOwner}
               title={title}
+              compact
             />
           </View>
         )}

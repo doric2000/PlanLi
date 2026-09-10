@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import AppText from '../../../components/AppText';
 import CachedImage from '../../../components/CachedImage';
+import { Avatar } from '../../../components/Avatar';
 import CityCard from '../../../components/CityCard';
 import { CenteredRefreshControl, CenteredRefreshState } from '../../../components/CenteredRefresh';
 import DestinationFilterModal from '../../../components/DestinationFilterModal';
@@ -69,15 +70,11 @@ import {
   shouldInviteGuestToNoya,
   wasNoyaAccountHandled,
 } from '../../profile/services/NoyaOnboardingStorage';
-import {
-  HomeContentRail,
-  HomeContinuationCard,
-  HomeQuickActions,
-} from '../components/HomeDashboard';
-import HomeRegionPreviewChip from '../../region/components/HomeRegionPreviewChip';
 import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
 import { isRegionDiscoveryEnabled, isRegionSelectorPreviewEnabled } from '../../region/regionDefinitions';
 import { shouldAutoOpenRegionSelector } from '../../region/utils/regionSelectorHomeGate';
+import HomeRefreshDashboard from '../components/HomeRefreshDashboard';
+import { homeRefreshStyles as refreshStyles } from '../../../styles/designRefresh';
 
 const NOYA_IMAGE = require('../../../../assets/noya-assistant.png');
 const DESTINATION_PLACEHOLDER_COLORS = ['#78909C', '#607D8B', '#526878'];
@@ -738,13 +735,40 @@ export default function HomePlanningHubScreen({ navigation }) {
   const renderHeader = () => (
     <PageHeader
       variant="hero"
-      title="מה מתכננים היום?"
+      title="מה נגלה היום?"
+      heroColors={[colors.primary, colors.primary]}
+      contentStyle={refreshStyles.headerContent}
+      renderTopRow={() => (
+        <View style={refreshStyles.greetingRow}>
+          <View style={refreshStyles.greetingCopy}>
+            <AppText style={refreshStyles.greeting} numberOfLines={1}>
+              {isGuest ? 'ברוכים הבאים ל־PlanLi' : `שלום, ${userDocument?.displayName || user?.displayName || 'מטיילים'}`}
+            </AppText>
+            <AppText style={refreshStyles.greetingTitle} numberOfLines={1}>מה נגלה היום?</AppText>
+          </View>
+          <TouchableOpacity
+            style={refreshStyles.headerAvatar}
+            onPress={() => navigation.navigate(isGuest ? 'Auth' : 'Profile')}
+            accessibilityRole="button"
+            accessibilityLabel={isGuest ? 'התחברות' : 'הפרופיל שלי'}
+            testID="home-profile-shortcut"
+          >
+            <Avatar
+              size={44}
+              photoURL={isGuest ? undefined : userDocument?.photoURL || user?.photoURL}
+              photoMedia={isGuest ? undefined : userDocument?.photoMedia}
+              displayName={isGuest ? undefined : userDocument?.displayName || user?.displayName}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
       allowOverflow
       style={tabHeroStyles.fixedHeader}
       testID="home-tab-header"
     >
       <SearchFilterRow
-        style={tabHeroStyles.searchRow}
+        style={[tabHeroStyles.searchRow, refreshStyles.searchRow]}
+        filterColor={colors.primary}
         searchTargetRef={homeSearchTourTarget.ref}
         searchTargetTestID="home-search-tour-target"
         onSearchTargetLayout={homeSearchTourTarget.onLayout}
@@ -771,15 +795,15 @@ export default function HomePlanningHubScreen({ navigation }) {
           onSelectLocal={selectLocalDestination}
           onSelect={handleGoogleSelect}
           googleFallbackDelayMs={2000}
-          searchIconColor="rgba(255,255,255,0.62)"
+          searchIconColor={colors.primary}
           searchIconSize={TAB_HERO_SEARCH_ICON_SIZE}
           searchIconStyle={tabHeroStyles.searchIcon}
-          placeholderTextColor="rgba(255,255,255,0.48)"
-          loaderColor="#FFFFFF"
+          placeholderTextColor="#647184"
+          loaderColor={colors.primary}
           loaderStyle={styles.searchLoader}
-          inputWrapperStyle={tabHeroStyles.searchField}
+          inputWrapperStyle={[tabHeroStyles.searchField, refreshStyles.searchField]}
           inputWrapperTestID="home-search-field"
-          inputStyle={tabHeroStyles.searchInput}
+          inputStyle={[tabHeroStyles.searchInput, refreshStyles.searchInput]}
           listContainerStyle={styles.searchDropdown}
         />
       </SearchFilterRow>
@@ -787,49 +811,23 @@ export default function HomePlanningHubScreen({ navigation }) {
   );
 
   const renderDashboard = () => (
-    <View style={styles.dashboard} testID="home-dashboard">
-      {isRegionSelectorPreviewEnabled() || isRegionDiscoveryEnabled() ? (
-        <HomeRegionPreviewChip
-          regionId={selectedRegionId}
-          mode={selectedMode}
-          onPress={() => openRegionSelectorFrom(navigation, 'home-change')}
-        />
-      ) : null}
-      <HomeContinuationCard
-        loading={draftLoading || recentLoading}
-        error={draftError}
-        draft={draft}
-        recentDestination={recentDestinations[0]}
-        onPress={handleContinuationPress}
-        onRetry={loadDraft}
-      />
-      <HomeQuickActions
-        onCreateRoute={openRouteBuilder}
-        onOpenCommunity={() => navigation.navigate('Community')}
-        onOpenFavorites={openFavorites}
-      />
-      {renderPreferencePrompt()}
-      <HomeContentRail
-        kind="route"
-        items={routes}
-        loading={routesLoading}
-        error={routesError}
-        mode={routesMode}
-        onRetry={loadRoutes}
-        onSeeAll={() => navigation.navigate('Routes')}
-        onItemPress={(item) => navigation.navigate('RouteDetail', { routeId: item.id })}
-      />
-      <HomeContentRail
-        kind="recommendation"
-        items={recommendations}
-        loading={recommendationsLoading}
-        error={recommendationsError}
-        mode={recommendationsMode}
-        onRetry={loadRecommendations}
-        onSeeAll={() => navigation.navigate('Community')}
-        onItemPress={(item) => navigation.navigate('RecommendationDetail', { item, postId: item.id })}
-      />
-    </View>
+    <HomeRefreshDashboard
+      regionId={selectedRegionId}
+      mode={selectedMode}
+      showRegion={isRegionSelectorPreviewEnabled() || isRegionDiscoveryEnabled()}
+      isGuest={isGuest}
+      favoriteCities={favoriteCities}
+      onCreateRoute={openRouteBuilder}
+      onOpenProfile={() => navigation.navigate(isGuest ? 'Auth' : 'Profile')}
+      onOpenFavorites={openFavorites}
+      onOpenCommunity={() => navigation.navigate('Community')}
+      onChangeRegion={() => openRegionSelectorFrom(navigation, 'home-change')}
+      onOpenDestination={selectLocalDestination}
+      continuation={{ loading: draftLoading || recentLoading, error: draftError, draft, recentDestination: recentDestinations[0], onPress: handleContinuationPress, onRetry: loadDraft }}
+      routes={{ items: routes, loading: routesLoading, error: routesError, mode: routesMode, onRetry: loadRoutes, onSeeAll: () => navigation.navigate('Routes'), onItemPress: (item) => navigation.navigate('RouteDetail', { routeId: item.id }) }}
+      recommendations={{ items: recommendations, loading: recommendationsLoading, error: recommendationsError, mode: recommendationsMode, onRetry: loadRecommendations, onSeeAll: () => navigation.navigate('Community'), onItemPress: (item) => navigation.navigate('RecommendationDetail', { item, postId: item.id }) }}
+      preferencePrompt={renderPreferencePrompt()}
+    />
   );
 
   const renderDestinationResults = () => {
@@ -885,7 +883,7 @@ export default function HomePlanningHubScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['left', 'right']}>
+    <SafeAreaView style={[styles.screen, refreshStyles.screen]} edges={['left', 'right']}>
       {isFocused ? (
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       ) : null}
@@ -893,7 +891,7 @@ export default function HomePlanningHubScreen({ navigation }) {
       <ScrollView
         ref={mainScrollRef}
         testID="home-scroll"
-        style={styles.scroll}
+        style={[styles.scroll, refreshStyles.screen]}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustContentInsets={false}
         automaticallyAdjustsScrollIndicatorInsets={false}
@@ -903,6 +901,7 @@ export default function HomePlanningHubScreen({ navigation }) {
         contentContainerStyle={[
           styles.scrollContent,
           tabHeroStyles.bodyContentInset,
+          refreshStyles.scrollContent,
           { paddingBottom: 116 + insets.bottom },
         ]}
         onScroll={onScroll}
@@ -918,7 +917,7 @@ export default function HomePlanningHubScreen({ navigation }) {
             testID={confirming ? 'home-refresh-confirmation' : 'home-refresh-state'}
           />
         ) : isResultsView ? (
-          <View style={styles.body}>{renderDestinationResults()}</View>
+          <View style={[styles.body, refreshStyles.screen]}>{renderDestinationResults()}</View>
         ) : renderDashboard()}
       </ScrollView>
       <DestinationFilterModal

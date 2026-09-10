@@ -12,7 +12,8 @@ import TabNavigator from './TabNavigator';
 import ProfileMenuList from '../features/profile/components/ProfileMenuList';
 import { signOutCentral } from '../services/AuthService';
 import { openAuthFlow } from './authNavigation';
-import { colors, common, userDrawerStyles as styles } from '../styles';
+import { colors, common } from '../styles';
+import { refreshedDrawerStyles as styles } from '../styles/designRefresh';
 import { useUnreadCount } from '../features/notifications/hooks/useUnreadCount';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { useAdminClaim } from '../hooks/useAdminClaim';
@@ -45,7 +46,7 @@ export function DrawerIdentity({ isGuest, user, userDocument }) {
 
   return (
     <LinearGradient
-      colors={colors.heroBlueGradient}
+      colors={[colors.primary, colors.primary]}
       end={{ x: 0.9, y: 1 }}
       start={{ x: 0.1, y: 0 }}
       style={styles.identityCard}
@@ -60,11 +61,11 @@ export function DrawerIdentity({ isGuest, user, userDocument }) {
           displayName={displayName}
           photoMedia={photoMedia}
           photoURL={photoURL}
-          size={60}
+          size={56}
         />
       )}
       <View style={styles.identityCopy}>
-        <AppText numberOfLines={1} style={styles.identityName}>
+        <AppText numberOfLines={2} style={styles.identityName}>
           {isGuest ? 'הטיול הבא מתחיל כאן' : displayName}
         </AppText>
         <AppText
