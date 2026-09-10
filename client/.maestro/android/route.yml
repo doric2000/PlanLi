@@ -4,9 +4,13 @@ name: Build and publish a three-day route on one page
 - runFlow: helpers/boot.yml
 - runFlow: helpers/login.yml
 - tapOn:
-    id: main-tab-routes
+    id: main-tab-community
 - tapOn:
-    id: routes-add-button
+    id: community-mode-routes
+- tapOn:
+    id: main-create-button
+- tapOn:
+    id: create-route
 - extendedWaitUntil:
     visible:
       id: "route-title-input|route-draft-discard"

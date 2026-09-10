@@ -15,7 +15,9 @@ import AddRecommendationScreen from "./src/features/community/screens/AddRecomme
 import RecommendationDetailScreen from "./src/features/community/screens/RecommendationDetailScreen";
 import AddRoutesScreen from "./src/features/roadtrip/screens/AddRoutesScreen";
 import UserProfileScreen from "./src/features/profile/screens/UserProfileScreen";
-import RoutesScreen from "./src/features/roadtrip/screens/RoutesScreen";
+import LegacyRoutesScreen from "./src/navigation/LegacyRoutesScreen";
+import CreateMenuScreen from "./src/navigation/CreateMenuScreen";
+import NotificationScreen from "./src/features/notifications/screens/NotificationScreen";
 import RouteDetailScreen from "./src/features/roadtrip/screens/RouteDetailScreen";
 import RouteMapScreen from "./src/features/roadtrip/screens/RouteMapScreen";
 import SettingsScreen from "./src/features/profile/screens/SettingsScreen";
@@ -54,6 +56,7 @@ const Stack = createStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 const EditProfileAuthed = withRequireAuth(EditProfileScreen);
+const NotificationsAuthed = withRequireAuth(NotificationScreen);
 const NotificationSettingsAuthed = withRequireAuth(NotificationSettingsScreen);
 const SettingsAuthed = withRequireAuth(SettingsScreen);
 const ChangeNameAuthed = withRequireAuth(ChangeNameScreen);
@@ -113,7 +116,7 @@ export default function App() {
 				 <BlockedUsersProvider>
 				 <NotificationCenterProvider>
 				 <ContentPublishProvider>
-				 <NoyaTourProvider currentRouteName={currentRouteName} navigationReady={navigationReady} navigationRef={navigationRef}>
+				 <NoyaTourProvider currentRouteName={currentRouteName === 'CommunityFeed' ? 'Community' : currentRouteName} navigationReady={navigationReady} navigationRef={navigationRef}>
 				<NavigationContainer
 					ref={navigationRef}
 					onReady={() => {
@@ -143,7 +146,19 @@ export default function App() {
 					<Stack.Screen name="TotpEnrollment" component={TotpEnrollmentAuthed} />
 					<Stack.Screen name='UserProfile' component={UserProfileScreen} />
 					<Stack.Screen name="AdminPanel" component={AdminPanelAuthed} />
-					<Stack.Screen name='Route' component={RoutesScreen} />
+					<Stack.Screen name='Route' component={LegacyRoutesScreen} />
+                    <Stack.Screen name='Routes' component={LegacyRoutesScreen} />
+                    <Stack.Screen name='Notifications' component={NotificationsAuthed} />
+                    <Stack.Screen
+                      name='CreateMenu'
+                      component={CreateMenuScreen}
+                      options={{
+                        presentation: 'transparentModal',
+                        cardStyle: { backgroundColor: 'transparent' },
+                        gestureEnabled: false,
+                        cardStyleInterpolator: ({ current }) => ({ cardStyle: { opacity: current.progress } }),
+                      }}
+                    />
 					<Stack.Screen
 						name='AddRecommendation'
 						component={AddRecommendationActive}

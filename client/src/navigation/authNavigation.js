@@ -17,9 +17,11 @@ const AUTH_FLOW_PATH = (screen, screenParams) => ({
   },
 });
 
-const MAIN_TAB_PATH = (screen) => ({
+export const buildMainTabPath = (screen) => ({
   screen: 'Tabs',
-  params: { screen },
+  params: ['Routes', 'CommunityFeed'].includes(screen)
+    ? { screen: 'Community', params: { screen } }
+    : { screen },
 });
 
 const ADMIN_AUTH_PATH = (screen, screenParams) => ({
@@ -50,7 +52,7 @@ export function openMainTab(navigation, screen = 'Home') {
     getRootNavigation(navigation)?.navigate?.('AdminPanel');
     return;
   }
-  getRootNavigation(navigation)?.navigate?.('Main', MAIN_TAB_PATH(screen));
+  getRootNavigation(navigation)?.navigate?.('Main', buildMainTabPath(screen));
 }
 
 export function getAuthFallbackTab(routeName) {

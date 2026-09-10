@@ -204,7 +204,7 @@ describe('CommunityScreen map mode', () => {
     screen.rerender(<CommunityScreen navigation={navigation} />);
 
     await waitFor(() => expect(screen.getByTestId('community-sort-button')).toBeTruthy());
-    expect(screen.getByTestId('community-add-button')).toBeTruthy();
+    expect(screen.queryByTestId('community-add-button')).toBeNull();
     expect(screen.queryByTestId('mock-community-map')).toBeNull();
   });
 
@@ -240,7 +240,7 @@ describe('CommunityScreen map mode', () => {
     expect(screen.getByTestId('community-filter-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-sort-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('community-map-toggle').props.onLayout).toEqual(expect.any(Function));
-    expect(screen.getByTestId('community-add-button').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.getByTestId('community-mode-recommendations').props.accessibilityState.selected).toBe(true);
     expect(within(list).queryByTestId('community-tab-header')).toBeNull();
     expect(StyleSheet.flatten(list.props.ListHeaderComponent.props.style)).toMatchObject({
       paddingTop: 28,

@@ -21,6 +21,8 @@ import {
   saveNoyaProductTourProgress,
 } from './services/NoyaProductTourStorage';
 
+import { buildMainTabPath } from '../../navigation/authNavigation';
+
 const ROOT_SCOPE = 'root';
 export const MAIN_TOUR_LOADING_TIMEOUT_MS = 8000;
 export const MAIN_TOUR_TAB_REVEAL_DELAY_MS = 300;
@@ -145,11 +147,18 @@ export function NoyaTourProvider({
 
   const navigateToMainTab = useCallback((tabName) => {
     if (!tabName) return;
-    try {
-      if (navigationRef?.isReady?.()) navigationRef.navigate('Main');
-    } catch {}
     const navigate = () => {
-      try { tabNavigationRef.current?.navigate?.(tabName); } catch {}
+      const destination = tabName === 'Community' ? 'CommunityFeed' : tabName;
+      try {
+        if (navigationRef?.isReady?.()) {
+          navigationRef.navigate('Main', buildMainTabPath(destination));
+          return;
+        }
+        const registered = tabNavigationRef.current;
+        const tabs = registered?.getParent?.('MainTabs') || registered;
+        const path = buildMainTabPath(destination).params;
+        tabs?.navigate?.(path.screen, path.params);
+      } catch {}
     };
     navigate();
     setTimeout(navigate, 40);

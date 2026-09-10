@@ -8,6 +8,16 @@ import {
 } from '../src/navigation/authNavigation';
 
 describe('authentication navigation helpers', () => {
+  it('maps legacy Routes and explicit recommendations to Community modes', () => {
+    const navigation = { navigate: jest.fn() };
+    openMainTab(navigation, 'Routes');
+    expect(navigation.navigate).toHaveBeenLastCalledWith('Main', { screen: 'Tabs', params: { screen: 'Community', params: { screen: 'Routes' } } });
+    openMainTab(navigation, 'CommunityFeed');
+    expect(navigation.navigate).toHaveBeenLastCalledWith('Main', { screen: 'Tabs', params: { screen: 'Community', params: { screen: 'CommunityFeed' } } });
+    openMainTab(navigation, 'Community');
+    expect(navigation.navigate).toHaveBeenLastCalledWith('Main', { screen: 'Tabs', params: { screen: 'Community' } });
+  });
+
   it('opens authentication inside the Auth tab instead of a root screen', () => {
     const rootNavigation = { navigate: jest.fn() };
     const nestedNavigation = { getParent: jest.fn(() => rootNavigation) };

@@ -558,6 +558,21 @@ It excludes the unrelated uncommitted media patch. This archive preparation made
 no production changes. The separately authorized destination release above
 records the completed backend deployment; Rules and IAM remain unchanged.
 
+### Navigation refresh local validation (2026-09-10)
+
+Source baseline: `2130650`; local, uncommitted implementation on
+`feat/integrated-create-navigation`. No EAS build, submission or Update was
+started for this navigation change; the production and TestFlight records above
+remain unchanged. [iPhone checks and Codex rollback checkpoint](docs/navigation-refresh-iphone-checklist.md).
+
+The local Android prebuild completed, but debug compilation was stopped when
+free host memory fell below 0.5 GiB. Prebuild recreated the ignored Android
+directory; the previous cached APK is no longer available for reuse, and the
+old native-build receipt does not certify current inputs. No replacement APK
+was completed or installed. The user then requested continuing without emulator
+checks and will test on iPhone. The last installed tester state below is historical,
+not validation of this navigation change.
+
 ### Local Android validation (2026-09-09)
 
 The current local debug APK was rebuilt at `2026-09-09T18:44:11.613Z`

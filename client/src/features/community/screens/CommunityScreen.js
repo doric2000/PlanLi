@@ -11,7 +11,7 @@ import SearchFilterRow from '../../../components/SearchFilterRow';
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
 import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
-import FabButton from '../../../components/FabButton';
+import CommunityContentSwitch from '../components/CommunityContentSwitch';
 import ActiveFiltersList from '../../../components/ActiveFiltersList';
 import { SortMenuModal } from '../components/SortMenuModal';
 import CommunityInlineMap from '../components/CommunityInlineMap';
@@ -36,13 +36,9 @@ import {
   tabHeroStyles,
   TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
-import { useAuthUser } from '../../../hooks/useAuthUser';
-import { CAPABILITIES } from '../../../constants/authPolicy';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import {
-  getFabBottomInset,
   getTabOverlayBottomInset,
-  getTabSceneListPaddingBottom,
 } from '../../../navigation/tabBarLayout';
 import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
@@ -99,9 +95,7 @@ export default function CommunityScreen({ navigation, route }) {
   const communityFilterTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communityFilter);
   const communitySortTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communitySort);
   const communityMapTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communityMap);
-  const communityAddTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.communityAdd);
   const insets = useSafeAreaInsets();
-  const { ensureCapability } = useAuthUser();
   // --- State ---
   const [sortBy, setSortBy] = useState('popularity');
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -377,6 +371,7 @@ export default function CommunityScreen({ navigation, route }) {
     <SafeAreaView style={styles.screen} edges={["left", "right"]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
+      <CommunityContentSwitch navigation={navigation} selected="CommunityFeed" />
       {mapOpen && (
         <>
           {renderActiveFilters()}
@@ -420,7 +415,7 @@ export default function CommunityScreen({ navigation, route }) {
             contentContainerStyle={[
               styles.feedContent,
               (loading || refreshing || confirming || displayData.length === 0) && styles.feedContentEmpty,
-              { paddingBottom: getTabSceneListPaddingBottom(insets) },
+              { paddingBottom: getTabOverlayBottomInset(insets, 16) },
             ]}
             showsVerticalScrollIndicator={false}
             refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
@@ -452,20 +447,6 @@ export default function CommunityScreen({ navigation, route }) {
               </View>
             }
           />
-      )}
-
-      {!mapOpen && (
-        <FabButton
-          accessibilityLabel="הוספת המלצה"
-          rootRef={communityAddTourTarget.ref}
-          onLayout={communityAddTourTarget.onLayout}
-          testID="community-add-button"
-          style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
-          onPress={async () => {
-            if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'AddRecommendation' })) return;
-            navigation.navigate('AddRecommendation');
-          }}
-        />
       )}
 
       {/* --- FILTER MODAL --- */}

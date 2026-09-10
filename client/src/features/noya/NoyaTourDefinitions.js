@@ -3,7 +3,7 @@ import { NOYA_TOUR_IDS } from './services/NoyaProductTourStorage';
 export const NOYA_MAIN_TAB_TARGETS = Object.freeze({
   Home: 'main-tab-home',
   Community: 'main-tab-community',
-  Routes: 'main-tab-routes',
+  Routes: 'main-tab-community',
   Favorites: 'main-tab-favorites',
 });
 
@@ -13,11 +13,11 @@ export const NOYA_MAIN_TARGETS = Object.freeze({
   communityFilter: 'main-community-filter',
   communitySort: 'main-community-sort',
   communityMap: 'main-community-map',
-  communityAdd: 'main-community-add',
+  communityAdd: 'main-create',
   routesSearch: 'main-routes-search',
   routesFilter: 'main-routes-filter',
   routesSort: 'main-routes-sort',
-  routesAdd: 'main-routes-add',
+  routesAdd: 'main-create',
   favoritesCategories: 'main-favorites-categories',
 });
 
@@ -92,7 +92,7 @@ const MAIN_TOUR_CONTENT_STEPS = [
     anchorTargetId: NOYA_MAIN_TARGETS.communityAdd,
     targets: [spotlight(NOYA_MAIN_TARGETS.communityAdd, { anchor: true, radius: 32 })],
     title: 'מוסיפים המלצה משלך',
-    message: 'כפתור הפלוס פותח יצירת המלצה. אם צריך נבקש להתחבר, ובטופס אני אלווה אותך בתמונות, במיקום, בקטגוריה ובסיפור.',
+    message: 'בפלוס שבמרכז התפריט בוחרים ״פרסום המלצה״. אם צריך נבקש להתחבר, ובטופס אני אלווה אותך בתמונות, במיקום, בקטגוריה ובסיפור.',
   },
   {
     id: 'routes-search',
@@ -103,7 +103,7 @@ const MAIN_TOUR_CONTENT_STEPS = [
       spotlight(NOYA_MAIN_TARGETS.routesSearch, { anchor: true }),
     ],
     title: 'מחפשים מסלול',
-    message: 'עברנו למסלולים. כאן מחפשים מסלול לפי מקום, שם או תחום עניין.',
+    message: 'עברנו לתצוגת המסלולים בתוך הקהילה. כאן מחפשים מסלול לפי מקום, שם או תחום עניין.',
   },
   {
     id: 'routes-filter',
@@ -126,8 +126,8 @@ const MAIN_TOUR_CONTENT_STEPS = [
     tabName: 'Routes',
     anchorTargetId: NOYA_MAIN_TARGETS.routesAdd,
     targets: [spotlight(NOYA_MAIN_TARGETS.routesAdd, { anchor: true, radius: 32 })],
-    title: 'בונים מסלול חדש',
-    message: 'כפתור הפלוס פותח בניית מסלול. אם צריך נבקש להתחבר, ואחר כך נועה תלווה אותך בבחירת האזור, הימים והעצירות.',
+    title: 'מפרסמים מסלול לקהילה',
+    message: 'בפלוס שבמרכז התפריט בוחרים ״פרסום מסלול״ כדי לשתף מסלול עם הקהילה. אם צריך נבקש להתחבר, ואחר כך נועה תלווה אותך בבחירת האזור, הימים והעצירות.',
   },
   {
     id: 'favorites',

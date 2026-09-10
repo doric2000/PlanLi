@@ -1,5 +1,5 @@
 'use strict';
-const FLOWS = ['guest', 'auth', 'publish', 'gallery', 'network', 'location', 'atlas', 'route'];
+const FLOWS = ['guest', 'auth', 'publish', 'gallery', 'network', 'location', 'atlas', 'route', 'navigation'];
 function selectFlows(files) {
   const selected = new Set();
   for (const file of files) {
@@ -32,6 +32,7 @@ function parseFlows(value, files = []) {
 }
 // A broad smoke selection is not proof that an unvisited screen was exercised.
 function runtimeFlowsForSource(file) {
+  if (file === 'client/App.js' || /^client\/src\/navigation\/(?:TabNavigator|MainTabBar|CreateMenuScreen)\.js$/.test(file)) return ['navigation'];
   if (/^client\/src\/features\/roadtrip\/|\/(?:useRouteDraftMedia|routeBuilder|RouteService)\.js$/.test(file)) return ['route'];
   if (/^client\/src\/(?:features\/region\/|styles\/atlas\.js$)/.test(file)) return ['atlas'];
   if (file === 'client/src/components/ExactLocationMapPreview.js') return ['location'];

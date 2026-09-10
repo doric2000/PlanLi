@@ -15,7 +15,6 @@ import SearchFilterRow from '../../../components/SearchFilterRow';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import RoutesFilterModal from '../../../components/RoutesFilterModal';
 import { useAuthUser } from '../../../hooks/useAuthUser';
-import { CAPABILITIES } from '../../../constants/authPolicy';
 import { useTabPressScrollOrRefresh } from '../../../hooks/useTabPressScrollOrRefresh';
 import { useSmartProfile } from '../../../hooks/useSmartProfile';
 import {
@@ -26,11 +25,11 @@ import {
   tabHeroStyles,
   TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
-import FabButton from '../../../components/FabButton';
+import CommunityContentSwitch from '../../community/components/CommunityContentSwitch';
 import { RouteCard } from '../components/RouteCard';
 import { CommentsModal } from '../../../components/CommentsModal';
 import ActiveRouteFiltersList from '../components/ActiveRouteFiltersList';
-import { getFabBottomInset, getTabSceneListPaddingBottom } from '../../../navigation/tabBarLayout';
+import { getTabOverlayBottomInset } from '../../../navigation/tabBarLayout';
 import { deleteContent } from '../../../services/SocialService';
 import { contentDeletionFailureMessage } from '../../../utils/contentDeletionError';
 import {
@@ -64,7 +63,7 @@ import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 import RegionHeaderAction from '../../region/components/RegionHeaderAction';
 
 const text = {
-  title: 'מסלולים',
+  title: 'קהילה',
   searchPlaceholder: 'חפשו מסלול, מקום או תחום עניין...',
   noFiltered: 'אין מסלולים שמתאימים לחיפוש ולמסננים שבחרתם.',
   noRoutes: 'עדיין אין מסלולים.',
@@ -80,8 +79,7 @@ export default function RoutesScreen({ navigation }) {
   const routesSearchTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesSearch);
   const routesFilterTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesFilter);
   const routesSortTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesSort);
-  const routesAddTourTarget = useNoyaTourTargetRegistration(NOYA_MAIN_TARGETS.routesAdd);
-  const { ensureCapability, user: currentUser } = useAuthUser();
+  const { user: currentUser } = useAuthUser();
   const insets = useSafeAreaInsets();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -265,11 +263,6 @@ export default function RoutesScreen({ navigation }) {
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
   const sortLabel = sortBy === 'personalized' ? 'בשבילך' : sortBy === 'newest' ? 'חדש' : 'פופולרי';
 
-  const openCreateRoute = async () => {
-    if (!await ensureCapability(CAPABILITIES.ACTIVE, { name: 'AddRoutesScreen' })) return;
-    navigation.navigate('AddRoutesScreen');
-  };
-
   const renderTopArea = () => (
     <PageHeader
       variant="hero"
@@ -343,11 +336,12 @@ export default function RoutesScreen({ navigation }) {
     <SafeAreaView style={styles.screen} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
+      <CommunityContentSwitch navigation={navigation} selected="Routes" />
       <FlatList style={styles.scroll} ref={routesListRef} data={loading || refreshing || confirming ? [] : routes} keyExtractor={(item) => item.id}
           contentContainerStyle={[
             styles.feedContent,
             (loading || refreshing || confirming || routes.length === 0) && styles.feedContentEmpty,
-            { paddingBottom: getTabSceneListPaddingBottom(insets) },
+            { paddingBottom: getTabOverlayBottomInset(insets, 16) },
           ]}
           initialNumToRender={3} maxToRenderPerBatch={3} windowSize={5} onScroll={onScroll} scrollEventThrottle={16}
           renderItem={({ item }) => (
@@ -380,14 +374,6 @@ export default function RoutesScreen({ navigation }) {
               </View>
             )}
           </View>} showsVerticalScrollIndicator={false} />
-      <FabButton
-        accessibilityLabel="הוספת מסלול"
-        onLayout={routesAddTourTarget.onLayout}
-        onPress={openCreateRoute}
-        rootRef={routesAddTourTarget.ref}
-        style={{ bottom: getFabBottomInset(insets), zIndex: 10 }}
-        testID="routes-add-button"
-      />
       <RoutesFilterModal visible={filterVisible} onClose={() => setFilterVisible(false)} filters={filters}
         onApply={(next) => { setFilters({ ...createEmptyDiscoveryFilters(), ...next }); setFilterVisible(false); }}
         onUseProfile={(current) => applySmartProfileFilters(current, normalizedProfile, { surface: 'routes' })} />

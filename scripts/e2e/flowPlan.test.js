@@ -30,6 +30,8 @@ test('a generic smoke flow cannot satisfy missing coverage for an unvisited scre
   const { runtimeFlowsForSource } = require('./flowPlan');
   assert.deepEqual(selectFlows(['client/src/features/trips/TripEditor.js']), ['guest']);
   assert.deepEqual(runtimeFlowsForSource('client/src/features/trips/TripEditor.js'), []);
+  assert.deepEqual(runtimeFlowsForSource('client/App.js'), ['navigation']);
+  assert.deepEqual(parseFlows('navigation'), ['navigation']);
   assert.deepEqual(runtimeFlowsForSource('client/src/config/appCheck.web.js'), []);
   assert.deepEqual(runtimeFlowsForSource('client/src/components/RecommendationHero.js'), ['gallery']);
   assert.deepEqual(runtimeFlowsForSource('client/src/components/ExactLocationPicker.js'), []);

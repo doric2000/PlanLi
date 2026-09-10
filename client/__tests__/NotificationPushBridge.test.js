@@ -68,7 +68,7 @@ describe('NotificationPushBridge', () => {
     }));
   });
 
-  it('routes a validated push intent through the authenticated notification tab', async () => {
+  it('routes a validated push intent to the authenticated root notification screen', async () => {
     const navigationRef = {
       isReady: jest.fn(() => true),
       navigate: jest.fn(),
@@ -84,8 +84,8 @@ describe('NotificationPushBridge', () => {
     });
 
     expect(navigationRef.navigate).toHaveBeenCalledWith(
-      'Main',
-      buildNotificationCenterPath({ notificationId: 'notice-1', channel: 'admin' })
+      'Notifications',
+      { notificationId: 'notice-1', channel: 'admin' }
     );
   });
 

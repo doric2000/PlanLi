@@ -125,7 +125,7 @@ export function CustomDrawerContent(props) {
       }
       if (key === 'notifications') {
         navigation.closeDrawer?.();
-        navigation.navigate('Tabs', { screen: 'Notifications' });
+        rootStackNav?.navigate?.('Notifications');
         return;
       }
       if (key === 'settings') {

@@ -12,16 +12,7 @@ import {
 import { setNotificationDeviceUnregisterHandler } from './session';
 
 export function buildNotificationCenterPath(intent) {
-  return {
-    screen: 'Tabs',
-    params: {
-      screen: 'Notifications',
-      params: {
-        notificationId: intent.notificationId,
-        channel: intent.channel,
-      },
-    },
-  };
+  return { notificationId: intent.notificationId, channel: intent.channel };
 }
 
 export default function NotificationPushBridge({ navigationRef, navigationReady }) {
@@ -56,7 +47,7 @@ export default function NotificationPushBridge({ navigationRef, navigationReady 
     let active = true;
     const onIntent = async (intent) => {
       if (!active || !navigationRef.isReady()) return false;
-      navigationRef.navigate('Main', buildNotificationCenterPath(intent));
+      navigationRef.navigate('Notifications', buildNotificationCenterPath(intent));
       addDiagnosticBreadcrumb({
         category: 'navigation',
         message: 'Notification response opened inbox',

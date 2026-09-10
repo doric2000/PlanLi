@@ -9,6 +9,7 @@ let mockCenter;
 const mockGetIdTokenResult = jest.fn();
 const mockSignOutCentral = jest.fn(async () => {});
 const mockOpenAuthFlow = jest.fn();
+const mockOpenMainTab = jest.fn();
 const mockUser = {
   uid: 'owner',
   displayName: 'דנה',
@@ -22,6 +23,7 @@ jest.mock('../src/services/AuthService', () => ({
 }));
 jest.mock('../src/navigation/authNavigation', () => ({
   openAuthFlow: (...args) => mockOpenAuthFlow(...args),
+  openMainTab: (...args) => mockOpenMainTab(...args),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -183,6 +185,16 @@ describe('NotificationScreen interactions', () => {
         firebase: { sign_in_second_factor: 'totp' },
       },
     });
+  });
+
+  it('returns from the root inbox to its prior screen, with a safe profile fallback', () => {
+    const navigation = { canGoBack: jest.fn(() => true), goBack: jest.fn(), navigate: jest.fn() };
+    const screen = render(<NotificationScreen navigation={navigation} route={{ name: 'Notifications' }} />);
+    fireEvent.press(screen.getByTestId('notifications-back'));
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+    navigation.canGoBack.mockReturnValue(false);
+    fireEvent.press(screen.getByTestId('notifications-back'));
+    expect(mockOpenMainTab).toHaveBeenCalledWith(navigation, 'Profile');
   });
 
   it('keeps RTL header controls and gates the admin channel by the active claim', () => {

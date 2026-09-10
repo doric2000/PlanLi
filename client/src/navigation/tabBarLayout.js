@@ -1,7 +1,7 @@
 /**
- * Must match TabNavigator tabBarStyle.bottom offset and tabNavigatorStyles.tabBar.height.
- * @see client/src/navigation/TabNavigator.js
- * @see tabNavigatorStyles.tabBar in client/src/styles/appStyles.js
+ * Must match MainTabBar bottom offset and mainNavigationStyles.bar.height.
+ * @see client/src/navigation/MainTabBar.js
+ * @see client/src/styles/mainNavigationStyles.js
  */
 export const TAB_BAR_HEIGHT = 70;
 

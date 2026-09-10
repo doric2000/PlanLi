@@ -117,6 +117,12 @@ function MainTourApp({ communityReady = true, navigationRef, onTabNavigate }) {
       setCurrentRouteName(tabName);
     },
   }), [onTabNavigate]);
+  useEffect(() => {
+    navigationRef?.navigate.mockImplementation((name, params) => {
+      const path = params?.params;
+      if (name === 'Main' && path?.screen) tabNavigation.navigate(path.screen);
+    });
+  }, [navigationRef, tabNavigation]);
   return (
     <NoyaTourProvider
       currentRouteName={currentRouteName}
@@ -241,7 +247,7 @@ describe('NoyaTourProvider', () => {
       NOYA_MAIN_TAB_TARGETS.Community,
       NOYA_MAIN_TARGETS.communitySearch,
     ]);
-    expect(contentSteps[5].message).toContain('כפתור הפלוס');
+    expect(contentSteps[5].message).toContain('בפלוס שבמרכז התפריט');
     expect(contentSteps[9].message).toContain('נועה תלווה');
   });
 
