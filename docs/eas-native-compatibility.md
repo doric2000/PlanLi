@@ -7,8 +7,8 @@ The reviewed events were OTA candidates for the same installed TestFlight
 
 - Navigation candidate `20c6c374-a1e8-4d2c-bd49-af8413844992` differed only in
   LF/CRLF bytes in `client/.gitignore`, `client/eas.json` and
-  `client/GoogleService-Info.plist`. Git archives contain repository blob bytes,
-  while the installed build had been fingerprinted with Windows CRLF metadata.
+  `client/GoogleService-Info.plist`. Git archive applies checkout newline settings;
+  the installed build had been fingerprinted with Windows CRLF metadata.
   Correcting those archive-only bytes produced candidate
   `23109828-9705-4ba1-8790-ab883d31e2f5` with the installed build's fingerprint.
 - Community candidate `65908052-d5e3-4dbf-be40-5cab871957fd` already had the
@@ -33,9 +33,12 @@ misleading. Use two explicit fingerprint hashes for a server-to-server compariso
 `npm run preflight:eas-native` is a dry run: no Metro export, EAS update, native
 build or store submission. It creates an immutable Git archive from the committed
 source, restores only the three verified metadata files to their baseline CRLF
-bytes, verifies every tracked archive blob, verifies EAS identity/build metadata,
+bytes, verifies every tracked archive blob allowing UTF-8 LF/CRLF normalization,
+verifies EAS identity/build metadata,
 and computes the iOS fingerprint with the production environment. Native metadata
 content changes are rejected; normalization never conceals an actual edit.
+The archive command explicitly pins Git's CRLF conversion for this installed
+baseline, so machine-local `core.autocrlf`/`core.eol` settings cannot change it.
 Archive depth and dependency-junction layout are stable, preserving fingerprint
 paths. Untracked root configuration and local environment files never enter the
 archive and are left untouched in the shared workspace.

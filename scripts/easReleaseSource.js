@@ -40,8 +40,15 @@ function verifySource(record) {
       if (!bytes.equals(expected)) throw new Error(`Native metadata line endings changed: ${file}`);
       bytes = Buffer.from(bytes.toString('utf8').replace(/\r\n/g, '\n'));
     }
-    const actual = crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
-    if (actual !== blob) throw new Error(`Archived source mismatch: ${file}`);
+    const blobHash = value => crypto.createHash('sha1').update(`blob ${value.length}\0`).update(value).digest('hex');
+    if (blobHash(bytes) !== blob) {
+      // Git archive applies checkout line endings. Accept that transformation
+      // only for valid UTF-8 text, never for binary data or changed content.
+      const text = bytes.toString('utf8');
+      if (!Buffer.from(text).equals(bytes) || blobHash(Buffer.from(text.replace(/\r\n/g, '\n'))) !== blob) {
+        throw new Error(`Archived source mismatch: ${file}`);
+      }
+    }
   }
   return { commit, trackedFiles: rows.length };
 }
@@ -55,7 +62,9 @@ function prepareSource({ repoRoot, baseline }) {
   fs.mkdirSync(releases, { recursive: true });
   const sourceRoot = fs.mkdtempSync(path.join(releases, `ios-${commit.slice(0, 12)}-`));
   const tarPath = sourceRoot + '.tar';
-  execFileSync('git', ['archive', '--format=tar', '--output=' + tarPath, commit], { cwd: repoRoot, windowsHide: true });
+  // Match this installed Windows-source baseline independently of machine-local
+  // Git settings. Do not change global/local Git config or the user's checkout.
+  execFileSync('git', ['-c', 'core.autocrlf=true', '-c', 'core.eol=crlf', 'archive', '--format=tar', '--output=' + tarPath, commit], { cwd: repoRoot, windowsHide: true });
   execFileSync('tar', ['-xf', tarPath, '-C', sourceRoot], { windowsHide: true });
   validateRootConfigFiles(sourceRoot);
   for (const [file, hash] of Object.entries(baseline.metadataCrlfSha1)) {

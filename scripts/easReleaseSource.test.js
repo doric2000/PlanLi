@@ -30,6 +30,7 @@ test('a tracked Git archive excludes unrelated root config and detects source ta
   assert.equal(fs.existsSync(path.join(source.sourceRoot, 'app.json')), false);
   assert.equal(fs.readFileSync(path.join(f.root, 'app.json'), 'utf8'), '{"unrelated":true}');
   assert.equal(fs.readFileSync(path.join(source.sourceRoot, 'client/.gitignore'), 'utf8'), 'node_modules/\r\n');
+  assert.equal(fs.readFileSync(path.join(source.sourceRoot, 'client/example.txt'), 'utf8'), 'unchanged\r\n');
   assert.equal(verifySource(source).trackedFiles, 6);
   fs.writeFileSync(path.join(source.sourceRoot, 'client/example.txt'), 'changed\n');
   assert.throws(() => verifySource(source), /Archived source mismatch/);
