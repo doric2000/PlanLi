@@ -9,7 +9,10 @@ export function useProfilePhoto({ uid, updateLocalUserData }) {
   const { pickImage } = useImagePicker({ aspect: [1, 1], quality: 1, processOnSelect: false });
   const uploading = jobs.some((job) => job.ownerUid === uid && !TERMINAL_STATES.has(job.status));
   useEffect(() => {
-    if (lastSaved?.ownerUid === uid) updateLocalUserData?.({ photoURL: lastSaved.asset.feed.url, photoMedia: lastSaved.asset });
+    // The profile mounts before its user snapshot arrives. Two missing IDs
+    // must not be treated as a matching, completed photo upload.
+    if (!uid || lastSaved?.ownerUid !== uid || !lastSaved?.asset?.feed?.url) return;
+    updateLocalUserData?.({ photoURL: lastSaved.asset.feed.url, photoMedia: lastSaved.asset });
   }, [lastSaved, uid, updateLocalUserData]);
   const onPickImage = useCallback(() => {
     if (uploading) return;
