@@ -15,11 +15,34 @@ jest.mock('../src/navigation/SwipeableTabBarButton', () => {
   return ({ tourTargetId, onSwipe, ...props }) => <Pressable {...props} />;
 });
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ bottom: 34 }) }));
-function setup(authed = true) {
+function setup(authed = true, unreadCount = 0) {
   const state = { index: 3, routes: getVisibleMainTabNames(authed).map((name) => ({ name, key: name })) };
   const navigation = { navigate: jest.fn(), emit: jest.fn(() => ({ defaultPrevented: false })) };
-  return { ...render(<MainTabBar state={state} navigation={navigation} />), state, navigation };
+  return { ...render(<MainTabBar state={state} navigation={navigation} unreadCount={unreadCount} />), state, navigation };
 }
+it('updates the profile unread count and removes the badge when all notifications are read', () => {
+  const s = setup(true, 1);
+  expect(s.getByText('1')).toBeTruthy();
+  expect(s.getByRole('tab', { name: 'פרופיל, התראה אחת שלא נקראה' })).toBeTruthy();
+  s.rerender(<MainTabBar state={s.state} navigation={s.navigation} unreadCount={12} />);
+  expect(s.getByText('12')).toBeTruthy();
+  expect(s.getByRole('tab', { name: 'פרופיל, 12 התראות שלא נקראו' })).toBeTruthy();
+  fireEvent.press(s.getByTestId('main-tab-profile'));
+  expect(s.navigation.navigate).toHaveBeenCalledWith('Profile');
+  s.rerender(<MainTabBar state={s.state} navigation={s.navigation} unreadCount={0} />);
+  expect(s.queryByTestId('profile-unread-badge')).toBeNull();
+  expect(s.getByRole('tab', { name: 'פרופיל' })).toBeTruthy();
+});
+it('caps the visible badge while keeping the full count accessible', () => {
+  const s = setup(true, 123);
+  expect(s.getByText('99+')).toBeTruthy();
+  expect(s.getByRole('tab', { name: 'פרופיל, 123 התראות שלא נקראו' })).toBeTruthy();
+});
+it('does not show a previous unread count on the guest sign-in tab', () => {
+  const s = setup(false, 12);
+  expect(s.queryByTestId('profile-unread-badge')).toBeNull();
+  expect(s.getByRole('tab', { name: 'התחברות' })).toBeTruthy();
+});
 it.each([true, false])('has four destinations and a center action, authenticated=%s', (authed) => {
   const s = setup(authed);
   expect(s.getAllByRole('tab')).toHaveLength(4);

@@ -756,6 +756,7 @@ export default function HomePlanningHubScreen({ navigation }) {
           >
             <Avatar
               size={44}
+              insideRing
               photoURL={isGuest ? undefined : userDocument?.photoURL || user?.photoURL}
               photoMedia={isGuest ? undefined : userDocument?.photoMedia}
               displayName={isGuest ? undefined : userDocument?.displayName || user?.displayName}

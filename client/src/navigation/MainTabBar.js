@@ -28,13 +28,15 @@ export default function MainTabBar({ state, navigation, user, unreadCount = 0, o
         const isCreate = route.name === 'Create';
         const focused = !isCreate && state.routes[state.index].key === route.key;
         const config = tabConfigs[route.name];
+        const showUnreadBadge = route.name === 'Profile' && unreadCount > 0;
+        const unreadLabel = unreadCount === 1 ? 'התראה אחת שלא נקראה' : `${unreadCount} התראות שלא נקראו`;
         return (
           <SwipeableTabBarButton
             key={route.key}
             testID={isCreate ? 'main-create-button' : `main-tab-${route.name.toLowerCase()}`}
             role={isCreate ? 'button' : 'tab'}
             accessibilityRole={isCreate ? 'button' : 'tab'}
-            accessibilityLabel={isCreate ? 'יצירה' : config.label}
+            accessibilityLabel={isCreate ? 'יצירה' : showUnreadBadge ? `${config.label}, ${unreadLabel}` : config.label}
             accessibilityState={isCreate ? {} : { selected: focused }}
             aria-selected={isCreate ? undefined : focused}
             accessibilityHint={isCreate ? 'פתיחת תפריט תכנון ופרסום' : undefined}
@@ -58,7 +60,13 @@ export default function MainTabBar({ state, navigation, user, unreadCount = 0, o
                   ) : (
                     <Ionicons name={focused ? config.icon : `${config.icon}-outline`} size={22} color={c.navy} />
                   )}
-                  {route.name === 'Profile' && unreadCount > 0 && <View style={styles.unread} />}
+                  {showUnreadBadge && (
+                    <View style={styles.unread} pointerEvents="none" testID="profile-unread-badge">
+                      <AppText style={styles.unreadText} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </AppText>
+                    </View>
+                  )}
                 </View>
                 <AppText style={styles.label} numberOfLines={1} maxFontSizeMultiplier={1.2}>{config.label}</AppText>
               </>
