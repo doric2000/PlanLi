@@ -25,7 +25,50 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### iPhone Home/Profile layout correction (2026-09-10)
+
+The user's first iPhone screenshots of the refresh revealed a navy strip below
+the floating profile tab bar and a Home region photo that did not fill its card.
+PR [#363](https://github.com/doric2000/PlanLi/pull/363) merged as
+`d5dfb30589b2c89952a1cf5c44386efbb16c1730` after all applicable CI checks passed.
+Profile now excludes the bottom safe-area padding from its navy container,
+allowing the sand list surface to continue behind the navigation. Existing list
+clearance is retained. Home moves content padding into an inner view so the
+photo and gradient fill the entire clipped card.
+
+The iOS OTA was published at `2026-09-10T08:40:47.784Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[7950ae31](https://expo.dev/accounts/doric2000/projects/client/updates/7950ae31-5993-4795-aabf-39506c72939c),
+update `01a08a7a-05a8-7d90-b3f2-5b5d972944b4`. Candidate group
+`83d5f17b-8140-42ed-a703-26aa7ad100a7` used production variables on staging;
+the same artifact was promoted without another export. At
+`2026-09-10T08:41:13.751Z`, the downloaded immutable bundle and public
+production-channel manifest matched the source and update. Bundle: 10,668,412
+bytes; SHA-256 `3b84d9358e0d45c63488d208777f2a112436c3e003a1705e29b0cda459f700aa`.
+The archive matched all 1,083 tracked Git blobs and preserved/excluded the
+unrelated untracked root `app.json`. Release identity, environment, main lineage
+and native compatibility checks were retained.
+
+Native fingerprint `0b5dd5996352ba381e65fc1a036a28eae3000516` matches existing
+TestFlight **1.1.1 (30)**, EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`.
+No native build, app version change, Apple submission/review, Android OTA or
+backend deployment was performed. The user's screenshots establish that the
+refresh was displayed on their iPhone; the exact installed update ID and
+application of this correction remain unverified.
+
+OTA readiness against deployed `b6c46f1` passed 45 tests in six affected suites.
+A real-component React Native Web fixture with a 34px bottom inset and floating
+navigation verified matching photo/card bounds at 320/390px widths, retained
+global recommendation navigation, and a profile list reaching the bottom with
+zero navy bottom padding. These checks do not replace physical iPhone validation.
+The final diff was directly reviewed; the previously recorded CLI/model mismatch
+still prevents automated CLI review. Immediate rollback group:
+`514b2a9b-6ff8-49fb-bb5a-8acb9926aa1c`. The pre-redesign source checkpoint is
+also preserved. See [refresh and rollback details](docs/home-profile-design-refresh.md).
+
 ### Home, Profile and drawer iPhone update (2026-09-10)
+
+The layout correction above supersedes this OTA and retains the refresh below.
 
 PR [#361](https://github.com/doric2000/PlanLi/pull/361) merged as
 `b6c46f1caead3c3a47a6f406f9c09a2c0b2f47f3` after all applicable CI checks passed.
