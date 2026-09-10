@@ -32,7 +32,7 @@ import { RecommendationActionBar } from './RecommendationActionBar';
  *   collectionName="routes"
  * />
  */
-const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' }) => {
+const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations', onReadMore }) => {
 	const [showLikesModal, setShowLikesModal] = useState(false);
 
 	const { isLiked, likeCount, toggleLike } = useLikes(
@@ -64,6 +64,7 @@ const ActionBar = ({ item, onCommentPress, collectionName = 'recommendations' })
 				onLikePress={toggleLike}
 				onLikesListPress={() => setShowLikesModal(true)}
 				contentLabel={contentLabel}
+				onReadMore={onReadMore}
 			/>
 
 			<LikesModal

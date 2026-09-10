@@ -1,17 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Alert, FlatList, TouchableOpacity, StatusBar } from 'react-native';
-import AppText from "../../../components/AppText";
-import AppTextInput from "../../../components/AppTextInput";
+import { View, Alert, FlatList, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import PageHeader from '../../../components/PageHeader';
-import SearchFilterRow from '../../../components/SearchFilterRow';
+import CommunityHeader from '../components/CommunityHeader';
+import CommunityFeedState from '../components/CommunityFeedState';
+import { communityDiscoveryStyles as discoveryStyles } from '../../../styles/communityDiscovery';
 
 // --- Components ---
 import RecommendationsFilterModal from '../../../components/RecommendationsFilterModal';
 import RecommendationCard from '../../../components/RecommendationCard';
 import { CommentsModal } from '../../../components/CommentsModal';
-import CommunityContentSwitch from '../components/CommunityContentSwitch';
 import ActiveFiltersList from '../../../components/ActiveFiltersList';
 import { SortMenuModal } from '../components/SortMenuModal';
 import CommunityInlineMap from '../components/CommunityInlineMap';
@@ -28,19 +25,14 @@ import { useSmartProfile } from '../../../hooks/useSmartProfile';
 
 // --- Global Styles ---
 import {
-  colors,
-  common,
   community,
   communityScreenStyles as styles,
-  discoveryFilterTriggerStyles as filterUiStyles,
-  tabHeroStyles,
-  TAB_HERO_SEARCH_ICON_SIZE,
 } from '../../../styles';
 import { getPlaceCoordinates, haversineDistanceKm } from '../../../utils/distance';
 import {
   getTabOverlayBottomInset,
 } from '../../../navigation/tabBarLayout';
-import { applySmartProfileFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
+import { applySmartProfileFilters, createEmptyDiscoveryFilters, discoveryRequestFromFilters, removeDiscoveryFilter } from '../../../utils/discoveryFilters';
 import { normalizeClientSmartProfile } from '../../profile/utils/preferenceSetup';
 import { countDiscoveryFilters } from '../../../utils/progressiveDiscoveryFilters';
 import { useRecommendationPublish } from '../publishing/RecommendationPublishContext';
@@ -53,7 +45,6 @@ import {
   useNoyaTourTargetRegistration,
 } from '../../noya/NoyaTourContext';
 import { NOYA_MAIN_TARGETS } from '../../noya/NoyaTourDefinitions';
-import RegionHeaderAction from '../../region/components/RegionHeaderAction';
 import { useOptionalRegionSelection } from '../../region/context/RegionSelectionState';
 import { isRegionDiscoveryEnabled } from '../../region/regionDefinitions';
 
@@ -204,7 +195,7 @@ export default function CommunityScreen({ navigation, route }) {
     scrollRef: feedListRef,
     onRefresh: refresh,
     enabled: !mapOpen && !loading,
-    scrollYResetKey: mapOpen,
+
   });
 
   // --- Handlers ---
@@ -258,123 +249,30 @@ export default function CommunityScreen({ navigation, route }) {
   const activeFilterCount = countDiscoveryFilters(filters, { includeQuery: false });
 
   const renderActiveFilters = () => (
-    <View style={tabHeroStyles.bodyContentInset}>
-      <ActiveFiltersList filters={filters} onRemove={handleRemoveFilter} onClear={clearFilters} />
+    <View>
+      <ActiveFiltersList compact filters={filters} onRemove={handleRemoveFilter} onClear={() => replaceFilters({ ...createEmptyDiscoveryFilters(), query: filters.query })} />
     </View>
   );
 
   const renderTopArea = () => (
-    <PageHeader
-      variant="hero"
-      title="קהילה"
-      style={tabHeroStyles.fixedHeader}
-      testID="community-tab-header"
-      renderTitleAccessory={() => (
-        isRegionDiscoveryEnabled() ? (
-          <RegionHeaderAction
-            regionId={selectedRegionId}
-            mode={selectedMode}
-            onPress={() => navigation.navigate('RegionSelector', { source: 'community-change' })}
-            testID="community-region-change"
-          />
-        ) : null
-      )}
-      renderStart={() => (
-        <TouchableOpacity
-          collapsable={false}
-          onLayout={communityMapTourTarget.onLayout}
-          ref={communityMapTourTarget.ref}
-          style={tabHeroStyles.iconAction}
-          onPress={() => setMapOpen((previous) => {
-            if (!previous) setSortMenuVisible(false);
-            else setMapFocus(null);
-            return !previous;
-          })}
-          accessibilityRole="button"
-          accessibilityLabel="מפה"
-          testID="community-map-toggle"
-        >
-          <Ionicons name={mapOpen ? "map" : "map-outline"} size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      )}
-      renderEnd={() => (
-        mapOpen ? (
-          <View style={[tabHeroStyles.labelAction, tabHeroStyles.mapLabelAction]} testID="map-all-recommendations-label">
-            <Ionicons name="location" size={16} color="#FFFFFF" />
-            <AppText
-              style={[tabHeroStyles.labelText, tabHeroStyles.mapLabelText]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
-            >
-              כל ההמלצות באזור
-            </AppText>
-          </View>
-        ) : (
-          <TouchableOpacity
-            collapsable={false}
-            onLayout={communitySortTourTarget.onLayout}
-            ref={communitySortTourTarget.ref}
-            style={tabHeroStyles.labelAction}
-            onPress={() => setSortMenuVisible(true)}
-            testID="community-sort-button"
-          >
-            <Ionicons name="chevron-down" size={18} color="#FFFFFF" />
-            <AppText style={tabHeroStyles.labelText}>{sortLabel}</AppText>
-          </TouchableOpacity>
-        )
-      )}
-    >
-
-      <SearchFilterRow
-        style={tabHeroStyles.searchRow}
-        searchTargetRef={communitySearchTourTarget.ref}
-        searchTargetTestID="community-search-tour-target"
-        onSearchTargetLayout={communitySearchTourTarget.onLayout}
-        filterTargetRef={communityFilterTourTarget.ref}
-        onFilterTargetLayout={communityFilterTourTarget.onLayout}
-        onFilterPress={() => setFilterModalVisible(true)}
-        activeFilterCount={activeFilterCount}
-        accessibilityLabel="סינון המלצות"
-        testID="community-search-row"
-        filterTestID="community-filter-button"
-      >
-        <View style={tabHeroStyles.searchField} testID="community-search-field">
-          <Ionicons name="search" size={TAB_HERO_SEARCH_ICON_SIZE} color="rgba(255,255,255,0.62)" />
-          <AppTextInput
-            value={filters.query}
-            onChangeText={(text) => updateFilters({ query: text })}
-            placeholder="חפש המלצה"
-            placeholderTextColor="rgba(255,255,255,0.48)"
-            style={tabHeroStyles.searchInput}
-            textAlign="right"
-            autoCorrect={false}
-            autoCapitalize="none"
-            testID="community-search-input"
-          />
-          {!!filters.query && (
-            <TouchableOpacity
-              onPress={() => updateFilters({ query: '' })}
-              style={community.destinationClearBtn}
-              accessibilityRole="button"
-              accessibilityLabel="חפש המלצה"
-            >
-              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.76)" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </SearchFilterRow>
-    </PageHeader>
+    <CommunityHeader navigation={navigation} mode="CommunityFeed" filters={filters}
+      regionId={selectedRegionId} regionMode={selectedMode}
+      onSubmit={(query) => updateFilters({ query })}
+      onDestinationsChange={(destinations) => updateFilters({ destinations })}
+      onFilter={() => setFilterModalVisible(true)}
+      onSort={() => setSortMenuVisible(true)} sortLabel={sortLabel} activeFilterCount={activeFilterCount}
+      mapOpen={mapOpen} onMapToggle={() => { setMapOpen((previous) => !previous); setSortMenuVisible(false); setMapFocus(null); }}
+      targets={{ search: communitySearchTourTarget, filter: communityFilterTourTarget, sort: communitySortTourTarget, map: communityMapTourTarget }}
+    />
   );
 
   return (
-    <SafeAreaView style={styles.screen} edges={["left", "right"]}>
+    <SafeAreaView style={discoveryStyles.screen} edges={["left", "right"]}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       {renderTopArea()}
-      <CommunityContentSwitch navigation={navigation} selected="CommunityFeed" />
+      {renderActiveFilters()}
       {mapOpen && (
         <>
-          {renderActiveFilters()}
           <View style={community.inlineMapSection}>
             <CommunityInlineMap
               recommendations={mapRecommendationsWithFocus}
@@ -393,9 +291,9 @@ export default function CommunityScreen({ navigation, route }) {
       )}
 
       {/* --- RECOMMENDATIONS LIST --- */}
-      {!mapOpen && (
+      <View style={mapOpen ? discoveryStyles.hiddenFeed : { flex: 1 }}>
           <FlatList
-            style={styles.scroll}
+            style={[styles.scroll, discoveryStyles.screen]}
             ref={feedListRef}
             data={loading || refreshing || confirming ? [] : displayData}
             keyExtractor={(item) => item.id}
@@ -409,17 +307,17 @@ export default function CommunityScreen({ navigation, route }) {
                   item={item}
                   onCommentPress={handleOpenComments}
                   onDeleted={removeRecommendation}
-                  variant="feed"
+                  variant="community"
               />
             )}
             contentContainerStyle={[
-              styles.feedContent,
+              styles.feedContent, discoveryStyles.feed,
               (loading || refreshing || confirming || displayData.length === 0) && styles.feedContentEmpty,
               { paddingBottom: getTabOverlayBottomInset(insets, 16) },
             ]}
             showsVerticalScrollIndicator={false}
             refreshControl={<CenteredRefreshControl refreshing={refreshing || confirming} onRefresh={refresh} />}
-            ListHeaderComponent={renderActiveFilters()}
+
             ListEmptyComponent={
               loading || refreshing || confirming ? (
                 <CenteredRefreshState
@@ -428,26 +326,11 @@ export default function CommunityScreen({ navigation, route }) {
                   style={styles.feedBodyState}
                   testID={confirming ? 'community-refresh-confirmation' : refreshing ? 'community-refresh-state' : 'community-loading-state'}
                 />
-              ) : <View style={[common.emptyState, styles.feedEmptyState, styles.feedBodyState]} testID="community-empty-state">
-                <Ionicons name="images-outline" size={50} color={colors.textMuted} />
-                <AppText style={common.emptyText}>{error
-                  ? 'לא הצלחנו לטעון תוצאות. משכו מטה כדי לנסות שוב.'
-                  : isFiltered ? 'אין תוצאות.' : 'אין המלצות עדיין.'}</AppText>
-                {isFiltered && (
-                  <View style={filterUiStyles.emptyActions}>
-                    <TouchableOpacity style={[filterUiStyles.emptyAction, filterUiStyles.emptyActionPrimary]}
-                      onPress={() => setFilterModalVisible(true)} accessibilityRole="button">
-                      <AppText style={[filterUiStyles.emptyActionText, filterUiStyles.emptyActionTextPrimary]}>עריכת סינון</AppText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={filterUiStyles.emptyAction} onPress={clearFilters} accessibilityRole="button">
-                      <AppText style={filterUiStyles.emptyActionText}>נקה הכול</AppText>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+              ) : <CommunityFeedState error={error} filtered={isFiltered} onRetry={refresh}
+                onFilter={() => setFilterModalVisible(true)} onClear={clearFilters} />
             }
           />
-      )}
+      </View>
 
       {/* --- FILTER MODAL --- */}
       <RecommendationsFilterModal

@@ -17,6 +17,8 @@ import CachedImage, { prefetchImage } from "../../../components/CachedImage";
 import RtlPagedFlatList from "../../../components/RtlPagedFlatList";
 import PlacesRoute from "./PlacesRoute";
 import ContentActionMenu from "../../../components/ContentActionMenu";
+import CommunityCardBody from '../../community/components/CommunityCardBody';
+import { COMMUNITY_MEDIA_RATIO, communityDiscoveryStyles as compactStyles } from '../../../styles/communityDiscovery';
 import ActionBar from "../../../components/ActionBar";
 import FavoriteButton from "../../../components/FavoriteButton";
 import PreferenceContextLine from "../../../components/PreferenceContextLine";
@@ -57,13 +59,14 @@ export const RouteCard = ({
 	const { isActive, ensureCapability } = useAuthUser();
 	const personalizationTarget = { type: 'route', id: item?.id };
 	const { isHidden } = usePersonalizationFeedback();
-	const isFeed = variant === "feed";
+	const compact = variant === "community";
+	const isFeed = variant === "feed" || compact;
 	const feedTopInset = isFeed ? Math.max(0, Number(topContentInset) || 0) : 0;
 	const {
 		pageWidth,
 		frameHeight,
 		onLayout: onCarouselLayout,
-	} = useStableCarouselLayout({ aspectRatio: 1.25, extraHeight: feedTopInset });
+	} = useStableCarouselLayout({ aspectRatio: compact ? COMMUNITY_MEDIA_RATIO : 1.25, extraHeight: feedTopInset });
 	const routeImages = useMemo(
 		() => getRouteImageUrls(item, "feed"),
 		[item]
@@ -166,12 +169,12 @@ export const RouteCard = ({
 				activeOpacity={0.75}
 				onPress={handleAuthorPress}
 			>
-				<View style={styles.feedAvatarRing}>
+				<View style={[styles.feedAvatarRing, compact && compactStyles.avatarRing]}>
 					<Avatar
 						photoURL={userPhoto}
 						photoMedia={author.photoMedia}
 						displayName={displayUser}
-						size={40}
+						size={compact ? 36 : 40}
 						insideRing
 					/>
 				</View>
@@ -187,11 +190,12 @@ export const RouteCard = ({
 				</View>
 			</TouchableOpacity>
 
-			<View style={[cards.recHeaderActionsRow, styles.feedHeaderActions]}>
+			<View style={[cards.recHeaderActionsRow, styles.feedHeaderActions, compact && compactStyles.headerActions]}>
 				<FavoriteButton
 					type="routes"
 					id={item.id}
-					variant="overlay"
+					variant={compact ? "light" : "overlay"}
+                    style={compact && compactStyles.favorite}
 					snapshotData={snapshotData}
 				/>
 				{showActionMenu ? (
@@ -261,7 +265,8 @@ export const RouteCard = ({
 			/>
 			{renderOverlayHeader()}
 
-			{routeImages.length > 1 && (
+			{compact && routeImages.length > 1 && <View style={compactStyles.photoPosition} pointerEvents="none"><AppText style={compactStyles.photoPositionText}>{activeImageIndex + 1} / {routeImages.length}</AppText></View>}
+			{!compact && routeImages.length > 1 && (
 				<View style={cards.recDotsContainer} pointerEvents="none">
 					{routeImages.map((_, index) => (
 						<View
@@ -375,16 +380,21 @@ export const RouteCard = ({
 
 	if (isFeed) {
 		return (
-			<View style={styles.feedCard}>
+			<View style={[styles.feedCard, compact && compactStyles.card]}>
 				{renderFeedMedia()}
-				{showActionBar && (
+				{!compact && showActionBar && (
 					<ActionBar
 						item={item}
 						onCommentPress={onCommentPress}
 						collectionName="routes"
 					/>
 				)}
-				{renderContent(true)}
+                {compact ? <>
+                  <CommunityCardBody testID="route-content" title={item.title} destination={destinationPreviews.map((value) => value.name).join(' · ')}
+                    metadata={[item.dayCount === 1 ? 'יום אחד' : item.dayCount ? item.dayCount + ' ימים' : '', item.stopCount ? item.stopCount + ' עצירות' : '', getBudgetLabel(item?.facets?.budgetLevel || item?.attributes?.budgetLevel || '')].filter(Boolean).join(' · ')}
+                    description={item.description} onPress={onPress} />
+                  {showActionBar && <ActionBar item={item} onCommentPress={onCommentPress} collectionName="routes" onReadMore={onPress} />}
+                </> : renderContent(true)}
 			</View>
 		);
 	}

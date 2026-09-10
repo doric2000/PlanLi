@@ -55,15 +55,14 @@ describe('progressive discovery filter UI', () => {
     expect(screen.queryByText('לא נמצא יעד פעיל ב־PlanLi')).toBeNull();
   });
 
-  it('keeps optional values hidden until their independent section is expanded', () => {
+  it('keeps recommendation audience and practical needs directly available', () => {
     const screen = render(<Harness />);
     expect(screen.getByText('לאן?')).toBeTruthy();
     expect(screen.getByText('מה מחפשים?')).toBeTruthy();
-    expect(screen.queryByTestId('discovery-audience-0')).toBeNull();
-
-    fireEvent.press(screen.getByTestId('discovery-section-audience-budget'));
+    expect(screen.getByLabelText('כשר')).toBeTruthy();
+    expect(screen.getByLabelText('נגישות לכיסא גלגלים')).toBeTruthy();
     expect(screen.getByTestId('discovery-audience-0')).toBeTruthy();
-    expect(screen.getByTestId('discovery-section-audience-budget').props.accessibilityState.expanded).toBe(true);
+    expect(screen.queryByTestId('discovery-vibe-0')).toBeNull();
   });
 
   it('reveals only the selected category branch and preserves stable test ids', () => {
@@ -84,15 +83,20 @@ describe('progressive discovery filter UI', () => {
     recommendation.unmount();
 
     const route = render(<Harness surface="routes" />);
-    fireEvent.press(route.getByTestId('discovery-section-route-details'));
+    expect(route.queryByTestId('discovery-audience-0')).toBeNull();
+    expect(route.queryByTestId('discovery-style-0')).toBeNull();
+    fireEvent.press(route.getByTestId('discovery-section-advanced'));
     expect(route.getByTestId('discovery-difficulty-0')).toBeTruthy();
-	expect(route.getByTestId('discovery-experience-0')).toBeTruthy();
+	expect(route.queryByTestId('discovery-experience-0')).toBeNull();
+    expect(route.getByTestId('discovery-style-0')).toBeTruthy();
+    expect(route.getByLabelText('כשר')).toBeTruthy();
     expect(route.getByText('טווח ימים')).toBeTruthy();
   });
 
-  it('makes profile-filled hard filters visible in the collapsed section summary', () => {
+  it('marks profile-filled filters selected before applying', () => {
     const screen = render(<Harness withProfile />);
     fireEvent.press(screen.getByTestId('discovery-use-profile'));
-    expect(screen.getByText('זוג · בינוני · ₪₪')).toBeTruthy();
+    expect(screen.getByLabelText('זוג').props.accessibilityState.checked).toBe(true);
+    expect(screen.getByLabelText('בינוני · ₪₪').props.accessibilityState.checked).toBe(true);
   });
 });

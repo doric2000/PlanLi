@@ -1,266 +1,92 @@
 import React, { useMemo, useState } from 'react';
-import { TouchableOpacity, View } from 'react-native';
-import AppText from "./AppText";
-import { Ionicons } from '@expo/vector-icons';
+import { Pressable, View } from 'react-native';
+import AppText from './AppText';
 import DiscoveryCategorySelector from './DiscoveryCategorySelector';
 import DiscoveryDestinationAutocomplete from './DiscoveryDestinationAutocomplete';
 import DiscoveryDisclosureSection from './DiscoveryDisclosureSection';
 import DiscoveryOptionGroup from './DiscoveryOptionGroup';
 import MinMaxInputs from './MinMaxInputs';
 import {
-  ENVIRONMENTS,
-  NEEDS,
-  PACES,
-  POST_BUDGETS,
-  ROUTE_DIFFICULTIES,
-	ROUTE_EXPERIENCE_LEVELS,
-  SEASONS,
-  TRANSPORT_MODES,
-  TRAVELER_STYLES,
-  TRAVEL_PARTIES,
-  VIBES,
+  ENVIRONMENTS, NEEDS, PACES, POST_BUDGETS, ROUTE_DIFFICULTIES,
+  SEASONS, TRANSPORT_MODES, TRAVELER_STYLES, TRAVEL_PARTIES, VIBES,
 } from '../constants/travelTaxonomy';
-import { colors, discoveryFilterStyles as styles } from '../styles';
-import {
-  getRelevantDiscoveryFacets,
-  summarizeSelections,
-} from '../utils/progressiveDiscoveryFilters';
+import { discoveryFilterStyles as styles } from '../styles';
+import { communityDiscoveryStyles as s } from '../styles/communityDiscovery';
+import { getRelevantDiscoveryFacets, summarizeSelections } from '../utils/progressiveDiscoveryFilters';
 
-function toggle(values, value, maximum = 20) {
-  const current = Array.isArray(values) ? values : [];
-  return current.includes(value)
-    ? current.filter((entry) => entry !== value)
-    : [...current, value].slice(0, maximum);
-}
+const durations = [
+  { label: 'יום אחד', value: { min: 1, max: 1 } },
+  { label: '2–3 ימים', value: { min: 2, max: 3 } },
+  { label: '4+ ימים', value: { min: 4, max: '' } },
+];
 
-function joinSummaries(...summaries) {
-  const visible = summaries.filter((summary) => summary && summary !== 'לא נבחר');
-  return visible.length ? visible.join(' · ') : 'לא נבחר';
-}
-
-function rangeSummary(label, range, suffix = '') {
-  if (!range || (range.min == null || range.min === '') && (range.max == null || range.max === '')) return '';
-  return `${label}: ${range.min || '0'}–${range.max || '∞'}${suffix}`;
-}
-
-export default function DiscoveryFilterContent({
-  filters,
-  onChange,
-  surface = 'recommendations',
-  onUseProfile,
-  destinationsEnabled = true,
-}) {
+export default function DiscoveryFilterContent({ filters, onChange, surface = 'recommendations', onUseProfile, destinationsEnabled = true }) {
   const current = filters || {};
-  const isRoute = surface === 'routes';
-  const [expandedSections, setExpandedSections] = useState({});
-  const relevant = useMemo(() => getRelevantDiscoveryFacets(current), [
-    (current.categoryIds || []).join('|'),
-    (current.subcategoryIds || []).join('|'),
-  ]);
-  const patch = (value) => onChange?.({ ...current, ...value });
-  const toggleField = (field, value, maximum) => patch({
-    [field]: toggle(current[field], value, maximum),
-  });
-  const toggleSection = (id) => setExpandedSections((previous) => ({
-    ...previous,
-    [id]: !previous[id],
-  }));
-
-  const audienceBudgetSummary = joinSummaries(
-    summarizeSelections(TRAVEL_PARTIES, current.audienceIds),
-    summarizeSelections(POST_BUDGETS, current.budgetLevels, 1),
+  const routes = surface === 'routes';
+  const [expanded, setExpanded] = useState({});
+  const relevant = useMemo(() => getRelevantDiscoveryFacets(current), [current.categoryIds, current.subcategoryIds]);
+  const patch = (next) => onChange?.({ ...current, ...next });
+  const toggle = (field, id, max = 20) => {
+    const values = current[field] || [];
+    patch({ [field]: values.includes(id) ? values.filter((v) => v !== id) : [...values, id].slice(0, max) });
+  };
+  const group = (field, label, options, prefix, maximum, relevantIds) => (
+    <DiscoveryOptionGroup label={label} options={options} selectedIds={current[field] || []}
+      onToggle={(id) => toggle(field, id, maximum)} testIDPrefix={prefix} relevantIds={relevantIds}
+      alwaysShowAll design="community" />
   );
-  const atmosphereSummary = joinSummaries(
-    summarizeSelections(VIBES, current.vibeIds),
-	isRoute ? summarizeSelections(TRAVELER_STYLES, current.travelerStyleIds, 1) : '',
-	isRoute ? summarizeSelections(SEASONS, current.seasons, 1) : '',
-	summarizeSelections(ENVIRONMENTS, current.environments, 1),
+  const section = (id, title, summary, children) => (
+    <DiscoveryDisclosureSection id={id} title={title} summary={summary} expanded={expanded[id]}
+      onToggle={() => setExpanded((previous) => ({ ...previous, [id]: !previous[id] }))}>
+      {children}
+    </DiscoveryDisclosureSection>
   );
-  const routeSummary = joinSummaries(
-    summarizeSelections(ROUTE_DIFFICULTIES, current.difficultyIds, 1),
-	summarizeSelections(ROUTE_EXPERIENCE_LEVELS, current.experienceLevelIds, 1),
-    summarizeSelections(TRANSPORT_MODES, current.transportModeIds, 1),
-    summarizeSelections(PACES, current.paceIds, 1),
-    rangeSummary('ימים', current.durationDays),
-    rangeSummary('מרחק', current.distanceKm, ' ק״מ'),
-  );
+  const needs = <DiscoveryOptionGroup label="צרכים שחשובים לי" helper="יוצגו רק תוצאות שבהן המידע הזה צוין במפורש"
+    options={NEEDS} selectedIds={current.needIds || []} onToggle={(id) => toggle('needIds', id, NEEDS.length)}
+    alwaysShowAll design="community" testIDPrefix="discovery-need" />;
+  const atmosphere = <>
+    {group('vibeIds', 'אווירה', VIBES, 'discovery-vibe', 8, relevant.vibes)}
+    {routes && group('travelerStyleIds', 'סגנון טיול', TRAVELER_STYLES, 'discovery-style', 6, relevant.travelerStyles)}
+    {group('environments', 'סביבה', ENVIRONMENTS, 'discovery-environment', ENVIRONMENTS.length, relevant.environments)}
+  </>;
 
-  return (
-    <View style={styles.content}>
-      {!!onUseProfile && (
-        <TouchableOpacity
-          style={styles.profilePresetButton}
-          onPress={onUseProfile}
-          accessibilityRole="button"
-          testID="discovery-use-profile"
-        >
-          <Ionicons name="options-outline" size={18} color={colors.primary} />
-          <View style={styles.profilePresetCopy}>
-            <AppText style={styles.profilePresetTitle}>מלאו מההעדפות שלי</AppText>
-            <AppText style={styles.profilePresetText}>הבחירות יופיעו כאן לפני ההחלה</AppText>
-          </View>
-        </TouchableOpacity>
-      )}
-
-      <DiscoveryDestinationAutocomplete
-        destinations={current.destinations || []}
-        onChange={(destinations) => patch({ destinations })}
-        enabled={destinationsEnabled}
-      />
-
-      <DiscoveryCategorySelector filters={current} onChange={onChange} />
-
-      {isRoute && (
-        <DiscoveryDisclosureSection
-          id="route-details"
-          title="פרטי המסלול"
-          summary={routeSummary}
-          expanded={expandedSections.routeDetails}
-          onToggle={() => toggleSection('routeDetails')}
-        >
-          <DiscoveryOptionGroup
-            label="רמת קושי"
-            options={ROUTE_DIFFICULTIES}
-            selectedIds={current.difficultyIds || []}
-            onToggle={(id) => toggleField('difficultyIds', id, 3)}
-            alwaysShowAll
-            testIDPrefix="discovery-difficulty"
-          />
-		  <DiscoveryOptionGroup
-			label="ניסיון נדרש"
-			options={ROUTE_EXPERIENCE_LEVELS}
-			selectedIds={current.experienceLevelIds || []}
-			onToggle={(id) => toggleField('experienceLevelIds', id, ROUTE_EXPERIENCE_LEVELS.length)}
-			alwaysShowAll
-			testIDPrefix="discovery-experience"
-		  />
-          <DiscoveryOptionGroup
-            label="אמצעי התניידות"
-            options={TRANSPORT_MODES}
-            selectedIds={current.transportModeIds || []}
-            onToggle={(id) => toggleField('transportModeIds', id, 6)}
-            alwaysShowAll
-            testIDPrefix="discovery-transport"
-          />
-          <DiscoveryOptionGroup
-            label="קצב"
-            options={PACES}
-            selectedIds={current.paceIds || []}
-            onToggle={(id) => toggleField('paceIds', id, 3)}
-            alwaysShowAll
-            testIDPrefix="discovery-pace"
-          />
-          <View style={styles.rangeGrid}>
-            <MinMaxInputs
-              label="טווח ימים"
-              minValue={current.durationDays?.min ?? ''}
-              maxValue={current.durationDays?.max ?? ''}
-              onChangeMin={(value) => patch({ durationDays: { ...(current.durationDays || {}), min: value } })}
-              onChangeMax={(value) => patch({ durationDays: { ...(current.durationDays || {}), max: value } })}
-            />
-            <MinMaxInputs
-              label="טווח מרחק"
-              unitSuffix="ק״מ"
-              minValue={current.distanceKm?.min ?? ''}
-              maxValue={current.distanceKm?.max ?? ''}
-              onChangeMin={(value) => patch({ distanceKm: { ...(current.distanceKm || {}), min: value } })}
-              onChangeMax={(value) => patch({ distanceKm: { ...(current.distanceKm || {}), max: value } })}
-            />
-          </View>
-        </DiscoveryDisclosureSection>
-      )}
-
-      <DiscoveryDisclosureSection
-        id="audience-budget"
-	title={isRoute ? "קהל ותקציב" : "קהל ורמת מחיר"}
-        summary={audienceBudgetSummary}
-        expanded={expandedSections.audienceBudget}
-        onToggle={() => toggleSection('audienceBudget')}
-      >
-        <DiscoveryOptionGroup
-          label="קהל יעד"
-          options={TRAVEL_PARTIES}
-          selectedIds={current.audienceIds || []}
-          onToggle={(id) => toggleField('audienceIds', id, 6)}
-          alwaysShowAll
-          testIDPrefix="discovery-audience"
-        />
-        <DiscoveryOptionGroup
-		  label={isRoute ? "תקציב" : "רמת מחיר"}
-          options={POST_BUDGETS}
-          selectedIds={current.budgetLevels || []}
-          onToggle={(id) => toggleField('budgetLevels', id, POST_BUDGETS.length)}
-          alwaysShowAll
-          testIDPrefix="discovery-budget"
-        />
-      </DiscoveryDisclosureSection>
-
-      <DiscoveryDisclosureSection
-        id="atmosphere"
-        title={isRoute ? "אופי המסלול" : "אווירה וסביבה"}
-        summary={atmosphereSummary}
-        expanded={expandedSections.atmosphere}
-        onToggle={() => toggleSection('atmosphere')}
-      >
-        <DiscoveryOptionGroup
-          label="אווירה"
-          options={VIBES}
-          selectedIds={current.vibeIds || []}
-          relevantIds={relevant.vibes}
-          onToggle={(id) => toggleField('vibeIds', id, 8)}
-          collapsedLimit={4}
-          testIDPrefix="discovery-vibe"
-        />
-		{isRoute ? (
-		  <>
-			<DiscoveryOptionGroup
-			  label="סגנון טיול"
-			  options={TRAVELER_STYLES}
-			  selectedIds={current.travelerStyleIds || []}
-			  relevantIds={relevant.travelerStyles}
-			  onToggle={(id) => toggleField('travelerStyleIds', id, 6)}
-			  collapsedLimit={4}
-			  testIDPrefix="discovery-style"
-			/>
-			<DiscoveryOptionGroup
-			  label="עונה"
-			  options={SEASONS}
-			  selectedIds={current.seasons || []}
-			  relevantIds={relevant.seasons}
-			  onToggle={(id) => toggleField('seasons', id, SEASONS.length)}
-			  collapsedLimit={4}
-			  testIDPrefix="discovery-season"
-			/>
-		  </>
-		) : null}
-		<DiscoveryOptionGroup
-		  label="סביבה"
-		  options={ENVIRONMENTS}
-		  selectedIds={current.environments || []}
-		  relevantIds={relevant.environments}
-		  onToggle={(id) => toggleField('environments', id, ENVIRONMENTS.length)}
-		  alwaysShowAll
-		  testIDPrefix="discovery-environment"
-		/>
-      </DiscoveryDisclosureSection>
-
-      <DiscoveryDisclosureSection
-        id="needs"
-        title="צרכים חשובים"
-        summary={summarizeSelections(NEEDS, current.needIds)}
-        expanded={expandedSections.needs}
-        onToggle={() => toggleSection('needs')}
-      >
-        <DiscoveryOptionGroup
-          helper="יוצגו רק תוצאות שבהן המידע הזה צוין במפורש"
-          options={NEEDS}
-          selectedIds={current.needIds || []}
-          onToggle={(id) => toggleField('needIds', id, NEEDS.length)}
-          alwaysShowAll
-          testIDPrefix="discovery-need"
-        />
-      </DiscoveryDisclosureSection>
-
-    </View>
-  );
+  return <View style={styles.content}>
+    <DiscoveryDestinationAutocomplete destinations={current.destinations || []} onChange={(destinations) => patch({ destinations })} enabled={destinationsEnabled} design="community" />
+    <DiscoveryCategorySelector filters={current} onChange={onChange} design="community" />
+    {routes && <>
+      <AppText style={s.filterHeading}>משך המסלול</AppText>
+      <View style={s.durationChoices}>{durations.map(({ label, value }, index) => {
+        const selected = Number(current.durationDays?.min) === value.min && String(current.durationDays?.max ?? '') === String(value.max);
+        return <Pressable key={label} style={[s.durationChoice, selected && s.durationSelected]}
+          accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked: selected }} aria-checked={selected}
+          onPress={() => patch({ durationDays: selected ? null : value })} testID={`discovery-duration-${index}`}>
+          <AppText style={[s.activeLabel, selected && s.whiteLabel]}>{label}</AppText>
+        </Pressable>;
+      })}</View>
+    </>}
+    {group('budgetLevels', routes ? 'תקציב' : 'רמת מחיר', POST_BUDGETS, 'discovery-budget', POST_BUDGETS.length)}
+    {routes ? <>
+      {group('difficultyIds', 'רמת קושי', ROUTE_DIFFICULTIES, 'discovery-difficulty', 3)}
+      {group('transportModeIds', 'איך מתניידים?', TRANSPORT_MODES, 'discovery-transport', TRANSPORT_MODES.length)}
+      {section('advanced', 'אפשרויות מתקדמות', 'קצב, עונות, מרחק, אופי המסלול וצרכים נוספים', <>
+        {group('paceIds', 'קצב', PACES, 'discovery-pace', PACES.length)}
+        {group('seasons', 'עונות', SEASONS, 'discovery-season', SEASONS.length, relevant.seasons)}
+        <MinMaxInputs label="טווח ימים" minValue={current.durationDays?.min ?? ''} maxValue={current.durationDays?.max ?? ''}
+          onChangeMin={(min) => patch({ durationDays: { ...current.durationDays, min } })}
+          onChangeMax={(max) => patch({ durationDays: { ...current.durationDays, max } })} />
+        <MinMaxInputs label="מרחק מחושב" unitSuffix="ק״מ" minValue={current.distanceKm?.min ?? ''} maxValue={current.distanceKm?.max ?? ''}
+          onChangeMin={(min) => patch({ distanceKm: { ...current.distanceKm, min } })}
+          onChangeMax={(max) => patch({ distanceKm: { ...current.distanceKm, max } })} />
+        {atmosphere}
+        {needs}
+      </>)}
+    </> : <>
+      {group('audienceIds', 'עם מי מטיילים?', TRAVEL_PARTIES, 'discovery-audience', 6)}
+      {needs}
+      {section('atmosphere', 'אווירה וסביבה', summarizeSelections(VIBES, current.vibeIds), atmosphere)}
+    </>}
+    {!!onUseProfile && <Pressable style={s.secondaryAction} onPress={onUseProfile} accessibilityRole="button" testID="discovery-use-profile">
+      <AppText style={s.activeLabel}>מלאו מההעדפות שלי</AppText>
+    </Pressable>}
+  </View>;
 }

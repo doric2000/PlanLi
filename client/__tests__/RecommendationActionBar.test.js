@@ -28,6 +28,19 @@ jest.mock('../src/features/moderation/components/ReportButton', () => {
 });
 
 describe('RecommendationActionBar', () => {
+  it('opens the complete community card without triggering its social actions', () => {
+    const onReadMore = jest.fn();
+    const onLikePress = jest.fn();
+    const onCommentPress = jest.fn();
+    const screen = render(<RecommendationActionBar onReadMore={onReadMore} onLikePress={onLikePress} onCommentPress={onCommentPress} />);
+    const stopPropagation = jest.fn();
+    fireEvent.press(screen.getByLabelText('קריאת ההמלצה במלואה'), { stopPropagation });
+    expect(onReadMore).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onLikePress).not.toHaveBeenCalled();
+    expect(onCommentPress).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('recommendation-action-divider')).toBeNull();
+  });
   it('renders the compact RTL action order with accessible touch targets', () => {
     const screen = render(
       <RecommendationActionBar

@@ -21,6 +21,7 @@ import {
 } from '../constants/travelTaxonomy';
 import { hasDiscoveryFilters } from '../utils/discoveryFilters';
 import { countDiscoveryFilters } from '../utils/progressiveDiscoveryFilters';
+import { communityDiscoveryStyles as compactStyles } from '../styles/communityDiscovery';
 
 const mapOptions = (options) => Object.fromEntries(options.map((item) => [item.value || item.id, item.label || item.postLabel]));
 const labels = {
@@ -39,7 +40,12 @@ const labels = {
   paceIds: mapOptions(PACES),
 };
 
-function Chip({ text, onRemove }) {
+function Chip({ text, onRemove, compact }) {
+  if (compact) return <TouchableOpacity style={compactStyles.activeChip} onPress={onRemove}
+    accessibilityRole="button" accessibilityLabel={`הסר ${text}`}>
+    <AppText style={compactStyles.activeLabel} numberOfLines={1}>{text}</AppText>
+    <Ionicons name="close-circle" size={16} color={colors.primary} />
+  </TouchableOpacity>;
   return (
     <View style={styles.chip}>
       <TouchableOpacity onPress={onRemove} accessibilityRole="button" accessibilityLabel={`הסר ${text}`}>
@@ -55,8 +61,9 @@ export default function DiscoveryActiveFiltersList({
   onRemove,
   onClear,
   surface = 'recommendations',
+  compact = false,
 }) {
-  if (!hasDiscoveryFilters(filters)) return null;
+  if (!hasDiscoveryFilters(filters, { includeQuery: !compact })) return null;
   const isRoutesSurface = surface === 'routes';
   const activeCount = countDiscoveryFilters(filters);
   const fields = [
@@ -67,35 +74,38 @@ export default function DiscoveryActiveFiltersList({
 	] : []),
   ];
   return (
-    <View style={styles.container}>
-      <View style={styles.summaryRow}>
+    <View style={compact ? compactStyles.activeRow : styles.container}>
+      {!compact && <View style={styles.summaryRow}>
         {!!onClear && (
           <TouchableOpacity onPress={onClear} accessibilityRole="button" testID="active-filters-clear">
             <AppText style={styles.clearText}>נקה הכול</AppText>
           </TouchableOpacity>
         )}
         <AppText style={styles.summaryText}>{activeCount} מסננים פעילים</AppText>
-      </View>
-      <RtlHorizontalScrollView contentContainerStyle={styles.scrollContent}>
-        {!!filters.query && <Chip text={filters.query} onRemove={() => onRemove?.('query')} />}
+      </View>}
+      <RtlHorizontalScrollView style={compact && compactStyles.activeScroll} contentContainerStyle={compact ? compactStyles.activeContent : styles.scrollContent}>
+        {!compact && !!filters.query && <Chip text={filters.query} onRemove={() => onRemove?.('query')} />}
         {(filters.destinations || []).map((destination) => {
           const key = `${destination.countryId}:${destination.cityId || ''}`;
-          return <Chip key={`destination-${key}`} text={destination.label || destination.cityId || destination.countryId}
+          return <Chip compact={compact} key={`destination-${key}`} text={destination.label || destination.cityId || destination.countryId}
             onRemove={() => onRemove?.('destinations', key)} />;
         })}
         {fields.flatMap((field) => (filters[field] || []).map((value) => (
-          <Chip key={`${field}-${value}`} text={labels[field]?.[value] || value}
+          <Chip compact={compact} key={`${field}-${value}`} text={labels[field]?.[value] || value}
             onRemove={() => onRemove?.(field, value)} />
         )))}
-        {isRoutesSurface && filters.durationDays && (
-          <Chip text={`ימים: ${filters.durationDays.min || '0'}–${filters.durationDays.max || '∞'}`}
+        {isRoutesSurface && hasDiscoveryFilters({ durationDays: filters.durationDays }) && (
+          <Chip compact={compact} text={`ימים: ${filters.durationDays.min || '0'}–${filters.durationDays.max || '∞'}`}
             onRemove={() => onRemove?.('durationDays')} />
         )}
-        {isRoutesSurface && filters.distanceKm && (
-          <Chip text={`מרחק: ${filters.distanceKm.min || '0'}–${filters.distanceKm.max || '∞'} ק״מ`}
+        {isRoutesSurface && hasDiscoveryFilters({ distanceKm: filters.distanceKm }) && (
+          <Chip compact={compact} text={`מרחק: ${filters.distanceKm.min || '0'}–${filters.distanceKm.max || '∞'} ק״מ`}
             onRemove={() => onRemove?.('distanceKm')} />
         )}
       </RtlHorizontalScrollView>
+      {compact && !!onClear && <TouchableOpacity onPress={onClear} style={compactStyles.clearFilters} accessibilityRole="button" testID="active-filters-clear">
+        <AppText style={compactStyles.activeLabel}>נקה סינון</AppText>
+      </TouchableOpacity>}
     </View>
   );
 }

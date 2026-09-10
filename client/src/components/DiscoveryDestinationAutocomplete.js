@@ -18,6 +18,7 @@ import {
 } from '../utils/progressiveDiscoveryFilters';
 import { compactDestinationText } from '../utils/destinationSearch';
 import { reconcileStoredRecentDiscoveryDestinations } from '../utils/recentDiscoveryDestinations';
+import { communityDiscoveryStyles as s } from '../styles/communityDiscovery';
 
 function uniqueOptions(options, used, selectedKeys, maximum) {
   const output = [];
@@ -50,7 +51,7 @@ function SuggestionRow({ option, onPress }) {
   );
 }
 
-export default function DiscoveryDestinationAutocomplete({ destinations, onChange, enabled = true }) {
+export default function DiscoveryDestinationAutocomplete({ destinations, onChange, enabled = true, design }) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -124,8 +125,8 @@ export default function DiscoveryDestinationAutocomplete({ destinations, onChang
 
   return (
     <View style={styles.destinationSection}>
-      <AppText style={styles.primarySectionTitle}>לאן?</AppText>
-      <AppText style={styles.primarySectionHelper}>אפשר לבחור עד חמישה יעדים</AppText>
+      <AppText style={[styles.primarySectionTitle, design === 'community' && s.filterHeading]}>לאן?</AppText>
+      <AppText style={[styles.primarySectionHelper, design === 'community' && s.suggestionHint]}>אפשר לבחור עד חמישה יעדים</AppText>
       <View style={styles.destinationInputWrap}>
         {loading ? <ActivityIndicator size="small" color={colors.primary} /> : (
           <Ionicons name="search" size={19} color={colors.textMuted} />

@@ -1,51 +1,41 @@
 import React from 'react';
-import { View, TouchableOpacity, Modal } from 'react-native';
-import AppText from "../../../components/AppText";
-import { Ionicons } from '@expo/vector-icons';
-import { colors, community } from '../../../styles';
+import { View, Pressable, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppText from '../../../components/AppText';
+import { communityDiscoveryStyles as styles } from '../../../styles/communityDiscovery';
 
 export const SortMenuModal = ({ visible, onClose, sortBy, onSelect, personalizationAvailable = false, includeNearby = true }) => {
+  const insets = useSafeAreaInsets();
+  const content = includeNearby ? 'המלצות' : 'מסלולים';
   const options = [
     ...(personalizationAvailable
-      ? [{ key: 'personalized', label: 'בשבילך', icon: 'person-outline' }]
+      ? [{ key: 'personalized', label: 'בשבילך', description: 'לפי תחומי העניין שלך' }]
       : []),
-    { key: 'popularity', label: 'הכי פופולרי', icon: 'trending-up-outline' },
-    { key: 'newest', label: 'הכי חדש', icon: 'time-outline' },
-    ...(includeNearby ? [{ key: 'nearby', label: 'הכי קרוב אליי', icon: 'navigate-outline' }] : []),
+    { key: 'newest', label: 'הכי חדשים', description: content + ' שנוספו לאחרונה לקהילה' },
+    { key: 'popularity', label: 'הכי אהובים', description: content + ' שמטיילים אהבו' },
+    ...(includeNearby ? [{ key: 'nearby', label: 'קרוב אליי', description: 'לפי המיקום שלך' }] : []),
   ];
 
   return (
-    <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={community.modalOverlay} activeOpacity={1} onPress={onClose}>
-        <View style={community.sortMenu}>
-          <AppText style={community.sortTitle}>מיין לפי</AppText>
-          {options.map((option) => (
-            <TouchableOpacity 
-              key={option.key}
-              style={[community.sortOption, sortBy === option.key && community.sortOptionSelected]}
-              onPress={() => onSelect(option.key)}
-            >
-              <View style={community.sortOptionLabelRow}>
-                <Ionicons
-                  name={option.icon}
-                  size={16}
-                  color={sortBy === option.key ? colors.primary : colors.textSecondary}
-                  style={community.sortOptionIcon}
-                />
-                <AppText
-                  style={[
-                    community.sortOptionText,
-                    sortBy === option.key && community.sortOptionTextSelected,
-                  ]}
-                >
-                  {option.label}
-                </AppText>
-              </View>
-              {sortBy === option.key && <Ionicons name="checkmark" size={18} color={colors.primary} />}
-            </TouchableOpacity>
-          ))}
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.sortOverlay}>
+        <Pressable style={styles.sortBackdrop} onPress={onClose} accessibilityRole="button" accessibilityLabel="סגירת מיון" />
+        <View style={[styles.sortPanel, { paddingBottom: Math.max(insets.bottom, 20) }]} accessibilityRole="radiogroup" accessibilityLabel="סדר התוצאות">
+          <AppText style={[styles.sheetTitle, { flex: 0 }]}>מה תרצו לראות קודם?</AppText>
+          {options.map((option) => {
+            const selected = sortBy === option.key;
+            return (
+              <Pressable key={option.key} style={[styles.sortOption, selected && styles.sortSelected]}
+                onPress={() => onSelect(option.key)} testID={'community-sort-' + option.key}
+                accessibilityRole="radio" accessibilityLabel={option.label + ', ' + option.description}
+                accessibilityState={{ checked: selected }} aria-checked={selected}>
+                <AppText style={styles.suggestionTitle}>{option.label}</AppText>
+                <AppText style={styles.suggestionHint}>{option.description}</AppText>
+              </Pressable>
+            );
+          })}
         </View>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 };

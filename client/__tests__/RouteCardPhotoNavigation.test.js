@@ -130,3 +130,14 @@ describe('RouteCard photo navigation', () => {
     expect(actionBarIndex).toBe(mediaIndex + 1);
   });
 });
+
+it('keeps community text and actions after its wide photo, with a two-line excerpt', () => {
+  const screen = render(<RouteCard item={route} variant="community" onPress={jest.fn()} />);
+  expect(screen.getByText(route.title).props.numberOfLines).toBe(2);
+  expect(screen.getByText(route.description).props.numberOfLines).toBe(2);
+  const children = screen.toJSON().children;
+  const contentIndex = children.findIndex((node) => node.props?.testID === 'route-content');
+  const actionsIndex = children.findIndex((node) => node.props?.testID === 'action-bar');
+  expect(contentIndex).toBeGreaterThan(0);
+  expect(actionsIndex).toBe(contentIndex + 1);
+});

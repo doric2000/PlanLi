@@ -11,8 +11,9 @@ import {
 } from '../constants/travelTaxonomy';
 import { discoveryFilterStyles as styles } from '../styles';
 import { toggleDiscoveryCategory } from '../utils/progressiveDiscoveryFilters';
+import { communityDiscoveryStyles as s } from '../styles/communityDiscovery';
 
-export default function DiscoveryCategorySelector({ filters, onChange }) {
+export default function DiscoveryCategorySelector({ filters, onChange, design }) {
   const selectedCategoryIds = Array.isArray(filters?.categoryIds) ? filters.categoryIds : [];
   const selectedSubcategoryIds = Array.isArray(filters?.subcategoryIds) ? filters.subcategoryIds : [];
   const [activeCategoryId, setActiveCategoryId] = useState(selectedCategoryIds[0] || '');
@@ -72,8 +73,8 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
 
   return (
     <View style={styles.categorySection}>
-      <AppText style={styles.primarySectionTitle}>מה מחפשים?</AppText>
-      <AppText style={styles.primarySectionHelper}>בחרו עד שלוש קטגוריות</AppText>
+      <AppText style={[styles.primarySectionTitle, design === 'community' && s.filterHeading]}>מה מחפשים?</AppText>
+      <AppText style={[styles.primarySectionHelper, design === 'community' && s.suggestionHint]}>בחרו עד שלוש קטגוריות</AppText>
       <View style={styles.categoryGrid}>
         {CATEGORIES.map((category, index) => {
           const selected = selectedCategoryIds.includes(category.id);
@@ -82,7 +83,8 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
             <CompactChip
               key={category.id}
               disabled={disabled}
-              style={styles.categoryChip}
+              style={[styles.categoryChip, design === 'community' && s.optionChip, design === 'community' && selected && s.optionSelected]}
+              textStyle={design === 'community' && [s.optionText, selected && s.optionSelectedText]}
               label={category.label}
               icon={category.icon || 'place'}
               iconSize={20}
@@ -151,6 +153,7 @@ export default function DiscoveryCategorySelector({ filters, onChange }) {
                 selectedIds={selectedSubcategoryIds}
                 onToggle={toggleSubcategory}
                 alwaysShowAll
+                design={design}
                 testIDPrefix={`discovery-subcategory-${activeCategoryId}`}
               />
             </>
