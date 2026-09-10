@@ -153,11 +153,11 @@ jest.mock('../src/utils/recentDiscoveryDestinations', () => ({
 jest.mock('../src/components/PageHeader', () => {
   const ReactModule = require('react');
   const { Text, View } = require('react-native');
-  return ({ children, title, renderStart, renderEnd, ...props }) => ReactModule.createElement(
+  return ({ children, title, renderTopRow, renderStart, renderEnd, ...props }) => ReactModule.createElement(
     View,
     props,
     renderStart?.(),
-    title ? ReactModule.createElement(Text, null, title) : null,
+    renderTopRow ? renderTopRow() : title ? ReactModule.createElement(Text, null, title) : null,
     renderEnd?.(),
     children
   );
@@ -260,6 +260,35 @@ describe('HomeScreenSearchTest', () => {
         }),
       ],
     });
+  });
+
+  it.each([true, false])('keeps the Home avatar centered inside its frame (photo=%s)', async (hasPhoto) => {
+    Object.assign(mockAuthUserState, {
+      user: { uid: 'traveler', displayName: 'Dor', ...(hasPhoto ? { photoURL: 'https://cdn.example/avatar.jpg' } : {}) },
+      isGuest: false,
+      isActive: true,
+    });
+    const navigation = { navigate: jest.fn() };
+    const screen = render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 44, right: 0, bottom: 34, left: 0 } }}>
+        <HomeScreen navigation={navigation} />
+      </SafeAreaProvider>
+    );
+    await act(async () => {});
+    const shortcut = screen.getByTestId('home-profile-shortcut');
+    const avatar = within(shortcut).UNSAFE_getByType(require('../src/components/Avatar').Avatar);
+    const content = hasPhoto
+      ? within(shortcut).UNSAFE_getByType(require('expo-image').Image)
+      : avatar.findByType(require('react-native').View);
+    const frame = StyleSheet.flatten(shortcut.props.style);
+    const imageStyle = StyleSheet.flatten(content.props.style);
+    expect(imageStyle.width).toBe(frame.width);
+    expect(imageStyle.height).toBe(frame.height);
+    expect(imageStyle.borderRadius).toBe(frame.borderRadius);
+    expect(imageStyle.marginRight).toBe(0);
+    expect(imageStyle.overflow).toBe('hidden');
+    fireEvent.press(shortcut);
+    expect(navigation.navigate).toHaveBeenCalledWith('Profile');
   });
 
   it.each([false, true])('keeps route creation behind the existing capability check (granted=%s)', async (granted) => {
