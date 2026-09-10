@@ -275,7 +275,8 @@ describe('RoutesScreen authentication state', () => {
     expect(screen.getByTestId('routes-search-tour-target').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('routes-filter-button').props.onLayout).toEqual(expect.any(Function));
     expect(screen.getByTestId('routes-sort-button').props.onLayout).toEqual(expect.any(Function));
-    expect(screen.getByTestId('routes-add-button').props.onLayout).toEqual(expect.any(Function));
+    expect(screen.queryByTestId('routes-add-button')).toBeNull();
+    expect(screen.getByTestId('community-mode-routes').props.accessibilityState.selected).toBe(true);
     expect(within(list).queryByTestId('routes-tab-header')).toBeNull();
     expect(StyleSheet.flatten(list.props.ListHeaderComponent.props.style)).toMatchObject({
       paddingTop: 28,

@@ -3,7 +3,9 @@ appId: com.planli.planlitravels.e2e
 - tapOn:
     id: main-tab-community
 - tapOn:
-    id: community-add-button
+    id: main-create-button
+- tapOn:
+    id: create-recommendation
 - extendedWaitUntil:
     visible:
       id: "recommendation-composer-header|recommendation-draft-discard"

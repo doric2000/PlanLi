@@ -1,3 +1,4 @@
+import { openMainTab } from '../../../navigation/authNavigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -824,7 +825,7 @@ export default function HomePlanningHubScreen({ navigation }) {
       onChangeRegion={() => openRegionSelectorFrom(navigation, 'home-change')}
       onOpenDestination={selectLocalDestination}
       continuation={{ loading: draftLoading || recentLoading, error: draftError, draft, recentDestination: recentDestinations[0], onPress: handleContinuationPress, onRetry: loadDraft }}
-      routes={{ items: routes, loading: routesLoading, error: routesError, mode: routesMode, onRetry: loadRoutes, onSeeAll: () => navigation.navigate('Routes'), onItemPress: (item) => navigation.navigate('RouteDetail', { routeId: item.id }) }}
+      routes={{ items: routes, loading: routesLoading, error: routesError, mode: routesMode, onRetry: loadRoutes, onSeeAll: () => openMainTab(navigation, 'Routes'), onItemPress: (item) => navigation.navigate('RouteDetail', { routeId: item.id }) }}
       recommendations={{ items: recommendations, loading: recommendationsLoading, error: recommendationsError, mode: recommendationsMode, onRetry: loadRecommendations, onSeeAll: () => navigation.navigate('Community'), onItemPress: (item) => navigation.navigate('RecommendationDetail', { item, postId: item.id }) }}
       preferencePrompt={renderPreferencePrompt()}
     />

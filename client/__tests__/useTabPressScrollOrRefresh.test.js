@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react-native';
 
 import { useTabPressScrollOrRefresh } from '../src/hooks/useTabPressScrollOrRefresh';
 
-function setup({ focused = false, variant = 'scrollview' } = {}) {
+function setup({ focused = false, variant = 'scrollview', nested = false } = {}) {
   let tabPress;
   const navigation = {
     addListener: jest.fn((event, handler) => {
@@ -13,6 +13,11 @@ function setup({ focused = false, variant = 'scrollview' } = {}) {
     }),
     isFocused: jest.fn(() => focused),
   };
+  const parent = { addListener: navigation.addListener };
+  if (nested) {
+    navigation.getParent = jest.fn(() => parent);
+    navigation.addListener = jest.fn();
+  }
   const onRefresh = jest.fn();
   const scrollable = {
     scrollTo: jest.fn(),
@@ -39,6 +44,17 @@ function setup({ focused = false, variant = 'scrollview' } = {}) {
 }
 
 describe('useTabPressScrollOrRefresh', () => {
+  it('listens to the outer Community tab but refreshes only its focused mode', () => {
+    const { navigation, pressTab, onRefresh } = setup({ focused: true, nested: true });
+    expect(navigation.getParent).toHaveBeenCalledWith('MainTabs');
+    expect(navigation.addListener).not.toHaveBeenCalled();
+    pressTab();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    navigation.isFocused.mockReturnValue(false);
+    pressTab();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing when a tab press enters an unfocused tab', () => {
     const { pressTab, onRefresh, scrollable } = setup({ focused: false });
 

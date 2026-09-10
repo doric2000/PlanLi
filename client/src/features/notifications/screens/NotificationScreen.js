@@ -24,7 +24,7 @@ import { Avatar } from '../../../components/Avatar';
 import LikesModal from '../../../components/LikesModal';
 import SegmentedTabs from '../../../components/SegmentedTabs';
 import { useAuthUser } from '../../../hooks/useAuthUser';
-import { openAuthFlow } from '../../../navigation/authNavigation';
+import { openAuthFlow, openMainTab } from '../../../navigation/authNavigation';
 import { signOutCentral } from '../../../services/AuthService';
 import { colors } from '../../../styles';
 import {
@@ -451,15 +451,20 @@ export default function NotificationScreen({
         <View style={styles.headerSide} testID="notifications-header-profile-slot">
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="פתיחת הפרופיל שלי"
+            accessibilityLabel={route?.name === 'Notifications' ? 'חזרה' : 'פתיחת הפרופיל שלי'}
             onPress={() => {
-              if (onProfilePress) onProfilePress(user);
+              if (route?.name === 'Notifications') {
+                if (navigation.canGoBack?.()) navigation.goBack();
+                else openMainTab(navigation, 'Profile');
+              } else if (onProfilePress) onProfilePress(user);
               else if (user?.uid) navigation.navigate('UserProfile', { uid: user.uid });
             }}
             style={({ pressed }) => [styles.iconButton, pressed && styles.rowPressed]}
-            testID="notifications-profile"
+            testID={route?.name === 'Notifications' ? 'notifications-back' : 'notifications-profile'}
           >
-            {user ? (
+            {route?.name === 'Notifications' ? (
+              <Ionicons name="chevron-forward" size={26} color={colors.textPrimary} />
+            ) : user ? (
               <Avatar photoURL={user.photoURL} displayName={user.displayName} size={36} />
             ) : (
               <Ionicons name="person-circle-outline" size={34} color={colors.textSecondary} />

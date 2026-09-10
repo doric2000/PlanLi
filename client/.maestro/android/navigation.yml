@@ -1,0 +1,102 @@
+appId: com.planli.planlitravels.e2e
+name: Integrated creation, persistent Community modes and root inbox
+---
+- runFlow: helpers/boot.yml
+- assertVisible:
+    id: main-tab-home
+- assertVisible:
+    id: main-tab-community
+- assertVisible:
+    id: main-create-button
+- assertVisible:
+    id: main-tab-favorites
+- assertVisible:
+    id: main-tab-auth
+- assertNotVisible:
+    id: "main-tab-routes|main-tab-notifications"
+- takeScreenshot: navigation-home
+- tapOn:
+    id: main-create-button
+- assertVisible: "מה ניצור היום?"
+- assertVisible: "בקרוב"
+- takeScreenshot: navigation-create-guest
+- tapOn:
+    id: create-recommendation
+- assertVisible:
+    id: auth-gate-primary
+- tapOn:
+    id: auth-gate-dismiss
+- assertVisible:
+    id: home-tab-header
+- tapOn:
+    id: main-tab-community
+- assertVisible:
+    id: community-mode-recommendations
+- assertNotVisible:
+    id: community-add-button
+- tapOn:
+    id: community-search-input
+- inputText: coffee
+- hideKeyboard
+- tapOn:
+    id: community-mode-routes
+- assertVisible:
+    id: routes-tab-header
+- assertNotVisible:
+    id: routes-add-button
+- tapOn:
+    id: routes-search-input
+- inputText: hiking
+- hideKeyboard
+- tapOn:
+    id: community-mode-recommendations
+- assertVisible: coffee
+- tapOn:
+    id: community-map-toggle
+- assertVisible:
+    id: community-map-controls
+- tapOn:
+    id: community-mode-routes
+- assertVisible: hiking
+- tapOn:
+    id: main-tab-home
+- tapOn:
+    id: main-tab-community
+- assertVisible: hiking
+- takeScreenshot: navigation-community-routes
+- tapOn:
+    id: community-mode-recommendations
+- assertVisible:
+    id: community-map-controls
+- takeScreenshot: navigation-community-map-preserved
+- tapOn:
+    id: community-map-toggle
+- runFlow: helpers/login.yml
+- tapOn:
+    id: main-tab-profile
+- extendedWaitUntil:
+    visible: "הפרופיל שלי"
+    timeout: 60000
+- tapOn: "פתיחת תפריט פרופיל"
+- tapOn:
+    id: drawer-menu-item-notifications
+- assertVisible:
+    id: notifications-back
+- assertNotVisible:
+    id: main-tab-bar
+- takeScreenshot: navigation-root-notifications
+- tapOn:
+    id: notifications-back
+- assertVisible:
+    id: main-tab-profile
+- tapOn:
+    id: main-create-button
+- assertVisible:
+    id: create-route
+- takeScreenshot: navigation-create-signed-in
+- tapOn:
+    id: create-menu-close
+- runFlow: helpers/open-composer.yml
+- assertVisible:
+    id: recommendation-composer-header
+- takeScreenshot: navigation-publish-entry
