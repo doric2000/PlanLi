@@ -25,6 +25,55 @@ the existing Text Search quota remains zero. See
 
 ## Current environment status
 
+### Profile unread badge and Home avatar iPhone OTA (2026-09-10)
+
+The user's iPhone feedback on the integrated navigation requested a notification
+count in place of the Profile dot and exposed an offset Home header avatar.
+PR [#367](https://github.com/doric2000/PlanLi/pull/367) merged as
+`2a26b5521c042d4e0763deda8d5c31125cd0ee4e` after all applicable CI checks passed.
+The Profile badge uses the existing unread count, hides at zero, displays 99+
+above 99 and exposes the full count to screen readers. Home now uses Avatar's
+existing insideRing mode, removing its native side margin inside the 44px frame
+for both photos and placeholders. Shared header geometry is unchanged.
+
+Continuing the authorized iPhone/TestFlight production update workflow, this iOS
+OTA was published at `2026-09-10T11:14:13.069Z`, channel/environment
+`production`, runtime `1.3.0`, group
+[5829a5e8](https://expo.dev/accounts/doric2000/projects/client/updates/5829a5e8-1041-4ab2-9b91-f75784f0d297),
+update `01a08b06-7bcd-78ec-8fb2-e41b12af0063`. Candidate group
+`c7399b9d-7a42-4429-aee8-1471aaa03e82` used production variables on staging;
+the identical artifact was promoted without another export. At
+`2026-09-10T11:14:39.167Z`, the downloaded immutable launch bundle,
+server environment, native fingerprint and public production-channel manifest
+were independently verified. Bundle: 10,677,040 bytes; SHA-256
+`50c4a413863c7b57dffd422fb7ed53a77da2bb4c92715283a631ceded4f3ad38`.
+
+All 1096 archived files matched their Git blobs, allowing only
+CRLF normalization for text. Native metadata bytes match the installed binary;
+native source inputs are unchanged. TestFlight remains **1.1.1 (30)**,
+EAS build `b16eca67-6291-4520-82b6-10cb1af190f5`, fingerprint
+`0b5dd5996352ba381e65fc1a036a28eae3000516`. No native build, app-version
+change, Apple submission/review, Android OTA or backend deployment occurred.
+The unrelated root app.json was preserved and excluded from the archive. Public
+iOS runtime 1.2.0 and Android runtime 1.3.0 responses were unchanged after release.
+This supersedes the navigation OTA below while retaining that implementation.
+
+Validation: 9 related suites / 72 tests passed; iOS OTA readiness against
+`193f98b77f128068ecb27d580757243997765ca0` reused matching receipts.
+A browser fixture with the native Avatar style branch exercised 320/390px,
+counts 0/1/12/123, guest state, photo/placeholder alignment and accessible labels.
+Manual final diff review completed; the previously recorded CLI/model
+incompatibility prevents automated CLI review. Android emulator testing remains
+waived by the user. The supplied screenshot confirms the preceding navigation
+update was rendered on the user's iPhone; this new OTA's download, application,
+rendering and live notification-count changes remain pending device verification.
+
+Immediate rollback group: `ed896780-d9d1-47b8-bf26-848a035f0616`.
+Source checkpoint before these two changes:
+`69aef03d9d85a0061181f5ebc595e1236c17b75e`; local record:
+`.codex_tmp/design-backups/profile-badge-avatar-20260910/checkpoint.json`.
+See [iPhone checks and rollback details](docs/navigation-refresh-iphone-checklist.md).
+
 ### Integrated navigation iPhone OTA (2026-09-10)
 
 PR [#365](https://github.com/doric2000/PlanLi/pull/365) merged as
@@ -4268,3 +4317,13 @@ part of this follow-up.
 - Existing TestFlight: 1.1.1 (30), build `b16eca67-6291-4520-82b6-10cb1af190f5`. No new binary or Apple review.
 - Immutable artifact and delivery verified at `2026-09-10T10:36:24.673Z`; physical iPhone testing pending.
 - Rollback: republish prior group `7950ae31-5993-4795-aabf-39506c72939c` for iOS only.
+
+## iOS production OTA release
+
+- Source commit: `2a26b5521c042d4e0763deda8d5c31125cd0ee4e`.
+- EAS Update group: `5829a5e8-1041-4ab2-9b91-f75784f0d297`; channel `production`; runtime `1.3.0`.
+- EAS environment: `production`; published at `2026-09-10T11:14:13.069Z`.
+- Immutable iOS launch bundle: update `01a08b06-7bcd-78ec-8fb2-e41b12af0063`; 10677040 bytes; SHA-256 `50C4A413863C7B57DFFD422FB7ED53A77DA2BB4C92715283A631CEDED4F3AD38`.
+- Message: Profile unread notification count and aligned Home header avatar
+- Device application, visual alignment and live notification-count checks: pending.
+- Rollback: republish verified group `ed896780-d9d1-47b8-bf26-848a035f0616` for iOS only.
